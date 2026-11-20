@@ -3,7 +3,7 @@
 **Prefix:** `EV` · **Iteration:** 16 · **Reviewed:** 2026-08-26 (pass 1),
 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-15 (pass 8), 2026-10-19
 (pass 9), 2026-10-23 (pass 10), 2026-10-26 (pass 11), 2026-10-29 (pass 12),
-2026-11-02 (pass 13), 2026-11-08 (pass 14) ·
+2026-11-02 (pass 13), 2026-11-08 (pass 14), 2026-11-20 (pass 15) ·
 **PR:**
 [#1848](https://github.com/thegspiro/the-logbook/pull/1848) (pass 1),
 [#2630](https://github.com/thegspiro/the-logbook/pull/2630) (pass 6),
@@ -24,20 +24,32 @@ reviewed clean against all seven checklist dimensions),
 watchdog pickup, 1 fixed — EV-30, cross-org file-retention gap on
 attachment delete),
 (pass 14, watchdog pickup, 0 fixed, 0 flagged — owner-decision batch work
-reviewed clean, see below for this pass's own PR number)
+reviewed clean, PR #4119),
+pass 15 (0 fixed in this feature itself, 0 new findings — real delta across
+nine declared files, dominated by two already-landed fixes: a public-surface
+member/guest enumeration leak closed, and an unrelated Alembic head fork
+found and fixed on its own branch before this pass's own gate could run)
 
-**Backend:** `api/v1/endpoints/events.py` (61 routes, unchanged),
-`api/v1/endpoints/event_requests.py` (23 routes — includes the
-public outreach event-request intake pipeline),
+**Backend:** `api/v1/endpoints/events.py` (63 routes, up from 61 — new
+`POST /{event_id}/postpone` and `PUT /{event_id}/guest-headcount`),
+`api/v1/endpoints/event_requests.py` (23 routes, unchanged),
 `api/v1/endpoints/event_attendance_petitions.py` (7 routes, unchanged),
-`api/public/event_guest.py` (4 routes, unchanged),
-`services/event_service.py`,
-`services/event_request_service.py`,
-`services/event_attendance_petition_service.py`,
-`services/event_organizer_service.py`,
-`services/guest_check_in_service.py`,
-`services/qr_check_in_analytics.py`,
-`models/event.py`, `models/event_request.py`
+`api/public/event_guest.py` (4 routes, unchanged — one response fixed, see
+below),
+`services/event_service.py` (+795/−39 this pass — postponement, draft-event
+check-in/QR refusal, training-waiver excusal, reminder-marker reset on
+reschedule),
+`services/event_request_service.py` (+118/−8 — staffing-sheet counts,
+short-notice flag, batched assignee names, all for the requests list),
+`services/event_attendance_petition_service.py` (+85/−24 — review routed to
+a fallback recipient, not only the organizer pair),
+`services/event_organizer_service.py` (+22/−4 — `may_decide_attendance_request`,
+the authorization half of the same fallback-routing change),
+`services/guest_check_in_service.py` (zero diff this pass),
+`services/qr_check_in_analytics.py` (zero diff this pass),
+`models/event.py` (+15/−0 — `guest_headcount`, `postponed_at`,
+`postponed_from_start`, `postponement_reason`), `models/event_request.py`
+(zero diff this pass)
 **Frontend:** `modules/events`, `pages/AttendanceRequestsPage.tsx`,
 `pages/GuestCheckInPage.tsx` + `.test.tsx`, `components/GuestEmailSignIn.tsx`,
 `pages/EventsPage.tsx`, `pages/EventDetailPage.tsx`,
@@ -58,7 +70,200 @@ touching `event_requests.contact_email` and
 `event_external_attendees.email`/`.email_hash`) reviewed pass 12;
 `e429ae62992e` (hash+encrypt `event_requests.status_token` at rest) and
 `f4583df5025b` (clear reminder/validation markers a series save copied)
-reviewed pass 14 — see below
+reviewed pass 14; `09f0171ccf5e` (postponement columns) and `790a86084359`
+(`guest_headcount` column) reviewed pass 15, below. A third, unrelated fork
+on `main` between `0c22a95b94b8` and `73f64017f9e2` (neither touching an
+`events`-prefixed table) was found and fixed on its own branch — see below.
+
+---
+
+## Pass 15 (2026-11-20) — real delta (two new routes, fallback review routing, waiver excusal), 0 fixed in this feature itself, 0 new findings
+
+**Watchdog pickup.** No other Claude session is running on this machine
+(`ListAgents` → "No reachable agents"), consistent with every prior pass.
+PR [#4465](https://github.com/thegspiro/the-logbook/pull/4465) (Feature 15,
+Scheduling, pass 15) had just merged; a fresh `list_pull_requests`
+(state=open) found 0 PRs with a `claude/security-review-` head branch, and
+row 16 (Events & requests) was confirmed the next `⬜` row.
+
+**An unrelated Alembic fork blocked this pass's own completion gate and was
+fixed first, on its own branch.** `validate_migrations.py --strict` failed
+with "Multiple head revisions" (`0c22a95b94b8`, `73f64017f9e2`) before any
+part of this pass's gate could run — neither head touches an
+`events`-prefixed table, so it is not this feature's own defect, but
+per `docs/rules/migrations.md`'s "one merge revision per fork" rule a red
+chain on `main` is fixed before anything else, on its own small branch,
+never riding along with a feature PR. Checked the open PR list first for an
+existing fix (none found), then opened
+[#4467](https://github.com/thegspiro/the-logbook/pull/4467) with a single
+no-op merge revision (`24c9eca002a2`), verified `validate_migrations.py
+--strict` reports one head again, and merged before continuing this pass's
+own baseline/gate work below.
+
+**Baseline** `51e6e1b50` (PR #4119's merge, pass 14) to head (current
+`main`, after #4467 merged) — a genuine ancestor
+(`git merge-base --is-ancestor` succeeds). `git diff --numstat` restricted
+to the nine declared backend files shows real changes in eight —
+`events.py` (+373/−18), `event_requests.py` (+29/−3),
+`event_attendance_petitions.py` (+6/−4), `event_guest.py` (+7/−9),
+`event_service.py` (+795/−39), `event_request_service.py` (+118/−8),
+`event_attendance_petition_service.py` (+85/−24),
+`event_organizer_service.py` (+22/−4), `models/event.py` (+15/−0); only
+`models/event_request.py` and `qr_check_in_analytics.py`/
+`guest_check_in_service.py` are byte-identical to pass 14.
+
+### Already-fixed, found while reading the delta — a public-surface member/guest enumeration leak
+
+`api/public/event_guest.py`'s `link_guest_lookup` (no authentication —
+checklist §1's public-surface review) previously answered
+`GuestCheckInService.LOOKUP_MEMBER` with "This looks like a department
+member account. Please scan the event's member check-in QR code instead,"
+and every other non-match with a generic not-found message. Anyone holding
+a public guest-check-in link could post any email address and learn from
+the response alone whether it belonged to a department member — a
+member-roster enumeration oracle on an unauthenticated endpoint (checklist
+§5, data exposure). The response now answers `LOOKUP_NOT_FOUND` for both
+cases unconditionally; the audit row behind the scenes still records which
+one actually happened, so nothing is lost for the department's own records,
+only for an outside caller. Not a finding this rotation previously flagged
+(grepped this file's history for "LOOKUP_MEMBER"/"enumerat" — no match);
+already landed and verified correct by reading the current code and its
+test.
+
+### Two new routes on `events.py` — both self-authorizing through pre-existing, already-reviewed helpers
+
+- **`POST /{event_id}/postpone`** gates through `_authorize_event_admin`
+  (pre-existing, used by `cancel_event`/`transfer_event` and others —
+  `events.manage`, or `training.manage` on a Training event, with the event
+  read org-scoped and a 404/403 split per Pitfall #14b). `postpone_event`
+  (`event_service.py:1864`) locks the event row (`with_for_update`, same
+  room-booking lock order as EV-26), refuses a cancelled or
+  attendance-finalized event and a past new start, settles any pending
+  attendance request first, and is idempotent on a repeat call with the
+  same times (Pitfall #36). Clears check-ins/corrections and their credit,
+  not RSVPs; resets the `reminders_sent` marker (deep-copied per Pitfall
+  #12) so reminders fire again for the new time.
+- **`PUT /{event_id}/guest-headcount`** gates on
+  `require_permission("events.manage")` directly and resolves the event
+  through `CommunityEngagementService.set_guest_headcount`
+  (`Event.id`/`Event.organization_id` both filtered, locking read),
+  refusing a cancelled or non-outreach event.
+
+Route count re-confirmed by AST: `events.py` 63 (+2, matching exactly these
+two routes); `event_requests.py` 23, `event_attendance_petitions.py` 7,
+`event_guest.py` 4 — all unchanged.
+
+### Attendance-request review routed to a fallback recipient — authorization and notification made one definition
+
+`EventAttendancePetitionService.may_review`/`_assert_may_decide` and
+`EventOrganizerService.may_decide_attendance_request` (new) extend who may
+review a pending attendance request beyond the organizer/alternate pair to
+whoever `attendance_request_recipients` (pre-existing, already used for
+notifications) would route it to when neither the organizer nor the
+alternate can act — the department's fallback position for the event type,
+then the Secretary, then every `events.manage` holder, in that order, the
+first non-empty tier winning. Read `attendance_request_recipients` in
+full: every tier is `User.organization_id`-filtered and `User.is_active`
+(Pitfall #32), and the requester is excluded at every tier
+(`without_requester`), so this cannot be used to approve one's own request.
+`_assert_may_decide` keeps its own, separate self-decision check
+(`petition.user_id == reviewer.id` → refused) regardless of which tier
+admitted the reviewer — confirmed unchanged by reading the current
+function in full. This is a correctness fix (the person already notified
+"please decide this" can now actually decide it, matching CLAUDE.md
+Pitfall #29's rule that a check and the thing it mirrors must be one
+definition) rather than a new authorization boundary: nobody gains access
+to an event they are not already the fallback recipient for, and the
+fallback chain itself is unchanged, pre-existing code.
+
+### `event_service.py` — postponement, draft-event check-in refusal, training-waiver excusal
+
+- **Draft events refused for check-in and QR scanning.** `get_qr_check_in_data`
+  and `check_in_attendee` both now refuse (`event.is_draft`) where they
+  previously did not — an unpublished event's title/description/location
+  could be read by scanning its QR code, and a scan could create a check-in
+  for an event nobody had announced. Mirrors the existing `EV-6` refusal on
+  RSVPs to a draft. A tightening, not a regression.
+- **Training-waiver excusal** (`_excused_event_ids`, `_active_training_waivers`,
+  `_event_requirement_ids`, `_excused_by_training_waiver`) feeds
+  `_was_expected_at`'s attendance-expectation list. Every new query filters
+  `organization_id` directly (`AttendanceWaiverRequest`, `TrainingWaiver`,
+  `TrainingSession`, `TrainingSessionRequirement`) — read in full, no
+  by-id lookup without it.
+- **Reminder/waiver reconfirmation on reschedule** (`_forget_sent_reminders_if_moved`,
+  `_reconfirm_waiver_requests_if_moved`, `_void_waiver_requests`,
+  `_send_waiver_notices`) all operate on `Event`/organization_id pairs the
+  caller already resolved org-scoped; `_forget_sent_reminders_if_moved`
+  deep-copies `custom_fields` before mutating it (Pitfall #12, same pattern
+  `postpone_event` uses).
+- **`attendance_waiver_requests`/`attendance_waiver_request_actions`** (new
+  tables, migration `8b1cf6f55425`) back the excusal feature above. These
+  tables and `services/attendance_waiver_service.py` are not this feature's
+  own declared scope — `attendance_waiver_requests.py` (the endpoint file)
+  is declared under Feature 18 (Training extended, row 18, `⬜`) per
+  `PROGRESS.md`'s rotation table — so only the call boundary `event_service.py`
+  crosses into it was checked here (every call passes an organization_id
+  and event/user ids this feature's own code already validated); the
+  service's own internals are that feature's own pass to review.
+
+### `event_request_service.py` / `event_requests.py` — current-member coordinator check, batched list helpers
+
+- **`assign_request` refuses a former member as the new coordinator**
+  (`not assignee.is_active`, Pitfall #32), with the correct carve-out of
+  letting an already-assigned former member be re-confirmed unchanged.
+- **`staffing_counts_by_request`, `short_notice_request_ids`,
+  `user_names_by_id`** — all new, feeding `list_event_requests`'s response
+  with per-row data in one batched query instead of N+1. Each is
+  `organization_id`-filtered directly, or (for `short_notice_request_ids`,
+  which takes bare request ids) operates only on ids the caller's own
+  org-scoped query already produced — confirmed by reading
+  `list_event_requests`'s query, which filters
+  `EventRequest.organization_id == current_user.organization_id` before
+  any of these helpers run.
+
+### Migrations reviewed
+
+`09f0171ccf5e` (postponement columns) and `790a86084359` (`guest_headcount`
+column): both nullable, no backfill needed (Pitfall #35 n/a — new, always-
+NULL-until-used columns), idempotent (column added only when absent),
+guarded on `events` existing even though it is not one of the 65
+`create_all`-only tables. `8b1cf6f55425` (waiver tables, Feature 18's own
+scope) reviewed only for the two new tables' existence/idempotency, not
+its full column design.
+
+**EV-17, EV-23, EV-26, EV-30 re-confirmed fixed, unregressed** — zero diff
+on each finding's own code this window. The `f4583df5025b` reminder-marker
+caveat from pass 14 (a purged `notification_logs` row defeats its
+double-send guard under a non-default short retention) is unaffected;
+`f4583df5025b` itself has zero diff.
+
+**0 fixed in this feature itself, 0 new findings.**
+`docs/module-audit/events.md` and `docs/app-review/events.md` re-grepped
+for `🚩`/`OPEN`/`FLAGGED` — both zero.
+
+### Frontend — grep sweep, no risky pattern found
+
+`git diff --stat` since pass 14 touches 37 files under the declared
+frontend scope (+3215/−521). Swept the full diff for
+`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, a bare
+`toHaveBeenCalledWith()`, the banned locale-method/`date-fns` imports, and
+a raw `localStorage.setItem` — zero hits.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 791
+revisions, single head `24c9eca002a2` (after #4467 merged);
+`check_route_permissions.py --strict` — 327 routes, 0 errors/0 warnings;
+scoped backend pytest (`-k "event or guest or rsvp or attendance"`, run
+under `python3.13`) — 1763 passed, 1 pre-existing environment-only skip
+(`py_vapid`); standing guard suites (capacity locking, org-scoping
+ratchet, LIKE escaping, CSV sweep, migration chain, `create_all`-table
+tolerance, account-status gates, log-call shape, baseline member grants)
+— 203 passed; `npm run typecheck` — 0 errors; `npm run lint` — 0 errors,
+0 warnings; scoped `npx vitest run` (events module/pages/components) —
+376 passed (31 files).
+
+Row 16 → ✅ (pending this PR's merge); next is Feature 17 (Training core)
+— re-check `list_pull_requests` fresh rather than trusting this note.
 
 ---
 
