@@ -661,6 +661,10 @@ only through the webhook.
 
 Authorize the service account's client ID in the Google Admin console (**Security → API controls → Domain-wide delegation**) for `admin.directory.user` and `admin.directory.group.member`, plus the read-only `admin.directory.orgunit.readonly` that lets **Test** confirm the organizational unit exists. Each account uses a Workspace license.
 
+**To change these later**, an organization administrator selects **Settings** on the connected Google Workspace card. The form opens with the saved admin, domain, organizational unit, groups and retirement setting. The key is never shown: choose a key file only to replace it, and the saved key is kept otherwise. A save applies to the next member converted. Accounts already created are not moved or changed. The domain must still match **Organization Settings → Department Email**, or the save is refused.
+
+![Google Workspace settings on a connected card: the service account key note saying a key is stored and a file is chosen only to replace it, the saved admin, domain, organizational unit and groups, the Suspend the account when a member retires box, and the notice that saved settings apply to the next member converted](./images/16-30-google-workspace-settings.png)
+
 ### What Happens at Conversion
 
 The account is created **after** the conversion is saved, so a Google failure never undoes it. The temporary Google password goes to the member's **personal** email — in the welcome email when one is sent, otherwise on its own — and Google asks for a new one at first sign-in. The conversion result says what happened, and the member's profile shows the account with a **Retry** for anything unfinished. If the address already belongs to a Google account, The Logbook links to it and changes nothing.
@@ -719,6 +723,10 @@ The app registration needs the Microsoft Graph application permissions `User.Rea
 Enter the secret's **Expires** date as **Client secret expires on**. From 30 days before it, the card shows the days left and administrators get a morning email at 30 days, 7 days and on the day. A new secret needs its new date entered with it. The Microsoft setting is **Block sign-in when a member retires**, and a group that assigns licenses is never edited, because removing the member would remove the license. Accounts still in the directory 90 days after suspension are listed under **N need attention** for information only; The Logbook never deletes an account.
 
 ![The Microsoft 365 card connected, with Client secret expires in 12 days, 3 need attention, Link existing members, Settings and Details](./images/16-20-microsoft-365-card.png)
+
+**To change these later**, or to replace the client secret before it expires, an organization administrator selects **Settings** on that card. The form opens with every saved value except the secret. Leave **Client secret value** blank to keep the saved one. To replace it, enter the new secret and its new **Client secret expires on** date in the same save; clearing the date stops the expiry warnings. Clearing **License SKU ID** leaves licensing to your groups for accounts created after the save. As with Google Workspace, a save applies to the next member converted, existing accounts are not changed, and the domain must still match **Department Email**.
+
+![Microsoft 365 settings on a connected card: the saved tenant and client IDs, the Client secret value box with its note that a secret is stored and is entered only to replace it, Client secret expires on, Domain, Usage location, License SKU ID, groups, Block sign-in when a member retires, and the notice that saved settings apply to the next member converted](./images/16-31-microsoft-365-settings.png)
 
 Conversion, the member's profile, **N need attention** and **Link existing members** work as for Google Workspace. Two differences: an account whose license could not be assigned is kept and its profile offers **Retry**; and an account synced from on-premises Active Directory is never blocked from here — the profile says to disable it in Active Directory.
 

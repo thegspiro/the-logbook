@@ -29,7 +29,7 @@ regenerated wholesale, so that audit cannot live here.
 | [13-medical-screening.md](./13-medical-screening.md) | 9 | 0 |
 | [14-elections.md](./14-elections.md) | 28 | 0 |
 | [15-prospective-members.md](./15-prospective-members.md) | 47 | 0 |
-| [16-integrations.md](./16-integrations.md) | 27 | 0 |
+| [16-integrations.md](./16-integrations.md) | 29 | 0 |
 | [17-privacy-data-rights.md](./17-privacy-data-rights.md) | 7 | 0 |
 | [18-storefront.md](./18-storefront.md) | 11 | 0 |
 | **Total** | **942** | **0** |
