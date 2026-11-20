@@ -198,6 +198,12 @@ class Organization(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # How the department names itself where the full name will not fit — the
+    # "FCVFD" beside each of a member's own shifts when they sit in one list
+    # with shifts worked for other departments. Readers fall back to ``name``
+    # when it is unset, so an installation that never fills it in loses
+    # nothing.
+    short_name: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     description: Mapped[Optional[str]] = mapped_column(Text)
     # Purchasing controls are explicit department policy, not client hints.

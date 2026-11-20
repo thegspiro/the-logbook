@@ -8,10 +8,11 @@
  */
 
 import React from 'react';
+import { FIELD_ERROR_CLASS } from '../../../components/ux/FormField';
 import { SuggestionIntakeQuestionType } from '../../../constants/enums';
 import { usePickOptions } from '../hooks/usePickOptions';
 import type { IntakeQuestion } from '../types/suggestions';
-import { savedQuestions, visibleQuestionIds } from '../utils/suggestionRouting';
+import { intakeInputId, savedQuestions, visibleQuestionIds } from '../utils/suggestionRouting';
 import PickAnswerField from './PickAnswerField';
 
 // Mirror MAX_TEXT_ANSWER_LENGTH / MAX_TEXTAREA_ANSWER_LENGTH in
@@ -25,6 +26,8 @@ interface IntakeQuestionsFieldsProps {
   questions: readonly IntakeQuestion[] | undefined;
   values: Readonly<Record<string, string>>;
   onChange: (questionId: string, value: string) => void;
+  /** What is wrong with each answer, by question id, shown on its question. */
+  errors?: Readonly<Record<string, string>> | undefined;
 }
 
 function toggleChoice(current: string, value: string, checked: boolean): string {
@@ -36,7 +39,7 @@ function toggleChoice(current: string, value: string, checked: boolean): string 
   return next.join(',');
 }
 
-const IntakeQuestionsFields: React.FC<IntakeQuestionsFieldsProps> = ({ questions, values, onChange }) => {
+const IntakeQuestionsFields: React.FC<IntakeQuestionsFieldsProps> = ({ questions, values, onChange, errors = {} }) => {
   const saved = savedQuestions(questions);
   const asks = (type: string) => saved.some((q) => q.type === type);
   const members = usePickOptions('member', asks(SuggestionIntakeQuestionType.MEMBER));
@@ -49,21 +52,35 @@ const IntakeQuestionsFields: React.FC<IntakeQuestionsFieldsProps> = ({ questions
       {saved
         .filter((q) => visible.has(q.id))
         .map((question) => {
-          const inputId = `intake-${question.id}`;
+          const inputId = intakeInputId(question.id);
           const labelId = `${inputId}-label`;
+          const error = errors[question.id];
+          const errorId = error ? `${inputId}-error` : undefined;
           const helpId = question.helpText ? `${inputId}-help` : undefined;
+          // Read on focus: the reason first, then the question's own help.
+          const describedBy = [errorId, helpId].filter(Boolean).join(' ') || undefined;
+          // aria-required rather than the native attribute: the form is
+          // noValidate and names an unanswered question on the question
+          // itself, where the browser's bubble named it and then vanished.
+          const ariaRequired = question.required ? true : undefined;
+          const ariaInvalid = error ? true : undefined;
           const value = values[question.id] ?? '';
           const label = (
             <>
               {question.label}
               {question.required && (
-                <span className="text-theme-alert-danger-text" aria-hidden="true">
+                <span className={FIELD_ERROR_CLASS} aria-hidden="true">
                   {' '}
                   *
                 </span>
               )}
             </>
           );
+          const errorText = error ? (
+            <p id={errorId} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+              {error}
+            </p>
+          ) : null;
           const help = question.helpText ? (
             <p id={helpId} className="text-theme-text-muted mt-1 text-xs">
               {question.helpText}
@@ -76,14 +93,15 @@ const IntakeQuestionsFields: React.FC<IntakeQuestionsFieldsProps> = ({ questions
           ) {
             const isMember = question.type === SuggestionIntakeQuestionType.MEMBER;
             return (
-              <fieldset key={question.id} aria-describedby={helpId}>
+              <fieldset key={question.id} aria-describedby={describedBy}>
                 <legend id={labelId} className="form-label">
                   {label}
                 </legend>
                 <PickAnswerField
                   inputId={inputId}
                   labelId={labelId}
-                  helpId={helpId}
+                  helpId={describedBy}
+                  invalid={Boolean(error)}
                   noun={isMember ? 'member' : 'vehicle'}
                   emptyMessage={
                     isMember
@@ -94,6 +112,7 @@ const IntakeQuestionsFields: React.FC<IntakeQuestionsFieldsProps> = ({ questions
                   value={value}
                   onChange={(next) => onChange(question.id, next)}
                 />
+                {errorText}
                 {help}
               </fieldset>
             );
@@ -101,23 +120,28 @@ const IntakeQuestionsFields: React.FC<IntakeQuestionsFieldsProps> = ({ questions
 
           if (question.type === SuggestionIntakeQuestionType.RATING) {
             return (
-              <fieldset key={question.id} aria-describedby={helpId}>
+              <fieldset
+                key={question.id}
+                aria-describedby={describedBy}
+                aria-required={ariaRequired}
+                aria-invalid={ariaInvalid}
+              >
                 <legend id={labelId} className="form-label">
                   {label}
                 </legend>
                 <div className="flex flex-wrap gap-4">
-                  {RATING_VALUES.map((rating) => (
+                  {RATING_VALUES.map((rating, index) => (
                     <label
                       key={rating}
                       className="text-theme-text-primary touch:min-h-[44px] flex items-center gap-1.5 text-sm"
                     >
                       <input
                         type="radio"
+                        id={index === 0 ? inputId : undefined}
                         name={inputId}
                         className="form-checkbox"
                         value={rating}
                         checked={value === rating}
-                        required={question.required}
                         onChange={() => onChange(question.id, rating)}
                       />
                       {rating}
@@ -125,6 +149,7 @@ const IntakeQuestionsFields: React.FC<IntakeQuestionsFieldsProps> = ({ questions
                   ))}
                 </div>
                 <p className="text-theme-text-muted mt-1 text-xs">1 is lowest, 5 is highest.</p>
+                {errorText}
                 {help}
               </fieldset>
             );
@@ -137,23 +162,28 @@ const IntakeQuestionsFields: React.FC<IntakeQuestionsFieldsProps> = ({ questions
             const isRadio = question.type === SuggestionIntakeQuestionType.RADIO;
             const chosen = value.split(',').map((part) => part.trim());
             return (
-              <fieldset key={question.id} aria-describedby={helpId}>
+              <fieldset
+                key={question.id}
+                aria-describedby={describedBy}
+                aria-required={ariaRequired}
+                aria-invalid={ariaInvalid}
+              >
                 <legend id={labelId} className="form-label">
                   {label}
                 </legend>
                 <div className="space-y-1">
-                  {question.options.map((option) => (
+                  {question.options.map((option, index) => (
                     <label
                       key={option.value}
                       className="text-theme-text-primary touch:min-h-[44px] flex items-center gap-2 text-sm"
                     >
                       <input
                         type={isRadio ? 'radio' : 'checkbox'}
+                        id={index === 0 ? inputId : undefined}
                         name={inputId}
                         className="form-checkbox"
                         value={option.value}
                         checked={isRadio ? value === option.value : chosen.includes(option.value)}
-                        required={isRadio && question.required}
                         onChange={(e) =>
                           onChange(
                             question.id,
@@ -165,6 +195,7 @@ const IntakeQuestionsFields: React.FC<IntakeQuestionsFieldsProps> = ({ questions
                     </label>
                   ))}
                 </div>
+                {errorText}
                 {help}
               </fieldset>
             );
@@ -180,8 +211,9 @@ const IntakeQuestionsFields: React.FC<IntakeQuestionsFieldsProps> = ({ questions
                   id={inputId}
                   className="form-input"
                   value={value}
-                  required={question.required}
-                  aria-describedby={helpId}
+                  aria-required={ariaRequired}
+                  aria-invalid={ariaInvalid}
+                  aria-describedby={describedBy}
                   onChange={(e) => onChange(question.id, e.target.value)}
                 >
                   <option value="">Choose…</option>
@@ -198,8 +230,9 @@ const IntakeQuestionsFields: React.FC<IntakeQuestionsFieldsProps> = ({ questions
                   rows={3}
                   value={value}
                   maxLength={MAX_TEXTAREA_LENGTH}
-                  required={question.required}
-                  aria-describedby={helpId}
+                  aria-required={ariaRequired}
+                  aria-invalid={ariaInvalid}
+                  aria-describedby={describedBy}
                   onChange={(e) => onChange(question.id, e.target.value)}
                 />
               ) : (
@@ -217,11 +250,13 @@ const IntakeQuestionsFields: React.FC<IntakeQuestionsFieldsProps> = ({ questions
                   }
                   value={value}
                   maxLength={question.type === SuggestionIntakeQuestionType.TEXT ? MAX_TEXT_LENGTH : undefined}
-                  required={question.required}
-                  aria-describedby={helpId}
+                  aria-required={ariaRequired}
+                  aria-invalid={ariaInvalid}
+                  aria-describedby={describedBy}
                   onChange={(e) => onChange(question.id, e.target.value)}
                 />
               )}
+              {errorText}
               {help}
             </div>
           );
