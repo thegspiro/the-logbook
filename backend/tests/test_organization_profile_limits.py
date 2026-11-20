@@ -23,6 +23,7 @@ pytestmark = pytest.mark.unit
 # {(schema, field): Organization column}
 _FIELD_COLUMNS = {
     (OrganizationProfileUpdate, "name"): "name",
+    (OrganizationProfileUpdate, "short_name"): "short_name",
     (OrganizationProfileUpdate, "timezone"): "timezone",
     (OrganizationProfileUpdate, "phone"): "phone",
     (OrganizationProfileUpdate, "email"): "email",

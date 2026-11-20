@@ -17,11 +17,20 @@ import React, { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ArrowLeft, ArrowRight, Copy, KeyRound, Loader2, Lightbulb } from 'lucide-react';
 import { EmptyState, FileDropzone } from '../../../components/ux';
-import { SuggestionAnonymityMode, SuggestionIntakeQuestionType } from '../../../constants/enums';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { SuggestionAnonymityMode } from '../../../constants/enums';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { useUnsavedChanges } from '../../../hooks/useUnsavedChanges';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { suggestionsService } from '../services/suggestionsService';
-import type { SubmissionReceipt, SuggestionBoxPublic } from '../types/suggestions';
-import { answersToSend, resolveRoute, savedQuestions, visibleQuestionIds } from '../utils/suggestionRouting';
+import type { IntakeQuestion, SubmissionReceipt, SuggestionBoxPublic } from '../types/suggestions';
+import {
+  answersToSend,
+  intakeInputId,
+  resolveRoute,
+  savedQuestions,
+  visibleQuestionIds,
+} from '../utils/suggestionRouting';
 import IntakeQuestionsFields from './IntakeQuestionsFields';
 
 // Mirrors the backend's screenshot rules in suggestion_service.py
@@ -33,6 +42,38 @@ const SCREENSHOT_MAX_EDGE_PX = 2560;
 const SCREENSHOT_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';
 const MAX_TITLE_LENGTH = 200;
 const MAX_DETAILS_LENGTH = 10000;
+
+type SubmitField = 'title' | 'details' | 'screenshots';
+const SUBMIT_FIELDS: FieldSpecs<SubmitField> = {
+  title: { id: 'suggestion-title', label: 'Title' },
+  details: { id: 'suggestion-details', label: 'Details' },
+  screenshots: { id: 'suggestion-screenshots', label: 'Screenshots' },
+};
+
+/** Every shown required question left blank, as an error on that question. */
+function unansweredQuestions(
+  questions: readonly IntakeQuestion[] | undefined,
+  answers: Readonly<Record<string, string>>
+): Record<string, string> {
+  const visible = visibleQuestionIds(questions, answers);
+  const errors: Record<string, string> = {};
+  for (const question of savedQuestions(questions)) {
+    if (question.required && visible.has(question.id) && !(answers[question.id] ?? '').trim()) {
+      errors[question.id] = `Answer “${question.label}”.`;
+    }
+  }
+  return errors;
+}
+
+/**
+ * The question a server refusal names, if any. suggestion_intake.py names a
+ * question by its label in single quotes ("'Station' needs a number.",
+ * "Please answer 'Station'."); the refusal is a 400 string, not a 422, so the
+ * label is the only key there is.
+ */
+function questionNamedIn(message: string, questions: readonly IntakeQuestion[] | undefined): string | undefined {
+  return savedQuestions(questions).find((q) => message.includes(`'${q.label}'`))?.id;
+}
 
 interface SuggestionSubmitFormProps {
   onSubmitted?: (() => void) | undefined;
@@ -64,6 +105,28 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
   const [step, setStep] = useState<'questions' | 'details'>('questions');
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   const stepChanged = useRef(false);
+  const fieldErrors = useFieldErrors(SUBMIT_FIELDS);
+  const [answerErrors, setAnswerErrors] = useState<Record<string, string>>({});
+  // Focus waits for the step's fields to render: a refused answer can send the
+  // member back from the details step to a question that is not on screen yet.
+  const focusAfterRender = useRef<string | null>(null);
+
+  // A typed suggestion is kept from a reload or a closed tab (forms review
+  // F-6); a box picked and nothing else typed is not worth a question.
+  useUnsavedChanges({
+    hasChanges:
+      !isSubmitting &&
+      (title.trim() !== '' ||
+        details.trim() !== '' ||
+        screenshots.length > 0 ||
+        Object.values(answers).some((v) => v.trim() !== '')),
+  });
+
+  const flagAnswers = (errors: Record<string, string>) => {
+    setAnswerErrors(errors);
+    const first = savedQuestions(chosenBox?.intakeQuestions).find((q) => errors[q.id]);
+    if (first) focusAfterRender.current = intakeInputId(first.id);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -112,11 +175,19 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
 
   // Move focus to the new step's heading so a screen reader announces it and
   // keyboard focus is not left on a button that has just disappeared.
+  // A step change made to show a refused answer focuses that answer instead.
   useEffect(() => {
     if (!stepChanged.current) return;
     stepChanged.current = false;
-    stepHeadingRef.current?.focus();
+    if (!focusAfterRender.current) stepHeadingRef.current?.focus();
   }, [step]);
+
+  // After the step effect above, which yields to this one when it is set.
+  useEffect(() => {
+    if (!focusAfterRender.current) return;
+    document.getElementById(focusAfterRender.current)?.focus();
+    focusAfterRender.current = null;
+  });
 
   const goToStep = (next: 'questions' | 'details') => {
     stepChanged.current = true;
@@ -127,39 +198,40 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
     setBoxId(id);
     // Answers are keyed by another box's question ids; none carry over.
     setAnswers({});
+    setAnswerErrors({});
     setStep('questions');
   };
 
   /**
-   * The browser has already checked every rendered `required` control by the
-   * time the form submits; a member pick has no native control to require,
-   * so it is checked here. The server checks all of them again.
+   * Named on the field or the question it concerns (forms review F-3), not in
+   * a toast and not by the browser's bubble: the form is noValidate. Continue
+   * and Submit are never greyed out; pressing one says what is missing.
    */
-  const unansweredPick = () => {
-    const visible = visibleQuestionIds(questions, answers);
-    return questions.find(
-      (q) =>
-        q.required &&
-        q.type === SuggestionIntakeQuestionType.MEMBER &&
-        visible.has(q.id) &&
-        !(answers[q.id] ?? '').trim()
-    );
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    fieldErrors.setFormError(null);
+    // Nothing offers a way to submit before a box is chosen: Continue and
+    // Submit only appear once one is.
     if (!chosenBox || !box) return;
     if (onQuestionsStep) {
-      const missing = unansweredPick();
-      if (missing) {
-        toast.error(`Please answer “${missing.label}”.`);
+      const missing = unansweredQuestions(chosenBox.intakeQuestions, answers);
+      if (Object.keys(missing).length > 0) {
+        flagAnswers(missing);
         return;
       }
+      setAnswerErrors({});
       goToStep('details');
       return;
     }
+    const problems: FieldErrors<SubmitField> = {};
+    if (!title.trim()) problems.title = 'Give your suggestion a title.';
+    if (!details.trim()) problems.details = 'Describe your suggestion.';
     if (screenshots.length > MAX_SCREENSHOTS) {
-      toast.error(`Attach at most ${MAX_SCREENSHOTS} screenshots.`);
+      problems.screenshots = `Attach at most ${MAX_SCREENSHOTS} screenshots; remove ${screenshots.length - MAX_SCREENSHOTS}.`;
+    }
+    fieldErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
       return;
     }
     setIsSubmitting(true);
@@ -176,6 +248,7 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
       setDetails('');
       setAnonymous(false);
       setAnswers({});
+      setAnswerErrors({});
       setStep('questions');
       setScreenshots([]);
       setDropzoneKey((k) => k + 1);
@@ -188,7 +261,17 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
       }
       onSubmitted?.();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Unable to submit. Try again.'));
+      const message = getErrorMessage(err, 'Unable to submit. Try again.');
+      const question = questionNamedIn(message, chosenBox.intakeQuestions);
+      if (question) {
+        // The answer is on the first step: go back to it, with the reason on
+        // the question and everything typed on this step kept.
+        goToStep('questions');
+        flagAnswers({ [question]: message });
+      } else {
+        // Said in the form, by the button, rather than in a toast that leaves.
+        fieldErrors.setFormError(message);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -222,6 +305,12 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
       />
     );
   }
+
+  const formErrorText = (
+    <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+      {fieldErrors.formError}
+    </p>
+  );
 
   return (
     // A reading width, not the full content column: at desktop widths a
@@ -258,7 +347,7 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
         </div>
       )}
 
-      <form onSubmit={(e) => void handleSubmit(e)} className="card space-y-4 p-4 sm:p-6">
+      <form noValidate onSubmit={(e) => void handleSubmit(e)} className="card space-y-4 p-4 sm:p-6">
         {hasQuestions && (
           <h2
             ref={stepHeadingRef}
@@ -270,28 +359,18 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
         )}
 
         {!hasQuestions || onQuestionsStep ? (
-          <div>
-            <label htmlFor="suggestion-box" className="form-label">
-              Suggestion box
-            </label>
-            <select
-              id="suggestion-box"
-              className="form-input"
-              value={boxId}
-              onChange={(e) => handleBoxChange(e.target.value)}
-              required
-            >
-              <option value="">Choose a box…</option>
-              {boxes.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-            {chosenBox?.description && (
-              <p className="text-theme-text-secondary mt-1 text-sm">{chosenBox.description}</p>
+          <FormField id="suggestion-box" label="Suggestion box" required hint={chosenBox?.description}>
+            {(field) => (
+              <select {...field} className="form-input" value={boxId} onChange={(e) => handleBoxChange(e.target.value)}>
+                <option value="">Choose a box…</option>
+                {boxes.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
             )}
-          </div>
+          </FormField>
         ) : (
           <p className="text-theme-text-secondary text-sm">
             Suggestion box: <span className="text-theme-text-primary font-medium">{chosenBox?.name}</span>
@@ -302,7 +381,17 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
           <IntakeQuestionsFields
             questions={chosenBox.intakeQuestions}
             values={answers}
-            onChange={(id, value) => setAnswers((current) => ({ ...current, [id]: value }))}
+            errors={answerErrors}
+            onChange={(id, value) => {
+              setAnswers((current) => ({ ...current, [id]: value }));
+              // Answering a flagged question is the answer to its flag.
+              setAnswerErrors((current) => {
+                if (!(id in current)) return current;
+                const rest = { ...current };
+                delete rest[id];
+                return rest;
+              });
+            }}
           />
         )}
 
@@ -321,6 +410,8 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
             if you want to stay anonymous.
           </p>
         )}
+
+        {onQuestionsStep && fieldErrors.formError && formErrorText}
 
         {onQuestionsStep && (
           <button type="submit" className="btn-primary inline-flex items-center gap-2 px-4 py-2">
@@ -360,36 +451,50 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
               </label>
             )}
 
-            <div>
-              <label htmlFor="suggestion-title" className="form-label">
-                Title
-              </label>
-              <input
-                id="suggestion-title"
-                className="form-input"
-                value={title}
-                maxLength={MAX_TITLE_LENGTH}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-              />
-            </div>
+            <FormField
+              id={SUBMIT_FIELDS.title.id}
+              label="Title"
+              required
+              error={fieldErrors.errors.title}
+              maxLength={MAX_TITLE_LENGTH}
+              count={title.length}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  className="form-input"
+                  value={title}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    fieldErrors.setError('title', null);
+                  }}
+                />
+              )}
+            </FormField>
 
-            <div>
-              <label htmlFor="suggestion-details" className="form-label">
-                Details
-              </label>
-              <textarea
-                id="suggestion-details"
-                className="form-input"
-                rows={6}
-                value={details}
-                maxLength={MAX_DETAILS_LENGTH}
-                onChange={(e) => setDetails(e.target.value)}
-                required
-              />
-            </div>
+            <FormField
+              id={SUBMIT_FIELDS.details.id}
+              label="Details"
+              required
+              error={fieldErrors.errors.details}
+              maxLength={MAX_DETAILS_LENGTH}
+              count={details.length}
+            >
+              {(field) => (
+                <textarea
+                  {...field}
+                  className="form-input"
+                  rows={6}
+                  value={details}
+                  onChange={(e) => {
+                    setDetails(e.target.value);
+                    fieldErrors.setError('details', null);
+                  }}
+                />
+              )}
+            </FormField>
 
-            <div>
+            <div id={SUBMIT_FIELDS.screenshots.id} tabIndex={-1} className="focus:outline-none">
               <span className="form-label">Screenshots (optional, up to {MAX_SCREENSHOTS})</span>
               <p className="text-theme-text-muted mb-2 text-xs">
                 PNG, JPEG, WebP or GIF, up to {MAX_SCREENSHOT_MB} MB each. Larger images are scaled down to{' '}
@@ -401,11 +506,14 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
                 multiple
                 maxSizeMB={MAX_SCREENSHOT_MB}
                 label="Drop screenshots here or click to browse"
-                onFilesSelected={setScreenshots}
+                onFilesSelected={(files) => {
+                  setScreenshots(files);
+                  fieldErrors.setError('screenshots', null);
+                }}
               />
               {/* Said as soon as the sixth lands, not only when Submit refuses it. */}
               {screenshots.length > MAX_SCREENSHOTS && (
-                <p role="alert" className="text-theme-alert-danger-text mt-1 text-xs">
+                <p role="alert" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
                   {screenshots.length} screenshots selected. Remove{' '}
                   {screenshots.length - MAX_SCREENSHOTS === 1 ? 'one' : screenshots.length - MAX_SCREENSHOTS} to submit;
                   at most {MAX_SCREENSHOTS} can be attached.
@@ -418,6 +526,8 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
                 </p>
               )}
             </div>
+
+            {fieldErrors.formError && formErrorText}
 
             <div className="flex flex-wrap items-center gap-2">
               {hasQuestions && (
@@ -434,7 +544,7 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
               <button
                 type="submit"
                 className="btn-primary inline-flex items-center gap-2 px-4 py-2 disabled:opacity-60"
-                disabled={isSubmitting || !title.trim() || !details.trim()}
+                disabled={isSubmitting}
               >
                 {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 {willBeAnonymous ? 'Submit anonymously' : 'Submit'}

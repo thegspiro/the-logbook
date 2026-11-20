@@ -15,7 +15,10 @@ const MAX_SHOWN = 8;
 interface PickAnswerFieldProps {
   inputId: string;
   labelId: string;
+  /** Ids of the help text and, when the question is refused, its error. */
   helpId?: string | undefined;
+  /** The question is flagged: the search box carries aria-invalid. */
+  invalid?: boolean | undefined;
   noun: string;
   emptyMessage: string;
   state: PickOptionsState;
@@ -27,6 +30,7 @@ const PickAnswerField: React.FC<PickAnswerFieldProps> = ({
   inputId,
   labelId,
   helpId,
+  invalid,
   noun,
   emptyMessage,
   state,
@@ -84,6 +88,7 @@ const PickAnswerField: React.FC<PickAnswerFieldProps> = ({
         placeholder={`Type to find a ${noun}`}
         aria-labelledby={labelId}
         aria-describedby={helpId}
+        aria-invalid={invalid ? true : undefined}
         autoComplete="off"
         onChange={(e) => setFilter(e.target.value)}
       />
