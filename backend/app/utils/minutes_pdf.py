@@ -14,7 +14,7 @@ be unit-tested without a database (same convention as
 
 import html
 from io import BytesIO
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -249,12 +249,14 @@ def _image_pages(
     return flow
 
 
-def render_minutes_pdf(
+def _layout(
     data: Dict[str, Any],
     meta: Dict[str, Any],
-    attachment_contents: Optional[Mapping[str, bytes]] = None,
-) -> BytesIO:
-    """Render the minutes, returning a BytesIO at position 0.
+    prepared: Mapping[str, PreparedAttachment],
+    total_pages: Optional[int],
+) -> Tuple[bytes, int]:
+    """One layout pass: the minutes' own pages, before PDF/A or any
+    appended attachment, and their count.
 
     *data* — ``title``, ``meeting_type_display``, ``meeting_date_display``,
     ``location``, ``called_by``, ``called_to_order``, ``adjourned``,
@@ -267,11 +269,8 @@ def render_minutes_pdf(
 
     *meta* — ``org_name``, ``generated_at``.
 
-    *attachment_contents* — the bytes of the attachments to embed, keyed by
-    attachment id, read for the ids ``minutes_pdf_attachments.select_for_pdf``
-    chose. Images are drawn after the signatures, PDFs appended after the
-    minutes, and every other file is listed (owner decision 2026-11-01). Left
-    out, the attachments are listed only.
+    *prepared* — the attachments decoded by ``minutes_pdf_attachments.prepare``
+    from *attachment_contents* (see :func:`render_minutes_pdf`).
     """
     header: Dict[str, Any] = data.get("header") or {}
     footer: Dict[str, Any] = data.get("footer") or {}
@@ -517,7 +516,6 @@ def render_minutes_pdf(
 
     # ── Attachments ──────────────────────────────────────────────────
     attachments = data.get("attachments") or []
-    prepared = prepare(attachments, attachment_contents or {}) if attachments else {}
     if attachments:
         story.append(Paragraph("Attachments", section_style))
         rows = [["Title", "Kind", "File", "SHA-256", "In this PDF"]]
@@ -651,7 +649,11 @@ def render_minutes_pdf(
         # applied here; lines are clipped by measured width, not characters.
         left = BINDING_EDGE
         right = width - BINDING_EDGE
-        page_label = f"Page {document.page}" if show_pages else ""
+        page_label = (
+            f"Page {document.page}" + (f" of {total_pages}" if total_pages else "")
+            if show_pages
+            else ""
+        )
         page_room = stringWidth(page_label, BODY_FONT, 7) + 12 if page_label else 0
         if notice:
             canvas.drawString(left, y + 20, _fit(str(notice), right - left))
@@ -665,10 +667,39 @@ def render_minutes_pdf(
         canvas.restoreState()
 
     doc.build(story, onFirstPage=_decorate, onLaterPages=_decorate)
+    return buf.getvalue(), doc.page
+
+
+def render_minutes_pdf(
+    data: Dict[str, Any],
+    meta: Dict[str, Any],
+    attachment_contents: Optional[Mapping[str, bytes]] = None,
+) -> BytesIO:
+    """Render the minutes, returning a BytesIO at position 0.
+
+    See :func:`_layout` for *data* and *meta*.
+
+    *attachment_contents* — the bytes of the attachments to embed, keyed by
+    attachment id, read for the ids ``minutes_pdf_attachments.select_for_pdf``
+    chose. Images are drawn after the signatures, PDFs appended after the
+    minutes, and every other file is listed (owner decision 2026-11-01). Left
+    out, the attachments are listed only.
+    """
+    attachments = data.get("attachments") or []
+    # Decoded once, before both layout passes: image decoding is the costly
+    # part, bounded by the budgets in minutes_pdf_attachments.
+    prepared = prepare(attachments, attachment_contents or {}) if attachments else {}
+    # Laid out twice: the footer is drawn on the canvas, outside the frame, so
+    # it cannot change the layout, and the first pass's page count is the
+    # second's total.
+    # The total counts the minutes' own pages. Appended attachment PDFs carry
+    # no minutes footer, and the attachment list says what follows.
+    _, pages = _layout(data, meta, prepared, None)
+    pdf, _ = _layout(data, meta, prepared, pages)
     if any(entry.kind == PDF for entry in prepared.values()):
         # PDF attachments go after the minutes, page for page. They carry no
         # minutes footer: the version and hash above are the record's own.
         # Pages from outside cannot be vouched for, so this file makes no
         # PDF/A claim (owner decision, 2026-11-09).
-        return BytesIO(append_pdfs(buf.getvalue(), attachments, prepared))
-    return BytesIO(to_pdfa(buf.getvalue()))
+        return BytesIO(append_pdfs(pdf, attachments, prepared))
+    return BytesIO(to_pdfa(pdf))

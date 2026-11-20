@@ -159,6 +159,29 @@ export const ALL_ROUTES: RouteCheck[] = [
   // without it this route's header renders none, and a lopsided row or a
   // stretched icon button in it would never be seen.
   { path: '/events', maxSmallTargets: 0, maxTinyText: 0, permissions: ['events.manage'] },
+  // The rest of the Events section strip. Each `expectText` is drawn only by
+  // its populated fixture (helpers.ts), never by an empty state.
+  {
+    path: '/events/templates',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+    expectText: 'Pancake Breakfast',
+  },
+  {
+    path: '/events/attendance-requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+    expectText: 'My phone died before I could scan the QR code; I was there the whole time.',
+  },
+  {
+    path: '/events/analytics',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['analytics.view'],
+    expectText: 'Annual Awards Banquet and Installation of Officers',
+  },
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
   // Every member reaches it; the fixture puts a request to decide on screen.
   { path: '/members/leave-requests', maxSmallTargets: 0, maxTinyText: 0 },

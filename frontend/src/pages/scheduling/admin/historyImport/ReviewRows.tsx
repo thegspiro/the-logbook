@@ -22,9 +22,10 @@ import type {
   HistoryImportIssue,
   HistoryImportRow,
   HistoryImportRowUpdate,
+  HistoryImportShift,
   MatchDecision,
 } from '../../../../modules/scheduling/types/historyImport';
-import { HISTORY_IMPORT_FIELD_LABELS } from '../../../../modules/scheduling/types/historyImport';
+import { ExistingShiftStatus, HISTORY_IMPORT_FIELD_LABELS } from '../../../../modules/scheduling/types/historyImport';
 import { issueLabel } from './historyImportLabels';
 
 /** A set of rows the reviewer was sent to, from an issue. */
@@ -36,8 +37,8 @@ export interface RowFocus {
 export interface RowActions {
   busy: boolean;
   onRowUpdate: (rowId: string, payload: HistoryImportRowUpdate) => Promise<boolean>;
-  /** Answer a probable match against a shift already on the schedule. */
-  onExistingDecision: (shiftKey: string, decision: MatchDecision) => void;
+  /** Answer a probable match against a shift already on the schedule; null takes the answer back. */
+  onExistingDecision: (shiftKey: string, decision: MatchDecision | null) => void;
 }
 
 interface ReviewRowsProps extends RowActions {
@@ -230,8 +231,18 @@ const InlineTimes: React.FC<{ row: HistoryImportRow; fields: string[] } & Pick<R
   );
 };
 
-/** Why a row is ready, skipped or excluded, and any decision already made on it. */
-const RowState: React.FC<{ row: HistoryImportRow } & RowActions> = ({ row, busy, onRowUpdate }) => (
+/**
+ * Any decision already made on a row, each with its undo. `shift` is the
+ * proposed shift the row belongs to: an answer about a shift already on the
+ * schedule is the shift's, so every row of it shows that answer.
+ */
+const RowState: React.FC<{ row: HistoryImportRow; shift?: HistoryImportShift | undefined } & RowActions> = ({
+  row,
+  shift,
+  busy,
+  onRowUpdate,
+  onExistingDecision,
+}) => (
   <>
     {row.keep_separate && (
       <div className="text-theme-text-secondary mt-1">
@@ -259,6 +270,25 @@ const RowState: React.FC<{ row: HistoryImportRow } & RowActions> = ({ row, busy,
         </button>
       </div>
     )}
+    {shift &&
+      !row.excluded &&
+      (shift.existing_status === ExistingShiftStatus.ACCEPTED ||
+        shift.existing_status === ExistingShiftStatus.SEPARATED) && (
+        <div className="text-theme-text-secondary mt-1">
+          Decided:{' '}
+          {shift.existing_status === ExistingShiftStatus.ACCEPTED
+            ? 'add to the shift already on the schedule'
+            : 'import separately from the shift already on the schedule'}{' '}
+          <button
+            type="button"
+            className="underline"
+            disabled={busy}
+            onClick={() => onExistingDecision(shift.key, null)}
+          >
+            Undo
+          </button>
+        </div>
+      )}
   </>
 );
 
@@ -276,10 +306,11 @@ const RowEditModal: React.FC<
     issues: HistoryImportIssue[];
     related: HistoryImportRow[];
     relatedIssues: Map<string, HistoryImportIssue[]>;
+    shift?: HistoryImportShift | undefined;
     onClose: () => void;
     onSave: (edits: Record<string, string | null>) => void;
   } & RowActions
-> = ({ row, fields, columnMapping, issues, related, relatedIssues, onClose, onSave, ...actions }) => {
+> = ({ row, fields, columnMapping, issues, related, relatedIssues, shift, onClose, onSave, ...actions }) => {
   const { busy } = actions;
   const [values, setValues] = useState<Record<string, string>>({ ...row.values });
 
@@ -339,7 +370,7 @@ const RowEditModal: React.FC<
             </ul>
           )}
           <div className="text-sm">
-            <RowState row={row} {...actions} />
+            <RowState row={row} shift={shift} {...actions} />
           </div>
         </section>
 
@@ -443,6 +474,8 @@ const ReviewRows: React.FC<ReviewRowsProps> = ({
 
   const issuesByRow = useMemo(() => rowIssues(analysis), [analysis]);
   const rowsById = useMemo(() => new Map(analysis.rows.map((r) => [r.id, r])), [analysis.rows]);
+  const shiftsByKey = useMemo(() => new Map(analysis.shifts.map((sh) => [sh.key, sh])), [analysis.shifts]);
+  const shiftOf = (row: HistoryImportRow) => (row.shift_key ? shiftsByKey.get(row.shift_key) : undefined);
 
   const needsAttention = (r: HistoryImportRow) => !r.excluded && issuesByRow.has(r.id);
   const counts = {
@@ -702,7 +735,7 @@ const ReviewRows: React.FC<ReviewRowsProps> = ({
                           })}
                         </ul>
                       )}
-                      <RowState row={row} {...actions} />
+                      <RowState row={row} shift={shiftOf(row)} {...actions} />
                     </td>
                     <td data-label="Actions" className="px-3 py-2">
                       <div className="flex justify-end gap-2">
@@ -745,6 +778,7 @@ const ReviewRows: React.FC<ReviewRowsProps> = ({
           issues={editingIssues}
           related={related}
           relatedIssues={issuesByRow}
+          shift={shiftOf(editing)}
           onClose={() => setEditingId(null)}
           onSave={(edits) => {
             void onRowUpdate(editing.id, { edits }).then((ok) => {

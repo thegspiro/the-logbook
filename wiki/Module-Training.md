@@ -56,7 +56,10 @@ program enrollments, external training integrations, and compliance reporting.
   **Not set up** instead of 100%; My Training, Programs and Course Library
   explain themselves to a member with nothing in them
 - **Competency Matrix** — Department readiness heat-map with color-coded
-  proficiency levels
+  proficiency levels. Since 2026-11-20 (#4413) it scrolls both ways inside a
+  bounded, keyboard-focusable box, with the member column pinned left and the
+  skill row pinned on top; member names wrap within a 7rem column instead of
+  truncating
 - **Expiring Certifications** — Tiered alerts at 90/60/30/7 days with
   escalation for expired certs
 - **Compliance Summary** — Per-member green/yellow/red compliance card on
@@ -271,7 +274,41 @@ lists those names and lets an officer link each to a library course.
 - **Endpoints** (all `training.manage`): `GET /training/course-links`
   (`search`, `offset`, `limit`), `POST /training/course-links` `{key,
 course_id}`, `POST /training/course-links/link-suggested`. Snake_case like the
-  rest of the module. No migration; no undo endpoint.
+  rest of the module.
+
+**Undo and the attention badge** _(2026-11-19, #4389, migration
+`0d54dd90d6ba`)_:
+
+- **Recorded links.** Every link (single or link-all) writes a
+  `training_course_links` row (course, label, `name_key`, `record_count`,
+  `linked_by` / `linked_at`, `undone_by` / `undone_at`) and one
+  `training_course_link_records` row per record it changed, holding the
+  record's `previous_category_id` and `previous_training_type`. Both tables are
+  new; no existing row changes, so **links made before this revision have no
+  row and cannot be undone**.
+- **Undo** (`POST /training/course-links/{link_id}/undo`, `training.manage`,
+  audited as `training_course_link_undone`) locks the link row, then puts back
+  `course_id = NULL` and the previous category and type on each record still
+  on that course and not updated since the link. "Not updated since" is
+  `app/utils/edit_window.changed_since` with a two-minute `EDIT_TOLERANCE` —
+  the helper the historical import undo uses — so the link's own write does
+  not count as an edit. Records edited since are kept and counted (`kept` in
+  the response). Members' qualifications are recomputed from the records still
+  on the course, so a qualification only the link supported is removed. A link
+  can be undone once; a second attempt is a 400 ("That link has already been
+  undone.").
+- **History**: `GET /training/course-links/history` (`offset`, `limit`),
+  newest first; the panel shows it as **Recent links**, ten a page.
+- **Badge.** The training attention queue gains an `unlinked_course_names` row
+  ("N training names can be linked to a course", **Review links**) counting
+  only names with a suggested course — **Link all suggested** clears every
+  one, while an unmatchable name would hold the row open for good (owner
+  decision 2026-11-17). The hub maps it onto **Curriculum → Course Links**.
+  It is read live on each hub load, and the panel tells the hub to re-read
+  after a link, link-all or undo. A failure building this row is contained
+  and logged so it cannot drop the queue's other rows, and the suggestion
+  matcher skips pairs whose quick-ratio bound cannot reach 0.85 (2,000 names
+  against 200 courses: 12.3 s to 0.63 s).
 
 ### Freshness window
 
@@ -1311,6 +1348,44 @@ read as one leave, not as months both on leave and waived. A leave marked
 now excuses no training month; before, it still did.
 
 ---
+
+## Former members in pickers _(2026-11-19, #4380, #4432)_
+
+`GET /users` returns every account, including the archived, retired, dropped
+and inactive members a roster import brings in. The training pickers that
+listed them all now offer current members only (`isActiveAccount`: active or
+probationary): cohort roster, add instructor qualification, manual shift
+report crew, training session lead instructor (a course's named instructor
+pre-fills only when it matches a current member) and the external-provider
+user mapping. A value already saved that names someone who has left stays in
+the select, marked "(former member)" (the mapping shows the stored name), so
+saving does not swap it out.
+
+The write paths behind them refuse a **newly chosen** former member with a 400
+"Only current members can be chosen as …" (`assert_current_members` in
+`app/utils/org_scoping.py`, which lets the record's stored ids through via
+`keep` and gives the same message for a former, deleted or other-org id):
+instructor qualification create, `POST /shift-completion/batch` with no
+linked shift, and the lead instructor on training-event create/edit and
+`POST /training/sessions` / `/recurring`. Cohort generation skips a former
+member with the warning "A selected member is no longer a current member."
+A batch linked to a scheduled shift and cohorts generated from class templates
+are not checked, because a member who worked the shift or was named on the
+template may have left since.
+
+## Phones and fixes, 2026-11-19 – 20
+
+- **Tables reflow to cards** (#4413): My Training's recent, self-reported and
+  History tables, the historical import preview and Member Training Status
+  use `rwd-table-wide` (cards on a tablet with the side navigation open too);
+  Expiring Certifications and the annual report's requirement analysis use
+  `rwd-table-narrow`. Held by `e2e/table-fit-training-phone.spec.ts`.
+- **Reordering a program's requirements** (#4390) answered 500 after the new
+  order had committed (the response lazy-loaded each link's requirement on the
+  async session). The service now eager-loads it.
+- **Headline Metrics settings** (#4426) no longer jump on a slow load: the
+  placeholder and loaded screen are keyed separately, so React replaces one
+  with the other instead of morphing it (a 0.35 layout shift on a phone).
 
 ## Cross-Module Connections
 

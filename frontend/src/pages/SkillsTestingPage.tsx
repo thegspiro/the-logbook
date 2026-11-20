@@ -265,7 +265,7 @@ export const SkillsTestingPage: React.FC = () => {
                 <span className="sr-only">Loading...</span>
               </div>
             ) : filteredTemplates.length === 0 ? (
-              <div className="card py-12 text-center">
+              <div className="card px-4 py-12 text-center">
                 <ClipboardCheck className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
                 <p className="text-theme-text-muted">
                   {searchQuery ? 'No tests match your search' : 'No tests are available yet'}
@@ -306,7 +306,7 @@ export const SkillsTestingPage: React.FC = () => {
                 <span className="sr-only">Loading...</span>
               </div>
             ) : tests.length === 0 ? (
-              <div className="card py-12 text-center">
+              <div className="card px-4 py-12 text-center">
                 <ClipboardCheck className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
                 <p className="text-theme-text-muted">
                   {searchQuery ? 'No results match your search' : "You haven't taken any tests yet"}

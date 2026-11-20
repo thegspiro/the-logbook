@@ -192,17 +192,22 @@ export const EventTemplatesPage: React.FC = () => {
         ) : (
           <div className="space-y-4">
             {templates.map((template) => (
-              <div key={template.id} className={`card p-5 transition-all ${!template.is_active ? 'opacity-60' : ''}`}>
+              // An inactive template is marked by its badge and a dashed border, not by
+              // fading the card: opacity-60 took every line of it below 7:1.
+              <div
+                key={template.id}
+                className={`card p-5 transition-all ${!template.is_active ? 'border-dashed' : ''}`}
+              >
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                   {/* Template Info */}
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex items-center gap-2">
-                      <h3 className="text-theme-text-primary line-clamp-2 text-lg font-medium">{template.name}</h3>
+                      <h2 className="text-theme-text-primary line-clamp-2 text-lg font-medium">{template.name}</h2>
                       <span
                         className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                           template.is_active
-                            ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400'
-                            : 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400'
+                            ? 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300'
+                            : 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300'
                         }`}
                       >
                         {template.is_active ? 'Active' : 'Inactive'}
@@ -223,12 +228,12 @@ export const EventTemplatesPage: React.FC = () => {
                         </span>
                       )}
                       {template.requires_rsvp && (
-                        <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
+                        <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-900 dark:bg-blue-500/20 dark:text-blue-300">
                           RSVP Required
                         </span>
                       )}
                       {template.is_mandatory && (
-                        <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">
+                        <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs text-orange-900 dark:bg-orange-500/20 dark:text-orange-300">
                           Mandatory
                         </span>
                       )}
@@ -241,7 +246,7 @@ export const EventTemplatesPage: React.FC = () => {
                       onClick={() => {
                         void handleToggleActive(template);
                       }}
-                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-2 transition-colors"
+                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-md p-2 transition-colors"
                       title={template.is_active ? 'Deactivate template' : 'Activate template'}
                       aria-label={template.is_active ? `Deactivate ${template.name}` : `Activate ${template.name}`}
                     >
@@ -253,7 +258,7 @@ export const EventTemplatesPage: React.FC = () => {
                     </button>
                     <button
                       onClick={() => handleEdit(template)}
-                      className="text-theme-text-muted hover:bg-theme-surface-hover rounded-md p-2 transition-colors hover:text-blue-600 dark:hover:text-blue-400"
+                      className="text-theme-text-muted hover:bg-theme-surface-hover touch-target-phone rounded-md p-2 transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                       title="Edit template"
                       aria-label={`Edit ${template.name}`}
                     >
@@ -262,7 +267,7 @@ export const EventTemplatesPage: React.FC = () => {
                     {template.is_active && (
                       <button
                         onClick={() => setDeleteTarget(template)}
-                        className="text-theme-text-muted hover:bg-theme-surface-hover rounded-md p-2 transition-colors hover:text-amber-700 dark:hover:text-amber-400"
+                        className="text-theme-text-muted hover:bg-theme-surface-hover touch-target-phone rounded-md p-2 transition-colors hover:text-amber-700 dark:hover:text-amber-400"
                         title="Deactivate template…"
                         aria-label={`Deactivate ${template.name}…`}
                       >
