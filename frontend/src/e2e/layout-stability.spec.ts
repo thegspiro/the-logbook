@@ -27,9 +27,13 @@
  * page (0.35 on a phone). Keying each state's root replaces the placeholder
  * instead; see the LATE table.
  *
- * WebKit does not report layout-shift entries, so on the Mobile Safari project
- * the measured value is always 0 and the second and third checks measure
- * nothing there. Chromium is where they hold.
+ * The second and third run only where the browser reports layout-shift
+ * entries: Chromium, which includes the Mobile Chrome project. WebKit and
+ * Firefox report none, so on Mobile Safari every case measured 0 and passed
+ * without measuring anything. They are skipped there (owner decision
+ * 2026-11-20). The footer check measures a position, so it runs everywhere.
+ * `layoutShiftOf` also fails outright if the browser cannot report the metric,
+ * so a 0 never again passes for a measurement.
  */
 
 import { test, expect } from '@playwright/test';
@@ -119,8 +123,9 @@ const layoutShiftOf = async (
     });
   }
   await page.addInitScript(() => {
-    const w = window as unknown as { __layoutShift: number };
+    const w = window as unknown as { __layoutShift: number; __layoutShiftSupported: boolean };
     w.__layoutShift = 0;
+    w.__layoutShiftSupported = PerformanceObserver.supportedEntryTypes.includes('layout-shift');
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries() as unknown as { value: number; hadRecentInput: boolean }[]) {
         if (!entry.hadRecentInput) w.__layoutShift += entry.value;
@@ -134,10 +139,26 @@ const layoutShiftOf = async (
   }
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   await page.waitForTimeout(1_000);
-  return page.evaluate(() => (window as unknown as { __layoutShift: number }).__layoutShift);
+  const { shift, supported } = await page.evaluate(() => {
+    const w = window as unknown as { __layoutShift: number; __layoutShiftSupported: boolean };
+    return { shift: w.__layoutShift, supported: w.__layoutShiftSupported };
+  });
+  expect(supported, 'this browser reports no layout-shift entries, so 0 would pass whatever the page did').toBe(true);
+  return shift;
 };
 
+// The layout-shift checks below need the browser to report layout-shift
+// entries. Only Chromium does; WebKit and Firefox report none, so there every
+// case measured 0 and passed without measuring anything (owner decision
+// 2026-11-20). This states an engine limit, not a flaky test (CLAUDE.md #38).
+const onlyWhereLayoutShiftIsReported = () =>
+  test.skip(
+    ({ browserName }) => browserName !== 'chromium',
+    'WebKit and Firefox report no layout-shift entries, so this check cannot measure anything there'
+  );
+
 test.describe('A page does not jump while it loads on a phone', () => {
+  onlyWhereLayoutShiftIsReported();
   test.use({ hasTouch: true });
 
   for (const { path, viewport } of LOADS.filter((load) => load.viewport === PHONE)) {
@@ -148,6 +169,7 @@ test.describe('A page does not jump while it loads on a phone', () => {
 });
 
 test.describe('A page does not jump while it loads on a desktop', () => {
+  onlyWhereLayoutShiftIsReported();
   for (const { path, viewport } of LOADS.filter((load) => load.viewport === DESKTOP)) {
     test(path, async ({ page }) => {
       expect(await layoutShiftOf(page, path, viewport)).toBeLessThan(0.1);
@@ -176,6 +198,7 @@ const LATE: (LateResponse & { path: string; viewport: { width: number; height: n
 ];
 
 test.describe('A page does not jump when its own data arrives after it is shown on a phone', () => {
+  onlyWhereLayoutShiftIsReported();
   test.use({ hasTouch: true });
 
   for (const { path, viewport, ...late } of LATE.filter((load) => load.viewport === PHONE)) {
@@ -186,6 +209,7 @@ test.describe('A page does not jump when its own data arrives after it is shown 
 });
 
 test.describe('A page does not jump when its own data arrives after it is shown on a desktop', () => {
+  onlyWhereLayoutShiftIsReported();
   for (const { path, viewport, ...late } of LATE.filter((load) => load.viewport === DESKTOP)) {
     test(path, async ({ page }) => {
       expect(await layoutShiftOf(page, path, viewport, late)).toBeLessThan(0.1);
