@@ -258,6 +258,12 @@ results share the table and are never deleted by retention.
   infected file is never stored, and the audit event carries the
   signature name and a hash, never the file or its name. See
   [Security Configuration → Malware scanning](Configuration-Security#malware-scanning-of-uploads).
+- **Files left by a permanent member delete** are queued in
+  `pending_file_deletions` inside the delete's own transaction and removed
+  right after it. Whatever a crash or an unreachable remote store left is
+  retried every hour by the `pending_file_deletions` task, which checks each
+  file's references again first and keeps one another record still uses. A
+  row that keeps failing stays queued; nothing is dropped.
 - **Public-portal access logs** (each request to the public API, including
   refused authentications, with the requester's IP address) are kept **90
   days**, a fixed platform-wide period, and deleted daily by the
