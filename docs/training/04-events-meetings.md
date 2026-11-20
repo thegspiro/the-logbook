@@ -2731,6 +2731,14 @@ same stretch of the previous period — the first forty days of this quarter
 against the first forty of the last — so a period still under way is not
 compared with a finished one. **All time** has nothing to compare with.
 
+**Printing a summary.** **Print summary**, above the events table, opens the
+report for the period you chose as a page ready to print or to save as a PDF
+from the browser's print dialog. It carries the department's name and logo,
+the figures beside the previous period's, the breakdowns by month and by type
+(every type, rather than folding the smaller ones into **Other**), and every
+outreach event in the period. Use it for an annual report to a board or a
+town council.
+
 Under the figures:
 
 - **People reached by month** stacks counted guests under estimates (by year
