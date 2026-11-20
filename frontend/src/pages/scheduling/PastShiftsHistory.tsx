@@ -11,11 +11,15 @@
  * Every row has a full date in its month header, which the flat list it
  * replaced did not — "Sat, Oct 11" appeared twice there with nothing to tell
  * the two years apart.
+ *
+ * Hours are credited hours, the Hours tab's own figures (see pastShiftsModel).
+ * If they cannot be loaded the shifts are still listed and the hours read "—":
+ * re-deriving them here would bring back the disagreement this replaced.
  */
 
 import React, { useMemo, useState } from 'react';
 import { ChevronDown, Clock, LogIn } from 'lucide-react';
-import type { ShiftRecord, ShiftAttendanceRecord } from '../../modules/scheduling/services/api';
+import type { MemberHoursMonth, ShiftRecord, ShiftAttendanceRecord } from '../../modules/scheduling/services/api';
 import type { Assignment } from '../../types/scheduling';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
@@ -26,19 +30,29 @@ import {
   ALL_TIME,
   MONTH_NAMES,
   buildPastRows,
+  creditByMonth,
+  creditByYear,
+  creditInScope,
+  foldCredit,
   groupByMonth,
   monthHeading,
   resolveScope,
   rowsInScope,
   summarizeYears,
-  totalsFor,
 } from './pastShiftsModel';
-import type { PastShiftRow, PeriodTotals } from './pastShiftsModel';
+import type { PastShiftRow } from './pastShiftsModel';
 
 const plural = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
 
-const periodLine = (totals: PeriodTotals): string =>
-  `${plural(totals.shifts, 'shift', 'shifts')} · ${formatHours(totals.hours)} hrs`;
+/** "4 shifts · 36.5 hrs credited · 12 hrs awaiting close-out" */
+const periodLine = (listed: number, credit: MemberHoursMonth | undefined, creditLoaded: boolean): string => {
+  const parts = [plural(listed, 'shift', 'shifts')];
+  if (creditLoaded) {
+    parts.push(`${formatHours(credit?.hours ?? 0)} hrs credited`);
+    if ((credit?.pending_hours ?? 0) > 0) parts.push(`${formatHours(credit?.pending_hours)} hrs awaiting close-out`);
+  }
+  return parts.join(' · ');
+};
 
 const sectionId = (key: string): string => `past-shifts-${key}`;
 
@@ -128,10 +142,18 @@ const ShiftRow: React.FC<{
     : '';
 
   let worked: React.ReactNode = null;
-  if (row.hours !== null) {
+  if (row.hours !== null && row.credited) {
     worked = (
       <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-green-800 dark:text-green-400">
-        <Clock className="h-3 w-3" aria-hidden="true" /> {formatHours(row.hours)}h worked
+        <Clock className="h-3 w-3" aria-hidden="true" /> {formatHours(row.hours)}h credited
+      </span>
+    );
+  } else if (row.hours !== null) {
+    // Worked, but the shift is not finalized yet, so the time is not credit:
+    // the Hours tab and the month header count it as pending, and so does this.
+    worked = (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-amber-800 dark:text-amber-300">
+        <Clock className="h-3 w-3" aria-hidden="true" /> {formatHours(row.hours)}h · awaiting close-out
       </span>
     );
   } else if (attendance?.checked_in_at) {
@@ -196,42 +218,58 @@ interface PastShiftsHistoryProps {
   /** Past assignments, newest first. Declined and cancelled seats are already removed. */
   past: Assignment[];
   attendanceByShift: Map<string, ShiftAttendanceRecord>;
+  /**
+   * Every month of credited hours, from `/scheduling/my-hours-history`'s
+   * `history`. Null when it could not be loaded.
+   */
+  creditHistory: MemberHoursMonth[] | null;
   onViewShift?: ((shift: ShiftRecord) => void) | undefined;
 }
 
-export const PastShiftsHistory: React.FC<PastShiftsHistoryProps> = ({ past, attendanceByShift, onViewShift }) => {
+export const PastShiftsHistory: React.FC<PastShiftsHistoryProps> = ({
+  past,
+  attendanceByShift,
+  creditHistory,
+  onViewShift,
+}) => {
   const [requestedScope, setRequestedScope] = useState<string | null>(null);
 
   const rows = useMemo(() => buildPastRows(past, attendanceByShift), [past, attendanceByShift]);
   const years = useMemo(() => summarizeYears(rows), [rows]);
   const scope = resolveScope(requestedScope, years);
   const scoped = useMemo(() => rowsInScope(rows, scope), [rows, scope]);
-  const totals = useMemo(() => totalsFor(scoped), [scoped]);
   const months = useMemo(() => groupByMonth(scoped), [scoped]);
+  const creditLoaded = creditHistory !== null;
+  const credit = useMemo(() => foldCredit(creditInScope(creditHistory ?? [], scope)), [creditHistory, scope]);
+  const monthCredit = useMemo(() => creditByMonth(creditHistory ?? []), [creditHistory]);
+  const yearCredit = useMemo(() => creditByYear(creditHistory ?? []), [creditHistory]);
   const allTime = scope === ALL_TIME;
   const scopeLabel = allTime ? 'All time' : scope;
 
   const bars: ChartBar[] = useMemo(() => {
     if (allTime) {
       // Oldest on the left, so the chart reads as a career left to right.
-      return [...years].reverse().map((y) => ({
-        key: String(y.year),
-        label: String(y.year),
-        description: `${y.year}: ${formatHours(y.hours)} hrs, ${plural(y.shifts, 'shift', 'shifts')}`,
-        hours: y.hours,
-        shifts: y.shifts,
-        onSelect: () => setRequestedScope(String(y.year)),
-      }));
+      return [...years].reverse().map((y) => {
+        const hours = yearCredit.get(y.year)?.hours ?? 0;
+        return {
+          key: String(y.year),
+          label: String(y.year),
+          description: `${y.year}: ${formatHours(hours)} hrs credited, ${plural(y.shifts, 'shift', 'shifts')}`,
+          hours,
+          shifts: y.shifts,
+          onSelect: () => setRequestedScope(String(y.year)),
+        };
+      });
     }
     const byMonth = new Map(months.map((m) => [m.month, m]));
     return MONTH_NAMES.map((name, index) => {
       const group = byMonth.get(index + 1);
-      const hours = group?.hours ?? 0;
+      const hours = group ? (monthCredit.get(group.key)?.hours ?? 0) : 0;
       const shifts = group?.shifts ?? 0;
       return {
         key: name,
         label: name.slice(0, 3),
-        description: `${name}: ${formatHours(hours)} hrs, ${plural(shifts, 'shift', 'shifts')}`,
+        description: `${name}: ${formatHours(hours)} hrs credited, ${plural(shifts, 'shift', 'shifts')}`,
         hours,
         shifts,
         onSelect: () => {
@@ -239,7 +277,7 @@ export const PastShiftsHistory: React.FC<PastShiftsHistoryProps> = ({ past, atte
         },
       };
     });
-  }, [allTime, years, months]);
+  }, [allTime, years, months, yearCredit, monthCredit]);
 
   if (rows.length === 0) {
     return (
@@ -272,23 +310,43 @@ export const PastShiftsHistory: React.FC<PastShiftsHistoryProps> = ({ past, atte
         </select>
       </div>
 
+      {!creditLoaded && (
+        <div className="alert-warning" role="status">
+          Your credited hours could not be loaded, so hours are not shown. Your shifts are still listed below.
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-3">
-        <div className="card p-3 text-center" role="group" aria-label={`Hours worked, ${scopeLabel}`}>
-          <p className="text-theme-text-primary text-xl font-bold">{formatHours(totals.hours)}</p>
-          <p className="text-theme-text-muted text-xs">Hours worked · {scopeLabel}</p>
+        <div className="card p-3 text-center" role="group" aria-label={`Hours credited, ${scopeLabel}`}>
+          <p className="text-theme-text-primary text-xl font-bold">{creditLoaded ? formatHours(credit.hours) : '—'}</p>
+          <p className="text-theme-text-muted text-xs">Hours credited · {scopeLabel}</p>
+          {creditLoaded && credit.pendingHours > 0 && (
+            <p className="text-theme-text-muted mt-1 text-xs">
+              +{formatHours(credit.pendingHours)} hrs awaiting close-out
+            </p>
+          )}
         </div>
-        <div className="card p-3 text-center" role="group" aria-label={`Shifts, ${scopeLabel}`}>
-          <p className="text-theme-text-primary text-xl font-bold">{totals.shifts}</p>
-          <p className="text-theme-text-muted text-xs">Shifts · {scopeLabel}</p>
+        <div className="card p-3 text-center" role="group" aria-label={`Credited shifts, ${scopeLabel}`}>
+          <p className="text-theme-text-primary text-xl font-bold">{creditLoaded ? credit.shifts : '—'}</p>
+          <p className="text-theme-text-muted text-xs">Credited shifts · {scopeLabel}</p>
+          {creditLoaded && credit.pendingShifts > 0 && (
+            <p className="text-theme-text-muted mt-1 text-xs">+{credit.pendingShifts} awaiting close-out</p>
+          )}
         </div>
-        <div className="card p-3 text-center" role="group" aria-label={`Average hours per shift, ${scopeLabel}`}>
-          <p className="text-theme-text-primary text-xl font-bold">{formatHoursExact(totals.averageHours)}</p>
+        <div
+          className="card p-3 text-center"
+          role="group"
+          aria-label={`Average hours per credited shift, ${scopeLabel}`}
+        >
+          <p className="text-theme-text-primary text-xl font-bold">
+            {creditLoaded ? formatHoursExact(credit.averageHours) : '—'}
+          </p>
           <p className="text-theme-text-muted text-xs">Avg hours/shift</p>
         </div>
       </div>
 
-      {bars.length > 0 && (
-        <HoursChart title={allTime ? 'Hours worked by year' : `Hours worked by month · ${scope}`} bars={bars} />
+      {creditLoaded && bars.length > 0 && (
+        <HoursChart title={allTime ? 'Hours credited by year' : `Hours credited by month · ${scope}`} bars={bars} />
       )}
 
       {/* overflow-clip, not overflow-hidden: hidden would make this card the
@@ -303,7 +361,9 @@ export const PastShiftsHistory: React.FC<PastShiftsHistoryProps> = ({ past, atte
               >
                 {monthHeading(group)}
               </h3>
-              <span className="text-theme-text-muted text-xs">{periodLine(group)}</span>
+              <span className="text-theme-text-muted text-xs">
+                {periodLine(group.shifts, monthCredit.get(group.key), creditLoaded)}
+              </span>
             </div>
             <ul className="divide-theme-surface-border divide-y">
               {group.rows.map((row) => (

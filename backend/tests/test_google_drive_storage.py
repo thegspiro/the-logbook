@@ -228,6 +228,9 @@ class TestReferences:
             f"gdrive://bad id/fileid0000000001/{ORG}/documents/a",
             f"gdrive://{DRIVE}/bad.id/{ORG}/documents/a",
         ],
+        # Named: an id built from a value drawn at import differs in every
+        # process, and pytest-xdist refuses to run when its workers disagree.
+        ids=["scheme-only", "no-file", "no-key", "bad-drive-id", "bad-file-id"],
     )
     def test_not_a_reference(self, value):
         assert gdrive.parse_ref(value) is None

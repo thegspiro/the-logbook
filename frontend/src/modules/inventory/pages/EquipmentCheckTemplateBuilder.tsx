@@ -7096,8 +7096,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="max-h-[60dvh] overflow-auto px-6 py-4">
-              <table className="w-full text-sm">
+            <div className="rwd-table-container max-h-[60dvh] overflow-auto px-6 py-4">
+              <table className="rwd-table rwd-table-narrow w-full text-sm">
                 <thead>
                   <tr className="border-theme-surface-border text-theme-text-secondary border-b text-left">
                     <th className="pr-3 pb-2">Compartment</th>
@@ -7111,17 +7111,27 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <tbody>
                   {csvPreview.map((row, i) => (
                     <tr key={i} className="border-theme-surface-border/50 border-b">
-                      <td className="text-theme-text-secondary py-1.5 pr-3">{row.compartment}</td>
-                      <td className="text-theme-text-primary py-1.5 pr-3">{row.name}</td>
-                      <td className="py-1.5 pr-3">{row.checkType}</td>
-                      <td className="py-1.5 pr-3">
+                      <td data-label="Compartment" className="text-theme-text-secondary py-1.5 pr-3">
+                        {row.compartment}
+                      </td>
+                      <td data-label="Item" className="rwd-table-lead text-theme-text-primary py-1.5 pr-3">
+                        {row.name}
+                      </td>
+                      <td data-label="Type" className="py-1.5 pr-3">
+                        {row.checkType}
+                      </td>
+                      <td data-label="Par" className="py-1.5 pr-3">
                         {row.expectedQty || '—'}
                         {row.expectedQty && (row.countUnit || row.levelUnit)
                           ? ` ${row.countUnit || row.levelUnit}`
                           : ''}
                       </td>
-                      <td className="py-1.5 pr-3">{row.minToPass || '—'}</td>
-                      <td className="py-1.5">{row.criticalMin || '—'}</td>
+                      <td data-label="Min to Pass" className="py-1.5 pr-3">
+                        {row.minToPass || '—'}
+                      </td>
+                      <td data-label="Critical Min" className="py-1.5">
+                        {row.criticalMin || '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

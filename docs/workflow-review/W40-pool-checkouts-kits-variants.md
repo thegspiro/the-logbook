@@ -172,11 +172,19 @@ group. Covered by a new case in `VariantGroupsPage.test.tsx`.
 Generate variants fill an existing group, is a design choice. Mirrored into
 `docs/KNOWN_LIMITATIONS.md`.
 
-### W40-8 — NIT — A refused extension shows the raw field name — OPEN
+### W40-8 — NIT — A refused extension shows the raw field name — ✅ FIXED
 
 "expected_return_at: expected_return_at must be in the future. (Error code:
 LB-VAL-001)". The date field already has a minimum, so only a typed date reaches
 this. Left: the wording comes from the shared 422 formatting.
+**Where:** `frontend/src/utils/errorHandling.ts` (`describeValidationError`).
+**Fix:** a 422 entry's field is shown as a label (`expected_return_at` reads
+"Expected return"; a trailing `at`/`id` and list indexes are dropped), and when
+the server's message already names the field the name is replaced in place
+rather than prefixed. The extension refusal now reads "Expected return must be
+in the future. (Error code: LB-VAL-001)". Fixed with W42-7, which is the same
+formatting. Covered by `errorHandling.test.ts`; the new cases fail against the
+old formatter.
 
 ### W40-9 — NIT — The kit member picker calls pool issuances "items assigned" — OPEN
 
@@ -194,7 +202,7 @@ Left: the picker is shared, and its count is a total of everything held.
 | 5. Coming back to it    | ✅ counts and loans survive reload; fixed W40-5 (due date a day early)       |
 | 6. On a phone           | ✅ pool page, Issue dialog and loans page at 390×844                         |
 | 7. Everyone can use it  | Fixed W40-3, W40-4                                                           |
-| 8. What happens around  | Fixed W40-2; flagged W40-7; W40-8, W40-9 open                                |
+| 8. What happens around  | Fixed W40-2, W40-8; flagged W40-7; W40-9 open                                |
 
 ## Completion gate
 

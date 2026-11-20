@@ -468,3 +468,39 @@ class TestListing:
 
         assert await service.list_payment_events(org_b.id) == []
         assert await service.count_unresolved_payment_events(org_b.id) == 0
+
+
+class TestAppliedOverpayment:
+    """W67b-7: a PayPal capture applied by hand records what actually arrived,
+    and the excess can be refunded without the order reading part-paid."""
+
+    async def test_an_applied_overpaying_capture_is_recorded_in_full(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        order = await _placed_order(db_session, org, service)
+        event = await service.record_external_payment(
+            org.id, "paypal", _capture(order.order_number, Decimal("50.00"))
+        )
+        assert event.status == StorePaymentEventStatus.AMBIGUOUS
+
+        await service.apply_payment_event(event.id, org.id, None)
+
+        settled = await service.get_order(order.id, org.id)
+        assert settled.amount_paid == Decimal("50.00")
+        assert settled.payment_status == StorePaymentStatus.PAID
+
+    async def test_refunding_only_the_excess_leaves_the_order_paid(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        order = await _placed_order(db_session, org, service)
+        event = await service.record_external_payment(
+            org.id, "paypal", _capture(order.order_number, Decimal("50.00"))
+        )
+        await service.apply_payment_event(event.id, org.id, None)
+
+        refunded = await service.refund_order(
+            order.id, org.id, None, amount=Decimal("5.00"), notify_member=False
+        )
+
+        assert refunded.amount_paid == Decimal("45.00")
+        assert refunded.payment_status == StorePaymentStatus.PAID

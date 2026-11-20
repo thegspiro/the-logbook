@@ -220,6 +220,12 @@ days), so they can extend or close it. Each series is reminded once
 **Needs You** band ("Events needing your response") at the top. The band's
 overflow link narrows the grid to what needs a response.
 
+- **Mandatory events awaiting a response** — an unanswered mandatory event is
+  in the band only once it starts within the department's response window
+  (**Events settings → Attendance → Mandatory event responses**, 1–365 days,
+  default 60), so a recurring mandatory series does not ask about every
+  future occurrence at once. One whose RSVP deadline is under 48 hours away is
+  in the band regardless.
 - **Missed mandatory events** — `GET /events/missed-mandatory` supplies the
   mandatory events the caller did not attend, for the band's "missed" rows. A
   member who joined after an event ran, or who was not in its audience, is not
@@ -388,7 +394,12 @@ credit. The other manager controls — Edit, Finalize, Record Times, the More
 menu — stay with `events.manage`. See
 [Module-Events-Developer](Module-Events-Developer) for the access table.
 
-- **Export CSV** of the attendee list and **Print roster**.
+- **Export CSV** of the attendee list and **Print roster**. The attendee CSV
+  and both event-list exports end with a **Source** column, **Imported** (the
+  Historical Data Import wrote it, per the `imported_source_records` ledger)
+  or **The Logbook** _(2026-11-19, #4355; `services/import_provenance.py`;
+  `source` / `source_label` on `EventListItem` and the roster's
+  `RSVPResponse`)_.
 - **Non-respondent reminders** (`POST /events/{id}/send-reminders`) — exclude
   members who already responded (going, not going or maybe).
 - **Get Directions** — a map link for events with a location.
@@ -451,6 +462,13 @@ scheduled start it was.
   (`GET /events/{id}/eligible-members`) and checks them in
   (`POST /events/{id}/check-in`); its buttons are named "Check in {name}", and
   it offers bulk add.
+- **An officer check-in after the scheduled start is stored at the scheduled
+  start** _(2026-11-17, #4395)_: the officer is vouching for attendance, so a
+  member is not docked the minutes it took to reach their name. It is written
+  as `checked_in_at`, not `override_check_in_at`, so the row is not marked
+  "(times edited)". Self check-ins (QR, ID card, the member's own button) still
+  count from the tap; a genuinely late arrival is corrected with **Edit Times**,
+  and the click time stays in the `event_checkin` audit entry.
 - `/events/:id/monitoring` (`GET /events/{id}/check-in-monitoring`) shows live
   check-in status using the same window logic as self check-in.
 - **End Event** (`POST /events/{id}/end-event`) ends an in-progress event:
@@ -858,7 +876,8 @@ client API cache (`/attendance-petitions` in `UNCACHEABLE_PREFIXES`).
   needs attendance reopened first, and that declining works either way, instead
   of the plain "Review the request" line.
 - **Across events:** `/events/attendance-requests` lists every pending request
-  on events the viewer organizes or is alternate for, oldest first, with
+  routed to the viewer — on events they organize or are alternate for, and any
+  a fallback step sent them — oldest first, with
   **Approve** / **Decline** in place (the same dialogs as the event card,
   `AttendancePetitionDecisionDialogs.tsx`). `events.manage` holders get **All
   events**. The Events page shows "N attendance requests are waiting for you"

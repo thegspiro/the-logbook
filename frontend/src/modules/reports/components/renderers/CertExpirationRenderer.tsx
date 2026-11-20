@@ -95,6 +95,7 @@ export function getCertExpirationExportData(data: CertExpirationReport) {
     { key: 'expiration_date', header: 'Expires' },
     { key: 'days_until_expiry', header: 'Days Until Expiry' },
     { key: 'expiry_status', header: 'Status' },
+    { key: 'source', header: 'Source' },
   ];
   return { rows: data.entries as unknown as Array<Record<string, unknown>>, columns };
 }

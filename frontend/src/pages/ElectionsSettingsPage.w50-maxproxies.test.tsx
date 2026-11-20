@@ -130,7 +130,7 @@ describe('ElectionsSettingsPage — max proxies per person (W50-49)', () => {
 
     expect(await screen.findByText(/Couldn't save/, {}, SETTLE)).toBeInTheDocument();
     expect(screen.queryByText('All changes saved')).not.toBeInTheDocument();
-    expect(toast.error).toHaveBeenCalledWith('max_proxies_per_person: Input should be less than or equal to 10.');
+    expect(toast.error).toHaveBeenCalledWith('Max proxies per person: Input should be less than or equal to 10.');
     // The failure never rolls the field back to the stored value.
     expect(input).toHaveValue(5);
   });

@@ -28,6 +28,9 @@ import type {
   StaffingUnfilledView,
   TrainingPreview,
   TrainingSettingsUpdate,
+  HistoricalUndoStep,
+  UndoPreview,
+  UndoResult,
 } from '../types/historicalImport';
 
 const api = createApiClient();
@@ -141,6 +144,16 @@ export const historicalImportService = {
   /** Make each held drill a session linked to the chosen requirements; safe to run again. */
   async commitDrills(importId: string): Promise<DrillPreview> {
     const response = await api.post<DrillPreview>(`${BASE}/${importId}/drills/commit`, null, { timeout: 0 });
+    return response.data;
+  },
+
+  async getUndoPreview(importId: string): Promise<UndoPreview> {
+    const response = await api.get<UndoPreview>(`${BASE}/${importId}/undo`, { timeout: 0 });
+    return response.data;
+  },
+
+  async undoStep(importId: string, step: HistoricalUndoStep): Promise<UndoResult> {
+    const response = await api.post<UndoResult>(`${BASE}/${importId}/undo/${step}`, null, { timeout: 0 });
     return response.data;
   },
 

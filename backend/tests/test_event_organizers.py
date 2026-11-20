@@ -477,6 +477,63 @@ class TestWhoMayDecide:
             )
 
 
+class TestWaitingForYou:
+    """The "mine" list, which the Events page counts for its banner and the
+    Attendance Requests page shows by default, holds the requests routed to
+    the reviewer: their own events, and any a fallback step sent them."""
+
+    async def _pending_ids(self, db_session, user_id):
+        reviewer = await _load(db_session, user_id)
+        rows = await EventAttendancePetitionService(
+            db_session
+        ).list_pending_for_reviewer(reviewer)
+        return [str(petition.id) for petition, _ in rows]
+
+    async def test_a_fallback_holder_sees_the_request_they_were_sent(
+        self, db_session, dept
+    ):
+        secretary_pos = await _position(db_session, dept["org"], "secretary")
+        secretary = await _user(db_session, dept["org"], "Sue", position=secretary_pos)
+        gone = await _user(db_session, dept["org"], "Gil", status="retired")
+        event_id = await _event(db_session, dept["org"], organizer=gone)
+        petition = await _ask(db_session, event_id, dept["member"])
+
+        assert await self._pending_ids(db_session, secretary) == [str(petition.id)]
+
+    async def test_a_fallback_holder_does_not_see_one_routed_elsewhere(
+        self, db_session, dept
+    ):
+        secretary_pos = await _position(db_session, dept["org"], "secretary")
+        secretary = await _user(db_session, dept["org"], "Sue", position=secretary_pos)
+        event_id = await _event(db_session, dept["org"], organizer=dept["organizer"])
+        await _ask(db_session, event_id, dept["member"])
+
+        assert await self._pending_ids(db_session, secretary) == []
+
+    async def test_an_events_manager_sees_only_what_reached_them(
+        self, db_session, dept
+    ):
+        # A manager may decide any request, but "mine" is what was sent to
+        # them; the department-wide view is scope=all.
+        organized = await _event(db_session, dept["org"], organizer=dept["organizer"])
+        await _ask(db_session, organized, dept["member"])
+        gone = await _user(db_session, dept["org"], "Gil", status="retired")
+        orphaned = await _event(db_session, dept["org"], organizer=gone)
+        last_resort = await _ask(db_session, orphaned, dept["member"])
+
+        assert await self._pending_ids(db_session, dept["manager"]) == [
+            str(last_resort.id)
+        ]
+
+    async def test_the_organizer_still_sees_their_own_events(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], organizer=dept["organizer"])
+        petition = await _ask(db_session, event_id, dept["member"])
+
+        assert await self._pending_ids(db_session, dept["organizer"]) == [
+            str(petition.id)
+        ]
+
+
 class TestTransfer:
     async def _series(self, db, dept):
         """A weekly series: two past occurrences (the first is the parent)
