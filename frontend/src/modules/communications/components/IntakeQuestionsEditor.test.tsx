@@ -73,7 +73,7 @@ describe('IntakeQuestionsEditor', () => {
     const user = userEvent.setup();
 
     await user.click(screen.getByRole('button', { name: 'Add question' }));
-    await user.type(screen.getByLabelText('Question'), 'Safety concern?');
+    await user.type(screen.getByLabelText(/^Question(?!s)/), 'Safety concern?');
     await user.click(screen.getByRole('button', { name: 'Use Yes / No' }));
     await user.selectOptions(screen.getByLabelText('Where option 1 sends the submission'), 'b-compliance');
 

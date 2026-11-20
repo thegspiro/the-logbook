@@ -19,6 +19,10 @@ import type { TemplateDraft } from '../hooks/useTemplateDraft';
 import { BlockPalette } from './BlockPalette';
 import { CcPositionsField } from './CcPositionsField';
 import { COLOURWAYS, EMAIL_LAYOUTS, FALLBACK_COLOURWAY } from '../constants/blocks';
+import { FIELD_ERROR_CLASS } from '../../../components/ux/FormField';
+
+/** The editor fields a save can refuse, by the request key they write. */
+export type TemplateEditorField = 'subject' | 'html_body' | 'status_chip' | 'default_cc' | 'default_bcc';
 
 interface TemplateEditorProps {
   template: EmailTemplate;
@@ -34,6 +38,9 @@ interface TemplateEditorProps {
   footers?: EmailFooter[];
   /** Which footer a template that has not chosen one renders with. */
   footerDefaultKey?: string;
+  /** Refusals from the last save, by field; editing a field answers its own. */
+  errors?: Partial<Record<TemplateEditorField, string>> | undefined;
+  onFieldEdit?: ((field: TemplateEditorField) => void) | undefined;
 }
 
 function hasDefaultCopies(template: EmailTemplate): boolean {
@@ -50,6 +57,8 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   officerVariables = [],
   footers = [],
   footerDefaultKey = '',
+  errors = {},
+  onFieldEdit,
 }) => {
   const {
     subject,
@@ -80,6 +89,19 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   const [showVariables, setShowVariables] = useState(false);
   const [showOfficerVariables, setShowOfficerVariables] = useState(false);
   const [showRecipients, setShowRecipients] = useState(() => hasDefaultCopies(template));
+  const edited = (field: TemplateEditorField) => onFieldEdit?.(field);
+  // A refused copy list opens the section, so the reason is on screen.
+  const copiesRefused = Boolean(errors.default_cc || errors.default_bcc);
+  useEffect(() => {
+    if (copiesRefused) setShowRecipients(true);
+  }, [copiesRefused]);
+  /** Error text and its id, for a hand-built field. */
+  const errorFor = (field: TemplateEditorField, id: string) =>
+    errors[field] ? (
+      <p id={id} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+        {errors[field]}
+      </p>
+    ) : null;
   const htmlRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -137,6 +159,10 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
         <div className="flex items-center justify-between">
           <label htmlFor="template-subject" className={labelClass}>
             Subject Line
+            <span className={FIELD_ERROR_CLASS} aria-hidden="true">
+              {' '}
+              *
+            </span>
           </label>
           <span
             className={`text-xs ${subject.length > 60 ? 'text-yellow-500' : 'text-theme-text-muted'}`}
@@ -149,12 +175,18 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
           id="template-subject"
           type="text"
           value={subject}
-          onChange={(e) => setSubject(e.target.value)}
+          onChange={(e) => {
+            setSubject(e.target.value);
+            edited('subject');
+          }}
           className={plainInputClass}
           placeholder="Email subject..."
           maxLength={500}
-          aria-describedby="subject-hint"
+          aria-required
+          aria-invalid={errors.subject ? true : undefined}
+          aria-describedby={errors.subject ? 'template-subject-error' : undefined}
         />
+        {errorFor('subject', 'template-subject-error')}
       </div>
 
       {/* Footer */}
@@ -251,11 +283,15 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
             id="template-chip"
             type="text"
             value={statusChip}
-            onChange={(e) => setStatusChip(e.target.value)}
-            className={`${plainInputClass} flex-1`}
+            onChange={(e) => {
+              setStatusChip(e.target.value);
+              edited('status_chip');
+            }}
+            className={`${plainInputClass} min-w-0 flex-1`}
             placeholder="Action required"
             maxLength={40}
-            aria-describedby="chip-hint"
+            aria-invalid={errors.status_chip ? true : undefined}
+            aria-describedby={errors.status_chip ? 'template-chip-error chip-hint' : 'chip-hint'}
           />
           {/* Shown as it will render, because the chip is uppercased and
               letter-spaced by the email stylesheet — what is typed here and
@@ -270,6 +306,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
             {statusChip || 'No chip'}
           </span>
         </div>
+        {errorFor('status_chip', 'template-chip-error')}
         <p id="chip-hint" className="text-theme-text-muted mt-1 text-xs">
           Leave it empty and the header carries no chip at all.
         </p>
@@ -300,14 +337,19 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                 id="template-default-cc"
                 type="text"
                 value={defaultCc}
-                onChange={(e) => setDefaultCc(e.target.value)}
-                className={`${plainInputClass} ${ccError ? 'border-red-500' : ''}`}
+                onChange={(e) => {
+                  setDefaultCc(e.target.value);
+                  edited('default_cc');
+                }}
+                className={plainInputClass}
                 placeholder="chief@dept.org, admin@dept.org"
-                aria-invalid={!!ccError}
-                aria-describedby="cc-hint"
+                aria-invalid={ccError || errors.default_cc ? true : undefined}
+                aria-describedby={ccError || errors.default_cc ? 'template-default-cc-error' : 'cc-hint'}
               />
-              {ccError ? (
-                <p className="mt-1 text-xs text-red-500">{ccError}</p>
+              {ccError || errors.default_cc ? (
+                <p id="template-default-cc-error" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+                  {ccError ?? errors.default_cc}
+                </p>
               ) : (
                 <p id="cc-hint" className="text-theme-text-muted mt-1 text-xs">
                   These addresses will be CC'd on every email sent with this template.
@@ -322,14 +364,19 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                 id="template-default-bcc"
                 type="text"
                 value={defaultBcc}
-                onChange={(e) => setDefaultBcc(e.target.value)}
-                className={`${plainInputClass} ${bccError ? 'border-red-500' : ''}`}
+                onChange={(e) => {
+                  setDefaultBcc(e.target.value);
+                  edited('default_bcc');
+                }}
+                className={plainInputClass}
                 placeholder="records@dept.org"
-                aria-invalid={!!bccError}
-                aria-describedby="bcc-hint"
+                aria-invalid={bccError || errors.default_bcc ? true : undefined}
+                aria-describedby={bccError || errors.default_bcc ? 'template-default-bcc-error' : 'bcc-hint'}
               />
-              {bccError ? (
-                <p className="mt-1 text-xs text-red-500">{bccError}</p>
+              {bccError || errors.default_bcc ? (
+                <p id="template-default-bcc-error" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+                  {bccError ?? errors.default_bcc}
+                </p>
               ) : (
                 <p id="bcc-hint" className="text-theme-text-muted mt-1 text-xs">
                   These addresses will be BCC'd (hidden from other recipients) on every email sent with this template.
@@ -420,16 +467,27 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
       <div>
         <label htmlFor="template-html" className={labelClass}>
           HTML Body
+          <span className={FIELD_ERROR_CLASS} aria-hidden="true">
+            {' '}
+            *
+          </span>
         </label>
         <textarea
           ref={htmlRef}
           id="template-html"
           rows={16}
           value={htmlBody}
-          onChange={(e) => setHtmlBody(e.target.value)}
+          onChange={(e) => {
+            setHtmlBody(e.target.value);
+            edited('html_body');
+          }}
           className={inputClass}
           placeholder="<div class='container'>...</div>"
+          aria-required
+          aria-invalid={errors.html_body ? true : undefined}
+          aria-describedby={errors.html_body ? 'template-html-error' : undefined}
         />
+        {errorFor('html_body', 'template-html-error')}
       </div>
 
       {/* Plain-text body (collapsible) */}

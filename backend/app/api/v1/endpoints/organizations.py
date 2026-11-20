@@ -1855,6 +1855,7 @@ async def get_organization_profile(
 
     return {
         "name": org.name,
+        "short_name": org.short_name or "",
         "timezone": org.timezone or "America/New_York",
         "phone": org.phone or "",
         "email": org.email or "",
@@ -1982,6 +1983,7 @@ async def update_organization_profile(
 
     return {
         "name": org.name,
+        "short_name": org.short_name or "",
         "timezone": org.timezone or "America/New_York",
         "phone": org.phone or "",
         "email": org.email or "",
