@@ -174,8 +174,11 @@ export const HistorySettingsPage: React.FC = () => {
         )}
         <ol className="space-y-2">
           {steps.map((step, index) => (
+            // Each field starts from a 12rem basis rather than flex-1's 0%: with
+            // no basis the row never wraps, and at 320px both fields were
+            // squeezed to ~32px with their labels spilling out of the box.
             <li key={index} className="card-secondary flex flex-wrap items-end gap-2 rounded-md p-3">
-              <label className="min-w-0 flex-1">
+              <label className="min-w-0 flex-[1_1_12rem]">
                 <span className="form-label">Step {index + 1}</span>
                 <input
                   value={step.name}
@@ -186,7 +189,7 @@ export const HistorySettingsPage: React.FC = () => {
                   className="form-input"
                 />
               </label>
-              <label className="min-w-0 flex-1">
+              <label className="min-w-0 flex-[1_1_12rem]">
                 <span className="form-label">Cleared by</span>
                 <select
                   value={step.position_id}

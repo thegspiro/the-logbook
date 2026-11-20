@@ -45,11 +45,13 @@ from app.models.user import (
     UserStatus,
 )
 from app.services.call_tracking_service import CallTrackingService
+from app.services.import_provenance import admin_hours_imported, label_for
 from app.services.training_compliance import (
     catch_up_deadline,
     member_join_date,
     requirement_applies_to_user,
 )
+from app.services.training_record_source import record_sources
 from app.services.training_waiver_service import fetch_org_waivers, leave_months_in
 from app.utils.apparatus_ref import resolve_apparatus_labels
 from app.utils.hours import (
@@ -1014,6 +1016,7 @@ class ReportsService:
         expiring_soon_count = 0
         valid_count = 0
         no_expiry_count = 0
+        sources = await record_sources(self.db, str(organization_id), records)
 
         for record in records:
             uid = str(record.user_id)
@@ -1054,6 +1057,7 @@ class ReportsService:
                     "expiration_date": str(exp_date) if exp_date else None,
                     "days_until_expiry": days_until,
                     "expiry_status": status,
+                    "source": sources[str(record.id)].label,
                 }
             )
 
@@ -2114,6 +2118,7 @@ class ReportsService:
                         entry.entry_method.value if entry.entry_method else "manual"
                     ),
                     "status": entry.status.value if entry.status else "pending",
+                    "source": label_for(admin_hours_imported(entry.entry_method)),
                 }
             )
 

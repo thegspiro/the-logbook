@@ -1,8 +1,158 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10, PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255) — corrected here from the "PR pending" placeholder pass 10's own write-up left unresolved after merge), 2026-10-18 (pass 11, PR [#3420](https://github.com/thegspiro/the-logbook/pull/3420)), 2026-10-23 (pass 12, PR [#3574](https://github.com/thegspiro/the-logbook/pull/3574)), 2026-10-25 (pass 13, PR [#3702](https://github.com/thegspiro/the-logbook/pull/3702) — not recorded here when pass 13 was written; added in pass 14's own commit), 2026-10-28 (pass 14, PR [#3811](https://github.com/thegspiro/the-logbook/pull/3811) — not recorded here when pass 14 was written; added in pass 15's own commit), 2026-11-01 (pass 15, PR [#3910](https://github.com/thegspiro/the-logbook/pull/3910) — not recorded here when pass 15 was written; added in pass 16's own commit), 2026-11-05 (pass 16) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), [#3255](https://github.com/thegspiro/the-logbook/pull/3255) (pass 10), [#3420](https://github.com/thegspiro/the-logbook/pull/3420) (pass 11), [#3574](https://github.com/thegspiro/the-logbook/pull/3574) (pass 12), [#3702](https://github.com/thegspiro/the-logbook/pull/3702) (pass 13), [#3811](https://github.com/thegspiro/the-logbook/pull/3811) (pass 14), [#3910](https://github.com/thegspiro/the-logbook/pull/3910) (pass 15)
+**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10, PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255) — corrected here from the "PR pending" placeholder pass 10's own write-up left unresolved after merge), 2026-10-18 (pass 11, PR [#3420](https://github.com/thegspiro/the-logbook/pull/3420)), 2026-10-23 (pass 12, PR [#3574](https://github.com/thegspiro/the-logbook/pull/3574)), 2026-10-25 (pass 13, PR [#3702](https://github.com/thegspiro/the-logbook/pull/3702) — not recorded here when pass 13 was written; added in pass 14's own commit), 2026-10-28 (pass 14, PR [#3811](https://github.com/thegspiro/the-logbook/pull/3811) — not recorded here when pass 14 was written; added in pass 15's own commit), 2026-11-01 (pass 15, PR [#3910](https://github.com/thegspiro/the-logbook/pull/3910) — not recorded here when pass 15 was written; added in pass 16's own commit), 2026-11-05 (pass 16, PR [#4087](https://github.com/thegspiro/the-logbook/pull/4087) — not recorded here when pass 16 was written; added in this pass's own commit), 2026-11-19 (pass 17) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), [#3255](https://github.com/thegspiro/the-logbook/pull/3255) (pass 10), [#3420](https://github.com/thegspiro/the-logbook/pull/3420) (pass 11), [#3574](https://github.com/thegspiro/the-logbook/pull/3574) (pass 12), [#3702](https://github.com/thegspiro/the-logbook/pull/3702) (pass 13), [#3811](https://github.com/thegspiro/the-logbook/pull/3811) (pass 14), [#3910](https://github.com/thegspiro/the-logbook/pull/3910) (pass 15), [#4087](https://github.com/thegspiro/the-logbook/pull/4087) (pass 16)
 
 ---
+
+## Pass 17 (2026-11-19) — watchdog pickup: no real backend delta since pass 16's merge (UI/accessibility-only commits, plus one incidental line changed by the medical-screening encryption refactor, already reviewed there and re-verified correct here), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged; a route-count correction to pass 16's own write-up
+
+**Step 0/1** confirmed fresh: PR #4436 (Feature 07, Users & organizations,
+pass 16) had merged (`c552cd3cd`) before this iteration started. A fresh
+`list_pull_requests` (state `open`) found no `claude/security-review-*`
+head, and row 08 (Membership pipeline) was the next `⬜` row on a freshly
+fetched `main`.
+
+**Scope:** the rotation row's two files plus this feature's established
+additional scope (unchanged since pass 16): `models/membership_pipeline.py`,
+`schemas/membership_pipeline.py`, `app/services/prospect_access.py`,
+`app/api/prospect_access.py`, `app/api/prospect_privacy.py`,
+`app/services/prospect_assignment_service.py`,
+`app/api/public/follow_up_forms.py`, `app/services/follow_up_form_service.py`,
+`app/utils/prospect_fields.py`, `frontend/src/modules/prospective-members/`.
+
+**Last reviewed at:** `4f05d3457` (pass 16's merge, PR #4087) to head
+`c552cd3cd`. `git log --no-merges 4f05d3457..c552cd3cd` over the declared
+scope: **9 non-merge commits**, each read in full via `git show`, not
+sampled.
+
+**The delta, in full — nothing backend-security-relevant landed:**
+
+| Commit      | What                                                                                                                                | Judgment                                                                                                                                                                                          |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `8aeaf31dc` | `useHasAssignedApplicants.ts`'s `applicantService` import moved behind a dynamic `import()` to shrink the nav bundle                | Bundle-size change only; no data/auth change — read in full                                                                                                                                       |
+| `65ee9c1c8` | `ApplicantDetailDialog.test.tsx` rewritten to wait for `getMyAccess` before asserting                                               | Test-only; no component change                                                                                                                                                                    |
+| `cdb09c836` | Stat-tile row layout (`ProspectiveMembersPage.tsx`) moved onto the shared `StatGrid` wrapper                                        | Pure CSS/markup; no data flow change                                                                                                                                                              |
+| `aad90537c` | One hand-styled button on `ProspectiveMembersPage.tsx` switched to the shared `btn-primary` class                                   | Styling only                                                                                                                                                                                      |
+| `4b5321efe` | `TargetRolePicker.tsx` gains an `error`/`aria-invalid`/`aria-describedby` prop for inline validation display                        | Accessibility/display only — the role list source and the `value`/`onChange` contract are unchanged, so MP-31's server-side target-role ceiling is unaffected, confirmed by reading the full diff |
+| `a0823cfd3` | `ProspectiveMembersPage.tsx`/`.test.tsx` forms-rollout pass (required-marker/error-on-field conventions)                            | Form-presentation only; no new field, no new endpoint call                                                                                                                                        |
+| `5d0d738cf` | `PipelineTable.tsx`/`ProspectiveMembersPage.tsx` get `rwd-table`/`data-label` reflow for phone/tablet widths                        | Pure CSS/markup (Pitfall #39's reflow convention); no data exposed that the desktop table didn't already show                                                                                     |
+| `3e478316d` | `membership_pipeline_service.py`'s `MEDICAL_SCREENING` step-completion query moved its `screening_type` filter from SQL into Python | **Read closely** (below) — correct and incidental to this feature                                                                                                                                 |
+| `f3b9be437` | Same line, a one-word comment fix (`MS-15` → `MS-18`) from the medical-screening review's id-collision cleanup                      | Comment only                                                                                                                                                                                      |
+
+**`3e478316d` read closely, since it is the one commit that touches this
+feature's own service code.** `ScreeningRecord.screening_type` and `.status`
+became encrypted columns in the medical-screening feature's own MS-18 fix
+(ciphertext cannot be filtered in SQL), so the membership-pipeline step-
+completion check for a `MEDICAL_SCREENING` stage can no longer do
+`.where(ScreeningRecord.screening_type.in_(required_screenings))` — it now
+selects every `ScreeningRecord` row for the prospect
+(`ScreeningRecord.prospect_id == prospect.id`, unchanged, and still reached
+only through a `prospect` already resolved org-scoped by the caller) and
+filters `status in cleared and screening_type.value in required_screenings`
+in Python after decryption. Traced directly against the current code
+(`membership_pipeline_service.py:2413-2437`): the Python filter is the exact
+equivalent of the old SQL `WHERE`, `missing` is still computed the same way,
+and no org or prospect scoping moved. This commit's own security review
+(medical-screening pass 15, `docs/security-review/MS-09-medical-screening.md`)
+already covers the encryption change itself; this pass confirms the one
+downstream read site it touched is still correct.
+
+**Route enumeration (checklist §1/§2), done fresh via AST walk — and a
+correction to pass 16's own count.** `membership_pipeline.py` has **64
+routes today**. Checking out pass 16's own merge commit (`4f05d3457`) and
+re-running the same AST walk against it also returns **64** — the route
+pass 16 called "new" (`GET /prospects/{id}/interview-requirement`) was
+indeed added in pass 16's reviewed window, but pass 16's write-up undercounted
+the _total_ by one: `GET /prospects/{prospect_id}/interview/follow-up-
+forms/{request_id}/answers` (`get_interview_follow_up_form_answers`,
+added by `b517b88fb`, itself an ancestor of pass 16's own baseline) was
+already present and already reviewable at pass 16's merge, so the count
+should have read 64 then, not 63. No code changed between pass 16 and this
+pass to explain the discrepancy — confirmed by diffing the file at
+`4f05d3457` against `c552cd3cd`: zero route-decorator lines differ. This is
+a documentation correction, not a new finding: the route itself was reviewed
+below.
+
+`get_interview_follow_up_form_answers` (and its sibling,
+`get_follow_up_form_answers`) both resolve through
+`Depends(require_prospect_access(Level.SEE))`, and both delegate to the
+shared `_follow_up_answers` helper, which calls
+`FollowUpFormService(db).submitted_answers(prospect_id, request_id,
+current_user.organization_id)` — org-scoped on every call, not only when
+`view_all` is held. The interview-only route's one behavioral difference —
+letting an assigned interviewer see sensitive follow-up answers on the
+Interview page, where the general route withholds them from anyone short of
+`sensitive_answers.view` — is gated on `access.is_interviewer`, and
+`ProspectAccess.roles` (read via `assigned_roles()` in
+`app/services/prospect_access.py`) is queried per `(prospect_id, user_id,
+organization_id)`, not globally: an interviewer sees sensitive answers only
+for the one applicant they are assigned to interview, confirmed by reading
+`assigned_roles()` directly rather than trusting its docstring. Every route
+still resolves to one of the same six auth dependencies pass 16 enumerated
+(`get_current_user`, `require_permission(...)`, `require_prospect_access(...)`,
+`require_view_all(...)`, `require_pipeline_reader`, `require_interview_access`)
+— no seventh shape introduced.
+
+`scripts/check_route_permissions.py --strict` (whole app): **327 routes**, 0
+errors, 0 warnings.
+
+**No new `.ilike()`/`.like()` without `escape=LIKE_ESCAPE_CHAR`, no raw
+`csv.writer`, no `window.confirm`/`alert`/`prompt`** in this window's nine
+commits (grepped fresh over the full diff).
+
+### Standing items re-verified this pass
+
+- **MP-10 (listing half)** — `list_election_packages` does not appear
+  anywhere in this window's diff. **Still OPEN**, unchanged;
+  `docs/KNOWN_LIMITATIONS.md`'s entry still matches (checked directly).
+- **MP-22** — `delete_prospect_document` and `_delete_inactive_prospects`
+  likewise do not appear in this window's diff. **Still OPEN**, unchanged;
+  owner-accepted tradeoff; `docs/KNOWN_LIMITATIONS.md`'s entry still matches.
+
+Both re-confirmed by searching the actual diff text for the function names,
+not copied from the prior write-up.
+
+### Verified good ✅ (pass 17)
+
+- **The one line this pass's delta touches in this feature's own service
+  code is a correct like-for-like port of the old SQL filter into Python**,
+  forced by an unrelated feature's encryption change, not a regression here.
+- **The route this pass's recount surfaced (`get_interview_follow_up_form_answers`)
+  cannot leak sensitive follow-up answers outside the one applicant an
+  interviewer is assigned to** — the grant is looked up per
+  `(prospect_id, user_id, organization_id)`, never globally.
+- **No regression on any previously-closed finding** (MP-1 through MP-34) —
+  none of their call sites appear in this pass's diff.
+
+### Schema & migration notes
+
+No new migrations touch this feature's scope since pass 16.
+`scripts/validate_migrations.py --strict` reports a single head
+`bbeb4867d393` (785 revisions) — the two-head fork pass 16 recorded as
+pre-existing and unrelated has since been resolved on `main` by other work.
+
+## Completion gate (pass 17)
+
+Run against CI's pinned toolchain (`flake8==7.4.1`, `black==26.5.1` [sandbox
+install; CI pins `26.10.1` — both format identically here, 0 diffs either
+way], `isort==9.0.2`) under `python3.13`.
+
+| Check                                                                                        | Result                                                    |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                | ✅ 0 violations                                           |
+| `black --check app/ tests/ alembic/`                                                         | ✅ 3276 files unchanged                                   |
+| `isort --check-only app/ tests/ alembic/`                                                    | ✅ clean                                                  |
+| `python3.13 scripts/validate_migrations.py --strict`                                         | ✅ single head `bbeb4867d393`, 785 revisions              |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                            | ✅ 327 routes, 0 errors, 0 warnings                       |
+| scoped backend pytest (`-k "membership or prospect or pipeline or follow_up or assignment"`) | ✅ 1,747 passed, 1 skipped (environment-only, `py_vapid`) |
+| `cd frontend && npm run typecheck`                                                           | ✅ 0 errors                                               |
+| `cd frontend && npx eslint src/modules/prospective-members`                                  | ✅ 0 errors, 0 warnings                                   |
+| `cd frontend && npx vitest run src/modules/prospective-members`                              | ✅ 410 passed (45 files)                                  |
+
+No application source file changed this pass (0 fixes — the real changes
+already landed on `main` via the nine commits above, independently tested
+and already merged, mostly outside this feature). Every check above verifies
+that the delta which landed since pass 16 is sound.
 
 ## Pass 16 (2026-11-05) — watchdog pickup: real delta (required interviewer positions on Interview Requirement stages, with an interview-position snapshot column; case-manager and interviewer "needs attention"/"interview requested" emails; My applicants narrowing extended to the stat header and the four archive tabs; a transferred prospect's screening records re-linked to the new member; the Convert dialog accepts the department's own membership tiers as a starting status; an interest-form double-escaping backfill), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged
 

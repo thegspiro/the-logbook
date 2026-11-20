@@ -5,7 +5,7 @@
  * for clarity and maintainability.
  */
 
-import { useState } from 'react';
+import { useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react';
 import { Pencil, Save, X, MapPin, Phone, Mail, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
@@ -15,7 +15,10 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 import { blankToNull, numberOrNull } from '@/utils/formValues';
 import { organizationEmailError } from '@/utils/organizationProfile';
-import { getErrorMessage } from '@/utils/errorHandling';
+import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '@/hooks/useFieldErrors';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { firstRefused, saveExceptRefused } from '@/utils/saveExceptRefused';
 
 interface Props {
   facility: Facility;
@@ -24,14 +27,81 @@ interface Props {
   canManage: boolean;
 }
 
-const NUMERIC_FIELDS = new Set([
-  'year_built',
-  'square_footage',
-  'num_floors',
-  'num_bays',
-  'max_occupancy',
-  'sleeping_quarters',
-]);
+type OverviewField =
+  | 'name'
+  | 'facility_number'
+  | 'facility_type_id'
+  | 'status_id'
+  | 'address_line1'
+  | 'address_line2'
+  | 'city'
+  | 'state'
+  | 'zip_code'
+  | 'county'
+  | 'phone'
+  | 'fax'
+  | 'email'
+  | 'year_built'
+  | 'square_footage'
+  | 'num_floors'
+  | 'num_bays'
+  | 'max_occupancy'
+  | 'sleeping_quarters'
+  | 'description'
+  | 'notes';
+
+// Ordered as on screen, so the first refusal takes focus. The ids are the
+// ones this form has always used.
+const OVERVIEW_FIELDS: FieldSpecs<OverviewField> = {
+  name: { id: 'facility-edit-name', label: 'Name' },
+  facility_number: { id: 'facility-edit-facility-number', label: 'Facility Number' },
+  facility_type_id: { id: 'facility-edit-facility-type-id', label: 'Type' },
+  status_id: { id: 'facility-edit-status-id', label: 'Status' },
+  address_line1: { id: 'facility-edit-address-line1', label: 'Address Line 1' },
+  address_line2: { id: 'facility-edit-address-line2', label: 'Address Line 2' },
+  city: { id: 'facility-edit-city', label: 'City' },
+  state: { id: 'facility-edit-state', label: 'State' },
+  zip_code: { id: 'facility-edit-zip-code', label: 'Zip Code' },
+  county: { id: 'facility-edit-county', label: 'County' },
+  phone: { id: 'facility-edit-phone', label: 'Phone' },
+  fax: { id: 'facility-edit-fax', label: 'Fax' },
+  email: { id: 'facility-edit-email', label: 'Email' },
+  year_built: { id: 'facility-edit-year-built', label: 'Year Built' },
+  square_footage: { id: 'facility-edit-square-footage', label: 'Sq. Footage' },
+  num_floors: { id: 'facility-edit-num-floors', label: 'Floors' },
+  num_bays: { id: 'facility-edit-num-bays', label: 'Apparatus Bays' },
+  max_occupancy: { id: 'facility-edit-max-occupancy', label: 'Max Occupancy' },
+  sleeping_quarters: { id: 'facility-edit-sleeping-quarters', label: 'Sleeping Quarters' },
+  description: { id: 'facility-edit-description', label: 'Description' },
+  notes: { id: 'facility-edit-notes', label: 'Notes' },
+};
+const OVERVIEW_ORDER = Object.keys(OVERVIEW_FIELDS) as OverviewField[];
+
+// Mirrors FacilityUpdate (forms review F-2).
+const TEXT_LIMITS: Partial<Record<OverviewField, number>> = {
+  name: 200,
+  facility_number: 50,
+  address_line1: 200,
+  address_line2: 200,
+  city: 100,
+  state: 50,
+  zip_code: 20,
+  county: 100,
+  phone: 50,
+  fax: 50,
+  email: 200,
+};
+
+/** Whole-number fields and the range FacilityUpdate accepts for each. */
+const NUMBER_RANGES: Partial<Record<OverviewField, { min: number; max?: number; message: string }>> = {
+  year_built: { min: 1800, max: 2100, message: 'Enter a year from 1800 to 2100, or leave it empty.' },
+  square_footage: { min: 0, message: 'Enter a whole number, 0 or more, or leave it empty.' },
+  num_floors: { min: 1, message: 'Enter a whole number, 1 or more, or leave it empty.' },
+  num_bays: { min: 0, message: 'Enter a whole number, 0 or more, or leave it empty.' },
+  max_occupancy: { min: 0, message: 'Enter a whole number, 0 or more, or leave it empty.' },
+  sleeping_quarters: { min: 0, message: 'Enter a whole number, 0 or more, or leave it empty.' },
+};
+const NUMERIC_FIELDS = new Set<string>(Object.keys(NUMBER_RANGES));
 
 /**
  * The lookup options this facility can be saved with.
@@ -65,13 +135,13 @@ function withRetainedOption<T extends LookupOption>(
  * "Select type..." option, so the form can present a value the column cannot
  * hold; caught here rather than sent as a null the backend has to refuse.
  */
-const REQUIRED_FIELDS: Record<string, string> = {
-  name: 'Facility name is required',
-  facility_type_id: 'Facility type is required',
-  status_id: 'Facility status is required',
+const REQUIRED_FIELDS: Partial<Record<OverviewField, string>> = {
+  name: 'Enter a name for the facility.',
+  facility_type_id: 'Choose the facility type.',
+  status_id: 'Choose the facility status.',
 };
 
-function facilityToEditData(facility: Facility): Record<string, string | number> {
+function facilityToEditData(facility: Facility): Record<OverviewField, string | number> {
   return {
     name: facility.name || '',
     facility_number: facility.facilityNumber || '',
@@ -107,27 +177,51 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editData, setEditData] = useState<Record<string, string | number>>({});
+  // What the form held when it opened (or last saved), so Cancel asks before
+  // throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState<Record<string, string | number>>({});
+  const overviewErrors = useFieldErrors(OVERVIEW_FIELDS);
 
   const startEditing = () => {
-    setEditData(facilityToEditData(facility));
+    const seeded = facilityToEditData(facility);
+    setEditData(seeded);
+    setBaseline(seeded);
+    overviewErrors.clear();
     setIsEditing(true);
   };
 
-  // The server accepts any string here, so a mistyped address is caught
-  // before it is saved rather than shown back on the overview.
-  const emailError = isEditing ? organizationEmailError(String(editData.email ?? '')) : null;
+  const stopEditing = () => {
+    overviewErrors.clear();
+    setIsEditing(false);
+  };
+  const requestCancel = useDiscardGuard({
+    isDirty: isEditing && JSON.stringify(editData) !== JSON.stringify(baseline),
+    onClose: stopEditing,
+  });
 
-  const handleSave = async () => {
-    for (const [field, message] of Object.entries(REQUIRED_FIELDS)) {
-      if (!String(editData[field] ?? '').trim()) {
-        toast.error(message);
-        return;
-      }
+  const handleSave = async (event: FormEvent) => {
+    event.preventDefault();
+    // Named on the field rather than in a toast that vanished (forms review F-3).
+    const problems: FieldErrors<OverviewField> = {};
+    for (const [field, message] of Object.entries(REQUIRED_FIELDS) as [OverviewField, string][]) {
+      if (!String(editData[field] ?? '').trim()) problems[field] = message;
     }
-    if (emailError) {
-      toast.error(emailError);
-      return;
+    // The server accepts any string here, so a mistyped address is caught
+    // before it is saved rather than shown back on the overview.
+    const emailError = organizationEmailError(String(editData.email ?? ''));
+    if (emailError) problems.email = emailError;
+    for (const [field, range] of Object.entries(NUMBER_RANGES) as [
+      OverviewField,
+      { min: number; max?: number; message: string },
+    ][]) {
+      const raw = String(editData[field] ?? '').trim();
+      if (!raw) continue;
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < range.min || (range.max !== undefined && n > range.max))
+        problems[field] = range.message;
     }
+    overviewErrors.setFormError(null);
+    overviewErrors.setErrors(problems);
     setIsSaving(true);
     try {
       // An update payload, so a cleared box is an explicit `null` and not
@@ -146,21 +240,44 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
         }
       }
 
-      await updateFacility(facility.id, payload);
+      // An edit saves the rest and keeps a refused field's stored value
+      // (owner rule, 2026-11-05): a blank type or a mistyped email no longer
+      // holds back the phone number changed beside it.
+      const { refused } = await saveExceptRefused<OverviewField, unknown>({
+        payload,
+        refused: problems,
+        send: (body) => updateFacility(facility.id, body),
+        place: (err) => placeApiError(OVERVIEW_FIELDS, err),
+      });
+      const first = firstRefused(OVERVIEW_ORDER, refused);
+      if (first) {
+        // The form stays open with the refused field flagged; only that field
+        // still counts as unsaved.
+        overviewErrors.setErrors(refused);
+        overviewErrors.setFormError(
+          `Facility saved, except ${OVERVIEW_FIELDS[first].label.toLowerCase()}. Fix it and save again.`
+        );
+        overviewErrors.focusFirst(refused);
+        const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, baseline[k] ?? '']));
+        setBaseline({ ...editData, ...keep });
+        return;
+      }
       toast.success('Facility updated');
-      setIsEditing(false);
+      stopEditing();
     } catch (error) {
-      // The generic message hid the reason: with real nulls now going out, a
-      // rejection names the field, and swallowing that leaves the user
-      // retrying the same save.
-      toast.error(getErrorMessage(error, 'Failed to update facility'));
+      // A refused field is flagged on that field (forms review F-2); anything
+      // no field answers for is said in the form.
+      overviewErrors.focusFirst(overviewErrors.setFromApiError(error, 'Failed to update facility'));
     } finally {
       setIsSaving(false);
     }
   };
 
-  const ed = (field: string) => editData[field] as string;
-  const setEd = (field: string, value: string) => setEditData((prev) => ({ ...prev, [field]: value }));
+  const ed = (field: OverviewField) => String(editData[field] ?? '');
+  const setEd = (field: OverviewField, value: string) => {
+    setEditData((prev) => ({ ...prev, [field]: value }));
+    overviewErrors.setError(field, null);
+  };
 
   return (
     <div className="card">
@@ -178,9 +295,8 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
         ) : (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                void handleSave();
-              }}
+              type="submit"
+              form="facility-overview-form"
               disabled={isSaving}
               className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm"
             >
@@ -188,8 +304,9 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
               Save
             </button>
             <button
-              onClick={() => setIsEditing(false)}
-              className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1.5 px-3 py-1.5 text-sm transition-colors"
+              type="button"
+              onClick={requestCancel}
+              className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 flex items-center gap-1.5 px-3 py-1.5 text-sm transition-colors"
             >
               <X className="h-3.5 w-3.5" /> Cancel
             </button>
@@ -201,12 +318,20 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
         {!isEditing ? (
           <OverviewViewMode facility={facility} tz={tz} />
         ) : (
-          <OverviewEditMode
-            ed={ed}
-            setEd={setEd}
-            facilityTypes={withRetainedOption(facilityTypes, facility.facilityType, facility.facilityTypeId)}
-            facilityStatuses={withRetainedOption(facilityStatuses, facility.statusRecord, facility.statusId)}
-          />
+          <form id="facility-overview-form" noValidate onSubmit={(e) => void handleSave(e)}>
+            {overviewErrors.formError && (
+              <p role="alert" className={`mb-4 text-sm ${FIELD_ERROR_CLASS}`}>
+                {overviewErrors.formError}
+              </p>
+            )}
+            <OverviewEditMode
+              ed={ed}
+              setEd={setEd}
+              errors={overviewErrors.errors}
+              facilityTypes={withRetainedOption(facilityTypes, facility.facilityType, facility.facilityTypeId)}
+              facilityStatuses={withRetainedOption(facilityStatuses, facility.statusRecord, facility.statusId)}
+            />
+          </form>
         )}
       </div>
     </div>
@@ -294,308 +419,138 @@ function OverviewViewMode({ facility, tz }: { facility: Facility; tz: string }) 
 }
 
 interface EditModeProps {
-  ed: (field: string) => string;
-  setEd: (field: string, value: string) => void;
+  ed: (field: OverviewField) => string;
+  setEd: (field: OverviewField, value: string) => void;
+  errors: FieldErrors<OverviewField>;
   // Already resolved by the parent — the active lookups plus, when this
   // facility references a deactivated one, that value kept selectable.
   facilityTypes: LookupOption[];
   facilityStatuses: LookupOption[];
 }
 
-function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditModeProps) {
-  const emailError = organizationEmailError(ed('email'));
+function OverviewEditMode({ ed, setEd, errors, facilityTypes, facilityStatuses }: EditModeProps) {
+  // The email is checked as it is typed, as it always was here; a refusal
+  // from a save takes its place until the box is edited.
+  const shown: FieldErrors<OverviewField> = { ...errors };
+  const typedEmailError = organizationEmailError(ed('email'));
+  if (!shown.email && typedEmailError) shown.email = typedEmailError;
+  const text = (field: OverviewField, extra: Partial<InputHTMLAttributes<HTMLInputElement>> = {}): ReactNode => (
+    <FormField
+      id={OVERVIEW_FIELDS[field].id}
+      label={OVERVIEW_FIELDS[field].label}
+      required={field in REQUIRED_FIELDS}
+      error={shown[field]}
+      labelClassName={labelCls}
+      {...(TEXT_LIMITS[field] !== undefined ? { maxLength: TEXT_LIMITS[field], count: ed(field).length } : {})}
+    >
+      {(props) => (
+        <input
+          {...props}
+          type="text"
+          value={ed(field)}
+          onChange={(e) => setEd(field, e.target.value)}
+          className={inputCls}
+          {...extra}
+        />
+      )}
+    </FormField>
+  );
+  const number = (field: OverviewField): ReactNode => (
+    <FormField
+      id={OVERVIEW_FIELDS[field].id}
+      label={OVERVIEW_FIELDS[field].label}
+      error={shown[field]}
+      labelClassName={labelCls}
+    >
+      {(props) => (
+        <input
+          {...props}
+          type="number"
+          inputMode="numeric"
+          value={ed(field)}
+          onChange={(e) => setEd(field, e.target.value)}
+          className={inputCls}
+        />
+      )}
+    </FormField>
+  );
+  const lookup = (field: 'facility_type_id' | 'status_id', options: LookupOption[], blank: string): ReactNode => (
+    <FormField
+      id={OVERVIEW_FIELDS[field].id}
+      label={OVERVIEW_FIELDS[field].label}
+      required
+      error={shown[field]}
+      labelClassName={labelCls}
+    >
+      {(props) => (
+        <select {...props} value={ed(field)} onChange={(e) => setEd(field, e.target.value)} className={inputCls}>
+          <option value="">{blank}</option>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </select>
+      )}
+    </FormField>
+  );
+  const area = (field: 'description' | 'notes'): ReactNode => (
+    <FormField
+      id={OVERVIEW_FIELDS[field].id}
+      label={OVERVIEW_FIELDS[field].label}
+      error={shown[field]}
+      labelClassName={labelCls}
+    >
+      {(props) => (
+        <textarea
+          {...props}
+          value={ed(field)}
+          onChange={(e) => setEd(field, e.target.value)}
+          rows={2}
+          className={inputCls + ' resize-none'}
+        />
+      )}
+    </FormField>
+  );
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div>
-          <label htmlFor="facility-edit-name" className={labelCls}>
-            Name *
-          </label>
-          <input
-            id="facility-edit-name"
-            type="text"
-            value={ed('name')}
-            onChange={(e) => setEd('name', e.target.value)}
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label htmlFor="facility-edit-facility-number" className={labelCls}>
-            Facility Number
-          </label>
-          <input
-            id="facility-edit-facility-number"
-            type="text"
-            value={ed('facility_number')}
-            onChange={(e) => setEd('facility_number', e.target.value)}
-            className={inputCls}
-            placeholder="e.g., STA-01"
-          />
-        </div>
+        {text('name')}
+        {text('facility_number', { placeholder: 'e.g., STA-01' })}
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div>
-          <label htmlFor="facility-edit-facility-type-id" className={labelCls}>
-            Type *
-          </label>
-          <select
-            id="facility-edit-facility-type-id"
-            value={ed('facility_type_id')}
-            onChange={(e) => setEd('facility_type_id', e.target.value)}
-            className={inputCls}
-          >
-            <option value="">Select type...</option>
-            {facilityTypes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="facility-edit-status-id" className={labelCls}>
-            Status *
-          </label>
-          <select
-            id="facility-edit-status-id"
-            value={ed('status_id')}
-            onChange={(e) => setEd('status_id', e.target.value)}
-            className={inputCls}
-          >
-            <option value="">Select status...</option>
-            {facilityStatuses.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {lookup('facility_type_id', facilityTypes, 'Select type...')}
+        {lookup('status_id', facilityStatuses, 'Select status...')}
       </div>
 
-      <div>
-        <label htmlFor="facility-edit-address-line1" className={labelCls}>
-          Address Line 1
-        </label>
-        <input
-          id="facility-edit-address-line1"
-          type="text"
-          value={ed('address_line1')}
-          onChange={(e) => setEd('address_line1', e.target.value)}
-          className={inputCls}
-        />
-      </div>
-      <div>
-        <label htmlFor="facility-edit-address-line2" className={labelCls}>
-          Address Line 2
-        </label>
-        <input
-          id="facility-edit-address-line2"
-          type="text"
-          value={ed('address_line2')}
-          onChange={(e) => setEd('address_line2', e.target.value)}
-          className={inputCls}
-        />
-      </div>
+      {text('address_line1')}
+      {text('address_line2')}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div>
-          <label htmlFor="facility-edit-city" className={labelCls}>
-            City
-          </label>
-          <input
-            id="facility-edit-city"
-            type="text"
-            value={ed('city')}
-            onChange={(e) => setEd('city', e.target.value)}
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label htmlFor="facility-edit-state" className={labelCls}>
-            State
-          </label>
-          <input
-            id="facility-edit-state"
-            type="text"
-            value={ed('state')}
-            onChange={(e) => setEd('state', e.target.value)}
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label htmlFor="facility-edit-zip-code" className={labelCls}>
-            Zip Code
-          </label>
-          <input
-            id="facility-edit-zip-code"
-            type="text"
-            inputMode="numeric"
-            autoComplete="postal-code"
-            value={ed('zip_code')}
-            onChange={(e) => setEd('zip_code', e.target.value)}
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label htmlFor="facility-edit-county" className={labelCls}>
-            County
-          </label>
-          <input
-            id="facility-edit-county"
-            type="text"
-            value={ed('county')}
-            onChange={(e) => setEd('county', e.target.value)}
-            className={inputCls}
-          />
-        </div>
+        {text('city')}
+        {text('state')}
+        {text('zip_code', { inputMode: 'numeric', autoComplete: 'postal-code' })}
+        {text('county')}
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div>
-          <label htmlFor="facility-edit-phone" className={labelCls}>
-            Phone
-          </label>
-          <input
-            id="facility-edit-phone"
-            type="text"
-            value={ed('phone')}
-            onChange={(e) => setEd('phone', e.target.value)}
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label htmlFor="facility-edit-fax" className={labelCls}>
-            Fax
-          </label>
-          <input
-            id="facility-edit-fax"
-            type="text"
-            value={ed('fax')}
-            onChange={(e) => setEd('fax', e.target.value)}
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label htmlFor="facility-edit-email" className={labelCls}>
-            Email
-          </label>
-          <input
-            id="facility-edit-email"
-            type="text"
-            value={ed('email')}
-            onChange={(e) => setEd('email', e.target.value)}
-            className={inputCls}
-            aria-invalid={Boolean(emailError)}
-            aria-describedby={emailError ? 'facility-edit-email-error' : undefined}
-          />
-          {emailError && (
-            <p id="facility-edit-email-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-              {emailError}
-            </p>
-          )}
-        </div>
+        {text('phone', { type: 'tel', autoComplete: 'tel' })}
+        {text('fax', { type: 'tel' })}
+        {text('email', { type: 'email', autoComplete: 'email' })}
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div>
-          <label htmlFor="facility-edit-year-built" className={labelCls}>
-            Year Built
-          </label>
-          <input
-            id="facility-edit-year-built"
-            type="number"
-            value={ed('year_built')}
-            onChange={(e) => setEd('year_built', e.target.value)}
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label htmlFor="facility-edit-square-footage" className={labelCls}>
-            Sq. Footage
-          </label>
-          <input
-            id="facility-edit-square-footage"
-            type="number"
-            value={ed('square_footage')}
-            onChange={(e) => setEd('square_footage', e.target.value)}
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label htmlFor="facility-edit-num-floors" className={labelCls}>
-            Floors
-          </label>
-          <input
-            id="facility-edit-num-floors"
-            type="number"
-            value={ed('num_floors')}
-            onChange={(e) => setEd('num_floors', e.target.value)}
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label htmlFor="facility-edit-num-bays" className={labelCls}>
-            Apparatus Bays
-          </label>
-          <input
-            id="facility-edit-num-bays"
-            type="number"
-            value={ed('num_bays')}
-            onChange={(e) => setEd('num_bays', e.target.value)}
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label htmlFor="facility-edit-max-occupancy" className={labelCls}>
-            Max Occupancy
-          </label>
-          <input
-            id="facility-edit-max-occupancy"
-            type="number"
-            value={ed('max_occupancy')}
-            onChange={(e) => setEd('max_occupancy', e.target.value)}
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label htmlFor="facility-edit-sleeping-quarters" className={labelCls}>
-            Sleeping Quarters
-          </label>
-          <input
-            id="facility-edit-sleeping-quarters"
-            type="number"
-            value={ed('sleeping_quarters')}
-            onChange={(e) => setEd('sleeping_quarters', e.target.value)}
-            className={inputCls}
-          />
-        </div>
+        {number('year_built')}
+        {number('square_footage')}
+        {number('num_floors')}
+        {number('num_bays')}
+        {number('max_occupancy')}
+        {number('sleeping_quarters')}
       </div>
 
-      <div>
-        <label htmlFor="facility-edit-description" className={labelCls}>
-          Description
-        </label>
-        <textarea
-          id="facility-edit-description"
-          value={ed('description')}
-          onChange={(e) => setEd('description', e.target.value)}
-          rows={2}
-          className={inputCls + ' resize-none'}
-        />
-      </div>
-      <div>
-        <label htmlFor="facility-edit-notes" className={labelCls}>
-          Notes
-        </label>
-        <textarea
-          id="facility-edit-notes"
-          value={ed('notes')}
-          onChange={(e) => setEd('notes', e.target.value)}
-          rows={2}
-          className={inputCls + ' resize-none'}
-        />
-      </div>
+      {area('description')}
+      {area('notes')}
     </div>
   );
 }

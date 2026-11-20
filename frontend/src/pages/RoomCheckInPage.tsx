@@ -24,7 +24,7 @@ import { locationsService } from '../services/api';
 import type { LocationCheckInInfo } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatTime } from '../utils/dateFormatting';
-import { getErrorMessage, toAppError } from '../utils/errorHandling';
+import { getLoadFailureMessage, toAppError } from '../utils/errorHandling';
 
 const RoomCheckInPage: React.FC = () => {
   const { locationId = '' } = useParams<{ locationId: string }>();
@@ -56,7 +56,7 @@ const RoomCheckInPage: React.FC = () => {
       setError(
         toAppError(err).status === 404
           ? 'This tag points at a room that no longer exists. Let an officer know so it can be rewritten.'
-          : getErrorMessage(err, 'Could not load this room. Check your connection and try again.')
+          : getLoadFailureMessage(err, 'this room')
       );
     } finally {
       setLoading(false);

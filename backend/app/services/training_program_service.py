@@ -2604,8 +2604,12 @@ class TrainingProgramService:
         The list may be a subset (e.g. one phase's requirements). Every id must
         belong to this program. Returns (links, error_message).
         """
+        # The response nests each link's requirement; loading it here is what
+        # keeps serialization from lazy-loading on the async session, which
+        # raised MissingGreenlet and answered 500 after the order had saved.
         result = await self.db.execute(
             select(ProgramRequirement)
+            .options(selectinload(ProgramRequirement.requirement))
             .join(TrainingProgram, ProgramRequirement.program_id == TrainingProgram.id)
             .where(
                 ProgramRequirement.program_id == str(program_id),

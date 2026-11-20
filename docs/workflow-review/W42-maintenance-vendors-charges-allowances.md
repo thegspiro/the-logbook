@@ -128,9 +128,11 @@ appears. Its history is reachable only from a due item. The coat was reached
 from its own Inspections tab. Left: whether a never-inspected item counts as
 due now is a scheduling choice.
 
-### W42-7 — NIT — 422 messages show the raw field name — OPEN
+### W42-7 — NIT — 422 messages show the raw field name — ✅ FIXED
 
 "charge_amount: Value is out of the allowed range." Same shared formatting as W40-8.
+**Fix:** with W40-8, in `describeValidationError`: the toast now reads "Charge
+amount: Value is out of the allowed range." Covered by `errorHandling.test.ts`.
 
 ## Checklist
 
@@ -143,7 +145,7 @@ due now is a scheduling choice.
 | 5. Coming back to it    | ✅ inspection dates and the cleared phone survive reload; fixed W42-1              |
 | 6. On a phone           | ✅ refusals at 390×844                                                             |
 | 7. Everyone can use it  | Fixed W42-3, W42-4                                                                 |
-| 8. What happens around  | Fixed W42-2; W42-6, W42-7 open                                                     |
+| 8. What happens around  | Fixed W42-2, W42-7; W42-6 open                                                     |
 
 ## Completion gate
 

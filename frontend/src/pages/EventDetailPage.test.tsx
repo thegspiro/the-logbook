@@ -22,6 +22,12 @@ function makeApiError(message: string, status = 400) {
 }
 
 // Mock the API module
+const downloadCsv = vi.fn();
+vi.mock('../utils/csv', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../utils/csv')>();
+  return { ...actual, downloadCsv: (...args: unknown[]) => downloadCsv(...args) as unknown };
+});
+
 vi.mock('../services/api', () => ({
   // Behind the transfer dialog's organizer pickers.
   userService: {
@@ -470,6 +476,25 @@ describe('EventDetailPage', () => {
         expect(screen.getByRole('button', { name: /cancel event/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /delete event/i })).toBeInTheDocument();
       });
+    });
+
+    it('exports where each check-in came from', async () => {
+      downloadCsv.mockReset();
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([
+        { ...mockRSVPs[0], source: 'imported', source_label: 'Imported' } as RSVP,
+      ]);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Export CSV' }));
+
+      expect(downloadCsv).toHaveBeenCalledTimes(1);
+      const [csv] = downloadCsv.mock.calls[0] as [string];
+      const [header, row] = csv.trim().split(/\r?\n/);
+      expect(header).toBe('Name,Email,RSVP Status,Guest Count,Checked In,Check-In Time,Notes,Source');
+      expect(row?.endsWith(',Imported')).toBe(true);
     });
 
     it('defaults official event times to the scheduled times', async () => {
@@ -1395,6 +1420,43 @@ describe('EventDetailPage', () => {
     describe('once the card reports a training session', () => {
       const trainingEvent = (custom: Record<string, unknown>) =>
         ({ ...withCustomFields(custom), event_type: 'training' }) as unknown as Event;
+
+      // The ids still list a link to a deactivated requirement (the editor
+      // removes it), so the badge follows the server's answer, not their count.
+      it('drops the attendance badge when every link is to an inactive requirement', async () => {
+        mockReportedSession = {
+          id: 'sess-1',
+          require_completion_confirmation: false,
+          attendance_requirement_ids: ['retired'],
+          counts_toward_attendance: false,
+        };
+        vi.mocked(eventService.getEvent).mockResolvedValue({
+          ...trainingEvent({ dress_code: 'Class B uniform' }),
+          counts_toward_attendance: true,
+        });
+
+        renderWithRouter(<EventDetailPage />);
+
+        expect(await screen.findByText('Class B uniform')).toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByText('Counts toward attendance')).not.toBeInTheDocument());
+      });
+
+      it('shows the attendance badge once the session reports it counts', async () => {
+        mockReportedSession = {
+          id: 'sess-1',
+          require_completion_confirmation: false,
+          attendance_requirement_ids: ['active'],
+          counts_toward_attendance: true,
+        };
+        vi.mocked(eventService.getEvent).mockResolvedValue({
+          ...trainingEvent({ dress_code: 'Class B uniform' }),
+          counts_toward_attendance: false,
+        });
+
+        renderWithRouter(<EventDetailPage />);
+
+        expect(await screen.findByText('Counts toward attendance')).toBeInTheDocument();
+      });
 
       // The card now reports the instructor, certification and record
       // settings from the session as well, and the training form edits them

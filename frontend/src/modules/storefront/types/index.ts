@@ -603,6 +603,8 @@ export interface StoreOrder {
   total: string;
   amountPaid: string;
   balanceDue: string;
+  /** Recorded beyond the total and owed back to the member (W67b-7). */
+  overpaidAmount?: string;
   paymentReference?: string | null;
   paymentReportedAt?: string | null;
   paidAt?: string | null;

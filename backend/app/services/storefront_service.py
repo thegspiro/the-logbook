@@ -15,7 +15,16 @@ import csv
 import re
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, AsyncIterator, Dict, List, Optional, Sequence, Tuple
+from typing import (
+    Any,
+    AsyncIterator,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 from loguru import logger
 from sqlalchemy import case, delete, func, or_, select
@@ -158,6 +167,27 @@ _STATUS_LABELS = {
     StoreOrderStatus.CANCELLED: "Cancelled",
 }
 
+# Owner decision (W67b-18, 2026-11-17): a shipped order goes through the same
+# statuses as one collected at the station, but "Ready for pickup" tells a
+# member who chose shipping to come in. Only the wording changes; the status
+# values, transitions and stored data are the same for both.
+_SHIPPED_STATUS_LABELS = {
+    StoreOrderStatus.READY_FOR_PICKUP: "Ready to ship",
+    StoreOrderStatus.FULFILLED: "Shipped",
+}
+
+
+def _status_label(status: StoreOrderStatus, order: Optional["StoreOrder"]) -> str:
+    """What ``status`` is called for this order: shipping wording when it ships.
+
+    The frontend's ``orderStatusLabel`` mirrors this for the screens.
+    """
+    if order is not None and order.fulfillment_method == StoreFulfillmentMethod.SHIP:
+        shipped = _SHIPPED_STATUS_LABELS.get(status)
+        if shipped:
+            return shipped
+    return _STATUS_LABELS.get(status, status.value)
+
 
 def _status_transition_error(
     order: "StoreOrder", current: StoreOrderStatus, target: StoreOrderStatus
@@ -167,7 +197,7 @@ def _status_transition_error(
     Cancelled and an unchanged status are settled by the caller before this
     is asked.
     """
-    target_label = _STATUS_LABELS[target]
+    target_label = _status_label(target, order)
     if target in (
         StoreOrderStatus.SUBMITTED,
         StoreOrderStatus.AWAITING_PAYMENT,
@@ -181,10 +211,33 @@ def _status_transition_error(
         current in _FULFILMENT_STAGES and target in _FULFILMENT_STAGES
     ):
         return (
-            f"An order cannot move back from {_STATUS_LABELS[current].lower()} "
+            f"An order cannot move back from {_status_label(current, order).lower()} "
             f"to {target_label.lower()}. Its payment stages follow the payments "
             "recorded against it."
         )
+    return None
+
+
+def _option_below_zero(
+    product_name: str,
+    base_price: Any,
+    options: Iterable[Tuple[Optional[str], Any]],
+) -> Optional[str]:
+    """Why one of a product's options would cost less than nothing, or None.
+
+    An option may lower the price (a youth size), but a line below zero
+    subtracts from the order, and an order totalling zero or less is created
+    already paid (W67b-6).
+    """
+    base = _money(base_price)
+    for label, delta in options:
+        price = _money(base + _money(delta))
+        if price < 0:
+            return (
+                f"'{product_name}' would be priced below zero for "
+                f"'{label}': {base} with {_money(delta)} comes to {price}. "
+                "An option can lower the price, but not below zero."
+            )
     return None
 
 
@@ -227,7 +280,7 @@ def _payment_gate_error(
         claim = (
             "marked ordered"
             if status == StoreOrderStatus.ORDERED
-            else "marked ready for pickup"
+            else f"marked {_status_label(status, order).lower()}"
         )
         return (
             f"{owed} This store holds unpaid orders out of the vendor order, "
@@ -485,9 +538,15 @@ class StorefrontService:
         return list(result.scalars().all())
 
     async def get_product(
-        self, product_id: str, organization_id: str
+        self, product_id: str, organization_id: str, reload: bool = False
     ) -> Optional[StoreProduct]:
-        result = await self.db.execute(
+        """Fetch one product with its variants.
+
+        ``reload`` is for the re-read after a write: without it a product the
+        session already holds keeps the variants it was loaded with, so a
+        variant the write just added would be missing from the response.
+        """
+        query = (
             select(StoreProduct)
             .options(selectinload(StoreProduct.variants))
             .where(
@@ -495,6 +554,9 @@ class StorefrontService:
                 StoreProduct.organization_id == str(organization_id),
             )
         )
+        if reload:
+            query = query.execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         store_product: Optional[StoreProduct] = result.scalar_one_or_none()
         return store_product
 
@@ -502,6 +564,17 @@ class StorefrontService:
         self, organization_id: str, data: Dict[str, Any], created_by: Optional[str]
     ) -> StoreProduct:
         variants = data.pop("variants", []) or []
+        below_zero = _option_below_zero(
+            data.get("name") or "This product",
+            data.get("price"),
+            (
+                (variant.get("label"), variant.get("price_delta"))
+                for variant in variants
+                if variant.get("is_active", True)
+            ),
+        )
+        if below_zero:
+            raise ValueError(below_zero)
         inventory_item_id = data.get("inventory_item_id")
         if inventory_item_id:
             await assert_in_org(
@@ -529,7 +602,7 @@ class StorefrontService:
         except IntegrityError as exc:
             await self.db.rollback()
             raise ValueError(self._integrity_message(exc)) from exc
-        refreshed = await self.get_product(product.id, organization_id)
+        refreshed = await self.get_product(product.id, organization_id, reload=True)
         return refreshed or product
 
     async def update_product(
@@ -540,6 +613,25 @@ class StorefrontService:
             raise ValueError("Product not found")
 
         variants = data.pop("variants", None)
+        # Checked against what the product will be after this update: a lower
+        # base price can take an existing option below zero as surely as a
+        # new option can.
+        options: Iterable[Tuple[Optional[str], Any]] = (
+            (
+                (v.get("label"), v.get("price_delta"))
+                for v in variants
+                if v.get("is_active", True)
+            )
+            if variants is not None
+            else ((v.label, v.price_delta) for v in product.variants if v.is_active)
+        )
+        below_zero = _option_below_zero(
+            data.get("name") or product.name,
+            data["price"] if data.get("price") is not None else product.price,
+            options,
+        )
+        if below_zero:
+            raise ValueError(below_zero)
         if data.get("inventory_item_id"):
             await assert_in_org(
                 self.db,
@@ -559,7 +651,7 @@ class StorefrontService:
         except IntegrityError as exc:
             await self.db.rollback()
             raise ValueError(self._integrity_message(exc)) from exc
-        refreshed = await self.get_product(product_id, organization_id)
+        refreshed = await self.get_product(product_id, organization_id, reload=True)
         return refreshed or product
 
     async def archive_product(self, product_id: str, organization_id: str) -> None:
@@ -778,9 +870,15 @@ class StorefrontService:
         return list(result.scalars().all())
 
     async def get_window(
-        self, window_id: str, organization_id: str
+        self, window_id: str, organization_id: str, reload: bool = False
     ) -> Optional[StoreOrderWindow]:
-        result = await self.db.execute(
+        """Fetch one window with its offerings and their products.
+
+        ``reload`` is for the re-read after a write: ``_replace_offerings``
+        deletes and inserts by query, so without it a window the session
+        already holds would return the offerings it had just replaced.
+        """
+        query = (
             select(StoreOrderWindow)
             .options(
                 selectinload(StoreOrderWindow.offerings).selectinload(
@@ -792,6 +890,9 @@ class StorefrontService:
                 StoreOrderWindow.organization_id == str(organization_id),
             )
         )
+        if reload:
+            query = query.execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         store_order_window: Optional[StoreOrderWindow] = result.scalar_one_or_none()
         return store_order_window
 
@@ -818,7 +919,7 @@ class StorefrontService:
         except IntegrityError as exc:
             await self.db.rollback()
             raise ValueError(self._integrity_message(exc)) from exc
-        refreshed = await self.get_window(window.id, organization_id)
+        refreshed = await self.get_window(window.id, organization_id, reload=True)
         return refreshed or window
 
     async def update_window(
@@ -844,7 +945,7 @@ class StorefrontService:
         except IntegrityError as exc:
             await self.db.rollback()
             raise ValueError(self._integrity_message(exc)) from exc
-        refreshed = await self.get_window(window_id, organization_id)
+        refreshed = await self.get_window(window_id, organization_id, reload=True)
         return refreshed or window
 
     async def _replace_offerings(
@@ -853,6 +954,27 @@ class StorefrontService:
         offerings: Sequence[Dict[str, Any]],
         organization_id: str,
     ) -> None:
+        # Every offering is checked before the old ones are deleted, so a
+        # refused save leaves the window's offerings as they were.
+        for payload in offerings:
+            product_id = payload.get("product_id")
+            await assert_in_org(
+                self.db, StoreProduct, product_id, organization_id, label="product"
+            )
+            if payload.get("price_override") is None:
+                continue
+            # assert_in_org has already refused a missing or unknown id.
+            product = await self.get_product(str(product_id), organization_id)
+            if product is None:
+                continue
+            below_zero = _option_below_zero(
+                product.name,
+                payload["price_override"],
+                ((v.label, v.price_delta) for v in product.variants if v.is_active),
+            )
+            if below_zero:
+                raise ValueError(below_zero)
+
         # Delete by query rather than iterating window.offerings: on a window
         # that was just flushed the collection is unloaded, and touching it
         # under asyncio raises MissingGreenlet instead of lazy-loading.
@@ -866,9 +988,6 @@ class StorefrontService:
 
         for index, payload in enumerate(offerings):
             product_id = payload.get("product_id")
-            await assert_in_org(
-                self.db, StoreProduct, product_id, organization_id, label="product"
-            )
             self.db.add(
                 StoreWindowProduct(
                     id=generate_uuid(),
@@ -1521,7 +1640,14 @@ class StorefrontService:
             total=total,
             amount_paid=Decimal("0.00"),
             fulfillment_method=fulfillment,
-            shipping_address=data.get("shipping_address"),
+            # Kept only for an order that ships. A member who typed an address
+            # and then chose pickup still sent it, and a home address was
+            # stored on an order with no use for it (W67b-9).
+            shipping_address=(
+                data.get("shipping_address")
+                if fulfillment == StoreFulfillmentMethod.SHIP
+                else None
+            ),
             member_notes=data.get("member_notes"),
             submitted_at=_utcnow(),
         )
@@ -1564,7 +1690,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        full_order = await self.get_order(order.id, organization_id)
+        full_order = await self.get_order(order.id, organization_id, reload=True)
         if full_order is None:
             return order
 
@@ -1791,6 +1917,15 @@ class StorefrontService:
                 else product.price
             )
             unit_price = _money(price + _money(variant.price_delta if variant else 0))
+            # The guard that cannot be bypassed: a price saved before the
+            # save-time checks existed, or a later base-price change, still
+            # meets it here (W67b-6).
+            if unit_price < 0:
+                label = f" ({variant.label})" if variant else ""
+                raise ValueError(
+                    f"'{product.name}{label}' is priced below zero. Ask the "
+                    "quartermaster to correct its price."
+                )
 
             personalization_text = self._normalize_personalization(
                 product, personalization
@@ -1896,11 +2031,17 @@ class StorefrontService:
         organization_id: str,
         user_id: Optional[str] = None,
         for_update: bool = False,
+        reload: bool = False,
     ) -> Optional[StoreOrder]:
         """Fetch one order, always org-scoped; ``user_id`` narrows to the owner.
 
         ``for_update`` locks the order row and re-reads it past the session's
         identity map, for a read-modify-write on its money columns (SF-9).
+
+        ``reload`` re-reads past the identity map without the lock, for the
+        read after a write: a write adds its timeline event by ``order_id``,
+        so an order the session already holds would otherwise come back
+        without the event just written.
         """
         query = (
             select(StoreOrder)
@@ -1918,6 +2059,8 @@ class StorefrontService:
             query = query.where(StoreOrder.user_id == str(user_id))
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
+        elif reload:
+            query = query.execution_options(populate_existing=True)
         result = await self.db.execute(query)
         store_order: Optional[StoreOrder] = result.scalar_one_or_none()
         return store_order
@@ -2096,7 +2239,7 @@ class StorefrontService:
             order.amount_paid = _money(order.total)
             order.paid_at = _utcnow()
 
-        label = _STATUS_LABELS.get(status, status.value)
+        label = _status_label(status, order)
         self.db.add(
             StoreOrderEvent(
                 id=generate_uuid(),
@@ -2113,7 +2256,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
             if settings.send_status_updates:
@@ -2135,10 +2278,16 @@ class StorefrontService:
         reference: Optional[str] = None,
         mark_paid: bool = True,
         notify_member: bool = True,
+        allow_overpayment: bool = False,
     ) -> StoreOrder:
         """Record money the department has actually confirmed receiving.
 
         ``amount=None`` settles whatever balance remains, read under the lock.
+
+        An explicit amount above the balance is refused unless
+        ``allow_overpayment`` (owner decision, W67b-7, 2026-11-15): a figure
+        staff type is checked, but a PayPal capture being applied records what
+        actually arrived, and the excess shows as owed back to the member.
 
         A read-modify-write on ``amount_paid``, so the order row is locked
         first (SF-9, pitfall 27): the PayPal webhook's auto-apply landing while
@@ -2175,6 +2324,15 @@ class StorefrontService:
         applied = _money(amount)
         if applied <= 0:
             raise ValueError("Payment amount must be greater than zero")
+        if not allow_overpayment:
+            owed = _money(Decimal(order.total or 0) - Decimal(order.amount_paid or 0))
+            if owed <= 0:
+                raise ValueError("This order is already paid in full")
+            if applied > owed:
+                raise ValueError(
+                    f"That is more than the {owed} still owed on this order. "
+                    f"Record {owed}, and return the rest to the member."
+                )
 
         order.amount_paid = _money(Decimal(order.amount_paid or 0) + applied)
         if payment_method is not None:
@@ -2208,7 +2366,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
             if settings.send_payment_receipts:
@@ -2320,7 +2478,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
             if settings.send_payment_receipts:
@@ -2430,7 +2588,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         if refreshed and settings.notify_admins_on_order:
             await self.notifications.send_admin_new_order(refreshed, settings)
         return refreshed or order
@@ -2470,7 +2628,9 @@ class StorefrontService:
 
         order.payment_method = method
         await self.db.commit()
-        refreshed = await self.get_order(order_id, organization_id, user_id=user_id)
+        refreshed = await self.get_order(
+            order_id, organization_id, user_id=user_id, reload=True
+        )
         return refreshed or order
 
     async def refund_order(
@@ -2505,11 +2665,17 @@ class StorefrontService:
             raise ValueError("Refund cannot exceed the amount paid")
 
         order.amount_paid = _money(paid - refunded)
-        order.payment_status = (
-            StorePaymentStatus.REFUNDED
-            if order.amount_paid <= 0
-            else StorePaymentStatus.PARTIAL
-        )
+        # What is left decides the status. Refunding only an overpayment's
+        # excess leaves the order paid in full, and it used to read part-paid
+        # (W67b-7). A waived order stays waived while anything is left.
+        if order.amount_paid <= 0:
+            order.payment_status = StorePaymentStatus.REFUNDED
+        elif order.payment_status == StorePaymentStatus.WAIVED:
+            pass
+        elif order.amount_paid >= _money(order.total):
+            order.payment_status = StorePaymentStatus.PAID
+        else:
+            order.payment_status = StorePaymentStatus.PARTIAL
 
         self.db.add(
             StoreOrderEvent(
@@ -2524,7 +2690,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
             if settings.send_payment_receipts:
@@ -2574,7 +2740,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
             # A cancellation is a status change, and rides the same switch.
@@ -2616,7 +2782,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         if refreshed and is_member_visible and notify_member:
             # Deliberately not behind a notification switch: this is a message
             # a quartermaster typed to one member and asked to send. The
@@ -2658,7 +2824,7 @@ class StorefrontService:
             raise ValueError("Order not found")
         order.admin_notes = notes
         await self.db.commit()
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         return refreshed or order
 
     async def bulk_update_status(
@@ -2915,6 +3081,9 @@ class StorefrontService:
             reference=event.external_id,
             mark_paid=True,
             notify_member=True,
+            # The capture is money that has already arrived, so it is recorded
+            # as it was; an excess shows as owed back to the member (W67b-7).
+            allow_overpayment=True,
         )
         # Re-read rather than refresh: the caller serializes the matched order
         # alongside the event, and refresh() would leave that relationship

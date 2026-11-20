@@ -1,6 +1,6 @@
 # Salesforce CRM Integration
 
-_(Added 2026-04-11)_
+_(Added 2026-04-11; Settings button 2026-11-16)_
 
 The Salesforce integration enables bidirectional synchronization between The Logbook and Salesforce CRM, allowing departments to manage contacts, donors, training records, and events across both platforms.
 
@@ -17,6 +17,7 @@ The Salesforce integration enables bidirectional synchronization between The Log
 - **Configurable Field Mappings** — Map Logbook fields to Salesforce fields per object type (members↔contacts, training→tasks, events→events)
 - **Real-Time Webhooks** — Receive Salesforce outbound messages via HMAC-validated webhook for immediate updates
 - **Sync History** — Full audit trail of sync operations with created/updated/adopted/failed counts
+- **Settings on a connected card** — Contact matching, sync direction, field handling and auto-sync can be changed without disconnecting, and the stored token re-authorized. The instance URL and environment are read-only there: to change org, disconnect and connect again
 
 ---
 
@@ -27,6 +28,16 @@ The Salesforce integration enables bidirectional synchronization between The Log
 | `/integrations` | Integrations Hub | `integrations.manage` |
 
 The Salesforce integration is configured via the **Integrations** page. A dedicated Salesforce card shows connection status, last sync timestamp, and action buttons.
+
+**Settings** on a connected card edits the sync settings and, optionally, the
+Connected App credentials or refresh token; a blank credential box keeps what
+is saved. The save leaves `instance_url` and `environment` out (owner decision,
+2026-11-16): the stored refresh token belongs to one org, and the token
+response's `instance_url` overrides the stored one at the next sync, so an
+edited URL would read as moved while syncs went to the old org. **Re-authorize
+with Salesforce** runs the OAuth flow again from Settings and replaces the
+stored token. The OAuth callback stores the `instance_url` Salesforce returns,
+so whoever signs in decides the org; sign in to the same one.
 
 ---
 

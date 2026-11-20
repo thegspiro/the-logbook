@@ -443,3 +443,50 @@ export interface StaffingUnfilledView {
   assigned: number;
   member_options: StaffingMemberOption[];
 }
+
+// ── Undo ─────────────────────────────────────────────────────────
+
+/** A step of a historical import that can be undone on its own. */
+export const HistoricalUndoStep = {
+  ADMIN: 'admin',
+  TRAINING: 'training',
+  DRILLS: 'drills',
+  STAFFING: 'staffing',
+  SHIFTS: 'shifts',
+} as const;
+export type HistoricalUndoStep = (typeof HistoricalUndoStep)[keyof typeof HistoricalUndoStep];
+
+export interface UndoKeptRecord {
+  kind: string;
+  record_id: string;
+  label: string;
+}
+
+export interface UndoStepPreview {
+  committed: boolean;
+  /** Later steps, by name, that must be undone first. */
+  blocked_by: string[];
+  /** Why the step cannot be undone yet, as a sentence to show. */
+  blocked_reason?: string | null;
+  removable: number;
+  kept_total: number;
+  /** The first few kept records; `kept_total` is the whole count. */
+  kept: UndoKeptRecord[];
+  already_gone: number;
+  /** Shifts and seats the step used but did not make: left as they are. */
+  reused?: number;
+}
+
+export interface UndoPreview {
+  steps: Record<string, UndoStepPreview>;
+  members_created: number;
+}
+
+export interface UndoResult {
+  step: string;
+  removed: number;
+  kept: number;
+  members_removed: number;
+  members_kept: number;
+  preview: UndoPreview;
+}
