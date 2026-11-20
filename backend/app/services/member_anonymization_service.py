@@ -27,6 +27,11 @@ docs/COMPLIANCE.md):
   records approval copied them to (the rows stay). A file another row still
   names is kept and only the member's entry goes; a file that cannot be
   deleted keeps its entry, its filename replaced, and is counted.
+- The files uploaded to the member's own training records (the
+  training-records storage area), by an officer or by the member, and their
+  entries (owner decision 2026-11-20). Same rules as the certificates: a
+  shared file is kept, a failed delete keeps its entry renamed and is
+  counted. The records stay.
 - event_rsvps: dietary restrictions, accessibility needs, notes.
 - external_user_mappings: duplicated name/email/username copies.
 - candidates.photo_url (second copy of the member photo). Candidate names
@@ -45,9 +50,6 @@ What is deliberately NOT touched:
 - votes/ballots — election integrity signatures must not change.
 - Operational history rows (training, attendance, hours, custody, dues,
   exposure records) — they now point at the anonymized shell.
-- Files uploaded to the member's training records themselves (the
-  training-records storage area, not a self-report certificate): department
-  training evidence, kept with the completions they document.
 - membership_number and previous_membership_number — department-assigned
   keys, not personal data: they are what rosters and paper records cite, and
   the anonymized shell is identified by them.
@@ -316,11 +318,11 @@ class MemberAnonymizationService:
         counts["form_submissions_scrubbed"] = prospect_counts["form_submissions"]
         counts["step_progress_scrubbed"] = prospect_counts["step_progress"]
 
-        # --- self-reported training certificates -----------------------
+        # --- uploaded training files -----------------------------------
         # Last, so the files go as late as possible before the endpoint's
         # commit: a failure in any step above rolls back before a single
-        # certificate has been deleted.
-        counts.update(await self._remove_self_report_certificates(user))
+        # file has been deleted.
+        counts.update(await self._remove_member_uploads(user))
 
         await self.db.flush()
         return {
@@ -329,10 +331,14 @@ class MemberAnonymizationService:
             **counts,
         }
 
-    async def _remove_self_report_certificates(self, user: User) -> dict[str, int]:
-        """Delete the certificates the member uploaded with self-reported
-        training, and the entries naming them on their submissions and on the
-        training records approval copied them to. The rows stay.
+    async def _remove_member_uploads(self, user: User) -> dict[str, int]:
+        """Delete the files the member's training rows name, and the entries
+        naming them. The rows stay.
+
+        Two kinds, counted apart: the certificates uploaded with self-reported
+        training (on the submissions, and on the records approval copied them
+        to), and the files uploaded to the member's own training records.
+        Erasing the second kind is the owner's decision of 2026-11-20.
 
         Files first, rows after, as the retention sweep does. If a later step
         or the endpoint's commit fails, the rows still name files that are
@@ -347,10 +353,6 @@ class MemberAnonymizationService:
         twice, so a dropped reference would leave an orphan nothing could
         ever find again, and the count tells the administrator the erasure
         is incomplete.
-
-        Files uploaded to the training records themselves (the TRAINING_RECORDS
-        area) are department training evidence and are kept, as the training
-        completions are.
         """
         org_id = str(user.organization_id)
         # Locks the member's submissions and records until the commit: an
@@ -360,7 +362,15 @@ class MemberAnonymizationService:
         # The records' half matters on its own: after an approval is reversed
         # and the member removes the attachment from the submission, only the
         # voided record still names the certificate.
-        candidates = files.self_report_paths
+        #
+        # Each path's kind comes from the collector's sets, never from
+        # confining it again: the legacy self-reports root sits inside the
+        # legacy training-records root, and the collector's SELF_REPORTS-first
+        # classification is the one answer.
+        certificates = files.self_report_paths
+        uploads = files.record_own_paths
+        candidates = certificates | uploads
+        # One check over both kinds: it reads the organization's references.
         shared = await referenced_elsewhere(
             self.db, org_id, candidates, exclude_rows=files.own_rows
         )
@@ -374,9 +384,8 @@ class MemberAnonymizationService:
                 failed.add(path)
 
         if candidates:
-            rows: list[TrainingSubmission | TrainingRecord] = []
             if files.submission_ids:
-                rows.extend(
+                submissions = (
                     (
                         await self.db.execute(
                             select(TrainingSubmission).where(
@@ -388,8 +397,16 @@ class MemberAnonymizationService:
                     .scalars()
                     .all()
                 )
+                for submission in submissions:
+                    _strip_entries(
+                        submission,
+                        org_id,
+                        removed | shared,
+                        failed,
+                        (StorageArea.SELF_REPORTS,),
+                    )
             if files.record_ids:
-                rows.extend(
+                records = (
                     (
                         await self.db.execute(
                             select(TrainingRecord).where(
@@ -401,13 +418,22 @@ class MemberAnonymizationService:
                     .scalars()
                     .all()
                 )
-            for row in rows:
-                _strip_certificates(row, org_id, removed | shared, failed)
+                for record in records:
+                    _strip_entries(
+                        record,
+                        org_id,
+                        removed | shared,
+                        failed,
+                        _RECORD_AREAS,
+                    )
 
         return {
-            "self_report_files_deleted": len(removed),
-            "self_report_files_not_deleted": len(failed),
-            "self_report_files_shared_kept": len(shared),
+            "self_report_files_deleted": len(removed & certificates),
+            "self_report_files_not_deleted": len(failed & certificates),
+            "self_report_files_shared_kept": len(shared & certificates),
+            "training_record_files_deleted": len(removed & uploads),
+            "training_record_files_not_deleted": len(failed & uploads),
+            "training_record_files_shared_kept": len(shared & uploads),
         }
 
     async def _scrub_prospect(self, user: User, token: str) -> dict[str, int]:
@@ -599,28 +625,59 @@ class MemberAnonymizationService:
         }
 
 
-def _strip_certificates(
+# A record's entries in the order collect_member_files classifies them and
+# upload_relocation.candidate_areas resolves a record's references: an
+# approved certificate lives in the self-reports tree, nested in the records
+# one, so it is checked first.
+_RECORD_AREAS = (StorageArea.SELF_REPORTS, StorageArea.TRAINING_RECORDS)
+
+# The neutral name a kept entry gets, by the area its file confined to. The
+# stored name is server-chosen, so its extension is the only part of the
+# label that does not come from the uploader.
+_NEUTRAL_LABELS = {
+    StorageArea.SELF_REPORTS: "certificate",
+    StorageArea.TRAINING_RECORDS: "attachment",
+}
+
+
+def _strip_entries(
     row: TrainingSubmission | TrainingRecord,
     org_id: str,
     drop: set[str],
     unnamed: set[str],
+    areas: tuple[StorageArea, ...],
 ) -> None:
     """Remove the entries naming *drop* from *row*'s attachments, and replace
-    the uploader's filename on the entries naming *unnamed*."""
+    the uploader's filename on the entries naming *unnamed*.
+
+    *areas* are the row kind's areas in the collector's order: a submission's
+    entries confine to SELF_REPORTS only, a record's to SELF_REPORTS then
+    TRAINING_RECORDS (:data:`_RECORD_AREAS`). An entry is matched
+    in the first area it confines to, as ``collect_member_files`` matches it.
+    """
     attachments = row.attachments
     if not isinstance(attachments, list):
         return
     kept: list[Any] = []
     changed = False
     for attachment in attachments:
-        path = confined_attachment_path(attachment, org_id, StorageArea.SELF_REPORTS)
+        path: str | None = None
+        area: StorageArea | None = None
+        for candidate in areas:
+            path = confined_attachment_path(attachment, org_id, candidate)
+            if path is not None:
+                area = candidate
+                break
         if path is not None and path in drop:
             changed = True
             continue
-        if path is not None and path in unnamed and isinstance(attachment, dict):
-            # The stored name is server-chosen; its extension is the only part
-            # of the label that does not come from the member.
-            label = "certificate" + os.path.splitext(path)[1]
+        if (
+            path is not None
+            and area is not None
+            and path in unnamed
+            and isinstance(attachment, dict)
+        ):
+            label = _NEUTRAL_LABELS[area] + os.path.splitext(path)[1]
             if attachment.get("file_name") != label:
                 attachment = {**copy.deepcopy(attachment), "file_name": label}
                 changed = True

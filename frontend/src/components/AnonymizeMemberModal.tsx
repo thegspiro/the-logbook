@@ -98,6 +98,7 @@ export const AnonymizeMemberModal: React.FC<AnonymizeMemberModalProps> = ({
               <li>Medical screening details and leave reasons</li>
               <li>Their original application</li>
               <li>Certificates uploaded with their training reports</li>
+              <li>Documents attached to their training records</li>
             </ul>
           </div>
           <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-3">

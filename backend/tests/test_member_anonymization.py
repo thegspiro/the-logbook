@@ -37,7 +37,7 @@ from app.models.user import (
     User,
     UserStatus,
 )
-from app.services import file_storage_service
+from app.services import file_storage_service, member_anonymization_service
 from app.services.member_anonymization_service import MemberAnonymizationService
 from tests.fake_request import fake_request
 
@@ -794,3 +794,220 @@ class TestSelfReportCertificates:
             assert "/" not in str(value)
             assert "Firefighter" not in str(value)
             assert "Pat" not in str(value)
+
+
+class TestTrainingRecordUploads:
+    """Owner decision 2026-11-20: anonymising a member also deletes the files
+    uploaded to their own training records (the training-records area), by
+    an officer or by the member. The records stay."""
+
+    _helpers = TestSelfReportCertificates
+
+    @pytest.fixture
+    def root(self, tmp_path, monkeypatch):
+        uploads = tmp_path / "uploads"
+        uploads.mkdir()
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(uploads))
+        return uploads
+
+    def _upload(self, root, org_id):
+        return self._helpers._certificate(root, org_id, area="training-records")
+
+    @staticmethod
+    def _legacy_upload(root, org_id):
+        directory = root / "training_attachments" / str(org_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{uuid.uuid4().hex}.pdf"
+        path.write_bytes(b"%PDF-1.4 legacy record upload")
+        return path
+
+    async def test_removes_training_record_uploads(self, db_session, root):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        evidence = self._upload(root, org.id)
+        record = await self._helpers._record(
+            db_session, org.id, user.id, [self._helpers._entry(evidence, "roster.pdf")]
+        )
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert not evidence.exists()
+        record = await self._helpers._fresh(db_session, TrainingRecord, record.id)
+        assert record is not None
+        assert record.attachments == []
+        assert summary["training_record_files_deleted"] == 1
+        assert summary["training_record_files_not_deleted"] == 0
+        assert summary["training_record_files_shared_kept"] == 0
+        assert summary["self_report_files_deleted"] == 0
+
+    async def test_keeps_an_upload_another_record_names(self, db_session, root):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        colleague = await _make_departed_member(db_session, org, deleted_at=None)
+        roster = self._upload(root, org.id)
+        entry = self._helpers._entry(roster, "roster.pdf")
+        own = await self._helpers._record(db_session, org.id, user.id, [dict(entry)])
+        theirs = await self._helpers._record(
+            db_session, org.id, colleague.id, [dict(entry)]
+        )
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert roster.exists()
+        own = await self._helpers._fresh(db_session, TrainingRecord, own.id)
+        theirs = await self._helpers._fresh(db_session, TrainingRecord, theirs.id)
+        assert own.attachments == []
+        assert theirs.attachments == [entry]
+        assert summary["training_record_files_shared_kept"] == 1
+        assert summary["training_record_files_deleted"] == 0
+
+    async def test_a_failed_delete_keeps_the_entry_renamed(
+        self, db_session, root, monkeypatch
+    ):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        evidence = self._upload(root, org.id)
+        record = await self._helpers._record(
+            db_session,
+            org.id,
+            user.id,
+            [self._helpers._entry(evidence, "Pat Firefighter roster.pdf")],
+        )
+        monkeypatch.setattr(
+            file_storage_service, "delete", AsyncMock(return_value=False)
+        )
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        record = await self._helpers._fresh(db_session, TrainingRecord, record.id)
+        [entry] = record.attachments
+        assert entry["file_path"] == str(evidence)
+        assert entry["file_name"] == "attachment.pdf"
+        assert summary["training_record_files_not_deleted"] == 1
+        assert summary["training_record_files_deleted"] == 0
+
+    async def test_one_reference_check_covers_both_areas(
+        self, db_session, root, monkeypatch
+    ):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        certificate = self._helpers._certificate(root, org.id)
+        evidence = self._upload(root, org.id)
+        await self._helpers._submission(
+            db_session, org.id, user.id, [self._helpers._entry(certificate)]
+        )
+        await self._helpers._record(
+            db_session, org.id, user.id, [self._helpers._entry(evidence)]
+        )
+        spy = AsyncMock(return_value=set())
+        monkeypatch.setattr(member_anonymization_service, "referenced_elsewhere", spy)
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        spy.assert_awaited_once()
+        assert spy.await_args.args[2] == {str(certificate), str(evidence)}
+        assert summary["self_report_files_deleted"] == 1
+        assert summary["training_record_files_deleted"] == 1
+
+    async def test_a_submission_entry_in_the_records_area_is_not_an_upload(
+        self, db_session, root
+    ):
+        """Submissions are confined to the self-reports area only, as the
+        collector confines them: an entry pointing into training-records is
+        not the member's upload, and is left alone."""
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        elsewhere = self._upload(root, org.id)
+        entry = self._helpers._entry(elsewhere, "odd.pdf")
+        submission = await self._helpers._submission(
+            db_session, org.id, user.id, [dict(entry)]
+        )
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert elsewhere.exists()
+        submission = await self._helpers._fresh(
+            db_session, TrainingSubmission, submission.id
+        )
+        assert submission.attachments == [entry]
+        assert summary["training_record_files_deleted"] == 0
+
+    async def test_legacy_layouts_count_under_their_own_area(self, db_session, root):
+        """The legacy self-reports root sits inside the legacy training-records
+        root, so the area comes from the collector's classification."""
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        upload = self._legacy_upload(root, org.id)
+        certificate = self._helpers._certificate(root, org.id, legacy=True)
+        await self._helpers._record(
+            db_session,
+            org.id,
+            user.id,
+            [self._helpers._entry(upload), self._helpers._entry(certificate)],
+        )
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert not upload.exists()
+        assert not certificate.exists()
+        assert summary["training_record_files_deleted"] == 1
+        assert summary["self_report_files_deleted"] == 1
+
+    async def test_a_rerun_after_a_rollback_completes(self, db_session, root):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        evidence = self._upload(root, org.id)
+        record = await self._helpers._record(
+            db_session, org.id, user.id, [self._helpers._entry(evidence)]
+        )
+        user_id, org_id, record_id = user.id, org.id, record.id
+        await db_session.commit()
+
+        service = MemberAnonymizationService(db_session)
+        await service.anonymize_member(user)
+        await db_session.rollback()
+
+        assert not evidence.exists()
+        record = await self._helpers._fresh(db_session, TrainingRecord, record_id)
+        assert record.attachments == [self._helpers._entry(evidence)]
+        user = await service.get_user_for_anonymization(user_id, org_id)
+
+        summary = await service.anonymize_member(user)
+
+        record = await self._helpers._fresh(db_session, TrainingRecord, record_id)
+        assert record.attachments == []
+        assert summary["training_record_files_deleted"] == 1
+
+    async def test_the_audit_event_carries_integer_counts(
+        self, db_session, root, monkeypatch
+    ):
+        org = await _make_org(db_session)
+        admin = await _make_departed_member(db_session, org, deleted_at=None)
+        user = await _make_departed_member(db_session, org)
+        evidence = self._upload(root, org.id)
+        await self._helpers._record(
+            db_session, org.id, user.id, [self._helpers._entry(evidence)]
+        )
+        audit = AsyncMock()
+        monkeypatch.setattr(users_endpoint, "log_audit_event", audit)
+
+        await users_endpoint.anonymize_member(
+            user_id=str(user.id),
+            request=fake_request(),
+            current_user=SimpleNamespace(id=admin.id, organization_id=org.id),
+            db=db_session,
+            _stepup=None,
+        )
+
+        event_data = audit.await_args.kwargs["event_data"]
+        assert event_data["training_record_files_deleted"] == 1
+        assert event_data["training_record_files_not_deleted"] == 0
+        assert event_data["training_record_files_shared_kept"] == 0
+        for key in (
+            "training_record_files_deleted",
+            "training_record_files_not_deleted",
+            "training_record_files_shared_kept",
+        ):
+            assert type(event_data[key]) is int
+        for value in event_data.values():
+            assert "/" not in str(value)
