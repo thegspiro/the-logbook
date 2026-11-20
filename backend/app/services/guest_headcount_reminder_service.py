@@ -34,8 +34,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.dependencies import user_has_permission
 from app.core.config import settings
-from app.core.permissions import permission_matches
 from app.core.utils import generate_uuid
 from app.models.email_template import EmailTemplateType
 from app.models.event import Event
@@ -78,11 +78,15 @@ class ReminderCounts:
 
 
 def can_record_headcount(user: User) -> bool:
-    """Whether *user* holds the permission ``set_guest_headcount`` requires."""
-    granted: set[str] = set()
-    for role in user.roles or []:
-        granted.update(role.permissions or [])
-    return permission_matches(EVENT_MANAGER_PERMISSION, granted)
+    """Whether *user* holds the permission ``set_guest_headcount`` requires.
+
+    Resolved the same way ``require_permission`` resolves it (CLAUDE.md #29) —
+    a hand-rolled loop over ``user.roles`` alone missed a grant that reaches a
+    user only through their operational rank's defaults, not a position of
+    their own (see ``_collect_user_permissions``), which silently dropped that
+    organizer from their own event's reminder.
+    """
+    return user_has_permission(user, EVENT_MANAGER_PERMISSION)
 
 
 class GuestHeadcountReminderService:
