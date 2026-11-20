@@ -10710,13 +10710,20 @@ beyond the feature.
   restates every evaluation's credit, or removes it where evaluations no
   longer count; a member taken off a shift, or marked No-show, loses that
   shift's evaluation credit. A shift that has started cannot be deleted, so an
-  evaluated one never is. The agency case is left: tying credit to the
-  agency's switch would also take back every past credit when an agency is
-  switched off, which needs an owner ruling.
-- **Credit is not re-stated when an evaluation's combined scope shrinks.** An
-  evaluation re-saved after one of its programs drops out of the combined
-  scope (its form cleared while the enrollment stays active) keeps the credit
-  it gave that program until the evaluation is saved again with it.
+  evaluated one never is. **The agency case is accepted (owner decision,
+  2026-11-16: keep it).** An evaluation already credited keeps its credit when
+  its outside entry moves to an agency that does not evaluate shifts: tying
+  credit to the agency's switch would also take back every past credit when an
+  agency is switched off.
+- ~~**Credit is not re-stated when an evaluation's combined scope shrinks.**~~
+  Resolved 2026-11-16 (owner decision: take it back). An evaluation re-saved
+  after one of its programs drops out of the combined scope (its form cleared
+  while the enrollment stays active) now revokes the credit it gave that
+  program; the programs it still counts for keep theirs. The credit pass reads
+  what the evaluation credited from the ledger, so it needs no record of the
+  earlier scope. A shift's evaluations are fixed once it ends, so this arises
+  on a shift still under way or on an outside shift.
+  `tests/test_combined_scope_shrink.py`.
 - ~~**A deactivated evaluation form is still offered and required**~~
   Resolved 2026-11-14 (owner decision): a form a program or the general-form
   setting uses cannot be deactivated, and an inactive form cannot be newly
