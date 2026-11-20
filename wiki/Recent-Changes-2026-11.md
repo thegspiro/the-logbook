@@ -82,6 +82,70 @@ The engineering audit is
   report window on every screen size. The inventory stock matrix keeps its
   Size column pinned.
 
+## Recent changes: the month in review, October 16 – November 16, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-month-review-october-16--november-16-2026).
+
+Every guide and wiki page was checked against the last month of changes.
+What changed in the guides, in short:
+
+- **Voting** is set per member type under **Election Settings → Voter
+  Eligibility**, not on membership tiers. New elections choose a **Kind of
+  vote**, and can customize the rules with a reason. See
+  [Elections](Module-Elections).
+- **Leave of absence:** members can ask for leave, are emailed about their
+  leave and reminded before it ends. A leave that does not waive training
+  excuses nothing.
+- **Training waivers:** members can ask to be excused from a session, with a
+  supporting document; approvers decide on their own page.
+- **Outside-agency shifts:** a preceptor can fill in the evaluation from a
+  link, with no login.
+- **History:** roster import, merging people, photos, audio, video and
+  documents. See [History](Module-History).
+- **Medical screening** sends expiry reminders at 90, 60, 30 and 7 days.
+- **Finance and the store:** budget request drafts save blank; the store has
+  **Cancel order** and stricter status changes.
+- **Upgrading:** `UPGRADING.md` lists what an operator will notice, including
+  integrations (weather alerts, webhooks) that start sending at upgrade.
+
+## Recent changes: November 15 – 16, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-15--16-2026).
+
+- **Training events have one form.** **Create Session** in Training
+  Administration and **Create Event** with the type **Training** open the same
+  four-step form. On the event page, the **Training details** card shows what
+  the session counts toward; **Edit training details** changes it. **Require
+  instructor confirmation** is now called **Require sign-off**. Saving training
+  details needs the **Manage all events** permission. See
+  [Training](Module-Training).
+- **Elections pages are reorganised.** Managers get a row of links — **All
+  Elections**, **Meeting Attendance**, **Settings** — in place of the gear
+  button. Each election opens with a header showing its stage, when voting
+  closes, turnout, the winner rule and the button for the next step. Each
+  section (Ballot, Candidates, Results, Integrity & Audit, …) has its own web
+  address you can send to someone; old links still work. See
+  [Elections](Module-Elections).
+- **Course Links.** **Training Admin → Curriculum → Course Links** finds
+  training records typed with a course name that is not in the Course Library,
+  suggests the matching course, and links them when an officer confirms, so
+  they count toward course and certification requirements.
+- **Evaluated Calls** is a new requirement type: the calls recorded on
+  submitted shift evaluations. The existing **Calls** type still counts shift
+  reports.
+- **Shift evaluations:** the evaluations a shift asks for are fixed once it
+  ends; taking a member off a shift or marking them No-show takes back its
+  evaluation credit; a form still in use cannot be deactivated.
+- **Training CSV imports** now show **Imported** as their source.
+- **Events:** an unanswered mandatory event appears in **Needs You** only
+  within two months of its start.
+- **Apparatus:** only current members can be added as operators.
+- **Phones:** the status bar matches the app's navigation bar for the theme
+  you chose in the app.
+- **Security:** changing your own sign-in email asks you to confirm it is you.
+
 ## Recent changes: November 16, 2026 (Google Workspace and Microsoft 365)
 
 The engineering audit is

@@ -144,6 +144,9 @@ newer (Debian 13, Ubuntu 25.04+, or installed beforehand) and stops before
 installing anything if it cannot find one. It also builds the frontend, which
 needs Node.js 22.22.1+ and npm 10+; the script installs the distribution's `nodejs`
 and `npm` without checking their versions, so install a current Node.js first.
+It does not install `ffmpeg`, which History audio and video uploads need
+(without it they are refused; photos and documents still upload): install it
+with `sudo apt-get install --no-install-recommends ffmpeg`.
 See
 [DEPLOYMENT.md → Traditional Server Deployment](https://github.com/thegspiro/the-logbook/blob/main/docs/DEPLOYMENT.md#option-2-traditional-server-deployment).
 

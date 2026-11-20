@@ -61,10 +61,12 @@ The last 25 hours of `main`: the 26 first-parent merges after `f337be43`
 through `775eb7df` (2026-11-18 10:56 UTC), #4364 at 2026-11-17 13:38 UTC to
 #4423. `CHANGELOG.md` stays closed.
 
-**Not covered:** the 37 first-parent merges between the November 14 – 15
+**Not covered here:** the 37 first-parent merges between the November 14 – 15
 pass (`79ab1c88`) and #4364, plus the 40 that pass already left for a
 catch-up (session waiver requests' screens, History phases 2 and 3, the shift
-evaluation review). A catch-up pass should take both ranges.
+evaluation review). The November 15 – 16 section and the month review below
+cover both through `9b68de55` (#4338); the merges after `9b68de55` and before
+#4364 still need a pass.
 
 | Change                                                                                                                                                                                                                                                                          | Guide  | Disposition                                                                                                                                                                           |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -99,6 +101,104 @@ Member dialog, phone table captures.
 
 **YouTube scripts:** 03 IT Manager and 14 Multi-class courses edited; others
 flagged in `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
+## Change audit: month review, October 16 – November 16, 2026
+
+A review of every first-parent merge from 2026-10-16 to `9b68de55`
+(2026-11-16), about 224, split into seven areas, each checked against the
+source on `main` rather than against earlier passes. It closes the gap
+recorded under the November 15 – 16 pass below: the 64 merges between the
+November 10 – 11 pass and that window are now covered. October merges, which
+earlier passes had covered, were checked by sampling labels and the larger
+batch PRs. `CHANGELOG.md` stays closed.
+
+| Area                                          | Docs that were missing or wrong                                                                                                                                                                                                                                                                                                                          | Fixed in                                                                                                           |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Training and evaluations                      | Session waiver request screens (02 said "no screen yet", #4243, #4244, #4248); preceptor links (#4264); no-show crew (#4300); linked department evaluation requirements (#4311); enrollment-date rule and reopening requirements (#4275); evaluation form figures (#4273, #4282, #4292); monthly shifts on My Training (#4287); tab names of 2026-11-08  | 02, `EVALUATIONS_MODULE`, wiki `Module-Training`, `-Developer`, `Module-Evaluations`                               |
+| Events, meetings and minutes                  | Meeting Attendance's Voting column (#4277); one attendance row per meeting (#4247); minutes emails as templates (#4294); fallback deciders (#4242); draft check-in (#4316); History system folder (#4313, 3 wrong folder slugs); recruitment-event guest answer; W51-9 still "open"; form embedding undocumented                                         | 04, 07, `MEETING_MINUTES_MODULE`, `FORMS_MODULE`, `PUBLIC_PORTAL_MODULE`, wiki `Module-Events`, `-Meeting-Minutes` |
+| Membership, scheduling, apparatus, facilities | Leave requests and reminders (#4303); leave emails; months-on-leave rule (15-day text stale since 11-02); preceptor links and no-show crew in 03; report drafts (#4296); decline-alert recipients (#4242); Add Member and import rules (#4129); unique location names and Due soon (#4082); non-existent permission names; tiers no longer decide voting | 01, 03, 06, `LABEL_PRINTING_MODULE`, wiki `Module-Scheduling`, `Administration-Pages`, `Module-Label-Printing`     |
+| Finance, grants, store, integrations          | Budget request drafts (#4250); **Approve as admin** (#4267); store Cancel order and status rules (#4288); dues troubleshooting rows contradicting #4110; grant task **Assigned To** and reminders; donor contact details; chains by type; approver preview; webhook address required; store Price required; MCP draft-event rule                         | 11, 12, 16, 18, `FINANCE_MODULE`, `STOREFRONT_MODULE`, wiki `Module-Finance`, `Integration-Claude-MCP`             |
+| Inventory, medical, History, reports          | History phases 2 – 4 had no wiki page (#4263, #4279, #4313); screening expiry reminders and 12-month default undocumented, wiki said "no expiry email" (#4121); screening type described as plaintext; **Department Messages**                                                                                                                           | 08, 13, `HISTORY_MODULE`, `MEDICAL_SCREENING_MODULE`, new wiki `Module-History` (sidebar, Home)                    |
+| Elections, communications, sign-in            | Per-type voter rules and four kinds of vote (#4265); custom rules at creation (#4270); Meeting Attendance page (#4277); roster reasons (#4274); **Results Report** / **Send Me a Copy** and ballot-link states (#4278); template CC and categories (#4248, #4294, #4295); step-up additions (#4316); convert result screen                               | 14, 15, `MFA`, wiki `Module-Elections`, `-Developer`, `Module-Communications`, `Security-Authentication`           |
+| Upgrading, configuration, scripts             | `markdown-it-py` boot entry; sixteen "changes you will notice" entries (prospect `view_all`, shift attendance de-duplication, Chief evaluation grants, Historian grants, weather alerts and webhooks starting, decline alerts, voter rules, leave, evaluations, store); S3, Redis, backup and QuickBooks settings; sign-in limit; ffmpeg                 | `UPGRADING`, wiki `Configuration-*`, `Deployment-Docker`; scripts 00, 02, 03, 04, 05, 07, 08, 11, 12, 16           |
+
+**Found in the code, not fixed here** (each needs a code change with its own
+tests):
+
+- `evaluation_data_service._waiver_attachments_on_file` still returns an empty
+  set, so the annual review's waiver history always reads "no attachment"
+  although #4243 added the attachments table.
+- `MembershipTiersSection.tsx:103` ("This ladder decides who votes") and
+  `MembershipLadderSection.tsx:95` still say the tier decides voting; wrong
+  since #4265. Guide 01 notes the wording predates 2026-11-13.
+- History's side and top navigation list only Overview, Past Members and Honor
+  Roll; `types/modules.ts` describes phase 1 only.
+- `ReportsPage.tsx:490` tooltip says "print to PDF"; #4346 made it a server
+  download.
+- `install.sh --traditional` does not install ffmpeg.
+
+**Upgrade risks worth an owner's look:** `1740b4886e52` deletes duplicate
+shift-attendance rows irreversibly and can merge separate stints on one shift
+(credited hours can fall); `c588f525fdbb` widens access on department-created
+positions; weather alerts and generic webhooks connected earlier start sending
+at upgrade. All three now have `UPGRADING.md` entries.
+
+**Screenshots:** queued in `docs/training/SCREENSHOT_CURRENCY.md` under
+"Queued by the month review". **Scripts:** `SCRIPT_CURRENCY.md`.
+
+## Change audit: November 15 – 16, 2026
+
+Merged to `main` from `c1293346` (#4323, 2026-11-15 14:48 UTC) through
+`9b68de55` (#4338, 2026-11-16 13:42 UTC): the 24 first-parent merges of the
+25 hours before this pass. Security-review passes (#4328, #4332, #4348) and
+ADV-02 (#4316) are recorded in `docs/security-review/`; forms batch 20 (#4333)
+in `docs/FORMS_REVIEW_2026-11-05.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                          | Guide  | Disposition                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **One training-event form** for Create Session and Create Event → Training; read-only **Training details** card with **Edit training details**; **Require sign-off**; Manage all events needed to save training details (#4347) | 02, 04 | Guides, `TRAINING_PROGRAMS`, wiki and screenshot queue written by the PR. This pass: `UPGRADING.md` entry (new Training defaults, the permission); scripts 04, 05, 16 rewritten |
+| Elections: **Elections pages** row; per-election header with stages, voting window, turnout, winner and the stage button; sections at `/elections/:id/<section>`, `?tab=` forwarded; **Integrity & Audit** section (#4297)      | 14     | Overview and section table rewritten; Integrity & Audit, Settings, Open and Close steps updated; wiki `Module-Elections-Developer` section rewritten; script 12 production note |
+| **Course Links**: Training Admin → Curriculum → Course Links suggests a library course for names on unlinked records; linking sets course, category and type (#4345)                                                            | 02     | New section under Course Library; wiki `Module-Training` subsection                                                                                                             |
+| **Evaluated Calls** requirement type (calls on submitted shift evaluations; migration `9d044fc1d81b`) (#4314)                                                                                                                   | 02     | Requirement Types table gains the four evaluation types (Evaluated Shifts, Transports, Refusals were missing); credit section rewritten; wiki `Module-Training`; `UPGRADING.md` |
+| A department shift's evaluation list fixed when it ends (migration `611204dcf8d1`) (#4312)                                                                                                                                      | 02     | Added to the shift-evaluation section; wiki; `UPGRADING.md`                                                                                                                     |
+| Evaluation credit re-synced when a requirement's type or lowest-rating rule changes, or the member leaves the shift or is marked No-show (#4305)                                                                                | 02     | Added; wiki; `UPGRADING.md`                                                                                                                                                     |
+| Deactivating an evaluation form in use refused; inactive form cannot be newly chosen (#4302)                                                                                                                                    | 02     | Added                                                                                                                                                                           |
+| Switching forms on a shift evaluation closes the old form's opened comment boxes (#4335)                                                                                                                                        | 02     | Added                                                                                                                                                                           |
+| Training CSV importers' records read **Imported** from 2026-11-15 (#4344)                                                                                                                                                       | 02     | History-tab note rewritten (and its list item 4, which had been run into the paragraph, restored); wiki `Module-Training`                                                       |
+| **Needs You** lists an unanswered mandatory event only within two months of its start, or 48 hours before its RSVP deadline (#4338)                                                                                             | 04     | Added; wiki `Module-Events`                                                                                                                                                     |
+| Only current members can be added as apparatus operators (#4340)                                                                                                                                                                | 06     | Added; wiki `Module-Apparatus`                                                                                                                                                  |
+| Phone status bar follows the app's navigation-bar colour for the picked theme; manifest `theme_color` now `#0f172a` (#4325)                                                                                                     | 10     | Installed-app bullet rewritten                                                                                                                                                  |
+| ADV-02: step-up for an own email change and for an authenticator added over a passkey; role reviewers cannot approve their own shift report; draft events refused on side paths (#4316)                                         | 00     | Step-up paragraph extended. The rest is internal; see `ADV-02-adversarial-last-month.md`                                                                                        |
+| Grants deadline text in its last two weeks AAA (#4339)                                                                                                                                                                          | 12     | Screenshot check only                                                                                                                                                           |
+| Store PayPal account (#4301)                                                                                                                                                                                                    | 16, 18 | Already covered by the PayPal pass below                                                                                                                                        |
+| Forms batch 20 (#4333); member sizes answer `null` (#4293); evaluation list query count (#4308)                                                                                                                                 | none   | Recorded in their PRs and the forms review                                                                                                                                      |
+| Pre-push migration-chain check (#4336); Alembic joins (#4323, `1d7fde550351`); WebKit apt fallback (#4327); "not required up to date" decision (`fc6b1d42`)                                                                     | none   | Developer and CI only; `docs/rules/migrations.md` and `KNOWN_LIMITATIONS.md` updated by the PRs                                                                                 |
+
+**Screenshots to create:** Elections header (open and closed), Elections pages
+row at 390px, Course Links list and its confirmation, the requirement form on
+**Evaluated Calls**, a program row reading "calls on evaluations", the
+evaluation form editor's in-use refusal. **Replace:** `14-01-elections-list`,
+`14-19-forensics-report`. **Check:** `14-05`, `14-07`, `14-17`, `14-25` – `14-27`,
+`04-01`, `06-23`, `12-02`, `12-03`, `12-05`. The training-event form's own list
+(#4347) stands. Queued in `docs/training/SCREENSHOT_CURRENCY.md`.
+
+**YouTube scripts:** 04, 05, 12 and 16 edited where they named a screen that is
+gone; each carries a 2026-11-16 production note. Not re-recorded. See
+`docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
+**Not covered — a gap before this window.** The 64 first-parent merges after
+`dcc32fe2` (2026-11-11 13:58 UTC, the last full pass) up to `c1293346` were never
+given a full pass; only the Zeffy (November 13) and PayPal (November 14)
+targeted passes ran. They include leave requests and reminders, waiver request
+workflows, History phases 2 – 4, evaluation data sources, the Elections Meeting
+Attendance page and per-member-type voter eligibility, and the shift evaluation
+review fixes. Many of those PRs wrote their own guide text; none has been
+audited against the guides here.
+
+The November 14 – 15 pass below was written in parallel with this one and
+merged to `main` first. Its 24 merges fall inside this gap and the month
+review above; where both passes edited the same guide paragraph, the two were
+combined when this branch took `main` in.
 
 ## Change audit: Google Workspace and Microsoft 365 Settings, November 16, 2026
 

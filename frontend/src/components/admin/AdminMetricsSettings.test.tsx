@@ -98,6 +98,18 @@ describe('AdminMetricsSettings', () => {
     expect(screen.getByText('Slot 4 · fixed')).toBeInTheDocument();
   });
 
+  // The settings arrive after the hub has shown its body. Reconciled in place,
+  // the placeholder's second bar became the preview column and leapt from the
+  // fold to far below it, a layout shift of 0.35 on a phone. Replaced, the
+  // loaded screen is drawn fresh and nothing on screen moves.
+  it('replaces its placeholder rather than growing out of it', async () => {
+    renderPanel();
+    const placeholder = screen.getByRole('status', { name: 'Loading headline metrics' });
+
+    await screen.findByRole('heading', { name: 'Headline metrics' });
+    expect(placeholder).not.toBeInTheDocument();
+  });
+
   // A metric the department cannot produce is listed rather than hidden, so an
   // admin can see what turning a module on would buy them instead of wondering
   // why something is missing.
