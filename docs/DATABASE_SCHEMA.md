@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**391 tables · 6223 columns · 1305 foreign keys**
+**391 tables · 6224 columns · 1306 foreign keys**
 
 ---
 
@@ -217,7 +217,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`evaluation_parts`](#evaluation_parts) | `EvaluationPart` | 11 | A block of authored content: the evaluator's ratings and narrative, the |
 | [`evaluation_periods`](#evaluation_periods) | `EvaluationPeriod` | 9 | A review period a manager opens, e.g. "2026 Annual Review". |
 | [`evaluation_signatures`](#evaluation_signatures) | `EvaluationSignature` | 14 | A signature given on one step of one revision. |
-| [`evaluation_steps`](#evaluation_steps) | `EvaluationStep` | 16 | The state of one workflow step on one revision of an evaluation. |
+| [`evaluation_steps`](#evaluation_steps) | `EvaluationStep` | 17 | The state of one workflow step on one revision of an evaluation. |
 | [`evaluation_template_versions`](#evaluation_template_versions) | `EvaluationTemplateVersion` | 11 | One version of a template's content and workflow. |
 | [`evaluation_templates`](#evaluation_templates) | `EvaluationTemplate` | 11 | A department's evaluation form for one kind of member. |
 | [`evaluations`](#evaluations) | `Evaluation` | 20 | One member's evaluation for one period. |
@@ -3161,11 +3161,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reminder_sent_at` | DATETIME | yes |  |  |  |
 | `overdue_notice_sent_at` | DATETIME | yes |  |  |  |
 | `flagged_items` | JSON | yes |  |  |  |
+| `assignee_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
 **Indexes**
 
+- `ix_evaluation_steps_assignee_id` (`assignee_id`)
 - `ix_evaluation_steps_org_due` (`organization_id`, `status`, `due_date`)
 
 **Constraints**
@@ -13381,7 +13383,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (477 references)
+### → `users` (478 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13493,6 +13495,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `evaluation_parts` | `author_id` | SET NULL | yes |
 | `evaluation_periods` | `created_by` | SET NULL | yes |
 | `evaluation_signatures` | `signer_id` | SET NULL | yes |
+| `evaluation_steps` | `assignee_id` | SET NULL | yes |
 | `evaluation_steps` | `completed_by` | SET NULL | yes |
 | `evaluation_template_versions` | `created_by` | SET NULL | yes |
 | `evaluation_template_versions` | `published_by` | SET NULL | yes |

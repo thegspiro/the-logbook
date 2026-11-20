@@ -24,6 +24,11 @@ import type {
   HonorRollEntry,
   ImportSummary,
 } from '../modules/history/types';
+import type {
+  BackendPipelineListResponse,
+  BackendProspectListResponse,
+  PendingSignOff,
+} from '../modules/prospective-members/types';
 import type { EventTemplate, PendingAttendancePetition } from '../types/event';
 import type { TemplateListItem as MinutesOutline } from '../modules/minutes/types/minutes';
 import type { AttendanceDashboard, AttendanceDashboardMember } from '../services/meetingsServices';
@@ -1230,6 +1235,17 @@ export interface MockOptions {
    * pass over those would otherwise measure the error panel under their names.
    */
   memberRecord?: boolean;
+  /**
+   * Serve prospective-member pipelines, the caller's assigned applicants and
+   * stages waiting on their signature.
+   *
+   * Opt-in because all three are read well beyond their own screens: assigned
+   * applicants put a "My Applicants" link in the navigation on every page,
+   * pending sign-offs add rows to the dashboard, and the pipeline list feeds
+   * the prospective-members home. Every other ratcheted route was measured
+   * without them.
+   */
+  prospectiveMembers?: boolean;
   /**
    * Lengthen every display string the fixtures serve: names, titles, labels,
    * descriptions, messages.
@@ -3989,6 +4005,7 @@ const routes = ({
   permissions = [],
   platoonsEnabled = false,
   memberRecord = false,
+  prospectiveMembers = false,
 }: MockOptions): [string, (request: Request) => unknown][] => [
   // Catch-all. Anything not listed below answers with an empty object rather
   // than reaching the dev-server proxy, which has no backend behind it.
@@ -5099,6 +5116,120 @@ const routes = ({
   ['**/api/v1/messages?**', (request) => departmentMessageList(request, empty)],
   ['**/api/v1/messages/roles', () => MESSAGE_ROLES],
   ...(memberRecord ? memberRecordRoutes() : []),
+  ...(prospectiveMembers ? prospectiveMemberRoutes() : []),
+];
+
+const PROSPECT_PIPELINES: BackendPipelineListResponse[] = [
+  {
+    id: 'pipe-1',
+    name: 'Volunteer Firefighter Recruitment',
+    description: 'Application, interview, background check, physical and a vote of the membership.',
+    is_template: false,
+    is_default: true,
+    is_active: true,
+    auto_transfer_on_approval: true,
+    step_count: 7,
+    prospect_count: 12,
+    created_at: '2026-01-10T12:00:00Z',
+  },
+  {
+    id: 'pipe-2',
+    name: 'Junior Firefighter Program (ages 14–17, guardian consent required)',
+    description: null,
+    is_template: false,
+    is_default: false,
+    is_active: true,
+    auto_transfer_on_approval: false,
+    step_count: 4,
+    prospect_count: 3,
+    created_at: '2026-03-02T12:00:00Z',
+  },
+];
+
+const assignedApplicant = (
+  overrides: Partial<BackendProspectListResponse> & Pick<BackendProspectListResponse, 'id' | 'first_name' | 'last_name'>
+): BackendProspectListResponse => ({
+  my_roles: ['case_manager'],
+  target_role_name: null,
+  deactivated_at: null,
+  withdrawn_at: null,
+  withdrawal_reason: null,
+  email: 'applicant@example.com',
+  phone: null,
+  status: 'active',
+  pipeline_id: 'pipe-1',
+  pipeline_name: 'Volunteer Firefighter Recruitment',
+  current_step_id: 'step-interview',
+  current_step_name: 'Interview',
+  desired_membership_type: 'active',
+  created_at: '2026-10-01T12:00:00Z',
+  updated_at: '2026-11-10T12:00:00Z',
+  stage_entered_at: '2026-11-01T12:00:00Z',
+  days_in_stage: 14,
+  days_in_pipeline: 45,
+  days_since_activity: 5,
+  inactivity_alert_level: 'normal',
+  inactivity_timeout_days: 30,
+  ...overrides,
+});
+
+const ASSIGNED_APPLICANTS: BackendProspectListResponse[] = [
+  assignedApplicant({ id: 'prospect-1', first_name: 'Jordan', last_name: 'Ellis', email: 'jordan.ellis@example.com' }),
+  assignedApplicant({
+    id: 'prospect-2',
+    first_name: 'Anastasia',
+    last_name: 'Vandenberg-Okonkwo',
+    email: 'anastasia.vandenberg-okonkwo@example.com',
+    my_roles: ['case_manager', 'interviewer'],
+    current_step_id: 'step-background',
+    current_step_name: 'Background Check and Driving Record Review',
+    days_in_stage: 26,
+    days_since_activity: 24,
+    inactivity_alert_level: 'warning',
+  }),
+  assignedApplicant({
+    id: 'prospect-3',
+    first_name: 'Sam',
+    last_name: 'Patel',
+    my_roles: ['interviewer'],
+    pipeline_id: 'pipe-2',
+    pipeline_name: 'Junior Firefighter Program (ages 14–17, guardian consent required)',
+    current_step_name: 'Guardian Consent',
+  }),
+];
+
+const PENDING_SIGN_OFFS: PendingSignOff[] = [
+  {
+    prospect_id: 'prospect-1',
+    first_name: 'Jordan',
+    last_name: 'Ellis',
+    pipeline_name: 'Volunteer Firefighter Recruitment',
+    step_id: 'step-interview',
+    step_name: 'Interview',
+    step_description: 'Panel interview with two officers; both sign once the interview is complete.',
+    roles_to_sign: [{ role: 'interviewer', label: 'Interviewer' }],
+    required_roles: [
+      { role: 'interviewer', label: 'Interviewer', signed: false },
+      { role: 'case_manager', label: 'Case manager', signed: true },
+    ],
+  },
+  {
+    prospect_id: 'prospect-2',
+    first_name: 'Anastasia',
+    last_name: 'Vandenberg-Okonkwo',
+    pipeline_name: 'Volunteer Firefighter Recruitment',
+    step_id: 'step-background',
+    step_name: 'Background Check and Driving Record Review',
+    step_description: null,
+    roles_to_sign: [{ role: 'case_manager', label: 'Case manager' }],
+    required_roles: [{ role: 'case_manager', label: 'Case manager', signed: false }],
+  },
+];
+
+const prospectiveMemberRoutes = (): [string, () => unknown][] => [
+  ['**/api/v1/prospective-members/pipelines**', () => PROSPECT_PIPELINES],
+  ['**/api/v1/prospective-members/my-applicants', () => ASSIGNED_APPLICANTS],
+  ['**/api/v1/prospective-members/my-sign-offs', () => PENDING_SIGN_OFFS],
 ];
 
 const memberRecordRoutes = (): [string, () => unknown][] => [

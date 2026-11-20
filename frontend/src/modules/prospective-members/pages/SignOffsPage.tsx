@@ -117,7 +117,7 @@ const SignOffsPage: React.FC = () => {
                     key={r.role}
                     className={`rounded-full px-2.5 py-1 text-xs font-medium ${
                       r.signed
-                        ? 'bg-green-500/15 text-green-800 dark:text-green-300'
+                        ? 'bg-green-500/15 text-green-900 dark:text-green-300'
                         : 'bg-theme-surface-secondary text-theme-text-secondary'
                     }`}
                   >
