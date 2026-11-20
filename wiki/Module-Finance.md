@@ -157,6 +157,11 @@ that type. Each step is either:
 - **Notification** — marked sent and skipped past. **No email is actually sent**
   for a notification step.
 
+A **specific member** step's picker lists current members only (active or
+probationary) since 2026-11-19 (#4380); a step already naming someone who has
+left keeps them, marked "(former member)". The backend already refused an
+inactive member for a new specific-member approver.
+
 Only the step's named approver can act on it, from **Approvals** or the
 request's own page. Being named is enough: a Chief named on a step approves or
 denies that step without `finance.approve` (on that step only), working from
@@ -248,7 +253,8 @@ Next year is built in a **draft** fiscal year, which moves through stages on
    last year** (current amounts, owners and stations; amendments and spending are
    not copied) and sets a **Request deadline** (inclusive, on the department's
    calendar). Each line's owner opens **Next year's budget**, chooses **Request
-   an amount** with a justification, and submits. A position holder can also
+   an amount** with a justification, and submits. A draft may be saved with
+   either blank; Submit needs both _(2026-11-11)_. A position holder can also
    **Propose a new line**. The Treasurer reviews them on **Budget requests**:
    **Approve as requested**, **Approve a different amount** or **Decline** (a
    note is required for the last two).

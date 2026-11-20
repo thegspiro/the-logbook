@@ -421,7 +421,7 @@ export const WaiverManagementPage: React.FC = () => {
         {activeTab === 'active' && (
           <div>
             {activeWaivers.length === 0 ? (
-              <div className="card py-12 text-center">
+              <div className="card px-4 py-12 text-center">
                 <p className="text-theme-text-muted">No active waivers.</p>
                 <button
                   onClick={() => handleTabChange('create')}
@@ -794,7 +794,7 @@ export const WaiverManagementPage: React.FC = () => {
             </div>
 
             {filteredHistory.length === 0 ? (
-              <div className="card py-12 text-center">
+              <div className="card px-4 py-12 text-center">
                 <p className="text-theme-text-muted">No waivers match the current filter.</p>
               </div>
             ) : (

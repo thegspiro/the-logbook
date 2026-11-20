@@ -1,9 +1,11 @@
 /**
  * medicalScreeningServices — the member's own screening compliance.
  *
- * Only the self-service read lives here. Managing requirements and records is
- * an officer surface behind `medical_screening.view` / `.manage` and is not
- * wired into the frontend yet.
+ * Only the self-service read lives here, for the dashboard. The officer
+ * screens — requirements, records, the compliance roster and the expiring
+ * list, behind `medical_screening.view` / `.manage` — are the
+ * `modules/medical-screening` module, with its own client in that module's
+ * `services/api.ts`.
  */
 
 import api from './apiClient';

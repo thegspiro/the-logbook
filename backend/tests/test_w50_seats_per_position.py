@@ -11,6 +11,7 @@ tie policy exactly as a one-seat tie is.
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from fastapi import HTTPException
@@ -21,9 +22,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.endpoints.elections import update_election
 from app.schemas.election import ElectionCreate, ElectionUpdate, seat_rule_error
 from app.services.election_service import ElectionService
+from tests.clock_support import reread_each_test
 from tests.test_election_voting_flow import TestElectionSetup
 
-NOW = datetime.now(timezone.utc)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    return {"NOW": now}
+
+
+(NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 def _election(**overrides):

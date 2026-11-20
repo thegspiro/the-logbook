@@ -133,6 +133,18 @@ one, open it and select **Edit**.
   save, the old value is removed. Four fields cannot be emptied: unit number,
   type, status and minimum staffing.
 - The save button reads **Add Apparatus**, or **Save Changes** when editing.
+- **A refused value is shown on its field** _(2026-11-20)_. A missing unit
+  number, a mistyped year or a number outside what the server accepts is named
+  under its own box, and a list at the top of the form (**Fix these before
+  adding the apparatus**) links to each one. Adding waits until all of them are
+  fixed. **Editing saves everything else**: the page says "Apparatus saved,
+  except _field_. Fix it and save again.", and the refused box keeps what you
+  typed, under **These were not saved**. A status that needs a reason is never
+  saved without one, so a refused reason holds the status change back too.
+- **Cancel asks first.** Cancelling or leaving the form after typing asks
+  _"Discard your changes?"_ with **Keep editing** and **Discard changes**. The
+  **Documents** tab's upload form does the same, and names a missing title on
+  its field ("Give the document a title.").
 
 **Archiving.** There is no archive button on a list row. Archiving asks how
 the vehicle left the fleet (**Sold**, **Traded in**, **Donated** or
@@ -234,7 +246,9 @@ The tab lists every record with its maintenance type, its date and a badge:
 - **Overdue**, when the due date has passed
 
 The fleet list's **Maintenance Due** tile counts open records whose due date
-is close or past.
+is close or past. The dashboard's apparatus **Maintenance due** tile opens the
+fleet list filtered to exactly those records, and the two numbers match
+_(2026-11-05)_.
 
 ### Logging Maintenance
 
@@ -365,16 +379,14 @@ with their EVOC level and certification dates.
 
 ![The Operators tab: certified operators by name, with EVOC level and certification dates](./images/06-22-apparatus-operators-tab.png)
 
-To add one, select **Add Operator** and pick the **Member** from the list. Add
+To add one, select **Add Operator** and pick the **Member** from the list. The
+list offers only current members — active or probationary _(2026-11-16)_;
+former, separated and imported historical members are left out, and saving one
+is refused with "Only current members can be added as operators". An operator
+already recorded keeps their entry, still editable, if they later leave. Add
 their **EVOC Certification Level**, certification and expiry dates, license
 details, any restrictions and notes. Adding, editing or removing operators
 needs full apparatus management.
-
-The **Member** list offers current members only, active or probationary.
-Former members, including those brought in by a roster import, are left out,
-and the app refuses to add one as an operator with "Only current members can
-be added as operators". An operator record made before a member left stays on
-the tab and can still be edited or removed. _(2026-11-16)_
 
 ![The Add Operator form: a member picker, not the free-text UUID box it replaced](./images/06-23-add-operator-member-picker.png)
 
@@ -690,11 +702,13 @@ with its **Badge check-in** switch and its kiosk taps over the last 7 days:
 taps, refusals and the last tap. Select a room to see its recent taps. Other
 ways in: Room QR Codes, the Locations page and the command palette.
 
-- It opens for **Manage locations**, **Manage facilities** or **Manage NFC tags
-  on locations**, with the Facilities module on or off. Only the last of those
-  can flip the switch, and **turn on** is not offered while NFC ID cards are off.
-- Whose card it was is hidden unless you also hold **Manage ID cards**. Without
-  it you see the room, the time and the outcome.
+- It opens for **Manage all locations**, **Full facility management** or
+  **Write NFC check-in tags for rooms**, with the Facilities module on or off.
+  Only the last of those can flip the switch, and **turn on** is not offered
+  while NFC ID cards are off.
+- Whose card it was is hidden unless you also hold **Issue and revoke member
+  ID card (NFC) credentials**. Without it you see the room, the time and the
+  outcome.
 - Events show the same taps: an event's page has a **Card taps** section (for
   people who manage events), and **Events → Card Check-ins** lists every event's
   card taps, filterable by outcome, reader and date.
@@ -750,6 +764,16 @@ management** (or **Create new facility records** to add one).
 **Email addresses are checked.** The add-facility form and the Overview edit
 form refuse an email that is not one: "Enter an email address like
 office@example.org."
+
+**Editing saves what it can** _(2026-11-20)_. On the **Overview** edit, and in
+the **Utilities** (and their readings), **Access Keys**, **Shutoff
+Locations**, **Capital Projects**, **Insurance** and **Occupants** forms, a
+refused value is shown under its own field. When you are editing, the rest is
+saved and the refused field stays flagged with what you typed, so fix it and
+save again. In the extended sections, boxes with a length limit show a
+character counter. Closing one of these forms after typing asks _"Discard your
+changes?"_ (**Keep editing** / **Discard changes**). The **Files** section's
+caption and description also name a refused value on the field.
 
 **Rooms and event locations.** A facility created during setup is linked to an
 event location, so it appears in the event location picker. Each room you add
@@ -813,6 +837,15 @@ it still shows the full path.
   deep), the message says why.
 - **A room whose container has gone** (for example, removed by someone else at
   the same moment) shows at the top level of the list, not nowhere.
+- **Two locations in one building cannot share a name** _(2026-11-05)_. Case
+  and trailing spaces do not make names different. A room or station The
+  Logbook names for itself takes the next free number, for example "Storage
+  (2)". On upgrade, existing duplicates were renamed the same way; the oldest
+  kept its name.
+- **Deleting a location that records use keeps it** _(2026-11-05)_. A location
+  named by training records, classes, cohorts, meetings or event requests (as
+  well as events) is deactivated rather than deleted, so those records keep
+  where they happened.
 
 ![The delete-room confirmation, stating that the room's sub-rooms move up a level rather than being deleted](./images/06-26-room-delete-subrooms.png)
 
@@ -863,8 +896,12 @@ when it is due, in words as well as an icon:
 - **Due 10/1/2026**
 - **Completed 10/1/2026**
 
-You can filter by **All**, **Pending**, **Completed** or **Overdue**. Officers
-who can log maintenance can mark an open record done with **Mark completed**.
+You can filter by **All**, **Pending**, **Due soon**, **Completed** or
+**Overdue**. **Due soon** _(2026-11-05)_ is open work due within 30 days that
+is not yet overdue, so every open record is in exactly one of the two. The
+dashboard's facilities **Maintenance due** tile opens **Due soon**, and
+**Urgent work orders** opens **Overdue**. Officers who can log maintenance can
+mark an open record done with **Mark completed**.
 
 The search box looks through the description, vendor, work order number and
 **Performed By** of every record, not just the ones on screen. The list shows
@@ -881,7 +918,8 @@ The maintenance types offered are your department's own list, set up in
 2. Select **New Record**. The dialog opens over the middle of the screen.
 3. On the department-wide page, choose the **Facility**.
 4. Fill in **Description** and **Maintenance Type** (both required). If you
-   leave out the type, the form stops you before saving.
+   leave out the type, the form stops you before saving, with _"Choose a
+   maintenance type."_ under the field.
 5. Add the **Scheduled Date** or **Due Date**, and if you like **Performed
    By**, **Vendor**, **Cost**, **Work Order #** and notes.
 6. Select **Create Record** (**Save Changes** when editing).
@@ -924,6 +962,13 @@ To keep the inspector's report, upload it on the facility's
 Every facility dialog's save button names what it saves: **Create Record**,
 **Create Inspection**, **Save Room**, **Save System**, **Save Contact**. When
 editing, it reads **Save Changes**.
+
+**A refused save points at the field** _(2026-11-11)_. In the maintenance,
+inspection, room, system and compliance checklist forms, a missing or refused
+value is shown under its own field rather than in a passing message. Closing
+or cancelling one of these forms after typing in it asks _"Discard your
+changes?"_: **Keep editing** returns to the form, **Discard changes** closes
+it.
 
 ![Facility inspections table with type, date, inspector, and result](./images/06-14-facility-inspections.png)
 
@@ -1003,6 +1048,10 @@ Some types and statuses come built in, such as the "Fire Station" type and the
 | Delete a built-in facility status                | "Cannot delete system facility statuses"                                      |
 | Archive a facility that is already archived      | "Facility is already archived"                                                |
 | Restore a facility that is not archived          | "Facility is not archived"                                                    |
+
+Facility Settings' add and edit dialog names a missing or too-long name on the
+field and counts its characters. Switching **Active** on an existing entry is
+saved even when the name beside it is refused.
 
 If the built-in types and statuses are ever missing, The Logbook adds them
 back the next time someone opens Facilities.
@@ -1370,5 +1419,10 @@ have moved, been renamed or work differently.
 - **Duplicate records.** Saving a maintenance record or an operator once
   showed an error even though it was saved. If people retried, delete the
   extra rows.
+- **Archiving a vehicle, or archiving or restoring a facility, showed an
+  error** before 2026-11-19 even though it had worked. If someone saw that
+  error and tried again, the second try reads "already archived" (or "not
+  archived"); the record is in the state you wanted. Check the archived list
+  rather than archiving again.
 - **A required EVOC level** once broke the fleet list. If your department gave
   up on setting one, it works.

@@ -69,9 +69,6 @@ def _req(rid, **overrides):
 
 async def _call(monkeypatch, members, requirements, records, evaluate):
     monkeypatch.setattr(mod, "fetch_org_waivers", AsyncMock(return_value={}))
-    monkeypatch.setattr(
-        mod, "get_org_include_current_month", AsyncMock(return_value=True)
-    )
     monkeypatch.setattr(mod, "_load_compliance_config", AsyncMock(return_value=None))
     monkeypatch.setattr(mod, "_evaluate_member_requirement", evaluate)
     monkeypatch.setattr(mod, "load_graded_records", AsyncMock(return_value=records))
@@ -152,6 +149,8 @@ class TestMemberPeriodStatus:
             compliant_threshold=0.0,
             at_risk_threshold=0.0,
             threshold_type="percentage",
+            include_current_month=True,
+            profiles=[],
         )
 
         def evaluate(*_a, **_k):
@@ -161,9 +160,6 @@ class TestMemberPeriodStatus:
             mod, "_load_compliance_config", AsyncMock(return_value=config)
         )
         monkeypatch.setattr(mod, "fetch_org_waivers", AsyncMock(return_value={}))
-        monkeypatch.setattr(
-            mod, "get_org_include_current_month", AsyncMock(return_value=True)
-        )
         monkeypatch.setattr(mod, "_evaluate_member_requirement", evaluate)
         monkeypatch.setattr(mod, "load_graded_records", AsyncMock(return_value=[]))
         db = _DB([_scalars([m]), _scalars([_req("r1")])])

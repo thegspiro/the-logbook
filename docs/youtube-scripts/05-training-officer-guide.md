@@ -324,9 +324,11 @@ form shows "Sessions to Attend (%)" and no hours box.]**
 > as a percentage."
 
 > "A drill counts toward it only if it's linked, so when you create a training
-> session, tick the requirement under **Connect to Requirements & Programs**.
-> You can change the links later from the event page, even after attendance is
-> finalized. Members see a **Counts toward attendance** badge beside
+> session, tick the requirement under **Counts toward attendance** on the
+> **Training Info** step. Ticking it also suggests who the session is
+> mandatory for, on the next step — check that suggestion. You can change the
+> links later with **Edit training details** on the event page, even after
+> attendance is finalized. Members see a **Counts toward attendance** badge beside
 > **Mandatory** on the event."
 
 **[CALLOUT: "Session Attendance = turn up, not hours logged"]**
@@ -449,8 +451,8 @@ record to open the Attachments panel]**
 
 ### FINALIZING A TRAINING SESSION (9:00 – 9:30)
 
-**[SCREEN: Show the training-event form, Step 2 (Training Info), highlighting
-the "Require sign-off" checkbox under Training completion]**
+**[SCREEN: Show the training-event form's **Training Info** step (step 2),
+highlighting the **Require sign-off** checkbox under _Training completion_]**
 
 > "When you create a training session, the second step, **Training Info**, has a
 > **Require sign-off** box under _Training completion_. This controls what happens when the class is over and
@@ -472,13 +474,12 @@ no record for most events, and the emailed link opened nothing. A Training
 event can be finalized only after it ends. Approving needs `training.manage`,
 not `events.manage`. New footage needed; re-time Chapter 4.]**
 
-**[EDITOR — 2026-11-17. Re-record this beat. Since 2026-11-11 (#4347) Create
-Session opens the step-by-step training-event form, and the box is **Require
-sign-off** on step 2, **Training Info**, under _Training completion_ — it was
-"Require instructor confirmation" on step 3. Narration above is updated; the
-old footage shows the wrong step and label. Length unchanged.]**
+**[PRODUCTION NOTE — 2026-11-16. The box was renamed from "Require instructor
+confirmation" and moved from step 3 to step 2 when Create Session became the
+training-event form (#4347). The training card on the event page is now the
+read-only **Training details** card; **Review and approve** is still on it.]**
 
-**[SCREENSHOT NEEDED]:** _The training-event form's Training Info step, Training completion section, with the "Require sign-off" checkbox and its helper text._
+**[SCREENSHOT NEEDED]:** _The training-event form's Training Info step, Training completion fieldset, with the **Require sign-off** checkbox and its helper text (guide image `02-91-session-confirmation-toggle`, queued for replacement)._
 
 > "Use the default for routine drills you want closed out the moment you
 > finalize. Turn it on only when a second officer must sign off."

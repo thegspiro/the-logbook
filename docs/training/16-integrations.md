@@ -155,9 +155,11 @@ webhooks, Cal.com and Documenso. Use the service's public web address.
 
 **Keys are needed before it connects** _(2026-10-28)_. PayPal, Documenso,
 Cal.com and Salesforce refuse to connect until their keys are filled in, with a
-message naming what is missing, such as "PayPal needs: client_id,
-client_secret". Before, they connected with blank keys and showed as connected
-until a test failed.
+message naming what is missing, such as "PayPal needs: `client_id`,
+`client_secret`". Before, they connected with blank keys and showed as connected
+until a test failed. Slack, Discord, Microsoft Teams and the generic webhook
+likewise refuse to connect without the address to post to, with "Enter the
+webhook URL for {name}" _(2026-10-16)_.
 
 > **What if a test fails with a general message?** When something unexpected
 > goes wrong, the message reads "An unexpected error occurred. Please try
@@ -643,6 +645,7 @@ twice, however it arrives. **Sync now** on the Zeffy page runs it at once.
 The sync reads payments by the day they were made and looks back seven days
 each time. A refund made more than seven days after the sale is therefore seen
 only through the webhook.
+
 ---
 
 ## Google Workspace — Member Accounts
@@ -993,6 +996,48 @@ to decide stay in view; open it to change any of them.
 Running the same file twice is safe. Full detail is in the wiki page
 [Historical Data Import](../../wiki/Integration-Historical-Data-Import.md).
 
+### Undoing a step
+
+_(2026-11-19)_ Each committed step of a historical import can be taken back,
+so a wrong decision (a subject mapped to the wrong course, a member matched to
+the wrong person, the wrong drill threshold) can be corrected and the step
+committed again. Before, there was no undo: every wrong record had to be fixed
+or deleted by hand.
+
+**Where:** on the import's page, under each committed step: administrative
+hours, training, company drills, the staffing roster, and shift hours (which
+undoes every committed shift review batch the import sent). The line reads
+_"Undoing removes the … this step wrote, so you can change the decisions and
+commit it again."_ Select **Undo this step**.
+
+The confirmation, **Undo the …?**, says what will happen before anything is
+removed: how many records go; how many were **changed since the import and are
+kept**; for the roster and shift hours, how many shifts and seats the step used
+but did not make, which are left alone; and that former members the import
+created are removed too, unless something else still refers to them. Select
+**Undo this step** to go ahead, or **Keep it**.
+
+The rules, and why:
+
+- **One step at a time, in order.** A step a later one builds on waits for
+  that one: training cannot be undone while the company drills stand (the
+  drill sessions hold the training records), and shift hours cannot be undone
+  while the staffing roster stands (the roster fills the shifts the hours
+  made). The button is greyed out with _"To undo this step, first undo the …
+  step, which builds on it."_ Shift hours also waits while any of its batches
+  is still in review: commit or discard those first.
+- **Records an officer changed are kept.** A record edited after the import
+  wrote it is treated as a correction, not as import output. It stays, and a
+  notice after the undo lists it ("3 records were kept because they were
+  changed after the import…"). Committing the step again leaves it as it is,
+  so it is never written twice; fix or delete it by hand if it is still wrong.
+- **A record already deleted by hand** is simply forgotten, so committing the
+  step again writes it afresh.
+
+The toast says how many records (and former members) were removed. Only
+holders of `integrations.historical_import` (the IT Manager by default) can
+undo.
+
 ### Importing training
 
 _(2026-11-04)_ Training rows become **completed** training records in one
@@ -1027,8 +1072,10 @@ greyed out until a column is marked as training hours), then:
   (**Create all unmatched as archived** does every one at once).
 
 **Import training records** asks first, saying how many records it will write.
-There is no batch undo: a wrong record is corrected on its own. Rows already
-imported are counted and skipped, so running it again adds only what is new.
+To take the whole commit back, use **Undo this step** (see
+[Undoing a step](#undoing-a-step)); a single wrong record can still be
+corrected on its own. Rows already imported are counted and skipped, so
+running it again adds only what is new.
 
 ### Where the imported hours show up
 
@@ -1424,7 +1471,7 @@ Details:
 - The provider card's **Auto-Sync** line shows both, for example "Every 1h ·
   review daily at 02:00".
 
-Other providers show only "Every _N_h". Their form has a single **Sync
+Other providers show only the interval, such as "Every 6h". Their form has a single **Sync
 Interval**, counted from the previous sync.
 
 #### Course mappings

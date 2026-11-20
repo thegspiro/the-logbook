@@ -7,7 +7,7 @@ Request and response schemas for training-related endpoints.
 import re
 from datetime import date, datetime
 from enum import Enum
-from typing import List, Literal, Optional, Sequence, Union
+from typing import List, Literal, NoReturn, Optional, Sequence, Union
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -16,7 +16,7 @@ from app.core.logging import redact_url_secrets
 from app.models.training import RequirementFrequency as ModelRequirementFrequency
 from app.models.training import TrainingStatus as ModelTrainingStatus
 from app.models.training import TrainingType as ModelTrainingType
-from app.schemas.base import RefusesNull, UTCResponseBase
+from app.schemas.base import RefusesNull, UTCResponseBase, refuse_attachment_writes
 from app.schemas.checklist import ChecklistItem, coerce_checklist_items
 from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 from app.schemas.enum_validation import validate_enum_value
@@ -216,6 +216,8 @@ class TrainingCourseResponse(TrainingCourseBase, UTCResponseBase):
 
 # Training Record Schemas
 
+RECORD_UPLOAD_ROUTE = "POST /training/records/{id}/attachments"
+
 
 class TrainingAttachment(BaseModel):
     """One file on a training record, as clients are allowed to see it.
@@ -260,9 +262,10 @@ class TrainingRecordBase(BaseModel):
     instructor: Optional[str] = Field(None, max_length=255)
     location: Optional[str] = Field(None, max_length=255)
     notes: Optional[str] = None
-    # Declared here so the field keeps its place in both schemas, and as wide
-    # as either subclass needs: a create takes file names, a response returns
-    # the stored attachment records. Each subclass narrows it to its own.
+    # Declared here so the field keeps its place in both schemas. A response
+    # returns the stored attachment records; a create refuses the field
+    # (refuse_attachment_writes), so it is declared there only to locate the
+    # 422. Each subclass narrows it to its own.
     attachments: Optional[Sequence[Union[str, TrainingAttachment]]] = None
     rank_at_completion: Optional[str] = Field(None, max_length=100)
     station_at_completion: Optional[str] = Field(None, max_length=100)
@@ -283,7 +286,14 @@ class TrainingRecordCreate(TrainingRecordBase):
 
     user_id: UUID
     course_id: Optional[UUID] = None
+    # Declared only so a body that sends it is refused at body.attachments:
+    # files are added through the upload route, which writes the stored shape.
     attachments: Optional[List[str]] = None
+
+    @field_validator("attachments", mode="before")
+    @classmethod
+    def _refuse_attachments(cls, value: object) -> NoReturn:
+        refuse_attachment_writes(RECORD_UPLOAD_ROUTE)
 
 
 class TrainingRecordUpdate(RefusesNull):
@@ -308,9 +318,17 @@ class TrainingRecordUpdate(RefusesNull):
     instructor: Optional[str] = Field(None, max_length=255)
     location: Optional[str] = Field(None, max_length=255)
     notes: Optional[str] = None
-    attachments: Optional[List[str]] = None
     rank_at_completion: Optional[str] = Field(None, max_length=100)
     station_at_completion: Optional[str] = Field(None, max_length=100)
+
+    # Declared only so a body that sends it is refused at body.attachments:
+    # files are added through the upload route, which writes the stored shape.
+    attachments: Optional[List[str]] = None
+
+    @field_validator("attachments", mode="before")
+    @classmethod
+    def _refuse_attachments(cls, value: object) -> NoReturn:
+        refuse_attachment_writes(RECORD_UPLOAD_ROUTE)
 
     @field_validator("training_type")
     @classmethod
@@ -904,9 +922,13 @@ class ComplianceSummary(BaseModel):
     user_id: UUID
     requirements_met: int
     requirements_total: int
+    # Shown for information; they do not drive compliance_status. They count
+    # every certificate record, including ones a renewal has superseded.
     certs_expiring_soon: int  # Within 90 days
     certs_expired: int
-    # "green", "yellow", "red", "exempt", "not_applicable"
+    # The member's compliance matrix standing in traffic-light form:
+    # compliant "green", at_risk "yellow", non_compliant "red",
+    # "not_applicable"; or "exempt" for a compliance-exempt member.
     compliance_status: str
     # "Compliant", "At Risk", "Non-Compliant", "Exempt", "Not Applicable"
     compliance_label: str

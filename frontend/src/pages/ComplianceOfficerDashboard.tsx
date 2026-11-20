@@ -15,6 +15,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
+import { STANDING_TEXT_COLORS } from '../constants/enums';
+import type { Standing } from '../constants/enums';
 import { COMPLIANCE_CONFIG_HREF, COMPLIANCE_CONFIG_PERMISSIONS } from '../components/training/trainingAdminAreas';
 import {
   Shield,
@@ -430,8 +432,8 @@ const AnnualReportSection: React.FC = () => {
           <div className="border-theme-surface-border border-b px-4 py-3">
             <h3 className="text-theme-text-secondary text-sm font-medium">Requirement Compliance Analysis</h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+          <div className="rwd-table-container overflow-x-auto">
+            <table className="rwd-table rwd-table-narrow min-w-full text-sm">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th
@@ -466,12 +468,16 @@ const AnnualReportSection: React.FC = () => {
                     key={req.requirement_id}
                     className="border-theme-surface-border hover:bg-theme-surface-hover border-b"
                   >
-                    <td className="text-theme-text-primary px-4 py-2">{req.name}</td>
-                    <td className="text-theme-text-secondary px-4 py-2 capitalize">{req.type.replace('_', ' ')}</td>
-                    <td className="text-theme-text-primary px-4 py-2 text-center">
+                    <td className="rwd-table-lead text-theme-text-primary px-4 py-2" data-label="Requirement">
+                      {req.name}
+                    </td>
+                    <td className="text-theme-text-secondary px-4 py-2 capitalize" data-label="Type">
+                      {req.type.replace('_', ' ')}
+                    </td>
+                    <td className="text-theme-text-primary px-4 py-2 text-center" data-label="Compliant">
                       {req.members_compliant}/{req.members_total}
                     </td>
-                    <td className="px-4 py-2 text-center">
+                    <td className="px-4 py-2 text-center" data-label="Compliance %">
                       {/* No member is held to it (a program-only requirement, say):
                           0 of 0 is not a 0% failure. */}
                       {req.members_total === 0 ? (
@@ -1156,7 +1162,7 @@ const ForecastSection: React.FC = () => {
                     {f.user_name}
                   </td>
                   <td data-label="Current" className="px-4 py-2 text-center">
-                    <PctBadge pct={f.current_compliance_percentage} />
+                    <StandingPct pct={f.current_compliance_percentage} standing={f.current_standing} />
                   </td>
                   <td data-label="30 Days" className="px-4 py-2 text-center">
                     <PctBadge pct={f.forecast_30_days} />
@@ -1262,6 +1268,19 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     </span>
   );
 };
+
+/**
+ * The forecast's current figure, coloured by the standing the server
+ * classified it with (the member's profile or the department's thresholds),
+ * so this table and the Training Enhancements tab cannot disagree about a
+ * member (CLAUDE.md pitfall #29).
+ */
+const StandingPct: React.FC<{ pct: number | null; standing: Standing }> = ({ pct, standing }) =>
+  pct === null ? (
+    <span className="text-theme-text-muted text-sm">N/A</span>
+  ) : (
+    <span className={`text-sm font-semibold ${STANDING_TEXT_COLORS[standing]}`}>{pct.toFixed(1)}%</span>
+  );
 
 const PctBadge: React.FC<{ pct: number | null }> = ({ pct }) =>
   pct === null ? (

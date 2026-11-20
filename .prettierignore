@@ -49,6 +49,17 @@ docs/training/17-privacy-data-rights.md
 docs/training/SCREENSHOT_CURRENCY.md
 docs/training/TRAINING_MATERIALS_REVIEW.md
 
+# YouTube scripts whose bracketed cues Prettier would rewrite. A cue such as
+# `**[PRODUCTION NOTE — …]**` or `**[SCREEN: …]**` that spans lines, or holds a
+# numbered list or a literal `*`, reads to Prettier as unmatched emphasis: it
+# escapes the markers to `\*\*` and in 02 turns `(wildcard *)` into `_`. The
+# rendered script then shows stray asterisks in the middle of a production
+# note. Same rule as the list above: take a file off once
+# `npx prettier --check` passes on it unchanged.
+docs/youtube-scripts/02-first-time-setup-and-onboarding.md
+docs/youtube-scripts/08-quick-tips-and-shorts.md
+docs/youtube-scripts/12-elections-deep-dive.md
+
 # Dependencies and build output
 node_modules/
 frontend/dist/

@@ -147,21 +147,23 @@ event participation, member activity]**
 > set the start and end time. Remember, the system handles timezone conversion
 > automatically, so enter times in your local timezone."
 
-**[SCREEN: With Training chosen, the form switches to the step-by-step
-training-event form; open the **Training Info** step — course, category,
-requirement.]**
+**[SCREEN: With Training chosen, the form switches to the four-step
+training-event form; show its **Training Info** step — Course (No course yet /
+From the Course Library / One-off course name), category, requirement.]**
 
-> "Choosing Training switches to the step-by-step training form. Its **Training
-> Info** step holds the course, category and requirement this drill counts
-> toward. When the organizer finalizes attendance, every member who checked in
-> is credited on their training record. Pick **No course yet** and it's filed
-> under the event name as Continuing Education. And training events don't
-> count toward admin hours — they count toward training."
+> "Choosing Training switches you to the training-event form — the same one
+> Training Administration uses. Its **Training Info** step holds the course,
+> category and requirement this drill counts toward. When the organizer
+> finalizes attendance, every member who checked in is credited on their
+> training record. Leave the course as **No course yet** and records are filed
+> under the event's title. And training events don't count toward admin hours
+> — they count toward training."
 
-**[EDITOR — 2026-11-17. Re-record this beat. Since 2026-11-11 (#4347) choosing
-Training opens the step-by-step training-event form; the inline "Training
-details (optional)" section the old footage shows is gone. Narration updated;
-length roughly unchanged.]**
+**[PRODUCTION NOTE — 2026-11-16. Rewritten for the one training-event form
+(#4347, merged 2026-11-16): the "Training details (optional)" group on Create
+Event is gone, and the old "Continuing Education" default is now "No course
+yet (filed under the event title)" with a training type you pick. Saving
+training details needs **Manage all events**. New footage needed.]**
 
 **[SCREEN: Set date and time fields]**
 
@@ -324,9 +326,8 @@ open **Check-ins → Card Check-ins**.]**
 ### DRILL ATTENDANCE THAT COUNTS, AND THE CHIEF'S OVERRIDE (added 2026-11-05)
 
 **[SCREEN: The training-event form's **Training Info** step, **Counts toward
-attendance** with a tick box for a session attendance requirement; then the
-event list card with the **Counts toward attendance** badge beside
-**Mandatory**.]**
+attendance** with a tick box for a session attendance requirement; then the event list card with
+the **Counts toward attendance** badge beside **Mandatory**.]**
 
 > "Some drills are about turning up, not hours logged — 'attend sixty percent of
 > the company drills this year.' That's a **Session Attendance** requirement. You
@@ -339,7 +340,7 @@ event list card with the **Counts toward attendance** badge beside
 **[EDITOR — 2026-11-17. Re-record this beat. The "Connect to Requirements &
 Programs" section and the event page's attendance editor were replaced by the
 training-event form's **Training Info** step and the event's **Training
-details** card (#4347, 2026-11-11). Narration updated.]**
+details** card (#4347, merged 2026-11-16). Narration updated.]**
 
 **[SCREEN: Compliance Matrix → a member's cell reading "2 of 3 sessions"; the
 **Chief override** control with dates and a required reason; the cell now
@@ -702,14 +703,17 @@ Form and Application Contact Details Changed, which cannot be switched off.]**
 > rules."
 
 > "Who may vote now has department-wide rules too. In **Election Settings →
-> Voter Eligibility** you set a meeting-attendance rule — say, six of the last
-> twelve meetings — and a waiting period for each kind of member. A new election
-> copies the rules for the meeting it's held at, and you can adjust them on the
-> election's **Eligibility** tab until voting opens. After that they're fixed."
+> Voter Eligibility** there's a row for each kind of member: may they vote, a
+> waiting period, and meeting-attendance rules — say, six of the last twelve
+> meetings. A new election copies the rules for its **Kind of vote** — a
+> regular business meeting, the annual meeting, a bylaws amendment or a
+> special meeting — and you can adjust them on the election's **Eligibility**
+> tab until voting opens. After that they're fixed."
 
 **[PRODUCTION NOTE — 2026-11-05. New, about 25 seconds (2026-10-29). Detail in
-Script 12. Administrative and social members follow their class for the
-waiting period; everyone else follows their status.]**
+Script 12.]** **[PRODUCTION NOTE — 2026-11-16. Rows per member type and Kind of
+vote since 2026-11-13; administrative and social members must now pass both
+their status row and their class row.]**
 
 ### MANAGING CANDIDATES AND OFFICES (15:30 – 16:30)
 
@@ -753,12 +757,16 @@ waiting period; everyone else follows their status.]**
 > candidate meets the victory condition and runoffs are enabled, a runoff
 > election is created automatically."
 
-**[SCREEN: Show the closed election with the Publish Results panel]**
+**[SCREEN: Show the closed election with the Results & Publishing panel:
+"Results are visible to members" and **Send Me a Copy**]** **[PRODUCTION NOTE
+— 2026-11-16. There is no Publish Results button any more: closing the
+election, early or on schedule, releases the results. Re-shoot this cue.]**
 
-> "Review the results, then use the Publish Results panel to make them visible
-> to the membership and email the results report. One tip: if you closed voting
-> early, press **Publish Results** so members don't have to wait for the
-> originally scheduled end time."
+> "Review the results. Closing the election is what shows them to the
+> membership — whether you close it early at the meeting or it ends on
+> schedule — and the results report is emailed to the election's creator and
+> leadership. **Send Me a Copy** on the Results & Publishing panel sends you
+> another."
 
 > "Results are recorded permanently, every vote carries a cryptographic
 > signature, and a full forensic audit trail is available if an election is

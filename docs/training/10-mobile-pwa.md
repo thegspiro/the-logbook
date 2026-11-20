@@ -114,12 +114,14 @@ You can also use the browser menu: **three-dot menu > Install The Logbook**
 Once installed, The Logbook runs on its own, outside the browser:
 
 - **No browser toolbar.** The app uses the whole screen. The phone's status bar
-  takes the colour of the app's navigation bar, for the theme you chose in the
+  takes the colour of the app's navigation bar for the theme you picked in the
   app: white in Light, dark navy in Dark, black in High Contrast. It no longer
-  follows the phone's own dark setting, so a member who chose Light on a dark
-  phone no longer gets a navy band above a white header. On Android, the
-  system bar along the bottom of an installed app is dark navy in every theme,
-  because Android fixes that colour when the app is installed. _(2026-11-15)_
+  follows the phone's own light or dark setting, so a member who chose Light on
+  a dark phone no longer gets a navy band above a white header _(2026-11-15;
+  it was dark red)_. The gesture strip along the bottom of an installed
+  Android app is different: Android fixes its colour when the app is
+  installed. See "The strip under the bottom bar is white" under Installing on
+  Android, above.
 - **Its own window.** It shows as a separate app in your app switcher, not as a
   browser tab.
 - **You stay signed in** between launches, within your department's sign-in
@@ -357,6 +359,17 @@ screens adapt:
   own card, and a long email address under a member's name wraps instead of
   pushing the table off the screen. Coverage and Availability also become cards
   on a tablet with the side navigation open.
+  _(2026-11-20)_ Seven training tables followed: **My Training**'s recent
+  training, self-reported training and **History** tab, **Expiring
+  Certifications**, a member's **Training Status** page, the annual report's
+  requirement analysis and the **Historical Import** preview (where a long
+  email address now wraps). The three My Training tables and the import preview
+  also become cards on a tablet with the side navigation open.
+- **The competency heat-map stays a grid** _(2026-11-20)_: on a phone it
+  scrolls both ways inside its own box, with the member column pinned on the
+  left and the skill names pinned along the top, and a fading edge with a
+  chevron where there is more. Long member names wrap instead of being cut
+  off.
 - **The inventory stock matrix stays a grid** _(2026-11-17)_: its **Size**
   column stays pinned while the colours scroll, and a fading edge with a
   chevron shows there are more colours to the side.

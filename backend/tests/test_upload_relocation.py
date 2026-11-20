@@ -300,3 +300,44 @@ class TestBucketReferences:
         assert report.missing == []
         assert report.outside_storage == []
         assert report.already_current == 1
+
+
+class TestCollectingForSomeAreas:
+    """``areas`` reads only the tables whose references can land in them, and
+    returns exactly what the full read would for those tables."""
+
+    async def test_self_reports_reads_the_training_tables_only(
+        self, db_session, setup_org_and_admin, root
+    ):
+        org_id, admin_id = setup_org_and_admin
+        await _rows(db_session, org_id, admin_id, root)
+
+        everything = await upload_relocation.collect_references(db_session, org_id)
+        some = await upload_relocation.collect_references(
+            db_session, org_id, areas=(upload_relocation.StorageArea.SELF_REPORTS,)
+        )
+
+        training = [
+            ref
+            for ref in everything
+            if ref.table in ("training_submissions", "training_records")
+        ]
+        assert some == training
+        assert {ref.table for ref in everything} - {ref.table for ref in some} == {
+            "documents",
+            "events",
+        }
+
+    async def test_records_are_read_for_their_own_area_too(
+        self, db_session, setup_org_and_admin, root
+    ):
+        org_id, admin_id = setup_org_and_admin
+        await _rows(db_session, org_id, admin_id, root)
+
+        some = await upload_relocation.collect_references(
+            db_session,
+            org_id,
+            areas=(upload_relocation.StorageArea.TRAINING_RECORDS,),
+        )
+
+        assert {ref.table for ref in some} == {"training_records"}

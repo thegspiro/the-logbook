@@ -486,16 +486,14 @@ administrator's password or two-factor, and deleting or anonymizing a member
 open a small box asking for your **authenticator code**, or offering **Use your
 passkey** if you have one (your password, if you do not use two-step sign-in).
 A member whose only second step is a passkey must use it here; the password is
-not accepted instead. Enter it and the action carries on by itself. It
+not accepted instead. _(2026-11-15)_ The box also opens when you **change your
+own sign-in email**, and when you **set up an authenticator app while you
+already use a passkey**, so someone who got hold of your signed-in browser
+cannot take over your account with either. Enter it and the action carries on by itself. It
 stays proven for 10 minutes on that browser, so a second sensitive action right
 after does not ask again. If you sign in only through a provider such as Google
 and have no password, authenticator or passkey, the box tells you to set up
 two-step sign-in first.
-
-_(2026-11-15)_ Two of your own changes now ask too: **changing your sign-in
-email address**, and **setting up an authenticator app when you already use a
-passkey**. Someone who got hold of your signed-in browser cannot then take
-over your account with either.
 
 ![The Confirm it's you box over Settings → Authentication → MFA Policy, opened by switching Allow passkeys: This action needs a recent confirmation, the Authenticator code field, and Cancel / Confirm](./images/00-34-step-up-code.png)
 

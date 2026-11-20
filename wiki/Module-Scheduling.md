@@ -54,6 +54,10 @@ reports.
   patterns for bulk generation. Patterns are created, **edited** and generated
   only on **Shift Planning → Patterns**; the Templates tab is templates only
   _(2026-11-17, W32-6, #4388)_
+  The template dialog _(2026-11-20, forms batch 24)_ asks before discarding
+  typed changes, counts the name toward 200 characters, and on an edit saves
+  everything but a refused field, which stays flagged with "Template saved,
+  except …"
 - **Shift Pattern Presets** — 24/48, 48/96, Kelly Schedule, California
   3-Platoon, ABCAB, plus a custom pattern builder with a 30-day preview
 - **Bulk Shift Generation** — generate shifts from templates and patterns;
@@ -550,7 +554,11 @@ with a type breakdown and average response time.
   it.**
 - **Only `ASSIGNED` and `CONFIRMED` crew are listed.** Every listed member gets
   the apparatus's full call count by default, so declined, pending and no-show
-  members are left off.
+  members are left off. _(2026-11-14)_ The same rule,
+  `WORKING_ASSIGNMENT_STATUSES` in `models/training.py`, now also decides who
+  needs a trainee report or a shift evaluation before close-out and who gets a
+  close-out draft report, so a no-show or pending trainee no longer blocks
+  close-out. A no-show still holds a seat for staffing, swaps and counts.
 - **Assigned members who never checked in are still listed**, with empty times
   to fill in, so the officer can give them hours and credit.
 - **A member credited with fewer calls than the apparatus ran gets a count, not
@@ -571,9 +579,21 @@ parts of the totals, not additions. An open swap a member could pick up posts on
 bell entry per seat and recipient (`open_swap_notices`), a deliberate departure
 from email-first.
 
+**My Hours redesigned** _(2026-11-20)_. **My Shifts → Hours** (and a member's
+profile Shift & Call History) now total department and outside hours on its
+This month / This year / All time cards, with a two-colour split bar; add a
+"<year> at a glance" stacked monthly chart with busiest month, months with
+shifts and average per active month; put the month table behind **Show as
+table**; and replace the separate outside-shifts card with **All shifts**: one
+list per year, newest first, of department shifts (labelled with the
+department's **Short Name**, Settings → Profile, falling back to the full name)
+and outside shifts, filterable **All** / department / **Other departments**.
+The Member Hours report still keeps outside hours in their own column. Data
+comes from `GET /scheduling/my-shift-history` and
+`GET /scheduling/members/{id}/shift-history` (self, or `scheduling.report`).
+
 A member who rides a neighbouring jurisdiction's apparatus gets credit for it
-from **My Shifts → Hours → Shifts with other departments**, with **Log outside
-shift**:
+from **My Shifts → Hours → All shifts**, with **Log outside shift**:
 
 - **Start and End**, with **+12 hours** / **+24 hours** buttons; the server
   derives the date (the start's local date, so a night shift counts on the day
@@ -594,6 +614,16 @@ shift**:
   **Outside apparatus staffed** per-unit summary.
 - Reported **beside** worked hours (`external_*`), but **added into** each
   member's totals on the Shift Compliance report.
+- **Preceptor link** _(2026-11-13)_. An entry that needs a shift evaluation
+  (**Evaluation needed** / **Evaluation started**) has a **Preceptor link**
+  button. The member who logged it, or a `training.manage` holder, makes a
+  single-use, no-login link for the outside agency's preceptor, shown as a QR
+  code, copied or emailed. It stays open for
+  `shift_evaluation_link_days` after the shift ends (default 7, 1–60, in
+  Training's Shift Evaluations settings); making a new one or turning it off
+  stops the old one. The public page is `/shift-evaluation/:token`. An entry
+  still **Awaiting approval** can now be evaluated; its credit waits for the
+  approval. Table `shift_evaluation_links` (migration `533f8aba187e`).
 
 Tables `external_agencies`, `external_apparatus` and `external_shift_hours`;
 API under `/api/v1/scheduling/external-hours` (see
@@ -678,8 +708,13 @@ given hours manually.
 ### Drafts and offline submission
 
 - In-progress forms are saved to `localStorage` (shift, form values, crew
-  selections and evaluations, crew remarks, timestamp). Up to **20 drafts** are
-  kept; the oldest is evicted past that.
+  selections and evaluations, per-member calls, crew remarks, timestamp). Up to
+  **20 drafts** are kept; the oldest is evicted past that, and one older than
+  24 hours is discarded. _(2026-11-14)_ The draft is also written at once when
+  the form closes, so following a trainee's shift-evaluation link and coming
+  back restores everything, including the report's own fields; crew no longer
+  on the shift are skipped and the open shift is never replaced by the
+  draft's.
 - A submission made without connectivity is queued in **IndexedDB** with its
   full `BatchShiftReportCreate` payload, a queued timestamp and a retry count,
   and is sent when connectivity returns; a failed retry increments the counter
@@ -862,6 +897,10 @@ Notification links open the scheduling page with the shift pre-selected;
 - **Automatic shift generation** — `auto_generate_enabled` (default `false`)
   and `auto_generate_weeks` (default `4`) keep active patterns generating shifts
   to a rolling horizon.
+  _(2026-11-20)_ The two cards' typed numbers (hours limit 0–336, window 1–31
+  days, weeks ahead 1–52) are checked on their own boxes before saving; a
+  cleared hours limit used to save as `0` and switch the advisory off. Each
+  saves on its own key, so the card's other number still saves.
 - **Department Defaults** (default duration, minimum staffing, overtime
   threshold) are stored but marked **Not in effect yet** — no shift, template or
   warning reads them.

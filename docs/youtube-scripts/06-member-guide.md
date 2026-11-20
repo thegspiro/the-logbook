@@ -769,12 +769,17 @@ officer to find cover and that no member sees it; that is no longer true. About
 > you withdraw, an officer reassigns you, your time off is approved — any
 > swap still waiting on that seat is cancelled, and both of you are told."
 
-**[SCREEN: My Shifts → Hours → "Shifts with other departments" → "Log outside
-shift"]**
+**[SCREEN: My Shifts → Hours → scroll to "All shifts" → "Log outside shift"]**
 
 > "One more thing on the Hours tab: if you ride on another department's
-> apparatus, **Log outside shift** under **Shifts with other departments**
-> records it, and it counts toward your hours."
+> apparatus, **Log outside shift** in **All shifts** records it, and it counts
+> toward your hours. It's listed right in among your own department's shifts,
+> and the cards at the top add it into your totals."
+
+**[PRODUCTION NOTE — 2026-11-20. The Hours tab was redesigned: the separate
+"Shifts with other departments" card is gone, outside shifts sit in one
+**All shifts** list, and the cards total both departments. Re-record this beat
+and the profile beat in Chapter 7 against the new screen.]**
 
 > "Some departments switch on **Require approval for outside-department shifts**.
 > If yours has, the shift shows **Awaiting approval** and stays out of your totals

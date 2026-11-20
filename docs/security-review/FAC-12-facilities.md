@@ -1,6 +1,6 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14), 2026-11-06 (pass 15) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix; FAC-42 fixed — ensure_facility_folder's unconditional org lock; FAC-43 fixed — the fast path still locked the shared facilities-root row; FAC-44 flagged — the same unindexed-scan class as FAC-41, on two call sites (the root and per-facility folder lookups); FAC-45 fixed — a same-facility concurrent-creation deadlock the FAC-43 fix left in the per-facility check — pass 3 continued, closing this PR), [#2425](https://github.com/thegspiro/the-logbook/pull/2425) (pass 4, FAC-46 through FAC-57 fixed across 7 Codex rounds), [#2563](https://github.com/thegspiro/the-logbook/pull/2563) (pass 5, FAC-58 fixed — access-key create/update/delete had no audit trail), [#2621](https://github.com/thegspiro/the-logbook/pull/2621) (pass 6, watchdog re-verification, 0 fixed, 0 new findings), [#2968](https://github.com/thegspiro/the-logbook/pull/2968) (pass 7, 0 fixed, 0 new findings, FAC-41/FAC-44 confirmed fixed and intact), [#3169](https://github.com/thegspiro/the-logbook/pull/3169) (pass 8, watchdog pickup, 0 new application findings, FAC-13 re-verified already fixed by owner-direct work, 1 cross-cutting migration-head conflict fixed), [#3288](https://github.com/thegspiro/the-logbook/pull/3288) (pass 9, watchdog pickup, 0 fixes, 0 new findings, FAC-30 re-confirmed the only standing item), [#3433](https://github.com/thegspiro/the-logbook/pull/3433) (pass 10, watchdog pickup, 0 fixes, 0 new findings, two new one-step upload routes reviewed and found sound), [#3585](https://github.com/thegspiro/the-logbook/pull/3585) (pass 11, watchdog pickup, docs-only, 0 fixes, 0 new findings), [#3739](https://github.com/thegspiro/the-logbook/pull/3739) (pass 12, watchdog pickup, 0 fixes, 0 new findings, two new paginated endpoints reviewed and found sound), [#3832](https://github.com/thegspiro/the-logbook/pull/3832) (pass 13, watchdog pickup, 0 fixes, 0 new findings, two cross-cutting encryption commits reviewed and found sound), pass 14 PR recorded in `PROGRESS.md`, pass 15 PR recorded in `PROGRESS.md`
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14), 2026-11-06 (pass 15), 2026-11-20 (pass 16) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix; FAC-42 fixed — ensure_facility_folder's unconditional org lock; FAC-43 fixed — the fast path still locked the shared facilities-root row; FAC-44 flagged — the same unindexed-scan class as FAC-41, on two call sites (the root and per-facility folder lookups); FAC-45 fixed — a same-facility concurrent-creation deadlock the FAC-43 fix left in the per-facility check — pass 3 continued, closing this PR), [#2425](https://github.com/thegspiro/the-logbook/pull/2425) (pass 4, FAC-46 through FAC-57 fixed across 7 Codex rounds), [#2563](https://github.com/thegspiro/the-logbook/pull/2563) (pass 5, FAC-58 fixed — access-key create/update/delete had no audit trail), [#2621](https://github.com/thegspiro/the-logbook/pull/2621) (pass 6, watchdog re-verification, 0 fixed, 0 new findings), [#2968](https://github.com/thegspiro/the-logbook/pull/2968) (pass 7, 0 fixed, 0 new findings, FAC-41/FAC-44 confirmed fixed and intact), [#3169](https://github.com/thegspiro/the-logbook/pull/3169) (pass 8, watchdog pickup, 0 new application findings, FAC-13 re-verified already fixed by owner-direct work, 1 cross-cutting migration-head conflict fixed), [#3288](https://github.com/thegspiro/the-logbook/pull/3288) (pass 9, watchdog pickup, 0 fixes, 0 new findings, FAC-30 re-confirmed the only standing item), [#3433](https://github.com/thegspiro/the-logbook/pull/3433) (pass 10, watchdog pickup, 0 fixes, 0 new findings, two new one-step upload routes reviewed and found sound), [#3585](https://github.com/thegspiro/the-logbook/pull/3585) (pass 11, watchdog pickup, docs-only, 0 fixes, 0 new findings), [#3739](https://github.com/thegspiro/the-logbook/pull/3739) (pass 12, watchdog pickup, 0 fixes, 0 new findings, two new paginated endpoints reviewed and found sound), [#3832](https://github.com/thegspiro/the-logbook/pull/3832) (pass 13, watchdog pickup, 0 fixes, 0 new findings, two cross-cutting encryption commits reviewed and found sound), pass 14 PR recorded in `PROGRESS.md`, pass 15 PR recorded in `PROGRESS.md`, pass 16 PR recorded in `PROGRESS.md`
 
 **Backend:** `api/v1/endpoints/facilities.py` (102 routes, 4401 L),
 `services/facilities_service.py` (3742 L), `services/documents_service.py`
@@ -11,6 +11,182 @@ schemas `app/schemas/facilities.py` (1460 L), `app/mcp/tools/facilities.py`
 **Migrations:** `986b38c2086b` (Documents-owned tables, FAC-13 follow-up) is
 the only migration in this pass's window naming this feature; it writes
 `documents`/`document_folders`, not any `facility_*` table.
+
+---
+
+## Pass 16 (2026-11-20) — watchdog pickup; 0 fixes, 0 new findings; a facility update/restore response-completeness fix, the shared History-document protection and a check-request receipt lock-order addition (both cross-feature) and a large forms-UX rollout all reviewed and found sound; FAC-30 re-confirmed the only standing item
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+remains unreachable (`ListAgents` → "No reachable agents" — confirmed fresh
+this pass, consistent with every prior pass recorded in this file). PR #4445
+(Feature 11, Inventory, pass 16) had already merged (`ff815adf9`); a fresh
+`list_pull_requests` (state `open`) found 0 PRs with a head branch starting
+`claude/security-review-`. Row 12 (Facilities) was the next `⬜` row on a
+freshly fetched `main`.
+
+### Prior art loaded first
+
+Read, in full: `CHECKLIST.md`; `SEC-00-cross-cutting-baseline.md` (no new
+facilities-specific guard added since pass 15); this file's **Pass 15**
+section. `docs/module-audit/facilities.md` and `docs/app-review/facilities.md`
+still defer security-relevant claims to this file; their one open item
+(app-review's FAC-4) is unrelated and untouched by this pass's delta.
+`docs/KNOWN_LIMITATIONS.md`'s FAC-30 entry re-read and unchanged.
+
+### Baseline
+
+Pass 15's own PR, #4108, merged as `2ff2abf75` (`Merge pull request #4108`)
+— and, unlike the last several passes' baselines, this one **is** a genuine
+ancestor of current `main` (`git merge-base --is-ancestor 2ff2abf75
+origin/main` succeeds), so no tree-diff workaround was needed this time.
+
+### Real delta since pass 15's baseline (`2ff2abf75`)
+
+`git diff --stat 2ff2abf75..origin/main` scoped to this feature's declared
+files: 33 files, +3205/−1981 — two small backend changes and a large,
+already-familiar frontend forms-UX rollout. Read in full:
+
+- **`services/facilities_service.py`** (+8/−4 L) — `update_facility` and
+  `restore_facility` now `return await self.get_facility(facility_id,
+organization_id)` instead of the bare refreshed ORM object. The comment
+  added explains why: the object was loaded without its relationships and
+  `db.refresh()` leaves them unloaded, while the response schema nests
+  `type`/`status`. Not a security change — `get_facility` is the same
+  already-org-scoped, already-reviewed method every other read path uses, so
+  this closes a correctness gap (CLAUDE.md Pitfall #11's shape: fetch the
+  full record rather than trust what a write handler already has in memory),
+  not an authz one. Confirmed `get_facility`'s signature and org filter are
+  unchanged.
+- **`services/documents_service.py`** (+160/−8 L, shared folder-access
+  machinery, out of this feature's own rotation row but reviewed because this
+  feature declares it) — two changes, both already reviewed for Documents &
+  legal's own invariants by PR #4440 (pass 16 there, merged `b32749894`
+  before this pass's baseline). Reviewed here only for whether either touches
+  a _Facilities_ invariant:
+  - `delete_folder`'s bulk cascade delete (a raw `DELETE ... WHERE id IN
+(...)`) now refuses up front if any of the targeted documents is
+    History-catalogued (`source_type == HISTORY_DOCUMENT_SOURCE_TYPE`), and
+    `delete_document` raises the same refusal for a single document. Neither
+    check mentions or special-cases `FacilityDocument`/`FacilityPhoto` or any
+    `facility_*` table — the refusal is keyed purely on `Document.source_type`
+    and folder ancestry (`is_in_history_tree`/`ensure_history_folder`, both
+    org-scoped by `DocumentFolder.organization_id`). A facility's own folder
+    tree is untouched by this change: a facility document deletion still
+    follows the same path it always did, refused only if it happens to be the
+    (today unreachable, by design) History-catalogued case.
+  - A new "check request's receipt" lock/refusal in
+    `_delete_facility_document_references`'s neighbourhood — reads as
+    `CheckRequest.organization_id == org_id` (org-scoped) and does not read or
+    write any `facility_*` table. `_delete_facility_document_references`
+    itself (the actual Facilities-owned cleanup this service calls, confirmed
+    by name and by re-reading its body) is unchanged in this diff.
+  - Net: both changes are Documents/Finance invariants; Facilities' own
+    document-folder machinery (the FAC-13-era move onto this shared service)
+    is neither widened nor narrowed by either.
+- **Frontend** (29 files under `modules/facilities` — components, hooks,
+  pages, and their tests): the same "Forms batch" shared-field,
+  server-error-mapping and discard-protection rollout this rotation has
+  reviewed repeatedly on other features (CLAUDE.md's `FormField`/
+  `useFieldErrors`/`saveExceptRefused`/`useDiscardGuard` pattern). Specifically:
+  - `useInspectionForm.ts`, `useMaintenanceForm.ts`, `ContactsSection.tsx`,
+    `OverviewSection.tsx`, `FacilitiesSettingsPage.tsx`'s `LookupDialog` all
+    gained per-field validation, a `useFieldErrors`-backed error summary, and
+    `saveExceptRefused` for the update path (a refused field keeps the dialog
+    open and the rest of the edit saves — owner rule, 2026-11-05) plus
+    `useDiscardGuard`/`isDirty` wiring so a close with unsaved changes asks
+    first (Pitfall #16's `useConfirm`, not a native dialog — confirmed no new
+    `window.confirm`/`alert`/`prompt` anywhere in the diff).
+  - Each hook/component's pre-existing `formToPayload`/payload-building
+    logic (the actual wire-format conversion) is **unchanged** in this diff —
+    re-read in full regardless, since that is exactly where Pitfall #1 bites.
+    `useInspectionForm.ts` and `useMaintenanceForm.ts` still use `text`/
+    `pick`/`num` from `formCoercions(isEdit)` (create: omit a blank optional
+    field; edit: send `null`), matching their own docstring comments citing
+    Pitfall #1 by name. `OverviewSection.tsx`'s new inline update-payload
+    builder (replacing what pass 15 and earlier passes would have seen as a
+    simpler object literal) explicitly uses `blankToNull`/`numberOrNull` for
+    every non-required field and `.trim()` for required ones — the correct
+    update-path shape, with a comment explaining why (an omitted key means
+    "leave this alone" under the backend's `exclude_unset` dump).
+  - `routes.tsx`/`FacilityDetailPage.tsx`/`FacilitiesSettingsPage.tsx`: no
+    `ProtectedRoute` prop, permission string or route path changed — the
+    `FacilityDetailPage.tsx` diff is a two-line `btn-success`/`btn-secondary`
+    class swap (Pitfall #17's shared utilities, replacing hand-rolled Tailwind)
+    with no behavior change, and `LookupDialog`'s create/update branching was
+    reordered (`if (item) { ... } else if (kind === 'types') ...`) but still
+    dispatches to the same three `facilitiesService` calls on the same
+    conditions.
+  - Grepped the full frontend diff (6364 diff lines) for
+    `dangerouslySetInnerHTML`/`innerHTML`, `window.confirm`/`alert`/`prompt`,
+    `localStorage.`, a hand-rolled `Authorization:` header, a new
+    `axios.create`/bare `fetch(`, and the banned locale-method/`date-fns` set
+    — zero matches.
+
+### Cross-feature changes reviewed for this feature's own invariants only
+
+`backend/alembic/versions`: 49 new migration files / 94 commits since this
+pass's baseline, none naming a `facility_*` table or `Facility*` model (every
+filename and diff checked by `grep -il facilit`) — consistent with this
+pass's file-scoped diff showing no change to `models/facilities.py` or
+`schemas/facilities.py`. No migration risk to this feature this window.
+
+### Standing findings re-verified
+
+- **FAC-30 (P2, owner-accepted "leave as is", 2026-10-05)** — re-confirmed
+  unchanged; nothing in this pass's delta touches the permission constants it
+  concerns.
+- **FAC-13 (HIGH, closed pass 8)**, **FAC-41/FAC-44 (locking fixes, confirmed
+  intact every pass since 3)** — all untouched this window.
+
+### Route inventory
+
+**102 routes, unchanged from pass 15** — confirmed by an AST walk counting
+every `@router.<verb>`/`@router.websocket` decorator in
+`api/v1/endpoints/facilities.py`. `check_route_permissions.py --strict`
+(repo-wide): 327 routes (up from 303 at pass 15, from unrelated feature
+work), 0 errors, 0 warnings.
+
+### Verified good ✅ (pass 16)
+
+- `update_facility`/`restore_facility` now return a fully-loaded,
+  already-org-scoped record via the same `get_facility` every other read
+  path uses — a correctness fix, not a widened or narrowed authz surface.
+- The shared `documents_service.py` History-document protection and
+  check-request receipt lock-order addition are Documents/Finance
+  invariants; neither reads, writes nor refuses on any `facility_*` table or
+  `FacilityDocument`/`FacilityPhoto` row, so Facilities' own document-folder
+  access is unaffected.
+- Every form touched by this pass's frontend rollout still builds its wire
+  payload through the same, unchanged, already-correct
+  `formCoercions`/`blankToNull`/`numberOrNull` helpers Pitfall #1 requires;
+  the new `useFieldErrors`/`saveExceptRefused`/`useDiscardGuard` wiring
+  changes only validation, error display and the close-without-saving
+  prompt.
+- No new route, no route/permission/role prop changed on any Facilities
+  route, no new by-id surface, no raw SQL, no `LIKE`/`ilike` call added, no
+  browser-blocking dialog, no `dangerouslySetInnerHTML`, no axios-instance
+  bypass.
+- No facility-table schema or seeded-grant change in this window (49
+  unrelated migrations, none naming this feature).
+
+### Completion gate
+
+| Check                                                                                                                                                                                                           | Result                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.5.0)                                                                                                                                                                           | ✅ 0 violations                                 |
+| `black --check app/ tests/ alembic/` (26.10.1)                                                                                                                                                                  | ✅ clean, 3286 files unchanged                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                                                                                                                                               | ✅ clean                                        |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                               | ✅ single head (`0d54dd90d6ba`), 786 revisions  |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                           | ✅ 327 routes, 0 errors, 0 warnings             |
+| `pytest tests/ -k "facilit"`                                                                                                                                                                                    | ✅ 321 passed, 1 pre-existing skip (`py_vapid`) |
+| `pytest tests/test_capacity_locking.py tests/test_org_scoping_ratchet.py tests/test_like_escaping.py tests/test_csv_writer_sweep.py tests/test_alembic_migrations.py tests/test_migration_create_all_tables.py` | ✅ 175 passed                                   |
+| `cd frontend && npm run typecheck`                                                                                                                                                                              | ✅ 0 errors                                     |
+| `cd frontend && npm run lint`                                                                                                                                                                                   | ✅ 0 errors, 0 warnings                         |
+| `npx vitest run src/modules/facilities`                                                                                                                                                                         | ✅ 204 passed (23 files, up from 170/22)        |
+
+**0 fixes applied, 0 new findings.** FAC-30 (P2, owner-accepted "leave as is")
+remains the only standing flagged item. Rotation row 12 → ✅ (pending this
+PR's merge). Next: Feature 13 (Apparatus & NFC).
 
 ---
 

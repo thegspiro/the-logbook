@@ -259,11 +259,12 @@ Recorded in `docs/KNOWN_LIMITATIONS.md` under "PDF Reports".
   embedded), by owner decision: their text is fitted to physical stock.
 - **Minutes that append attachment PDFs are not PDF/A.** Pages from outside
   cannot be vouched for, so that file makes no claim.
-- **Older layouts.** Minutes, the impact plan and the election documents keep
-  their own layouts. Minutes, the evaluation and the election documents number
-  their pages "Page N" rather than "of Y". The ballot and, since 2026-11-17,
-  the impact plan are the exceptions: both are laid out twice and footed
-  "Page X of Y" by `page_of_footer`.
+- **Older layouts.** Minutes, the impact plan, the evaluation and the election
+  documents keep their own layouts rather than the report kit's. Every one of
+  them is numbered "Page X of Y" (since 2026-11-20 for minutes, the
+  evaluation, certified results and the pre-meeting package): each is laid
+  out twice, the first pass counting the pages. Minutes count their own pages
+  only; attachment PDFs appended after them carry no minutes footer.
 
 ## Roadmap (owner decisions of 2026-11-09)
 

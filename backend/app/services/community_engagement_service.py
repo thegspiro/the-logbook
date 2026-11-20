@@ -24,13 +24,22 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import case, func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.event import Event, EventExternalAttendee, EventRSVP
-from app.models.event_request import EventRequest, EventRequestStatus
+from app.models.event_request import (
+    EventRequest,
+    EventRequestActivity,
+    EventRequestStatus,
+)
 from app.models.user import Organization
-from app.services.dashboard_widget_service import outreach_event_clause, period_dates
+from app.services.dashboard_widget_service import (
+    is_outreach_event,
+    outreach_event_clause,
+    period_dates,
+)
 from app.services.event_request_service import outreach_type_label
 from app.services.event_service import EventService
 from app.utils.hours import hours_from_minutes, sum_hours_to_quarter
@@ -85,15 +94,32 @@ class EventReach:
     crew: int
     member_hours: float
     member_ids: set[str] = field(default_factory=set)
+    headcount: Optional[int] = None
+    #: "request" for an event a public request was scheduled onto, labelled by
+    #: the request's outreach type; "department" for the rest, labelled by
+    #: event type. Two vocabularies, so the breakdown keeps them apart.
+    group: str = "department"
+
+    @property
+    def has_actual(self) -> bool:
+        """Whether anything was counted: a headcount, or any guest sign-in."""
+        return self.headcount is not None or self.signed_in > 0
+
+    @property
+    def counted(self) -> int:
+        """The actual audience. A coordinator's headcount, where one was
+        recorded, is a count of the room; sign-ins are a count of the people
+        who stopped at the sheet, so the headcount wins rather than adding."""
+        return self.headcount if self.headcount is not None else self.signed_in
 
     @property
     def reach_is_estimate(self) -> bool:
-        return self.signed_in == 0 and self.expected is not None
+        return not self.has_actual and self.expected is not None
 
     @property
     def people_reached(self) -> int:
-        if self.signed_in > 0:
-            return self.signed_in
+        if self.has_actual:
+            return self.counted
         return self.expected or 0
 
 
@@ -101,6 +127,7 @@ class EventReach:
 class Totals:
     events_held: int
     people_reached: int
+    counted: int
     signed_in: int
     estimated: int
     member_hours: float
@@ -204,7 +231,15 @@ class CommunityEngagementService:
             select(EventRSVP).where(
                 EventRSVP.organization_id == organization_id,
                 EventRSVP.event_id.in_(ids),
-                EventRSVP.checked_in.is_(True),
+                # Present by scan or by an officer's override: the events
+                # list's rule (user_attended) and the attendance-waiver
+                # check's. An override writes override_check_in_at without
+                # setting checked_in, and a member an officer recorded after
+                # the fact gave the same hours as one who tapped in.
+                or_(
+                    EventRSVP.checked_in.is_(True),
+                    EventRSVP.override_check_in_at.is_not(None),
+                ),
             )
         )
         for rsvp in rsvp_rows.scalars().all():
@@ -245,6 +280,8 @@ class CommunityEngagementService:
                     crew=len(crew),
                     member_hours=hours,
                     member_ids={str(r.user_id) for r in crew},
+                    headcount=event.guest_headcount,
+                    group="request" if req is not None else "department",
                 )
             )
         rows.sort(key=lambda r: r.start, reverse=True)
@@ -253,32 +290,34 @@ class CommunityEngagementService:
     async def _request_counts(
         self, organization_id: str, start: Optional[datetime], end: datetime
     ) -> tuple[int, int]:
-        conditions = [
+        """Requests received in the period, and requests completed in it.
+
+        Two populations, deliberately: a request received in December and
+        finished in January is January's completion. The request row keeps no
+        completion date, but every move to Completed goes through the status
+        endpoint, which logs it, and Completed is terminal — so the activity
+        row's time is the completion time.
+        """
+        received_conditions = [
             EventRequest.organization_id == organization_id,
             EventRequest.created_at < end,
         ]
+        completed_conditions = [
+            EventRequest.organization_id == organization_id,
+            EventRequestActivity.new_status == EventRequestStatus.COMPLETED.value,
+            EventRequestActivity.created_at < end,
+        ]
         if start is not None:
-            conditions.append(EventRequest.created_at >= start)
-        received, completed = (
-            await self.db.execute(
-                select(
-                    func.count(EventRequest.id),
-                    func.coalesce(
-                        func.sum(
-                            case(
-                                (
-                                    EventRequest.status
-                                    == EventRequestStatus.COMPLETED.value,
-                                    1,
-                                ),
-                                else_=0,
-                            )
-                        ),
-                        0,
-                    ),
-                ).where(*conditions)
-            )
-        ).one()
+            received_conditions.append(EventRequest.created_at >= start)
+            completed_conditions.append(EventRequestActivity.created_at >= start)
+        received = await self.db.scalar(
+            select(func.count(EventRequest.id)).where(*received_conditions)
+        )
+        completed = await self.db.scalar(
+            select(func.count(func.distinct(EventRequestActivity.request_id)))
+            .join(EventRequest, EventRequest.id == EventRequestActivity.request_id)
+            .where(*completed_conditions)
+        )
         return int(received or 0), int(completed or 0)
 
     @staticmethod
@@ -289,6 +328,7 @@ class CommunityEngagementService:
         return Totals(
             events_held=len(rows),
             people_reached=sum(r.people_reached for r in rows),
+            counted=sum(r.counted for r in rows if r.has_actual),
             signed_in=sum(r.signed_in for r in rows),
             estimated=sum(r.expected or 0 for r in rows if r.reach_is_estimate),
             member_hours=sum_hours_to_quarter(r.member_hours for r in rows),
@@ -325,25 +365,38 @@ class CommunityEngagementService:
         step = relativedelta(years=1) if by_year else relativedelta(months=1)
         while cursor <= local_now.date():
             k = key(cursor)
-            buckets[k] = {"period": k, "events": 0, "signed_in": 0, "estimated": 0}
+            buckets[k] = {
+                "period": k,
+                "events": 0,
+                "counted": 0,
+                "signed_in": 0,
+                "estimated": 0,
+            }
             cursor += step
         for r in rows:
             bucket = buckets.get(key(r.start.astimezone(tz).date()))
             if bucket is None:
                 continue
             bucket["events"] += 1
+            bucket["signed_in"] += r.signed_in
             if r.reach_is_estimate:
                 bucket["estimated"] += r.expected or 0
-            else:
-                bucket["signed_in"] += r.signed_in
+            elif r.has_actual:
+                bucket["counted"] += r.counted
         return ("year" if by_year else "month"), list(buckets.values())
 
     @staticmethod
     def _by_type(rows: list[EventReach]) -> list[dict]:
-        grouped: dict[str, dict] = {}
+        grouped: dict[tuple[str, str], dict] = {}
         for r in rows:
             entry = grouped.setdefault(
-                r.type_label, {"label": r.type_label, "events": 0, "people_reached": 0}
+                (r.group, r.type_label),
+                {
+                    "group": r.group,
+                    "label": r.type_label,
+                    "events": 0,
+                    "people_reached": 0,
+                },
             )
             entry["events"] += 1
             entry["people_reached"] += r.people_reached
@@ -352,7 +405,14 @@ class CommunityEngagementService:
             key=lambda e: (-e["people_reached"], -e["events"], e["label"]),
         )
 
-    async def report(self, organization_id: str, period: str) -> dict:
+    async def _context(self, organization_id: str, period: str) -> tuple[
+        Optional[Organization],
+        ZoneInfo,
+        datetime,
+        Optional[datetime],
+        datetime,
+        Optional[tuple[datetime, datetime]],
+    ]:
         if period not in REPORT_PERIODS:
             raise ValueError(f"Unknown period: {period}")
         org = (
@@ -363,6 +423,41 @@ class CommunityEngagementService:
         tz = scheduling_timezone(org)
         now = datetime.now(timezone.utc)
         start, end, previous = report_bounds(period, now, tz)
+        return org, tz, now, start, end, previous
+
+    @staticmethod
+    def _row(r: EventReach) -> dict:
+        return {
+            "event_id": r.event_id,
+            "title": r.title,
+            "start_datetime": r.start,
+            "type_label": r.type_label,
+            "organization_name": r.organization_name,
+            "request_id": r.request_id,
+            "signed_in": r.signed_in,
+            "headcount": r.headcount,
+            "counted": r.counted if r.has_actual else None,
+            "expected": r.expected,
+            "people_reached": r.people_reached,
+            "reach_is_estimate": r.reach_is_estimate,
+            "crew": r.crew,
+            "member_hours": r.member_hours,
+        }
+
+    async def events(self, organization_id: str, period: str) -> list[dict]:
+        """Every held outreach event in the period, newest first — the rows
+        the report's table shows the first RECENT_EVENT_LIMIT of, in full for
+        the export, so a spreadsheet totals to the figures on the screen."""
+        org, _, _, start, end, _ = await self._context(organization_id, period)
+        return [
+            self._row(r)
+            for r in await self._held_events(organization_id, org, start, end)
+        ]
+
+    async def report(self, organization_id: str, period: str) -> dict:
+        org, tz, now, start, end, previous = await self._context(
+            organization_id, period
+        )
 
         rows = await self._held_events(organization_id, org, start, end)
         current = self._totals(
@@ -382,7 +477,7 @@ class CommunityEngagementService:
             )
         )
 
-        both = [r for r in rows if r.signed_in > 0 and r.expected is not None]
+        both = [r for r in rows if r.has_actual and r.expected is not None]
         granularity, buckets = self._buckets(rows, start, now, tz)
         return {
             "period": period,
@@ -393,30 +488,61 @@ class CommunityEngagementService:
             "upcoming_events": int(upcoming or 0),
             "turnout": {
                 "events": len(both),
+                "counted": sum(r.counted for r in both),
                 "signed_in": sum(r.signed_in for r in both),
                 "expected": sum(r.expected or 0 for r in both),
             },
             "granularity": granularity,
             "by_period": buckets,
             "by_type": self._by_type(rows),
-            "recent_events": [
-                {
-                    "event_id": r.event_id,
-                    "title": r.title,
-                    "start_datetime": r.start,
-                    "type_label": r.type_label,
-                    "organization_name": r.organization_name,
-                    "request_id": r.request_id,
-                    "signed_in": r.signed_in,
-                    "expected": r.expected,
-                    "people_reached": r.people_reached,
-                    "reach_is_estimate": r.reach_is_estimate,
-                    "crew": r.crew,
-                    "member_hours": r.member_hours,
-                }
-                for r in rows[:RECENT_EVENT_LIMIT]
-            ],
+            "recent_events": [self._row(r) for r in rows[:RECENT_EVENT_LIMIT]],
         }
+
+    async def load_event(self, organization_id: str, event_id: str) -> Optional[Event]:
+        """This department's event, with the location the response names."""
+        result = await self.db.execute(
+            select(Event)
+            .where(
+                Event.id == str(event_id),
+                Event.organization_id == str(organization_id),
+            )
+            .options(selectinload(Event.location_obj))
+            .execution_options(populate_existing=True)
+        )
+        return result.scalar_one_or_none()
+
+    async def set_guest_headcount(
+        self, organization_id: str, event_id: str, headcount: Optional[int]
+    ) -> Optional[Event]:
+        """Record (or clear, with None) the guests counted at an outreach event.
+
+        None when the event is not this department's. Refused for an event
+        that is not outreach — the count would be stored and read by nothing —
+        for a cancelled one, and before the event has started, when there is
+        nobody to count yet.
+        """
+        event = (
+            await self.db.execute(
+                select(Event)
+                .where(
+                    Event.id == str(event_id),
+                    Event.organization_id == str(organization_id),
+                )
+                .options(selectinload(Event.location_obj))
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if event is None:
+            return None
+        if event.is_cancelled:
+            raise ValueError("A cancelled event has no guests to count")
+        if not await is_outreach_event(self.db, organization_id, event_id):
+            raise ValueError("Only community outreach events take a guest headcount")
+        if _as_utc(event.start_datetime) > datetime.now(timezone.utc):
+            raise ValueError("A headcount can be recorded once the event has started")
+        event.guest_headcount = headcount
+        await self.db.flush()
+        return event
 
 
 __all__ = [

@@ -1311,7 +1311,7 @@ linked into the program, graded by `training_compliance`. The per-type rule is
 | `evaluated_shifts` | `required_shifts`     | 1, or 0 when `evaluation_excludes_lowest_rating` and any item is at the lowest rating |
 | `transports`       | `required_transports` | the evaluation's `transports` statistic                                               |
 | `refusals`         | `required_refusals`   | the evaluation's `refusals` statistic                                                 |
-| `evaluated_calls`  | `required_calls`      | the evaluation's `calls` statistic _(2026-11-14)_                                     |
+| `evaluated_calls`  | `required_calls`      | the evaluation's `calls` statistic _(2026-11-15)_                                     |
 
 `evaluated_calls` shares `required_calls` with the `calls` type; every reader
 that grades `calls` checks the type first, and `calls` stays credited by shift
@@ -1326,7 +1326,7 @@ reports, so no call counts toward both. Migration `9d044fc1d81b` widens the
 }
 ```
 
-**Credit is re-stated** _(2026-11-14)_ when a requirement's type or
+**Credit is re-stated** _(2026-11-16)_ when a requirement's type or
 `evaluation_excludes_lowest_rating` changes (every evaluation's credit is
 re-counted, or removed where evaluations no longer count), and when a member is
 taken off a shift or marked No-show (that shift's evaluation credit is taken
@@ -1334,7 +1334,7 @@ back). An outside entry moved to an agency that does not evaluate shifts, and a
 program dropped from a combined evaluation's scope, keep earlier credit until
 the evaluation is saved again (`docs/KNOWN_LIMITATIONS.md`).
 
-**Which evaluations a shift needs is frozen at its end** _(2026-11-14)_. The
+**Which evaluations a shift needs is frozen at its end** _(2026-11-15)_. The
 first read after a department shift's `end_time` stores each crew member's
 evaluations in `shifts.evaluation_requirements` (migration `611204dcf8d1`), and
 later reads use it; the crew itself stays live. Outside-shift entries are

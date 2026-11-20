@@ -110,7 +110,13 @@ batch scanner is titled **Distribute Items**.
   purchases; quartermasters approve, decline and fulfil (see
   [Gear Requests](#gear-requests))
 - **Return Requests** — members submit return notices from My Issued Gear;
-  a quartermaster reviews them before processing
+  a quartermaster reviews them before processing. While an item has an open
+  (`requested`) notice, its row on My Issued Gear reads **Quartermaster
+  notified** with the date instead of offering the button again — the same
+  one-open-notice-per-item rule `create_return_request` refuses a second
+  notice by _(W39-9, 2026-11-20)_. The page loads gear requests and return
+  notices independently (`Promise.allSettled`), so one failing no longer
+  blanks the other
 - **Gear Kits** — named bundles (e.g. "New Recruit PPE Kit") issued in one
   operation with per-component tracking. A component can be flagged
   **optional** (`equipment_kit_items.optional`), and an optional component
@@ -539,6 +545,11 @@ results beyond the exact ones are ordered by match quality.
 | `checkin_closes_hours_after` | 12      | 0–72  |
 
 Absence means the defaults, never "off".
+
+Each control saves on its own. Since 2026-11-20 the page says under the
+control what happened to a change: a refused save's reason, an empty or
+unusable entry ("Enter whole hours, from 0 to 24. 2 is kept."), or a number
+folded back into range ("24 is the most allowed. 24 was saved.").
 
 ### Permissions
 

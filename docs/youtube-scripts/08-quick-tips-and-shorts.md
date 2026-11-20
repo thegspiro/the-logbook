@@ -579,10 +579,10 @@ Finalize is blocked]**
 
 **Length:** 50 seconds
 **Extracted From:** New — Training doc 11 (Finance); referenced from Script 7
-**Status:** ⚠️ **Do not film yet.** The behavior is live in the API, but the
-Dues page is read-only in the current release — there is no Reverse Waiver or
-Record Payment button to demonstrate. Hold both shorts until the dues
-management UI ships.
+**Status:** Ready to film. **[PRODUCTION NOTE — 2026-11-16. The hold is
+lifted: Finance → Dues now has **Record payment**, **Waive** and **Reverse
+waiver** buttons on each member's row, and a payment-history (clock) button
+beside them. Shorts 8M and 8N can be filmed as written below.]**
 
 ---
 
@@ -597,17 +597,21 @@ management UI ships.
 > slide that amount into your collection figures, with nothing anywhere saying
 > it had ever been waived. So it's blocked now."
 
-**[SCREEN: Open the dues record; click "Reverse Waiver"; type a reason]**
+**[SCREEN: Finance → Dues, the member's row: click **Reverse waiver**; the
+dialog asks "Why are you reversing it?"; type a reason; click **Reverse
+waiver**]**
 
-> "Reverse the waiver instead. Give a reason — you need one, same as waiving
-> did — and it goes to the audit log along with the original reason."
+> "Reverse the waiver instead. It asks why — you have to say, so a reversal is
+> always deliberate. The audit log records that the waiver was reversed, but
+> neither your reason nor the original waiver reason is kept: free text about
+> why a member couldn't pay doesn't belong in a permanent log."
 
 **[SCREEN: The status badge flips from Waived back to Pending]**
 
 > "The record goes back to whatever the payment history says. Nothing paid?
 > Pending. Something paid earlier? Partial or Paid. Nothing is guessed."
 
-**[SCREEN: Record the payment — it now succeeds]**
+**[SCREEN: Click **Record payment** on the same row — it now succeeds]**
 
 > "Now record the payment. Takes ten seconds, and your books still say what
 > actually happened."
@@ -618,15 +622,15 @@ management UI ships.
 
 **Length:** 45 seconds
 **Extracted From:** New — Training doc 11 (Finance); referenced from Script 7
-**Status:** ⚠️ **Do not film yet.** The behavior is live in the API, but the
-Dues page is read-only in the current release — there is no Reverse Waiver or
-Record Payment button to demonstrate. Hold both shorts until the dues
-management UI ships.
+**Status:** Ready to film. **[PRODUCTION NOTE — 2026-11-16. The hold is
+lifted: Finance → Dues now has **Record payment**, **Waive** and **Reverse
+waiver** buttons on each member's row, and a payment-history (clock) button
+beside them. Shorts 8M and 8N can be filmed as written below.]**
 
 ---
 
-**[SCREEN: The Record Payment form, with a check number in the transaction
-reference field]**
+**[SCREEN: The Record payment dialog, with a check number in the **Reference**
+field]**
 
 > "Slow connection, you hit Save twice. Did that member just get charged
 > double?"
@@ -637,7 +641,8 @@ reference field]**
 > reference. The second submission is recognized as the same payment and
 > ignored."
 
-**[SCREEN: Scroll to the payment history list, showing one entry, not two]**
+**[SCREEN: Click the row's payment-history (clock) button: the list shows one
+entry, not two]**
 
 > "One entry. And that's the other thing worth knowing: payments are a history
 > now, not one running total. Every installment keeps its own method, reference
@@ -2512,8 +2517,12 @@ department timezone must observe daylight saving.
 **Audience:** Members, scheduling officers
 **Added:** 2026-09-30
 
-**[0:00 — SCREEN: My Shifts → Hours → **Shifts with other departments** → **Log
-outside shift**.]**
+**[0:00 — SCREEN: My Shifts → Hours → **All shifts** → **Log outside
+shift**.]**
+
+**[PRODUCTION NOTE — 2026-11-20. The "Shifts with other departments" card was
+folded into the **All shifts** list on the Hours view; the button and the
+dialog are unchanged. Re-shoot the opening frame only.]**
 
 > "Covered a shift on the next town's engine? Log it so it counts toward your
 > hours."
@@ -2669,7 +2678,8 @@ Waiting on column.]**
 > says who it's waiting on."
 
 **[0:20 — SCREEN: An approvals admin opens a row badged **Not assigned to
-you**: **Approve as approvals admin**, the Override reason box.]**
+you**: **Approve as admin** on the row, then the **Approve as approvals admin**
+dialog and its Override reason box.]**
 
 > "An approvals admin can still step in — with a reason, which is logged."
 

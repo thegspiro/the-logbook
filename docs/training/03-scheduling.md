@@ -338,7 +338,7 @@ already taken, whether they sign up or an officer assigns them.
 positions, only a minimum staffing number, members can't sign up past that
 number. An officer can still add an extra person on purpose.
 
-**Custom seats** _(2026-11-04)_. An officer with **Manage scheduling** may seat
+**Custom seats** _(2026-11-04)_. An officer with **Manage schedules** may seat
 anyone in a department-defined seat that nothing grants. A reason is required and
 the action is audited; caps, leave, overlap and EVOC rules still apply. A
 certification can confer a custom seat, and notifications, reminders and printed
@@ -372,38 +372,6 @@ person.
 The **My Shifts** tab shows only your own shifts. It has three views:
 **Upcoming**, **Past** and **Hours**.
 
-**Past view by year and month** _(2026-11-09)_. **Past** opens on your newest
-year. A **Year** dropdown picks another year or **All time**, and the three
-stat tiles follow it. A bar chart shows hours worked by month (by year under
-**All time**); tap a bar to jump to that month, or to open that year. Shifts are
-listed under month headings that stay pinned as you scroll and carry the
-month's shift count and hours. Before, Past was one flat list with no year on
-any card, so a long-serving member saw "Sat, Oct 11" twice with nothing to tell
-the years apart. _Screenshot: replace the Past view image._
-
-**Past now shows credited hours, the same figures as Hours** _(2026-11-17)_.
-Past used to add up the raw time between check-in and check-out. **Hours**
-credits a shift only once an officer closes it out (finalizes it), plus any
-approved pre-shift prep, so a year with a shift still awaiting close-out read
-higher on Past than on Hours, with nothing to say why. Now:
-
-- The tiles read **Hours credited**, **Credited shifts** and **Avg
-  hours/shift**, and match the **Hours** view. Time not yet credited is shown
-  beneath, for example "+12 hrs awaiting close-out".
-- Each shift card says **Xh credited**, or **Xh · awaiting close-out** in amber
-  for a shift an officer has not closed out yet.
-- Month headers read, for example, "4 shifts · 36.5 hrs credited · 12 hrs
-  awaiting close-out".
-- If your credited hours cannot be loaded, a yellow notice says so, the hours
-  read "—", and your shifts are still listed.
-- **Older shifts are no longer cut off.** Past used to load only your 50 most
-  recent attended shifts, so a member with more lost the older ones, and their
-  hours, without warning. Every shift is now loaded.
-
-_Screenshot: create the Past view image (still outstanding from
-2026-11-09) after this change, with the **Hours credited** tiles and an amber
-**awaiting close-out** pill in frame._
-
 For each shift you see:
 
 - the date and time;
@@ -428,14 +396,39 @@ month headers such as **December 2026 · 2 shifts**. The year is in every header
 so a schedule that runs past New Year reads December, then January. The cards
 and their Confirm, Decline, Swap and Details actions are unchanged.
 
-**Past** opens on your newest year. Pick another year, or **All time**, from the
-**Year** dropdown; the three stat tiles follow it. A bar chart shows hours worked
-by month (by year under **All time**), and tapping a bar jumps to that month.
-Shifts are listed under month headers carrying the month's shift count and
-credited hours, plus any hours awaiting close-out. Each shift's pill reads **Xh
-credited** or **Xh · awaiting close-out** _(2026-11-17; it read "Xh worked")_. Shifts you
-declined or that were cancelled no longer appear in Past, because you did not work
-them; a seat you declined but then worked still shows, with its hours.
+**Past view by year and month** _(2026-11-09)_. **Past** opens on your newest
+year. Pick another year, or **All time**, from the **Year** dropdown; the three
+stat tiles follow it. A bar chart shows hours worked by month (by year under
+**All time**); tap a bar to jump to that month, or to open that year. Shifts are
+listed under pinned month headers carrying the month's shift count and credited
+hours, plus any hours awaiting close-out. Each shift's pill reads **Xh
+credited** or **Xh · awaiting close-out** _(2026-11-17; it read "Xh worked")_.
+Shifts you declined or that were cancelled no longer appear in Past, because you
+did not work them; a seat you declined but then worked still shows, with its
+hours.
+
+**Past now shows credited hours, the same figures as Hours** _(2026-11-17)_.
+Past used to add up the raw time between check-in and check-out. **Hours**
+credits a shift only once an officer closes it out (finalizes it), plus any
+approved pre-shift prep, so a year with a shift still awaiting close-out read
+higher on Past than on Hours, with nothing to say why. Now:
+
+- The tiles read **Hours credited**, **Credited shifts** and **Avg
+  hours/shift**, and match the **Hours** view. Time not yet credited is shown
+  beneath, for example "+12 hrs awaiting close-out".
+- Each shift card says **Xh credited**, or **Xh · awaiting close-out** in amber
+  for a shift an officer has not closed out yet.
+- Month headers read, for example, "4 shifts · 36.5 hrs credited · 12 hrs
+  awaiting close-out".
+- If your credited hours cannot be loaded, a yellow notice says so, the hours
+  read "—", and your shifts are still listed.
+- **Older shifts are no longer cut off.** Past used to load only your 50 most
+  recent attended shifts, so a member with more lost the older ones, and their
+  hours, without warning. Every shift is now loaded.
+
+_Screenshot: create the Past view image (still outstanding from
+2026-11-09) after this change, with the **Hours credited** tiles and an amber
+**awaiting close-out** pill in frame._
 
 _Added 2026-11-10._ **End-of-shift summary.** The email and the in-app notice
 list call types as counts, most frequent first ("3 × EMS, 1 × Fire Alarm"),
@@ -455,8 +448,9 @@ permission. It shows only your own record.
 
 - **Three cards:** **This month**, **This year** and **All time**. If you
   pick another year, the middle card is titled with that year.
-- **A table** below lists every month of the chosen year: **Shifts**,
-  **Hours**, **Calls**, and a **vs. busiest month** bar.
+- **Show as table** opens a table of every month of the chosen year:
+  **Shifts**, **Hours**, **Calls**, and a **vs. busiest month** bar. (Until
+  2026-11-20 the table was always shown; a chart now leads, below.)
 - **Hours count once an officer finalizes the shift.** This matches the
   department's own report, so your number and your officer's number agree.
 - **Hours on shifts not yet closed out** show on their own line, for example
@@ -464,9 +458,54 @@ permission. It shows only your own record.
   They are never added into your total, so your total never drops without a
   reason.
 - **No Calls column** appears if your department does not track calls.
-- **Shifts with other departments** show beside your totals as "+N hrs with
-  other departments". See
+- **Shifts with other departments** are added into each card's total, with
+  the split shown under it. See
   [Shifts with Other Departments](#shifts-with-other-departments).
+
+**The Hours view was redesigned on 2026-11-20.** What changed, and why:
+
+- **The three cards now total everything you worked.** The big number on
+  **This month**, **This year** and **All time** is your department's credited
+  hours **plus** your counted shifts with other departments, and the shift and
+  call counts beneath it add both too. A thin bar under the number splits it:
+  violet for your own department, blue for the others. When you have outside
+  hours, the line under the bar reads, for example, "36 FCVFD" on the left and
+  "+24 with other departments" on the right. Before, the card showed only your own department's hours with
+  the outside hours as a separate "+N" line, so a member who rides mostly with
+  a neighbour saw a misleadingly small number. **Your department's own report
+  is unchanged**: the Member Hours report still keeps outside hours in their
+  own column, and hours awaiting close-out are still never added in.
+- **Previous year / Next year arrows** step through the years you have shifts
+  in, beside the year picker.
+- **"<year> at a glance"** is a bar chart of the year by month, stacked the
+  same two colours. Select a month's bar to open that month in the list below
+  and highlight its shifts. Under the chart: **Busiest month**, **Months with
+  shifts** ("9 of 12"), **Avg per active month**.
+- **The month-by-month table is now behind Show as table** (Hide table to
+  close it). It has the same columns as before, plus "(+N outside)" in the
+  Hours cell for months with outside shifts.
+- **All shifts** replaces the separate **Shifts with other departments** card.
+  It is one list, newest first, of every shift you worked: your department's
+  (violet edge, labelled with the department's short name) and other
+  departments' (blue edge, labelled with that department). Each year is a
+  row you open, showing its counts, its hours and any hours awaiting
+  close-out. Each shift shows its day, times, hours, unit or template,
+  position, calls, and **On call**, **Awaiting close-out**, **Awaiting
+  approval** or **Not counted** where they apply. **All**, your department, and
+  **Other departments** filter the list. **Log outside shift**, and **Edit**,
+  **Delete** and **Preceptor link** on your own outside entries, now live here.
+- **The department's short name** is the label beside your own department's
+  shifts. An administrator sets it under Settings → Profile → **Short Name**
+  (see [Administration](./08-admin-reports.md#general-settings)). If nobody
+  has, the full department name is used.
+
+The same layout is used for a member's **Shift & Call History** on their
+profile, for the member and for officers with **View scheduling reports**;
+an officer sees the list but not **Log outside shift**.
+
+_Screenshots: `03-104-my-shifts-hours`, `03-108-member-outside-shifts` and
+`03-113-member-hours-with-outside` show the old layout and need replacing (see
+the 2026-11-20 rows in `SCREENSHOT_CURRENCY.md`)._
 
 ![My Shifts on its Hours view: cards for this month, this year and all time, above the month-by-month table with its vs. busiest month bar column](./images/03-104-my-shifts-hours.png)
 
@@ -557,9 +596,11 @@ member compare lists and see different shifts, that is why.
 If you ride a neighbouring department's apparatus, you can log that time so
 it counts toward your hours.
 
-**Where:** **My Shifts → Hours**, in the **Shifts with other departments**
-card (_"Log time on another jurisdiction's apparatus so it counts toward your
-hours."_). Select **Log outside shift**.
+**Where:** **My Shifts → Hours**, in the **All shifts** list. Select **Log
+outside shift**. (Until 2026-11-20 this was a separate **Shifts with other
+departments** card; your outside entries are now listed among your own
+department's shifts, with a blue edge and the other department's name, and
+**Other departments** shows them alone.)
 
 1. Enter the **Start** and **End**. **+12 hours** and **+24 hours** set the
    end from the start, for standard shifts. If you move the start, the end
@@ -609,16 +650,30 @@ the shift carries a badge: **Evaluation needed**, **Evaluation started** or
 officer enters it. Nothing about logging the shift changes, and nothing waits
 on the evaluation.
 
+**Preceptor link** _(2026-11-13)_. While a shift reads **Evaluation needed**
+or **Evaluation started**, it has a **Preceptor link** button. It opens a
+dialog with a QR code and the **Link**, which you can **Copy**, or type the
+**Preceptor's email (optional)** and select **Make and email link**. The
+preceptor opens it without an account, enters their name, fills out the form
+and submits it once. The link works for the number of days your department
+sets after the shift ends (7 by default) and says until when. **Make a new
+link** stops the old one; **Turn off link** stops it outright. A training
+officer can make the same link. A shift still **Awaiting approval** can be
+evaluated too, but the credit waits for the approval. See
+[Training > Shifts on an outside agency's unit](./02-training.md#shifts-on-an-outside-agencys-unit-2026-11-02).
+
 > **What if an old entry has only a date and hours?** Some entries were logged
 > that way. They open with _"This shift was logged as a date and hours,
 > without its start and end times."_ Select **Enter start and end times
 > instead** to add the times.
 
-**Where it shows up.** Outside hours appear **beside** your own department's
-figures, not inside them:
+**Where it shows up.**
 
-- "+N hrs with other departments" on your **Hours** view;
-- an **Outside Hours** column on the Member Hours report.
+- On your **Hours** view _(changed 2026-11-20)_, outside hours are **added
+  into** the big number on each card, with the split shown under it ("36
+  FCVFD" and "+24 with other departments"), and the shifts are in **All shifts**.
+- On the Member Hours report they stay **beside** your department's figures,
+  in an **Outside Hours** column.
 
 The Shift Compliance report **does** add them into each member's shift and
 hour totals.
@@ -1460,7 +1515,9 @@ work, see [Equipment Check System](#equipment-checks).
 training program, or if they were assigned to a **Training position** seat
 (see [Training positions](#training-positions-on-the-crew)). Members with
 neither get no draft. If one trainee's draft fails, the others still get
-theirs.
+theirs. Only crew who took the shift (**Assigned** or **Confirmed**) get one;
+a trainee marked **No-show**, or still **Pending**, gets no draft
+_(2026-11-14)_.
 
 #### After close-out
 
@@ -2069,17 +2126,15 @@ Drafts are also made automatically when a shift is closed out. See
 Shift reports are built to survive a poor signal.
 
 **Your work is saved on the device as you type.** This covers the shift you
-picked, all the fields, who is ticked, each trainee's evaluation, the calls
-typed for each member, and the remarks. If the connection drops, the tab
-closes or the browser crashes, open the same shift again and your work comes
-back.
+picked, all the fields, who is ticked, each trainee's evaluation, each
+member's calls and the remarks. If the connection drops, the tab closes or the
+browser crashes, open the same shift again and your work comes back.
 
-_(2026-11-14)_ The same is true when you leave the report to fill in a
-trainee's shift evaluation and come back. Each trainee's ratings, strengths,
-skills and tasks, and the per-member calls, are restored, not only the crew
-ticks and remarks. The form is saved the moment you leave it, so following an
-evaluation link straight after typing loses nothing. Restored entries are kept
-only for crew still on the shift.
+**Going to a shift evaluation and back keeps it all** _(2026-11-14)_. The
+report also saves the moment you leave it, for example by following a
+trainee's evaluation link. Coming back restores every trainee's rating, notes,
+skills and tasks, and each member's calls, not just the crew and the
+narrative. Crew no longer on the shift are skipped.
 
 - The device keeps up to 20 saved forms. When there are more, the oldest is
   removed.
@@ -2307,13 +2362,20 @@ Pick one section at a time from the list. There are seven:
 > out anyway** and give a reason, which goes on the record. The box only
 > applies while **Enable post-shift validation** is on.
 >
+> A trainee whose program has a required shift evaluation form blocks
+> close-out the same way until the evaluation is submitted. The close-out
+> screen lists them under _"A shift evaluation is still needed for:"_ with
+> **Open the shift report to fill them in**. See
+> [Training > Shift Evaluations](./02-training.md#shift-evaluations-2026-10-31--11-01).
+>
 > **Who counts as crew for this** _(2026-11-14)_: only members whose
 > assignment is **Assigned** or **Confirmed**. A trainee marked **No-show**,
 > or still **Pending**, no longer blocks close-out, is not written a draft
 > report, and is not owed a shift evaluation for a shift they did not work.
-> Declined and cancelled members were already left out.
+> Declined and cancelled members were already left out. The Shift Completion
+> Report still lists pending members, so you can file for one who did work.
 >
-> **Evaluations already submitted** _(2026-11-14)_: taking a member off the
+> **Evaluations already submitted** _(2026-11-16)_: taking a member off the
 > shift, or marking them **No-show**, takes back the program credit that
 > shift's evaluation gave them. Once the shift's end time passes, which
 > evaluations it needs is fixed, so changing evaluation settings or a member's
@@ -3348,6 +3410,21 @@ of a pattern card on the Patterns tab with its **Edit** button._
 
 Select **New Template** to create one, or select a template to edit it.
 
+**The template dialog** _(2026-11-20)_:
+
+- **Closing asks first.** Escape, the X and **Cancel** ask before throwing
+  typed changes away (**Discard changes**). A dialog you have not changed
+  closes at once.
+- **The name counts toward 200 characters.** A longer name used to be
+  accepted by the form and then fail when saved.
+- **Editing saves what it can.** If one field is refused (a blank name, no
+  vehicle on a specialty template, a missing time, a crew below one), the rest
+  of your changes are still saved, the refused field keeps its stored value
+  and stays flagged, and the dialog stays open with _"Template saved, except
+  …"_. Fix the field and save again. A refused start or end time also holds
+  back the shift length, so a template never stores a length its times
+  contradict. A **new** template is created only once nothing is refused.
+
 **Deleting a template or a basic vehicle.** A shift template used by any shift
 or pattern, and a basic apparatus named by any template, shift, pre-work
 session, equipment check or call, is **deactivated** rather than deleted, so
@@ -3728,6 +3805,15 @@ computer never sees your values.
 | **Department Defaults**                                   | **Default Shift Duration (hours)** and **Default Min Staffing**. Since 2026-10-31 a new shift template starts with them: the end time is set that many hours after the 08:00 start, and minimum staffing is filled in. The built-in Day, Night and 24 Hour shift types use the minimum staffing too. Overtime is set under **Overtime advisory**, not here |
 | **Position Names**                                        | Add your own seats under **Add Custom Position**, and tick the **Certifications that qualify** for each _(2026-11-05)_. See [Your department's own seats](#your-departments-own-seats). The on/off ticks for built-in seats are saved but marked **Not in effect yet**: templates and shifts still offer the full built-in list                                                                  |
 
+**The typed numbers are checked** _(2026-11-20)_. **Hours limit** (0 to 336),
+**Window (days)** (1 to 31) and **Weeks ahead** (1 to 52) must be whole
+numbers. A value outside that is named on its own box (_"Enter a whole number
+from 1 to 31."_) and is not sent. Before, clearing the **Hours limit** box saved
+it as 0, which quietly turned the overtime advisory off. Each setting saves on
+its own, so if one is refused the other on the same card still saves, and the
+card says _"Saved, except the flagged setting, which keeps its stored value."_
+Pressing Enter in a box saves its card.
+
 ### What the settings do not do
 
 - **There is no "Require assignment confirmation" setting.** Assignments are
@@ -3748,6 +3834,13 @@ once email is ticked.
 | **Shift Assignment Alerts**        | The member, when an officer assigns them to a shift                                             |
 | **Start-of-Shift Reminders**       | Members assigned to a shift that is about to start                                              |
 | **Equipment Check Alerts**         | Chosen ranks and the shift officer, when an equipment check fails                               |
+
+**Shift Decline / Drop Alerts** _(2026-11-11)_. A rank you pick reaches every
+current member who holds that position, including a Chief seeded as **Fire
+Chief**; former members are never told. A department that has never saved this
+group gets the boxes the screen already shows ticked (**Chief**, **Deputy
+Chief** and **Captain**). Before, those departments told nobody. Equipment
+Check Alerts match ranks the same way.
 
 **The section shows what is saved** _(2026-11-18)_. Before this date the
 Notifications section never received the department's saved choices: it
@@ -4885,6 +4978,10 @@ rather than starting from zero. It needs `scheduling.manage`.
    ordinary row edit, so **Revert** still brings back the file's value. An
    excluded row keeps its plain text.
 4. Choose **Commit**. The dialog says plainly that a commit **cannot be undone**.
+   The exception _(2026-11-19)_: batches sent here by a **Historical Data
+   Import** can be undone together from that import's page, with **Undo this
+   step** under its shift hours step. See
+   [Integrations > Undoing a step](./16-integrations.md#undoing-a-step).
 
 How it reads your file: an end time at or before the start time means the shift
 crossed midnight; back-to-back entries for one member on one unit with a gap of
