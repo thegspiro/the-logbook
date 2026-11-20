@@ -31,8 +31,10 @@ from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
     NOT_YET_HELD_STATUS,
+    ComplianceGrading,
     EvaluationCredits,
     HeldSession,
+    _load_compliance_config,
     apply_recency,
     biannual_window,
     catch_up_deadline,
@@ -40,14 +42,12 @@ from app.services.training_compliance import (
     counts_shift_attendance,
     evaluate_member_requirement_detail,
     fallback_record_matches,
-    get_org_include_current_month,
     is_evaluation_credited,
     is_session_attendance,
     load_credited_shift_dates,
     load_evaluation_credits,
     load_held_sessions,
     member_join_date,
-    requirement_applies_to_user,
 )
 from app.services.training_period import (
     effective_include_current_month,
@@ -156,9 +156,14 @@ class CompetencyMatrixService:
         # against, so the two views agree about every member.
         today = await resolve_org_today(self.db, organization_id)
         expiring_threshold = today + timedelta(days=90)
-        org_include_current = await get_org_include_current_month(
-            self.db, str(organization_id)
+        # Which requirements grade each member, and the current-month
+        # cut-off, as the compliance matrix resolves them: one config load
+        # (owner decision 2026-11-20, CLAUDE.md pitfall 29). There is no
+        # member standing here, so the profile narrows cells only.
+        grading = ComplianceGrading.from_config(
+            await _load_compliance_config(self.db, str(organization_id))
         )
+        org_include_current = grading.include_current_month
         shifts_by_user = await load_credited_shift_dates(
             self.db,
             str(organization_id),
@@ -184,9 +189,10 @@ class CompetencyMatrixService:
         expiring_soon_count = 0
         expired_count = 0
         not_started_count = 0
-        # Cells that grade nobody: the requirement does not apply to the member
-        # (type, role, grandfathering cutoff), or an existing member is still
-        # inside its catch-up period. Shown, but kept out of readiness.
+        # Cells that grade nobody: the member's compliance profile does not
+        # list the requirement, it does not apply to the member (type, role,
+        # grandfathering cutoff), or an existing member is still inside its
+        # catch-up period. Shown, but kept out of readiness.
         ungraded_count = 0
 
         # Build matrix
@@ -208,10 +214,15 @@ class CompetencyMatrixService:
             member_waivers = waivers_by_user.get(uid, [])
             statuses = {}
             join_date = member_join_date(member)
+            # for_member over the requested columns: with a requirement_ids
+            # filter this is the profile's list intersected with it.
+            graded = {
+                str(r.id) for r in grading.for_member(member, requirements).requirements
+            }
 
             for req in requirements:
                 rid = str(req.id)
-                if not requirement_applies_to_user(req, member):
+                if rid not in graded:
                     statuses[rid] = {
                         "status": "not_applicable",
                         "expiration_date": None,

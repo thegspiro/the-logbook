@@ -922,9 +922,13 @@ class ComplianceSummary(BaseModel):
     user_id: UUID
     requirements_met: int
     requirements_total: int
+    # Shown for information; they do not drive compliance_status. They count
+    # every certificate record, including ones a renewal has superseded.
     certs_expiring_soon: int  # Within 90 days
     certs_expired: int
-    # "green", "yellow", "red", "exempt", "not_applicable"
+    # The member's compliance matrix standing in traffic-light form:
+    # compliant "green", at_risk "yellow", non_compliant "red",
+    # "not_applicable"; or "exempt" for a compliance-exempt member.
     compliance_status: str
     # "Compliant", "At Risk", "Non-Compliant", "Exempt", "Not Applicable"
     compliance_label: str

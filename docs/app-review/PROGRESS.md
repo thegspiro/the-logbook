@@ -39,7 +39,7 @@ from its open list.
 
 | #   | Feature                    | Prefix | Status |
 | --- | -------------------------- | ------ | ------ |
-| B1  | medical-screening          | MS2    | ⬜     |
+| B1  | medical-screening          | MS2    | ✅     |
 | B2  | apparatus                  | AP2    | ⬜     |
 | B3  | inventory                  | INV2   | ⬜     |
 | B4  | facilities                 | FAC2   | ⬜     |
@@ -3628,3 +3628,16 @@ secrets redacted for non-admins. See
   resolved; OPS-7 accepted by the owner. Gate: typecheck, lint, flake8, black and
   the docs link check clean; no application code changed. See platform-ops.md →
   Pass 4. Tier A's fourth pass is complete; next: B1 medical-screening.
+- **B1 medical-screening ✅ (pass 6).** Reviewed the three commits since the
+  security rotation's pass 15 (expiry reminders, `screening_type` and
+  `requirement_id` encrypted, the requirement-link race fix) and the open list,
+  which is now empty (MS-13 subject validation, MS-17, MS-6 and the grace
+  period all resolved). Verified: all 16 routes gated; the expiry reminder is
+  safe to run twice and keeps the screening out of plaintext at rest; the
+  delete-versus-link race is serialized. **3 fixes:** MS2-11 (LOW), the officer
+  page offered Add, Edit and Delete to view-only readers, which the server
+  refuses — now shown only with `.manage`, test seen to fail first; MS2-10 (LOW,
+  docs), the wiki said no expiry email is sent; MS2-9 (LOW, docs), a service
+  comment said the officer screens were not built. Gate: typecheck, lint,
+  flake8, black and the docs link check clean; 88 medical-screening tests pass.
+  See medical-screening.md → Pass 6. Next: B2 apparatus.

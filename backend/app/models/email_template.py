@@ -126,6 +126,9 @@ class EmailTemplateType(str, enum.Enum):
     OPEN_ENDED_LEAVE_DIGEST = "open_ended_leave_digest"
     LEAVE_REQUEST_SUBMITTED = "leave_request_submitted"
     LEAVE_REQUEST_DENIED = "leave_request_denied"
+    # The morning after an outreach event ends with no guest headcount; see
+    # email_templates_outreach.py.
+    GUEST_HEADCOUNT_REMINDER = "guest_headcount_reminder"
     CUSTOM = "custom"
 
 
