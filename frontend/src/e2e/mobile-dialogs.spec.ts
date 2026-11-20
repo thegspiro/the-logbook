@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createRequire } from 'node:module';
-import { NARROW, PHONE, ROUTES, signInForRoute } from './mobile-routes';
+import { NARROW, PHONE, routesInPart, signInForRoute } from './mobile-routes';
 import type { SignInState } from './mobile-routes';
 
 /**
@@ -55,205 +55,233 @@ const AA_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
  */
 const MAX_OPENERS_PER_ROUTE = 6;
 
+/**
+ * How many tests the pass is cut into; see `routesInPart` in mobile-routes.ts.
+ * Changing it moves the `@sweep` test count that ci.yml's matrix is derived
+ * from.
+ */
+const PARTS = 3;
+
+/**
+ * The fewest dialogs a part must find. The undivided pass required six of
+ * the whole route list, as a guard against measuring nothing after a refactor
+ * renames the create controls; a third of the routes owes a third of that.
+ */
+const MIN_DIALOGS_PER_PART = 2;
+
 test.describe('mobile dialogs', () => {
   // No retries. Every request is mocked, so a failure here is a finding, not a
   // flake, and a re-run costs the shared `frontend-e2e` budget twice over.
   test.describe.configure({ retries: 0 });
 
-  test('every dialog is named, labelled and fits a phone @sweep', async ({ page }) => {
-    // Measured at 7.5 min on a dedicated CI runner (2026-10-04); 2x that, the
-    // multiple every @sweep test uses. The previous 30 min was 4x and predated
-    // the matrix split, when this shared a runner with the whole suite.
-    //
-    // Raised on 2026-11-13, by owner decision, to 2x the measured run as the
-    // route list grows. 9.8 min on `main` (run 43208484077, 2026-11-12); 12.1
-    // min once the finance screens joined (#4267, run 43415858920); the nine
-    // grants screens add ~5% (0.78 of 14.9 min, timed per route locally), so
-    // ~12.7 min, and 2x that would have been 26. This PR's own run measured
-    // 15.1 min with every route in (#4269, run 43444576216), so 2x is 31.
-    test.setTimeout(1_860_000);
+  for (let part = 0; part < PARTS; part++) {
+    const routes = routesInPart(part, PARTS);
+    // The route filter in mobile-routes.ts can leave a slice empty, and an
+    // empty slice has no dialogs to find.
+    if (routes.length === 0) continue;
 
-    // A dialog still fading in when axe runs is measured through a partial
-    // opacity: on a slow runner the Create Shift dialog reported 38 contrast
-    // failures, every element in it, and passed on the same commit's previous
-    // run. index.css collapses every animation and transition to 0.01ms under
-    // reduced motion, as mobile-accessibility.spec.ts already relies on.
-    await page.emulateMedia({ reducedMotion: 'reduce' });
+    test(`every dialog is named, labelled and fits a phone, part ${part + 1} of ${PARTS} @sweep`, async ({ page }) => {
+      // Measured at 7.5 min on a dedicated CI runner (2026-10-04); 2x that, the
+      // multiple every @sweep test uses. The previous 30 min was 4x and predated
+      // the matrix split, when this shared a runner with the whole suite.
+      //
+      // Raised on 2026-11-13, by owner decision, to 2x the measured run as the
+      // route list grows. 9.8 min on `main` (run 43208484077, 2026-11-12); 12.1
+      // min once the finance screens joined (#4267, run 43415858920); the nine
+      // grants screens add ~5% (0.78 of 14.9 min, timed per route locally), so
+      // ~12.7 min, and 2x that would have been 26. This PR's own run measured
+      // 15.1 min with every route in (#4269, run 43444576216), so 2x is 31.
+      //
+      // Split into PARTS tests on 2026-11-19, when the whole pass was a 30-minute
+      // CI job: a third is about 10 minutes, and 2x that is 20. An estimate from
+      // the whole, to be replaced by measured per-part times.
+      test.setTimeout(1_200_000);
 
-    let granted: SignInState | null = null;
+      // A dialog still fading in when axe runs is measured through a partial
+      // opacity: on a slow runner the Create Shift dialog reported 38 contrast
+      // failures, every element in it, and passed on the same commit's previous
+      // run. index.css collapses every animation and transition to 0.01ms under
+      // reduced motion, as mobile-accessibility.spec.ts already relies on.
+      await page.emulateMedia({ reducedMotion: 'reduce' });
 
-    const unnamed: string[] = [];
-    const axeFailures: string[] = [];
-    const unreachable: string[] = [];
-    const overflowing: string[] = [];
-    const measured: string[] = [];
-    const seen = new Set<string>();
+      let granted: SignInState | null = null;
 
-    /**
-     * Click the nth opener on the current route and measure whatever it opens.
-     *
-     * Indexed rather than held as an element handle: Escape re-renders the page
-     * body on several routes, so a handle taken before the first dialog is
-     * stale by the second. The order is stable within a route because the query
-     * is the same and the landing state is restored between dialogs; the label
-     * is re-read after the click so the report names what was actually opened.
-     */
-    const measureNthOpener = async (routePath: string, index: number): Promise<void> => {
-      const opened = await page.evaluate(
-        ({ source, nth }) => {
+      const unnamed: string[] = [];
+      const axeFailures: string[] = [];
+      const unreachable: string[] = [];
+      const overflowing: string[] = [];
+      const measured: string[] = [];
+      const seen = new Set<string>();
+
+      /**
+       * Click the nth opener on the current route and measure whatever it opens.
+       *
+       * Indexed rather than held as an element handle: Escape re-renders the page
+       * body on several routes, so a handle taken before the first dialog is
+       * stale by the second. The order is stable within a route because the query
+       * is the same and the landing state is restored between dialogs; the label
+       * is re-read after the click so the report names what was actually opened.
+       */
+      const measureNthOpener = async (routePath: string, index: number): Promise<void> => {
+        const opened = await page.evaluate(
+          ({ source, nth }) => {
+            const re = new RegExp(source, 'i');
+            const root = document.getElementById('main-content') ?? document.body;
+            const el = [...root.querySelectorAll('button, [role="button"]')].filter((candidate) => {
+              const box = candidate.getBoundingClientRect();
+              if (box.width <= 0 || box.height <= 0) return false;
+              const name = ((candidate as HTMLElement).innerText || candidate.getAttribute('aria-label') || '').trim();
+              return re.test(name);
+            })[nth];
+            if (!el) return null;
+            const label = ((el as HTMLElement).innerText || el.getAttribute('aria-label') || '').trim().slice(0, 40);
+            (el as HTMLElement).click();
+            return label;
+          },
+          { source: OPENER.source, nth: index }
+        );
+
+        if (!opened) return;
+        // A route often carries the same opener twice — a header button and the
+        // empty state's own call to action — and measuring one dialog twice just
+        // doubles its findings in the report.
+        const key = `${routePath}::${opened}`;
+        if (seen.has(key)) {
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(200);
+          return;
+        }
+        seen.add(key);
+        await page.waitForTimeout(700);
+
+        const shape = await page.evaluate(() => {
+          const dialogs = [...document.querySelectorAll('[role="dialog"], [aria-modal="true"]')].filter((d) => {
+            const b = d.getBoundingClientRect();
+            return b.width > 0 && b.height > 0;
+          });
+          const panel = dialogs[dialogs.length - 1];
+          if (!panel) return null;
+          const viewportHeight = window.innerHeight;
+          const inner =
+            [...panel.querySelectorAll('*')].find((el) => {
+              const b = el.getBoundingClientRect();
+              return b.height > 80 && b.width > 100;
+            }) ?? panel;
+          const box = inner.getBoundingClientRect();
+          // The end is reachable when anything from the measured element up to
+          // and including the dialog element scrolls. Where role="dialog" sits
+          // on the capped, scrolling panel itself, `inner` is the form inside it:
+          // taller than the screen and not scrolling on its own, yet every field
+          // is reached by scrolling the panel around it.
+          let scrolls = false;
+          for (let el: Element | null = inner; el; el = el === panel ? null : el.parentElement) {
+            const overflowY = getComputedStyle(el).overflowY;
+            if (overflowY === 'auto' || overflowY === 'scroll') scrolls = true;
+          }
+          return {
+            named: !!(panel.getAttribute('aria-label')?.trim() || panel.getAttribute('aria-labelledby')?.trim()),
+            // Both ends must be reachable: a panel centred by flex that outgrows
+            // the viewport overflows in both directions and no scrollbar reaches
+            // either edge, unless the panel itself scrolls.
+            strandedEnd: (box.top < -1 || box.bottom > viewportHeight + 1) && !scrolls,
+            top: Math.round(box.top),
+            bottom: Math.round(box.bottom),
+            viewportHeight,
+          };
+        });
+
+        if (!shape) return;
+        measured.push(`${routePath} — "${opened}"`);
+
+        if (!shape.named) unnamed.push(`${routePath} — "${opened}" dialog has no accessible name`);
+        if (shape.strandedEnd) {
+          unreachable.push(
+            `${routePath} — "${opened}" panel spans ${shape.top}..${shape.bottom} in a ${shape.viewportHeight}px viewport and does not scroll`
+          );
+        }
+
+        await page.addScriptTag({ path: AXE_PATH });
+        const violations = await page.evaluate(async (tags) => {
+          const axe = (
+            window as unknown as {
+              axe: {
+                run: (
+                  context: Document,
+                  options: unknown
+                ) => Promise<{ violations: Array<{ id: string; help: string; nodes: unknown[] }> }>;
+              };
+            }
+          ).axe;
+          const result = await axe.run(document, {
+            runOnly: { type: 'tag', values: tags },
+            resultTypes: ['violations'],
+          });
+          return result.violations.map((v) => `${v.id} x${v.nodes.length} — ${v.help}`);
+        }, AA_TAGS);
+        if (violations.length) axeFailures.push(`${routePath} — "${opened}":\n    ${violations.join('\n    ')}`);
+
+        await page.setViewportSize(NARROW);
+        await page.waitForTimeout(300);
+        const spill = await page.evaluate(() => {
+          const dialogs = [...document.querySelectorAll('[role="dialog"], [aria-modal="true"]')];
+          const panel = dialogs[dialogs.length - 1];
+          if (!panel) return [];
+          const viewportWidth = document.documentElement.clientWidth;
+          return [...panel.querySelectorAll('*')]
+            .filter((el) => {
+              if (el.closest('[data-mobile-scroll-region]')) return false;
+              const b = el.getBoundingClientRect();
+              return b.width > 0 && b.height > 0 && (b.left < -1 || b.right > viewportWidth + 1);
+            })
+            .slice(0, 4)
+            .map((el) => `${el.tagName.toLowerCase()} "${((el as HTMLElement).innerText || '').trim().slice(0, 30)}"`);
+        });
+        if (spill.length)
+          overflowing.push(`${routePath} — "${opened}" at ${NARROW.width}px:\n    ${spill.join('\n    ')}`);
+
+        await page.setViewportSize(PHONE);
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(200);
+      };
+
+      for (const route of routes) {
+        granted = await signInForRoute(page, route, granted);
+
+        await page.setViewportSize(PHONE);
+        await page.goto(route.path);
+        await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
+        await page.waitForTimeout(350);
+
+        // Every opener on the route, not just the first. Medical supplies offers
+        // both "Add supply" and "Receive delivery"; measuring only the first left
+        // the second free to lose its accessible name or outgrow the viewport
+        // under a pass named "every dialog".
+        const openerCount = await page.evaluate((source) => {
           const re = new RegExp(source, 'i');
           const root = document.getElementById('main-content') ?? document.body;
-          const el = [...root.querySelectorAll('button, [role="button"]')].filter((candidate) => {
+          return [...root.querySelectorAll('button, [role="button"]')].filter((candidate) => {
             const box = candidate.getBoundingClientRect();
             if (box.width <= 0 || box.height <= 0) return false;
             const name = ((candidate as HTMLElement).innerText || candidate.getAttribute('aria-label') || '').trim();
             return re.test(name);
-          })[nth];
-          if (!el) return null;
-          const label = ((el as HTMLElement).innerText || el.getAttribute('aria-label') || '').trim().slice(0, 40);
-          (el as HTMLElement).click();
-          return label;
-        },
-        { source: OPENER.source, nth: index }
-      );
+          }).length;
+        }, OPENER.source);
 
-      if (!opened) return;
-      // A route often carries the same opener twice — a header button and the
-      // empty state's own call to action — and measuring one dialog twice just
-      // doubles its findings in the report.
-      const key = `${routePath}::${opened}`;
-      if (seen.has(key)) {
-        await page.keyboard.press('Escape');
-        await page.waitForTimeout(200);
-        return;
-      }
-      seen.add(key);
-      await page.waitForTimeout(700);
-
-      const shape = await page.evaluate(() => {
-        const dialogs = [...document.querySelectorAll('[role="dialog"], [aria-modal="true"]')].filter((d) => {
-          const b = d.getBoundingClientRect();
-          return b.width > 0 && b.height > 0;
-        });
-        const panel = dialogs[dialogs.length - 1];
-        if (!panel) return null;
-        const viewportHeight = window.innerHeight;
-        const inner =
-          [...panel.querySelectorAll('*')].find((el) => {
-            const b = el.getBoundingClientRect();
-            return b.height > 80 && b.width > 100;
-          }) ?? panel;
-        const box = inner.getBoundingClientRect();
-        // The end is reachable when anything from the measured element up to
-        // and including the dialog element scrolls. Where role="dialog" sits
-        // on the capped, scrolling panel itself, `inner` is the form inside it:
-        // taller than the screen and not scrolling on its own, yet every field
-        // is reached by scrolling the panel around it.
-        let scrolls = false;
-        for (let el: Element | null = inner; el; el = el === panel ? null : el.parentElement) {
-          const overflowY = getComputedStyle(el).overflowY;
-          if (overflowY === 'auto' || overflowY === 'scroll') scrolls = true;
+        for (let index = 0; index < Math.min(openerCount, MAX_OPENERS_PER_ROUTE); index++) {
+          await measureNthOpener(route.path, index);
         }
-        return {
-          named: !!(panel.getAttribute('aria-label')?.trim() || panel.getAttribute('aria-labelledby')?.trim()),
-          // Both ends must be reachable: a panel centred by flex that outgrows
-          // the viewport overflows in both directions and no scrollbar reaches
-          // either edge, unless the panel itself scrolls.
-          strandedEnd: (box.top < -1 || box.bottom > viewportHeight + 1) && !scrolls,
-          top: Math.round(box.top),
-          bottom: Math.round(box.bottom),
-          viewportHeight,
-        };
-      });
-
-      if (!shape) return;
-      measured.push(`${routePath} — "${opened}"`);
-
-      if (!shape.named) unnamed.push(`${routePath} — "${opened}" dialog has no accessible name`);
-      if (shape.strandedEnd) {
-        unreachable.push(
-          `${routePath} — "${opened}" panel spans ${shape.top}..${shape.bottom} in a ${shape.viewportHeight}px viewport and does not scroll`
-        );
       }
 
-      await page.addScriptTag({ path: AXE_PATH });
-      const violations = await page.evaluate(async (tags) => {
-        const axe = (
-          window as unknown as {
-            axe: {
-              run: (
-                context: Document,
-                options: unknown
-              ) => Promise<{ violations: Array<{ id: string; help: string; nodes: unknown[] }> }>;
-            };
-          }
-        ).axe;
-        const result = await axe.run(document, { runOnly: { type: 'tag', values: tags }, resultTypes: ['violations'] });
-        return result.violations.map((v) => `${v.id} x${v.nodes.length} — ${v.help}`);
-      }, AA_TAGS);
-      if (violations.length) axeFailures.push(`${routePath} — "${opened}":\n    ${violations.join('\n    ')}`);
+      console.log(`\nDialogs measured, part ${part + 1} of ${PARTS} (${measured.length}):\n  ` + measured.join('\n  '));
 
-      await page.setViewportSize(NARROW);
-      await page.waitForTimeout(300);
-      const spill = await page.evaluate(() => {
-        const dialogs = [...document.querySelectorAll('[role="dialog"], [aria-modal="true"]')];
-        const panel = dialogs[dialogs.length - 1];
-        if (!panel) return [];
-        const viewportWidth = document.documentElement.clientWidth;
-        return [...panel.querySelectorAll('*')]
-          .filter((el) => {
-            if (el.closest('[data-mobile-scroll-region]')) return false;
-            const b = el.getBoundingClientRect();
-            return b.width > 0 && b.height > 0 && (b.left < -1 || b.right > viewportWidth + 1);
-          })
-          .slice(0, 4)
-          .map((el) => `${el.tagName.toLowerCase()} "${((el as HTMLElement).innerText || '').trim().slice(0, 30)}"`);
-      });
-      if (spill.length)
-        overflowing.push(`${routePath} — "${opened}" at ${NARROW.width}px:\n    ${spill.join('\n    ')}`);
-
-      await page.setViewportSize(PHONE);
-      await page.keyboard.press('Escape');
-      await page.waitForTimeout(200);
-    };
-
-    for (const route of ROUTES) {
-      granted = await signInForRoute(page, route, granted);
-
-      await page.setViewportSize(PHONE);
-      await page.goto(route.path);
-      await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
-      await page.waitForTimeout(350);
-
-      // Every opener on the route, not just the first. Medical supplies offers
-      // both "Add supply" and "Receive delivery"; measuring only the first left
-      // the second free to lose its accessible name or outgrow the viewport
-      // under a pass named "every dialog".
-      const openerCount = await page.evaluate((source) => {
-        const re = new RegExp(source, 'i');
-        const root = document.getElementById('main-content') ?? document.body;
-        return [...root.querySelectorAll('button, [role="button"]')].filter((candidate) => {
-          const box = candidate.getBoundingClientRect();
-          if (box.width <= 0 || box.height <= 0) return false;
-          const name = ((candidate as HTMLElement).innerText || candidate.getAttribute('aria-label') || '').trim();
-          return re.test(name);
-        }).length;
-      }, OPENER.source);
-
-      for (let index = 0; index < Math.min(openerCount, MAX_OPENERS_PER_ROUTE); index++) {
-        await measureNthOpener(route.path, index);
-      }
-    }
-
-    console.log(`\nDialogs measured (${measured.length}):\n  ` + measured.join('\n  '));
-
-    // A guard against the pass quietly measuring nothing: if a refactor renames
-    // the create controls, this is what says so, rather than a green run over
-    // zero dialogs.
-    expect(measured.length, 'the pass found no dialogs to measure').toBeGreaterThanOrEqual(6);
-    expect(unnamed, 'dialogs with no accessible name').toEqual([]);
-    expect(unreachable, 'dialog panels with an end no one can reach (see Pitfall #21)').toEqual([]);
-    expect(axeFailures, 'dialogs with WCAG A/AA violations').toEqual([]);
-    expect(overflowing, `dialog content outside the viewport at ${NARROW.width}px`).toEqual([]);
-  });
+      // A guard against the pass quietly measuring nothing: if a refactor renames
+      // the create controls, this is what says so, rather than a green run over
+      // zero dialogs.
+      expect(measured.length, 'the pass found too few dialogs to measure').toBeGreaterThanOrEqual(MIN_DIALOGS_PER_PART);
+      expect(unnamed, 'dialogs with no accessible name').toEqual([]);
+      expect(unreachable, 'dialog panels with an end no one can reach (see Pitfall #21)').toEqual([]);
+      expect(axeFailures, 'dialogs with WCAG A/AA violations').toEqual([]);
+      expect(overflowing, `dialog content outside the viewport at ${NARROW.width}px`).toEqual([]);
+    });
+  }
 });

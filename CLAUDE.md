@@ -381,14 +381,18 @@ waiting on the work.
 **Documentation-only changes need no local suite at all.** `README.md`,
 `docs/**`, `wiki/**` and `CHANGELOG.md` are prose: nothing imports them, no test
 asserts on them, and no migration reads them. Resolve, commit and push — CI
-still runs everything, so the safety net is intact either way. The changelog
+still runs the lint jobs, the docs link check and both unit suites on a
+prose-only pull request, and those hold the few tests that do read a prose
+file (see "What CI runs" below). The changelog
 conflict this used to describe — both branches appending under
 `## [Unreleased]` — now only arises on branches opened before the 2026-09-08
 freeze; while any remain open, resolve it the same way: keep both sets and move
 on.
 
-The exceptions are the two docs a job does parse, and they are cheap to check
-on their own rather than by running everything:
+The exceptions are the prose a CI job does parse: links in any Markdown file,
+and the permission claims in endpoint docstrings, which are documentation even
+though they sit in `.py` files. Each is cheap to check on its own rather than
+by running everything:
 
 | Changed                                        | Run                                                                          |
 | ---------------------------------------------- | ---------------------------------------------------------------------------- |
@@ -400,6 +404,34 @@ For code, scale it the same way: the tests covering the changed module first,
 then the wider suite when the change is broad, a schema or a shared utility.
 A merge that only brings in commits already tested on `main` is not itself a
 reason to run everything — CI re-tests the combination, which is its job.
+
+### What CI Runs, by What Changed _(2026-11-19)_
+
+A pull request no longer starts every job. `scripts/ci_changed_areas.py`
+classifies the changed paths and the `changes` job hands the result to the
+rest of `ci.yml`:
+
+| Runs                                                              | When                                                 |
+| ----------------------------------------------------------------- | ---------------------------------------------------- |
+| Migration Chain, Backend Lint, Docs Link Check                    | always                                               |
+| Backend Unit Tests, Frontend Tests (Vitest)                       | always                                               |
+| Backend Type Check, Security Scan, Integration and Contract Tests | `backend/**` changed                                 |
+| Frontend Lint/Build, both Playwright suites, PWA Smoke Test       | `frontend/**` or the root `package*.json` changed    |
+| Docker Image Build                                                | either of the two above                              |
+| Everything                                                        | any path the script does not recognize               |
+| Everything, and the MariaDB legs                                  | a push to `main`, a merge queue commit, a manual run |
+
+The two unit suites are never skipped because they read across the tree:
+backend unit tests parse frontend sources, and Vitest reads `backend/`, `wiki/`
+and root Markdown. **Do not add an `if:` or a `paths` filter to a job in
+`ci.yml`** — `ci-success` fails any skip that `changes` did not sanction, and
+`scripts/check_ci_gate.py` rejects any other condition. A new top-level
+directory runs everything until it is classified in `ci_changed_areas.py`.
+
+A pull request therefore does not test MariaDB, and a backend-only one does not
+run the browser suites. To run them on a branch before merging, start the CI
+workflow by hand on that branch (Actions → CI → Run workflow). See "CI — What a
+Pull Request No Longer Runs" in `docs/KNOWN_LIMITATIONS.md`.
 
 The test setup (`src/test/setup.ts`) automatically mocks `window.matchMedia`, `IntersectionObserver`, `ResizeObserver`, and `window.print`. Test utilities (`src/test/utils.tsx`) provide:
 

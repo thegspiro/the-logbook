@@ -1,5 +1,51 @@
 # Known Limitations & Open Decisions
 
+## CI — What a Pull Request No Longer Runs (Owner Decisions, 2026-11-19)
+
+Until this date every pull request and every merge to `main` started all 22 CI
+jobs, about 340 runner-minutes. The account runs a limited number of jobs at
+once, so jobs waited for a runner: on 2026-11-19 the jobs of #4435's run on
+`main` waited over three hours to start 72 minutes of work, and eleven merges
+inside three minutes queued about 240 jobs. A pull request that changed only
+prose (#4437) ran the full suite.
+
+### Decided
+
+- **A pull request runs only the suites its changes can affect.** The rules are
+  in `scripts/ci_changed_areas.py` and summarized under "What CI Runs, by What
+  Changed" in `CLAUDE.md`. The lint jobs, Migration Chain, the docs link check
+  and both unit suites always run.
+- **`main` runs one CI run at a time, in full, and it is never cancelled.** Of
+  the merges that land while it runs, only the newest waits; the ones between
+  get no run of their own.
+- **MariaDB 10.11 is tested on `main`, in the merge queue and on a manual run,
+  not on pull requests.** Pull requests test MySQL 8.0.
+
+### Accepted
+
+- **A break that only a skipped suite can see is found after the merge, on
+  `main`.** That covers MariaDB-only SQL (`docker-compose.arm.yml` ships
+  MariaDB), and a suite skipped by area that turns out to depend on the other
+  side. Two cases of the second kind are known and were measured: no Playwright
+  spec reads outside `frontend/`, and the backend tests that parse frontend
+  sources are all in the unit suite, which always runs. A database-backed test
+  that starts reading a frontend file would not run on a frontend-only pull
+  request.
+- **A red run on `main` may cover several merges.** When merges land faster
+  than a run completes, the run that finds a failure tests more than one
+  merged pull request, and the one at fault has to be worked out from the
+  failing test.
+- **Every gated job waits for the `changes` job first.** It takes seconds, but
+  it is one more wait for a runner when runners are short.
+
+### What would reopen this
+
+- **A failure reaching `main` that a pull request run would have caught.** Move
+  that suite to the always-run set, or classify the path it depends on.
+- **A department reporting a MariaDB-only fault.** Put the MariaDB legs back on
+  pull requests: `decide()` in `scripts/ci_changed_areas.py` chooses the
+  engines.
+
 ## Migration Chain — Branches Need Not Be Up to Date to Merge (Owner Decision, 2026-11-16)
 
 Two pull requests that each add an Alembic migration on the same parent both
@@ -286,8 +332,9 @@ now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
   `docs/PDF_REPORTS.md`.)
 - **Minutes, the inventory impact plan and the election documents keep their
   own layouts.** Minutes, the evaluation and the election documents are
-  numbered "Page N" rather than "Page X of Y" (except the ballot), and the
-  impact plan carries no footer or page numbers at all. Since 2026-11-16 every
+  numbered "Page N" rather than "Page X of Y" (except the ballot). The impact
+  plan, which had no footer at all, is numbered "Page X of Y" since
+  2026-11-17. Since 2026-11-16 every
   one of them repeats the department's logo, name and the document's title at
   the top of each later page, so a loose page is still identifiable. They
   escape correctly and are audited; moving them onto the kit's footer is a
@@ -710,6 +757,34 @@ are as they were. In the order dialog each section is its own request with its
 own errors, and a refusal no longer reloads the order, which used to reseed the
 amount and reference just refused. Send update and Import are no longer greyed
 out until answered; pressing them says what is missing.
+
+**Rolled out further on 2026-11-16** (batch 22): a facility's overview (edit),
+files (the caption and description dialog) and Facility Settings' lookup
+dialog; inventory's catalog quick add, stock lots (Add Lot) and checklist
+settings; and store settings. The same rules apply. The overview is an edit,
+so a blank type or status, a mistyped email or an out-of-range number no
+longer holds back the rest of it. Store settings is the exception: it carries
+the payment configuration, so a refused setting holds the whole save back,
+listed with the others at the top of the page; its payload, payment methods
+and provider behaviour are unchanged. Checklist settings still save as each
+control changes, and now say on that control what happened (a refused save,
+an unusable entry, a number folded back into range). Catalog quick add hands
+a refused name back instead of clearing it. Not converted, and still listed in
+`docs/FORMS_REVIEW_2026-11-05.md`: the checklist builder, the full apparatus
+form and its documents, and a facility's extended sections (utilities, keys,
+shutoffs, capital projects, insurance, occupants).
+
+**Rolled out further on 2026-11-16** (batch 23): the full apparatus form (add
+and edit) and the Documents tab's upload form, and a facility's six extended
+sections (utilities with their readings, access keys, shutoffs, capital
+projects, insurance, occupants). The same rules apply: adding refuses until
+every flagged box is fixed, and an edit saves the rest and keeps a refused box
+flagged. One coupling on the apparatus form: a status that needs a reason is
+never saved without one, so a refused reason holds the status change back with
+it rather than marking a rig Out of Service with no record of why. The
+apparatus form lists every open problem at the top of the page. Not converted,
+and still listed in `docs/FORMS_REVIEW_2026-11-05.md`: the equipment checklist
+builder.
 
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
@@ -6832,6 +6907,42 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   does a previously filed report, which stores what it said when generated.
   `tests/test_annual_report_compliance_profiles.py` holds the three surfaces
   to the same figures for a profile org.
+- **My Training was not compliance-profile-aware (D10) — ✅ fixed, owner
+  decision 2026-11-16.** A member's own training views chose the requirements
+  that grade them without consulting compliance profiles, while the matrix,
+  the dashboard, the annual and monthly reports and the compliance emails
+  narrowed to the member's highest-priority matching active profile. Every
+  member-facing view now resolves the set through
+  `ComplianceGrading.for_member`, the one definition: `GET /my-training`, the
+  officer's `GET /training/module-config/members/{id}/requirements`, the
+  profile card (`GET /training/compliance-summary/{id}`) and
+  `TrainingService.get_applicable_requirements`, behind
+  `/training/requirements/progress/{id}`, `/training/reports/user/{id}` and
+  the MCP `get_member_requirements_progress` tool. **Reported numbers change
+  for departments that use compliance profiles**: for a member whose matching
+  profile lists required requirements, those views list only that profile's
+  requirements (that also apply by type, rank, position and join date), so
+  outstanding items the department never grades them on disappear and the
+  "N of M met", the average progress and the Upcoming list move. Unchanged: a
+  department with no compliance configuration or no profiles, a
+  threshold-only profile (`required_requirement_ids` unset), a member who
+  matches no active profile, the evaluator, waivers, catch-up and
+  not-yet-held handling, and compliance-exempt members, who are still graded
+  on My Training. No migration. Tests:
+  `tests/test_my_training_compliance_profiles.py`.
+- **The profile card's colour re-derives its thresholds (D10 follow-up) —
+  open, owner decision needed.** `get_compliance_summary` colours the card
+  red / yellow / green with its own fixed rule instead of
+  `classify_standing` with the matching profile's threshold overrides, so the
+  card can disagree with the matrix's standing for the same member (CLAUDE.md
+  pitfall #29). D10 narrowed its denominator only and left the colour rule
+  as it was; narrowing can still flip a member's colour. Remaining surfaces
+  that are not yet profile-aware, all officer-facing: the period roster
+  (`GET /training/records/member-status`, which also ignores profile
+  threshold overrides), the competency matrix, the compliance CSV/PDF export
+  cells, the compliance forecast and Scheduling's Shift Compliance report.
+  Separately, `optional_requirement_ids` has no reader, and two active
+  profiles of equal priority resolve in an undefined order.
 - **A requirement with zero currently-applicable members renders as a
   failing 0% (CMP4-4, LOW) — ✅ fixed 2026-09-29, workflow review W29-4.**
   `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`

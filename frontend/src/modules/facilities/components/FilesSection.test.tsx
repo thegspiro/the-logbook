@@ -1,9 +1,14 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 import FilesSection from './FilesSection';
 import { facilitiesService } from '@/services/facilitiesServices';
 
-vi.mock('@/contexts/ConfirmContext', () => ({ useConfirm: () => ({ confirm: vi.fn() }) }));
+// The real provider, as the app shell mounts it: the caption dialog asks before
+// discarding typed text, which needs one.
+const render = (ui: ReactElement) => rtlRender(<ConfirmProvider>{ui}</ConfirmProvider>);
 vi.mock('@/services/facilitiesServices', () => ({
   facilitiesService: {
     getPhotos: vi.fn(),
@@ -92,5 +97,51 @@ describe('FilesSection upload', () => {
       expect(facilitiesService.uploadFacilityDocument).toHaveBeenCalledWith('f1', file, 'facility_record')
     );
     expect(facilitiesService.uploadPhoto).not.toHaveBeenCalled();
+  });
+});
+
+describe('FilesSection caption dialog', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(facilitiesService.getPhotos).mockReset();
+    vi.mocked(facilitiesService.getPhotos).mockResolvedValue([{ ...photo, caption: 'Front' }]);
+    vi.mocked(facilitiesService.getFacilityDocuments).mockReset();
+    vi.mocked(facilitiesService.getFacilityDocuments).mockResolvedValue([]);
+    vi.mocked(facilitiesService.updatePhoto).mockReset();
+  });
+
+  // Forms review F-2: a refused caption was a toast, and nothing on the field
+  // said which value was refused.
+  it('shows a refused caption on the field and keeps what was typed', async () => {
+    vi.mocked(facilitiesService.updatePhoto).mockRejectedValueOnce({
+      response: { status: 422, data: { detail: 'Caption is too long.' } },
+    });
+    const user = userEvent.setup();
+    render(<FilesSection facilityId="f1" canCreate canEdit canDelete canViewSensitive />);
+    await user.click(await screen.findByRole('button', { name: 'Edit station.jpg' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit photo caption' });
+    const field = within(dialog).getByRole('textbox', { name: /Caption/ });
+    await user.clear(field);
+    await user.type(field, 'Front bay');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Caption is too long.');
+    expect(field).toHaveValue('Front bay');
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  // Forms review F-6: Cancel, Escape and the X threw a typed caption away.
+  it('asks before Cancel throws a typed caption away', async () => {
+    const user = userEvent.setup();
+    render(<FilesSection facilityId="f1" canCreate canEdit canDelete canViewSensitive />);
+    await user.click(await screen.findByRole('button', { name: 'Edit station.jpg' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit photo caption' });
+    await user.type(within(dialog).getByRole('textbox', { name: /Caption/ }), ' at dusk');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(within(dialog).getByRole('textbox', { name: /Caption/ })).toHaveValue('Front at dusk');
   });
 });

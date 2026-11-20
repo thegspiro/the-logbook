@@ -20,9 +20,11 @@ import type {
   HistoricalImportDetail,
   TrainingSettingsUpdate,
 } from '../../../modules/integrations/types/historicalImport';
+import { HistoricalUndoStep } from '../../../modules/integrations/types/historicalImport';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import StepUndo from './StepUndo';
 
 interface DrillsSectionProps {
   detail: HistoricalImportDetail;
@@ -129,6 +131,13 @@ const DrillsSection: React.FC<DrillsSectionProps> = ({ detail }) => {
                 : ''}, {formatNumber(preview.result.records_attached ?? 0)} attendance records attached.
             </p>
           )}
+
+          <StepUndo
+            importId={importId}
+            step={HistoricalUndoStep.DRILLS}
+            noun="drill sessions"
+            onUndone={() => void load()}
+          />
 
           <div className="field-grid gap-4">
             <div>

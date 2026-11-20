@@ -408,6 +408,11 @@ class TrainingSessionResponse(UTCResponseBase):
     phase_id: Optional[UUID] = None
     requirement_id: Optional[UUID] = None
     attendance_requirement_ids: List[str] = Field(default_factory=list)
+    # Whether any of those links is to an active requirement: the same answer
+    # as the event's own flag, so a client showing the badge from the session
+    # need not re-derive it. A link to a deactivated requirement is kept in
+    # attendance_requirement_ids (the editor removes it) but counts for no one.
+    counts_toward_attendance: bool = False
 
     course_name: str
     course_code: Optional[str]

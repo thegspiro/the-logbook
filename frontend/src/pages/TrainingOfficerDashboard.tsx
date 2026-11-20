@@ -21,6 +21,7 @@ import {
   saveTrainingWidgetPreferences,
 } from '../components/dashboard/widgets/training/preferences';
 import { TrainingSetupGuide } from '../components/training/TrainingSetupGuide';
+import { getLoadFailureMessage } from '../utils/errorHandling';
 
 const widgets: Record<TrainingWidgetId, React.FC<{ data: TrainingDashboardSummary }>> = {
   'compliance-overview': ComplianceOverviewWidget,
@@ -81,8 +82,8 @@ const TrainingOfficerDashboard: React.FC = () => {
         throw new TypeError('The training dashboard response was not a summary');
       }
       setData(summary);
-    } catch {
-      setError('Failed to load the dashboard. Check your connection and refresh the page.');
+    } catch (err: unknown) {
+      setError(getLoadFailureMessage(err, 'the dashboard'));
     } finally {
       setLoading(false);
     }

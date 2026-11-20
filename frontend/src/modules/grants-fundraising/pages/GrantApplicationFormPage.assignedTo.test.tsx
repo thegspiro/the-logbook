@@ -30,8 +30,15 @@ vi.mock('react-hot-toast', () => ({ default: { error: vi.fn(), success: vi.fn() 
 import GrantApplicationFormPage from './GrantApplicationFormPage';
 
 const members = [
-  { id: 'user-pat', username: 'pquinn', first_name: 'Pat', last_name: 'Quinn' },
-  { id: 'user-sam', username: 'sreyes', first_name: 'Sam', last_name: 'Reyes', preferred_name: 'Sammy' },
+  { id: 'user-pat', username: 'pquinn', first_name: 'Pat', last_name: 'Quinn', status: 'active' },
+  {
+    id: 'user-sam',
+    username: 'sreyes',
+    first_name: 'Sam',
+    last_name: 'Reyes',
+    preferred_name: 'Sammy',
+    status: 'active',
+  },
 ];
 
 const stored = {
@@ -138,6 +145,28 @@ describe('GrantApplicationFormPage — Assigned To', () => {
 
     await waitFor(() => expect(mockUpdateApplication).toHaveBeenCalledTimes(1));
     expect(updatePayload()).toHaveProperty('assignedTo', null);
+  });
+
+  it('does not offer a former member', async () => {
+    mockGetUsers.mockReset();
+    mockGetUsers.mockResolvedValue([
+      ...members,
+      { id: 'user-lee', username: 'lpark', first_name: 'Lee', last_name: 'Park', status: 'retired' },
+    ]);
+    renderAt('/grants/applications/new');
+
+    await screen.findByRole('option', { name: 'Sammy Reyes' });
+    expect(screen.queryByRole('option', { name: /Lee Park/ })).not.toBeInTheDocument();
+  });
+
+  it('names a stored assignee who has since left, marked as a former member', async () => {
+    mockGetUsers.mockReset();
+    mockGetUsers.mockResolvedValue([{ ...members[0], status: 'archived' }, members[1]]);
+    renderAt('/grants/applications/app-1/edit');
+
+    const picker = await screen.findByRole('combobox', { name: 'Assigned To' });
+    await waitFor(() => expect(picker).toHaveValue('user-pat'));
+    expect(screen.getByRole('option', { name: 'Pat Quinn (former member)' })).toBeInTheDocument();
   });
 
   it('keeps a stored assignee who is no longer on the member list', async () => {

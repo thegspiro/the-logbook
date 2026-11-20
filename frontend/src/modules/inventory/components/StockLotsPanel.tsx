@@ -22,6 +22,9 @@ import type { InventoryLot, InventoryLotCreate } from '@/services/eventServices'
 import { getErrorMessage } from '@/utils/errorHandling';
 import { formatCalendarDate, getTodayLocalDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
+import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '@/hooks/useFieldErrors';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
 interface StockLotsPanelProps {
@@ -29,15 +32,36 @@ interface StockLotsPanelProps {
   canManage: boolean;
 }
 
-function emptyForm(): InventoryLotCreate {
+/** The add-lot form as typed; quantity is kept as text so a cleared box is not read as 0. */
+interface LotForm {
+  lot_number: string;
+  quantity: string;
+  expiration_date: string;
+  received_date: string;
+  notes: string;
+}
+
+function emptyForm(): LotForm {
   return {
     lot_number: '',
     expiration_date: '',
-    quantity: 1,
+    quantity: '1',
     received_date: '',
     notes: '',
   };
 }
+
+type LotField = keyof LotForm;
+// Ordered as on screen, so the first refusal takes focus. Limits mirror
+// InventoryLotBase (lot_number 100, FreeText 2000).
+const LOT_FIELDS: FieldSpecs<LotField> = {
+  lot_number: { id: 'stock-lot-number', label: 'Lot Number' },
+  quantity: { id: 'stock-lot-quantity', label: 'Quantity' },
+  expiration_date: { id: 'stock-lot-expiration', label: 'Expiration Date' },
+  received_date: { id: 'stock-lot-received', label: 'Received Date' },
+  notes: { id: 'stock-lot-notes', label: 'Notes' },
+};
+const LOT_LIMITS = { lot_number: 100, notes: 2000 } as const;
 
 const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) => {
   const { confirm } = useConfirm();
@@ -51,9 +75,24 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
   const [lots, setLots] = useState<InventoryLot[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<InventoryLotCreate>(emptyForm);
+  const [form, setForm] = useState<LotForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deployments, setDeployments] = useState<ItemDeployment[]>([]);
+  const lotErrors = useFieldErrors(LOT_FIELDS);
+  const set = (patch: Partial<LotForm>) => {
+    setForm((p) => ({ ...p, ...patch }));
+    for (const key of Object.keys(patch)) lotErrors.setError(key as LotField, null);
+  };
+  const closeForm = () => {
+    setShowForm(false);
+    setForm(emptyForm());
+    lotErrors.clear();
+  };
+  // Cancel asks before throwing a typed lot away (forms review F-6).
+  const requestCancel = useDiscardGuard({
+    isDirty: showForm && JSON.stringify(form) !== JSON.stringify(emptyForm()),
+    onClose: closeForm,
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,27 +127,37 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
     };
   }, [itemId]);
 
-  const handleAdd = async () => {
-    if (form.quantity == null || form.quantity < 0) {
-      toast.error('Quantity must be zero or more');
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // Named on the field rather than in a toast that vanished (forms review
+    // F-3). A new lot is not added until every field is fixed.
+    const problems: FieldErrors<LotField> = {};
+    const quantity = form.quantity.trim();
+    if (!quantity || !Number.isInteger(Number(quantity)) || Number(quantity) < 0)
+      problems.quantity = 'Enter how many units, a whole number 0 or more.';
+    lotErrors.setFormError(null);
+    lotErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      lotErrors.focusFirst(problems);
       return;
     }
     setSaving(true);
     try {
       const payload: InventoryLotCreate = {
-        lot_number: form.lot_number?.trim() || undefined,
+        lot_number: form.lot_number.trim() || undefined,
         expiration_date: form.expiration_date || undefined,
-        quantity: Number(form.quantity),
+        quantity: Number(quantity),
         received_date: form.received_date || undefined,
-        notes: form.notes?.trim() || undefined,
+        notes: form.notes.trim() || undefined,
       };
       const created = await inventoryService.addItemLot(itemId, payload);
       setLots((prev) => [...prev, created]);
-      setForm(emptyForm());
-      setShowForm(false);
+      closeForm();
       toast.success('Stock lot added');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to add stock lot'));
+      // A refused field is flagged on that field (forms review F-2); anything
+      // no field answers for is said in the form, with what was typed kept.
+      lotErrors.focusFirst(lotErrors.setFromApiError(err, 'Failed to add stock lot'));
     } finally {
       setSaving(false);
     }
@@ -209,79 +258,111 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
       </div>
 
       {showForm && canManage && (
-        <div className="card-secondary space-y-3 p-4">
+        <form noValidate onSubmit={(e) => void handleAdd(e)} className="card-secondary space-y-3 p-4">
+          {lotErrors.formError && (
+            <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+              {lotErrors.formError}
+            </p>
+          )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className="form-label">Lot Number</label>
+            <FormField
+              id={LOT_FIELDS.lot_number.id}
+              label={LOT_FIELDS.lot_number.label}
+              error={lotErrors.errors.lot_number}
+              maxLength={LOT_LIMITS.lot_number}
+              count={form.lot_number.length}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. LOT-4823"
+                  value={form.lot_number}
+                  onChange={(e) => set({ lot_number: e.target.value })}
+                />
+              )}
+            </FormField>
+            <FormField
+              id={LOT_FIELDS.quantity.id}
+              label={LOT_FIELDS.quantity.label}
+              required
+              error={lotErrors.errors.quantity}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  className="form-input"
+                  value={form.quantity}
+                  onChange={(e) => set({ quantity: e.target.value })}
+                />
+              )}
+            </FormField>
+            <FormField
+              id={LOT_FIELDS.expiration_date.id}
+              label={LOT_FIELDS.expiration_date.label}
+              error={lotErrors.errors.expiration_date}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="date"
+                  className="form-input"
+                  value={form.expiration_date}
+                  onChange={(e) => set({ expiration_date: e.target.value })}
+                />
+              )}
+            </FormField>
+            <FormField
+              id={LOT_FIELDS.received_date.id}
+              label={LOT_FIELDS.received_date.label}
+              error={lotErrors.errors.received_date}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="date"
+                  className="form-input"
+                  value={form.received_date}
+                  onChange={(e) => set({ received_date: e.target.value })}
+                />
+              )}
+            </FormField>
+          </div>
+          <FormField
+            id={LOT_FIELDS.notes.id}
+            label={LOT_FIELDS.notes.label}
+            error={lotErrors.errors.notes}
+            maxLength={LOT_LIMITS.notes}
+            count={form.notes.length}
+          >
+            {(field) => (
               <input
+                {...field}
                 type="text"
                 className="form-input"
-                placeholder="e.g. LOT-4823"
-                value={form.lot_number ?? ''}
-                onChange={(e) => setForm((p) => ({ ...p, lot_number: e.target.value }))}
+                value={form.notes}
+                onChange={(e) => set({ notes: e.target.value })}
               />
-            </div>
-            <div>
-              <label className="form-label">Quantity</label>
-              <input
-                type="number"
-                min="0"
-                className="form-input"
-                value={form.quantity}
-                onChange={(e) => setForm((p) => ({ ...p, quantity: Number(e.target.value) }))}
-              />
-            </div>
-            <div>
-              <label className="form-label">Expiration Date</label>
-              <input
-                type="date"
-                className="form-input"
-                value={form.expiration_date ?? ''}
-                onChange={(e) => setForm((p) => ({ ...p, expiration_date: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="form-label">Received Date</label>
-              <input
-                type="date"
-                className="form-input"
-                value={form.received_date ?? ''}
-                onChange={(e) => setForm((p) => ({ ...p, received_date: e.target.value }))}
-              />
-            </div>
-          </div>
-          <div>
-            <label className="form-label">Notes</label>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Optional"
-              value={form.notes ?? ''}
-              onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-            />
-          </div>
+            )}
+          </FormField>
           <div className="flex items-center gap-2">
             <button
-              type="button"
+              type="submit"
               disabled={saving}
-              onClick={() => void handleAdd()}
               className="btn-primary btn-sm inline-flex items-center gap-1 disabled:opacity-50"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
               Save Lot
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShowForm(false);
-                setForm(emptyForm());
-              }}
-              className="btn-secondary btn-sm"
-            >
+            <button type="button" onClick={requestCancel} className="btn-secondary btn-sm">
               Cancel
             </button>
           </div>
-        </div>
+        </form>
       )}
 
       {lots.length === 0 ? (
