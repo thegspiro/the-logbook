@@ -599,7 +599,7 @@ describe('template training details', () => {
     });
 
     it('follows the length when the course has no hours any more', () => {
-      const bare = { ...COURSE, credit_hours: undefined, duration_hours: undefined };
+      const { credit_hours: _hours, duration_hours: _duration, ...bare } = COURSE;
       const { value } = reconcileTemplateTraining(seeded, seeded, [bare], members);
       expect(value.credit_hours_source).toBe('duration');
     });
