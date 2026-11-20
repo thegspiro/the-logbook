@@ -8718,13 +8718,41 @@ single-page form. What it changes, and what it leaves:
   the training details.** The rest of Training Info is drawn locked; reopen
   attendance to change it. The event's own fields keep the finalized-event
   rules under "Events — Edit Form Gaps" below.
-- **A Training template fills the event's own fields, not its training
+- ~~**A Training template fills the event's own fields, not its training
   details.** Training Admin's Create Session now offers the department's
   Training templates, as the Events page does, but `EventTemplate` has no
   training fields (course, type, hours, instructor, certification, links),
   so Training Info opens on its defaults. Carrying them needs template
   fields that do not exist yet: an owner decision, since it changes what a
-  saved template is.
+  saved template is.~~ **Resolved 2026-11-20 (owner decision, "Templates
+  keep training"):** a Training template stores the course (a library
+  course, a one-off name and code, or none), the training type, credit hours
+  and their source, the lead instructor and the certification settings
+  (issues certification, number prefix, issuing agency, expiry), in
+  `event_templates.training_details`, and picking it fills Training Info as
+  well as the event. The Event Templates editor has a Training Details
+  section for them, and Save as Template on a Training event saves its
+  session's. Still not carried, because they were not in the owner's list:
+  the category, program, phase and requirement links, Counts toward
+  attendance, and the completion settings (counts toward certification,
+  auto-create records, completion sign-off and its deadline); they start on
+  their defaults. A template whose library course is no longer in the Course
+  Library opens on No course yet, and one whose lead instructor is no longer
+  a current member opens with Lead instructor empty, each with a note on
+  Training Info. The entry below still applies to an event made from a
+  template: a library-course template saved with a blank instructor or
+  expiry gets the course's.
+- **A template's lead instructor survives that member's anonymisation, as a
+  training session's instructor does.** `training_details` holds the
+  instructor's member id and name as JSON, and neither
+  `member_anonymization_service.py` nor `user_deletion_service.py` touches
+  it — nor `training_sessions.instructor`, the free-text name a session
+  stores beside its `instructor_id`, which has the same gap and was not
+  recorded before. Neither carries a foreign key, so a removed member leaves
+  a dangling id, which applying the template clears. Scrubbing both on
+  anonymisation is a change to the anonymisation service, left for an owner
+  decision. A department-template export writes `training_details` as null,
+  so neither the name nor an org-local course id leaves the installation.
 - **Under a library course, a blank Lead Instructor or Expiration is saved
   as the course's.** The backend reads `null` for those two as "use the
   course's value", on create and on edit, so an officer cannot clear either
@@ -10928,11 +10956,27 @@ each case):
 
 **Accepted residuals:**
 
-- **A permanent delete's files go after its commit.** A process killed, or a
-  remote store unreachable, between the commit and the deletes leaves files no
-  later run can find. A failed delete is logged and counted
-  (`files_not_deleted` in the `user_hard_deleted` audit event); closing the
-  crash window would need a durable pending-deletion table and a migration.
+- ~~**A permanent delete's files go after its commit.**~~ **Resolved
+  2026-11-20** (owner decision "Hard-delete crash gap"): the files are queued
+  in `pending_file_deletions` in the delete's own transaction, removed right
+  after the commit, and an hourly `pending_file_deletions` sweep retries what
+  a crash or an unreachable store left. `files_not_deleted` in the
+  `user_hard_deleted` audit event now means files left queued for the sweep.
+- **A queued file that never deletes is visible only in logs and the
+  table.** A remote store that is gone, or a path that no longer confines to
+  its department's area (a moved uploads root), keeps its row, retried every
+  hour and logged as a warning after 24 failures. There is no screen listing
+  them and no way to dismiss one short of a database edit.
+- **A crash after the delete commits can lose its audit record.** The
+  `user_hard_deleted` event is written after the delete's commit and committed
+  with the request, so a process killed in between keeps the delete (and now
+  the queued files) but loses the critical audit row. Writing the event
+  inside the delete's transaction would close it, but changes the event's
+  shape (the per-file counts are known only after the commit), so it awaits
+  the owner.
+- **Member deletes outside the endpoint queue nothing**:
+  `historical_import_undo` and the onboarding reset delete users directly and
+  leave any files their rows named.
 - **An upload racing a permanent delete** (a certificate stored for the member
   after the files were collected) is orphaned.
 - **A relocation or remote migration running at the same moment** can rewrite

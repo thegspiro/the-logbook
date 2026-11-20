@@ -37,6 +37,12 @@ import { useEventFormModel } from './useEventFormModel';
 
 interface EventComposerProps {
   initialData?: Partial<EventCreate> | undefined;
+  /**
+   * Create only: Training Info as a picked template filled it (its saved
+   * training details). The wizard checks it against the Course Library and
+   * the member list once they load, without counting that as a change.
+   */
+  initialTraining?: TrainingDetailsForm | undefined;
   /** Save a single event. Throw on failure: the form shows why. */
   onSubmit: (data: EventCreate) => Promise<void>;
   /** Save a series. Throw on failure: the form shows why. Create only. */
@@ -109,6 +115,7 @@ const EDIT_TYPE_HINT_ID = 'event-type-edit-hint';
 
 export const EventComposer: React.FC<EventComposerProps> = ({
   initialData,
+  initialTraining,
   onSubmit,
   onSubmitRecurring,
   onCancel,
@@ -136,7 +143,10 @@ export const EventComposer: React.FC<EventComposerProps> = ({
     attendanceLocked: editing?.attendanceLocked ?? false,
     eventTypeLocked: editing?.eventTypeLocked ?? false,
   });
-  const [training, setTraining] = useState<TrainingDetailsForm>(editing?.initialTraining ?? DEFAULT_TRAINING_DETAILS);
+  const templateTraining = editing ? undefined : initialTraining;
+  const [training, setTraining] = useState<TrainingDetailsForm>(
+    editing?.initialTraining ?? templateTraining ?? DEFAULT_TRAINING_DETAILS
+  );
   // What the form opened with, so the training form's Cancel asks only when
   // there is something to lose. Recurrence and Mandatory for live outside
   // formData, so they are part of it too. The training details are kept apart
@@ -330,7 +340,9 @@ export const EventComposer: React.FC<EventComposerProps> = ({
                 finalizedBefore: editing.finalizedOccurrenceBefore,
               },
             }
-          : {})}
+          : templateTraining
+            ? { templateTraining, onReadStoredTraining: readStoredTraining }
+            : {})}
       />
     </div>
   );

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**396 tables · 6267 columns · 1321 foreign keys**
+**397 tables · 6277 columns · 1322 foreign keys**
 
 ---
 
@@ -254,7 +254,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`event_attendance_petitions`](#event_attendance_petitions) | `EventAttendancePetition` | 14 | A member's request to be recorded as present at an event that is over. |
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 18 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
-| [`event_templates`](#event_templates) | `EventTemplate` | 29 | Event Template model for reusable event configurations |
+| [`event_templates`](#event_templates) | `EventTemplate` | 30 | Event Template model for reusable event configurations |
 | [`events`](#events) | `Event` | 60 | Event model for managing department events |
 | [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 9 | RSVP History model for tracking RSVP status changes. |
 
@@ -670,6 +670,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`user_passkeys`](#user_passkeys) | `UserPasskey` | 14 |  |
 | [`webauthn_challenges`](#webauthn_challenges) | `WebAuthnChallenge` | 6 | A challenge handed to the browser, consumed by the response to it. |
+
+### Pending_File_Deletion
+
+<sub>`app/models/pending_file_deletion.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`pending_file_deletions`](#pending_file_deletions) | `PendingFileDeletion` | 9 | One stored file a committed delete has yet to remove. |
 
 ### Public Portal
 
@@ -3660,6 +3668,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reminder_schedule` | JSON | no |  | generated |  |
 | `reminder_target` | VARCHAR(20) | no |  | `going` |  |
 | `custom_fields_template` | JSON | yes |  |  |  |
+| `training_details` | JSON | yes |  |  |  |
 | `is_active` | BOOL | no |  | `1` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
@@ -9775,6 +9784,30 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `ix_webauthn_challenges_user_id` (`user_id`)
 
+## Pending_File_Deletion
+
+### `pending_file_deletions`
+
+**PendingFileDeletion** · `app/models/pending_file_deletion.py`
+
+> One stored file a committed delete has yet to remove. Written in the same transaction as the delete whose rows named the file, so a refused or rolled-back delete leaves no row; resolved (deleted) once the file is gone or another row is found still naming it. A row left behind is a removal a crash or an unreachable store interrupted, and the hourly sweep finishes it. The idempotency key is the row id: resolving a row is a ``DELETE ... WHERE id`` whose affected count says whether this run or an earlier one did it, and deleting a file that is already gone counts as deleted. There is deliberately no unique key on the path: two deletes of members who share a file each queue it, and a unique key would turn the second delete's commit into a misleading conflict. Duplicate rows are harmless; the first removes the file and the second finds it gone. No member column, and no foreign key to the deleted rows: nothing here identifies the person whose files these were.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `path` | TEXT | no |  |  |  |
+| `area` | VARCHAR(40) | no |  |  |  |
+| `reason` | VARCHAR(40) | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `attempts` | INTEGER | no |  | `0` |  |
+| `last_attempt_at` | DATETIME | yes |  |  |  |
+| `last_error` | VARCHAR(255) | yes |  |  |  |
+
+**Indexes**
+
+- `idx_pending_file_deletions_org` (`organization_id`)
+
 ## Public Portal
 
 ### `public_portal_access_log`
@@ -13989,7 +14022,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (321 references)
+### → `organizations` (322 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14217,6 +14250,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `org_chart_nodes` | `organization_id` | CASCADE | no |
 | `organization_locks` | `organization_id` | CASCADE | no |
 | `organization_officers` | `organization_id` | CASCADE | no |
+| `pending_file_deletions` | `organization_id` | CASCADE | no |
 | `pledges` | `organization_id` | CASCADE | no |
 | `positions` | `organization_id` | CASCADE | no |
 | `program_enrollments` | `organization_id` | CASCADE | no |

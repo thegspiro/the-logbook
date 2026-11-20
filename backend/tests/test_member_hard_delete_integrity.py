@@ -56,6 +56,8 @@ from app.models.training import (
 from app.schemas.shift_completion import ShiftCompletionReportResponse
 from app.services import file_storage_service, member_files
 from app.services.inventory_service import InventoryService
+from app.services.pending_file_deletions import PendingFileDeletionSweep
+from app.services.scheduled_tasks import run_pending_file_deletions
 from app.services.user_deletion_service import _cascading_references
 from tests.fake_request import fake_request
 
@@ -667,6 +669,7 @@ class TestStoredFilesGoWithTheMember:
         await self._record(
             db_session, department, department.trainee, [self._entry(evidence)]
         )
+        check = member_files.referenced_elsewhere
         monkeypatch.setattr(
             member_files,
             "referenced_elsewhere",
@@ -687,3 +690,137 @@ class TestStoredFilesGoWithTheMember:
             "files_not_deleted": 2,
             "files_shared_kept": 0,
         }
+        # Kept, and still queued untouched: the sweep can finish them.
+        assert (
+            await self._pending(db_session, department.org)
+            == [
+                ("attendance-waivers", 0),
+                ("self-reports", 0),
+                ("training-records", 0),
+            ][1:]
+        )
+        monkeypatch.setattr(member_files, "referenced_elsewhere", check)
+        await self._backdate(db_session, department.org)
+
+        await PendingFileDeletionSweep(db_session).run()
+
+        assert not certificate.exists()
+        assert not evidence.exists()
+        assert await self._pending(db_session, department.org) == []
+
+    @staticmethod
+    async def _pending(db, org_id: str) -> list[tuple[str, int]]:
+        rows = await db.execute(
+            text(
+                "SELECT area, attempts FROM pending_file_deletions "
+                "WHERE organization_id = :org ORDER BY area"
+            ),
+            {"org": org_id},
+        )
+        return [(row.area, row.attempts) for row in rows]
+
+    @staticmethod
+    async def _backdate(db, org_id: str) -> None:
+        """Past the sweep's grace period, measured by the database's clock."""
+        await db.execute(
+            text(
+                "UPDATE pending_file_deletions "
+                "SET created_at = created_at - INTERVAL 1 HOUR "
+                "WHERE organization_id = :org"
+            ),
+            {"org": org_id},
+        )
+
+    async def test_a_crash_after_the_commit_leaves_rows_the_sweep_finishes(
+        self, db_session, department, root, monkeypatch
+    ):
+        """The delete commits and the process dies before removing a file:
+        the queue, written in the delete's own transaction, is what lets the
+        hourly sweep finish the job."""
+        certificate = self._file(root, department.org, "self-reports")
+        evidence = self._file(root, department.org, "training-records")
+        await self._submission(
+            db_session, department, department.trainee, [self._entry(certificate)]
+        )
+        await self._record(
+            db_session, department, department.trainee, [self._entry(evidence)]
+        )
+        note = await self._waiver_document(
+            db_session, department, department.trainee, root
+        )
+        await db_session.commit()
+        monkeypatch.setattr(
+            users_endpoint,
+            "process_pending_file_deletions",
+            AsyncMock(side_effect=_Killed()),
+        )
+
+        with pytest.raises(_Killed):
+            await _hard_delete(db_session, department, department.trainee)
+
+        gone = await db_session.scalar(
+            text("SELECT COUNT(*) FROM users WHERE id = :id"),
+            {"id": department.trainee},
+        )
+        assert gone == 0
+        assert certificate.exists()
+        assert evidence.exists()
+        assert note.exists()
+        assert await self._pending(db_session, department.org) == [
+            ("attendance-waivers", 0),
+            ("self-reports", 0),
+            ("training-records", 0),
+        ]
+        await self._backdate(db_session, department.org)
+
+        result = await run_pending_file_deletions(db_session)
+
+        assert not certificate.exists()
+        assert not evidence.exists()
+        assert not note.exists()
+        assert await self._pending(db_session, department.org) == []
+        assert result["deleted"] == 3
+
+    async def test_a_refused_delete_queues_nothing(
+        self, db_session, department, root, monkeypatch
+    ):
+        """The queue rows ride the delete's transaction: a delete refused at
+        its commit leaves none behind."""
+        certificate = self._file(root, department.org, "self-reports")
+        evidence = self._file(root, department.org, "training-records")
+        await self._submission(
+            db_session, department, department.trainee, [self._entry(certificate)]
+        )
+        await self._record(
+            db_session, department, department.trainee, [self._entry(evidence)]
+        )
+        # Committed, so the endpoint's rollback discards only the delete.
+        await db_session.commit()
+        real_flush = db_session.flush
+
+        async def refused():
+            # The INSERTs and the DELETE reach the database, then the commit
+            # is refused, as an unexpected foreign key would refuse it.
+            await real_flush()
+            raise IntegrityError("DELETE FROM users", {}, Exception("1451"))
+
+        commit = db_session.commit
+        monkeypatch.setattr(db_session, "commit", refused)
+
+        with pytest.raises(HTTPException) as exc:
+            await _hard_delete(db_session, department, department.trainee)
+
+        monkeypatch.setattr(db_session, "commit", commit)
+        assert exc.value.status_code == 409
+        kept = await db_session.scalar(
+            text("SELECT COUNT(*) FROM users WHERE id = :id"),
+            {"id": department.trainee},
+        )
+        assert kept == 1
+        assert await self._pending(db_session, department.org) == []
+        assert certificate.exists()
+        assert evidence.exists()
+
+
+class _Killed(BaseException):
+    """A worker killed mid-request: not an Exception, so no handler swallows it."""

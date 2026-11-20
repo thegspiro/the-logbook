@@ -62,8 +62,8 @@ def confined_attachment_paths(
 class MemberFiles:
     """Every stored file a member's rows name, as plain strings.
 
-    Plain values on purpose: the hard delete reads this after its commit, and
-    nothing here may depend on an ORM instance surviving that.
+    Plain values on purpose: the hard delete queues these in its own
+    transaction and no ORM instance of the member's rows survives its commit.
     """
 
     submission_ids: list[str] = field(default_factory=list)
@@ -87,6 +87,23 @@ class MemberFiles:
         # Sets: an approved certificate is named by the submission and by the
         # record that copied it, and is one file.
         return self.self_report_paths | self.record_own_paths | self.waiver_paths
+
+    def paths_by_area(self) -> dict[str, StorageArea]:
+        """Every path in :attr:`all_paths` with the area it was confined to.
+
+        Taken from the sets above, never by confining a path again: the
+        legacy self-reports root sits inside the legacy training-records
+        root, and the collector's SELF_REPORTS-first classification is the
+        one answer. A path in two sets keeps its self-report area.
+        """
+        areas: dict[str, StorageArea] = {}
+        for path in self.waiver_paths:
+            areas[path] = StorageArea.ATTENDANCE_WAIVERS
+        for path in self.record_own_paths:
+            areas[path] = StorageArea.TRAINING_RECORDS
+        for path in self.self_report_paths:
+            areas[path] = StorageArea.SELF_REPORTS
+        return areas
 
     @property
     def own_rows(self) -> set[tuple[str, str]]:
@@ -216,6 +233,9 @@ async def referenced_elsewhere(
 
 @dataclass(frozen=True)
 class FileRemoval:
+    """What a removal pass did: files deleted, files it could not delete
+    (left queued), and files kept because another row still names them."""
+
     deleted: int = 0
     not_deleted: int = 0
     shared_kept: int = 0
@@ -243,7 +263,9 @@ async def remove_unreferenced_files(
     hold every area *paths* lie in; see :func:`referenced_elsewhere`.
 
     A process killed between the commit and these deletes leaves orphans no
-    later run can find (see docs/KNOWN_LIMITATIONS.md).
+    later run can find. That is accepted for a single removed attachment; a
+    permanent member delete, which removes many files at once, queues them in
+    ``pending_file_deletions`` instead (``app.services.pending_file_deletions``).
     """
     if not paths:
         return FileRemoval()
@@ -276,18 +298,4 @@ async def remove_unreferenced_files(
         logger.warning("{} file(s) of {} could not be removed", not_deleted, subject_id)
     return FileRemoval(
         deleted=deleted, not_deleted=not_deleted, shared_kept=len(shared)
-    )
-
-
-async def remove_files_after_hard_delete(
-    db: AsyncSession, user_id: str, organization_id: str, files: MemberFiles
-) -> FileRemoval:
-    """Delete the files a committed hard delete left behind. Never raises.
-
-    Runs after the commit, so a refused delete (a 409) has touched no file.
-    The member's rows are gone by now, so any reference still found belongs
-    to another row and its file is kept; see :func:`remove_unreferenced_files`.
-    """
-    return await remove_unreferenced_files(
-        db, organization_id, files.all_paths, subject_id=f"deleted member {user_id}"
     )

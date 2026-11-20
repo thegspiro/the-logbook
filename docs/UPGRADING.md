@@ -830,6 +830,26 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A permanent member delete queues its files; new hourly task (2026-11-20)
+
+Nothing blocks a restart. Migration `d5946cb2bd41` creates one new, empty
+table, `pending_file_deletions`, and touches no existing row.
+
+- **A permanent delete now records the member's files in the delete's own
+  transaction** and removes them right after it. A crash, a killed worker or
+  an unreachable remote store in between used to leave those files with no
+  record of them; the new hourly `pending_file_deletions` task now finishes
+  them. It checks each file's references again first and keeps one another
+  record still uses. In the `user_hard_deleted` audit event,
+  `files_not_deleted` now counts files left queued for that task.
+- The task writes a `pending_file_deletions_completed` audit event (integer
+  counts only) for a department when it removes something.
+- **Downgrading drops the table, and any rows still in it.** The files those
+  rows named then become orphans nothing records. Before downgrading past
+  `d5946cb2bd41`, check the table is empty
+  (`SELECT COUNT(*) FROM pending_file_deletions`), or let the hourly task
+  empty it first.
+
 ### My Hours counts outside hours; Course Links and historical imports can be undone (2026-11-20)
 
 Nothing blocks a restart. Two additive migrations ship in this range, and
