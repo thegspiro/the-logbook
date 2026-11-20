@@ -431,6 +431,167 @@ describe('IntegrationsPage', () => {
       }
     });
 
+    // Owner decision, 2026-11-16: Settings cannot move the integration to
+    // another org. A stored refresh token belongs to one org, and Salesforce's
+    // token reply puts the old instance URL back at the next sync.
+    const salesforceConfigured = {
+      ...salesforceConnected,
+      config: {
+        instance_url: 'https://oakvillefd.my.salesforce.com',
+        environment: 'sandbox',
+        sync_direction: 'both',
+        match_strategy: 'email_lastname',
+        graceful_fields: false,
+        auto_sync_enabled: true,
+      },
+    };
+
+    it('opens Settings prefilled, with the org locked, and saves the rest', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([salesforceConfigured]);
+      mockUpdateIntegration.mockResolvedValue(salesforceConfigured);
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-salesforce');
+      await user.click(within(card).getByRole('button', { name: 'Salesforce settings' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Salesforce settings' });
+
+      const instanceUrl = within(dialog).getByLabelText('Salesforce Instance URL');
+      expect(instanceUrl).toHaveValue('https://oakvillefd.my.salesforce.com');
+      expect(instanceUrl).toHaveAttribute('readonly');
+      expect(within(dialog).getByLabelText('Environment')).toHaveValue('sandbox');
+      expect(within(dialog).getByLabelText('Environment')).toBeDisabled();
+      expect(within(dialog).getByLabelText('Contact Matching')).toHaveValue('email_lastname');
+      expect(within(dialog).getByLabelText('Sync Direction')).toHaveValue('both');
+      expect(within(dialog).getByRole('checkbox', { name: /Skip custom fields/ })).not.toBeChecked();
+      expect(within(dialog).getByRole('checkbox', { name: /Sync automatically/ })).toBeChecked();
+      expect(within(dialog).getByLabelText('Refresh Token')).toHaveAttribute(
+        'placeholder',
+        'Leave blank to keep the current token'
+      );
+      expect(dialog).toHaveTextContent('To move to another Salesforce org, disconnect and connect again.');
+      expect(dialog).toHaveTextContent(
+        'Saved settings apply from the next sync. The connected org does not change: to move to another org, disconnect and connect again.'
+      );
+
+      await user.selectOptions(within(dialog).getByLabelText('Sync Direction'), 'push');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('sf-1', {
+        instance_url: undefined,
+        environment: undefined,
+        client_id: undefined,
+        client_secret: undefined,
+        refresh_token: undefined,
+        sync_direction: 'push',
+        match_strategy: 'email_lastname',
+        graceful_fields: false,
+        auto_sync_enabled: true,
+      });
+      expect(mockConnectIntegration).not.toHaveBeenCalled();
+    });
+
+    it('reconnecting keeps the stored sync settings rather than the defaults', async () => {
+      const user = userEvent.setup();
+      // Disconnect keeps the public config, so a reconnect starts from it.
+      mockGetIntegrations.mockResolvedValue([{ ...salesforceConfigured, status: 'available', enabled: false }]);
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-salesforce');
+      await user.click(within(card).getByText('Connect'));
+
+      expect(screen.getByLabelText('Salesforce Instance URL')).toHaveValue('https://oakvillefd.my.salesforce.com');
+      expect(screen.getByLabelText('Salesforce Instance URL')).not.toHaveAttribute('readonly');
+      expect(screen.getByLabelText('Environment')).toHaveValue('sandbox');
+      expect(screen.getByLabelText('Environment')).toBeEnabled();
+      expect(screen.getByLabelText('Sync Direction')).toHaveValue('both');
+      expect(screen.getByRole('checkbox', { name: /Sync automatically/ })).toBeChecked();
+    });
+
+    it('asks for the Client Secret when Settings replaces the Client ID', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([salesforceConfigured]);
+      mockUpdateIntegration.mockReset();
+      mockUpdateIntegration.mockResolvedValue(salesforceConfigured);
+      vi.mocked(toast.error).mockClear();
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-salesforce');
+      await user.click(within(card).getByRole('button', { name: 'Salesforce settings' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Salesforce settings' });
+      const mismatch = 'Enter the Client Secret of the new Connected App. The saved secret belongs to the current one.';
+
+      await user.type(within(dialog).getByLabelText('Connected App Client ID'), '3MVG9newapp');
+      await user.click(screen.getByTestId('settings-submit'));
+      expect(toast.error).toHaveBeenCalledWith(mismatch);
+
+      vi.mocked(toast.error).mockClear();
+      await user.click(within(dialog).getByRole('button', { name: 'Re-authorize with Salesforce' }));
+      expect(toast.error).toHaveBeenCalledWith(mismatch);
+      expect(mockUpdateIntegration).not.toHaveBeenCalled();
+
+      await user.type(within(dialog).getByLabelText('Client Secret'), 'newapp-secret');
+      await user.click(screen.getByTestId('settings-submit'));
+      expect(mockUpdateIntegration).toHaveBeenCalledWith(
+        'sf-1',
+        expect.objectContaining({ client_id: '3MVG9newapp', client_secret: 'newapp-secret' })
+      );
+    });
+
+    it('lets Settings replace the Client Secret on its own', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([salesforceConfigured]);
+      mockUpdateIntegration.mockReset();
+      mockUpdateIntegration.mockResolvedValue(salesforceConfigured);
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-salesforce');
+      await user.click(within(card).getByRole('button', { name: 'Salesforce settings' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Salesforce settings' });
+
+      await user.type(within(dialog).getByLabelText('Client Secret'), 'rotated-secret');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith(
+        'sf-1',
+        expect.objectContaining({ client_id: undefined, client_secret: 'rotated-secret' })
+      );
+    });
+
+    it('re-authorizes from Settings without moving the org', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([salesforceConfigured]);
+      mockUpdateIntegration.mockResolvedValue(salesforceConfigured);
+      const originalLocation = window.location;
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        writable: true,
+        value: { ...originalLocation, href: '' },
+      });
+
+      try {
+        renderPage();
+        const card = await screen.findByTestId('integration-card-salesforce');
+        await user.click(within(card).getByRole('button', { name: 'Salesforce settings' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Salesforce settings' });
+
+        expect(within(dialog).queryByRole('button', { name: /Connect with Salesforce/i })).not.toBeInTheDocument();
+        await user.click(within(dialog).getByRole('button', { name: 'Re-authorize with Salesforce' }));
+
+        expect(mockUpdateIntegration).toHaveBeenCalledWith(
+          'sf-1',
+          expect.objectContaining({ instance_url: undefined, environment: undefined, sync_direction: 'both' })
+        );
+        expect(window.location.href).toBe('/api/v1/integrations/salesforce/oauth/authorize');
+      } finally {
+        Object.defineProperty(window, 'location', {
+          configurable: true,
+          writable: true,
+          value: originalLocation,
+        });
+      }
+    });
+
     it('readiness check renders missing external-ID fields', async () => {
       const user = userEvent.setup();
       mockGetIntegrations.mockResolvedValue([salesforceConnected]);
@@ -771,6 +932,177 @@ describe('IntegrationsPage', () => {
       expect(
         screen.getByText(/When connecting again after a disconnect, leave it blank to keep the saved secret\./)
       ).toBeInTheDocument();
+    });
+  });
+
+  // Cal.com cannot connect without an API key, and a stored key is never sent
+  // back, so Settings states that a blank box keeps it. The key belongs to the
+  // host it was entered for: the API refuses to move it to a new base URL.
+  describe('Cal.com settings', () => {
+    const calcomConnected = {
+      id: 'cal-1',
+      organization_id: 'org-1',
+      integration_type: 'calcom',
+      name: 'Cal.com',
+      description: 'Pull scheduled bookings from Cal.com',
+      category: 'Scheduling',
+      status: 'connected' as const,
+      config: { api_base_url: 'https://cal.oakvillefd.org/api/v1' },
+      enabled: true,
+      contains_phi: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+
+    beforeEach(() => {
+      mockGetIntegrations.mockReset();
+      mockUpdateIntegration.mockReset();
+      mockGetIntegrations.mockResolvedValue([calcomConnected]);
+      mockUpdateIntegration.mockResolvedValue(calcomConnected);
+      vi.mocked(toast.error).mockClear();
+    });
+
+    const openSettings = async (user: ReturnType<typeof userEvent.setup>) => {
+      renderPage();
+      const card = await screen.findByTestId('integration-card-calcom');
+      await user.click(within(card).getByRole('button', { name: 'Cal.com settings' }));
+      return screen.findByRole('dialog', { name: 'Cal.com settings' });
+    };
+
+    it('opens prefilled and saves only what was typed', async () => {
+      const user = userEvent.setup();
+      const dialog = await openSettings(user);
+
+      expect(within(dialog).getByLabelText('API Key')).toHaveAttribute(
+        'placeholder',
+        'Leave blank to keep the current key'
+      );
+      expect(within(dialog).getByLabelText('API Base URL (optional)')).toHaveValue('https://cal.oakvillefd.org/api/v1');
+      expect(dialog).toHaveTextContent('Changing it needs the API key for the new address in the same save.');
+      expect(dialog).toHaveTextContent('Leave it blank to keep the saved secret, if one was entered.');
+      expect(dialog).toHaveTextContent(
+        'A new key or base URL is used from the next booking lookup, and a new webhook secret from the next message Cal.com sends. The webhook address does not change.'
+      );
+
+      await user.type(within(dialog).getByLabelText('Webhook Secret (optional)'), 'cal-secret');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('cal-1', {
+        api_base_url: 'https://cal.oakvillefd.org/api/v1',
+        api_key: undefined,
+        webhook_secret: 'cal-secret',
+      });
+      expect(mockConnectIntegration).not.toHaveBeenCalled();
+    });
+
+    it('asks for the key before moving to a new base URL', async () => {
+      const user = userEvent.setup();
+      const dialog = await openSettings(user);
+      const baseUrl = within(dialog).getByLabelText('API Base URL (optional)');
+      await user.clear(baseUrl);
+      await user.type(baseUrl, 'https://api.cal.com/v1');
+
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(toast.error).toHaveBeenCalledWith(
+        'Enter the API key for the new base URL. The saved key belongs to the current one.'
+      );
+      expect(mockUpdateIntegration).not.toHaveBeenCalled();
+
+      await user.type(within(dialog).getByLabelText('API Key'), 'cal_live_new');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('cal-1', {
+        api_base_url: 'https://api.cal.com/v1',
+        api_key: 'cal_live_new',
+        webhook_secret: undefined,
+      });
+    });
+  });
+
+  // Documenso, like Cal.com, cannot connect without its credential, never
+  // sends it back, and binds it to the host it was made on.
+  describe('Documenso settings', () => {
+    const documensoConnected = {
+      id: 'doc-1',
+      organization_id: 'org-1',
+      integration_type: 'documenso',
+      name: 'Documenso',
+      description: 'Send documents for electronic signature',
+      category: 'Documents',
+      status: 'connected' as const,
+      config: { api_base_url: 'https://sign.oakvillefd.org/api/v1' },
+      enabled: true,
+      contains_phi: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+
+    beforeEach(() => {
+      mockGetIntegrations.mockReset();
+      mockUpdateIntegration.mockReset();
+      mockGetIntegrations.mockResolvedValue([documensoConnected]);
+      mockUpdateIntegration.mockResolvedValue(documensoConnected);
+      vi.mocked(toast.error).mockClear();
+    });
+
+    const openSettings = async (user: ReturnType<typeof userEvent.setup>) => {
+      renderPage();
+      const card = await screen.findByTestId('integration-card-documenso');
+      await user.click(within(card).getByRole('button', { name: 'Documenso settings' }));
+      return screen.findByRole('dialog', { name: 'Documenso settings' });
+    };
+
+    it('opens prefilled and saves only what was typed', async () => {
+      const user = userEvent.setup();
+      const dialog = await openSettings(user);
+
+      expect(within(dialog).getByLabelText('API Token')).toHaveAttribute(
+        'placeholder',
+        'Leave blank to keep the current token'
+      );
+      expect(within(dialog).getByLabelText('API Base URL (optional)')).toHaveValue(
+        'https://sign.oakvillefd.org/api/v1'
+      );
+      expect(dialog).toHaveTextContent('Changing it needs the API token for the new address in the same save.');
+      expect(dialog).toHaveTextContent('Leave it blank to keep the saved secret, if one was entered.');
+      expect(dialog).toHaveTextContent(
+        'A new token or base URL is used from the next request to Documenso, and a new webhook secret from the next message Documenso sends. The webhook address does not change.'
+      );
+
+      await user.type(within(dialog).getByLabelText('Webhook Secret (optional)'), 'doc-secret');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('doc-1', {
+        api_base_url: 'https://sign.oakvillefd.org/api/v1',
+        api_token: undefined,
+        webhook_secret: 'doc-secret',
+      });
+      expect(mockConnectIntegration).not.toHaveBeenCalled();
+    });
+
+    it('asks for the token before moving to a new base URL', async () => {
+      const user = userEvent.setup();
+      const dialog = await openSettings(user);
+      const baseUrl = within(dialog).getByLabelText('API Base URL (optional)');
+      await user.clear(baseUrl);
+      await user.type(baseUrl, 'https://app.documenso.com/api/v1');
+
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(toast.error).toHaveBeenCalledWith(
+        'Enter the API token for the new base URL. The saved token belongs to the current one.'
+      );
+      expect(mockUpdateIntegration).not.toHaveBeenCalled();
+
+      await user.type(within(dialog).getByLabelText('API Token'), 'api_cloud_new');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('doc-1', {
+        api_base_url: 'https://app.documenso.com/api/v1',
+        api_token: 'api_cloud_new',
+        webhook_secret: undefined,
+      });
     });
   });
 

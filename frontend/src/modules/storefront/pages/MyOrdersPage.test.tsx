@@ -114,6 +114,47 @@ describe('MyOrdersPage', () => {
     expect(mockGetMyOrders).toHaveBeenCalledWith();
   });
 
+  it('tells a member whose order ships that it is ready to ship, not ready for pickup', async () => {
+    mockGetMyOrders.mockResolvedValue([
+      {
+        ...unpaidOrder,
+        status: 'ready_for_pickup',
+        paymentStatus: 'paid',
+        amountPaid: '45.00',
+        balanceDue: '0.00',
+        fulfillmentMethod: 'ship',
+        shippingAddress: '12 Elm St',
+      },
+    ]);
+    renderPage();
+    await screen.findByRole('heading', { name: 'ORD-2026-0001' });
+
+    const progress = screen.getByRole('list', { name: 'Order progress' });
+    expect(progress).toHaveTextContent('Ready to ship');
+    expect(screen.getAllByText('Ready to ship').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText(/Ready for pickup/)).not.toBeInTheDocument();
+  });
+
+  it('tells the member when the department owes them money back', async () => {
+    mockGetMyOrders.mockResolvedValue([
+      {
+        ...unpaidOrder,
+        status: 'paid',
+        paymentStatus: 'paid',
+        amountPaid: '50.00',
+        balanceDue: '0.00',
+        overpaidAmount: '5.00',
+      },
+    ]);
+    renderPage();
+    await screen.findByRole('heading', { name: 'ORD-2026-0001' });
+
+    const terms = screen.getAllByRole('term');
+    const owedIndex = terms.findIndex((term) => term.textContent === 'Owed to you');
+    expect(owedIndex).toBeGreaterThanOrEqual(0);
+    expect(screen.getAllByRole('definition')[owedIndex]).toHaveTextContent('$5.00');
+  });
+
   it('shows the member how a shipped order reaches them, and what it cost to ship', async () => {
     mockGetMyOrders.mockResolvedValue([
       {

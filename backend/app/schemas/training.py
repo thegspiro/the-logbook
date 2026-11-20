@@ -1577,3 +1577,31 @@ class CourseLinkRequest(BaseModel):
 class CourseLinkResult(BaseModel):
     names: int
     records: int
+
+
+class CourseLinkHistoryItem(BaseModel):
+    """One past link, for the Course Links screen's history."""
+
+    id: UUID
+    course_id: Optional[UUID] = None
+    course_name: str
+    label: str
+    record_count: int
+    linked_by_name: Optional[str] = None
+    linked_at: datetime
+    undone_at: Optional[datetime] = None
+    undone_by_name: Optional[str] = None
+
+
+class CourseLinkHistory(BaseModel):
+    items: List[CourseLinkHistoryItem]
+    total: int
+    offset: int
+    limit: int
+
+
+class CourseUnlinkResult(BaseModel):
+    reverted: int
+    # Records changed since the link, or linked to another course by hand:
+    # they keep their course.
+    kept: int

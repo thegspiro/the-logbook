@@ -1,6 +1,246 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14), 2026-11-06 (pass 15) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), #3579 (pass 11), #3734 (pass 12), #3816 (pass 13), #3913 (pass 14), (this PR) (pass 15)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14), 2026-11-06 (pass 15), 2026-11-19 (pass 16) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), #3579 (pass 11), #3734 (pass 12), #3816 (pass 13), #3913 (pass 14), #4103 (pass 15), (this PR) (pass 16)
+
+---
+
+## Pass 16 (2026-11-19)
+
+**Watchdog pickup.** `/loop 30m /security-review` was unreachable; a chain of
+prior watchdog iterations (PR #4436 Feature 07, #4438 Feature 08, #4439
+Feature 09) had just merged, leaving `main` at `b7f84513dd` with no open
+`claude/security-review-*` PR (`list_pull_requests`, state `open`, fresh
+check). Row 10 (Documents & legal) was the next `⬜`.
+
+**Baseline** `fb288610f0` (PR #4103's merge, pass 15) — found the same way
+pass 15 itself found its own baseline: pass 15's file text names
+`2b1884237` as _its_ baseline, which is not an ancestor of current `main`
+(the squash/orphan-merge artifact this file has now documented at passes
+1/4/7/8/15); the real merge commit for PR #4103
+(`claude/security-review-documents-legal-p15`, confirmed via `git log --all
+--grep`) is `fb288610f0`, which _is_ an ancestor of HEAD. A plain `git diff
+--numstat` against the file-text baseline alone would again have looked
+emptier than reality; using the real merge commit instead, across the full
+declared scope (`documents.py`, `station_documents.py`, `legal_documents.py`,
+`api/public/legal.py`, `documents_service.py`, `document_service.py`,
+`print_document_service.py`, `legal_service.py`,
+`admin_only_folder_digest.py`, `models/document.py`, `models/legal.py`,
+`schemas/documents.py`, `schemas/legal.py`, `mcp/tools/documents.py`,
+`DocumentsPage.tsx`, `LegalPage.tsx`, and the `documents/` frontend
+components) finds real delta in seven files:
+
+| File                                           | +/−       | What changed                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `services/documents_service.py`                | +275/−28  | DOC-31's lock-order fix (below) landed for real this pass's baseline window, plus a check-request receipt extension (2026-11-06); new `ensure_history_folder`/`is_in_history_tree`/`lock_finance_receipts_folder` helpers (Feature "History" phase 4, owner-approved 2026-11-14) protecting a catalogued document from `delete_document`          |
+| `api/v1/endpoints/documents.py`                | +32/−1    | `_refuse_history_document` (409) on `update_document`/`delete_document`; `is_in_history_tree` check (409) on upload and on a folder move's destination                                                                                                                                                                                            |
+| `services/legal_service.py`                    | +88/−12   | Owner decisions W54-3/W54-4 (2026-11-01): `revert_to_default` records the revert as an ARCHIVED history row; `update_draft` records `edited_by`/`edited_at` when the editor is not the proposer                                                                                                                                                   |
+| `api/v1/endpoints/legal_documents.py`          | +17/−8    | Threads `edited_by` through `update_revision`; exposes `reverts_to_default`/`edited_by`/`edited_at` on the response                                                                                                                                                                                                                               |
+| `models/legal.py`                              | +25/−2    | New `reverts_to_default` (`NOT NULL`, `server_default=false()`), `edited_by` (`String(36)`, `ForeignKey(..., ondelete="SET NULL")`, `nullable=True` — Pitfall #2 pair correct), `edited_at`                                                                                                                                                       |
+| `models/document.py`                           | +18/−0    | New `HISTORY_FOLDER_PERMISSIONS = ["history.manage"]`, `HISTORY_DOCUMENT_SOURCE_TYPE`, and a `"history"` entry in `SYSTEM_FOLDERS` (`is_system`, root-level, per the existing folder-ACL mechanism — not a new ACL mechanism)                                                                                                                     |
+| `schemas/legal.py`                             | +11/−1    | `LegalRevisionResponse` gains the three fields above                                                                                                                                                                                                                                                                                              |
+| `services/document_service.py`                 | +1/−1     | Minutes HTML label "Ballots cast" → "Votes cast"; still `escape()`d, Minutes-owned                                                                                                                                                                                                                                                                |
+| `frontend/.../DocumentsPage.tsx`               | +382/−214 | Forms-rollout pass (field-level errors via `FormField`/`useFieldErrors`, discard-guard on both dialogs, `getLoadFailureMessage`/`getActionFailureMessage` replacing fixed strings) plus a "Managed in History" link/button swap for `source_type === 'history_document'` rows, mirroring (not re-deriving, Pitfall #29) the backend's own refusal |
+| `frontend/.../PublishedMinutesAttachments.tsx` | +3/−2     | Same load-failure-message helper swap                                                                                                                                                                                                                                                                                                             |
+
+`station_documents.py`, `print_document_service.py`,
+`admin_only_folder_digest.py`, `schemas/documents.py`, `mcp/tools/documents.py`
+and `LegalPage.tsx` are byte-identical to pass 15.
+
+Two migrations in this window touch this feature's tables, both read in full:
+
+- `81b38694152f` ("Record legal-document reverts and edits…") — adds
+  `reverts_to_default` (`NOT NULL`, `server_default=false()` — satisfies
+  Pitfall #35, existing rows get `0` from the default, not the implicit-type
+  default), `edited_by` (nullable `SET NULL` FK, nothing to backfill since
+  no row has ever had an attributed edit) and `edited_at` to
+  `legal_document_revisions`. Table-existence guarded (Pitfall #26), has a
+  downgrade (deletes revert rows before dropping the column, since a revert
+  row with the column gone would misread as an ordinary archived revision).
+- `4d8e2b6f1c93` ("History phase 4: documents") — Feature "History"-owned
+  (new tables only: `history_document_types`, `history_documents`,
+  `history_document_files`, `history_document_tags`,
+  `history_album_documents`). Reviewed for this feature's own invariant
+  only: `history_documents.document_id` is `ForeignKey("documents.id",
+ondelete="CASCADE")` as its own primary key — correct given
+  `DocumentsService.delete_document` now refuses to delete a catalogued
+  document outright (see DOC-32 below), so this CASCADE is defensive, not
+  the live deletion path. Table-existence guarded throughout.
+
+No other migration in this window touches `document_folders`, `documents`,
+`legal_documents`, or `legal_document_revisions` (`git diff --name-only
+fb288610f0..HEAD -- backend/alembic/versions`, grepped for all four table
+names).
+
+**Routes: 26, unchanged from pass 15** (re-enumerated by AST, not grepped:
+`documents.py` 17, `station_documents.py` 2, `legal_documents.py` 7 — no
+route gained or lost a decorator since pass 15; the diff above only added
+checks _inside_ existing handlers). The unauthenticated `api/public/legal.py`
+route (1, unchanged) is tracked separately, as in every prior pass. Every
+route's permission string re-confirmed unchanged from pass 15:
+`documents.view`/`documents.manage` on `documents.py`'s 17,
+`get_current_user` only on `station_documents.py`'s 2 (unchanged, already
+accepted — these two routes render/print whatever the caller already has
+rights to view, enforced inside the handler, not at the route gate),
+`legal.propose`/`legal.publish`/`settings.manage` OR-gates on
+`legal_documents.py`'s create/update/delete/publish, `legal.publish`/
+`settings.manage` on `revert-to-default` (a higher tier, correctly —
+reverting published text is as consequential as publishing it).
+`check_route_permissions.py --strict` — 327 routes repo-wide, 0
+errors/warnings.
+
+### New surface — reviewed in full
+
+**History's boundary with the Documents module.** Owner-approved phase-4
+spec (2026-11-14): a History-catalogued document is a `documents` row filed
+in a protected, `is_system` "History" folder, so it still benefits from the
+Documents module's folder-ACL and storage machinery, but is edited only
+through History.
+
+- **The History folder is a system folder like any other** — no new ACL
+  mechanism. `required_permissions = ["history.manage"]` on the seeded
+  `SYSTEM_FOLDERS` entry is read by the same `_folder_admits_user` every
+  other restricted folder (Finance, Separations, Facilities) already goes
+  through.
+- **A catalogued document cannot be renamed, moved or deleted from the
+  Documents screens.** `_refuse_history_document` (`documents.py:122-128`,
+  called from `update_document`/`delete_document`) and the service-layer
+  `delete_document`'s own check (`documents_service.py:2029`, "every
+  deletion path ends here") both gate on `source_type ==
+HISTORY_DOCUMENT_SOURCE_TYPE` and fail with 409/`ValueError`, never a
+  silent no-op.
+- **Nothing can be filed into the History tree from the Documents screens
+  either.** `is_in_history_tree` (`documents_service.py`) walks a folder's
+  ancestors via the already org-scoped `get_folder_by_id`, checking for the
+  System-flagged, root-level `"history"` slug — not a bare string match a
+  user-created folder could spoof (an ordinary folder can share the name but
+  never `is_system=True` at the root, since `create_folder`/`update_folder`
+  do not accept `is_system` from the client). `upload_document` and
+  `update_document`'s folder-move both call it on the _destination_ and
+  refuse with 409 before any write.
+- **The single point of entry is the History root itself, confirmed by
+  reading the writer:** `history_document_service.py:601,670` files every
+  catalogued document's `folder_id` as `ensure_history_folder(...)`'s
+  return — always the root, never a subfolder — so a catalogued document
+  is never reachable at any other node in the tree through any writer this
+  review could find.
+
+### DOC-32 — LOW — `delete_folder`'s bulk delete had no per-row History check, unlike `delete_document` — ✅ FIXED
+
+**What:** `delete_document` (single document) and the new
+`_refuse_history_document` (documents.py's `update_document`/
+`delete_document`) both refuse a catalogued History document explicitly.
+`delete_folder`'s cascade does not call either of them — it resolves the
+subtree's document ids via `_lock_subtree_documents` and then issues a bulk
+`DELETE FROM documents WHERE id IN (...)` directly (`documents_service.py`,
+the FAC-40 comment's own description), with no per-row check of
+`source_type` at all.
+
+**Where:** `backend/app/services/documents_service.py`, `delete_folder`
+(bulk-delete block, originally right before `await self.db.delete(folder)`).
+
+**Failure scenario — not reachable today, confirmed by reading the single
+writer:** a catalogued document only ever lives directly in the `is_system`
+History root (see "New surface" above), and `delete_folder` already refuses
+outright on the target folder's own `is_system` flag _and_ on any
+descendant's `is_system` flag found during its subtree walk (the FAC-22/
+FAC-23 checks, pre-existing). Since the History root is `is_system=True` at
+the root with no children, no `delete_folder` call can ever reach a
+catalogued document today. But the two checks that make this true
+(`is_system` gates and "History always files at its own root") are enforced
+in three different places by three different authors across two features —
+not a single invariant one reviewer can pin down permanently — and the bulk
+`DELETE` itself carries no check of its own, unlike the single-document
+path. A future change to any one of them (a bug in `is_in_history_tree`, a
+History writer that starts using a subfolder for organization, a relaxed
+`is_system` check) would silently destroy catalogued historical records
+with no refusal, the same silent-data-loss shape DOC-31 closed for Finance's
+receipts.
+
+**Impact:** LOW — defense-in-depth, not a live gap. Scored LOW rather than
+NONE because the two things keeping it unreachable are enforced by code
+this feature does not own (History's own writer) and are not re-asserted at
+the point that actually deletes the rows.
+
+**Fix:** `delete_folder` now re-checks `document_ids` for
+`source_type == HISTORY_DOCUMENT_SOURCE_TYPE` and raises `ValueError` (409
+via the endpoint's existing `handle_service_errors`) before any write,
+mirroring `delete_document`'s own message. Regression test
+`test_delete_folder_will_not_bulk_delete_a_history_document`
+(`tests/test_history_documents.py`) constructs the otherwise-unreachable
+case directly (an ordinary, non-system folder holding a catalogued
+document, by direct assignment — not through any real writer, which already
+refuses to put one there) and asserts the cascade refuses rather than
+deletes; seen failing (`DID NOT RAISE ValueError`) against the pre-fix code,
+passing after.
+
+### DOC-31 — now ✅ RESOLVED, re-verified against the current code
+
+Pass 15 re-confirmed this OPEN against _its own_ baseline (`2b1884237`/
+`fb288610f0`), reading `_release_document_references` as still a plain
+`SELECT`. That was accurate for the code pass 15 was looking at: the actual
+fix (owner decision 2026-11-01, "agree a lock order and lock") merged into
+`main`'s DAG only in the commits this pass's delta table lists above
+(`26b2e202dc`, `5cb8589dcb`) — both outside pass 15's baseline `fb288610f0`,
+despite carrying an earlier author-date (another instance of this repo's
+squash/orphan-merge history not matching wall-clock order, same class as
+the baseline-commit mismatch above, just affecting a fix's landing time
+instead of a review's).
+
+Re-verified this pass against the current, running code (not merely
+`docs/KNOWN_LIMITATIONS.md`'s say-so): `_release_document_references`
+(`documents_service.py:1562-1711`) locks `PurchaseRequest`/`ExpenseLineItem`
+exclusively and `ExpenseReport` shared, all `NOWAIT`, through
+`read_referencing_rows_nowait` (`app/utils/document_locks.py`); a check
+request's receipt is covered too (2026-11-06 extension); the minutes clear
+locks the naming rows by the now-indexed `published_document_id`
+(migration `c6b690cc33d6`) instead of every minutes row in the org. Full
+mechanism already documented in `KNOWN_LIMITATIONS.md` → DOC-31 and the
+canonical-lock-order comment at the top of `documents_service.py`; nothing
+in this pass's delta touches it further.
+`tests/test_document_receipt_reference_race.py` and
+`tests/test_cross_feature_lock_order.py` both still pass (12
+two-connection tests). No `KNOWN_LIMITATIONS.md` edit needed — it already
+reads "Resolved".
+
+**Legal-document markup is XSS-safe by construction, not by sanitizing**
+(owner decision W54-5, reviewed as part of the batch-8/9 delta even though
+`legalMarkup.ts`/`LegalMarkup.tsx` are outside this file's previously
+declared scope — the public legal page is new-reachable surface for every
+visitor, so it earns a direct look): `parseLegalMarkup` returns plain data
+(`{kind, text}` block objects), and the renderer puts every string into the
+page as a React text node — no `dangerouslySetInnerHTML` anywhere in either
+file, confirmed by grep. The only text-derived value reaching an attribute
+is a numbered list's `start`, parsed with `Number.parseInt` and capped by
+the originating regex to 6 digits — a plain numeric attribute, not an
+injection point. `api/public/legal.py`'s own comment was updated in the
+same commit to describe this (text is returned verbatim; the no-HTML
+guarantee is now the frontend parser's, not a backend strip).
+
+**0 fixed-elsewhere, 1 fixed (DOC-32), 0 flagged.** DOC-31, the only
+standing item carried into this pass, is now resolved. No other OPEN/
+FLAGGED finding exists for this feature.
+
+## Completion gate
+
+| Check                                                                                                                                            | Result                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                                                                                            | ✅ 0 violations                                           |
+| `black --check app/ tests/ alembic/` (26.10.1)                                                                                                   | ✅ 3281 files unchanged                                   |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                                                                                | ✅ clean                                                  |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                | ✅ 786 revisions, single head `0d54dd90d6ba`              |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                | ✅ 327 routes, 0 errors, 0 warnings                       |
+| `pytest tests/ -k "document or legal or station_document or facility_folder or folder or admin_only or minutes_attachment or published_minutes"` | ✅ 826 passed, 1 pre-existing skip (`py_vapid`), 0 failed |
+| `cd frontend && npm run typecheck`                                                                                                               | ✅ 0 errors                                               |
+| `cd frontend && npm run lint`                                                                                                                    | ✅ 0 errors, 0 warnings                                   |
+| `npx vitest run src/pages/DocumentsPage.test.tsx src/components/documents src/pages/LegalPage.test.tsx src/utils/fileTypeLabel.test.ts`          | ✅ 74 passed (5 files)                                    |
+
+New regression test (`test_delete_folder_will_not_bulk_delete_a_history_document`)
+seen failing (`DID NOT RAISE ValueError`) against the pre-fix code and
+passing after, per CLAUDE.md Pitfall #37.
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 

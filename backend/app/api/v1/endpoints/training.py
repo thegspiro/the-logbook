@@ -65,11 +65,14 @@ from app.schemas.training import (
     CertAlertSettingsUpdate,
     ComplianceSummary,
     CourseLinkCourse,
+    CourseLinkHistory,
+    CourseLinkHistoryItem,
     CourseLinkName,
     CourseLinkRequest,
     CourseLinkResult,
     CourseLinkSpelling,
     CourseLinksView,
+    CourseUnlinkResult,
     DuplicateWarning,
     HistoricalImportConfirmRequest,
     RequirementChangeScope,
@@ -636,7 +639,10 @@ async def link_course_name(
     """
     try:
         result = await TrainingCourseLinkService(db).link(
-            str(current_user.organization_id), payload.key, str(payload.course_id)
+            str(current_user.organization_id),
+            payload.key,
+            str(payload.course_id),
+            linked_by=str(current_user.id),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -665,7 +671,7 @@ async def link_suggested_course_names(
     **Requires permission: training.manage**
     """
     result = await TrainingCourseLinkService(db).link_suggested(
-        str(current_user.organization_id)
+        str(current_user.organization_id), linked_by=str(current_user.id)
     )
     await db.commit()
     await log_audit_event(
@@ -678,6 +684,98 @@ async def link_suggested_course_names(
         username=current_user.username,
     )
     return CourseLinkResult(names=result.names, records=result.records)
+
+
+@router.get("/course-links/history", response_model=CourseLinkHistory)
+async def course_link_history(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    The department's course links, newest first, with who made and undid each.
+
+    **Requires permission: training.manage**
+    """
+    links, total = await TrainingCourseLinkService(db).history(
+        str(current_user.organization_id), offset, limit
+    )
+    people = {
+        str(u.id): f"{u.first_name or ''} {u.last_name or ''}".strip() or u.username
+        for u in (
+            await db.execute(
+                select(User).where(
+                    User.organization_id == current_user.organization_id,
+                    User.id.in_(
+                        {
+                            i
+                            for link in links
+                            for i in (link.linked_by, link.undone_by)
+                            if i
+                        }
+                    ),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    }
+    return CourseLinkHistory(
+        items=[
+            CourseLinkHistoryItem(
+                id=link.id,
+                course_id=link.course_id,
+                course_name=link.course_name,
+                label=link.label,
+                record_count=link.record_count,
+                linked_by_name=people.get(str(link.linked_by)),
+                linked_at=link.linked_at,
+                undone_at=link.undone_at,
+                undone_by_name=people.get(str(link.undone_by)),
+            )
+            for link in links
+        ],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.post("/course-links/{link_id}/undo", response_model=CourseUnlinkResult)
+async def undo_course_link(
+    link_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Put a link's records back as they were: no course, and the category and
+    training type each had before. A record changed since the link, or linked
+    to another course by hand, keeps its course.
+
+    **Requires permission: training.manage**
+    """
+    try:
+        result = await TrainingCourseLinkService(db).unlink(
+            str(current_user.organization_id), str(link_id), str(current_user.id)
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    await db.commit()
+    await log_audit_event(
+        db=db,
+        event_type="training_course_link_undone",
+        event_category="training",
+        severity="info",
+        event_data={
+            "link_id": str(link_id),
+            "reverted": result.reverted,
+            "kept": result.kept,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return CourseUnlinkResult(reverted=result.reverted, kept=result.kept)
 
 
 @router.get("/courses", response_model=list[TrainingCourseResponse])
@@ -2489,13 +2587,14 @@ async def get_compliance_summary(
 
     Uses ``_evaluate_member_requirement()`` for consistent per-type
     evaluation (hours, certification, shifts, calls, courses, fallback).
-    Only requirements applicable to the member (via ``applies_to_all``
-    or ``required_roles``) are counted.
+    The requirements counted are the ones ``ComplianceGrading.for_member``
+    resolves — the member's matching compliance profile narrows them, as on
+    the compliance matrix and the dashboard — so the card's "N of M" matches
+    those screens (D10).
     """
     await _require_self_or_training_officer(db, current_user, user_id)
     org_id = current_user.organization_id
     today = await resolve_org_today(db, org_id)
-    org_include_current = await get_org_include_current_month(db, str(org_id))
 
     # Get user stats for hours and cert counts
     training_service = TrainingService(db)
@@ -2543,16 +2642,15 @@ async def get_compliance_summary(
     )
     all_requirements = list(requirements_result.scalars().all())
 
-    # Filter to requirements applicable to this user. Was a hand-rolled
-    # loop that checked required_membership_types before applies_to_all --
-    # the wrong order, and one that also silently dropped a requirement
-    # scoped ONLY by required_membership_types (applies_to_all=False, no
-    # required_roles), since neither branch below it re-checked a
-    # membership-type match as its own inclusion criterion. See
-    # requirement_applies_to_member's docstring.
-    requirements = [
-        req for req in all_requirements if requirement_applies_to_user(req, target_user)
-    ]
+    # The requirements that grade this member: the matching compliance
+    # profile narrows the set, then applicability by type, rank, position and
+    # join date. One resolution, shared with the matrix and the dashboard
+    # (CLAUDE.md pitfall 29).
+    grading = ComplianceGrading.from_config(
+        await _load_compliance_config(db, str(org_id))
+    )
+    org_include_current = grading.include_current_month
+    requirements = grading.for_member(target_user, all_requirements).requirements
 
     # The member's records the grader can read for these requirements.
     member_records = await load_graded_records(

@@ -1,0 +1,52 @@
+{
+  "script": "docs/youtube-scripts/08-quick-tips-and-shorts.md — SHORT 8D",
+  "title": "QR Check-In",
+  "callout": "QR Check-In — contactless attendance tracking",
+  "endCard": {
+    "headline": "Try The Logbook",
+    "sub": "Free & Open Source",
+    "url": "github.com/thegspiro/the-logbook"
+  },
+  "shots": [
+    {
+      "id": "hook",
+      "say": "Create an event with automatic attendance tracking, using QR codes.",
+      "caption": "Events with QR check-in"
+    },
+    {
+      "id": "basics",
+      "say": "Tap Create Event. Fill in the basics: name, date, time, and location.",
+      "caption": "Create Event → the basics"
+    },
+    {
+      "id": "window",
+      "say": "Every event gets its own check-in QR code. There's nothing to switch on. In Check-In Settings, pick the Check-In Window: Flexible, Strict, or Window.",
+      "caption": "Check-In Window: Flexible, Strict or Window"
+    },
+    {
+      "id": "save",
+      "say": "Save the event. The QR code is ready straight away.",
+      "caption": "Save — the QR code is ready"
+    },
+    {
+      "id": "qr",
+      "say": "Print this QR code, or show it on a tablet at the door.",
+      "caption": "Print it, or show it at the door"
+    },
+    {
+      "id": "member",
+      "say": "When members arrive, they scan the code, sign in if they need to, and tap Check In to This Event.",
+      "caption": "Members scan and tap Check In"
+    },
+    {
+      "id": "done",
+      "say": "Their screen says You're Checked In. No more paper sign-in sheets. No more chasing people down after the event.",
+      "caption": "You're Checked In"
+    },
+    {
+      "id": "outro",
+      "say": "Attendance just works.",
+      "caption": "Attendance just works"
+    }
+  ]
+}

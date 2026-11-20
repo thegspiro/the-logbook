@@ -405,11 +405,16 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
               className="form-input py-3"
             >
               <option value="">Select instructor...</option>
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
+              {/* Former members are not offered; one this session already
+                names stays listed, marked, so the select still shows them. */}
+              {members
+                .filter((m) => !m.former || m.id === value.instructor_id)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                    {m.former ? ' (former member)' : ''}
+                  </option>
+                ))}
             </select>
           )}
         </FormField>

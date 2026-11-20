@@ -25,7 +25,7 @@ been through a review pass.
 | A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ✅     |
 | A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ✅     |
 | A7  | Dashboard & action items       | `endpoints/dashboard.py` (1452 L, 7 routes), `services/attendance_dashboard_service.py` (329 L), `dashboard_widget_service.py`; `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`, `components/dashboard/`                                             | DASH   | ✅     |
-| A8  | Locations & kiosk              | `endpoints/locations.py` (434 L, 8 routes), `services/location_service.py` (394 L), `api/public/display.py` (550 L, 4 routes); `pages/LocationKioskPage.tsx`, `RoomCheckInPage.tsx`, `RoomQRCodesPage.tsx`                                                                | LOC    | ⬜     |
+| A8  | Locations & kiosk              | `endpoints/locations.py` (434 L, 8 routes), `services/location_service.py` (394 L), `api/public/display.py` (550 L, 4 routes); `pages/LocationKioskPage.tsx`, `RoomCheckInPage.tsx`, `RoomQRCodesPage.tsx`                                                                | LOC    | ✅     |
 | A9  | Platform ops & data lifecycle  | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (165 L), `data_export_service.py` (192 L), `separation_of_duties.py` (70 L, 20 call sites in 8 modules)                                                                                           | OPS    | ⬜     |
 
 ## Tier B — second pass over the audited 27
@@ -3597,6 +3597,21 @@ secrets redacted for non-admins. See
   the backend dashboard/action-item/pulse selection pass. One setup error was
   the sandbox's stale schema (behind MS-18), cleared by `alembic upgrade head`.
   See dashboard.md → Pass 4. Next: A8 locations & kiosk.
+- **A8 locations & kiosk ✅ (pass 4).** Reviewed the delta since pass 3: the
+  LOC-41 uniqueness key (a generated `building_key` so locations with no
+  building are covered), the LOC-40 shared display builder, and the new
+  email-first guest sign-in (`guest-lookup`, `guest-confirm`). The security
+  rotation re-derived authorization on 2026-11-11 (LOC13), so this pass
+  re-checked rather than repeated it. Verified: every unavailable sign-in answers
+  the same 404, a member's address is indistinguishable from an unknown one,
+  the confirm token is typed and bound to its prospect, event, room and
+  department and cannot authenticate a session, and lookups are audited without
+  the email. **1 fix:** LOC-42 (LOW, docs), the delete route's docstring named
+  three of the eleven reference kinds that make it deactivate and omitted its 409. **Every pass-3 flag resolved** (LOC-37, 40, 41; LOC-3 has a consumer).
+  **Leads:** organizations (the department timezone is checked for length only,
+  and an invalid zone throws in the frontend's formatters); membership pipeline
+  (LOC10-4, still open there). Gate: typecheck, lint, flake8 and black clean; 301
+  locations, display, kiosk and guest tests pass. See locations-kiosk.md → Pass 4. Next: A9 platform ops & data lifecycle.
 - **B1 medical-screening ✅ (pass 6).** Reviewed the three commits since the
   security rotation's pass 15 (expiry reminders, `screening_type` and
   `requirement_id` encrypted, the requirement-link race fix) and the open list,

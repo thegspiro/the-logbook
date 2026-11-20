@@ -59,7 +59,7 @@ export const HistoryHonorRollPage: React.FC = () => {
                 {entry.service_years && <p className="text-theme-text-secondary text-sm">{entry.service_years}</p>}
                 {died && <p className="text-theme-text-primary mt-2 text-sm">Died {died}</p>}
                 {entry.death_circumstances && (
-                  <p className="text-theme-text-primary mt-1 text-sm whitespace-pre-wrap">
+                  <p className="text-theme-text-primary mt-1 text-sm whitespace-pre-line">
                     {entry.death_circumstances}
                   </p>
                 )}

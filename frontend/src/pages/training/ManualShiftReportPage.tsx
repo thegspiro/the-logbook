@@ -40,6 +40,7 @@ import { DraftRestoredNotice } from '../../components/ux/DraftRestoredNotice';
 import { useSessionDraft } from '../../hooks/useSessionDraft';
 import type { BatchShiftReportCreate, CrewMemberEvaluation, TrainingModuleConfig } from '../../types/training';
 import type { User } from '../../types/user';
+import { isActiveAccount } from '../../constants/enums';
 
 /** Calculate hours between two datetime strings, handling midnight crossover. */
 /**
@@ -189,7 +190,8 @@ export const ManualShiftReportPage: React.FC = () => {
   useEffect(() => {
     userService
       .getUsers()
-      .then(setMembers)
+      // Only current members can be added to a shift crew.
+      .then((users) => setMembers(users.filter((u) => isActiveAccount(u.status))))
       .catch(() => {});
     trainingModuleConfigService
       .getConfig()
