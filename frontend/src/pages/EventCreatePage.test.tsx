@@ -413,7 +413,7 @@ describe('EventCreatePage templates', () => {
       name: 'CPR Renewal — Two-year recertification (Training)',
     });
     expect(await picker()).toHaveAccessibleDescription(
-      'Pick a template to pre-fill common settings, or start blank. A Training template opens the step-by-step form.'
+      'Pick a template to pre-fill common settings, or start blank. A Training template opens the step-by-step form and fills its training details.'
     );
     fireEvent.change(await picker(), { target: { value: (option as HTMLOptionElement).value } });
 
@@ -459,6 +459,66 @@ describe('EventCreatePage templates', () => {
 
     expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
     expect(screen.getByLabelText(/^Title/)).toHaveValue('CPR Renewal');
+  });
+
+  // Owner decision 2026-11-20: a Training template carries the session's
+  // training details, and picking it fills Training Info.
+  const details = {
+    course_mode: 'oneoff',
+    course_id: null,
+    course_name: 'CPR / BLS Renewal',
+    course_code: 'CPR-R',
+    training_type: 'certification',
+    credit_hours: 4,
+    credit_hours_source: 'manual',
+    instructor_id: null,
+    instructor: 'Visiting AHA instructor',
+    issues_certification: true,
+    certification_number_prefix: 'CPR-',
+    issuing_agency: 'American Heart Association',
+    expiration_months: 24,
+  };
+  const toTrainingInfo = async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+  };
+  const expectFilled = () => {
+    expect(screen.getByRole('radio', { name: /One-off course name/ })).toBeChecked();
+    expect(screen.getByLabelText(/^Course Name/)).toHaveValue('CPR / BLS Renewal');
+    expect(screen.getByLabelText(/^Course Code/)).toHaveValue('CPR-R');
+    expect(screen.getByLabelText(/Training Type/)).toHaveValue('certification');
+    expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(4);
+    expect(screen.getByLabelText(/Issuing Agency/)).toHaveValue('American Heart Association');
+  };
+
+  it('fills Training Info from a link to a Training template', async () => {
+    vi.mocked(eventService.getTemplates).mockResolvedValue([meeting, { ...cpr, training_details: details }] as never);
+    window.history.pushState({}, '', '/events/admin?tab=create&template=tpl-cpr');
+    renderWithRouter(<EventCreatePage />);
+
+    expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+    await toTrainingInfo();
+    expectFilled();
+  });
+
+  it('fills Training Info when a Training template is picked', async () => {
+    vi.mocked(eventService.getTemplates).mockResolvedValue([meeting, { ...cpr, training_details: details }] as never);
+    renderWithRouter(<EventCreatePage />);
+
+    fireEvent.change(await picker(), { target: { value: 'tpl-cpr' } });
+    expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+    await toTrainingInfo();
+    expectFilled();
+  });
+
+  it('opens Training Info on its defaults for a Training template saved without details', async () => {
+    window.history.pushState({}, '', '/events/admin?tab=create&template=tpl-cpr');
+    renderWithRouter(<EventCreatePage />);
+
+    expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+    await toTrainingInfo();
+    expect(screen.getByRole('radio', { name: /No course yet/ })).toBeChecked();
+    expect(screen.getByLabelText(/Training Type/)).toHaveValue('continuing_education');
   });
 
   // RecurringEventCreate takes template_id; the page never sent it.
