@@ -464,6 +464,8 @@ export interface ModuleSettingsData {
 
 export interface OrganizationProfile {
   name: string;
+  /** Blank when unset; screens that need it fall back to `name`. */
+  short_name: string;
   timezone: string;
   phone: string;
   email: string;

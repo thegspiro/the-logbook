@@ -9,7 +9,7 @@ place and can be unit-tested without a database.
 
 from datetime import datetime, timezone
 from io import BytesIO
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
@@ -22,7 +22,7 @@ from reportlab.platypus import (
     Table,
 )
 
-from app.utils.election_pdf_style import beside_logo
+from app.utils.election_pdf_style import FOOTER_BASELINE, beside_logo, page_of_footer
 from app.utils.pdf_fonts import (
     BODY_FONT,
     BOLD_FONT,
@@ -35,6 +35,9 @@ from app.utils.pdf_running_header import HeadedDocTemplate, RunningHeader
 _HEADER_BG = colors.HexColor("#1f2937")
 _ROW_ALT = colors.HexColor("#f3f4f6")
 _GRID = colors.HexColor("#d1d5db")
+# Room under the frame for the page footer, whose baseline sits just above
+# the print-safe edge (app.utils.print_geometry).
+_BOTTOM_MARGIN = FOOTER_BASELINE + 12
 
 
 def _money(value: Optional[float]) -> str:
@@ -76,177 +79,193 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
     label strings), and the ``show_size`` / ``show_existing`` /
     ``show_contact`` column toggles.
     """
-    buf = BytesIO()
-    doc = HeadedDocTemplate(
-        buf,
-        running_header=RunningHeader(
-            meta.get("org_name"),
-            "Inventory Impact Plan",
-            next(iter(meta.get("parameters") or []), None),
-            meta.get("logo"),
-        ),
-        # The canvas otherwise declares Helvetica, never embedded, on every page.
-        initialFontName=BODY_FONT,
-        pagesize=letter,
-        topMargin=0.6 * inch,
-        bottomMargin=0.6 * inch,
-        # Ink starts 0.78" from the left, clear of a three-hole punch, and
-        # 0.58" from the right, clear of the printer's border (frame padding
-        # adds 6pt to each margin; see app.utils.print_geometry).
-        leftMargin=0.7 * inch,
-        rightMargin=0.5 * inch,
-        title="Inventory Impact Plan",
-    )
 
-    styles = document_stylesheet()
-    title_style = ParagraphStyle(
-        "PlanTitle", parent=styles["Title"], fontSize=18, spaceAfter=2
-    )
-    sub_style = ParagraphStyle(
-        "PlanSub",
-        parent=styles["Normal"],
-        fontSize=9,
-        textColor=colors.HexColor("#6b7280"),
-    )
-    section_style = ParagraphStyle(
-        "Section",
-        parent=styles["Heading2"],
-        fontSize=12,
-        spaceBefore=14,
-        spaceAfter=6,
-    )
-    cell_style = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=8, leading=10)
+    # Laid out twice: once to learn how many pages it runs to, then with a
+    # "Page X of Y" footer, so a loose page shows where it falls in the set.
+    def build(onpage: Callable[[Any, Any], None]) -> BytesIO:
+        buf = BytesIO()
+        doc = HeadedDocTemplate(
+            buf,
+            running_header=RunningHeader(
+                meta.get("org_name"),
+                "Inventory Impact Plan",
+                next(iter(meta.get("parameters") or []), None),
+                meta.get("logo"),
+            ),
+            # The canvas otherwise declares Helvetica, never embedded, on every page.
+            initialFontName=BODY_FONT,
+            pagesize=letter,
+            topMargin=0.6 * inch,
+            bottomMargin=_BOTTOM_MARGIN,
+            # Ink starts 0.78" from the left, clear of a three-hole punch, and
+            # 0.58" from the right, clear of the printer's border (frame padding
+            # adds 6pt to each margin; see app.utils.print_geometry).
+            leftMargin=0.7 * inch,
+            rightMargin=0.5 * inch,
+            title="Inventory Impact Plan",
+        )
 
-    show_size = bool(meta.get("show_size"))
-    show_existing = bool(meta.get("show_existing"))
-    show_contact = bool(meta.get("show_contact"))
+        styles = document_stylesheet()
+        title_style = ParagraphStyle(
+            "PlanTitle", parent=styles["Title"], fontSize=18, spaceAfter=2
+        )
+        sub_style = ParagraphStyle(
+            "PlanSub",
+            parent=styles["Normal"],
+            fontSize=9,
+            textColor=colors.HexColor("#6b7280"),
+        )
+        section_style = ParagraphStyle(
+            "Section",
+            parent=styles["Heading2"],
+            fontSize=12,
+            spaceBefore=14,
+            spaceAfter=6,
+        )
+        cell_style = ParagraphStyle(
+            "Cell", parent=styles["Normal"], fontSize=8, leading=10
+        )
 
-    generated_at: datetime = meta.get("generated_at") or datetime.now(timezone.utc)
-    org_name = meta.get("org_name") or ""
-    heading: List[Any] = [
-        Paragraph("Inventory Impact Plan", title_style),
-        Paragraph(
-            f"{escape(str(org_name))} &middot; Generated "
-            f"{generated_at.strftime('%Y-%m-%d %H:%M %Z').rstrip()}",
-            sub_style,
-        ),
-    ]
-    story: List[Any] = beside_logo(heading, meta.get("logo"), doc.width)
-    parameters: List[str] = meta.get("parameters") or []
-    if parameters:
-        story.append(Spacer(1, 4))
-        story.append(
+        show_size = bool(meta.get("show_size"))
+        show_existing = bool(meta.get("show_existing"))
+        show_contact = bool(meta.get("show_contact"))
+
+        generated_at: datetime = meta.get("generated_at") or datetime.now(timezone.utc)
+        org_name = meta.get("org_name") or ""
+        heading: List[Any] = [
+            Paragraph("Inventory Impact Plan", title_style),
             Paragraph(
-                " &nbsp;|&nbsp; ".join(escape(str(value)) for value in parameters),
+                f"{escape(str(org_name))} &middot; Generated "
+                f"{generated_at.strftime('%Y-%m-%d %H:%M %Z').rstrip()}",
                 sub_style,
-            )
-        )
-
-    # ---- Summary ----
-    story.append(Paragraph("Summary", section_style))
-    summary_rows = [
-        ["Members matched", str(data.get("total_members", 0))],
-        ["Need the item", str(data.get("members_needing_item", 0))],
-        ["Already have one", str(data.get("members_with_related_item", 0))],
-    ]
-    if data.get("replacement_aware"):
-        summary_rows.append(
-            ["Need replacement", str(data.get("members_needing_replacement", 0))]
-        )
-    if data.get("size_field"):
-        summary_rows.append(
-            ["Missing size info", str(data.get("members_missing_sizes", 0))]
-        )
-    if data.get("stock_checked"):
-        summary_rows.append(
-            ["Total to purchase", str(data.get("total_to_purchase", 0))]
-        )
-    if data.get("cost_estimated"):
-        summary_rows.append(
-            ["Estimated total cost", _money(data.get("estimated_total_cost"))]
-        )
-    story.append(_styled_table(summary_rows, [2.6 * inch, 1.4 * inch]))
-
-    # ---- Size breakdown ----
-    breakdown = data.get("size_breakdown") or []
-    if breakdown:
-        story.append(Paragraph("Sizes to purchase", section_style))
-        header = ["Size", "Needed"]
-        if data.get("stock_checked"):
-            header += ["On hand", "Buy"]
-        if data.get("cost_estimated"):
-            header += ["Unit", "Est. cost"]
-        rows = [header]
-        for b in breakdown:
-            row = [b.get("size", ""), str(b.get("needing", 0))]
-            if data.get("stock_checked"):
-                row += [str(b.get("on_hand", 0)), str(b.get("shortfall", 0))]
-            if data.get("cost_estimated"):
-                row += [_money(b.get("unit_cost")), _money(b.get("estimated_cost"))]
-            rows.append(row)
-        widths = [1.0 * inch] + [0.9 * inch for _ in range(len(header) - 1)]
-        story.append(_styled_table(rows, widths))
-
-    # ---- Members ----
-    members = data.get("members") or []
-    story.append(Paragraph(f"Impacted Members ({len(members)})", section_style))
-    header = ["Member", "ID", "Rank", "Station"]
-    if show_size:
-        header.append("Size")
-    if show_existing:
-        header.append("Existing")
-    if show_contact:
-        header.append("Contact")
-
-    # Distribute width across the visible columns.
-    base_widths = {
-        "Member": 1.5 * inch,
-        "ID": 0.7 * inch,
-        "Rank": 1.0 * inch,
-        "Station": 0.9 * inch,
-        "Size": 0.7 * inch,
-        "Existing": 0.8 * inch,
-        "Contact": 1.9 * inch,
-    }
-    widths = [base_widths[col] for col in header]
-    # With every column shown the preferred widths total 7.5", wider than
-    # the frame: shrink them together rather than let the table run past
-    # the margins into the punch holes and the printer's border.
-    # doc.width is the frame's; its 6pt padding each side is not table room.
-    scale = min(1.0, (doc.width - 12) / sum(widths))
-    widths = [w * scale for w in widths]
-    # An email breaks at its punctuation, not mid-word; the cell's 4pt
-    # padding each side is not text room.
-    contact_room = widths[-1] - 8 if show_contact else 0.0
-    rows = [header]
-    for m in members:
-        row = [
-            Paragraph(escape(str(m.get("full_name") or "Unknown")), cell_style),
-            m.get("membership_number") or "",
-            m.get("rank") or "",
-            m.get("station") or "",
+            ),
         ]
-        if show_size:
-            row.append(m.get("needed_size") or "—")
-        if show_existing:
-            row.append(_existing_status(m))
-        if show_contact:
-            contact = m.get("email") or m.get("phone") or ""
-            row.append(
+        story: List[Any] = beside_logo(heading, meta.get("logo"), doc.width)
+        parameters: List[str] = meta.get("parameters") or []
+        if parameters:
+            story.append(Spacer(1, 4))
+            story.append(
                 Paragraph(
-                    fit_token(
-                        str(contact),
-                        contact_room,
-                        cell_style.fontName,
-                        cell_style.fontSize,
-                    ),
-                    cell_style,
+                    " &nbsp;|&nbsp; ".join(escape(str(value)) for value in parameters),
+                    sub_style,
                 )
             )
-        rows.append(row)
 
-    story.append(_styled_table(rows, widths))
+        # ---- Summary ----
+        story.append(Paragraph("Summary", section_style))
+        summary_rows = [
+            ["Members matched", str(data.get("total_members", 0))],
+            ["Need the item", str(data.get("members_needing_item", 0))],
+            ["Already have one", str(data.get("members_with_related_item", 0))],
+        ]
+        if data.get("replacement_aware"):
+            summary_rows.append(
+                ["Need replacement", str(data.get("members_needing_replacement", 0))]
+            )
+        if data.get("size_field"):
+            summary_rows.append(
+                ["Missing size info", str(data.get("members_missing_sizes", 0))]
+            )
+        if data.get("stock_checked"):
+            summary_rows.append(
+                ["Total to purchase", str(data.get("total_to_purchase", 0))]
+            )
+        if data.get("cost_estimated"):
+            summary_rows.append(
+                ["Estimated total cost", _money(data.get("estimated_total_cost"))]
+            )
+        story.append(_styled_table(summary_rows, [2.6 * inch, 1.4 * inch]))
 
-    doc.build(story)
-    buf.seek(0)
-    return buf
+        # ---- Size breakdown ----
+        breakdown = data.get("size_breakdown") or []
+        if breakdown:
+            story.append(Paragraph("Sizes to purchase", section_style))
+            header = ["Size", "Needed"]
+            if data.get("stock_checked"):
+                header += ["On hand", "Buy"]
+            if data.get("cost_estimated"):
+                header += ["Unit", "Est. cost"]
+            rows = [header]
+            for b in breakdown:
+                row = [b.get("size", ""), str(b.get("needing", 0))]
+                if data.get("stock_checked"):
+                    row += [str(b.get("on_hand", 0)), str(b.get("shortfall", 0))]
+                if data.get("cost_estimated"):
+                    row += [_money(b.get("unit_cost")), _money(b.get("estimated_cost"))]
+                rows.append(row)
+            widths = [1.0 * inch] + [0.9 * inch for _ in range(len(header) - 1)]
+            story.append(_styled_table(rows, widths))
+
+        # ---- Members ----
+        members = data.get("members") or []
+        story.append(Paragraph(f"Impacted Members ({len(members)})", section_style))
+        header = ["Member", "ID", "Rank", "Station"]
+        if show_size:
+            header.append("Size")
+        if show_existing:
+            header.append("Existing")
+        if show_contact:
+            header.append("Contact")
+
+        # Distribute width across the visible columns.
+        base_widths = {
+            "Member": 1.5 * inch,
+            "ID": 0.7 * inch,
+            "Rank": 1.0 * inch,
+            "Station": 0.9 * inch,
+            "Size": 0.7 * inch,
+            "Existing": 0.8 * inch,
+            "Contact": 1.9 * inch,
+        }
+        widths = [base_widths[col] for col in header]
+        # With every column shown the preferred widths total 7.5", wider than
+        # the frame: shrink them together rather than let the table run past
+        # the margins into the punch holes and the printer's border.
+        # doc.width is the frame's; its 6pt padding each side is not table room.
+        scale = min(1.0, (doc.width - 12) / sum(widths))
+        widths = [w * scale for w in widths]
+        # An email breaks at its punctuation, not mid-word; the cell's 4pt
+        # padding each side is not text room.
+        contact_room = widths[-1] - 8 if show_contact else 0.0
+        rows = [header]
+        for m in members:
+            row = [
+                Paragraph(escape(str(m.get("full_name") or "Unknown")), cell_style),
+                m.get("membership_number") or "",
+                m.get("rank") or "",
+                m.get("station") or "",
+            ]
+            if show_size:
+                row.append(m.get("needed_size") or "—")
+            if show_existing:
+                row.append(_existing_status(m))
+            if show_contact:
+                contact = m.get("email") or m.get("phone") or ""
+                row.append(
+                    Paragraph(
+                        fit_token(
+                            str(contact),
+                            contact_room,
+                            cell_style.fontName,
+                            cell_style.fontSize,
+                        ),
+                        cell_style,
+                    )
+                )
+            rows.append(row)
+
+        story.append(_styled_table(rows, widths))
+
+        doc.build(story, onFirstPage=onpage, onLaterPages=onpage)
+        buf.seek(0)
+        return buf
+
+    pages = {"count": 0}
+
+    def count(canvas: Any, document: Any) -> None:
+        pages["count"] = document.page
+
+    build(count)
+    # No "continues" note: that warns a voter not to leave a ballot's second
+    # page unmarked, and a planning sheet has no such reader.
+    return build(page_of_footer("Inventory Impact Plan", pages["count"]))

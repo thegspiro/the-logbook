@@ -17,14 +17,27 @@ import { apparatusPhotoService, apparatusDocumentService } from '../services/api
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { FileDropzone } from '../../../components/ux/FileDropzone';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { useFieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import { formatDate } from '../../../utils/dateFormatting';
 import { saveFile } from '../../../utils/fileDownload';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useAuthStore } from '../../../stores/authStore';
 import { APPARATUS_DOCUMENT_TYPES, type ApparatusPhoto, type ApparatusDocument } from '../types';
 
-const inputClass = 'form-input';
-const labelClass = 'form-label';
+const inputClass = 'form-input w-full min-w-0';
+
+type DocumentField = 'title' | 'documentType' | 'expirationDate';
+// The upload is multipart, so a refusal names the form field as sent.
+const DOCUMENT_FIELDS: FieldSpecs<DocumentField> = {
+  title: { id: 'apparatus-document-title', label: 'Title' },
+  documentType: { id: 'apparatus-document-type', label: 'Type', apiKeys: ['document_type'] },
+  expirationDate: { id: 'apparatus-document-expires', label: 'Expires', apiKeys: ['expiration_date'] },
+};
+// ApparatusDocumentBase.title max_length.
+const TITLE_MAX = 200;
+const DEFAULT_DOCUMENT_TYPE = 'registration';
 
 function stem(name: string): string {
   const dot = name.lastIndexOf('.');
@@ -45,9 +58,10 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
   const [photoUploading, setPhotoUploading] = useState(false);
   const [pendingDocument, setPendingDocument] = useState<File | null>(null);
   const [documentTitle, setDocumentTitle] = useState('');
-  const [documentType, setDocumentType] = useState<string>('registration');
+  const [documentType, setDocumentType] = useState<string>(DEFAULT_DOCUMENT_TYPE);
   const [documentExpires, setDocumentExpires] = useState('');
   const [documentUploading, setDocumentUploading] = useState(false);
+  const documentErrors = useFieldErrors(DOCUMENT_FIELDS);
   const tz = useTimezone();
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canUpload = checkPermission('apparatus.edit') || checkPermission('apparatus.manage');
@@ -95,15 +109,33 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
   const cancelDocument = () => {
     setPendingDocument(null);
     setDocumentTitle('');
+    setDocumentType(DEFAULT_DOCUMENT_TYPE);
     setDocumentExpires('');
+    documentErrors.clear();
   };
+
+  // The title starts as the file's name, so only what was typed over it, a
+  // chosen type or an expiry date counts as something to lose (forms review F-6).
+  const documentDirty =
+    pendingDocument !== null &&
+    (documentTitle !== stem(pendingDocument.name) || documentType !== DEFAULT_DOCUMENT_TYPE || documentExpires !== '');
+  const requestCancelDocument = useDiscardGuard({
+    isDirty: documentDirty,
+    onClose: cancelDocument,
+    message: 'The title, type and expiry you entered for this document have not been saved. Cancelling will lose them.',
+  });
 
   const handleDocumentUpload = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!pendingDocument) return;
     const title = documentTitle.trim();
+    documentErrors.clear();
+    // A document is filed only once it has a title: said on the field, not in
+    // a toast (forms review F-3), and nothing is uploaded until it is fixed.
     if (!title) {
-      toast.error('Give the document a title');
+      const problems = { title: 'Give the document a title.' };
+      documentErrors.setErrors(problems);
+      documentErrors.focusFirst(problems);
       return;
     }
     setDocumentUploading(true);
@@ -118,7 +150,9 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
       cancelDocument();
       void loadData();
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to upload document'));
+      // The file and what was typed stay in the form; a refusal lands on the
+      // field it names, anything else above the buttons.
+      documentErrors.focusFirst(documentErrors.setFromApiError(err, 'Failed to upload document'));
     } finally {
       setDocumentUploading(false);
     }
@@ -242,57 +276,90 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
         )}
 
         {canUpload && pendingDocument && (
-          <form onSubmit={(e) => void handleDocumentUpload(e)} className="card-secondary mb-6 space-y-4 p-4">
-            <p className="text-theme-text-primary text-sm">
+          <form noValidate onSubmit={(e) => void handleDocumentUpload(e)} className="card-secondary mb-6 space-y-4 p-4">
+            <p className="text-theme-text-primary min-w-0 text-sm break-words">
               <Upload className="mr-1 inline h-4 w-4" aria-hidden="true" />
               {pendingDocument.name}
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div>
-                <label htmlFor="apparatus-document-title" className={labelClass}>
-                  Title
-                </label>
-                <input
-                  id="apparatus-document-title"
-                  className={inputClass}
-                  value={documentTitle}
-                  maxLength={200}
-                  onChange={(e) => setDocumentTitle(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-document-type" className={labelClass}>
-                  Type
-                </label>
-                <select
-                  id="apparatus-document-type"
-                  className={inputClass}
-                  value={documentType}
-                  onChange={(e) => setDocumentType(e.target.value)}
-                >
-                  {APPARATUS_DOCUMENT_TYPES.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="apparatus-document-expires" className={labelClass}>
-                  Expires (optional)
-                </label>
-                <input
-                  id="apparatus-document-expires"
-                  type="date"
-                  className={inputClass}
-                  value={documentExpires}
-                  onChange={(e) => setDocumentExpires(e.target.value)}
-                />
-              </div>
+              <FormField
+                id={DOCUMENT_FIELDS.title.id}
+                label="Title"
+                required
+                error={documentErrors.errors.title}
+                maxLength={TITLE_MAX}
+                count={documentTitle.length}
+                className="min-w-0"
+              >
+                {(props) => (
+                  <input
+                    {...props}
+                    className={inputClass}
+                    value={documentTitle}
+                    onChange={(e) => {
+                      setDocumentTitle(e.target.value);
+                      documentErrors.setError('title', null);
+                    }}
+                  />
+                )}
+              </FormField>
+              <FormField
+                id={DOCUMENT_FIELDS.documentType.id}
+                label="Type"
+                error={documentErrors.errors.documentType}
+                className="min-w-0"
+              >
+                {(props) => (
+                  <select
+                    {...props}
+                    className={inputClass}
+                    value={documentType}
+                    onChange={(e) => {
+                      setDocumentType(e.target.value);
+                      documentErrors.setError('documentType', null);
+                    }}
+                  >
+                    {APPARATUS_DOCUMENT_TYPES.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
+              <FormField
+                id={DOCUMENT_FIELDS.expirationDate.id}
+                label="Expires"
+                optional
+                error={documentErrors.errors.expirationDate}
+                className="min-w-0"
+              >
+                {(props) => (
+                  <input
+                    {...props}
+                    type="date"
+                    className={inputClass}
+                    value={documentExpires}
+                    onChange={(e) => {
+                      setDocumentExpires(e.target.value);
+                      documentErrors.setError('expirationDate', null);
+                    }}
+                  />
+                )}
+              </FormField>
             </div>
+            {documentErrors.formError && (
+              <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                {documentErrors.formError}
+              </p>
+            )}
             <div className="flex justify-end gap-2">
-              <button type="button" className="btn-secondary" onClick={cancelDocument} disabled={documentUploading}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={requestCancelDocument}
+                disabled={documentUploading}
+              >
                 Cancel
               </button>
               <button type="submit" className="btn-primary" disabled={documentUploading}>

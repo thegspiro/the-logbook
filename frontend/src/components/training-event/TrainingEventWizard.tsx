@@ -49,6 +49,7 @@ import { linkedAttendanceLabel, useRetiredAttendanceRequirements } from '../../h
 import { getErrorDetail } from '../../utils/errorHandling';
 import { mapServerFieldErrors } from '../../utils/serverFieldErrors';
 import { displayNameOf } from '../../utils/memberName';
+import { isActiveAccount } from '../../constants/enums';
 import { getEventTypeBadgeColor } from '../../utils/eventHelpers';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import type { EventFormModel } from '../event-form/useEventFormModel';
@@ -423,7 +424,12 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     () =>
       users.map((user) => {
         const name = displayNameOf(user) || user.username;
-        return { id: user.id, name, label: user.rank ? `${name} (${formatRank(user.rank)})` : name };
+        return {
+          id: user.id,
+          name,
+          label: user.rank ? `${name} (${formatRank(user.rank)})` : name,
+          former: !isActiveAccount(user.status),
+        };
       }),
     [users, formatRank]
   );
@@ -514,7 +520,8 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     const picked = applyLibraryCourse(
       training,
       course,
-      members,
+      // A course's named instructor is matched to a current member only.
+      members.filter((m) => !m.former),
       linkageData.programs.map((p) => p.id),
       training.course_mode === 'library' ? courses.find((c) => c.id === training.course_id) : undefined
     );

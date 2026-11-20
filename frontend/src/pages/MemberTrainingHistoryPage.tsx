@@ -23,7 +23,7 @@ import { Ban, GraduationCap, Download, Paperclip, Pencil, Upload, X } from 'luci
 import { formatDate } from '../utils/dateFormatting';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorMessage, getLoadFailureMessage } from '../utils/errorHandling';
 import {
   getTrainingPeriodWindow,
   isDateInTrainingPeriod,
@@ -261,8 +261,8 @@ export const MemberTrainingHistoryPage: React.FC = () => {
 
       setUser(userData);
       setTrainings(records);
-    } catch (_err) {
-      setError('Unable to load training history. Check your connection and refresh the page.');
+    } catch (err: unknown) {
+      setError(getLoadFailureMessage(err, 'training history'));
     } finally {
       setLoading(false);
     }

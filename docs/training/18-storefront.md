@@ -447,7 +447,12 @@ Each option has:
 
 - **Label** — what the member picks, such as "XL" or "Navy — Women's"
 - **+/- price** — added to the item's price. `+3.00` on 2XL is the usual case;
-  a negative amount works too
+  a negative amount works too, for a youth size for example, but not one that
+  takes the price below zero. _(2026-11-18)_ An item, option or order-window
+  price that would put any option below zero is refused when you save it, and
+  checkout refuses a line priced below zero, including one saved before this
+  rule. Before, a below-zero line could make an order total zero or less,
+  which was created already paid.
 - **Stock** — counted per option, not just per item
 
 Tick **Requires an option (size/color)** on the item if the member must pick
@@ -548,7 +553,10 @@ Select **Department Store** in the sidebar.
    dropped. The saved cart is removed when you place the order, when the window
    closes, and at sign-out. _(2026-10-27)_
 6. On the checkout page, choose pickup or shipping. Shipping asks for an
-   address.
+   address. _(2026-11-18)_ An address is sent and kept only for a shipped
+   order: if you type one and then switch to pickup, it is dropped. Reloading
+   or bookmarking the checkout page now keeps you on it with your cart, rather
+   than sending you back to the store.
 7. Choose how you will pay.
 8. Add **Notes for the quartermaster (optional)** if you need to, then tap
    **Submit order**.
@@ -639,15 +647,15 @@ Zelle" is the question you have in front of a bank statement.
 
 Open an order to work on it:
 
-| Action                                | What it does                                                                                                                         |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **Mark paid in full ($…)**            | Settles the whole remaining balance in one step                                                                                      |
-| **Record payment**                    | Records a specific amount (part payments)                                                                                            |
-| **Refund**                            | Records money going back                                                                                                             |
-| **Waive payment**                     | Settles the balance without collecting money. Needs a **Reason (shown to the member)**. The window's collected total does not change |
-| **Change status** → **Update status** | Moves the order on: Awaiting payment, Paid, Ordered from vendor, Ready for pickup, Fulfilled                                         |
-| **Send an update** → **Send update**  | Sends the member a note, in the app, by email, or both                                                                               |
-| **Internal notes** → **Save notes**   | Notes only staff see                                                                                                                 |
+| Action                                | What it does                                                                                                                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Mark paid in full ($…)**            | Settles the whole remaining balance in one step                                                                                             |
+| **Record payment**                    | Records a specific amount (part payments)                                                                                                   |
+| **Record refund**                     | Records money going back: an amount and a reason, then a confirmation. See [Recording a refund](#recording-a-refund-2026-11-18)             |
+| **Waive payment**                     | Settles the balance without collecting money. Needs a **Reason (shown to the member)**. The window's collected total does not change        |
+| **Change status** → **Update status** | Moves the order on: Awaiting payment, Paid, Ordered from vendor, Ready for pickup, Fulfilled (Ready to ship and Shipped on a shipped order) |
+| **Send an update** → **Send update**  | Sends the member a note, in the app, by email, or both                                                                                      |
+| **Internal notes** → **Save notes**   | Notes only staff see                                                                                                                        |
 
 The order also shows its **Timeline**: everything that has happened to it.
 
@@ -658,6 +666,14 @@ the lines behind it: **Subtotal**, then **Tax**, **Shipping** and **Discount**
 when the order has them. A pickup order never shows an address, even if one
 was typed at checkout. The member sees the same details on their order in
 **My Orders**.
+
+**A shipped order says shipped** _(2026-11-18)_. An order the member chose to
+have shipped goes through the same statuses, but wherever that one order is
+shown or emailed, **Ready for pickup** reads **Ready to ship** and
+**Fulfilled** reads **Shipped**: the member's progress steps and badge, the
+order dialog's badge and status picker, the Orders list row, recent orders on
+the Overview, the timeline and the status email. Filters and counts that mix
+pickup and shipped orders keep the general names.
 
 **Which status moves are allowed** _(2026-11-14)_. **Change status** moves an
 order forward as before. Moving it back is only for correcting fulfilment,
@@ -679,10 +695,11 @@ will not be filled:
 3. The member is emailed. A cancelled order cannot be reopened.
 
 Cancelling does not refund money. When a payment is already recorded, the
-confirmation says so. After cancelling, use **Refund** to record the money
-going back. A cancelled order shows the date and reason at the top and hides
-**Mark paid**, **Record payment**, **Waive payment**, **Change status** and
-**Balance due**. **Refund** stays.
+confirmation says so. After cancelling, use **Record refund** to record the
+money going back. A cancelled order shows the date and reason at the top and
+hides the Payment section (**Mark paid**, **Record payment**, **Waive
+payment**), **Change status** and **Balance due**. The **Refund** section
+stays whenever money has been paid.
 
 To move many orders at once, select them on the **Orders** tab. Then use
 **Mark selected paid** or **New status for selected orders**. "Everything's in,
@@ -737,6 +754,39 @@ with "This order is already paid. Refund it instead of waiving it." Use
 Orders where the member tapped **I've sent payment** read **Reported — needs
 verification**. That is your queue. Filter the **Orders** tab by that payment
 status, confirm the money arrived, then mark it paid.
+
+**A typed payment cannot be more than the balance** _(2026-11-18)_. **Record
+payment** refuses an amount above the balance due, and any payment on an order
+already paid in full. If a member really did send too much, record what was
+owed and refund the rest. A PayPal payment applied from
+[Automatic PayPal Reconciliation](#automatic-paypal-reconciliation) is the
+exception: it records what actually arrived, so an overpayment is not lost.
+
+**Overpaid orders** _(2026-11-18)_. When more than the order total has been
+recorded (an applied PayPal payment for too much), the order dialog says how
+much more, that it is owed back to the member, and offers **Refund the $…
+excess**. It asks first, then records exactly that amount going back and
+leaves the order **Paid**. The member sees the amount as **Owed to you** on
+**My Orders**.
+
+### Recording a refund _(2026-11-18)_
+
+**Refund** is its own section of the order, shown whenever money has been
+paid, cancelled orders included.
+
+1. **Amount to refund** starts at everything paid. Change it for a part
+   refund; it cannot be zero or more than was paid.
+2. Type a **Refund reason (shown to the member)**, for example "Hoodie
+   returned unworn".
+3. Select **Record refund**. The confirmation names the amount and the member;
+   confirm with **Refund $…**, or **Not now** to back out.
+
+The member is emailed. A refund records money going back; send the money
+itself the way it came in. A refund that leaves the order paid in full (for
+example, refunding only an overpayment) keeps it **Paid**; otherwise it reads
+**Partially paid** or **Refunded**. Before this change, **Refund** was a single
+tap that refunded everything and emailed the member, with no amount and no
+confirmation.
 
 ---
 
@@ -1005,6 +1055,14 @@ have moved, been renamed or work differently.
   the member.
 
 ### Works differently now
+
+- **Refund asks for an amount and a reason, then confirms** _(2026-11-18)_.
+  Older notes describe a one-tap **Refund** that refunded everything. The
+  button reads **Record refund**.
+- **Record payment refuses more than the balance** _(2026-11-18)_. Older notes
+  may describe recording an overpayment and refunding it later.
+- **A shipped order reads Ready to ship and Shipped** _(2026-11-18)_, not Ready
+  for pickup and Fulfilled.
 
 - **Store emails show times in your department's time zone**, not UTC. The
   orders CSV does too, with the zone's short name.

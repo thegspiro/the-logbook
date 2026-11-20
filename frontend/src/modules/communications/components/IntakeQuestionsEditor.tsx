@@ -20,9 +20,15 @@ import {
   NUMERIC_CONDITION_OPERATORS,
   getDescendantFieldIds,
 } from '../../../utils/formVisibility';
+import { FIELD_ERROR_CLASS } from '../../../components/ux/FormField';
 import { usePickOptions } from '../hooks/usePickOptions';
 import type { IntakeOption } from '../types/suggestions';
-import { type EditableQuestion, newQuestionId, toConditionalFields } from '../utils/suggestionRouting';
+import {
+  type EditableQuestion,
+  type QuestionProblems,
+  newQuestionId,
+  toConditionalFields,
+} from '../utils/suggestionRouting';
 
 // Mirror MAX_INTAKE_QUESTIONS / MAX_INTAKE_OPTIONS / MAX_INTAKE_LABEL_LENGTH /
 // MAX_INTAKE_HELP_LENGTH in backend/app/schemas/suggestion.py.
@@ -82,6 +88,10 @@ interface IntakeQuestionsEditorProps {
   /** Every other box in the department. */
   routeTargets: RouteTarget[];
   anonymityMode: string;
+  /** What is wrong with each question, by id, shown on the question. */
+  problems?: Readonly<Record<string, QuestionProblems>> | undefined;
+  /** A refusal the server gave for the questions as a whole. */
+  error?: string | null | undefined;
 }
 
 /**
@@ -99,6 +109,8 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
   onChange,
   routeTargets,
   anonymityMode,
+  problems = {},
+  error,
 }) => {
   const { confirm } = useConfirm();
   const vehicles = usePickOptions(
@@ -206,7 +218,13 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
   };
 
   return (
-    <section aria-labelledby="box-questions-heading" className="border-theme-surface-border space-y-4 border-y py-4">
+    <section
+      id="box-questions"
+      tabIndex={-1}
+      aria-labelledby="box-questions-heading"
+      aria-describedby={error ? 'box-questions-error' : undefined}
+      className="border-theme-surface-border space-y-4 border-y py-4 focus:outline-none"
+    >
       <div>
         <h3 id="box-questions-heading" className="text-theme-text-primary text-sm font-semibold">
           Questions
@@ -215,6 +233,11 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
           Asked before the title and details. A question can appear only after a particular answer, and a dropdown or
           single-choice answer can send the submission to another box — only that box&apos;s reviewers then read it.
         </p>
+        {error && (
+          <p id="box-questions-error" role="alert" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+            {error}
+          </p>
+        )}
       </div>
 
       {questions.map((question, index) => {
@@ -225,6 +248,7 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
         const parents = questions.filter((q) => !ownBranch.has(q.id));
         const parent = questions.find((q) => q.id === question.conditionQuestionId);
         const needsValue = CONDITION_OPERATORS_WITH_VALUE.includes(question.conditionOperator ?? '');
+        const problem = problems[question.id];
 
         return (
           <fieldset key={question.id} className="border-theme-surface-border space-y-3 rounded-md border p-3">
@@ -233,16 +257,27 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
               <div className="min-w-0 flex-1 basis-60">
                 <label htmlFor={`${prefix}-label`} className="form-label">
                   Question
+                  <span className={FIELD_ERROR_CLASS} aria-hidden="true">
+                    {' '}
+                    *
+                  </span>
                 </label>
                 <input
                   id={`${prefix}-label`}
                   className="form-input"
                   value={question.label}
                   maxLength={MAX_LABEL_LENGTH}
-                  required
+                  aria-required
+                  aria-invalid={problem?.label ? true : undefined}
+                  aria-describedby={problem?.label ? `${prefix}-label-error` : undefined}
                   onChange={(e) => update(question.id, { label: e.target.value })}
                   placeholder="e.g. Is this a safety concern?"
                 />
+                {problem?.label && (
+                  <p id={`${prefix}-label-error`} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+                    {problem.label}
+                  </p>
+                )}
               </div>
               <div className="basis-44">
                 <label htmlFor={`${prefix}-type`} className="form-label">
@@ -324,14 +359,24 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
             {isChoice && (
               <div className="space-y-2">
                 <span className="form-label">Options</span>
+                {problem?.options && (
+                  <p id={`${prefix}-options-error`} className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                    {problem.options}
+                  </p>
+                )}
                 {question.options.map((option, optionIndex) => (
                   <div key={optionIndex} className="flex flex-wrap items-center gap-2">
                     <input
+                      id={`${prefix}-option-${optionIndex}`}
                       aria-label={`Option ${optionIndex + 1}`}
                       className="form-input min-w-0 flex-1 basis-40"
                       value={option.label}
                       maxLength={MAX_LABEL_LENGTH}
-                      required
+                      aria-required
+                      aria-invalid={problem?.options && !option.label.trim() ? true : undefined}
+                      aria-describedby={
+                        problem?.options && !option.label.trim() ? `${prefix}-options-error` : undefined
+                      }
                       onChange={(e) => renameOption(question, optionIndex, e.target.value)}
                     />
                     {canRoute && (
@@ -369,8 +414,12 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
+                    id={`${prefix}-add-option`}
                     className="btn-secondary inline-flex items-center gap-1 px-3 py-1.5 text-sm"
                     disabled={question.options.length >= MAX_OPTIONS}
+                    aria-describedby={
+                      problem?.options && question.options.length === 0 ? `${prefix}-options-error` : undefined
+                    }
                     onClick={() => setOptions(question, [...question.options, { value: newOptionValue(), label: '' }])}
                   >
                     <Plus className="h-4 w-4" aria-hidden="true" />
@@ -449,7 +498,7 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
                         aria-label="Answer"
                         className="form-input min-w-0 flex-1 basis-40"
                         value={question.conditionValue ?? ''}
-                        required
+                        aria-required
                         onChange={(e) => update(question.id, { conditionValue: e.target.value || null })}
                       >
                         <option value="">Choose an answer…</option>
@@ -466,7 +515,7 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
                         aria-label="Answer"
                         className="form-input min-w-0 basis-24"
                         value={question.conditionValue ?? ''}
-                        required
+                        aria-required
                         onChange={(e) => update(question.id, { conditionValue: e.target.value || null })}
                       >
                         <option value="">Rating…</option>
@@ -483,7 +532,7 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
                         type={parent.type === SuggestionIntakeQuestionType.NUMBER ? 'number' : 'text'}
                         value={question.conditionValue ?? ''}
                         maxLength={MAX_LABEL_LENGTH}
-                        required
+                        aria-required
                         onChange={(e) => update(question.id, { conditionValue: e.target.value || null })}
                       />
                     ))}

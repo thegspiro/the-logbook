@@ -701,7 +701,10 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
-    expectText: 'Suggestion box',
+    // The box picker's label, which carries the required marker ("Suggestion
+    // box *"): with several boxes none is preselected, so it is the one text
+    // only the submit form shows.
+    expectText: 'Suggestion box *',
   },
   {
     path: '/communications/messages',
@@ -1401,6 +1404,52 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/history', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/history/media', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/history/documents', maxSmallTargets: 0, maxTinyText: 0 },
+  // The rest of the archive's list and form screens. `history.manage` is what
+  // the forms, the importer and the settings screen are gated on; each
+  // `expectText` is drawn only by its populated fixture (helpers.ts) or its form.
+  { path: '/history/people', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Robert Doyle' },
+  {
+    path: '/history/people/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'Add to the archive',
+  },
+  {
+    path: '/history/import',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'roster-1976-2000.csv',
+  },
+  {
+    path: '/history/media/upload',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'People in every file',
+  },
+  {
+    path: '/history/documents/upload',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'Transcription',
+  },
+  { path: '/history/albums', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Centennial Parade, 1923' },
+  {
+    path: '/history/honor-roll',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: 'Lost when the roof of the Grange Hall collapsed during an interior attack.',
+  },
+  {
+    path: '/history/settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: '3 records · retired',
+  },
   { path: '/medical-supplies', maxSmallTargets: 0, maxTinyText: 0, permissions: ['inventory.view_medical'] },
   { path: '/ip-security', maxSmallTargets: 0, maxTinyText: 0, permissions: ['security.manage'] },
   // Both are settings.manage-gated, so they cost no extra sign-in between them.
@@ -1428,6 +1477,21 @@ export const ALL_ROUTES: RouteCheck[] = [
 // passes read this one, so a local filter narrows them together.
 const routeFilter = process.env.MOBILE_ROUTE_FILTER;
 export const ROUTES = routeFilter ? ALL_ROUTES.filter(({ path }) => path.includes(routeFilter)) : ALL_ROUTES;
+
+/**
+ * One of `parts` contiguous slices of ROUTES, which between them hold every
+ * route exactly once.
+ *
+ * The three route-walking sweeps (accessibility, dialogs, presentation) each
+ * declare one test per slice. A sweep written as a single test cannot be
+ * divided by a shard or a worker count, and by 2026-11-19 the accessibility
+ * one had become a 55-72 minute CI job. The part counts are chosen so every
+ * sweep test takes about the same time, roughly ten minutes: `--shard`
+ * balances on the number of tests, so equal tests are what make its split an
+ * even one. See the `frontend-e2e` matrix in ci.yml.
+ */
+export const routesInPart = (part: number, parts: number): RouteCheck[] =>
+  ROUTES.filter((_, index) => Math.floor((index * parts) / ROUTES.length) === part);
 
 /** iPhone 14/15 class — the narrow end of what members actually carry. */
 export const PHONE = { width: 390, height: 844 };

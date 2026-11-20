@@ -146,6 +146,11 @@ and silently under-reported any window larger than that.
 `awaiting_payment`, `paid`, `ordered`, `ready_for_pickup`, `fulfilled`,
 `cancelled`.
 
+A **shipped order** goes through the same statuses, with shipping wording
+wherever one order is shown or emailed (W67b-18): `ready_for_pickup` reads
+"Ready to ship" and `fulfilled` reads "Shipped". Lists that mix pickup and
+shipped orders keep the general labels.
+
 **Payment status** (`store_orders.payment_status`): `unpaid`,
 `pending_verification`, `partial`, `paid`, `refunded`, `waived`.
 
@@ -172,6 +177,20 @@ would force a false ordering on two independent things.
 
 A refused move answers 400 with the reason. The bulk endpoint skips the order
 and reports why.
+
+**Prices and payments that cannot go wrong** (W67b-6 and W67b-7, 2026-11-16):
+
+- **No price below zero.** An option, such as a youth size, may lower a
+  product's price, but not below zero. A product, option or window price
+  override that would do so is refused when saved. Checkout refuses any line
+  priced below zero, including one saved before this rule.
+- **Typed payments cannot exceed the balance.** A payment staff type in is
+  refused above the balance, and on an order already paid in full.
+- **Applied PayPal captures record what arrived.** Applying a capture records
+  its real amount. Anything beyond the total is reported as `overpaid_amount`
+  and shown as owed back to the member, with a one-step refund of exactly
+  that excess.
+- **A refund that leaves the order paid in full keeps it Paid.**
 
 `pending_verification` exists because a member can _report_ having sent
 payment. That is a claim, not a receipt — it moves the order into a queue for

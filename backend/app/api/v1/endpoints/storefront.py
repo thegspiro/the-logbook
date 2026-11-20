@@ -136,6 +136,9 @@ def _order_payload(
         if order.payment_status == StorePaymentStatus.WAIVED
         else max(total - paid, Decimal("0"))
     )
+    # Money recorded beyond the total is owed back to the member: a PayPal
+    # capture applied for more than the balance (W67b-7).
+    overpaid_amount = max(paid - total, Decimal("0"))
 
     events = []
     for event in order.events:
@@ -175,6 +178,7 @@ def _order_payload(
         "total": order.total,
         "amount_paid": order.amount_paid,
         "balance_due": balance_due,
+        "overpaid_amount": overpaid_amount,
         "payment_reference": order.payment_reference,
         "payment_reported_at": order.payment_reported_at,
         "paid_at": order.paid_at,

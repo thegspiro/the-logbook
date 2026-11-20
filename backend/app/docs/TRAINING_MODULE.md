@@ -1469,7 +1469,10 @@ authenticated by `key` and `secret` query parameters, returning a CSV.
   to records already imported from it, leaving alone any record whose hours or
   credit hours an officer changed — including when both courses credit the
   same, so a record imported while its course credited nothing still catches
-  up. Members are matched on the `Email` column against the
+  up. The staged import records the hours it took from the course
+  (`course_hours_credited`), and re-mapping compares a record against that
+  rather than the course's current settings, so editing a course's hours
+  after crediting does not strand the hours it gave. Members are matched on the `Email` column against the
   member's email, case- and whitespace-insensitive, skipping deleted members. An
   unmatched member stays in the user mappings and is auto-matched on a later
   sync unless an officer has set or cleared that mapping by hand.

@@ -129,14 +129,18 @@ describe('OverviewSection — clearing a field', () => {
 
   it('refuses a blank required select instead of sending a null the column cannot hold', async () => {
     // Both selects offer a blank option on a NOT NULL column, so the form can
-    // present a value the row cannot store.
+    // present a value the row cannot store. Under the owner's single-save rule
+    // (2026-11-05) the rest of the edit still saves, without the type, and the
+    // type is flagged on its field.
     const user = userEvent.setup();
     await renderEditing(user);
 
     await user.selectOptions(screen.getByDisplayValue('Fire Station'), '');
-    await user.click(screen.getByRole('button', { name: /Save/ }));
+    const payload = await save(user);
 
-    expect(updateFacility).not.toHaveBeenCalled();
+    expect(payload).not.toHaveProperty('facility_type_id');
+    expect(payload.name).toBe('Station 1');
+    expect(screen.getByRole('combobox', { name: /^Type/ })).toHaveAccessibleDescription('Choose the facility type.');
   });
 });
 
@@ -231,7 +235,66 @@ describe('OverviewSection — the edit form', () => {
     expect(email).toHaveAttribute('aria-invalid', 'true');
     expect(email).toHaveAccessibleDescription(/Enter an email address/);
 
+    // The rest of the edit saves without the email, which stays flagged
+    // (owner rule, 2026-11-05).
+    const payload = await save(user);
+    expect(payload).not.toHaveProperty('email');
+    expect(screen.getByRole('alert')).toHaveTextContent('Facility saved, except email.');
+  });
+});
+
+describe('OverviewSection — refusals and leaving the form', () => {
+  beforeEach(() => {
+    updateFacility.mockReset();
+    updateFacility.mockResolvedValue(undefined);
+  });
+
+  // Forms review F-2: a refusal from the server was a toast that named the
+  // reason but not the field, and the form gave no clue which box to fix.
+  it("puts the server's refusal on its field and saves the rest", async () => {
+    updateFacility
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'zip_code', message: 'Zip code is too long.' }] } },
+      })
+      .mockResolvedValueOnce(undefined);
+    const user = userEvent.setup();
+    await renderEditing(user);
+    await user.clear(screen.getByRole('textbox', { name: 'Notes' }));
+    await user.type(screen.getByRole('textbox', { name: 'Notes' }), 'Bay door serviced');
+
     await user.click(screen.getByRole('button', { name: /Save/ }));
+
+    await waitFor(() => expect(updateFacility).toHaveBeenCalledTimes(2));
+    const second = updateFacility.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(second).not.toHaveProperty('zip_code');
+    expect(second.notes).toBe('Bay door serviced');
+    expect(
+      await screen.findByRole('textbox', { name: 'Zip Code', description: 'Zip code is too long.' })
+    ).toHaveFocus();
+  });
+
+  // Forms review F-6: Cancel threw every typed change away without a word.
+  it('asks before Cancel throws typed changes away', async () => {
+    const user = userEvent.setup();
+    await renderEditing(user);
+    await user.type(screen.getByRole('textbox', { name: 'City' }), ' Heights');
+
+    await user.click(screen.getByRole('button', { name: /Cancel/ }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+
+    expect(screen.getByRole('textbox', { name: 'City' })).toHaveValue('Falls Church Heights');
     expect(updateFacility).not.toHaveBeenCalled();
+  });
+
+  it('names a whole number out of range on its field before saving', async () => {
+    const user = userEvent.setup();
+    await renderEditing(user);
+    const floors = screen.getByRole('spinbutton', { name: 'Floors' });
+    await user.type(floors, '0');
+
+    const payload = await save(user);
+
+    expect(payload).not.toHaveProperty('num_floors');
+    expect(floors).toHaveAccessibleDescription('Enter a whole number, 1 or more, or leave it empty.');
   });
 });

@@ -589,6 +589,124 @@ grants store still also sets the page's own error banner behind it.
 **Still not converted**, from the finance-and-grants row of the batch 18 list:
 the Approvals approve / deny prompt. The other rows are as batch 20 left them.
 
+## Rollout status, 2026-11-16 (batch 22)
+
+The same steps, on these:
+
+| Area                 | Converted                                                                                                                                                                                |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inventory and assets | Facilities › overview (edit), files (caption / description), Facility Settings' lookup dialog; Inventory › catalog quick add, stock lots (Add Lot), checklist settings; Store › settings |
+
+The facility overview is an edit, so a blank type or status, a mistyped email
+or an out-of-range number is left out of the save and stays flagged while the
+rest saves; its field ids are unchanged and the email is still checked as it is
+typed. Facility Settings' lookup dialog had main's field errors already; it
+gains the discard question, a counter and the single-save rule (Active saves
+with the name refused).
+
+Store settings carries the payment configuration and is replaced together, so a
+refused setting holds the whole save back, as batch 18's Zeffy link does. The
+fourteen settings with a limit or a rule go through `FormField` with their
+existing ids, with an `ErrorSummary` at the top of the long page and a
+leave-page question; the payload is built exactly as before.
+
+Two screens on the list had no form to convert. The facility list is a search
+box over cards, and its Add Facility dialog was already converted on main.
+Checklist settings saves each control as it changes; it now says on the
+control what happened to the change (a refused save, an unusable entry, a
+number folded back into range) instead of a toast or nothing. Catalog quick add
+is a search box rather than a form: Add is no longer greyed out on an empty
+box, and a refused create hands the typed name back with the reason under the
+bar instead of clearing it.
+
+**Still not converted**, from the inventory-and-assets row: the checklist
+builder (`EquipmentCheckTemplateBuilder`, some 7,000 lines, its own batch);
+the full apparatus form and its documents; and a facility's extended sections
+(utilities, access keys, shutoffs, capital projects, insurance, occupants),
+which share one `ResourceSection` and were not on earlier lists. The other rows
+of the batch 18 list are unchanged.
+
+## Rollout status, 2026-11-16 (batch 23)
+
+The same steps, on these:
+
+| Area                 | Converted                                                                                                                                                                                                      |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inventory and assets | Apparatus › the full add / edit form and the Documents tab's upload form; Facilities › the six extended sections (utilities and their readings, access keys, shutoffs, capital projects, insurance, occupants) |
+
+The apparatus form is the longest page converted so far, about forty boxes in
+seven cards, so it carries an `ErrorSummary` at the top. Adding refuses until
+every flagged box is fixed. An edit saves the rest and keeps a flagged box
+flagged, with one coupling: a status that needs a reason (Out of Service, as
+seeded) is never saved without one, so a refused reason holds the status
+change back with it. Each number is checked against the bound the server
+enforces before anything is sent, and Cancel and leaving the page ask before
+throwing typed changes away. The payload, including the explicit nulls for
+cleared boxes, is built exactly as before.
+
+The six extended sections share one `ResourceSection`, so one change covers
+them. Its update is split into a payload builder and a sender so an edit can
+leave a refused box out; the boxes whose request key differs from their name
+(`project_name`, `estimated_cost`, `carrier_name`, `unit_name`,
+`effective_date`) carry it, so a refusal lands on the right box. The readings
+form under each utility account is converted with it.
+
+**Still not converted**, from the inventory-and-assets row: the checklist
+builder (`EquipmentCheckTemplateBuilder`, some 7,300 lines, its own batch). The
+other rows of the batch 18 list are unchanged.
+
+## Rollout status, 2026-11-20 (batch 24)
+
+The same steps, on these:
+
+| Area           | Converted                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Communications | intake questions (as a member answers them, and as the box dialog writes them); the member's suggestion form; email templates (the editor) |
+| Scheduling     | the shift template dialog; Settings › General's overtime advisory and automatic-generation cards                                           |
+
+The shift template dialog had main's field errors and form already. It gains
+the discard question, a counter on the name (200, its column width; the schema
+sets none) and the single-save rule on edit; a refused start or end also holds
+back the length derived from both. The templates page memoises the dialog's
+initial data on the record, because the modal reseeded its form whenever that
+object changed and the list refresh after a keep-open save threw away what was
+typed.
+
+The member's suggestion form leaned on the browser's `required` bubble and a
+greyed-out Submit. It is `noValidate` now: an unanswered required question is
+named on the question, a missing title or details on its field. The server
+answers a submission with a 400 string, not a 422, and names a question by its
+label in quotes; such a refusal goes back to the questions step with the reason
+on that question, and any other stays in the form by the button.
+
+In the box dialog, a question with no wording, a choice question with no
+options, or an option with no label is named on the question before anything is
+sent; a 422 on the questions (`intakeQuestions.N.key`) lands on the questions
+section instead of a "label: ..." line at the top.
+
+The email template's Save is no longer greyed out while a copy list is wrong.
+A refused subject, body or copy list is left out of the update and keeps what
+was typed, put back after the draft re-seeds from the saved template.
+
+Scheduling settings' typed numbers held `Number(value)`, so a cleared hours
+limit was saved as 0 and switched the overtime advisory off. They hold what
+was typed now, are checked against the schema's bounds, and a refused one is
+named on its box while the card's other number still saves.
+
+Two items on the list were looked at and left. Photo consent is a read-only
+roster with filters, not a form. "Communications templates" and "email
+templates" are one screen pair: the template list holds only a search filter,
+and the backups panel has no form.
+
+**Still not converted**, from the batch 18 list's last row: the minutes editor
+and the rest of its settings; the remaining report dialogs; the rest of
+Scheduling › Settings (shift reports, eligibility, outside apparatus,
+notifications, platoons, and the defaults cards under the footer's Save
+Settings); applicant conversion, stage configuration, detail dialog, interviews
+and pipeline settings; onboarding, the public portal, membership, history, the
+org chart node and IP security admin. The other rows are as batches 21 to 23
+left them.
+
 ## Suggested order
 
 1. **F-1** — small, backend-led, stops a data-integrity hole.

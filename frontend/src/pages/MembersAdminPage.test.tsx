@@ -914,3 +914,82 @@ describe('MembersAdminPage — a row says each thing once', () => {
     expect(screen.queryByRole('button', { name: 'More actions for Cory Self' })).not.toBeInTheDocument();
   });
 });
+
+describe('MembersAdminPage — says why the roster did not load', () => {
+  beforeEach(() => {
+    vi.mocked(userService.getUsersWithRoles).mockReset();
+    vi.mocked(roleService.getRoles).mockReset();
+    vi.mocked(roleService.getRoles).mockResolvedValue([memberRole] as never);
+    vi.mocked(locationsService.getLocations).mockReset();
+    vi.mocked(locationsService.getLocations).mockResolvedValue([] as never);
+  });
+
+  // The server answered 500 for days because of one stored record, and the
+  // page told the officer to check their connection.
+  it('reports a server fault as one, with the support code', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockRejectedValue({
+      response: { status: 500, data: { detail: 'Internal server error', code: 'LB-SYS-001' } },
+    });
+    renderWithRouter(<MembersAdminPage />);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('the server hit a problem on its end');
+    expect(alert).toHaveTextContent('LB-SYS-001');
+    expect(alert).not.toHaveTextContent(/connection/i);
+  });
+
+  it('reports a refused positions list as a permission problem', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([member] as never);
+    vi.mocked(roleService.getRoles).mockRejectedValue({ response: { status: 403, data: { detail: 'Forbidden' } } });
+    renderWithRouter(<MembersAdminPage />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'You do not have permission to see members and positions.'
+    );
+  });
+
+  it('still points at the connection when nothing came back', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockRejectedValue({
+      request: {},
+      code: 'ERR_NETWORK',
+      message: 'Network Error',
+    });
+    renderWithRouter(<MembersAdminPage />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not load members and positions. Check your connection and refresh the page.'
+    );
+  });
+});
+
+describe('MembersAdminPage — says why a position was not removed', () => {
+  const driverRole = { ...memberRole, id: 'role-driver', name: 'Driver', slug: 'driver', is_system: false };
+
+  beforeEach(() => {
+    vi.mocked(userService.getUsersWithRoles).mockReset();
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
+      { ...member, roles: [memberRole, driverRole] },
+    ] as never);
+    vi.mocked(roleService.getRoles).mockReset();
+    vi.mocked(roleService.getRoles).mockResolvedValue([memberRole, driverRole] as never);
+    vi.mocked(locationsService.getLocations).mockReset();
+    vi.mocked(locationsService.getLocations).mockResolvedValue([] as never);
+    vi.mocked(userService.assignUserRoles).mockReset();
+  });
+
+  it('reports a server fault as one when removing a position', async () => {
+    vi.mocked(userService.assignUserRoles).mockRejectedValue({
+      response: { status: 500, data: { detail: 'Internal server error', code: 'LB-SYS-001' } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<MembersAdminPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Remove Driver position from Jordan Avery' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^Remove/ }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Could not remove the position: the server hit a problem on its end.');
+    expect(alert).not.toHaveTextContent(/connection/i);
+  });
+});

@@ -40,7 +40,11 @@ vi.mock('../services/api', () => ({
       }),
   },
   userService: {
-    getUsers: () => Promise.resolve([{ id: 'u2', first_name: 'Sam', last_name: 'Ortiz', rank: 'fire_chief' }]),
+    getUsers: () =>
+      Promise.resolve([
+        { id: 'u2', first_name: 'Sam', last_name: 'Ortiz', rank: 'fire_chief', status: 'active' },
+        { id: 'u3', first_name: 'Lee', last_name: 'Park', status: 'archived' },
+      ]),
   },
   locationsService: { getLocations: () => Promise.resolve([]) },
 }));
@@ -100,6 +104,17 @@ describe('EventRequestsTab pipeline tasks', () => {
     await user.click(await screen.findByRole('button', { name: 'Assign' }));
 
     expect(screen.getByRole('option', { name: 'Sam Ortiz — Fire Chief' })).toBeInTheDocument();
+  });
+
+  it('does not offer a former member as coordinator', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EventRequestsTab />);
+
+    await user.click(await screen.findByRole('button', { name: /Pat Requester/ }));
+    await user.click(await screen.findByRole('button', { name: 'Assign' }));
+
+    expect(screen.getByRole('option', { name: 'Sam Ortiz — Fire Chief' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Lee Park/ })).not.toBeInTheDocument();
   });
 });
 

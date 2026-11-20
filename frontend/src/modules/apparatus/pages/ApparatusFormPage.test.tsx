@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 
 interface RankLike {
   rank_code: string;
@@ -214,11 +215,13 @@ describe('ApparatusFormPage clearing a field on edit', () => {
   it('sends an emptied field as null and leaves untouched ones alone', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter initialEntries={['/apparatus/app-1/edit']}>
-        <Routes>
-          <Route path="/apparatus/:id/edit" element={<ApparatusFormPage />} />
-        </Routes>
-      </MemoryRouter>
+      <ConfirmProvider>
+        <MemoryRouter initialEntries={['/apparatus/app-1/edit']}>
+          <Routes>
+            <Route path="/apparatus/:id/edit" element={<ApparatusFormPage />} />
+          </Routes>
+        </MemoryRouter>
+      </ConfirmProvider>
     );
 
     await user.clear(await screen.findByRole('textbox', { name: 'Name/Nickname' }));
@@ -329,11 +332,13 @@ describe('ApparatusFormPage status reason', () => {
 
   const renderEdit = () =>
     render(
-      <MemoryRouter initialEntries={['/apparatus/app-1/edit']}>
-        <Routes>
-          <Route path="/apparatus/:id/edit" element={<ApparatusFormPage />} />
-        </Routes>
-      </MemoryRouter>
+      <ConfirmProvider>
+        <MemoryRouter initialEntries={['/apparatus/app-1/edit']}>
+          <Routes>
+            <Route path="/apparatus/:id/edit" element={<ApparatusFormPage />} />
+          </Routes>
+        </MemoryRouter>
+      </ConfirmProvider>
     );
 
   beforeEach(() => {
@@ -359,13 +364,23 @@ describe('ApparatusFormPage status reason', () => {
     expect(screen.getByText('*', { selector: 'label[for="apparatus-statusReason"] span' })).toBeInTheDocument();
   });
 
-  it('refuses to save Out of Service without a reason', async () => {
+  // Single-save rule (owner, 2026-11-05): the rest of the edit saves, but a
+  // status that needs a reason is never saved without one, so the status and
+  // its reason are both left out and the reason stays flagged.
+  it('saves the rest but holds the status back when Out of Service has no reason', async () => {
     const user = userEvent.setup();
     renderEdit();
     await user.clear(await screen.findByRole('textbox', { name: /Reason/ }));
     await user.click(screen.getByRole('button', { name: /Save|Update/ }));
-    expect(await screen.findByText('Give a reason for Out of Service')).toBeInTheDocument();
-    expect(apparatusService.updateApparatus).not.toHaveBeenCalled();
+    await waitFor(() => expect(apparatusService.updateApparatus).toHaveBeenCalled());
+    const [, payload] = vi.mocked(apparatusService.updateApparatus).mock.calls[0] ?? [];
+    expect(payload).not.toHaveProperty('statusId');
+    expect(payload).not.toHaveProperty('statusReason');
+    expect(payload).toMatchObject({ unitNumber: 'E-2' });
+    expect(await screen.findByRole('textbox', { name: /Reason/ })).toHaveAccessibleDescription(
+      /Give a reason for Out of Service/
+    );
+    expect(screen.getByText(/Apparatus saved, except reason/)).toBeInTheDocument();
   });
 
   it('drops the old reason when the status changes, and clears it on the server', async () => {

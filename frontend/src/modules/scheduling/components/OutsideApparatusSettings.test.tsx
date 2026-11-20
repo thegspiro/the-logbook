@@ -13,6 +13,7 @@ const mockDeleteAgency = vi.fn();
 const mockCreateUnit = vi.fn();
 const mockUpdateUnit = vi.fn();
 const mockDeleteUnit = vi.fn();
+const mockMerge = vi.fn();
 
 vi.mock('../services/api', () => ({
   schedulingService: {
@@ -23,6 +24,7 @@ vi.mock('../services/api', () => ({
     createExternalApparatus: (...args: unknown[]) => mockCreateUnit(...args) as unknown,
     updateExternalApparatus: (...args: unknown[]) => mockUpdateUnit(...args) as unknown,
     deleteExternalApparatus: (...args: unknown[]) => mockDeleteUnit(...args) as unknown,
+    mergeExternalAgency: (...args: unknown[]) => mockMerge(...args) as unknown,
   },
 }));
 
@@ -150,5 +152,259 @@ describe('OutsideApparatusSettings', () => {
     await user.click(toggle);
 
     await waitFor(() => expect(mockUpdateAgency).toHaveBeenCalledWith('a1', { evaluate_shifts: true }));
+  });
+});
+
+const county: ExternalAgency = {
+  id: 'a-county',
+  name: 'Arlington County',
+  is_active: true,
+  evaluate_shifts: true,
+  apparatus: [
+    { id: 'u-fas', agency_id: 'a-county', name: 'FAS', apparatus_type: null, is_active: true },
+    { id: 'u-a106-dup', agency_id: 'a-county', name: 'a106', apparatus_type: null, is_active: true },
+  ],
+};
+const countyFd: ExternalAgency = {
+  id: 'a-county-fd',
+  name: 'Arlington County Fire Department',
+  is_active: true,
+  evaluate_shifts: false,
+  apparatus: [{ id: 'u-a106', agency_id: 'a-county-fd', name: 'A106', apparatus_type: null, is_active: true }],
+};
+
+describe('OutsideApparatusSettings: merging two spellings of one department', () => {
+  beforeEach(() => {
+    mockList.mockReset();
+    mockMerge.mockReset();
+    vi.mocked(toast.success).mockReset();
+    vi.mocked(toast.error).mockReset();
+    mockList.mockResolvedValue({ agencies: [county, countyFd] });
+    mockMerge.mockResolvedValue({
+      agency: countyFd,
+      moved_apparatus: 1,
+      combined_apparatus: 1,
+      relabelled_shifts: 12,
+    });
+  });
+
+  const openMerge = async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<OutsideApparatusSettings />);
+    await user.click(await screen.findByRole('button', { name: 'Merge Arlington County into another department' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Merge Arlington County' });
+    return { user, dialog };
+  };
+
+  it('offers no merge while there is only one department', async () => {
+    mockList.mockResolvedValue({ agencies });
+    renderWithRouter(<OutsideApparatusSettings />);
+
+    await screen.findByRole('region', { name: 'Township Fire Company' });
+    expect(screen.queryByRole('button', { name: /^Merge / })).not.toBeInTheDocument();
+  });
+
+  it('says what will happen before anything does, and needs a department chosen', async () => {
+    const { user, dialog } = await openMerge();
+
+    const mergeButton = within(dialog).getByRole('button', { name: 'Merge departments' });
+    expect(mergeButton).toBeDisabled();
+    // Only the other department is offered as the one to keep.
+    const select = within(dialog).getByLabelText('Merge into');
+    expect(within(select).queryByRole('option', { name: 'Arlington County' })).not.toBeInTheDocument();
+
+    await user.selectOptions(select, 'a-county-fd');
+
+    expect(dialog).toHaveTextContent('1 apparatus moves to Arlington County Fire Department.');
+    expect(dialog).toHaveTextContent('a106 is already listed there, so it is combined into one.');
+    expect(dialog).toHaveTextContent(
+      'Every shift logged with Arlington County will show Arlington County Fire Department instead'
+    );
+    expect(dialog).toHaveTextContent('Arlington County Fire Department does not evaluate shifts');
+    expect(dialog).toHaveTextContent('cannot be undone');
+    expect(mockMerge).not.toHaveBeenCalled();
+    expect(mergeButton).toBeEnabled();
+  });
+
+  it('previews a unit spelled with an accent on one side as combined, as the server will', async () => {
+    mockList.mockResolvedValue({
+      agencies: [
+        {
+          ...county,
+          apparatus: [{ id: 'u-cafe', agency_id: 'a-county', name: 'Cafe', apparatus_type: null, is_active: true }],
+        },
+        {
+          ...countyFd,
+          apparatus: [
+            { id: 'u-cafe-fd', agency_id: 'a-county-fd', name: 'Café', apparatus_type: null, is_active: true },
+          ],
+        },
+      ],
+    });
+    const { user, dialog } = await openMerge();
+
+    await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+
+    expect(dialog).toHaveTextContent('Cafe is already listed there, so it is combined into one.');
+    expect(dialog).not.toHaveTextContent('apparatus moves');
+  });
+
+  it('says when merging into a hidden department hides the moved apparatus from members', async () => {
+    mockList.mockResolvedValue({ agencies: [county, { ...countyFd, is_active: false }] });
+    const { user, dialog } = await openMerge();
+
+    const select = within(dialog).getByLabelText('Merge into');
+    expect(
+      within(select).getByRole('option', { name: 'Arlington County Fire Department (hidden from members)' })
+    ).toBeInTheDocument();
+    await user.selectOptions(select, 'a-county-fd');
+
+    expect(dialog).toHaveTextContent(
+      "Arlington County Fire Department is hidden from members, so Arlington County's apparatus will be hidden from them too."
+    );
+  });
+
+  it('says when merging a hidden department into an offered one makes its apparatus available', async () => {
+    mockList.mockResolvedValue({ agencies: [{ ...county, is_active: false }, countyFd] });
+    const { user, dialog } = await openMerge();
+
+    await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+
+    expect(dialog).toHaveTextContent(
+      "Arlington County Fire Department is offered to members, so Arlington County's apparatus that are switched on become available to them."
+    );
+  });
+
+  it("says when a combined unit takes the kept department's switched-off setting", async () => {
+    mockList.mockResolvedValue({
+      agencies: [
+        county,
+        {
+          ...countyFd,
+          apparatus: [{ id: 'u-a106', agency_id: 'a-county-fd', name: 'A106', apparatus_type: null, is_active: false }],
+        },
+      ],
+    });
+    const { user, dialog } = await openMerge();
+
+    await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+
+    expect(dialog).toHaveTextContent(
+      'a106 is switched off under Arlington County Fire Department, so once combined it is hidden from members.'
+    );
+  });
+
+  it("says when a combined unit takes the kept department's switched-on setting", async () => {
+    mockList.mockResolvedValue({
+      agencies: [
+        {
+          ...county,
+          apparatus: [
+            { id: 'u-a106-dup', agency_id: 'a-county', name: 'a106', apparatus_type: null, is_active: false },
+          ],
+        },
+        countyFd,
+      ],
+    });
+    const { user, dialog } = await openMerge();
+
+    await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+
+    expect(dialog).toHaveTextContent(
+      'a106 is switched on under Arlington County Fire Department, so once combined it is available to members.'
+    );
+  });
+
+  it('does not promise a combined unit to members when the kept department is hidden', async () => {
+    mockList.mockResolvedValue({
+      agencies: [
+        {
+          ...county,
+          apparatus: [
+            { id: 'u-a106-dup', agency_id: 'a-county', name: 'a106', apparatus_type: null, is_active: false },
+          ],
+        },
+        { ...countyFd, is_active: false },
+      ],
+    });
+    const { user, dialog } = await openMerge();
+
+    await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+
+    expect(dialog).toHaveTextContent('Arlington County Fire Department is hidden from members');
+    expect(dialog).not.toHaveTextContent('available to members');
+  });
+
+  it('says nothing about visibility when both departments match', async () => {
+    const { user, dialog } = await openMerge();
+
+    await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+
+    expect(dialog).not.toHaveTextContent('from members');
+  });
+
+  it('previews "Engine I" and "Engine i" as one unit whatever the browser locale', async () => {
+    // A Turkish locale folds "I" to a dotless "ı"; the server's collation does not.
+    const original = String.prototype.toLocaleLowerCase;
+    String.prototype.toLocaleLowerCase = function (this: string) {
+      return original.call(this, 'tr');
+    };
+    try {
+      mockList.mockResolvedValue({
+        agencies: [
+          {
+            ...county,
+            apparatus: [{ id: 'u-i', agency_id: 'a-county', name: 'Engine I', apparatus_type: null, is_active: true }],
+          },
+          {
+            ...countyFd,
+            apparatus: [
+              { id: 'u-i-fd', agency_id: 'a-county-fd', name: 'Engine i', apparatus_type: null, is_active: true },
+            ],
+          },
+        ],
+      });
+      const { user, dialog } = await openMerge();
+
+      await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+
+      expect(dialog).toHaveTextContent('Engine I is already listed there, so it is combined into one.');
+    } finally {
+      String.prototype.toLocaleLowerCase = original;
+    }
+  });
+
+  it('merges into the chosen department and reports what moved', async () => {
+    const { user, dialog } = await openMerge();
+
+    await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+    await user.click(within(dialog).getByRole('button', { name: 'Merge departments' }));
+
+    await waitFor(() => expect(mockMerge).toHaveBeenCalledWith('a-county', 'a-county-fd'));
+    expect(toast.success).toHaveBeenCalledWith(
+      'Arlington County merged into Arlington County Fire Department: 1 apparatus moved, 1 combined, 12 shifts relabelled'
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockList).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the dialog open and says so when the merge fails', async () => {
+    mockMerge.mockRejectedValue(new Error('Choose a different department to merge into'));
+    const { user, dialog } = await openMerge();
+
+    await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+    await user.click(within(dialog).getByRole('button', { name: 'Merge departments' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Choose a different department to merge into'));
+    expect(screen.getByRole('dialog', { name: 'Merge Arlington County' })).toBeInTheDocument();
+  });
+
+  it('closes without merging when the officer keeps both', async () => {
+    const { user, dialog } = await openMerge();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Keep both' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockMerge).not.toHaveBeenCalled();
   });
 });

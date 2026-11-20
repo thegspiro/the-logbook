@@ -240,15 +240,18 @@ Fixed 2026-11-14:
   back into a payment stage. The same status is a no-op, and Cancelled goes
   through the real cancel.
 
-Open:
+Fixed 2026-11-16:
 
-- W67b-6 (MED): sizes can be priced below zero;
-- W67b-7 (MED): overpayment is accepted;
-- W67b-8 (LOW): refund is one tap and always refunds everything;
-- W67b-9 (LOW): a pickup order keeps a home address it does not need;
-- W67b-10 (LOW): loading checkout directly bounces to the store;
-- W67b-18 (LOW): a shipped order's progress steps end at "Ready for
-  pickup".
+- W67b-6 (MED): an option could take a line below zero. Products, options
+  and window prices are now refused at save, and any line below zero at
+  checkout.
+- W67b-7 (MED): an overpayment was accepted silently. Owner decision: a typed
+  payment above the balance is refused; an applied PayPal capture records
+  what arrived, and the excess shows as owed back to the member with a
+  one-step refund. A partial refund that leaves the order paid in full keeps
+  it Paid.
+
+Open:
 
 Read from code, not driven: W67b-11 to W67b-17 (window lifecycle, vendor
 order, payment reports and notification gaps). Details in
@@ -257,6 +260,42 @@ order, payment reports and notification gaps). Details in
 Gate for the W67b-3, -4 and -5 fixes: typecheck, lint, flake8, black, isort
 and the mypy ratchet clean; 313 frontend storefront and integrity tests and 571
 backend storefront, payment, locking and SoD tests pass.
+
+Fixed 2026-11-16, later the same day:
+
+- W67b-8 (LOW): Refund was one tap and refunded everything. It is now its own
+  section, with an amount (defaulting to all paid, checked against it), a
+  reason the member sees, and a confirmation.
+- W67b-9 (LOW): a pickup order stored the address typed for shipping.
+  Checkout no longer sends it and the server no longer stores it. Addresses
+  already stored on pickup orders are left for the owner to decide on.
+
+Fixed 2026-11-17:
+
+- W67b-10 (LOW): reloading or bookmarking the checkout page bounced the member
+  to the store, because the page decided the cart was empty before the saved
+  cart was restored. It now waits for the store to load, and shows a load
+  failure with a retry.
+
+- W67b-18 (LOW): a shipped order read "Ready for pickup". Owner decision:
+  relabel everywhere. A shipped order now reads "Ready to ship" and
+  "Shipped" in its progress steps, badges, status picker, timeline and
+  status email. Same statuses, no migration.
+
+Gate for the W67b-18 fix: typecheck, lint, flake8, black, isort and the mypy
+ratchet clean; 347 frontend storefront and integrity tests and 695 backend
+storefront, payment, PayPal, Zeffy, locking and SoD tests pass.
+
+Gate for the W67b-10 fix: typecheck and lint clean; 341 frontend storefront and
+integrity tests pass.
+
+Gate for the W67b-8 and -9 fixes: typecheck, lint, flake8, black, isort and the
+mypy ratchet clean; 338 frontend storefront and integrity tests and 693 backend
+storefront, payment, PayPal, Zeffy, locking and SoD tests pass.
+
+Gate for the W67b-6 and -7 fixes: typecheck, lint, flake8, black, isort and the
+mypy ratchet clean; 334 frontend storefront and integrity tests and 691 backend
+storefront, payment, PayPal, Zeffy, locking and SoD tests pass.
 
 ### W09 second pass — Import members from a spreadsheet — 2026-11-10
 
