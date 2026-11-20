@@ -26,6 +26,7 @@ from app.models.admin_hours import (
 from app.models.apparatus_event import EventApparatusPlan
 from app.models.event import Event
 from app.models.user import Organization, User
+from app.services.import_provenance import admin_hours_imported, label_for
 from app.services.separation_of_duties import assert_different_person
 from app.utils.admin_hours_settings import (
     load_admin_hours_review_settings,
@@ -1492,6 +1493,10 @@ class AdminHoursService:
                 "Status",
                 "Approved By",
                 "Description",
+                # Last, so a sheet that reads the columns by position keeps
+                # working. "Method" says how it was entered; this says whether
+                # it came from an import or from The Logbook itself.
+                "Source",
             ]
         )
         yield writer.drain()
@@ -1544,6 +1549,7 @@ class AdminHoursService:
                         entry.status.value if entry.status else "",
                         approver_name,
                         entry.description or "",
+                        label_for(admin_hours_imported(entry.entry_method)),
                     ]
                 )
             yield writer.drain()
@@ -2128,6 +2134,7 @@ class AdminHoursService:
         crew_category = (
             await self.crew_hour_category_overrides(organization_id, [event_id])
         ).get(str(event_id))
+        mappings: List[Tuple[str, int, Optional[AdminHoursCategory]]]
         if crew_category is not None:
             mappings = [(crew_category.id, 100, crew_category)]
         else:

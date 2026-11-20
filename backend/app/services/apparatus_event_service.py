@@ -15,7 +15,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, overload
 
 from loguru import logger
 from sqlalchemy import and_, func, or_, select
@@ -78,6 +78,21 @@ class SeatOutcome:
     """A seat write's result: the warnings the caller should show."""
 
     warnings: List[Dict[str, Any]]
+
+
+@overload
+def _utc(value: datetime) -> datetime:
+    """A stored time read as UTC; a naive one is UTC by convention."""
+
+
+@overload
+def _utc(value: None) -> None:
+    """No time in, no time out."""
+
+
+@overload
+def _utc(value: Optional[datetime]) -> Optional[datetime]:
+    """A nullable column (a template's latest night) stays nullable."""
 
 
 def _utc(value: Optional[datetime]) -> Optional[datetime]:
@@ -217,7 +232,7 @@ class ApparatusEventService:
         }
 
     async def template_names(
-        self, organization_id: str, template_ids: Sequence[str]
+        self, organization_id: str, template_ids: Sequence[Optional[str]]
     ) -> Dict[str, str]:
         ids = [str(t) for t in template_ids if t]
         if not ids:
@@ -231,7 +246,7 @@ class ApparatusEventService:
         return {str(i): n for i, n in result.all()}
 
     async def category_names(
-        self, organization_id: str, category_ids: Sequence[str]
+        self, organization_id: str, category_ids: Sequence[Optional[str]]
     ) -> Dict[str, str]:
         ids = [str(c) for c in category_ids if c]
         if not ids:
@@ -1336,20 +1351,20 @@ class ApparatusEventService:
             await self.db.flush()
             kept_unit_ids.add(str(unit.id))
             for seat_index, seat_spec in enumerate(unit_spec.seats):
-                seat = existing_seats.get(seat_spec.id) if seat_spec.id else None
-                if seat is None:
-                    seat = EventApparatusSeat(
+                seat_row = existing_seats.get(seat_spec.id) if seat_spec.id else None
+                if seat_row is None:
+                    seat_row = EventApparatusSeat(
                         organization_id=str(organization_id),
                         event_id=event.id,
                         unit_id=unit.id,
                         name=seat_spec.name,
                     )
-                    self.db.add(seat)
-                seat.unit_id = unit.id
-                seat.name = seat_spec.name
-                seat.seat_type = _value(seat_spec.seat_type)
-                seat.note = seat_spec.note
-                seat.sort_order = seat_index
+                    self.db.add(seat_row)
+                seat_row.unit_id = unit.id
+                seat_row.name = seat_spec.name
+                seat_row.seat_type = _value(seat_spec.seat_type)
+                seat_row.note = seat_spec.note
+                seat_row.sort_order = seat_index
 
         await self.db.flush()
         for seat_id, seat in existing_seats.items():
@@ -1364,9 +1379,10 @@ class ApparatusEventService:
         # stands: a seat retyped as Driver, moved to another apparatus, or a
         # mode tightened from "don't check" to "enforce" can each leave
         # someone behind a wheel the rule would not let them take.
-        units_by_id = {
-            str(u.id): u for u in (await self.get_plan(event_id, organization_id)).units
-        }
+        plan = await self.get_plan(event_id, organization_id)
+        if plan is None:
+            return None
+        units_by_id = {str(u.id): u for u in plan.units}
         for unit in units_by_id.values():
             for seat in unit.seats:
                 if (
