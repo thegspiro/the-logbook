@@ -246,7 +246,9 @@ _Updated 2026-11-16._ The Historical Data Import has always read "Imported".
 Since 2026-11-15, records written by the two Training CSV importers — the
 **CSV import wizard** and **Import CSV** on training records — read "Imported"
 too. Records those importers wrote before that date were not marked at the time
-and still read "The Logbook"; nothing can tell them apart afterwards.
+and still read "The Logbook"; nothing can tell them apart afterwards. Since 2026-11-19
+the department-wide exports carry the same column; see
+[Bulk and Reporting Exports](#bulk-and-reporting-exports-reports-tab).
 
 The top of the tab shows your **all-time** courses and hours and how many years
 are on record. The History tab reads your whole record, however long it is.
@@ -558,7 +560,11 @@ later"** — the way most officers describe a schedule out loud.
 
 1. Open **Training Admin → Records → Course Cohorts**.
 2. Select **New cohort**. The wizard has five steps.
-3. **Course** — pick the course and name the cohort, such as "Recruit School —
+3. **Course** — pick the course and name the cohort. _(2026-11-17)_ Only
+   courses with at least one class on their syllabus are offered; a
+   single-session course with an empty syllabus used to be listed and then
+   failed at the preview step. If the course you want is missing, add its
+   classes in the Course Library first. Name the cohort, such as "Recruit School —
    Fall 2026". _(2026-11-04)_ You may also add a **Description**, which
    everyone on the cohort sees on its page, and **Notes**, which only training
    officers see.
@@ -1399,7 +1405,10 @@ drills graded at 60% for active members and 30% for senior members, say.
 **Who sees which sessions count.** A session linked to an attendance
 requirement carries a **Counts toward attendance** badge on its event card in
 the events list, on the calendar and on its event page, so members know which
-drills they are expected at.
+drills they are expected at. _(2026-11-18)_ The badge shows only while at least
+one linked requirement is **active**. A session linked only to deactivated
+requirements counts against nobody, so it no longer carries the badge. The
+session editor still lists those old links so you can remove them.
 
 **How compliance counts it.** For each member, in the requirement's current
 period:
@@ -1429,12 +1438,20 @@ sessions", and counts a member's progress in sessions.
 **Applying a requirement to every operational member** _(2026-10-27)_. Under
 **Member Categories**, the **Operational members** button ticks **Active**,
 **Probationary** and **Life** in one go — the operational members still
-serving. **Retired** is an operational rung too (see
+serving — and **Senior** too, if your department has a **Senior** membership
+tier _(2026-11-17)_. The hint beside the button names what it ticks ("Active,
+Probationary, Life and Senior Member" where the tier exists). A department
+without that tier sees no change. **Retired** is an operational rung too (see
 [Member Class and Member Status](./01-membership.md#member-class-and-member-status)),
 but the button leaves it out _(2026-11-06)_ so a riding requirement is not
 held against members who have stepped back; tick it yourself if the
-requirement covers them. When all three are ticked, the button shows a check
-mark; selecting it again unticks those three. **Retired**, **Administrative**
+requirement covers them. When all of them are ticked (Senior included, where
+it exists), the button shows a check mark; selecting it again unticks them.
+Requirements scoped with the button before 2026-11-17 do not have Senior
+ticked: open each one and select the button again, or tick **Senior** by hand.
+_Screenshot: `02-135-requirement-operational-members` is still right for a
+department with no Senior tier; create a second one showing Senior ticked and
+the longer hint._ **Retired**, **Administrative**
 and **Honorary** are left as you set them either way.
 
 **Your department's own membership tiers are listed too** _(2026-11-14)_.
@@ -1825,6 +1842,16 @@ months" is a running count, met or short on any day. The member's card shows
 hours still to go. A rolling requirement of **any other type** — a
 certification, a course, a checklist — keeps its due date: the member's last
 completion plus the interval.
+
+**A rolling requirement credited by shift evaluations falls due from the
+latest evaluation** _(2026-11-17)_. For a rolling **Evaluated shifts**,
+**Evaluated calls**, **Transports** or **Refusals** requirement, My Training's
+due date is the latest evaluation that counts toward it plus the rolling
+period. Before, the date was taken from training records, which never count
+toward these types, so the member saw no due date or a date from an unrelated
+record. An evaluation older than the window still sets the date, so the
+requirement shows as overdue rather than with no date. A rolling **Shifts
+worked** requirement already worked this way, from the latest shift.
 
 If a member has an active **Leave of Absence** during part of the window, the
 months on leave are excused and the requirement is reduced to match. How much
@@ -2319,6 +2346,20 @@ the same rules, so their figures agree:
   with the same thresholds. The figure you file for the year matches the
   dashboard. A report already generated keeps the figures it was generated
   with.
+- **My Training uses compliance profiles too** _(2026-11-18)_. When a member
+  matches a compliance profile that lists its own required requirements, their
+  **My Training** page, the officer's view of that member's requirements, the
+  member profile's compliance card and the per-member training report list
+  only that profile's requirements (those that also apply by type, rank,
+  position and join date). Before, those pages listed every requirement, so a
+  Life member on a non-riding profile saw shift and call requirements the
+  department never grades them on, and their "X of Y requirements met" and
+  average progress disagreed with the Compliance Matrix. Nothing changes for a
+  department without profiles, for a profile that sets only thresholds, or for
+  a member who matches no active profile. The profile card's green, yellow or
+  red colour still uses its own fixed rule, not the profile's thresholds, so it
+  can occasionally disagree with the matrix (see `docs/KNOWN_LIMITATIONS.md`,
+  "D10 follow-up").
 - **A requirement limited to certain ranks applies to those ranks.** The
   **Required roles** on a requirement are **ranks**. Members of those ranks
   are graded on it on My Training, the matrix, the dashboard, the member
@@ -3769,6 +3810,14 @@ exports:
 4. **Compliance Report** — department-wide compliance for all members and
    requirements.
 
+**A Source column on the record exports** _(2026-11-19)_. The **Member
+Records** CSV and the **Certification Report** CSV end with a **Source**
+column: the training provider's name for a synced record, **Imported** for one
+the Historical Data Import wrote, and **The Logbook** for everything else. It
+is the last column, so a spreadsheet that reads the columns by position keeps
+working. The Hours Summary and Compliance Report add up records rather than
+listing them, so they have no Source column.
+
 ![Training admin reports tab with the compliance, hours, and certification cards](./images/02-41-training-admin-reports.png)
 
 > **Hint:** A bulk PDF for a period with no records still downloads, as a
@@ -3840,7 +3889,12 @@ hours, the import now credits the course's **Credit Hours**, or its duration whe
 Credit Hours is blank. Hours the provider did report still win. Mapping,
 re-mapping or unmapping a course applies the same rule to the records already
 imported from it, except a record whose hours an officer changed or that is
-linked to another course by hand. An upgrade backfills records imported before
+linked to another course by hand. _(2026-11-18)_ Each import now remembers the
+hours it took from its course, so editing a course's hours later no longer
+confuses a re-map: the course's original figure is moved or removed as it
+should be, and an officer's value that happens to equal the new figure is left
+alone. Records whose course was edited before this upgrade are treated as an
+officer's, as before. An upgrade backfills records imported before
 this change. The Course Library's **Credit Hours** help text now says imports
 read the field as well as sessions.
 
@@ -3848,6 +3902,21 @@ The icon beside Active / Inactive is a **separate** fact: it shows whether the
 sign-in details have been proved to work. A newly saved provider has an amber
 triangle reading _Connection not verified_. It is active; it has just never
 been tested. Select **Test** to turn it green.
+
+**Which edits need a new Test** _(2026-11-18)_. Only a change to the connection
+itself returns a provider to _Connection not verified_: a different API URL,
+client ID or authentication type, a new secret, or clearing a saved secret.
+Changing the sync interval, the daily review time or the provider's name keeps
+it verified. **Automatic syncs run only for a verified provider**, and before
+this change any save un-verified it, so a provider whose schedule was edited
+silently stopped syncing on its own while **Sync Now** still worked. If a
+provider's last scheduled pull is older than its interval, open it and select
+**Test**.
+
+**Manual pulls are labelled** _(2026-11-18)_. In **Sync History**, a pull an
+officer started with **Sync Now** reads **Manual pull**. Before, it read
+**Scheduled pull**, so a provider that had dropped off the schedule looked as
+if it was still syncing by itself.
 
 ![The Integrations tab with a saved provider — its platform, last sync, auto-sync interval and sync actions](./images/02-42-external-integrations.png)
 

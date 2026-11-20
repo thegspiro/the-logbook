@@ -429,6 +429,7 @@ class TestListPermissionGates:
             ("/agencies", "POST"),
             ("/agencies/{agency_id}", "PATCH"),
             ("/agencies/{agency_id}", "DELETE"),
+            ("/agencies/{agency_id}/merge", "POST"),
             ("/agencies/{agency_id}/apparatus", "POST"),
             ("/apparatus/{apparatus_id}", "PATCH"),
             ("/apparatus/{apparatus_id}", "DELETE"),

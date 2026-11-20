@@ -979,7 +979,10 @@ class ApparatusService:
         await self.db.commit()
         await self.db.refresh(apparatus)
 
-        return apparatus
+        # The row was loaded without its relationships and the refresh leaves
+        # them unloaded; the response nests type and status, and reading them
+        # lazily on the async session raises MissingGreenlet.
+        return await self.get_apparatus(apparatus_id, organization_id)
 
     async def delete_apparatus(self, apparatus_id: str, organization_id: str) -> bool:
         """Delete apparatus (hard delete - use archive for soft delete)"""

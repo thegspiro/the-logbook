@@ -1133,6 +1133,87 @@ describe('ItemFormModal', () => {
   });
 });
 
+// W38-3: an item added under a consumable category opened as Individual, and
+// the quartermaster had to switch it to Pool by hand every time.
+describe("ItemFormModal tracking type follows a new item's category", () => {
+  const consumables: InventoryCategory = {
+    ...ppeCategory,
+    id: 'cat-ems',
+    name: 'EMS Supplies',
+    item_type: 'consumable',
+  };
+  const medical: InventoryCategory = { ...ppeCategory, id: 'cat-med', name: 'Medications', item_type: 'medical' };
+  const props = { ...baseProps, categories: [ppeCategory, consumables, medical] };
+  const tracking = () => screen.getByRole('combobox', { name: 'Tracking Type' });
+  const category = () => screen.getByRole('combobox', { name: 'Category' });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetVendors.mockResolvedValue([]);
+    mockGetVariantGroups.mockReset();
+    mockGetVariantGroups.mockResolvedValue([]);
+  });
+
+  it('switches to Pool for a consumable or medical category, and back for others', async () => {
+    const user = userEvent.setup();
+    render(<ItemFormModal {...props} isOpen />);
+
+    expect(tracking()).toHaveValue('individual');
+    await user.selectOptions(category(), 'cat-ems');
+    expect(tracking()).toHaveValue('pool');
+    await user.selectOptions(category(), 'cat-ppe');
+    expect(tracking()).toHaveValue('individual');
+    await user.selectOptions(category(), 'cat-med');
+    expect(tracking()).toHaveValue('pool');
+  });
+
+  // Codex review on #4399: with no category the default was skipped, so an
+  // item moved back to "-- Select --" kept the consumable category's Pool.
+  it('goes back to Individual when the category is cleared', async () => {
+    const user = userEvent.setup();
+    render(<ItemFormModal {...props} isOpen />);
+
+    await user.selectOptions(category(), 'cat-ems');
+    expect(tracking()).toHaveValue('pool');
+    await user.selectOptions(category(), '');
+    expect(tracking()).toHaveValue('individual');
+  });
+
+  it('leaves a tracking type the officer chose alone', async () => {
+    const user = userEvent.setup();
+    render(<ItemFormModal {...props} isOpen />);
+
+    await user.selectOptions(tracking(), 'pool');
+    await user.selectOptions(category(), 'cat-ppe');
+    expect(tracking()).toHaveValue('pool');
+  });
+
+  it('opens a new item under a consumable category as Pool, and closes it without asking', async () => {
+    const onClose = vi.fn();
+    render(<ItemFormModal {...props} isOpen onClose={onClose} defaults={{ category_id: 'cat-ems' }} />);
+
+    expect(tracking()).toHaveValue('pool');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a tracking type the page asked for', () => {
+    render(<ItemFormModal {...props} isOpen defaults={{ category_id: 'cat-ems', tracking_type: 'individual' }} />);
+
+    expect(tracking()).toHaveValue('individual');
+  });
+
+  it("never changes an existing item's tracking type", async () => {
+    const user = userEvent.setup();
+    render(
+      <ItemFormModal {...props} isOpen editItem={makeItem({ category_id: 'cat-ppe', tracking_type: 'individual' })} />
+    );
+
+    await user.selectOptions(category(), 'cat-ems');
+    expect(tracking()).toHaveValue('individual');
+  });
+});
+
 describe('ItemFormModal server errors on their fields', () => {
   const tooLong = (field: string) => ({
     response: { status: 422, data: { detail: [{ field, message: 'Value is too long.' }] } },

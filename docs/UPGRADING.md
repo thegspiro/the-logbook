@@ -830,6 +830,66 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### My Training follows compliance profiles; scheduling notification settings are read back; a Source column on exports (2026-11-19)
+
+Nothing blocks a restart, and no migration ships in this range: `main` at
+`762f1c93` still has the one head `bbeb4867d393`.
+
+- **My Training and the profile card narrow to the member's compliance
+  profile** _(#4403)_. In a department that uses compliance profiles with their
+  own required requirements, a profiled member's **My Training**, the
+  officer's per-member requirements view, the profile compliance card and
+  requirement progress list only that profile's requirements. "X of Y
+  requirements met", average progress and the Upcoming list will move for
+  those members. Departments without profiles see no change.
+- **Check Scheduling → Settings → Notifications** _(#4401)_. Before this
+  version the section never received the saved settings, so it showed the
+  built-in defaults and any save from it overwrote the department's decline /
+  drop, assignment, reminder and equipment-check alert choices with them. If
+  anyone saved that section, re-check it after upgrading.
+- **Failed equipment checks alert Chief and Captain by default** _(#4401)_. In
+  a department that never saved Equipment Check Alerts, holders of the Chief
+  and Captain positions now receive the in-app alert the screen always showed
+  as ticked; before, nobody was alerted. Email still needs **Also send email
+  notification**.
+- **A Source column ends several CSV exports** _(#4355)_: the training
+  Member Records and Certification Report exports, the Certification
+  Expiration and Admin Hours report downloads, Admin Hours' **Export CSV**, the
+  event list exports and an event's attendee CSV. It is always the last
+  column, so a sheet that reads columns by position keeps working; one that
+  checks the column count will see one more.
+- **Training providers stay verified when only their schedule is edited**
+  _(#4419)_. A provider whose sync interval or review time was edited on an
+  earlier version was un-verified by that save and has not auto-synced since.
+  Open **Training Admin → Integrations** and select **Test** on any provider
+  showing _Connection not verified_.
+- **Store payments typed by hand cannot exceed the balance** _(#4391)_, and
+  **Refund** asks for an amount, a reason and a confirmation.
+
+### Anonymising a member deletes their uploaded certificates; officer check-ins count from the start (2026-11-17)
+
+Nothing blocks a restart. Migration `bbeb4867d393` adds one nullable column,
+`external_training_imports.course_hours_credited`, and backfills it for
+imported records that still hold their mapped course's hours; no other row
+changes and the downgrade drops the column.
+
+- **Anonymising a member now deletes files** _(#4405)_. The certificates the
+  member uploaded with self-reported training are removed from storage, and
+  their attachment entries go with them; the training records stay. Permanently
+  deleting a member removes the files on the training submissions, training
+  records and waiver documents the delete cascades away, after the delete
+  commits. A file another row still names is kept either way. If your
+  department relies on keeping those certificates after a member leaves,
+  download them before anonymising. What remains on disk is listed under "D11"
+  in `docs/KNOWN_LIMITATIONS.md`.
+- **An officer's check-in after an event starts is recorded at the scheduled
+  start** _(#4395)_, not at the click. Attendance figures for events checked
+  in late by an officer will read higher than the same habit produced before
+  the upgrade. Rows already recorded are not changed.
+- **My Shifts → Past shows credited hours** _(#4381)_, so a member with a
+  shift awaiting close-out sees a lower figure than before, matching the Hours
+  view.
+
 ### Training: one form for Training events, evaluated calls, and evaluation credit that follows the shift (2026-11-16)
 
 Nothing blocks a restart. Migration `9d044fc1d81b` widens the training

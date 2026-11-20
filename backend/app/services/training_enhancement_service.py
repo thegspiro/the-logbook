@@ -59,11 +59,19 @@ from app.services.training_compliance import (
     requirement_applies_to_user,
     tally_standing,
 )
-from app.services.training_record_source import RecordSource, record_sources
+from app.services.training_record_source import (
+    RecordSource,
+    load_source_lookup,
+    record_sources,
+)
 from app.services.training_waiver_service import WaiverPeriod, fetch_org_waivers
 from app.utils.csv_export import SafeCsvChunks, collect_csv
 from app.utils.model_updates import apply_updates
-from app.utils.org_scoping import assert_all_in_org, assert_in_org
+from app.utils.org_scoping import (
+    assert_all_in_org,
+    assert_current_members,
+    assert_in_org,
+)
 from app.utils.org_timezone import (
     format_in_org_timezone,
     local_date,
@@ -647,6 +655,10 @@ class InstructorQualificationService:
         """Create an instructor qualification"""
         data = _stringify_uuids(data)
         await self._validate_references(organization_id, data)
+        # A new qualification is recorded for a current member only.
+        await assert_current_members(
+            self.db, [data.get("user_id")], organization_id, label="the member"
+        )
         qual = InstructorQualification(
             organization_id=organization_id,
             created_by=created_by,
@@ -1958,6 +1970,7 @@ class ReportExportService:
             .order_by(User.last_name, User.first_name)
         )
         users = users_result.scalars().all()
+        lookup = await load_source_lookup(self.db, organization_id)
 
         async def chunks() -> AsyncIterator[str]:
             writer = SafeCsvChunks()
@@ -1977,6 +1990,9 @@ class ReportExportService:
                     "Score",
                     "Instructor",
                     "Location",
+                    # Last, so a sheet that reads the columns by position
+                    # keeps working.
+                    "Source",
                 ]
             )
 
@@ -2017,6 +2033,7 @@ class ReportExportService:
                             f"{r.score:.1f}" if r.score else "",
                             r.instructor or "",
                             r.location or "",
+                            lookup.of(r).label,
                         ]
                     )
                 yield writer.drain()
@@ -2280,8 +2297,10 @@ class ReportExportService:
         )
 
         # Records are read through a server-side cursor a batch at a time
-        # (AH-16); user_map is loaded above because the connection cannot run
-        # another query while the cursor is open.
+        # (AH-16); user_map and the source lookup are loaded here because the
+        # connection cannot run another query while the cursor is open.
+        lookup = await load_source_lookup(self.db, organization_id)
+
         async def chunks() -> AsyncIterator[str]:
             writer = SafeCsvChunks()
             writer.writerow(
@@ -2295,6 +2314,7 @@ class ReportExportService:
                     "Expiration Date",
                     "Status",
                     "Days Until Expiry",
+                    "Source",
                 ]
             )
 
@@ -2332,6 +2352,7 @@ class ReportExportService:
                             exp_str,
                             status,
                             days_str,
+                            lookup.of(r).label,
                         ]
                     )
                 yield writer.drain()

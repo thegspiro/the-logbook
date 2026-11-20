@@ -23,6 +23,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.event import Event
 from app.models.training import TrainingApproval, TrainingSession
 from app.models.user import User
@@ -44,6 +45,7 @@ from app.services.training_session_service import (
     TRAINING_DETAILS_EXIST,
     TrainingSessionService,
 )
+from app.utils.org_scoping import assert_current_members
 
 router = APIRouter()
 
@@ -66,7 +68,9 @@ def _session_error(error: str) -> HTTPException:
 
 
 def _session_response(
-    ts: TrainingSession, attendance_requirement_ids: Optional[list[str]] = None
+    ts: TrainingSession,
+    attendance_requirement_ids: Optional[list[str]] = None,
+    counts_toward_attendance: bool = False,
 ) -> TrainingSessionResponse:
     """Build the response schema from a TrainingSession row.
 
@@ -85,6 +89,7 @@ def _session_response(
         phase_id=ts.phase_id,
         requirement_id=ts.requirement_id,
         attendance_requirement_ids=attendance_requirement_ids or [],
+        counts_toward_attendance=counts_toward_attendance,
         course_name=ts.course_name,
         course_code=ts.course_code,
         training_type=ts.training_type.value,
@@ -114,7 +119,10 @@ async def _session_payload(
     service: TrainingSessionService, ts: TrainingSession
 ) -> TrainingSessionResponse:
     links = await service.attendance_requirement_ids([str(ts.id)])
-    return _session_response(ts, links.get(str(ts.id)))
+    counted = await service.events_counting_toward_attendance(
+        [str(ts.event_id)], ts.organization_id
+    )
+    return _session_response(ts, links.get(str(ts.id)), str(ts.event_id) in counted)
 
 
 @router.post(
@@ -135,6 +143,20 @@ async def create_training_session(
     **Authentication required**
     **Requires permission: events.manage**
     """
+    # A lead instructor is picked from current members only. Checked here
+    # rather than in the service, which cohort generation also calls with
+    # instructors saved on class templates.
+    try:
+        await assert_current_members(
+            db,
+            [session_data.instructor_id],
+            current_user.organization_id,
+            label="the lead instructor",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     service = TrainingSessionService(db)
 
     training_session, error = await service.create_training_session(
@@ -185,6 +207,20 @@ async def create_recurring_training_session(
     **Authentication required**
     **Requires permission: events.manage**
     """
+    # A lead instructor is picked from current members only. Checked here
+    # rather than in the service, which cohort generation also calls with
+    # instructors saved on class templates.
+    try:
+        await assert_current_members(
+            db,
+            [session_data.instructor_id],
+            current_user.organization_id,
+            label="the lead instructor",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     service = TrainingSessionService(db)
 
     training_sessions, error = await service.create_recurring_training_session(
@@ -215,7 +251,14 @@ async def create_recurring_training_session(
     links = await service.attendance_requirement_ids(
         [str(ts.id) for ts in training_sessions]
     )
-    return [_session_response(ts, links.get(str(ts.id))) for ts in training_sessions]
+    counted = await service.events_counting_toward_attendance(
+        [str(ts.event_id) for ts in training_sessions],
+        current_user.organization_id,
+    )
+    return [
+        _session_response(ts, links.get(str(ts.id)), str(ts.event_id) in counted)
+        for ts in training_sessions
+    ]
 
 
 @router.get("/by-event/{event_id}", response_model=Optional[TrainingSessionResponse])

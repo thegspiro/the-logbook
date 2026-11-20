@@ -292,11 +292,14 @@ export default defineConfig({
         dir: 'ltr',
         // Android colours an installed app's system gesture bar with this, and
         // it cannot change per theme — the value is baked in when the app is
-        // installed. It matches the dark-mode navigation bar (--nav-bg) so the
-        // bottom bar does not appear to float on a strip of another colour.
+        // installed. It matches the light-mode navigation bar (--nav-bg), an
+        // owner decision (2026-11-16): dark and high-contrast show a white strip
+        // under their dark bar, because no value can match all three themes.
+        // Chrome does not draw an installed app edge-to-edge, so the bottom
+        // bar's own safe-area padding cannot cover the strip instead.
         // The status bar is driven at runtime from the theme-color meta tags,
         // which ThemeContext keeps in step with the theme picked in the app.
-        theme_color: '#0f172a',
+        theme_color: '#ffffff',
         background_color: '#0f172a',
         display: 'standalone',
         // Each src is served by the backend with the department's own logo

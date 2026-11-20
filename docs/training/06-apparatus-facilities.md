@@ -529,6 +529,9 @@ number**. The printer you choose is remembered for your position.
 
 Every station and room gets a kiosk **display code** when it is created. Its
 QR code opens the room's kiosk display, a public screen for event check-in.
+On the kiosk, each QR code is now named for screen readers _(2026-11-17)_:
+"Member check-in QR code for …" and "Guest sign-in QR code for …" with the
+event's name, or "Check-in QR code for …" when the event takes no guests.
 
 The **Check-In QR Codes** page collects every code in one printable list,
 grouped by station or facility, with a search box. To open it, use:

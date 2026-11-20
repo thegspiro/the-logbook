@@ -5,6 +5,103 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 18 – 19, 2026
+
+The last 25 hours of `main`: the 19 first-parent merges after `775eb7df`
+through `762f1c93` (2026-11-19 12:47 UTC), #4419 to #4435, less the November
+17 – 18 pass itself (#4431). #4363 (Cal.com and Documenso Settings) merged in
+this range but was documented by its own targeted sections below.
+`CHANGELOG.md` stays closed.
+
+**Still not covered:** the two earlier ranges the November 17 – 18 pass left
+for a catch-up (the 37 merges between `79ab1c88` and #4364, and the 40 before
+`b44b32ea`). This pass did not take them.
+
+| Change                                                                                                                                                                                                                                                        | Guide      | Disposition                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Source** column on every export whose rows can be told apart: training Member Records and Certification CSVs, Certification Expiration and Admin Hours report downloads, Admin Hours **Export CSV**, event list exports, attendee CSV (#4355)               | 02, 04, 08 | Written in all three; wiki `Module-Training`, `Module-Events`, `Module-Admin-Hours`; `UPGRADING.md` note. Downloads only, so no screenshot changes                                                                                           |
+| My Training, the officer's member view, the profile card and requirement progress graded through the member's compliance profile (D10, #4403)                                                                                                                 | 02         | Bullet written; wiki `Module-Training`; `UPGRADING.md` note. `COMPLIANCE_CONFIG.md`, `KNOWN_LIMITATIONS.md` and wiki `Module-Compliance` already updated by the PR                                                                           |
+| Scheduling Notifications panel now receives the saved settings (a save from it used to overwrite them with defaults); Equipment Check Alerts default to Chief and Captain when never saved; Attendance Requests **Sent to me** (#4401)                        | 03, 04     | 03: two paragraphs; `UPGRADING.md` asks operators to re-check the section. 04 and wiki `Module-Events` already updated by the PR; wiki `Module-Scheduling` written                                                                           |
+| Store: no price below zero; typed payment capped at the balance; overpaid orders and **Refund the $… excess**; **Record refund** section with amount, reason and confirmation; **Ready to ship / Shipped**; checkout reload; pickup stores no address (#4391) | 18         | New "Recording a refund" section, paragraphs in Options, Working the Orders, Recording Payment and checkout; "If You Learned an Older Version" updated; wiki `Integration-PayPal`; YouTube 13 edited. `STOREFRONT_MODULE.md` already updated |
+| Training providers stay verified unless the connection changes; **Manual pull** in Sync History (#4419)                                                                                                                                                       | 02         | Two paragraphs; wiki `Module-Training`; `UPGRADING.md` asks operators to **Test** providers left unverified                                                                                                                                  |
+| **Counts toward attendance** badge only for links to an active requirement (#4378)                                                                                                                                                                            | 02         | Sentence written; wiki `Module-Training`                                                                                                                                                                                                     |
+| New item's tracking type follows its category: Consumable / Medical start as Pool (W38-3, #4399)                                                                                                                                                              | 05         | Paragraph written; wiki `Module-Inventory`                                                                                                                                                                                                   |
+| Impact plan PDF numbered "Page N of M" (#4421)                                                                                                                                                                                                                | 05         | Bullet written; wiki `Module-Inventory`. `PDF_REPORTS.md` and `KNOWN_LIMITATIONS.md` already updated by the PR                                                                                                                               |
+| Election page's **Link a meeting** lists the next 100 upcoming events (was 10) (#4424)                                                                                                                                                                        | 14         | Sentence written; wiki `Module-Elections`                                                                                                                                                                                                    |
+| Load, save and delete failures say why (connection, permission, server fault with error code) instead of always blaming the connection (#4367)                                                                                                                | 10         | Troubleshooting row added                                                                                                                                                                                                                    |
+| Scheduling Reports' Coverage, Call Volume and Availability tables reflow to cards (#4415)                                                                                                                                                                     | 03, 10     | Sentence in each; wiki `Module-Scheduling`                                                                                                                                                                                                   |
+| Installed Android app's gesture strip is white (#4373)                                                                                                                                                                                                        | 10         | Paragraph under Installing on Android                                                                                                                                                                                                        |
+| Outside apparatus: merge two spellings of one department (#4404)                                                                                                                                                                                              | 03         | Already written by the PR, with wiki `Module-Scheduling` and `-Developer`                                                                                                                                                                    |
+| Video production pipeline and Shorts 8A–8F (#4400)                                                                                                                                                                                                            | none       | Script 08's 8A–8F reconciled with the recorded narration; two script errors corrected (8C Open Swap, 8E ballot emails). See `SCRIPT_CURRENCY.md`                                                                                             |
+| Locations A8 app-review pass 4 (#4368); finance-approvals (#4430) and elections-ballots (#4435) security passes 16, 0 findings                                                                                                                                | none       | `docs/app-review/` and `docs/security-review/` updated by the PRs                                                                                                                                                                            |
+| CI: Mobile Safari pinned to ubuntu-24.04 (#4368), ffmpeg install on ubuntu-26.04 (#4429)                                                                                                                                                                      | none       | Internal                                                                                                                                                                                                                                     |
+
+**Also fixed on the way:** guide 02's "Your training history" list had item 4
+glued onto the end of the 2026-11-10 Source paragraph, so it rendered as prose;
+it is a list item again, above that paragraph.
+
+**Alembic heads.** No migration in this range; `main` at `762f1c93` has one
+head, `bbeb4867d393` (checked with `alembic heads`).
+
+**Screenshots to create or replace:** see "Queued by the November 18 – 19
+documentation pass" in `docs/training/SCREENSHOT_CURRENCY.md`. **No existing
+image is made wrong.** **Create:** the store's Refund section and
+confirmation, overpaid order and **Owed to you**, shipped-order steps, the
+Equipment Check Alerts defaults, Scheduling Reports cards at 390px, Attendance
+Requests' **Sent to me**, Sync History's **Manual pull**, Add Item switching to
+Pool. The November 14 – 15 row for a cancelled order "only **Refund** left" is
+superseded.
+
+**YouTube scripts:** 08 (Shorts 8A–8F) and 13 Department Store edited; others
+flagged in `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
+## Change audit: November 17 – 18, 2026
+
+The last 25 hours of `main`: the 26 first-parent merges after `f337be43`
+through `775eb7df` (2026-11-18 10:56 UTC), #4364 at 2026-11-17 13:38 UTC to
+#4423. `CHANGELOG.md` stays closed.
+
+**Not covered here:** the 37 first-parent merges between the November 14 – 15
+pass (`79ab1c88`) and #4364, plus the 40 that pass already left for a
+catch-up (session waiver requests' screens, History phases 2 and 3, the shift
+evaluation review). The November 15 – 16 section and the month review below
+cover both through `9b68de55` (#4338); the merges after `9b68de55` and before
+#4364 still need a pass.
+
+| Change                                                                                                                                                                                                                                                                          | Guide  | Disposition                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shift patterns made and edited in one place: **Edit** on each pattern in Shift Planning → Patterns; the Templates tab's Templates / Patterns switch, second pattern form and generate dialog removed (W32-6, #4388)                                                             | 03     | Written; wiki `Module-Scheduling`. `Module-Scheduling-Developer` already updated by the PR. `03-133` should be re-shot from the Patterns tab                                          |
+| My Shifts → Past shows the Hours view's credited hours, marks shifts awaiting close-out, and loads every attended shift (it stopped at 50) (#4381)                                                                                                                              | 03     | Written; wiki `Module-Scheduling`; `UPGRADING.md` note. API additive (`history`, `offset`, `shift_is_finalized`)                                                                      |
+| Officer check-in after an event starts is recorded at the scheduled start; dialog text changed (#4395)                                                                                                                                                                          | 04     | New subsection and "older version" bullet; wiki `Module-Events`; `UPGRADING.md` note                                                                                                  |
+| Mandatory RSVP window is a department setting, Event settings → Attendance → **Mandatory event responses**, 1–365 days, default 60 (#4361)                                                                                                                                      | 04     | Written (Needs You band, settings table and section). Wiki `Module-Events` already updated by the PR                                                                                  |
+| **Operational members** shortcut also ticks Senior where the tier exists (#4370)                                                                                                                                                                                                | 02     | Written, including a note that requirements scoped before today lack Senior; wiki `Module-Training`                                                                                   |
+| Rolling evaluated-shifts / calls / transports / refusals requirement falls due from the latest evaluation (#4379)                                                                                                                                                               | 02     | Written under Rolling Period Requirements; wiki `Module-Training`. `KNOWN_LIMITATIONS.md` already updated by the PR                                                                   |
+| Cohort wizard offers only courses with a syllabus (W27-4, #4385); `GET /training/courses?with_classes=true`                                                                                                                                                                     | 02     | Written; wiki `Module-Training`; YouTube 14 edited                                                                                                                                    |
+| Re-mapping an imported course compares against the hours the import took (`external_training_imports.course_hours_credited`, migration `bbeb4867d393`) (#4423)                                                                                                                  | 02     | Sentence written; wiki `Module-Training`; migration noted in `UPGRADING.md` (additive, nullable, backfilled). `TRAINING_MODULE.md` and `DATABASE_SCHEMA.md` already updated by the PR |
+| Anonymising a member deletes certificates uploaded with self-reported training; permanent delete removes the member's files after commit (D11, #4405)                                                                                                                           | 17     | Written, with the worked example; `UPGRADING.md` note; YouTube 03 edited. `wiki/Security-Privacy`, `COMPLIANCE.md` and `KNOWN_LIMITATIONS.md` already updated by the PR               |
+| Create New Election's **Linked Meeting** lists events when `/meetings` is refused (#4337)                                                                                                                                                                                       | 14     | Table row updated; wiki `Module-Elections`                                                                                                                                            |
+| Kiosk QR codes named for screen readers (W23-4, #4374)                                                                                                                                                                                                                          | 06     | Sentence written                                                                                                                                                                      |
+| Report results reflow to labelled cards in the report window, desktop included except Training Summary and Event Attendance (#4414)                                                                                                                                             | 08, 10 | Paragraph written in 08; mobile list in 10                                                                                                                                            |
+| Phone table reflows: grants (#4417), members import and Assigned Inventory (#4412), message history and outreach events (#4410), error code reference (#4409), election integrity tables (#4408), expense line items (#4416), inventory stock matrix and three previews (#4411) | 10     | Listed under "Wide tables become cards"; the stock matrix's pinned Size column described. Steps unchanged elsewhere                                                                   |
+| W24-4 marked fixed (receipt no longer promises a review within a week) (#4385)                                                                                                                                                                                                  | none   | Already true in guide 02 since #3701                                                                                                                                                  |
+| Storefront payments security pass 16, 0 findings (#4359)                                                                                                                                                                                                                        | none   | `docs/security-review/` updated by the PR                                                                                                                                             |
+| Stripe 17.0.0 (#4372), Python (#4371) and npm (#4364) patch groups                                                                                                                                                                                                              | none   | Stripe 17's breaking change (API keys dropped from pickled `StripeObject`s) does not apply: nothing in `backend/app` pickles one                                                      |
+| CI per-job concurrency (#4428), merge-queue runs (#4375), session-start `npm ci` (#4398)                                                                                                                                                                                        | none   | Internal                                                                                                                                                                              |
+
+**Alembic heads.** `main` at `775eb7df` has one head, `bbeb4867d393`.
+
+**Screenshots to create or replace:** see "Queued by the November 17 – 18
+documentation pass" in `docs/training/SCREENSHOT_CURRENCY.md`. **Replace or
+check:** `03-133-pattern-form-template-inactive` (taken from the removed
+Templates-tab form), `03-12-shift-templates` and `03-129-template-reactivate`
+(may show the removed switch). **Create:** pattern card **Edit**, Past view
+with credited hours, Check In Members dialog, Mandatory event responses,
+Operational members with Senior, report results as cards, the Anonymize
+Member dialog, phone table captures.
+
+**YouTube scripts:** 03 IT Manager and 14 Multi-class courses edited; others
+flagged in `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
 ## Change audit: month review, October 16 – November 16, 2026
 
 A review of every first-parent merge from 2026-10-16 to `9b68de55`
@@ -103,6 +200,57 @@ merged to `main` first. Its 24 merges fall inside this gap and the month
 review above; where both passes edited the same guide paragraph, the two were
 combined when this branch took `main` in.
 
+## Change audit: Google Workspace and Microsoft 365 Settings, November 16, 2026
+
+A documentation-only pass. Both directory integrations have had a **Settings**
+button for organization administrators, but neither guide 16 nor their wiki
+pages said what it does. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                           | Guide | Disposition                                                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------- |
+| **Settings** on a connected Google Workspace card: saved values prefilled, a key file chosen only to replace the stored key, the domain still checked against Department Email, and a save applying to the next member converted | 16    | Paragraph written; `16-30-google-workspace-settings` captured; `wiki/Integration-Google-Workspace.md` updated |
+| **Settings** on a connected Microsoft 365 card: every value but the secret prefilled, a blank secret kept, a new secret entered with its new expiry date, and clearing the license SKU leaving licensing to groups               | 16    | Paragraph written; `16-31-microsoft-365-settings` captured; `wiki/Integration-Microsoft-365.md` updated       |
+
+**Screenshots:** none queued.
+
+## Change audit: Salesforce Settings, November 16, 2026
+
+A targeted pass for the **Settings** button on a connected Salesforce card.
+`CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                                          | Guide | Disposition                                             |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------- |
+| **Settings** on a connected Salesforce card: edit contact matching, sync direction, field handling, auto-sync and, optionally, the Connected App credentials or refresh token without disconnecting; blank credential boxes keep the saved ones | 16    | Paragraph written; `16-29-salesforce-settings` captured |
+| In Settings, the Instance URL and Environment are read-only and left out of the save (owner decision, 2026-11-16): the stored token belongs to one org. To change org, disconnect and connect again                                             | 16    | Note written; `wiki/Integration-Salesforce.md` updated  |
+| **Re-authorize with Salesforce** in Settings runs the sign-in again and replaces the stored token                                                                                                                                               | 16    | Written                                                 |
+| Connect on a disconnected Salesforce card now starts from the stored settings; before, a reconnection put sync direction, matching and auto-sync back to their defaults                                                                         | 16    | Covered by the Settings paragraph                       |
+
+**Screenshots:** none queued.
+
+## Change audit: Documenso Settings, November 16, 2026
+
+A targeted pass for the **Settings** button on a connected Documenso card, the
+Documenso counterpart of Cal.com's. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                | Guide | Disposition                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------ |
+| **Settings** on a connected Documenso card: edit the API token, base URL and webhook secret without disconnecting; the base URL in use is shown, and blank token and secret boxes keep the saved ones | 16    | Paragraph written; `16-28-documenso-settings` captured |
+| Moving Documenso to a different base URL needs that server's API token in the same save. The API already refused this with 422; the dialog now says so and asks before sending                        | 16    | Note written; `wiki/Integration-Documenso.md` updated  |
+
+**Screenshots:** none queued.
+
+## Change audit: Cal.com Settings, November 16, 2026
+
+A targeted pass for the **Settings** button on a connected Cal.com card, the
+Cal.com counterpart of Zeffy's and PayPal's. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                          | Guide | Disposition                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | --------------------------------------------------- |
+| **Settings** on a connected Cal.com card: edit the API key, base URL and webhook secret without disconnecting; the base URL in use is shown, and blank key and secret boxes keep the saved ones | 16    | Paragraph written; `16-27-calcom-settings` captured |
+| Moving Cal.com to a different base URL needs that server's API key in the same save. The API already refused this with 422; the dialog now says so and asks before sending                      | 16    | Note written; `wiki/Integration-Calcom.md` updated  |
+
+**Screenshots:** none queued.
+
 ## Change audit: November 14 – 15, 2026
 
 Merged to `main` after `b44b32ea` (2026-11-14 04:56 UTC) through `79ab1c88`
@@ -154,6 +302,7 @@ its settings. **Replace:** `08-34-email-templates` (old category list),
 **YouTube scripts:** 07 Secretary edited (its Email Templates chapter quoted
 the old category list; re-record note added). Others flagged in
 `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
 ## Change audit: PayPal Settings, November 14, 2026
 
 A targeted pass for the PayPal changes of November 14: a **Settings** button on

@@ -81,6 +81,12 @@ POST   /api/v1/store/payments/{event_id}/ignore    # Dismiss one that is not a s
 The `/integrations` endpoints require `integrations.manage`; the
 `/store/payments` endpoints require `storefront.manage`.
 
+**Applying a payment records what arrived** _(2026-11-18, W67b-7, #4391)_.
+`apply` passes `allow_overpayment`, so a capture larger than the balance is
+recorded in full; the excess is reported on the order as `overpaid_amount` and
+shown as owed back to the member, with a one-step refund of exactly that
+amount. A payment staff type in by hand is refused above the balance.
+
 ### Public Webhook
 
 ```

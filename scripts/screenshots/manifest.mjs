@@ -18154,6 +18154,128 @@ export const SHOTS = [
   },
   {
     // Settings appears only on a connected card; see showIntegrationConnected.
+    // The values are examples, not a real Workspace tenant. The key is never
+    // sent back, so the key box shows its "a key is stored" note.
+    id: "16-30-google-workspace-settings",
+    doc: "16-integrations.md",
+    line: 666,
+    anchor:
+      "Google Workspace settings on a connected card, as an organization administrator",
+    alt: "Google Workspace settings on a connected card: the service account key note saying a key is stored and a file is chosen only to replace it, the saved admin, domain, organizational unit and groups, the Suspend the account when a member retires box, and the notice that saved settings apply to the next member converted",
+    route: "/integrations",
+    beforeNavigate: showIntegrationConnected("google-workspace", {
+      admin_email: "it-admin@oakvillefd.example.org",
+      domain: "oakvillefd.example.org",
+      org_unit_path: "/Members",
+      group_emails: [
+        "members@oakvillefd.example.org",
+        "announcements@oakvillefd.example.org",
+      ],
+      suspend_on_retirement: false,
+    }),
+    prepare: openIntegrationSettings("Google Workspace", "google-workspace"),
+    expect: "Saved settings apply to the next member converted",
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 1800 },
+    selector: '[aria-labelledby="integration-connect-title"]',
+  },
+  {
+    // As 16-30; the IDs are made up, and the secret is never sent back.
+    id: "16-31-microsoft-365-settings",
+    doc: "16-integrations.md",
+    line: 729,
+    anchor:
+      "Microsoft 365 settings on a connected card, as an organization administrator",
+    alt: "Microsoft 365 settings on a connected card: the saved tenant and client IDs, the Client secret value box with its note that a secret is stored and is entered only to replace it, Client secret expires on, Domain, Usage location, License SKU ID, groups, Block sign-in when a member retires, and the notice that saved settings apply to the next member converted",
+    route: "/integrations",
+    beforeNavigate: showIntegrationConnected("microsoft-365", {
+      tenant_id: "3f2a8c1e-5b7d-4e90-a1c2-6d8e9f0a1b2c",
+      client_id: "9c4e7a21-0d3b-4f68-b5a9-2e1c7d8f6a40",
+      domain: "oakvillefd.example.org",
+      usage_location: "US",
+      license_sku_id: "06ebc4ee-1bb5-47dd-8120-11324bc54e06",
+      client_secret_expires_on: "2027-05-14",
+      groups: [
+        "members@oakvillefd.example.org",
+        "5d0b6a3e-8f21-4c97-9e44-1a2b3c4d5e6f",
+      ],
+      suspend_on_retirement: true,
+    }),
+    prepare: openIntegrationSettings("Microsoft 365", "microsoft-365"),
+    expect: "Saved settings apply to the next member converted",
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 2400 },
+    selector: '[aria-labelledby="integration-connect-title"]',
+  },
+  {
+    // Settings appears only on a connected card; see showIntegrationConnected.
+    // The instance URL is an example, not a real Salesforce org.
+    id: "16-29-salesforce-settings",
+    doc: "16-integrations.md",
+    line: 215,
+    anchor:
+      "Salesforce settings on a connected Salesforce card, as an administrator",
+    alt: "Salesforce settings on a connected card: the Instance URL and Environment shown read-only with the note to disconnect and connect again to change org, Contact Matching, the Re-authorize with Salesforce button, the Client ID, Client Secret and Refresh Token boxes with notes that blank keeps what is saved, Sync Direction, the two tick boxes, and the notice that saved settings apply from the next sync",
+    route: "/integrations",
+    beforeNavigate: showIntegrationConnected("salesforce", {
+      instance_url: "https://oakvillefd.my.salesforce.com",
+      environment: "production",
+      sync_direction: "push",
+      match_strategy: "email",
+      graceful_fields: true,
+      auto_sync_enabled: true,
+    }),
+    prepare: openIntegrationSettings("Salesforce", "salesforce"),
+    expect: "The connected org does not change",
+    // "No personal information" is a chip on the Claude card behind the
+    // dialog, not an empty page.
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 1900 },
+    fullPage: false,
+  },
+  {
+    // Settings appears only on a connected card; see showIntegrationConnected.
+    // The base URL is an example self-hosted server, not a real one.
+    id: "16-28-documenso-settings",
+    doc: "16-integrations.md",
+    line: 337,
+    anchor:
+      "Documenso settings on a connected Documenso card, as an administrator",
+    alt: "Documenso settings on a connected card: the API Token box reading Leave blank to keep the current token, the API Base URL box showing the department's own Documenso server with the note that changing it needs that server's token in the same save, the Webhook Secret box with its note that a blank box keeps the saved secret, the webhook address, and the notice that a new token or base URL is used from the next request to Documenso",
+    route: "/integrations",
+    beforeNavigate: showIntegrationConnected("documenso", {
+      api_base_url: "https://sign.oakvillefd.org/api/v1",
+    }),
+    prepare: openIntegrationSettings("Documenso", "documenso"),
+    expect: "The webhook address does not change",
+    // "No personal information" is a chip on the Claude card behind the
+    // dialog, not an empty page.
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 1200 },
+    fullPage: false,
+  },
+  {
+    // Settings appears only on a connected card; see showIntegrationConnected.
+    // The base URL is an example self-hosted server, not a real one.
+    id: "16-27-calcom-settings",
+    doc: "16-integrations.md",
+    line: 383,
+    anchor: "Cal.com settings on a connected Cal.com card, as an administrator",
+    alt: "Cal.com settings on a connected card: the API Key box reading Leave blank to keep the current key, the API Base URL box showing the department's own Cal.com server with the note that changing it needs that server's key in the same save, the Webhook Secret box with its note that a blank box keeps the saved secret, the webhook address, and the notice that a new key or base URL is used from the next booking lookup",
+    route: "/integrations",
+    beforeNavigate: showIntegrationConnected("calcom", {
+      api_base_url: "https://cal.oakvillefd.org/api/v1",
+    }),
+    prepare: openIntegrationSettings("Cal.com", "calcom"),
+    expect: "The webhook address does not change",
+    // "No personal information" is a chip on the Claude card behind the
+    // dialog, not an empty page.
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 1200 },
+    fullPage: false,
+  },
+  {
+    // Settings appears only on a connected card; see showIntegrationConnected.
     // The prefilled values are the form's own example Webhook ID and live
     // environment, not a real PayPal app.
     id: "16-26-paypal-settings",

@@ -399,11 +399,36 @@ and their Confirm, Decline, Swap and Details actions are unchanged.
 **Past view by year and month** _(2026-11-09)_. **Past** opens on your newest
 year. Pick another year, or **All time**, from the **Year** dropdown; the three
 stat tiles follow it. A bar chart shows hours worked by month (by year under
-**All time**); tap a bar to jump to that month, or to open that year. Shifts
-are listed under pinned month headers carrying the month's shift count and hours,
-and a header always equals the sum of the **Xh worked** pills under it. Shifts you
-declined or that were cancelled no longer appear in Past, because you did not work
-them; a seat you declined but then worked still shows, with its hours.
+**All time**); tap a bar to jump to that month, or to open that year. Shifts are
+listed under pinned month headers carrying the month's shift count and credited
+hours, plus any hours awaiting close-out. Each shift's pill reads **Xh
+credited** or **Xh · awaiting close-out** _(2026-11-17; it read "Xh worked")_.
+Shifts you declined or that were cancelled no longer appear in Past, because you
+did not work them; a seat you declined but then worked still shows, with its
+hours.
+
+**Past now shows credited hours, the same figures as Hours** _(2026-11-17)_.
+Past used to add up the raw time between check-in and check-out. **Hours**
+credits a shift only once an officer closes it out (finalizes it), plus any
+approved pre-shift prep, so a year with a shift still awaiting close-out read
+higher on Past than on Hours, with nothing to say why. Now:
+
+- The tiles read **Hours credited**, **Credited shifts** and **Avg
+  hours/shift**, and match the **Hours** view. Time not yet credited is shown
+  beneath, for example "+12 hrs awaiting close-out".
+- Each shift card says **Xh credited**, or **Xh · awaiting close-out** in amber
+  for a shift an officer has not closed out yet.
+- Month headers read, for example, "4 shifts · 36.5 hrs credited · 12 hrs
+  awaiting close-out".
+- If your credited hours cannot be loaded, a yellow notice says so, the hours
+  read "—", and your shifts are still listed.
+- **Older shifts are no longer cut off.** Past used to load only your 50 most
+  recent attended shifts, so a member with more lost the older ones, and their
+  hours, without warning. Every shift is now loaded.
+
+_Screenshot: create the Past view image (still outstanding from
+2026-11-09) after this change, with the **Hours credited** tiles and an amber
+**awaiting close-out** pill in frame._
 
 _Added 2026-11-10._ **End-of-shift summary.** The email and the in-app notice
 list call types as counts, most frequent first ("3 × EMS, 1 × Fire Alarm"),
@@ -618,6 +643,15 @@ You need to be able to manage schedules for both of these.
   have been logged on it, so it stays on record. Turn it off to hide it from
   members instead."_ Each logged shift keeps the names it was logged under, so
   renaming an entry never changes past records.
+- **One department listed twice** _(2026-11-16)_. If the same department is on
+  the list under two names (say _Arlington County_ and _Arlington County Fire
+  Department_), select the merge button beside the one to remove, choose the
+  department to keep under **Merge into**, and read **What happens** before
+  selecting **Merge departments**. Its units move to the kept department, and a
+  unit both list becomes one. Every shift logged with the removed department
+  then shows the kept name, on members' hours and in reports. The old name is
+  not kept on those shifts, so a merge cannot be undone from the screen; the
+  audit log records both names.
 - **Evaluations on an agency's units** _(2026-11-02)_. Under each department in
   the list, tick **Evaluate shifts on _agency_'s units** if its preceptors
   evaluate your trainees. It is off to start with. With it on, a member in a
@@ -1761,6 +1795,11 @@ the **Manage schedules** permission. It has five tabs:
 | **Call Volume**      | Calls by day, week or month                                                                |
 | **Availability**     | Member availability over the dates you pick                                                |
 | **Shift Compliance** | Each member's progress against shift and hours requirements                                |
+
+_(2026-11-18)_ On a phone, the **Coverage**, **Call Volume** and
+**Availability** tables show each row as a labelled card, led by its date,
+period or member. Coverage and Availability do the same on a tablet with the
+side navigation open. The figures are unchanged.
 
 ### Member Hours: worked vs. scheduled
 
@@ -3291,6 +3330,19 @@ has three tabs: **Staffing gaps**, **Templates** and **Patterns**. The hub
 also has its own **Shift Templates** and **Shift Patterns** cards that open the
 same tabs.
 
+**Patterns are made and edited only on the Patterns tab** _(2026-11-17)_. The
+**Templates** tab used to carry its own **Templates / Patterns** switch, with a
+second pattern list, a second pattern form and a second **Generate** dialog.
+The two copies had drifted apart, and only the one on the Templates tab could
+edit an existing pattern. Now the **Templates** tab shows templates only, and
+its heading points to **Shift patterns**. Each pattern on the **Patterns** tab
+has an **Edit** button, which opens **Edit Pattern** and saves exactly as the
+old form did: emptying a field clears it, a field the server refuses stays
+flagged while the rest saves, and an inactive template is warned about.
+_Screenshots: check `03-12-shift-templates` and `03-129-template-reactivate`
+and replace either if it shows the old Templates / Patterns switch; create one
+of a pattern card on the Patterns tab with its **Edit** button._
+
 ### Templates
 
 Select **New Template** to create one, or select a template to edit it.
@@ -3444,6 +3496,9 @@ only bounds when automatic generation begins.
 ![The Weekend Duty Rotation weekly pattern in the pattern list, expanded: the sun and moon glyphs beside each covered weekday, and the weekly shifts listed as Sunday: Day, Friday: Night and Saturday: Day + Night](./images/03-128-pattern-list-glyphs.png)
 
 Select **Create Pattern** to save it.
+
+**To change a pattern later,** select **Edit** on its card. The form is the
+same one **New Pattern** uses, titled **Edit Pattern**.
 
 **A pattern needs a template.** Generating from a pattern with no template
 linked is refused: _"A shift template must be linked to the pattern before
@@ -3699,6 +3754,20 @@ Chief**; former members are never told. A department that has never saved this
 group gets the boxes the screen already shows ticked (**Chief**, **Deputy
 Chief** and **Captain**). Before, those departments told nobody. Equipment
 Check Alerts match ranks the same way.
+
+**The section shows what is saved** _(2026-11-18)_. Before this date the
+Notifications section never received the department's saved choices: it
+always showed the built-in defaults, and saving it wrote those defaults over
+whatever had been configured. If your department set up these alerts and then
+saved this section, check each group and set it again. The section is shown
+to settings administrators and holders of **Manage schedules**.
+
+**Equipment Check Alerts when nobody has saved them** _(2026-11-18)_. The
+section shows **Chief** and **Captain** ticked in a department that has never
+saved it, and those positions are now what is alerted, in the app, when an
+equipment check fails. Before, a department that had never saved the section
+alerted nobody, although the screen said otherwise. Email still goes only
+when **Also send email notification** is ticked.
 
 **Shift Assignment Alerts.** The in-app notice gives the seat, the shift date
 and its start time in your department's time zone. If the shift has
