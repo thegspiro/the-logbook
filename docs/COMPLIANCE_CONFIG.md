@@ -122,7 +122,14 @@ compliance card, and requirement progress (`/training/requirements/progress`,
 the per-member training report and the MCP `get_member_requirements_progress`
 tool). Since 2026-11-20 the profile card's green / yellow / red colour is the
 member's matrix standing too, so it follows the profile's threshold overrides
-and the department's threshold type. Before 2026-10-05 the Department
+and the department's threshold type. Also since 2026-11-20 the officer views
+read it: the period roster (`/training/records/member-status`) and the
+compliance forecast take both the narrowing and the threshold overrides (the
+forecast reports the current figure's standing as `current_standing`), while
+the competency matrix, the compliance CSV and PDF exports and Scheduling's
+Shift Compliance report show no member standing, so they apply the narrowing
+only — a requirement outside the member's profile reads not applicable, prints
+N/A, or does not list the member. Before 2026-10-05 the Department
 Compliance card graded every member against every
 applicable requirement at 100%, and the reports used the fixed 100% / 75%
 thresholds, so a department using profiles read different figures in each place.

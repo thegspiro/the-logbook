@@ -1886,7 +1886,7 @@ export interface BulkImportResponse {
 // ==================== Self-Reported Training Types ====================
 
 // Import enum type from the canonical source and re-export
-import type { SubmissionStatus } from '../constants/enums';
+import type { Standing, SubmissionStatus } from '../constants/enums';
 export type { SubmissionStatus };
 
 export interface FieldConfig {
@@ -3132,6 +3132,12 @@ export interface ComplianceForecast {
   user_name?: string;
   /** Each is null when no requirement grades the member (not applicable). */
   current_compliance_percentage: number | null;
+  /**
+   * The current figure's compliance matrix standing, by the member's profile
+   * thresholds or the department's. Colour the current figure by this, never
+   * by thresholds of a screen's own. The projections carry no standing.
+   */
+  current_standing: Standing;
   forecast_30_days: number | null;
   forecast_60_days: number | null;
   forecast_90_days: number | null;

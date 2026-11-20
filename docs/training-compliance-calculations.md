@@ -1231,7 +1231,10 @@ Every screen that decides who a requirement grades goes through
 date — dashboard, matrix and print view, profile card, My Training, progress
 and MCP, compliance-officer report, member status, scheduling hours report,
 competency matrix, forecast, and the CSV/PDF exports, which print N/A where a
-requirement does not apply. `tests/test_requirement_grandfathering.py` sweeps
+requirement does not apply. Most reach it through
+`ComplianceGrading.for_member`, which first narrows to the member's compliance
+profile; the member status roster, competency matrix, forecast, exports and
+scheduling report joined them on 2026-11-20. `tests/test_requirement_grandfathering.py` sweeps
 `app/` for a call that omits it. Passing role ids through the same helper also
 fixed the dashboard, matrix and member-status views, which had ignored
 role-scoped requirements that My Training already enforced.

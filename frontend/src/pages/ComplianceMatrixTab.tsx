@@ -39,6 +39,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatCalendarDate, formatShortDateTime } from '../utils/dateFormatting';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { EmptyState } from '../components/ux/EmptyState';
+import { STANDING_TEXT_COLORS } from '../constants/enums';
 import { SkeletonPage } from '../components/ux/Skeleton';
 import {
   CellTone,
@@ -161,13 +162,6 @@ const STANDING_LABELS: Record<Standing, string> = {
   [Standing.AT_RISK]: 'At risk',
   [Standing.COMPLIANT]: 'Compliant',
   [Standing.NOT_APPLICABLE]: 'Not applicable',
-};
-
-const STANDING_BADGE_TEXT: Record<Standing, string> = {
-  [Standing.NON_COMPLIANT]: 'text-red-700 dark:text-red-300',
-  [Standing.AT_RISK]: 'text-orange-700 dark:text-orange-300',
-  [Standing.COMPLIANT]: 'text-green-700 dark:text-green-300',
-  [Standing.NOT_APPLICABLE]: 'text-theme-text-muted',
 };
 
 const Pips: React.FC<{ tones: CellTone[] }> = ({ tones }) => (
@@ -671,7 +665,7 @@ const ComplianceMatrixTab: React.FC = () => {
                         <div className="flex items-baseline justify-between gap-2">
                           <span className="text-theme-text-primary truncate text-sm font-semibold">{item.title}</span>
                           <span
-                            className={`shrink-0 text-xs font-bold tabular-nums ${STANDING_BADGE_TEXT[item.standing]}`}
+                            className={`shrink-0 text-xs font-bold tabular-nums ${STANDING_TEXT_COLORS[item.standing]}`}
                           >
                             {item.badge}
                           </span>

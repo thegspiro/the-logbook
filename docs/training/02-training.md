@@ -4472,6 +4472,16 @@ It looks **30, 60 and 90 days** ahead: summary cards across the top, then one
 row per member showing each period alongside the certifications expiring in
 it.
 
+Each member is graded on what their compliance profile requires, as on the
+Compliance Matrix _(2026-11-20)_. The **Current** figure is coloured by the
+member's standing there — the profile's thresholds when it sets its own,
+otherwise the department's — so the same member reads the same here, on the
+Training Enhancements forecast and on the matrix. The 30, 60 and 90-day
+figures are estimates and keep fixed colour bands. They subtract every
+certificate expiring in the window, including one no requirement grades, so
+for a member whose profile lists few requirements one expiring certificate
+moves the projection further.
+
 ![Compliance forecast projecting each member's compliance over 90 days](./images/02-75-compliance-forecast.png)
 
 ### Edge Cases
