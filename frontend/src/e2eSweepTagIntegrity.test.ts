@@ -2,15 +2,16 @@
  * E2E sweep-tag integrity
  *
  * `frontend-e2e` splits its matrix by weight rather than by test count. That
- * split is necessary because three tests carry most of the suite: each walks
- * every route, and `mobile-accessibility` renders ~50 of them in three themes
- * with an axe run apiece. Measured on 2026-10-04, a plain `--shard=i/4` put all
- * three on one shard — Playwright balances on the number of tests, which is the
+ * split is necessary because a few tests carry most of the suite: each walks
+ * every route, and `mobile-accessibility` renders them in three themes with an
+ * axe run apiece (it is cut into parts for that reason, each part a `@sweep`
+ * test of its own). Measured on 2026-10-04, a plain `--shard=i/4` put all of
+ * them on one shard — Playwright balances on the number of tests, which is the
  * wrong axis when one test is worth sixty — and the other three runners sat
  * idle while the wall clock barely moved.
  *
- * The workflow therefore selects on the `@sweep` tag: those tests get a runner
- * each, the remaining 120 share two. Nothing about Playwright enforces the tag,
+ * The workflow therefore selects on the `@sweep` tag: those tests get runners
+ * of their own, the rest share two. Nothing about Playwright enforces the tag,
  * so a new route-walking test would silently join the shared shards and drag
  * one of them back to the old serial time — the failure is a slow build, which
  * nobody reports as a bug.
@@ -28,11 +29,11 @@ const E2E = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'e2e');
 
 /**
  * Five minutes. It has to sit under the *smallest* @sweep budget, which is
- * mobile-dialogs' 1_860_000 — otherwise this file calls a test ordinary
- * while the workflow treats it as a sweep, and the two halves disagree, which
- * is what the second assertion below exists to catch. Nothing else in the suite
- * declares a budget at all, so ordinary tests sit on Playwright's 30s default,
- * an order of magnitude clear of this.
+ * a mobile-presentation part's 1_080_000 — otherwise this file calls a test
+ * ordinary while the workflow treats it as a sweep, and the two halves
+ * disagree, which is what the second assertion below exists to catch. Nothing
+ * else in the suite declares a budget at all, so ordinary tests sit on
+ * Playwright's 30s default, an order of magnitude clear of this.
  *
  * Both margins are wide on purpose: raise this only if an ordinary test ever
  * needs a budget above it, and lower it if a sweep is ever budgeted below it.

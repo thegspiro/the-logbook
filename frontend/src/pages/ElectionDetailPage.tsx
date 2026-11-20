@@ -343,9 +343,12 @@ export const ElectionDetailPage: React.FC = () => {
   const fetchUpcomingEvents = async () => {
     try {
       const today = getTodayLocalDate(tz);
+      // 100, the create dialog's window. The events come back soonest first
+      // and of every type, so ten was often all trainings, and a business
+      // meeting a few weeks out never reached the picker.
       const events = await eventService.getEvents({
         start_after: today,
-        limit: 10,
+        limit: 100,
       });
       setUpcomingEvents(events);
     } catch {
@@ -2279,7 +2282,7 @@ export const ElectionDetailPage: React.FC = () => {
                       <p className="text-theme-text-muted text-sm">No votes have been voided.</p>
                     ) : (
                       <div className="overflow-x-auto">
-                        <table className="min-w-full text-sm" aria-label="Voided votes">
+                        <table className="rwd-table min-w-full text-sm" aria-label="Voided votes">
                           <thead className="bg-theme-surface-secondary">
                             <tr>
                               <th scope="col" className="text-theme-text-muted px-3 py-2 text-left text-xs font-medium">
@@ -2299,14 +2302,20 @@ export const ElectionDetailPage: React.FC = () => {
                           <tbody className="divide-theme-surface-border divide-y">
                             {groupVoidedVotes(forensicsReport.deleted_votes.records).map((v) => (
                               <tr key={v.key}>
-                                <td className="px-3 py-2 font-mono text-xs">
+                                <td data-label="Vote ID" className="px-3 py-2 font-mono text-xs">
                                   {v.batch_size !== null
                                     ? `paper batch voided (${v.batch_size} ballot${v.batch_size === 1 ? '' : 's'})`
                                     : `${v.vote_id.slice(0, 8)}...`}
                                 </td>
-                                <td className="px-3 py-2">{v.position || '—'}</td>
-                                <td className="px-3 py-2">{v.deletion_reason || '—'}</td>
-                                <td className="px-3 py-2">{v.deleted_at ? formatDateTime(v.deleted_at, tz) : '—'}</td>
+                                <td data-label="Position" className="px-3 py-2">
+                                  {v.position || '—'}
+                                </td>
+                                <td data-label="Reason" className="px-3 py-2">
+                                  {v.deletion_reason || '—'}
+                                </td>
+                                <td data-label="Voided At" className="px-3 py-2">
+                                  {v.deleted_at ? formatDateTime(v.deleted_at, tz) : '—'}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -2425,7 +2434,7 @@ export const ElectionDetailPage: React.FC = () => {
                         <p className="text-theme-text-muted text-sm">No audit entries.</p>
                       ) : (
                         <div className="max-h-64 overflow-x-auto overflow-y-auto">
-                          <table className="min-w-full text-sm" aria-label="Audit log entries">
+                          <table className="rwd-table min-w-full text-sm" aria-label="Audit log entries">
                             <thead className="surface-secondary-opaque sticky top-0">
                               <tr>
                                 <th
@@ -2451,11 +2460,13 @@ export const ElectionDetailPage: React.FC = () => {
                             <tbody className="divide-theme-surface-border divide-y">
                               {(forensicsReport.audit_log.entries || []).slice(0, 50).map((entry, i) => (
                                 <tr key={entry.id || i}>
-                                  <td className="text-theme-text-muted px-3 py-2 text-xs whitespace-nowrap">
+                                  <td data-label="Time" className="text-theme-text-muted px-3 py-2 text-xs">
                                     {entry.timestamp ? formatDateTime(entry.timestamp, tz) : '—'}
                                   </td>
-                                  <td className="px-3 py-2 text-xs">{entry.event_type}</td>
-                                  <td className="px-3 py-2">
+                                  <td data-label="Event" className="px-3 py-2 text-xs">
+                                    <div className="min-w-0 break-all">{entry.event_type}</div>
+                                  </td>
+                                  <td data-label="Severity" className="px-3 py-2">
                                     <span
                                       className={`rounded px-2 py-0.5 text-xs ${
                                         entry.severity === 'critical'

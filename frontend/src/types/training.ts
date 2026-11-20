@@ -3865,3 +3865,29 @@ export interface CourseLinkResult {
   names: number;
   records: number;
 }
+
+/** One past Course Links link, for the screen's history. */
+export interface CourseLinkHistoryItem {
+  id: string;
+  course_id: string | null;
+  course_name: string;
+  label: string;
+  record_count: number;
+  linked_by_name: string | null;
+  linked_at: string;
+  undone_at: string | null;
+  undone_by_name: string | null;
+}
+
+export interface CourseLinkHistory {
+  items: CourseLinkHistoryItem[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface CourseUnlinkResult {
+  reverted: number;
+  /** Records changed since the link, or linked elsewhere by hand: they keep their course. */
+  kept: number;
+}

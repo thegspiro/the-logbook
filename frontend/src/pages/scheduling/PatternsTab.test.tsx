@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { renderWithRouter } from '../../test/utils';
@@ -417,6 +417,73 @@ describe('PatternsTab with a pattern held by an inactive template', () => {
 
     expect(await screen.findByRole('button', { name: 'Generate shifts from A-Shift 24/48' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Generate shifts from B-Shift 24/48' })).toBeEnabled();
+  });
+});
+
+// W32-6: patterns were made and edited in two places, this section and a
+// second form under Templates; only that one could edit. Editing lives here now.
+describe('PatternsTab editing a pattern', () => {
+  it('edits a pattern from its card and reloads the list', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<PatternsTab />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit A-Shift 24/48' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Pattern' });
+    const name = within(dialog).getByLabelText(/^Name/);
+    expect(name).toHaveValue('A-Shift 24/48');
+
+    await user.clear(name);
+    await user.type(name, 'A-Shift 24/48 (2027)');
+    await user.click(within(dialog).getByRole('button', { name: 'Save Pattern' }));
+
+    expect(mockUpdatePattern).toHaveBeenCalledWith(
+      'pat-1',
+      expect.objectContaining({ name: 'A-Shift 24/48 (2027)', template_id: 'tpl-1', days_on: 1, days_off: 2 })
+    );
+    expect(mockToastSuccess).toHaveBeenCalledWith('Pattern updated');
+    expect(mockGetPatterns).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('dialog', { name: 'Edit Pattern' })).not.toBeInTheDocument();
+  });
+
+  // The list reloads behind the dialog after a partial save; the form must
+  // keep what the officer typed and the flag on the refused field.
+  it('keeps the dialog, its values and the flagged field after a partial save', async () => {
+    const user = userEvent.setup();
+    mockUpdatePattern
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'end_date', message: 'Invalid date format.' }] } },
+      })
+      .mockResolvedValue(PATTERN);
+    // A fresh list per call, as the API returns, so the reload re-renders.
+    mockGetPatterns.mockImplementation(() => Promise.resolve([{ ...PATTERN }]));
+    renderWithRouter(<PatternsTab />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit A-Shift 24/48' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Pattern' });
+    const name = within(dialog).getByLabelText(/^Name/);
+    await user.clear(name);
+    await user.type(name, 'Renamed');
+    await user.click(within(dialog).getByRole('button', { name: 'Save Pattern' }));
+
+    const end = within(dialog).getByLabelText(/^End Date/);
+    await waitFor(() => expect(end).toHaveAccessibleDescription('Invalid date format.'));
+    await waitFor(() => expect(mockGetPatterns).toHaveBeenCalledTimes(2));
+    // Let the reload land before reading the form back.
+    await screen.findByRole('button', { name: 'Edit A-Shift 24/48' });
+    expect(within(dialog).getByLabelText(/^Name/)).toHaveValue('Renamed');
+    expect(end).toHaveAccessibleDescription('Invalid date format.');
+    expect(mockToastSuccess).not.toHaveBeenCalledWith('Pattern updated');
+  });
+
+  it("warns in the edit form when the pattern's template is inactive", async () => {
+    const user = userEvent.setup();
+    mockGetPatterns.mockResolvedValue([{ ...PATTERN, inactive_templates: ['Day Shift A'] }]);
+    mockGetTemplates.mockResolvedValue([{ ...TEMPLATE, is_active: false }]);
+    renderWithRouter(<PatternsTab />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit A-Shift 24/48' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Pattern' });
+    expect(dialog).toHaveTextContent('Template inactive — this pattern is not generating shifts');
   });
 });
 

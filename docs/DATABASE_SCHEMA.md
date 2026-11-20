@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**394 tables · 6247 columns · 1314 foreign keys**
+**396 tables · 6264 columns · 1320 foreign keys**
 
 ---
 
@@ -809,7 +809,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`course_cohorts`](#course_cohorts) | `CourseCohort` | 24 | Course Cohort model — one scheduled run of a multi-class course. |
 | [`external_category_mappings`](#external_category_mappings) | `ExternalCategoryMapping` | 12 | External Category Mapping model |
 | [`external_course_mappings`](#external_course_mappings) | `ExternalCourseMapping` | 11 | Maps a provider's course id to a course in the department's library. |
-| [`external_training_imports`](#external_training_imports) | `ExternalTrainingImport` | 25 | External Training Import model |
+| [`external_training_imports`](#external_training_imports) | `ExternalTrainingImport` | 26 | External Training Import model |
 | [`external_training_providers`](#external_training_providers) | `ExternalTrainingProvider` | 24 | External Training Provider model |
 | [`external_training_sync_logs`](#external_training_sync_logs) | `ExternalTrainingSyncLog` | 18 | External Training Sync Log model |
 | [`external_user_mappings`](#external_user_mappings) | `ExternalUserMapping` | 13 | External User Mapping model |
@@ -859,6 +859,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_submissions`](#training_submissions) | `TrainingSubmission` | 29 | Training Submission model |
 | [`training_waivers`](#training_waivers) | `TrainingWaiver` | 13 | Training Waiver / Leave of Absence |
 | [`xapi_statements`](#xapi_statements) | `XAPIStatement` | 27 | xAPI (Experience API / Tin Can) Statement model |
+
+### Training_Course_Link
+
+<sub>`app/models/training_course_link.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`training_course_link_records`](#training_course_link_records) | `TrainingCourseLinkRecord` | 5 | A record a link changed, and the category and type it had before. |
+| [`training_course_links`](#training_course_links) | `TrainingCourseLink` | 11 | One name's records linked to one library course. |
 
 ### Users, Organizations & Access Control
 
@@ -11324,6 +11333,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `description` | TEXT | yes |  |  |  |
 | `duration_minutes` | INTEGER | yes |  |  |  |
 | `credit_hours` | FLOAT | yes |  |  |  |
+| `course_hours_credited` | FLOAT | yes |  |  |  |
 | `completion_date` | DATETIME | yes |  |  |  |
 | `score` | FLOAT | yes |  |  |  |
 | `passed` | BOOL | yes |  |  |  |
@@ -13033,6 +13043,54 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_xapi_verb` (`verb_id`)
 - `ix_xapi_statements_user_id` (`user_id`)
 
+## Training_Course_Link
+
+### `training_course_link_records`
+
+**TrainingCourseLinkRecord** · `app/models/training_course_link.py`
+
+> A record a link changed, and the category and type it had before.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `link_id` | VARCHAR(36) | no | FK |  | → `training_course_links.id` ON DELETE CASCADE |
+| `record_id` | VARCHAR(36) | no | FK, IDX |  | → `training_records.id` ON DELETE CASCADE |
+| `previous_category_id` | VARCHAR(36) | yes |  |  |  |
+| `previous_training_type` | VARCHAR(50) | yes |  |  |  |
+
+**Indexes**
+
+- `ix_training_course_link_records_record` (`record_id`)
+
+**Constraints**
+
+- UNIQUE `uq_training_course_link_records_link_record` (`link_id`, `record_id`)
+
+### `training_course_links`
+
+**TrainingCourseLink** · `app/models/training_course_link.py`
+
+> One name's records linked to one library course.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `course_id` | VARCHAR(36) | yes | FK |  | → `training_courses.id` ON DELETE SET NULL |
+| `course_name` | VARCHAR(255) | no |  |  |  |
+| `name_key` | VARCHAR(255) | no |  |  |  |
+| `label` | VARCHAR(255) | no |  |  |  |
+| `record_count` | INTEGER | no |  | `0` |  |
+| `linked_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `linked_at` | DATETIME | no |  | `now()` |  |
+| `undone_at` | DATETIME | yes |  |  |  |
+| `undone_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Indexes**
+
+- `ix_training_course_links_org_linked` (`organization_id`, `linked_at`)
+
 ## Users, Organizations & Access Control
 
 ### `member_leaves_of_absence`
@@ -13443,7 +13501,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (476 references)
+### → `users` (478 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13891,6 +13949,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `testing_runs` | `started_by_id` | SET NULL | yes |
 | `training_approvals` | `approved_by` | SET NULL | yes |
 | `training_categories` | `created_by` | SET NULL | yes |
+| `training_course_links` | `linked_by` | SET NULL | yes |
+| `training_course_links` | `undone_by` | SET NULL | yes |
 | `training_courses` | `created_by` | SET NULL | yes |
 | `training_effectiveness_evaluations` | `evaluated_by` | SET NULL | yes |
 | `training_effectiveness_evaluations` | `user_id` | CASCADE | no |
@@ -13924,7 +13984,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (320 references)
+### → `organizations` (321 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14229,6 +14289,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `testing_runs` | `organization_id` | CASCADE | no |
 | `training_approvals` | `organization_id` | CASCADE | no |
 | `training_categories` | `organization_id` | CASCADE | no |
+| `training_course_links` | `organization_id` | CASCADE | no |
 | `training_courses` | `organization_id` | CASCADE | no |
 | `training_effectiveness_evaluations` | `organization_id` | CASCADE | no |
 | `training_module_configs` | `organization_id` | CASCADE | no |
@@ -14404,6 +14465,23 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_forwards` | `position_id` | CASCADE | yes |
 | `user_positions` | `position_id` | CASCADE | no |
 
+### → `training_courses` (12 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_classes` | `class_course_id` | CASCADE | no |
+| `course_classes` | `course_id` | CASCADE | no |
+| `course_cohort_classes` | `class_course_id` | SET NULL | yes |
+| `course_cohorts` | `course_id` | CASCADE | no |
+| `external_course_mappings` | `internal_course_id` | SET NULL | yes |
+| `instructor_qualifications` | `course_id` | CASCADE | yes |
+| `program_milestone_items` | `course_id` | CASCADE | yes |
+| `recertification_pathways` | `assessment_course_id` | SET NULL | yes |
+| `training_course_links` | `course_id` | SET NULL | yes |
+| `training_effectiveness_evaluations` | `course_id` | SET NULL | yes |
+| `training_records` | `course_id` | SET NULL | yes |
+| `training_sessions` | `course_id` | SET NULL | yes |
+
 ### → `training_requirements` (12 references)
 
 | From table | Column | On delete | Nullable |
@@ -14436,22 +14514,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `minutes_revisions` | `minutes_id` | CASCADE | no |
 | `minutes_signatures` | `minutes_id` | CASCADE | no |
 | `minutes_suggestions` | `minutes_id` | CASCADE | no |
-
-### → `training_courses` (11 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `course_classes` | `class_course_id` | CASCADE | no |
-| `course_classes` | `course_id` | CASCADE | no |
-| `course_cohort_classes` | `class_course_id` | SET NULL | yes |
-| `course_cohorts` | `course_id` | CASCADE | no |
-| `external_course_mappings` | `internal_course_id` | SET NULL | yes |
-| `instructor_qualifications` | `course_id` | CASCADE | yes |
-| `program_milestone_items` | `course_id` | CASCADE | yes |
-| `recertification_pathways` | `assessment_course_id` | SET NULL | yes |
-| `training_effectiveness_evaluations` | `course_id` | SET NULL | yes |
-| `training_records` | `course_id` | SET NULL | yes |
-| `training_sessions` | `course_id` | SET NULL | yes |
 
 ### → `prospective_members` (10 references)
 
@@ -14510,6 +14572,20 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_courses` | `program_id` | SET NULL | yes |
 | `training_sessions` | `program_id` | SET NULL | yes |
 
+### → `training_records` (9 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohort_missed_classes` | `training_record_id` | SET NULL | yes |
+| `external_training_imports` | `training_record_id` | SET NULL | yes |
+| `multi_agency_trainings` | `training_record_id` | SET NULL | yes |
+| `renewal_tasks` | `new_record_id` | SET NULL | yes |
+| `renewal_tasks` | `training_record_id` | SET NULL | yes |
+| `training_course_link_records` | `record_id` | CASCADE | no |
+| `training_effectiveness_evaluations` | `training_record_id` | CASCADE | yes |
+| `training_submissions` | `training_record_id` | SET NULL | yes |
+| `xapi_statements` | `training_record_id` | SET NULL | yes |
+
 ### → `fundraising_campaigns` (8 references)
 
 | From table | Column | On delete | Nullable |
@@ -14522,19 +14598,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `pledges` | `campaign_id` | SET NULL | yes |
 | `purchase_requests` | `fund_campaign_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `fundraising_campaign_id` | SET NULL | yes |
-
-### → `training_records` (8 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `course_cohort_missed_classes` | `training_record_id` | SET NULL | yes |
-| `external_training_imports` | `training_record_id` | SET NULL | yes |
-| `multi_agency_trainings` | `training_record_id` | SET NULL | yes |
-| `renewal_tasks` | `new_record_id` | SET NULL | yes |
-| `renewal_tasks` | `training_record_id` | SET NULL | yes |
-| `training_effectiveness_evaluations` | `training_record_id` | CASCADE | yes |
-| `training_submissions` | `training_record_id` | SET NULL | yes |
-| `xapi_statements` | `training_record_id` | SET NULL | yes |
 
 ### → `external_training_providers` (7 references)
 
@@ -15547,6 +15610,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `testing_checklist_entries` | `run_id` | CASCADE | no |
 
+### → `training_course_links` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `training_course_link_records` | `link_id` | CASCADE | no |
+
 ---
 
 ## Tables without `organization_id`
@@ -15621,6 +15690,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `shift_equipment_check_seals` | `check_template_compartments`, `shift_equipment_checks` |
 | `shift_history_import_rows` | `shift_history_imports` |
 | `skill_test_viewers` | `skill_tests`, `users` |
+| `training_course_link_records` | `training_course_links`, `training_records` |
 | `user_positions` | `positions`, `users` |
 | `votes` | `candidates`, `elections`, `users` |
 | `webauthn_challenges` | `users` |

@@ -35,7 +35,7 @@ import {
   getTodayLocalDate,
   localToUTC,
 } from '../../utils/dateFormatting';
-import { DateRollPolicy, MEETING_WEEKDAYS } from '../../constants/enums';
+import { DateRollPolicy, MEETING_WEEKDAYS, isActiveAccount } from '../../constants/enums';
 import { getErrorMessage } from '../../utils/errorHandling';
 import type {
   CohortClassOverride,
@@ -143,14 +143,17 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
       setLoading(true);
       try {
         const [courseList, memberList, locationList] = await Promise.all([
-          trainingService.getCourses(),
+          // Only courses a cohort can be generated from; one with an empty
+          // syllabus would fail at the preview (W27-4).
+          trainingService.getCourses(true, { withClasses: true }),
           userService.getUsers(),
           // A room is optional; a failed location list must not stop the
           // officer generating a cohort without one.
           locationsService.getLocations({ is_active: true }).catch(() => [] as Location[]),
         ]);
         setCourses(courseList);
-        setMembers(memberList);
+        // Only current members can be enrolled; imported former members are not.
+        setMembers(memberList.filter((m) => isActiveAccount(m.status)));
         setLocations(locationList);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to load courses'));

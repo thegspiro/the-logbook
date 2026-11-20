@@ -552,6 +552,10 @@ from app.models.training import (
     TrainingSession,
     TrainingSessionRequirement,
 )
+from app.models.training_course_link import (
+    TrainingCourseLink,
+    TrainingCourseLinkRecord,
+)
 from app.models.user import (
     LeaveType,
     MemberLeaveOfAbsence,
@@ -571,6 +575,8 @@ from app.models.zeffy import (
 )
 
 __all__ = [
+    "TrainingCourseLink",
+    "TrainingCourseLinkRecord",
     # Admin hours models
     "AdminHoursCategory",
     "AdminHoursEntry",

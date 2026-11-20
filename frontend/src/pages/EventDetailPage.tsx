@@ -1003,9 +1003,11 @@ export const EventDetailPage: React.FC = () => {
   // The card has found a session, so it — not custom_fields — describes it.
   const trainingSessionReported = isTrainingEvent && trainingSession !== null;
   // The session the card loaded is current after an officer changes its links
-  // there; the event's own flag answers until the card has loaded.
+  // there; the event's own flag answers until the card has loaded. Both are
+  // the server's answer: a link to a deactivated requirement is in the ids but
+  // counts for no one, so their length is not the answer.
   const countsTowardAttendance = trainingSession
-    ? (trainingSession.attendance_requirement_ids?.length ?? 0) > 0
+    ? Boolean(trainingSession.counts_toward_attendance)
     : Boolean(event.counts_toward_attendance);
   // Seats taken, which is what max_attendees caps. Falls back to the member
   // count for payloads predating the aggregate.
@@ -1142,7 +1144,7 @@ export const EventDetailPage: React.FC = () => {
 
   const exportAttendanceCSV = () => {
     if (!rsvps || !event) return;
-    const headers = ['Name', 'Email', 'RSVP Status', 'Guest Count', 'Checked In', 'Check-In Time', 'Notes'];
+    const headers = ['Name', 'Email', 'RSVP Status', 'Guest Count', 'Checked In', 'Check-In Time', 'Notes', 'Source'];
     const rows = rsvps.map((r) => [
       r.user_name || '',
       r.user_email || '',
@@ -1151,6 +1153,7 @@ export const EventDetailPage: React.FC = () => {
       r.checked_in ? 'Yes' : 'No',
       r.checked_in_at ? formatDateTime(r.checked_in_at, tz) : '',
       r.notes || '',
+      r.source_label || '',
     ]);
     downloadCsv(buildCsv([headers, ...rows]), `${event.title.replace(/[^a-zA-Z0-9]/g, '_')}_attendance.csv`);
   };

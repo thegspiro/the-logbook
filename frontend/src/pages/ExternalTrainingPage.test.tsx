@@ -240,6 +240,47 @@ describe('ExternalTrainingPage — user mappings', () => {
     );
   });
 
+  it('does not offer a former member to map to', async () => {
+    mockGetUsers.mockResolvedValue([
+      ...roster,
+      {
+        id: 'user-3',
+        organization_id: 'org-1',
+        username: 'lpark',
+        first_name: 'Lee',
+        last_name: 'Park',
+        status: 'retired',
+      },
+    ]);
+    await openUsersTab();
+
+    await screen.findByLabelText('Member for Pat Rivera');
+    expect(screen.getByRole('option', { name: 'Jane Doe' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Lee Park/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps showing a mapping to a member who has since left', async () => {
+    mockGetUsers.mockResolvedValue([
+      ...roster,
+      {
+        id: 'user-3',
+        organization_id: 'org-1',
+        username: 'lpark',
+        first_name: 'Lee',
+        last_name: 'Park',
+        status: 'retired',
+      },
+    ]);
+    mockGetUserMappings.mockResolvedValue([
+      { ...unmappedUser, is_mapped: true, internal_user_id: 'user-3', internal_user_name: 'Lee Park' },
+    ]);
+    await openUsersTab();
+
+    const select = await screen.findByLabelText('Member for Pat Rivera');
+    expect(select).toHaveValue('user-3');
+    expect(screen.getAllByRole('option', { name: 'Lee Park' })).toHaveLength(1);
+  });
+
   it('keeps showing a mapped member the roster no longer lists', async () => {
     mockGetUserMappings.mockResolvedValue([
       { ...unmappedUser, is_mapped: true, internal_user_id: 'user-gone', internal_user_name: 'Sam Former' },

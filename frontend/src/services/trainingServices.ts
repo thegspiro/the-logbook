@@ -39,8 +39,10 @@ import type {
   CourseClassCreate,
   CourseClassUpdate,
   CourseCohort,
+  CourseLinkHistory,
   CourseLinkResult,
   CourseLinksView,
+  CourseUnlinkResult,
   CourseCohortClass,
   CourseCohortCreate,
   CourseCohortDetail,
@@ -205,11 +207,15 @@ export const trainingService = {
     return response.data;
   },
   /**
-   * Get all training courses
+   * Get all training courses. `withClasses` keeps only courses with at least
+   * one class on their syllabus: the ones a cohort can be generated from.
    */
-  async getCourses(activeOnly: boolean = true): Promise<TrainingCourse[]> {
+  async getCourses(
+    activeOnly: boolean = true,
+    options: { withClasses?: boolean | undefined } = {}
+  ): Promise<TrainingCourse[]> {
     const response = await api.get<TrainingCourse[]>('/training/courses', {
-      params: { active_only: activeOnly },
+      params: { active_only: activeOnly, ...(options.withClasses ? { with_classes: true } : {}) },
     });
     return asArray(response.data);
   },
@@ -254,6 +260,18 @@ export const trainingService = {
   /** Link every unlinked record carrying a name to a library course. */
   async linkCourseName(key: string, courseId: string): Promise<CourseLinkResult> {
     const response = await api.post<CourseLinkResult>('/training/course-links', { key, course_id: courseId });
+    return response.data;
+  },
+
+  /** The department's course links, newest first. */
+  async getCourseLinkHistory(params: { offset: number; limit: number }): Promise<CourseLinkHistory> {
+    const response = await api.get<CourseLinkHistory>('/training/course-links/history', { params });
+    return response.data;
+  },
+
+  /** Put a link's records back as they were before it. */
+  async undoCourseLink(linkId: string): Promise<CourseUnlinkResult> {
+    const response = await api.post<CourseUnlinkResult>(`/training/course-links/${linkId}/undo`);
     return response.data;
   },
 

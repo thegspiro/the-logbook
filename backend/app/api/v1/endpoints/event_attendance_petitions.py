@@ -91,8 +91,9 @@ async def list_pending_attendance_petitions(
     scope: Literal["mine", "all"] = Query(
         "mine",
         description=(
-            "mine: events you organize or are alternate for; all: every event "
-            "in the department (events.manage only)"
+            "mine: requests sent to you (your events, and any a fallback step "
+            "routed to you); all: every event in the department (events.manage "
+            "only)"
         ),
     ),
     db: AsyncSession = Depends(get_db),
@@ -101,8 +102,9 @@ async def list_pending_attendance_petitions(
     """
     Pending attendance requests across events, oldest first.
 
-    `scope=mine` (the default) lists requests on events you organize or are
-    alternate for. `scope=all` lists every pending request in the department
+    `scope=mine` (the default) lists requests sent to you: those on events you
+    organize or are alternate for, and any a fallback step routed to you
+    because the event's organizers could not take it. `scope=all` lists every pending request in the department
     and needs events.manage, checked in the handler because the default scope
     is open to any organizer. Your own requests are never listed: nobody
     decides their own.

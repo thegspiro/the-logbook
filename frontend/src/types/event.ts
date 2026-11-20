@@ -277,6 +277,9 @@ export interface EventListItem {
   is_mandatory: boolean;
   /** A session-attendance requirement counts this event; absent from an older backend. */
   counts_toward_attendance?: boolean;
+  /** Where the event came from, decided by the server: "Imported" or "The Logbook". */
+  source?: string | null;
+  source_label?: string | null;
   is_draft?: boolean;
   is_cancelled: boolean;
   /** The start before the first postponement; absent for an event never postponed. */
@@ -526,6 +529,9 @@ export interface RSVP {
   id: string;
   event_id: string;
   user_id: string;
+  /** Where the check-in came from, on the roster listing: "Imported" or "The Logbook". */
+  source?: string | null;
+  source_label?: string | null;
   status: RSVPStatus;
   guest_count: number;
   notes?: string;
@@ -956,6 +962,8 @@ export interface EventModuleSettings {
    * Secretary, then to every events manager.
    */
   attendance_request_fallback_positions: Partial<Record<EventType, string | null>>;
+  /** Days before an unanswered mandatory event starts that members are asked to respond. */
+  mandatory_rsvp_window_days: number;
 }
 
 /** A transfer of an event to a new organizer and alternate. */

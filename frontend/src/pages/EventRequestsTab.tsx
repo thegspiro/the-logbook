@@ -65,6 +65,7 @@ import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { asArray, expectArray } from '../utils/asArray';
 import { displayNameOf } from '../utils/memberName';
+import { isActiveAccount } from '../constants/enums';
 import { useAuthStore } from '../stores/authStore';
 import RequestApparatusCrewSection from './event-requests/RequestApparatusCrewSection';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -151,6 +152,7 @@ interface OrgMember {
   preferred_name?: string | null | undefined;
   display_name?: string | undefined;
   rank?: string;
+  status?: string | undefined;
 }
 
 interface OrgLocation {
@@ -258,7 +260,8 @@ const EventRequestsTab: React.FC = () => {
         // the button.
         setRoleNeeds(roleList[0] ? [{ role: roleList[0].value, count: 1 }] : []);
         setPipelineTasks(asArray(settings?.request_pipeline?.tasks ?? []));
-        setMembers(memberList);
+        // The coordinator picker offers current members only.
+        setMembers(memberList.filter((m) => isActiveAccount(m.status)));
         setLocations(asArray(locationList));
         setEmailTemplates(templates);
       } catch {

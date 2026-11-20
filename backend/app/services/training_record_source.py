@@ -23,7 +23,7 @@ than deciding for itself, so they cannot disagree (CLAUDE.md pitfall 29).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Set
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -136,6 +136,58 @@ async def record_sources(
         else:
             sources[rid] = LOGBOOK
     return sources
+
+
+@dataclass
+class SourceLookup:
+    """Everything needed to label any of a department's records, loaded once.
+
+    For exports that read their rows through a server-side cursor, where no
+    other query may run while the rows stream (``iter_row_batches``): load this
+    first, then label each row without touching the database.
+    """
+
+    provider_labels: Dict[str, str]
+    imported: Set[str]
+
+    def of(self, record: TrainingRecord) -> RecordSource:
+        if _synced(record):
+            return RecordSource(
+                SOURCE_PROVIDER,
+                self.provider_labels.get(
+                    str(record.external_provider_id), UNKNOWN_PROVIDER_LABEL
+                ),
+            )
+        if str(record.id) in self.imported:
+            return RecordSource(SOURCE_IMPORTED, IMPORTED_LABEL)
+        return LOGBOOK
+
+
+async def load_source_lookup(db: AsyncSession, organization_id: str) -> SourceLookup:
+    """The department's providers and every training record id an import
+    ledgered: ids only, so a whole history costs a few hundred kilobytes."""
+    org_id = str(organization_id)
+    providers = await db.execute(
+        select(
+            ExternalTrainingProvider.id,
+            ExternalTrainingProvider.provider_type,
+            ExternalTrainingProvider.name,
+        ).where(ExternalTrainingProvider.organization_id == org_id)
+    )
+    imported = await db.execute(
+        select(ImportedSourceRecord.record_id).where(
+            ImportedSourceRecord.organization_id == org_id,
+            ImportedSourceRecord.record_kind
+            == ImportedRecordKind.TRAINING_RECORD.value,
+        )
+    )
+    return SourceLookup(
+        provider_labels={
+            str(pid): PROVIDER_LABELS.get(ptype) or name
+            for pid, ptype, name in providers.all()
+        },
+        imported={str(r) for r in imported.scalars().all()},
+    )
 
 
 async def ledger_csv_imports(
