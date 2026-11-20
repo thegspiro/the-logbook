@@ -2720,6 +2720,20 @@ has started and is not cancelled. A headcount can be recorded or changed after
 the event's attendance is finalized: it is a count of the public, not members'
 credited time.
 
+If an outreach event ends without a headcount, the next morning its organizer
+and alternate are emailed and sent a notification asking for one, with a link
+to the event. Only those who can manage events are asked; when neither of them
+can, the officer who created the event is asked instead, and when nobody can,
+nobody is. Each event is reminded about once, and only events that ended in
+the last 14 days. Postponing an event lets it be reminded about again after
+its new date.
+
+The email is the **Guest Headcount Reminder** template under **Communications →
+Email Templates → Events & Scheduling**, where a department can reword it or
+switch it off. A member
+can stop receiving it by turning off **Event officer duties** in their email
+preferences; the notification still arrives.
+
 ### Public Request Form
 
 The quickest way to make the public form is **Manage Events → Settings →

@@ -125,6 +125,7 @@ const HIDDEN_CUSTOM_FIELD_KEYS = new Set([
   'reminders_sent',
   'validation_notification_sent',
   'series_end_reminder_sent',
+  'guest_headcount_reminder_sent',
   // Legacy twin of attendance_finalized_at, kept for the reminder task. The
   // lock is shown as a banner, not as a details row reading "true".
   'attendance_finalized',
