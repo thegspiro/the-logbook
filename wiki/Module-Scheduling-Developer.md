@@ -117,6 +117,8 @@ GET    /availability                    # Member availability (scheduling.assign
 GET    /my-shifts                       # Caller's shifts
 GET    /my-assignments                  # Caller's assignments, with embedded shift data
 GET    /my-hours-history                # Caller's hours (year's months, totals, all time, and `history`: every month on record)
+GET    /my-shift-history                # Caller's shifts in a year, own department's and outside, one row each
+GET    /members/{id}/shift-history      # The same for a member's profile (self, or scheduling.report)
 GET    /standing-shifts/preview         # Preview a standing series
 GET    /standing-shifts                 # Caller's standing claims
 POST   /standing-shifts                 # Create a standing claim

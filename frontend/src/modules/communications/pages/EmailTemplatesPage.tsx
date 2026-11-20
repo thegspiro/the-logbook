@@ -53,7 +53,7 @@ import { useOfficersStore } from '../store/officersStore';
 import { useFootersStore } from '../store/footersStore';
 import { emailTemplatesService, userService } from '../../../services/api';
 import { TemplateList } from '../components/TemplateList';
-import { TemplateEditor } from '../components/TemplateEditor';
+import { TemplateEditor, type TemplateEditorField } from '../components/TemplateEditor';
 import { TemplateBackupsPanel } from '../components/TemplateBackupsPanel';
 import { TemplatePreview } from '../components/TemplatePreview';
 import ScheduleEmailForm from '../components/ScheduleEmailForm';
@@ -67,6 +67,9 @@ import type { EmailAttachment, EmailTemplate } from '../types';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { isActiveAccount } from '../../../constants/enums';
+import { FIELD_ERROR_CLASS } from '../../../components/ux/FormField';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
 
 interface PreviewMember {
   id: string;
@@ -106,6 +109,17 @@ const SECTIONS: SettingsSection<EmailTemplatesTab>[] = [
   { key: 'history', label: 'History', icon: History, description: 'What has been sent, and to whom' },
 ];
 
+// The fields a save can refuse, in page order. The template schema is
+// snake_case (no alias generator), so a 422 names them as written.
+const TEMPLATE_FIELDS: FieldSpecs<TemplateEditorField> = {
+  subject: { id: 'template-subject', label: 'Subject line' },
+  status_chip: { id: 'template-chip', label: 'Status chip' },
+  default_cc: { id: 'template-default-cc', label: 'Default CC' },
+  default_bcc: { id: 'template-default-bcc', label: 'Default BCC' },
+  html_body: { id: 'template-html', label: 'HTML body' },
+};
+const TEMPLATE_FIELD_ORDER = Object.keys(TEMPLATE_FIELDS) as TemplateEditorField[];
+
 /** How long typing has to stop before the preview re-renders. */
 const PREVIEW_DEBOUNCE_MS = 500;
 
@@ -131,6 +145,28 @@ const EmailTemplatesPage: React.FC = () => {
   const draft = useTemplateDraft(selectedTemplate);
   const { confirm } = useConfirm();
   useUnsavedChanges({ hasChanges: draft.isDirty });
+  const fieldErrors = useFieldErrors(TEMPLATE_FIELDS);
+  /** The field a save went through without, for the "saved, except" notice. */
+  const [savedExcept, setSavedExcept] = useState<TemplateEditorField | null>(null);
+
+  /**
+   * What a save left out, put back after the draft re-seeds from the saved
+   * template. The draft resets whenever the template it edits changes, which a
+   * successful save does, so without this a refused CC list was wiped along
+   * with its flag. Applied in an effect declared after useTemplateDraft, so it
+   * runs after the draft's own reset in the same commit.
+   */
+  const restoreAfterSave = useRef<Partial<Record<TemplateEditorField, string>> | null>(null);
+  useEffect(() => {
+    const restore = restoreAfterSave.current;
+    if (!restore) return;
+    restoreAfterSave.current = null;
+    if (restore.subject !== undefined) draft.setSubject(restore.subject);
+    if (restore.html_body !== undefined) draft.setHtmlBody(restore.html_body);
+    if (restore.status_chip !== undefined) draft.setStatusChip(restore.status_chip);
+    if (restore.default_cc !== undefined) draft.setDefaultCc(restore.default_cc);
+    if (restore.default_bcc !== undefined) draft.setDefaultBcc(restore.default_bcc);
+  });
 
   /**
    * Picking another template re-seeds the draft from it, so an unsaved edit
@@ -150,9 +186,11 @@ const EmailTemplatesPage: React.FC = () => {
         });
         if (!discard) return;
       }
+      fieldErrors.clear();
+      setSavedExcept(null);
       selectTemplate(template);
     },
-    [selectedTemplate, draft.isDirty, confirm, selectTemplate]
+    [selectedTemplate, draft.isDirty, confirm, selectTemplate, fieldErrors]
   );
   const officerVariables = useOfficersStore((s) => s.variables);
   const fetchOfficers = useOfficersStore((s) => s.fetchOfficers);
@@ -233,15 +271,71 @@ const EmailTemplatesPage: React.FC = () => {
     }
   }, [templates, selectedTemplate, selectTemplate]);
 
+  /**
+   * Saves what can be saved (owner rule, 2026-11-05). A blank subject or body,
+   * or a CC list with an address that is not one, is left out of the update,
+   * which keeps the stored value, while the rest saves; a 422 on a field is
+   * resent without it (saveExceptRefused). The refused field keeps what was
+   * typed and stays flagged. Before, Save sat greyed out while a copy list was
+   * wrong, and a failed save said only "Failed to save template".
+   */
   const handleSave = useCallback(async () => {
-    if (!selectedTemplate || draft.hasValidationErrors) return;
-    try {
-      await updateTemplate(selectedTemplate.id, draft.buildUpdate());
-      toast.success('Template saved');
-    } catch {
-      toast.error('Failed to save template');
+    if (!selectedTemplate) return;
+    const update = draft.buildUpdate() as Record<string, unknown>;
+    const refused: FieldErrors<TemplateEditorField> = {};
+    if ('subject' in update && !draft.subject.trim()) refused.subject = 'Write a subject line.';
+    if ('html_body' in update && !draft.htmlBody.trim()) refused.html_body = 'The email needs a body.';
+    if ('default_cc' in update && draft.ccError) refused.default_cc = draft.ccError;
+    if ('default_bcc' in update && draft.bccError) refused.default_bcc = draft.bccError;
+    fieldErrors.setFormError(null);
+    setSavedExcept(null);
+    clearError();
+    const typed: Record<TemplateEditorField, string> = {
+      subject: draft.subject,
+      html_body: draft.htmlBody,
+      status_chip: draft.statusChip,
+      default_cc: draft.defaultCc,
+      default_bcc: draft.defaultBcc,
+    };
+    const flag = (held: FieldErrors<TemplateEditorField>) => {
+      fieldErrors.setErrors(held);
+      fieldErrors.focusFirst(held);
+      setSavedExcept(firstRefused(TEMPLATE_FIELD_ORDER, held) ?? null);
+    };
+    // Every change refused: there is nothing to send, only the flags to show.
+    if (Object.keys(update).every((key) => key in refused)) {
+      fieldErrors.setErrors(refused);
+      fieldErrors.focusFirst(refused);
+      return;
     }
-  }, [selectedTemplate, updateTemplate, draft]);
+    try {
+      const { refused: held } = await saveExceptRefused<TemplateEditorField, void>({
+        payload: update,
+        refused,
+        send: (body) => updateTemplate(selectedTemplate.id, body),
+        place: (err) => placeApiError(TEMPLATE_FIELDS, err),
+      });
+      // The store set its own banner on the refused first attempt.
+      clearError();
+      if (Object.keys(held).length === 0) {
+        fieldErrors.setErrors({});
+        toast.success('Template saved');
+        return;
+      }
+      const restore: Partial<Record<TemplateEditorField, string>> = {};
+      for (const field of Object.keys(held) as TemplateEditorField[]) {
+        const value = typed[field];
+        if (value !== undefined) restore[field] = value;
+      }
+      restoreAfterSave.current = restore;
+      flag(held);
+    } catch (err) {
+      // Said by the Save button, where the member is looking, instead of in a
+      // toast and the store's banner both.
+      clearError();
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Could not save the template. Try again.'));
+    }
+  }, [selectedTemplate, updateTemplate, draft, fieldErrors, clearError]);
 
   // Ctrl/Cmd+S. The dependency array is the point: without one this rebound
   // on every render, which for a textarea is every keystroke — a listener
@@ -250,12 +344,12 @@ const EmailTemplatesPage: React.FC = () => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        if (draft.isDirty && !isSaving && !draft.hasValidationErrors) void handleSave();
+        if (draft.isDirty && !isSaving) void handleSave();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [draft.isDirty, draft.hasValidationErrors, isSaving, handleSave]);
+  }, [draft.isDirty, isSaving, handleSave]);
 
   /**
    * The unsaved draft, in the shape the preview endpoint takes as overrides.
@@ -512,7 +606,7 @@ const EmailTemplatesPage: React.FC = () => {
                 onClick={() => {
                   void handleSave();
                 }}
-                disabled={!draft.isDirty || isSaving || draft.hasValidationErrors}
+                disabled={!draft.isDirty || isSaving}
                 className="btn-primary flex items-center gap-2 disabled:cursor-not-allowed"
                 title="Save changes (Ctrl+S)"
               >
@@ -520,6 +614,17 @@ const EmailTemplatesPage: React.FC = () => {
                 <span>Save</span>
               </button>
             </div>
+            {fieldErrors.formError && (
+              <p role="alert" className={`mt-2 text-right text-sm ${FIELD_ERROR_CLASS}`}>
+                {fieldErrors.formError}
+              </p>
+            )}
+            {savedExcept && (
+              <p role="status" className="text-theme-text-secondary mt-2 text-right text-sm">
+                Template saved, except {TEMPLATE_FIELDS[savedExcept].label.toLowerCase()}. Fix the flagged field and
+                save again to change it.
+              </p>
+            )}
           </div>
         )}
 
@@ -707,6 +812,8 @@ const EmailTemplatesPage: React.FC = () => {
                       officerVariables={officerVariables}
                       footers={footers}
                       footerDefaultKey={footerDefaultKey}
+                      errors={fieldErrors.errors}
+                      onFieldEdit={(field) => fieldErrors.setError(field, null)}
                     />
 
                     {/* Attachments section */}

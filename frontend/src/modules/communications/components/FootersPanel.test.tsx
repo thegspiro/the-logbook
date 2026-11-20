@@ -296,6 +296,7 @@ describe('FootersPanel', () => {
       email: 'info@example.org',
       website: '',
       county: '',
+      short_name: '',
       founded_year: null,
       logo: null,
       mailing_address: { line1: '100 Main Street', line2: '', city: 'Falls Church', state: 'VA', zip: '22046' },

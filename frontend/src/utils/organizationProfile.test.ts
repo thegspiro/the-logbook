@@ -29,6 +29,7 @@ describe('ORGANIZATION_PROFILE_MAX_LENGTH', () => {
     // OrganizationProfileUpdate to the same columns. Change both together.
     expect(ORGANIZATION_PROFILE_MAX_LENGTH).toEqual({
       name: 255,
+      shortName: 20,
       phone: 20,
       email: 255,
       website: 255,
