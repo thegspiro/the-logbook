@@ -71,7 +71,13 @@ test.describe('mobile dialogs', () => {
     // grants screens add ~5% (0.78 of 14.9 min, timed per route locally), so
     // ~12.7 min, and 2x that would have been 26. This PR's own run measured
     // 15.1 min with every route in (#4269, run 43444576216), so 2x is 31.
-    test.setTimeout(1_860_000);
+    //
+    // Re-derived on 2026-11-20 by the same rule: the route list kept growing
+    // (training, history, and more), and `main` measured 29.9 min against the
+    // 31 (run 44600207163, job 135829225922), so the next PR adding routes ran
+    // out of time with no dialog failing (#4441, run 44617496635). 2x is 60,
+    // still under the job's 88-minute cap in ci.yml.
+    test.setTimeout(3_600_000);
 
     // A dialog still fading in when axe runs is measured through a partial
     // opacity: on a slow runner the Create Shift dialog reported 38 contrast
