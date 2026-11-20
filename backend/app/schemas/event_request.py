@@ -6,11 +6,12 @@ Supports flexible date preferences, configurable pipeline tasks, comments,
 assignment, scheduling with room booking, and postponement.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
+from app.models.event_request import STAFF_ENTERED_SOURCES
 from app.schemas.base import UTCResponseBase, as_utc
 
 
@@ -85,6 +86,69 @@ class EventRequestCreate(BaseModel):
             self.preferred_date_start = as_utc(self.preferred_date_start)
         if self.preferred_date_end:
             self.preferred_date_end = as_utc(self.preferred_date_end)
+        if (
+            self.preferred_date_start
+            and self.preferred_date_end
+            and self.preferred_date_end < self.preferred_date_start
+        ):
+            raise ValueError(
+                "preferred_date_end must not be before preferred_date_start"
+            )
+        return self
+
+
+class EventRequestStaffCreate(BaseModel):
+    """A request a coordinator enters for somebody who phoned, wrote or came by.
+
+    Differs from the public ``EventRequestCreate`` where the person typing is
+    not the requester: an email is optional when there is a phone number (a
+    caller may give only that), the description may be short (it is the
+    coordinator's note of a conversation, not a stranger's first message), and
+    the preferred dates are plain calendar dates. The endpoint anchors those to
+    midnight in the department's timezone, so a date chosen as the 15th is
+    stored and shown as the 15th rather than the evening of the 14th.
+    """
+
+    source: str = Field(
+        ...,
+        description="How the request arrived: phone, email, in_person or other",
+    )
+    contact_name: str = Field(..., min_length=1, max_length=255)
+    contact_email: Optional[EmailStr] = None
+    contact_phone: Optional[str] = Field(None, max_length=50)
+    organization_name: Optional[str] = Field(None, max_length=255)
+
+    outreach_type: str = Field(..., min_length=1, max_length=100)
+    description: str = Field(..., min_length=1, max_length=2000)
+
+    date_flexibility: str = "flexible"
+    preferred_date_start: Optional[date] = None
+    preferred_date_end: Optional[date] = None
+    preferred_timeframe: Optional[str] = Field(None, max_length=500)
+    preferred_time_of_day: Optional[str] = "flexible"
+
+    audience_size: Optional[int] = Field(None, ge=1, le=10000)
+    age_group: Optional[str] = Field(None, max_length=100)
+    venue_preference: str = "their_location"
+    venue_address: Optional[str] = Field(None, max_length=500)
+    special_requests: Optional[str] = Field(None, max_length=2000)
+
+    # Coordinator to assign now. Omitted: the department's default coordinator,
+    # as for a public submission.
+    assigned_to: Optional[str] = None
+    # Whether the requester gets the "request received" email with their status
+    # link. Ignored when there is no email to send it to.
+    notify_requester: bool = True
+
+    @model_validator(mode="after")
+    def _check(self) -> "EventRequestStaffCreate":
+        allowed = {source.value for source in STAFF_ENTERED_SOURCES}
+        if self.source not in allowed:
+            raise ValueError("source must be one of: " + ", ".join(sorted(allowed)))
+        if self.contact_phone is not None:
+            self.contact_phone = self.contact_phone.strip() or None
+        if not self.contact_email and not self.contact_phone:
+            raise ValueError("Enter an email address or a phone number.")
         if (
             self.preferred_date_start
             and self.preferred_date_end
@@ -375,7 +439,7 @@ class EventRequestResponse(UTCResponseBase):
     id: str
     organization_id: str
     contact_name: str
-    contact_email: str
+    contact_email: Optional[str] = None
     contact_phone: Optional[str] = None
     organization_name: Optional[str] = None
     outreach_type: str
@@ -409,6 +473,9 @@ class EventRequestResponse(UTCResponseBase):
     staffing_roles: Optional[List[Dict[str, Any]]] = None
     volunteer_call_sent_at: Optional[datetime] = None
     status_token: Optional[str] = None
+    # How it arrived: "web" for the public form, otherwise how a coordinator
+    # said it came in (EventRequestSource).
+    source: str = "web"
     created_at: datetime
     updated_at: datetime
     activity_log: List[EventRequestActivityResponse] = []
@@ -421,7 +488,7 @@ class EventRequestListItem(UTCResponseBase):
 
     id: str
     contact_name: str
-    contact_email: str
+    contact_email: Optional[str] = None
     organization_name: Optional[str] = None
     outreach_type: str
     status: str
@@ -437,6 +504,7 @@ class EventRequestListItem(UTCResponseBase):
     # Intake flagged the request as arriving inside the department's lead time
     # (a `lead_time_warning` activity row); see `short_notice_request_ids`.
     short_notice: bool = False
+    source: str = "web"
     # Seats on the request's live signup sheet; both null when it has none.
     staffing_slots_filled: Optional[int] = None
     staffing_slots_total: Optional[int] = None

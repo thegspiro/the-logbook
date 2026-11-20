@@ -791,6 +791,13 @@ export const eventRequestService = {
     const response = await api.get<import('../types/event').EventRequestListItem[]>('/event-requests', { params });
     return response.data;
   },
+  /** Enter a request taken by phone, email or in person (events.manage). */
+  async createRequest(
+    data: import('../types/event').EventRequestStaffCreate
+  ): Promise<import('../types/event').EventRequest> {
+    const response = await api.post<import('../types/event').EventRequest>('/event-requests', data);
+    return response.data;
+  },
   async getRequest(requestId: string): Promise<import('../types/event').EventRequest> {
     const response = await api.get<import('../types/event').EventRequest>(`/event-requests/${requestId}`);
     return response.data;

@@ -7,6 +7,8 @@ const getRequest = vi.fn();
 const postponeRequest = vi.fn();
 const assignRequest = vi.fn();
 const updateRequestStatus = vi.fn();
+const createRequest = vi.fn();
+const getOutreachTypeLabels = vi.fn(() => Promise.resolve({}));
 const toastError = vi.fn();
 
 vi.mock('react-hot-toast', () => ({
@@ -23,7 +25,8 @@ vi.mock('../services/api', () => ({
     postponeRequest: (...args: unknown[]) => postponeRequest(...args) as unknown,
     assignRequest: (...args: unknown[]) => assignRequest(...args) as unknown,
     updateRequestStatus: (...args: unknown[]) => updateRequestStatus(...args) as unknown,
-    getOutreachTypeLabels: () => Promise.resolve({}),
+    createRequest: (...args: unknown[]) => createRequest(...args) as unknown,
+    getOutreachTypeLabels: () => getOutreachTypeLabels(),
     listEmailTemplates: () => Promise.resolve([]),
     getOutreachRoles: () => Promise.resolve([]),
     getStaffing: () => Promise.resolve(null),
@@ -417,5 +420,208 @@ describe('EventRequestsTab at desktop width', () => {
     const drawer = await screen.findByRole('dialog', { name: 'Maple Street HOA' });
     expect(within(drawer).getByRole('button', { name: 'Schedule event' })).toBeInTheDocument();
     expect(within(drawer).getByRole('button', { name: 'Email requester' })).toBeInTheDocument();
+  });
+});
+
+describe('EventRequestsTab entering a request taken by phone', () => {
+  const CREATED = {
+    id: 'phone-1',
+    contact_name: 'Pat Rivera',
+    contact_email: null,
+    contact_phone: '703-555-0142',
+    outreach_type: 'station_tour',
+    status: 'submitted',
+    source: 'phone',
+    description: 'Tour for a Cub Scout den.',
+    venue_preference: 'their_location',
+    date_flexibility: 'flexible',
+    created_at: '2026-11-20T00:00:00Z',
+    activity_log: [],
+  };
+
+  beforeEach(() => {
+    listRequests.mockReset();
+    getRequest.mockReset();
+    createRequest.mockReset();
+    getOutreachTypeLabels.mockReset();
+    listRequests.mockResolvedValue([]);
+    getRequest.mockResolvedValue(CREATED);
+    createRequest.mockResolvedValue(CREATED);
+    getOutreachTypeLabels.mockResolvedValue({ station_tour: 'Station Tour', fire_safety_demo: 'Fire Safety Demo' });
+  });
+
+  afterEach(() => {
+    // Back to the module default, so a block after this one does not inherit the types.
+    getOutreachTypeLabels.mockReset();
+    getOutreachTypeLabels.mockImplementation(() => Promise.resolve({}));
+  });
+
+  const openDialog = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderWithRouter(<EventRequestsTab />);
+    await user.click(await screen.findByRole('button', { name: 'New request' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New request' });
+    // The types arrive with the tab's settings; wait for them in the picker.
+    await within(dialog).findByRole('option', { name: 'Station Tour' });
+    return dialog;
+  };
+
+  const fillRequired = async (user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement) => {
+    await user.type(within(dialog).getByLabelText(/Requester name/), 'Pat Rivera');
+    await user.type(within(dialog).getByLabelText('Phone'), '703-555-0142');
+    await user.selectOptions(within(dialog).getByLabelText(/Type of event/), 'station_tour');
+    await user.type(within(dialog).getByLabelText(/What they asked for/), 'Tour for a Cub Scout den.');
+  };
+
+  it('flags every missing field on its field and sends nothing', async () => {
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Add request' }));
+
+    expect(await within(dialog).findByText('Enter who the request is from.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Enter a phone number or an email address.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Choose the type of event.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Note what they asked for.')).toBeInTheDocument();
+    expect(createRequest).not.toHaveBeenCalled();
+  });
+
+  it('files a phone-only request without asking for an email, then opens it', async () => {
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+    await fillRequired(user, dialog);
+
+    // No email, so there is nobody to send the confirmation to.
+    const confirmation = within(dialog).getByRole('checkbox', { name: /Email the requester a confirmation/ });
+    expect(confirmation).toBeDisabled();
+    expect(confirmation).not.toBeChecked();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Add request' }));
+
+    await waitFor(() =>
+      expect(createRequest).toHaveBeenCalledWith({
+        source: 'phone',
+        contact_name: 'Pat Rivera',
+        contact_phone: '703-555-0142',
+        outreach_type: 'station_tour',
+        description: 'Tour for a Cub Scout den.',
+        date_flexibility: 'flexible',
+        preferred_time_of_day: 'flexible',
+        venue_preference: 'their_location',
+        notify_requester: false,
+      })
+    );
+    await waitFor(() => expect(getRequest).toHaveBeenCalledWith('phone-1'));
+    expect(screen.queryByRole('dialog', { name: 'New request' })).not.toBeInTheDocument();
+  });
+
+  it('sends the confirmation by default once there is an email, and not once unticked', async () => {
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+    await fillRequired(user, dialog);
+    await user.selectOptions(within(dialog).getByLabelText('How it came in'), 'email');
+    await user.type(within(dialog).getByLabelText('Email'), 'pat@example.org');
+
+    const confirmation = within(dialog).getByRole('checkbox', { name: /Email the requester a confirmation/ });
+    expect(confirmation).toBeEnabled();
+    expect(confirmation).toBeChecked();
+    await user.click(confirmation);
+    await user.click(within(dialog).getByRole('button', { name: 'Add request' }));
+
+    await waitFor(() => expect(createRequest).toHaveBeenCalledTimes(1));
+    expect(createRequest.mock.calls[0]?.[0]).toMatchObject({
+      source: 'email',
+      contact_email: 'pat@example.org',
+      notify_requester: false,
+    });
+  });
+
+  it('sends the dates the caller named as plain calendar dates', async () => {
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+    await fillRequired(user, dialog);
+    await user.selectOptions(within(dialog).getByLabelText('Dates'), 'specific_dates');
+    await user.type(within(dialog).getByLabelText(/Earliest date/), '2027-01-15');
+    await user.type(within(dialog).getByLabelText(/Latest date/), '2027-01-29');
+    await user.click(within(dialog).getByRole('button', { name: 'Add request' }));
+
+    await waitFor(() => expect(createRequest).toHaveBeenCalledTimes(1));
+    expect(createRequest.mock.calls[0]?.[0]).toMatchObject({
+      date_flexibility: 'specific_dates',
+      preferred_date_start: '2027-01-15',
+      preferred_date_end: '2027-01-29',
+    });
+  });
+
+  it('refuses a latest date before the earliest', async () => {
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+    await fillRequired(user, dialog);
+    await user.selectOptions(within(dialog).getByLabelText('Dates'), 'specific_dates');
+    await user.type(within(dialog).getByLabelText(/Earliest date/), '2027-01-29');
+    await user.type(within(dialog).getByLabelText(/Latest date/), '2027-01-15');
+    await user.click(within(dialog).getByRole('button', { name: 'Add request' }));
+
+    expect(await within(dialog).findByText('The latest date cannot be before the earliest.')).toBeInTheDocument();
+    expect(createRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('EventRequestsTab showing a request with no email', () => {
+  const mailtoLinks = (scope: HTMLElement) =>
+    within(scope)
+      .queryAllByRole('link')
+      .filter((link) => link.getAttribute('href')?.startsWith('mailto:'));
+
+  const PHONE_ONLY = {
+    id: 'phone-1',
+    contact_name: 'Pat Rivera',
+    contact_email: null,
+    contact_phone: '703-555-0142',
+    outreach_type: 'station_tour',
+    status: 'in_progress',
+    source: 'phone',
+    description: 'Tour for a Cub Scout den.',
+    venue_preference: 'their_location',
+    date_flexibility: 'flexible',
+    created_at: '2026-11-20T00:00:00Z',
+  };
+
+  beforeEach(() => {
+    listRequests.mockReset();
+    getRequest.mockReset();
+    listRequests.mockResolvedValue([PHONE_ONLY]);
+    getRequest.mockResolvedValue({
+      ...PHONE_ONLY,
+      activity_log: [
+        {
+          id: 'act-1',
+          action: 'submitted',
+          new_status: 'submitted',
+          notes: 'Entered by Casey Morgan from a phone call',
+          details: { source: 'phone' },
+          performer_name: 'Casey Morgan',
+          created_at: '2026-11-20T00:00:00Z',
+        },
+      ],
+    });
+  });
+
+  it('says how it came in, and offers the phone rather than an email link', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EventRequestsTab />);
+
+    await user.click(await screen.findByRole('button', { name: /Pat Rivera/ }));
+    const drawer = await screen.findByRole('dialog', { name: 'Pat Rivera' });
+
+    expect(within(drawer).getByText('Came in by: Phone call')).toBeInTheDocument();
+    expect(within(drawer).getByText('Entered by Casey Morgan from a phone call')).toBeInTheDocument();
+    expect(within(drawer).getByText('No email given')).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: /703-555-0142/ })).toHaveAttribute('href', 'tel:703-555-0142');
+    expect(within(drawer).queryByRole('link', { name: /email app/ })).not.toBeInTheDocument();
+    expect(mailtoLinks(drawer)).toHaveLength(0);
+
+    await user.click(within(drawer).getByRole('button', { name: 'Email requester' }));
+    expect(within(drawer).getByText(/gave no email address\. Call them on 703-555-0142 instead\./)).toBeInTheDocument();
+    expect(mailtoLinks(drawer)).toHaveLength(0);
   });
 });

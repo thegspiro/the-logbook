@@ -70,6 +70,8 @@ import { useAuthStore } from '../stores/authStore';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import RequestInboxRow, { ChecklistBar, CoordinatorChip, RequestDateLine } from './event-requests/RequestInboxRow';
+import NewRequestDialog from './event-requests/NewRequestDialog';
+import { EVENT_REQUEST_SOURCE_LABELS } from '../constants/enums';
 import {
   INBOX_GROUPS,
   groupRequests,
@@ -174,6 +176,7 @@ const EventRequestsTab: React.FC = () => {
   const [showMore, setShowMore] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
   const [showDecline, setShowDecline] = useState(false);
+  const [showNewRequest, setShowNewRequest] = useState(false);
   const [outreachLabels, setOutreachLabels] = useState<Record<string, string>>({});
   const [pipelineTasks, setPipelineTasks] = useState<PipelineTaskConfig[]>([]);
 
@@ -688,21 +691,30 @@ const EventRequestsTab: React.FC = () => {
   return (
     <div className="mx-auto max-w-6xl py-8">
       <div className="space-y-5">
-        <div>
-          <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-bold">
-            <ClipboardList className="h-5 w-5 text-red-700" aria-hidden="true" />
-            Public Outreach Requests
-          </h2>
-          <p className="text-theme-text-muted mt-1 text-sm">
-            Requests from the community, grouped by what needs doing next.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-bold">
+              <ClipboardList className="h-5 w-5 text-red-700" aria-hidden="true" />
+              Public Outreach Requests
+            </h2>
+            <p className="text-theme-text-muted mt-1 text-sm">
+              Requests from the community, grouped by what needs doing next.
+            </p>
+          </div>
+          <button type="button" onClick={() => setShowNewRequest(true)} className="btn-primary flex items-center gap-2">
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            New request
+          </button>
         </div>
 
         {requests.length === 0 ? (
           <div className="bg-theme-surface-secondary rounded-lg py-16 text-center">
             <ClipboardList className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
             <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No event requests yet</h3>
-            <p className="text-theme-text-muted text-sm">Community event requests will appear here once submitted.</p>
+            <p className="text-theme-text-muted text-sm">
+              Requests from the public form appear here. Use New request for one that came in by phone, email or in
+              person.
+            </p>
           </div>
         ) : (
           <>
@@ -968,7 +980,13 @@ const EventRequestsTab: React.FC = () => {
                         <Mail className="h-4 w-4" aria-hidden="true" />
                         Email {detail.contact_name}
                       </h3>
-                      {emailTemplates.length > 0 && detailOpen && (
+                      {!detail.contact_email && (
+                        <p className="text-theme-text-secondary text-sm">
+                          {detail.contact_name} gave no email address.
+                          {detail.contact_phone ? ` Call them on ${detail.contact_phone} instead.` : ''}
+                        </p>
+                      )}
+                      {detail.contact_email && emailTemplates.length > 0 && detailOpen && (
                         <div className="flex items-center gap-2">
                           <select
                             value={selectedTemplateId}
@@ -994,12 +1012,14 @@ const EventRequestsTab: React.FC = () => {
                           </button>
                         </div>
                       )}
-                      <a
-                        href={`mailto:${detail.contact_email}`}
-                        className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
-                      >
-                        Write your own from your email app
-                      </a>
+                      {detail.contact_email && (
+                        <a
+                          href={`mailto:${detail.contact_email}`}
+                          className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
+                        >
+                          Write your own from your email app
+                        </a>
+                      )}
                     </div>
                   )}
 
@@ -1453,14 +1473,26 @@ const EventRequestsTab: React.FC = () => {
                     {detail.organization_name && (
                       <p className="text-theme-text-secondary text-sm">{detail.organization_name}</p>
                     )}
+                    {detail.source && detail.source !== 'web' && (
+                      <p className="text-theme-text-muted text-xs">
+                        Came in by: {EVENT_REQUEST_SOURCE_LABELS[detail.source]}
+                      </p>
+                    )}
                     <div className="flex flex-wrap gap-x-4 text-sm">
-                      <a
-                        href={`mailto:${detail.contact_email}`}
-                        className="flex min-h-11 items-center gap-1 break-all text-blue-700 hover:underline dark:text-blue-400"
-                      >
-                        <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                        {detail.contact_email}
-                      </a>
+                      {detail.contact_email ? (
+                        <a
+                          href={`mailto:${detail.contact_email}`}
+                          className="flex min-h-11 items-center gap-1 break-all text-blue-700 hover:underline dark:text-blue-400"
+                        >
+                          <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          {detail.contact_email}
+                        </a>
+                      ) : (
+                        <span className="text-theme-text-muted flex min-h-11 items-center gap-1">
+                          <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          No email given
+                        </span>
+                      )}
                       {detail.contact_phone && (
                         <a
                           href={`tel:${detail.contact_phone}`}
@@ -1505,6 +1537,13 @@ const EventRequestsTab: React.FC = () => {
                                       {STATUS_CONFIG[entry.new_status as EventRequestStatus]?.label || entry.new_status}
                                     </span>
                                   )}
+                                  {/* A request a coordinator entered says who and how ("Entered by … from a
+                                      phone call"); a public submission's note adds nothing to its badge. */}
+                                  {entry.action === 'submitted' &&
+                                    entry.details &&
+                                    typeof entry.details === 'object' &&
+                                    'source' in entry.details &&
+                                    entry.notes && <span className="text-theme-text-muted text-xs">{entry.notes}</span>}
                                   {entry.action.startsWith('task_') && (
                                     <span className="text-theme-text-muted text-xs">
                                       {entry.action.includes('completed') ? 'Completed task' : 'Uncompleted task'}
@@ -1603,6 +1642,20 @@ const EventRequestsTab: React.FC = () => {
         confirmVariant="warning"
         loading={actionLoading}
       />
+
+      {showNewRequest && (
+        <NewRequestDialog
+          outreachTypes={outreachLabels}
+          coordinators={members.map((m) => ({ id: m.id, name: displayNameOf(m) }))}
+          onClose={() => setShowNewRequest(false)}
+          onCreated={(created) => {
+            setShowNewRequest(false);
+            toast.success(`Request from ${created.contact_name} added.`);
+            void fetchRequests();
+            void openRequest(created.id);
+          }}
+        />
+      )}
     </div>
   );
 };

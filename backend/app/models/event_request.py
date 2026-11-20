@@ -62,6 +62,27 @@ class EventRequestStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class EventRequestSource(str, enum.Enum):
+    """How a request reached the department.
+
+    ``web`` is the public form, through either intake path. The rest are
+    entered by a coordinator for a requester who phoned, wrote or came by,
+    and a coordinator cannot choose ``web`` for one: it would claim the
+    requester filled in the form themselves.
+    """
+
+    WEB = "web"
+    PHONE = "phone"
+    EMAIL = "email"
+    IN_PERSON = "in_person"
+    OTHER = "other"
+
+
+STAFF_ENTERED_SOURCES = tuple(
+    source for source in EventRequestSource if source != EventRequestSource.WEB
+)
+
+
 class EventRequest(Base):
     """
     Public outreach event request.
@@ -82,7 +103,10 @@ class EventRequest(Base):
 
     # Requester contact info
     contact_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    contact_email: Mapped[str] = mapped_column(EncryptedText, nullable=False)
+    # NULL for a request a coordinator entered for a caller who gave only a
+    # phone number; every email to the requester is skipped for such a request.
+    # The public form still requires an address.
+    contact_email: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     contact_phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     organization_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
@@ -201,6 +225,15 @@ class EventRequest(Base):
     status_token: Mapped[Optional[str]] = mapped_column(EncryptedText)
     status_token_hash: Mapped[Optional[str]] = mapped_column(
         String(64), unique=True, index=True, nullable=True
+    )
+
+    # How the request arrived (EventRequestSource). A plain string rather than
+    # a database enum, so a new intake channel is not a column migration.
+    source: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=EventRequestSource.WEB.value,
+        server_default=EventRequestSource.WEB.value,
     )
 
     # Source tracking (from form submission)

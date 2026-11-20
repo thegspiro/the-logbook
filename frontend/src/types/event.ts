@@ -3,7 +3,7 @@
  */
 
 // Import enum types from the canonical source and re-export
-import type { AttendancePetitionStatus, EventType, RSVPStatus } from '../constants/enums';
+import type { AttendancePetitionStatus, EventRequestSource, EventType, RSVPStatus } from '../constants/enums';
 export type { AttendancePetitionStatus, EventType, RSVPStatus };
 
 export interface Event {
@@ -1074,7 +1074,8 @@ export interface EventRequest {
   id: string;
   organization_id: string;
   contact_name: string;
-  contact_email: string;
+  /** Null for a request a coordinator entered for a caller who gave only a phone number. */
+  contact_email?: string | null;
   contact_phone?: string;
   organization_name?: string;
   outreach_type: string;
@@ -1105,15 +1106,46 @@ export interface EventRequest {
   staffing_roles?: StaffingRoleNeed[];
   volunteer_call_sent_at?: string;
   status_token?: string;
+  /** How it arrived: `web` for the public form, otherwise as the coordinator entered it. */
+  source?: EventRequestSource;
   created_at: string;
   updated_at: string;
   activity_log: EventRequestActivity[];
 }
 
+/**
+ * A request a coordinator enters for somebody who phoned, wrote or came by
+ * (EventRequestStaffCreate). Optional keys are omitted, not sent blank; the
+ * dates are plain YYYY-MM-DD calendar dates.
+ */
+export interface EventRequestStaffCreate {
+  source: EventRequestSource;
+  contact_name: string;
+  contact_email?: string | undefined;
+  contact_phone?: string | undefined;
+  organization_name?: string | undefined;
+  outreach_type: string;
+  description: string;
+  date_flexibility: DateFlexibility;
+  preferred_date_start?: string | undefined;
+  preferred_date_end?: string | undefined;
+  preferred_timeframe?: string | undefined;
+  preferred_time_of_day: TimeOfDay;
+  audience_size?: number | undefined;
+  age_group?: string | undefined;
+  venue_preference: VenuePreference;
+  venue_address?: string | undefined;
+  special_requests?: string | undefined;
+  assigned_to?: string | undefined;
+  notify_requester: boolean;
+}
+
+export type VenuePreference = 'their_location' | 'our_station' | 'either';
+
 export interface EventRequestListItem {
   id: string;
   contact_name: string;
-  contact_email: string;
+  contact_email?: string | null;
   organization_name?: string;
   outreach_type: string;
   status: EventRequestStatus;
@@ -1128,6 +1160,7 @@ export interface EventRequestListItem {
   staffing_shift_id?: string;
   /** Intake flagged it as arriving inside the department's lead time. */
   short_notice?: boolean;
+  source?: EventRequestSource;
   /** Seats on the live signup sheet; both null when the request has none. */
   staffing_slots_filled?: number | null;
   staffing_slots_total?: number | null;

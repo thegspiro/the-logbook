@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**390 tables · 6208 columns · 1301 foreign keys**
+**390 tables · 6209 columns · 1301 foreign keys**
 
 ---
 
@@ -230,7 +230,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`event_request_activity`](#event_request_activity) | `EventRequestActivity` | 9 | Audit trail for event request pipeline actions. |
 | [`event_request_email_templates`](#event_request_email_templates) | `EventRequestEmailTemplate` | 12 | Reusable email templates for the event request pipeline. |
-| [`event_requests`](#event_requests) | `EventRequest` | 36 | Public outreach event request. |
+| [`event_requests`](#event_requests) | `EventRequest` | 37 | Public outreach event request. |
 
 ### Events
 
@@ -3330,7 +3330,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `contact_name` | VARCHAR(255) | no |  |  |  |
-| `contact_email` | TEXT | no |  |  |  |
+| `contact_email` | TEXT | yes |  |  |  |
 | `contact_phone` | TEXT | yes |  |  |  |
 | `organization_name` | VARCHAR(255) | yes |  |  |  |
 | `outreach_type` | VARCHAR(100) | no |  | `'other'` |  |
@@ -3359,6 +3359,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `volunteer_call_sent_at` | DATETIME | yes |  |  |  |
 | `status_token` | TEXT | yes |  |  |  |
 | `status_token_hash` | VARCHAR(64) | yes | UQ, UQ-IDX |  |  |
+| `source` | VARCHAR(20) | no |  | `web` |  |
 | `form_submission_id` | VARCHAR(36) | yes | FK |  | → `form_submissions.id` ON DELETE SET NULL |
 | `ip_address` | VARCHAR(45) | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |

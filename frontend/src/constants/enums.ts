@@ -1457,3 +1457,33 @@ export const AttendanceWaiverReasonText = {
   REQUIRED: 'required',
 } as const;
 export type AttendanceWaiverReasonText = (typeof AttendanceWaiverReasonText)[keyof typeof AttendanceWaiverReasonText];
+
+/**
+ * How an outreach request reached the department (EventRequestSource in
+ * backend/app/models/event_request.py). `web` is the public form; the others
+ * are entered by a coordinator, who cannot pick `web` for one.
+ */
+export const EventRequestSource = {
+  WEB: 'web',
+  PHONE: 'phone',
+  EMAIL: 'email',
+  IN_PERSON: 'in_person',
+  OTHER: 'other',
+} as const;
+export type EventRequestSource = (typeof EventRequestSource)[keyof typeof EventRequestSource];
+
+export const EVENT_REQUEST_SOURCE_LABELS: Record<EventRequestSource, string> = {
+  web: 'Public request form',
+  phone: 'Phone call',
+  email: 'Email',
+  in_person: 'In person',
+  other: 'Other',
+};
+
+/** The channels a coordinator can choose when entering a request, in the order offered. */
+export const STAFF_ENTERED_SOURCES: readonly EventRequestSource[] = [
+  EventRequestSource.PHONE,
+  EventRequestSource.EMAIL,
+  EventRequestSource.IN_PERSON,
+  EventRequestSource.OTHER,
+];

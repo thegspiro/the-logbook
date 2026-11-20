@@ -561,6 +561,7 @@ async def send_request_notification(
     org: Organization,
     extra_context: Optional[dict] = None,
     template: Any = None,
+    skip_requester: bool = False,
 ) -> bool:
     """
     Send email notification based on pipeline trigger settings.
@@ -569,6 +570,11 @@ async def send_request_notification(
     as configured. ``template``, when given, is a department's own
     EventRequestEmailTemplate and is sent as itself in place of the generic
     status email.
+
+    The requester is skipped when the request holds no email (a phone request
+    a coordinator entered) or when ``skip_requester`` is set — a coordinator
+    entering a request can decline the acknowledgement because they have just
+    told the caller everything it says. The coordinator's own copy still goes.
 
     Returns True when the configured work completed — including "the trigger is
     switched off, so there was nothing to send". Returns False only when
@@ -598,7 +604,11 @@ async def send_request_notification(
         status_label = STATUS_LABELS.get(status_value, status_value)
 
         # Notify the requester
-        if trigger_config.get("notify_requester", False):
+        if (
+            trigger_config.get("notify_requester", False)
+            and not skip_requester
+            and event_request.contact_email
+        ):
             from app.models.email_template import EmailTemplateType
             from app.services.email_template_service import (
                 DEFAULT_EVENT_REQUEST_STATUS_HTML,
@@ -735,15 +745,18 @@ async def send_request_notification(
                     html_body=body,
                 )
 
+                # Only NotificationLog's own columns: an unknown key is a
+                # TypeError that log_notification swallows with a rollback, so
+                # the notice went unrecorded and every object the caller held
+                # was expired under it.
                 await notifications_service.log_notification(
                     organization_id=org.id,
                     log_data={
                         "recipient_id": assignee.id,
                         "channel": "email",
                         "category": "events",
-                        "trigger": "event_reminder",
                         "subject": subject,
-                        "body": f"New event request from {event_request.contact_name}",
+                        "message": f"New event request from {event_request.contact_name}",
                     },
                 )
         return True
