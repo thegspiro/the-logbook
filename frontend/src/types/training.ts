@@ -700,7 +700,12 @@ export interface ComplianceSummary {
   requirements_total: number;
   certs_expiring_soon: number;
   certs_expired: number;
-  /** `not_applicable`: no requirement grades the member and no certificate is lapsing. */
+  /**
+   * The member's compliance matrix standing: green compliant, yellow at risk,
+   * red non-compliant. `not_applicable`: no requirement grades the member,
+   * whatever their certificates say. The certificate counts above are
+   * informational and do not set it.
+   */
   compliance_status: 'green' | 'yellow' | 'red' | 'exempt' | 'not_applicable';
   compliance_label: string;
   hours_this_year: number;
