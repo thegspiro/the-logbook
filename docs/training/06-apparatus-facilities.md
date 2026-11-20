@@ -133,6 +133,18 @@ one, open it and select **Edit**.
   save, the old value is removed. Four fields cannot be emptied: unit number,
   type, status and minimum staffing.
 - The save button reads **Add Apparatus**, or **Save Changes** when editing.
+- **A refused value is shown on its field** _(2026-11-20)_. A missing unit
+  number, a mistyped year or a number outside what the server accepts is named
+  under its own box, and a list at the top of the form (**Fix these before
+  adding the apparatus**) links to each one. Adding waits until all of them are
+  fixed. **Editing saves everything else**: the page says "Apparatus saved,
+  except _field_. Fix it and save again.", and the refused box keeps what you
+  typed, under **These were not saved**. A status that needs a reason is never
+  saved without one, so a refused reason holds the status change back too.
+- **Cancel asks first.** Cancelling or leaving the form after typing asks
+  _"Discard your changes?"_ with **Keep editing** and **Discard changes**. The
+  **Documents** tab's upload form does the same, and names a missing title on
+  its field ("Give the document a title.").
 
 **Archiving.** There is no archive button on a list row. Archiving asks how
 the vehicle left the fleet (**Sold**, **Traded in**, **Donated** or
@@ -753,6 +765,16 @@ management** (or **Create new facility records** to add one).
 form refuse an email that is not one: "Enter an email address like
 office@example.org."
 
+**Editing saves what it can** _(2026-11-20)_. On the **Overview** edit, and in
+the **Utilities** (and their readings), **Access Keys**, **Shutoff
+Locations**, **Capital Projects**, **Insurance** and **Occupants** forms, a
+refused value is shown under its own field. When you are editing, the rest is
+saved and the refused field stays flagged with what you typed, so fix it and
+save again. In the extended sections, boxes with a length limit show a
+character counter. Closing one of these forms after typing asks _"Discard your
+changes?"_ (**Keep editing** / **Discard changes**). The **Files** section's
+caption and description also name a refused value on the field.
+
 **Rooms and event locations.** A facility created during setup is linked to an
 event location, so it appears in the event location picker. Each room you add
 gets its own linked location too. Deleting a room also deletes its linked
@@ -1026,6 +1048,10 @@ Some types and statuses come built in, such as the "Fire Station" type and the
 | Delete a built-in facility status                | "Cannot delete system facility statuses"                                      |
 | Archive a facility that is already archived      | "Facility is already archived"                                                |
 | Restore a facility that is not archived          | "Facility is not archived"                                                    |
+
+Facility Settings' add and edit dialog names a missing or too-long name on the
+field and counts its characters. Switching **Active** on an existing entry is
+saved even when the name beside it is refused.
 
 If the built-in types and statuses are ever missing, The Logbook adds them
 back the next time someone opens Facilities.
@@ -1393,5 +1419,10 @@ have moved, been renamed or work differently.
 - **Duplicate records.** Saving a maintenance record or an operator once
   showed an error even though it was saved. If people retried, delete the
   extra rows.
+- **Archiving a vehicle, or archiving or restoring a facility, showed an
+  error** before 2026-11-19 even though it had worked. If someone saw that
+  error and tried again, the second try reads "already archived" (or "not
+  archived"); the record is in the state you wanted. Check the archived list
+  rather than archiving again.
 - **A required EVOC level** once broke the fleet list. If your department gave
   up on setting one, it works.

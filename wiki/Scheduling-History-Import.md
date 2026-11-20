@@ -342,6 +342,14 @@ Filters: **Need attention** (the default), **All**, **Skipped** and
   the file's value.
 - **Exclude / Include:** leave a row out of the import entirely, or bring it
   back.
+- **Other lines in these issues** _(edit dialog)_: when a row's issue joins it
+  to other lines (an overlap, a duplicate), the edit dialog lists them with
+  **Exclude line N** / **Include line N**. Since 2026-11-20 a line you exclude
+  from here stays in the list while the dialog is open, so you can bring it
+  back. Before, excluding it
+  usually settled the issue that linked the two, so the line vanished from the
+  dialog along with its **Include** button, and you had to find it under
+  **Excluded** instead.
 - **Undo** reverses a _Same shift_ or _Keep separate_ decision.
 - **Rejoin** reverses a _Split apart_.
 
