@@ -24,7 +24,7 @@ from app.schemas.training_submission import (
     TrainingSubmissionResponse,
     sanitize_attachments,
 )
-from app.services import file_storage_service
+from app.services import file_storage_service, member_files
 from app.services.training_submission_service import TrainingSubmissionService
 
 
@@ -593,6 +593,10 @@ class TestDeletingASubmission:
         )
         monkeypatch.setattr(
             training_submissions, "TrainingSubmissionService", lambda db: service
+        )
+        # No other row names the file. The real removal helper still runs.
+        monkeypatch.setattr(
+            member_files, "referenced_elsewhere", AsyncMock(return_value=set())
         )
 
         await training_submissions.delete_submission(

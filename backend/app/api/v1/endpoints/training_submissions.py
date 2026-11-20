@@ -59,6 +59,7 @@ from app.schemas.training_submission import (
     sanitize_attachments,
 )
 from app.services import file_storage_service as file_storage
+from app.services import member_files
 from app.services.file_storage_service import (
     FileRules,
     StorageArea,
@@ -547,11 +548,10 @@ async def delete_submission(
         # can carry PHI, and deleting only the row leaves the file in the
         # uploads volume — and in its backups — indefinitely.
         #
-        # Safe only because a submission is deletable in draft, pending_review
-        # and revision_requested alone — never after approval, the one state
-        # where a TrainingRecord also points at these files. Widen that guard
-        # in the service and this unlink has to go, or an approved member's
-        # evidence vanishes from their training record.
+        # A deletable submission can still share its files: reverse_approval
+        # reopens the submission and voids the record approval copied from
+        # it, and the voided record keeps naming the same certificates. So
+        # the reference check, after the commit, decides what goes.
         submission = await service.get_submission(
             submission_id, current_user.organization_id
         )
@@ -567,8 +567,13 @@ async def delete_submission(
             submission_id, current_user.id, current_user.organization_id
         )
 
-        for path in stored_paths:
-            await file_storage.delete_quietly(path)
+        await member_files.remove_unreferenced_files(
+            db,
+            str(current_user.organization_id),
+            set(stored_paths),
+            subject_id=f"submission {submission_id}",
+            areas=(StorageArea.SELF_REPORTS,),
+        )
 
 
 # ==================== Officer Review ====================
@@ -974,6 +979,15 @@ async def delete_submission_attachment(
     flag_modified(submission, "attachments")
     await db.commit()
 
+    # After the commit, and only if nothing else names it: the same list may
+    # carry the file twice, and a voided record a reversal left behind still
+    # names the certificate it was copied from.
     removed_path = _confined_path(removed, submission.organization_id)
     if removed_path:
-        await file_storage.delete_quietly(removed_path)
+        await member_files.remove_unreferenced_files(
+            db,
+            str(submission.organization_id),
+            {removed_path},
+            subject_id=f"submission {submission_id}",
+            areas=(StorageArea.SELF_REPORTS,),
+        )
