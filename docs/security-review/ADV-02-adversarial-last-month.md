@@ -24,7 +24,7 @@ rotation's own open pull request.
 | ADV2-1  | Session thief | High     | A passkey-only member's session could enroll an authenticator app with no step-up, replace the recovery codes, then pass step-up with TOTP in place of the passkey | Fixed  |
 | ADV2-2  | Session thief | Medium   | A member's own login email changed with no step-up, so a stolen session plus forgot-password set a new password                                                    | Fixed  |
 | ADV2-3  | Officer       | Medium   | A shift-report role reviewer could approve a report they filed, and review drafts or already-released reports by id                                                | Fixed  |
-| ADV2-4  | Officer       | Medium   | One officer could conduct, calibrate and approve the same personnel evaluation                                                                                     | Owner  |
+| ADV2-4  | Officer       | Medium   | One officer could conduct, calibrate and approve the same personnel evaluation                                                                                     | Fixed  |
 | ADV2-5  | Officer       | Low–Med  | The Chief could grant a training-requirement override to themselves                                                                                                | Fixed  |
 | ADV2-6  | Officer       | Low      | `members.manage` could repoint the personal email of a member above its ceiling and collect a retried directory-account password                                   | Fixed  |
 | ADV2-7  | Member        | Low      | Draft events were still reachable through the QR payload, self-check-in, the event folder and the training-session lookup                                          | Fixed  |
@@ -67,19 +67,34 @@ Separately, `main` had two Alembic heads (`4d8e2b6f1c93` on the History branch,
 `c4e81b7a2d95`), so `alembic upgrade head` refused to run. Merge revision
 `e2b7d94c1a63` joins them.
 
+## ADV2-4 fix (2026-11-16)
+
+Owner decisions: refuse the evaluator; a manager may name who takes a step,
+and the named person is the only one who may; any current member may be
+named; one person never signs two approvals on a revision.
+
+- `_signable` refuses the evaluator and anyone who signed another approval on
+  the revision. `complete_calibration` refuses the evaluator. Both honour
+  `evaluation_steps.assignee_id` (migration `a6c3e8d17f42`) in place of the
+  position or `view_all` holders.
+- `PUT /evaluations/{id}/steps/{key}/assignee` takes `evaluations.manage`
+  and step-up. It is audited at `warning` with both names, and emails the new
+  assignee when the step is open. `GET .../assignee-candidates` lists who may
+  be named, by the same rules.
+- The calibration route moved from a `view_all` gate to sign-in, because a
+  named calibrator may hold no `view_all`. The service makes the decision, and
+  the route is in `tests/permissionless_route_baseline.txt` with that reason.
+- Step notices never ask the evaluator to approve or calibrate their own
+  evaluation.
+- Tests: `TestSeparationOfDuties` in `tests/test_evaluation_workflow.py`
+  (three of its tests failed before the fix) and
+  `tests/test_evaluation_step_assignee_migration.py`. For the frontend, the
+  step-assignment cases in `EvaluationDetailPage.test.tsx`.
+
 ## Awaiting an owner decision
 
-- **ADV2-4**: `_signable` excludes only the subject from an approval step, and
-  `complete_calibration` excludes only the subject. A Captain who conducts an
-  evaluation on a template whose approval step is "Captain" can sign it. If
-  they also hold `evaluations.view_all`, they can complete its calibration too.
-  Refusing the evaluator is the obvious fix, but nothing can reassign or skip an
-  approval step. A department with one Captain, or a Chief who is both
-  evaluator and the only `view_all` holder, would then have evaluations that
-  cannot finish. The options:
-  1. Refuse, and accept that those evaluations stall.
-  2. Refuse, and add a manager's reassign-step action.
-  3. Accept the current behaviour.
+- **ADV2-4**: resolved 2026-11-16, owner's option 2 (refuse, and add a
+  manager's reassign-step action). See "ADV2-4 fix" below.
 - **ADV2-8**: `PATCH /shifts/{id}/closeout/attendance` lets the shift officer set
   any member's times, their own included. Pre-shift work and event attendance
   both refuse the self case. A one-person shift has no one else to record it.
