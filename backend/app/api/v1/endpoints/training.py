@@ -113,17 +113,14 @@ from app.services.training_compliance import (
     UNGRADED_STATUSES,
     ComplianceGrading,
     _load_compliance_config,
-    classify_standing,
     evaluate_member_requirement,
     evaluate_member_requirement_detail,
-    get_org_include_current_month,
     get_requirement_date_window,
     load_credited_shift_dates,
     load_evaluation_credits,
     load_graded_records,
     load_held_sessions,
     member_join_date,
-    requirement_applies_to_user,
     tally_standing,
 )
 from app.services.training_course_links import (
@@ -4098,7 +4095,14 @@ async def get_member_period_status(
         }
 
     today = await resolve_org_today(db, org_id)
-    org_include_current = await get_org_include_current_month(db, str(org_id))
+    # One config load for the whole roster: which requirements grade each
+    # member, the thresholds and the current-month cut-off, as the matrix
+    # resolves them (owner decision 2026-11-20, CLAUDE.md pitfall 29).
+    # get_org_include_current_month() would repeat the same query.
+    grading = ComplianceGrading.from_config(
+        await _load_compliance_config(db, str(org_id))
+    )
+    org_include_current = grading.include_current_month
 
     # The records the standing grades from, plus the selected period's
     # completions the activity columns count — not every record on file.
@@ -4138,13 +4142,6 @@ async def get_member_period_status(
 
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
-    # Compliance thresholds, read as the matrix reads them. `or` here turned a
-    # configured 0% threshold into the 100% default.
-    config = await _load_compliance_config(db, str(org_id))
-    compliant_threshold = config.compliant_threshold if config else 100.0
-    at_risk_threshold = config.at_risk_threshold if config else 75.0
-    threshold_type = (config.threshold_type if config else None) or "percentage"
-
     rows: list[MemberPeriodStatusRow] = []
     for member in members:
         member_records = records_by_user.get(member.id, [])
@@ -4183,9 +4180,9 @@ async def get_member_period_status(
             )
             continue
 
-        applicable = [
-            req for req in requirements if requirement_applies_to_user(req, member)
-        ]
+        # The member's profile narrows the set and may override the
+        # thresholds; applicability by type, rank and join date follows.
+        member_grading = grading.for_member(member, list(requirements))
         join_date = member_join_date(member)
         met, total = tally_standing(
             _evaluate_member_requirement(
@@ -4199,11 +4196,9 @@ async def get_member_period_status(
                 held_sessions=held_sessions,
                 evaluation_credits=evaluations_by_user.get(str(member.id), {}),
             )[0]
-            for req in applicable
+            for req in member_grading.requirements
         )
-        standing, _ = classify_standing(
-            met, total, compliant_threshold, at_risk_threshold, threshold_type
-        )
+        standing, _ = grading.classify(member_grading, met, total)
         status_color = _PERIOD_STATUS_COLOR[standing]
 
         rows.append(
