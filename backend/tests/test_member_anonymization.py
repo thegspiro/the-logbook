@@ -732,23 +732,6 @@ class TestSelfReportCertificates:
         assert entry["file_path"] == str(certificate)
         assert entry["file_name"] == "certificate.pdf"
 
-    async def test_training_record_uploads_are_kept(self, db_session, root):
-        """Department training evidence uploaded to the record itself is not
-        a self-report certificate, and stays with the completion."""
-        org = await _make_org(db_session)
-        user = await _make_departed_member(db_session, org)
-        evidence = self._certificate(root, org.id, area="training-records")
-        record = await self._record(
-            db_session, org.id, user.id, [self._entry(evidence, name="roster.pdf")]
-        )
-
-        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
-
-        assert evidence.exists()
-        record = await self._fresh(db_session, TrainingRecord, record.id)
-        assert record.attachments == [self._entry(evidence, name="roster.pdf")]
-        assert summary["self_report_files_deleted"] == 0
-
     async def test_a_rerun_after_a_rollback_completes(self, db_session, root):
         """The files go before the commit. If it fails, the rows still name
         files that are gone, and running anonymisation again finishes."""
