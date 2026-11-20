@@ -305,8 +305,8 @@ const MemberTrainingStatusPage: React.FC = () => {
           description="No active members were found for this period."
         />
       ) : (
-        <div className="border-theme-surface-border overflow-x-auto rounded-lg border">
-          <table className="min-w-full text-sm">
+        <div className="border-theme-surface-border rwd-table-container overflow-x-auto rounded-lg border">
+          <table className="rwd-table rwd-table-wide min-w-full text-sm">
             <thead className="bg-theme-surface-secondary">
               <tr>
                 <th scope="col" className="px-4 py-2 text-left">
@@ -361,13 +361,19 @@ const MemberTrainingStatusPage: React.FC = () => {
                 const meta = STATUS_META[r.compliance_status];
                 return (
                   <tr key={r.user_id} className="border-theme-surface-border border-t">
-                    <td className="text-theme-text-primary px-4 py-2 font-medium">{r.member_name}</td>
-                    <td className="text-theme-text-secondary px-4 py-2">{r.trainings_completed}</td>
-                    <td className="text-theme-text-secondary px-4 py-2">{formatHours(r.hours_completed)}</td>
-                    <td className="text-theme-text-muted px-4 py-2">
+                    <td className="rwd-table-lead text-theme-text-primary px-4 py-2 font-medium" data-label="Member">
+                      {r.member_name}
+                    </td>
+                    <td className="text-theme-text-secondary px-4 py-2" data-label="Trainings">
+                      {r.trainings_completed}
+                    </td>
+                    <td className="text-theme-text-secondary px-4 py-2" data-label="Hours">
+                      {formatHours(r.hours_completed)}
+                    </td>
+                    <td className="text-theme-text-muted px-4 py-2" data-label="Last activity">
                       {r.last_activity ? formatDate(r.last_activity, tz) : '—'}
                     </td>
-                    <td className="px-4 py-2">
+                    <td className="px-4 py-2" data-label="Status">
                       <div className="flex items-center gap-2">
                         <span
                           className={`inline-block rounded-full border px-2 py-0.5 text-xs font-medium ${meta.cls}`}

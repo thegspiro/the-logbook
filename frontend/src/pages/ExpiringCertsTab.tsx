@@ -116,8 +116,8 @@ const ExpiringCertsTab: React.FC = () => {
           <p>No certifications expiring within {daysWindow} days</p>
         </div>
       ) : (
-        <div className="card-secondary overflow-hidden overflow-x-auto">
-          <table className="min-w-full text-sm">
+        <div className="card-secondary rwd-table-container overflow-hidden overflow-x-auto">
+          <table className="rwd-table rwd-table-narrow min-w-full text-sm">
             <thead>
               <tr className="border-theme-surface-border border-b">
                 <th scope="col" className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium uppercase">
@@ -137,10 +137,16 @@ const ExpiringCertsTab: React.FC = () => {
             <tbody>
               {certs.map((cert, idx) => (
                 <tr key={idx} className="border-theme-surface-border hover:bg-theme-surface-hover border-b">
-                  <td className="text-theme-text-primary px-4 py-3 font-medium">{cert.member_name}</td>
-                  <td className="text-theme-text-secondary px-4 py-3">{cert.requirement_name}</td>
-                  <td className="text-theme-text-secondary px-4 py-3">{formatDate(cert.expiry_date, tz)}</td>
-                  <td className="px-4 py-3">
+                  <td className="rwd-table-lead text-theme-text-primary px-4 py-3 font-medium" data-label="Member">
+                    {cert.member_name}
+                  </td>
+                  <td className="text-theme-text-secondary px-4 py-3" data-label="Certification">
+                    {cert.requirement_name}
+                  </td>
+                  <td className="text-theme-text-secondary px-4 py-3" data-label="Expiry Date">
+                    {formatDate(cert.expiry_date, tz)}
+                  </td>
+                  <td className="px-4 py-3" data-label="Status">
                     <span
                       className={`inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-xs font-medium ${getUrgencyClass(cert.days_until_expiry)}`}
                     >

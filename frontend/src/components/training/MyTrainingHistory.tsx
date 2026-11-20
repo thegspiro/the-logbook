@@ -79,14 +79,24 @@ const HistoryRow: React.FC<{ record: MyTrainingHistoryRecord; showHours: boolean
   const tz = useTimezone();
   return (
     <tr className="text-theme-text-secondary">
-      <td className="px-4 py-2">{record.course_name}</td>
-      <td className="px-4 py-2 whitespace-nowrap">
+      <td className="rwd-table-lead px-4 py-2" data-label="Course">
+        {record.course_name}
+      </td>
+      <td className="px-4 py-2 whitespace-nowrap" data-label="Type">
         {TRAINING_TYPE_LABELS[record.training_type] ?? record.training_type.replace('_', ' ')}
       </td>
-      <td className="px-4 py-2 whitespace-nowrap">{formatDate(record.completion_date, tz)}</td>
-      {showHours && <td className="px-4 py-2 whitespace-nowrap">{formatHours(record.hours_completed)}</td>}
-      <td className="px-4 py-2 whitespace-nowrap">{record.source_label}</td>
-      <td className="px-4 py-2">
+      <td className="px-4 py-2 whitespace-nowrap" data-label="Date">
+        {formatDate(record.completion_date, tz)}
+      </td>
+      {showHours && (
+        <td className="px-4 py-2 whitespace-nowrap" data-label="Hours">
+          {formatHours(record.hours_completed)}
+        </td>
+      )}
+      <td className="px-4 py-2" data-label="Source">
+        {record.source_label}
+      </td>
+      <td className="px-4 py-2" data-label="Status">
         {record.voided_at ? (
           <div className="flex flex-col gap-1">
             <span className="w-fit rounded-sm bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
@@ -172,8 +182,8 @@ const YearGroup: React.FC<{
             </div>
           )}
           {rows && rows.items.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+            <div className="rwd-table-container overflow-x-auto">
+              <table className="rwd-table rwd-table-wide w-full text-left text-sm">
                 <thead className="text-theme-text-muted bg-theme-surface-secondary text-xs uppercase">
                   <tr>
                     <th scope="col" className="px-4 py-2">
