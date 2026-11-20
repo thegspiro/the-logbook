@@ -185,3 +185,96 @@ describe('SuggestionBoxFormModal', () => {
     });
   });
 });
+
+describe('SuggestionBoxFormModal — a question the server would refuse is named on it (batch 24)', () => {
+  beforeEach(() => {
+    mockCreateBox.mockReset();
+    mockUpdateBox.mockReset();
+    mockUpdateBox.mockResolvedValue(existing);
+  });
+
+  const renderNew = () =>
+    renderWithRouter(<SuggestionBoxFormModal box={null} options={options} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+  it('names a question with no wording on the question and focuses it, sending nothing', async () => {
+    renderNew();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/^Name/), 'Station issues');
+    await user.click(
+      within(screen.getByRole('group', { name: 'Reviewer positions' })).getByRole('checkbox', { name: 'Chief' })
+    );
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+    await user.click(screen.getByRole('button', { name: 'Use Yes / No' }));
+
+    await user.click(screen.getByRole('button', { name: 'Save box' }));
+
+    const wording = screen.getByLabelText(/^Question(?!s)/);
+    expect(wording).toHaveAccessibleDescription('Write the question members will be asked.');
+    expect(wording).toHaveAttribute('aria-invalid', 'true');
+    expect(wording).toHaveFocus();
+    expect(mockCreateBox).not.toHaveBeenCalled();
+
+    await user.type(wording, 'Is it urgent?');
+    expect(wording).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('names a choice question with no options and focuses Add option', async () => {
+    renderNew();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/^Name/), 'Station issues');
+    await user.click(
+      within(screen.getByRole('group', { name: 'Reviewer positions' })).getByRole('checkbox', { name: 'Chief' })
+    );
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+    await user.type(screen.getByLabelText(/^Question(?!s)/), 'Which shift?');
+
+    await user.click(screen.getByRole('button', { name: 'Save box' }));
+
+    const add = screen.getByRole('button', { name: 'Add option' });
+    expect(add).toHaveFocus();
+    expect(add).toHaveAccessibleDescription('Add at least one option to choose from.');
+    expect(mockCreateBox).not.toHaveBeenCalled();
+  });
+
+  it('saves the rest of an edit with the stored questions, and keeps the question flagged', async () => {
+    renderWithRouter(<SuggestionBoxFormModal box={existing} options={options} onClose={vi.fn()} onSaved={vi.fn()} />);
+    const user = userEvent.setup();
+    await user.clear(screen.getByLabelText(/^Name/));
+    await user.type(screen.getByLabelText(/^Name/), 'Ideas and issues');
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+    await user.click(screen.getByRole('button', { name: 'Use Yes / No' }));
+
+    await user.click(screen.getByRole('button', { name: 'Save box' }));
+
+    await waitFor(() => expect(mockUpdateBox).toHaveBeenCalledTimes(1));
+    expect(mockUpdateBox).toHaveBeenCalledWith(
+      'b1',
+      expect.objectContaining({ name: 'Ideas and issues', intakeQuestions: [] })
+    );
+    expect(screen.getByLabelText(/^Question(?!s)/)).toHaveAccessibleDescription(
+      'Write the question members will be asked.'
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Saved, except the field flagged below');
+  });
+
+  it('shows a refusal of the questions by the server on the questions section', async () => {
+    mockCreateBox.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ loc: ['body', 'intakeQuestions', 0, 'conditionValue'], msg: 'Value error, too long' }] },
+      },
+    });
+    renderNew();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/^Name/), 'Station issues');
+    await user.click(
+      within(screen.getByRole('group', { name: 'Reviewer positions' })).getByRole('checkbox', { name: 'Chief' })
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Save box' }));
+
+    const section = await screen.findByRole('region', { name: 'Questions' });
+    await waitFor(() => expect(section).toHaveAccessibleDescription('Value error, too long.'));
+    expect(section).toHaveFocus();
+  });
+});
