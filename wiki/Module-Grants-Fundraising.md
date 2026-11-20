@@ -40,6 +40,11 @@ organization as well as on the permissions below.
   due dates, status and assignee. A standard set is generated automatically the
   first time an application becomes **Awarded** (see
   [Auto-generated compliance tasks](#auto-generated-compliance-tasks)).
+- **Application assignee** — the **Assigned To** picker lists current members
+  only (active or probationary) since 2026-11-19 (#4380); create and update
+  refuse a newly chosen former member with a 400 "Only current members can be
+  chosen as the assignee" (#4432). An application already assigned to someone
+  who has left keeps them, shown "(former member)".
 - **Notes** — a per-application timeline of typed notes; status changes and
   compliance-task generation add notes automatically.
 - **Fundraising campaigns** — goal, running total, dates, type, and an optional

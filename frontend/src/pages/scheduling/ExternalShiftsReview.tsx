@@ -159,7 +159,7 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
           <p>{error}</p>
         </div>
       ) : entries.length === 0 ? (
-        <div className="card-secondary py-6 text-center">
+        <div className="card-secondary px-4 py-6 text-center">
           <p className="text-theme-text-muted text-sm">
             {statusFilter === 'pending'
               ? 'Nothing is waiting for approval.'

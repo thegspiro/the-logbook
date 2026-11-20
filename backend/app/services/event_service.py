@@ -2020,9 +2020,14 @@ class EventService:
         event.postponement_reason = reason
         # Deep copy before reassigning (CLAUDE.md pitfall #12). Only the
         # markers that describe the old time go: series_end_reminder_sent is
-        # about the series, and attendance_finalized cannot be set here.
+        # about the series, and attendance_finalized cannot be set here. A
+        # headcount reminder was about the run that did not happen.
         custom = copy.deepcopy(event.custom_fields or {})
-        for marker in ("reminders_sent", "validation_notification_sent"):
+        for marker in (
+            "reminders_sent",
+            "validation_notification_sent",
+            "guest_headcount_reminder_sent",
+        ):
             custom.pop(marker, None)
         event.custom_fields = custom
         if postponed_by:

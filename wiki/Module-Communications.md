@@ -100,6 +100,15 @@ that suggestion only.
 - **Emails carry a link, never the content.** Anonymous submitters are never
   emailed.
 - **Not gated by the Communications module switch**, which defaults off.
+- **Missing answers are named on the field** _(2026-11-20, forms batch 24)_.
+  The member's form is `noValidate`; Continue and Submit are never disabled.
+  An unanswered required question, a missing title or details is named on its
+  field. The submit endpoint answers a refused answer with a 400 string naming
+  the question's label in quotes, and the form returns to the questions step
+  with the reason on that question. The box dialog names a question with no
+  wording, a choice question with no options or an option with no label before
+  sending, and maps a 422 on `intakeQuestions.N.key` onto the Questions
+  section.
 
 **Added 2026-09-24 → 09-30:**
 
@@ -192,27 +201,29 @@ See the member/officer how-to in the
 
 ## Email Templates (2026-08-07)
 
+**Saving with a refused field** _(2026-11-20, forms batch 24)_. The editor's
+**Save** is no longer greyed out while a CC or BCC list holds a bad address.
+A refused subject, body or copy list is named on its field and left out of the
+update, so the rest saves; what was typed is put back after the draft
+re-seeds from the saved template, and the field stays flagged until fixed.
+
 ### Catalogue Categories
 
 The template catalogue had grown past three dozen entries rendered as a single
 flat scroll. Templates are now grouped into collapsible categories with
-per-category counts: **Members & Accounts, Events & Scheduling, Training,
-Elections, Inventory, Department Store, Other**.
+per-category counts. _(2026-11-14)_ The categories are now **Members &
+Accounts, Prospective Members, Events & Scheduling, Training & Certifications,
+Meetings & Minutes, Elections & Voting, Inventory & Property, Performance
+Evaluations, Suggestion Boxes, Department Store** and **Other**. Within a
+category, templates follow the order `TEMPLATE_CATEGORIES` declares, then
+name; they used to follow the `template_type` ENUM's declaration order. A
+drift guard in `TemplateList.test.tsx` fails when any type but `custom` lands
+in **Other**.
 
-_(2026-11-14)_ The categories are now **Members & Accounts, Prospective
-Members, Events & Scheduling, Training & Certifications, Meetings & Minutes,
-Elections & Voting, Inventory & Property, Performance Evaluations, Suggestion
-Boxes, Department Store, Other**, and within a category templates follow the
-order the category lists them, then name (they used to follow the database
-ENUM's declaration order). Ten notices that were built in code became
-templates (migration `c4e81b7a2d95`): **Nominations Open**, **You've Been
-Nominated**, **Nomination Accepted for You**, **Proxy Authorized**,
-**Pre-Meeting Package**, **Minutes Ready for Review**, **Action Items
-Assigned**, **Action Item Reminder (Minutes)**, **Open Action Items Digest**
-and **Action Item Reminder (Meetings)**. The minutes and pre-meeting types
-reuse the `template_type` they already logged under, so the send log is
-continuous. The three election-manager delivery alarms stay in code because
-they report mail failing. See
+Ten notices that were built in code became templates (migration
+`c4e81b7a2d95`); see
+[Election and minutes notices are templates](#election-and-minutes-notices-are-templates-2026-11-14)
+below, and
 [guide 08, Email Templates](https://github.com/thegspiro/the-logbook/blob/main/docs/training/08-admin-reports.md#email-templates).
 
 Two behaviours that keep the grouping from getting in the way:
@@ -221,6 +232,54 @@ Two behaviours that keep the grouping from getting in the way:
   collapsed header.
 - The category holding the **selected** template is force-expanded, so the
   selection cannot scroll out of view.
+
+### Template copies on every send, and CC by position _(2026-11-13)_
+
+Until #4248 a template's **Default CC** and **Default BCC** were used only by
+scheduled emails; every immediate send dropped them (defect D1).
+
+- `send_email` now adds the stored template's CC, CC positions and BCC to
+  every send that names a template type. Test sends and the scheduled-email
+  task pass `apply_template_copies=False`; the scheduled task merges its own
+  copies.
+- **Never copied:** the credential templates (`ALWAYS_SENT_TYPES`: welcome,
+  password reset, IT password, ballot, applicant status link, follow-up
+  form, contact changed), `custom`, the attendance-waiver types (which send
+  their own copies without buttons, category or the decider's note) and the
+  pre-meeting package. The editor says so on a credential template: _"This
+  email carries a password, a sign-in or reset link, a ballot link or an
+  applicant's private link, so it is never copied to anyone."_
+- **CC positions** (`email_templates.default_cc_position_ids`): a checkbox
+  list under **Default CC / BCC Recipients**. Whoever holds a chosen position
+  when an email is sent is CC'd, limited to current members. Saving checks
+  each position is in the department, and is audited.
+- Saved CC addresses that never fired before now do; `docs/UPGRADING.md` asks
+  operators to review them.
+
+### Election and minutes notices are templates _(2026-11-14)_
+
+Ten notices built in code became templates a department can reword, preview,
+test-send, CC and switch off (#4295):
+
+| Category           | Template types                                                                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Elections & Voting | `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package` |
+| Meetings & Minutes | `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`     |
+
+- Default wording matches the old built-in emails; the minutes types and
+  `pre_meeting_package` keep the `template_type` they already logged under.
+- The three election-manager delivery alarms (ballots, nominations
+  announcement, automatic reminder not all sent) stay in code, so switching a
+  template off cannot hide a mail failure.
+- A switched-off **Pre-meeting package** refuses **Send** before the PDF is
+  built. A switched-off reminder leaves its items unmarked.
+- The minutes senders now pass the organization, so they use the
+  department's mail settings, logo and footer.
+
+The same week added the training-session waiver, preceptor-link
+(`shift_evaluation_preceptor_link`) and leave templates under **Training &
+Certifications**, and the business-meeting waiver templates under **Meetings &
+Minutes** (#4248, #4264, #4303).
 
 ### Officer Signature Variables
 
@@ -233,6 +292,12 @@ Secretary, Assistant Secretary, Treasurer, Safety Officer, Training Officer,
 Quartermaster, Compliance Officer, EMS Supply Officer — exposes
 `{{<office>_name}}`, `{{<office>_title}}`, `{{<office>_email}}` and
 `{{<office>_phone}}`.
+
+**Former members** _(2026-11-19, #4380)_: the Officers panel's office-holder
+picker, a message's **Specific members** list and the template preview's member
+picker offer current members only (active or probationary). A holder or
+recipient already saved who has since left stays listed, marked "(former
+member)".
 
 **Resolution order** for a holder: an admin override on the office → the member
 the office is linked to (so the values track that member's profile) →

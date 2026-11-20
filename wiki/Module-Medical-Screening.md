@@ -69,16 +69,16 @@ Once it is on, the page is at **Administration → Members → Medical Screening
 
 ## HIPAA-relevant behaviour
 
-| Safeguard                  | What the module does                                                                                                                                                                                                                                                                                                                             |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Encryption at rest**     | Provider name, result summary, structured results and notes are AES-256-GCM encrypted. Dates, status and the links to the member are not — they are what the compliance views sort and filter on, and the sensitive content is the result, not the fact a screening is on file. See [Security-Encryption](Security-Encryption#what-is-encrypted) |
-| **Reads are audited**      | Opening the records list, a single record, the compliance roster, one person's compliance or the expiring list writes an audit event naming who looked and whose records came back (one event per request, not per row), committed before the response is sent. The member's own dashboard counts are not audited                                |
-| **Writes are audited**     | Creating, updating and deleting requirements and records are audit events; deletes are logged at warning severity                                                                                                                                                                                                                                |
-| **No caching**             | `/medical-screening/` is excluded from the browser's API cache, and the service worker never caches `/api/` responses                                                                                                                                                                                                                            |
-| **Department isolation**   | A record cannot be filed against a member, applicant or requirement from another department (refused with "Invalid member", "Invalid prospect" or "Invalid screening requirement"); a compliance lookup for an id outside the department is a 404                                                                                                |
-| **Right of access**        | A member's own data export (`GET /api/v1/users/me/data-export`) includes their screening records                                                                                                                                                                                                                                                 |
-| **Anonymisation**          | Anonymising a member or an applicant scrubs the medical content (results, notes, provider) from their screening records                                                                                                                                                                                                                          |
-| **Assistant (MCP) access** | Off unless the department turns on **Share medical screening status** and the key holder has `medical_screening.view`; even then it returns compliant-or-not and lapse dates, never a result, provider, note or status. See [Integration-Claude-MCP](Integration-Claude-MCP)                                                                     |
+| Safeguard                  | What the module does                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Encryption at rest**     | Provider name, result summary, structured results and notes are AES-256-GCM encrypted, and so are each record's status _(2026-11-05)_, screening type and link to its requirement _(2026-11-10)_, since which screening a member had and how it went are PHI on their own. Dates and the link to the member are not. See [Security-Encryption](Security-Encryption#what-is-encrypted) |
+| **Reads are audited**      | Opening the records list, a single record, the compliance roster, one person's compliance or the expiring list writes an audit event naming who looked and whose records came back (one event per request, not per row), committed before the response is sent. The member's own dashboard counts are not audited                                                                     |
+| **Writes are audited**     | Creating, updating and deleting requirements and records are audit events; deletes are logged at warning severity                                                                                                                                                                                                                                                                     |
+| **No caching**             | `/medical-screening/` is excluded from the browser's API cache, and the service worker never caches `/api/` responses                                                                                                                                                                                                                                                                 |
+| **Department isolation**   | A record cannot be filed against a member, applicant or requirement from another department (refused with "Invalid member", "Invalid prospect" or "Invalid screening requirement"); a compliance lookup for an id outside the department is a 404                                                                                                                                     |
+| **Right of access**        | A member's own data export (`GET /api/v1/users/me/data-export`) includes their screening records                                                                                                                                                                                                                                                                                      |
+| **Anonymisation**          | Anonymising a member or an applicant scrubs the medical content (results, notes, provider) from their screening records                                                                                                                                                                                                                                                               |
+| **Assistant (MCP) access** | Off unless the department turns on **Share medical screening status** and the key holder has `medical_screening.view`; even then it returns compliant-or-not and lapse dates, never a result, provider, note or status. See [Integration-Claude-MCP](Integration-Claude-MCP)                                                                                                          |
 
 The department-wide picture — access control, audit chain, BAAs — is on
 [Security-HIPAA](Security-HIPAA) and [Security-Audit-Logging](Security-Audit-Logging).
@@ -167,9 +167,15 @@ requirement rather than entered.
 
 ## Rules and gotchas
 
-- **There is no expiry email.** Nothing in the scheduler sends screening
-  reminders; the expiring list, the banner, the admin hub and the member's
-  dashboard card are how lapses surface.
+- **Members are emailed before a screening falls due** _(2026-11-10)_: 90,
+  60, 30 and 7 days before, the most urgent tier only, once each. The email
+  names the requirement and due date; the subject names neither. No text, no
+  bell entry. Current members only, and only for requirements they are graded
+  on. Switched off for the department by disabling the **Medical Screening
+  Expiry** notification rule, and by a member through **Training and
+  certification reminders** in their email choices.
+- **A new requirement starts recurring every 12 months** _(2026-11-10)_, with
+  **One-time requirement (not recurring)** unticked.
 - **Medical screening does not feed the Training/[Compliance](Module-Compliance)
   module's figures.** It is graded on its own.
 - **When an applicant becomes a member, their screening records stay filed
@@ -178,8 +184,9 @@ requirement rather than entered.
   going forward against the new member.
 - **A record with neither an expiration date nor a frequency to derive one
   never lapses.**
-- **The Add Requirement / Add Record buttons show for view-only holders**, but
-  the server refuses the save without `medical_screening.manage`.
+- **Add, edit and delete are offered only with `medical_screening.manage`.** A
+  `medical_screening.view` holder reads the tabs and the roster; the server
+  refuses every write without `.manage` either way.
 
 ## For developers
 
@@ -191,7 +198,10 @@ requirement rather than entered.
   snake_case.
 - **Models:** `app/models/medical_screening.py` — `screening_requirements`,
   `screening_records` (exactly one of `user_id` / `prospect_id` on create;
-  `requirement_id` is `SET NULL`; `self_recorded` flag).
+  `requirement_id` is an encrypted reference with no foreign key, cleared in
+  code when its requirement is deleted; `self_recorded` flag).
+  `screening_reminder_sends` keys the expiry reminders
+  (`app/services/screening_reminder_service.py`).
 - **Grading:** `_grade` in `app/services/medical_screening_service.py` is the
   one definition of compliant used by the roster, per-person summary, dashboard
   counts and expiring list.
@@ -200,7 +210,9 @@ requirement rather than entered.
 - **Migrations:** `20260313_0101` creates the tables; `20260707_0001`
   lowercases the enums; `20260810_0001` encrypts the PHI columns (legacy
   plaintext stays readable — `backend/scripts/reencrypt_to_aesgcm.py`
-  re-encrypts it); `9c1445489666` adds `self_recorded`.
+  re-encrypts it); `9c1445489666` adds `self_recorded`; `80fa2c83bf9d`
+  encrypts the status; `cf93f3b65274` adds the reminder table and
+  `ac1687769b62` encrypts the type and requirement link.
 
 ## Related
 

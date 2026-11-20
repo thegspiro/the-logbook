@@ -13,6 +13,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import type { ScreeningRecord } from '../types';
+import { useAuthStore } from '../../../stores/authStore';
 
 const listRequirements = vi.fn();
 const listRecords = vi.fn();
@@ -42,8 +43,32 @@ const record = (overrides: Partial<ScreeningRecord>): ScreeningRecord => ({
   ...overrides,
 });
 
+const signInWith = (permissions: string[]): void =>
+  useAuthStore.setState({
+    user: {
+      id: 'me',
+      username: 'officer',
+      email: 'officer@example.com',
+      organization_id: 'org-1',
+      timezone: 'America/New_York',
+      roles: [],
+      positions: [],
+      rank: null,
+      membership_type: 'active',
+      permissions,
+      is_active: true,
+      email_verified: true,
+      mfa_enabled: false,
+      password_expired: false,
+      must_change_password: false,
+      bottom_nav_slots: null,
+    },
+  });
+
 describe('MedicalScreeningPage — deleting a record', () => {
   beforeEach(() => {
+    // Deleting is a manager's action; the page offers it to no one else (MS2-11).
+    signInWith(['medical_screening.view', 'medical_screening.manage']);
     listRequirements.mockReset();
     listRecords.mockReset();
     getExpiringScreenings.mockReset();

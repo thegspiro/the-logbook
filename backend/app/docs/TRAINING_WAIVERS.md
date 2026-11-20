@@ -655,7 +655,9 @@ waivers in the **Training Admin > Dashboard > Training Waivers** tab.
 
 **Q: What is the compliance summary card on member profiles?**
 
-The profile card shows a green/yellow/red compliance indicator based on
-requirements met, certification expirations, and training hours. Red means
-non-compliant (expired certs or <50% requirements met), yellow means at risk
-(expiring certs or incomplete requirements), and green means fully compliant.
+The profile card shows the member's Compliance Matrix standing as a
+green/yellow/red indicator: green compliant, yellow at risk, red
+non-compliant, against the member's compliance profile thresholds or else the
+department's (2026-11-20). Waivers adjust it the same way they adjust the
+matrix. Certificate expiry counts are shown for information and lower the
+standing only through a requirement that grades the certificate.

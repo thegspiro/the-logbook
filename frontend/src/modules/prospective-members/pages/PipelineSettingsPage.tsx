@@ -466,7 +466,7 @@ export const PipelineSettingsPage: React.FC = () => {
               <span className="sr-only">Loading pipeline...</span>
             </div>
           ) : !currentPipeline ? (
-            <div className="card bg-theme-input-bg border-dashed py-20 text-center">
+            <div className="card bg-theme-input-bg border-dashed px-4 py-20 text-center">
               <Settings className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
               <h3 className="text-theme-text-primary mb-2 text-lg font-medium">
                 {visiblePipelines.length === 0 ? 'Create your first pipeline' : 'Select a pipeline'}

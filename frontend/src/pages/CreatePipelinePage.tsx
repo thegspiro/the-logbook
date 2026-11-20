@@ -640,7 +640,7 @@ const StepPhases: React.FC<{
     </InfoCallout>
 
     {phases.length === 0 ? (
-      <div className="card-secondary border-dashed py-12 text-center">
+      <div className="card-secondary border-dashed px-4 py-12 text-center">
         <Layers className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
         <p className="text-theme-text-muted mb-2">No phases defined yet</p>
         <p className="text-theme-text-muted mb-4 text-sm">Add phases to structure your training pipeline</p>
@@ -817,7 +817,7 @@ const StepRequirements: React.FC<{
     )}
 
     {groups.length === 0 ? (
-      <div className="card-secondary border-dashed py-12 text-center">
+      <div className="card-secondary border-dashed px-4 py-12 text-center">
         <ListChecks className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
         <p className="text-theme-text-muted">Add phases first before defining requirements.</p>
       </div>
@@ -1227,7 +1227,7 @@ const StepMilestones: React.FC<{
     )}
 
     {groups.length === 0 ? (
-      <div className="card-secondary border-dashed py-12 text-center">
+      <div className="card-secondary border-dashed px-4 py-12 text-center">
         <Flag className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
         <p className="text-theme-text-muted">Add phases first before defining milestones.</p>
       </div>

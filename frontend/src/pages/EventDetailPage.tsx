@@ -85,6 +85,7 @@ import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessi
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
 import EventGuestsCard from '../components/event-detail/EventGuestsCard';
 import EventApparatusCrewCard from '../components/event-detail/EventApparatusCrewCard';
+import EventGuestHeadcountCard from '../components/event-detail/EventGuestHeadcountCard';
 import { GuestCheckInQRCard } from '../components/events/GuestCheckInQRCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
@@ -125,6 +126,7 @@ const HIDDEN_CUSTOM_FIELD_KEYS = new Set([
   'reminders_sent',
   'validation_notification_sent',
   'series_end_reminder_sent',
+  'guest_headcount_reminder_sent',
   // Legacy twin of attendance_finalized_at, kept for the reminder task. The
   // lock is shown as a banner, not as a details row reading "true".
   'attendance_finalized',
@@ -1822,6 +1824,18 @@ export const EventDetailPage: React.FC = () => {
                 take or assign a seat. */}
             {(checkPermission('apparatus_events.signup') || checkPermission('apparatus_events.manage')) && (
               <EventApparatusCrewCard eventId={event.id} timezone={tz} />
+            )}
+
+            {/* The headcount for an outreach event nobody signed in at.
+                Merged rather than replaced: the save answers with a plain
+                event, which lacks the detail-only fields this page shows. */}
+            {event.can_record_guest_headcount && (
+              <EventGuestHeadcountCard
+                event={event}
+                onSaved={(updated) =>
+                  setEvent((prev) => (prev ? { ...prev, guest_headcount: updated.guest_headcount ?? null } : prev))
+                }
+              />
             )}
 
             {/* Guests are listed apart from member attendance and never

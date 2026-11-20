@@ -15,6 +15,7 @@ Pins what was agreed with the department:
 """
 
 from datetime import date, datetime, time, timezone
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -37,9 +38,18 @@ from app.services.historical_import_service import (
 )
 from app.services.historical_staffing_commit import HistoricalStaffingCommitService
 from app.services.historical_staffing_service import HistoricalStaffingService
+from tests.clock_support import reread_each_test
 from tests.test_historical_import import CSV, _add_user, _uid, _world
 
-NEXT_YEAR = date.today().year + 1
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    next_year = date.today().year + 1
+    return {"NEXT_YEAR": next_year}
+
+
+(NEXT_YEAR,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 SEATS_CSV = "\n".join(
     [

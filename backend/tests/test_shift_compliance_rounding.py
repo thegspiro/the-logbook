@@ -34,7 +34,15 @@ class _Result:
 
 
 @pytest.mark.asyncio
-async def test_hours_compliance_uses_raw_minutes_before_display_rounding():
+async def test_hours_compliance_uses_raw_minutes_before_display_rounding(
+    monkeypatch,
+):
+    # No compliance configuration: the department defaults grade, and no
+    # profile narrows the requirement.
+    monkeypatch.setattr(
+        "app.services.scheduling_service._load_compliance_config",
+        AsyncMock(return_value=None),
+    )
     user_id = str(uuid4())
     requirement = SimpleNamespace(
         id=str(uuid4()),
@@ -53,6 +61,7 @@ async def test_hours_compliance_uses_raw_minutes_before_display_rounding():
         full_name="Short Member",
         rank=None,
         membership_type="active",
+        positions=[],
     )
     attendance = SimpleNamespace(user_id=user_id, shift_count=1, total_minutes=53)
     db = SimpleNamespace(
@@ -60,7 +69,6 @@ async def test_hours_compliance_uses_raw_minutes_before_display_rounding():
             side_effect=[
                 _Result(scalar_rows=[requirement]),
                 _Result(scalar_rows=[user]),
-                _Result(rows=[]),
                 _Result(rows=[attendance]),
                 # approved pre-shift work: none
                 _Result(rows=[]),

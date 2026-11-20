@@ -3,7 +3,7 @@
 **Prefix:** `SCH` · **Iteration:** 15 · **Reviewed:** 2026-08-26 (pass 1),
 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-15 (pass 8), 2026-10-19
 (pass 9), 2026-10-23 (pass 10), 2026-10-26 (pass 11), 2026-10-29 (pass 12),
-2026-11-02 (pass 13), 2026-11-08 (pass 14) ·
+2026-11-02 (pass 13), 2026-11-08 (pass 14), 2026-11-20 (pass 15) ·
 **PR:**
 [#1846](https://github.com/thegspiro/the-logbook/pull/1846) (pass 1),
 [#2628](https://github.com/thegspiro/the-logbook/pull/2628) (pass 6),
@@ -26,53 +26,187 @@ pass 13 (0 fixed, 0 new findings; real delta — the Shift Evaluations feature's
 own close-out gate plus an unbounded-pattern-generation guard),
 pass 14 (1 fixed — SCH-19 closed — 1 new finding, SCH-20, LOW/accepted; real
 delta — the requester's-supervisor time-off approval path and an officer
-seat-eligibility override, both owner decisions of 2026-11-01)
+seat-eligibility override, both owner decisions of 2026-11-01),
+pass 15 (0 fixed in Scheduling itself — ADV-2 self-supervisor-assignment
+closed by a commit riding along in scope, already tracked and fixed under
+`ADV-01-adversarial-exfiltration.md` — 0 new findings; real delta — two new
+member-shift-history routes, two notify-role senders moved to the
+current-member-aware helper, and evaluation-credit resync on seat changes)
 
-**Backend:** `api/v1/endpoints/scheduling.py` (110 routes, up from 109 — new
-`GET /members/{user_id}/hours-history`),
+**Backend:** `api/v1/endpoints/scheduling.py` (112 routes, up from 110 — new
+`GET /my-shift-history` and `GET /members/{user_id}/shift-history`),
 `api/v1/endpoints/scheduling_module_config.py` (3 routes, unchanged),
 `api/v1/endpoints/calcom_sync.py` (1 route, unchanged),
-`services/scheduling_service.py` (+582/−125 this pass — the requester's-
-supervisor time-off review path, an officer seat-eligibility override for
-ungranted custom seats, open-swap bell fan-out, on-call/external-call hours
-history fields, and leave-month-adjusted compliance),
-`services/scheduling_module_config_service.py` (+58/−1 — `load_custom_positions`/
-`department_seat_labels` helpers, deep-copied per Pitfall #12),
-`services/standing_shift_service.py` (unchanged logic, mypy-typed),
+`services/scheduling_service.py` (+259/−26 this pass — `get_member_shift_history`
+and its two new routes' backing, evaluation-credit resync on assignment
+change/delete/finalize/reopen, `WORKING_ASSIGNMENT_STATUSES` tightening, and
+the `notify_roles` sender moved to `current_holder_ids()`),
+`services/scheduling_module_config_service.py` (zero diff this pass),
+`services/standing_shift_service.py` (zero diff this pass),
 `services/call_tracking_service.py` (zero diff this pass),
-`services/shift_eligibility_service.py` (+74/−3 — `seat_is_granted` for the
-new seat-override check, custom-qualification-seat mapping threaded through
-eligibility),
-`services/shift_completion_service.py` (+302/−30 this pass — shift-report
-credit restatement; shared with Feature 14, already reviewed under its own
-pass 15, not re-reviewed here),
+`services/shift_eligibility_service.py` (zero diff this pass),
+`services/shift_completion_service.py` (+10/−1 this pass — crew
+current-member validation on a manual batch; shared with Feature 14,
+already reviewed under its own pass 16, not re-reviewed here),
 `services/integration_services/calcom_service.py` (zero diff since pass 6),
 `services/scheduling_widget_service.py` (zero diff this pass),
 `services/pre_shift_work_service.py` (zero diff this pass),
-`mcp/tools/scheduling.py` (zero diff), `schemas/scheduling.py` (+60/−3 — the two
-SCH-19 caps, `override_seat_eligibility`/`override_reason`,
-`reviewable_as_supervisor`, `SchedulingWidgetPreferencesResponse`,
-on-call/external-call hours fields),
-`schemas/scheduling_module_config.py` (+28/−1 — `CustomPositionSchema.qualifications`,
-validated against the known qualification vocabulary),
+`mcp/tools/scheduling.py` (zero diff), `schemas/scheduling.py` (+62/−0 this
+pass — `MemberHoursYear`, `MemberDepartmentShift`, `MemberShiftHistoryResponse`),
+`schemas/scheduling_module_config.py` (zero diff this pass),
 `models/call_tracking.py`, `models/scheduling_module_config.py`,
 `models/training.py` (zero diff this pass),
 `utils/scheduling_dates.py` (zero diff). **Opportunistically reviewed, shared
-dependency (not in declared scope, not previously reviewed by any feature):**
-`services/member_supervisor_service.py` (612 L, new — backs the new
-requester's-supervisor approval path; see "Close-out and approval gates"
-below).
+dependency:** `services/member_supervisor_service.py` (+10/−0 this pass — the
+self-assignment refusal; see below).
 **Frontend:** `modules/scheduling`, `pages/scheduling`
-**Migrations:** `20260823_1400_e7a41b6d09c2_add_standing_shift_claims.py` (from
-an earlier pass); `84819ea78a79` (pass 7 window, seeds `training.view_analytics`
-on existing leadership positions); `20261006_0436_56c91e7d9e10` (pass 8
-window, widens `shift_assignments.position` / `standing_shift_claims.position`
-to VARCHAR — see Pass 8 below); `20261011_0030_46c55e6a3330` (pass 8 window,
-adds `shift_pre_work_sessions`, out-of-declared-scope table, reviewed
-opportunistically below); `20261031_1830_db30a34afa5b_shift_pattern_occurrences.py`
-(pass 13 window, adds `shift_pattern_occurrences` — see Pass 13 below). No new
-migration in Scheduling's own scope this pass (`member_supervisor_assignments`
-belongs to the Members feature's own migration, reviewed there).
+**Migrations:** none in Scheduling's own declared scope this pass (one
+migration in the window, `20261113_1200_533f8aba187e_shift_evaluation_preceptor_links.py`,
+adds `shift_evaluation_links` — Shift Evaluations' own table, declared under
+Features 03 and 17, not reviewed here).
+
+---
+
+## Pass 15 (2026-11-20) — real delta (already-landed defense-in-depth and a cross-feature fix), 0 fixed in Scheduling itself, 0 new findings
+
+**Watchdog pickup.** No other Claude session is running on this machine
+(`ListAgents` → "No reachable agents"), consistent with the dedicated
+`/loop 30m /security-review` session remaining unreachable through every
+prior pass. PR [#4464](https://github.com/thegspiro/the-logbook/pull/4464)
+(Feature 14, Equipment check & shifts, pass 16) had just merged
+(`2a5ca8e31`); a fresh `list_pull_requests` (state=open) found 0 PRs with a
+`claude/security-review-` head branch, and row 15 (Scheduling) was
+confirmed the next `⬜` row.
+
+**Baseline** `df47203db` (PR #4115's merge, pass 14) to head `2a5ca8e31`
+(PR #4464's merge, current `main`) — a genuine ancestor
+(`git merge-base --is-ancestor` succeeds). `git diff --numstat` restricted
+to the declared backend files shows real changes in five:
+`scheduling.py` (+82/−3), `schemas/scheduling.py` (+62/−0),
+`member_supervisor_service.py` (+10/−0, opportunistic — not previously in
+declared scope), `scheduling_service.py` (+259/−26), and
+`shift_completion_service.py` (+10/−1, shared with Feature 14). Every
+other declared file is byte-identical to pass 14.
+
+### `scheduling.py` / `schemas/scheduling.py` — two new self/permission-scoped routes
+
+`GET /my-shift-history` (self only, `get_current_user`) and
+`GET /members/{user_id}/shift-history` (any member for their own id; anyone
+else needs `scheduling.report`) back a new "Past Shifts" list — one row per
+department shift plus every external entry, in any status, for one
+calendar year. Read `get_member_shift_history`
+(`scheduling_service.py:10020`) in full: every query is scoped through
+`Shift.organization_id == org_id` or `ShiftAssignment.organization_id ==
+org_id`, and the second route resolves `user_id` through an org-filtered
+existence check before calling the service (`User.id == user_id,
+User.organization_id == current org`, 404 on a miss) — the exact shape
+`GET /members/{user_id}/hours-history` already used at pass 14, re-applied
+correctly. `MemberShiftHistoryResponse`/`MemberDepartmentShift` carry
+shift timing, hours, calls, unit label, template name and position — no
+field beyond what the existing hours-history and attendance-history
+responses already return to the same caller. Route count re-confirmed by
+AST (112, +2 from pass 14, matching exactly these two routes); no other
+new route in the window.
+
+### `scheduling_service.py` — evaluation-credit resync, a notify-role sender moved to the current-member-aware helper, and an assignment-status tightening
+
+- **Evaluation-credit resync.** A new `_resync_evaluation_credit` helper is
+  called from `update_assignment` (on a status or seat change),
+  `delete_assignment`, `finalize_shift` and `reopen_shift`, and forwards to
+  `ShiftEvaluationService.sync_credit_for_shift_member`/
+  `sync_credit_for_shift` (both pre-existing, read in full at
+  `shift_evaluation_service.py:1763` — org-scoped via
+  `ShiftEvaluation.organization_id == str(organization_id)`, called with an
+  `organization_id` the caller already trusts). Correctness logic (an
+  evaluation credits only while its subject still holds the seat they
+  worked), not a new authorization surface — no new by-id lookup, no new
+  caller outside this already-authenticated, already-org-scoped request
+  path.
+- **`notify_roles` sender moved to `current_holder_ids()`.** The open-swap
+  bell's role-notification lookup replaced a bare `Role`/`user_positions`
+  join (`Role.organization_id` filtered, but no active-member filter at
+  all) with the shared `current_holder_ids()` helper reviewed in full under
+  `EC-14-equipment-check-shifts.md`'s pass 16 — same fix, same file shape,
+  same closed gap (a departed member holding the notified position no
+  longer keeps receiving swap-bell notices). Not re-derived here.
+- **`WORKING_ASSIGNMENT_STATUSES` tightening.** Three call/training-crew
+  queries changed from `notin_(INACTIVE_ASSIGNMENT_STATUSES)` —
+  `{ASSIGNED, CONFIRMED, PENDING, NO_SHOW}` — to
+  `in_(WORKING_ASSIGNMENT_STATUSES)` — `{ASSIGNED, CONFIRMED}` only
+  (confirmed against the `AssignmentStatus` enum's six values and both
+  constants' definitions directly, not assumed from the names). A strict
+  narrowing: `PENDING` (not yet accepted) and `NO_SHOW` no longer count as
+  "crew who took the shift" for training-presence or call-crediting
+  queries — closes a correctness/data-integrity gap (crediting calls or
+  training attendance to someone who did not actually work the shift),
+  consistent with the call-crediting site's own comment. Not a tenant- or
+  permission-boundary change.
+
+### `member_supervisor_service.py` — self-supervisor-assignment refusal (opportunistic review; already tracked and fixed as ADV-2)
+
+`assign_supervisor` now raises `ValueError` (→ 400) when
+`str(supervisor_id) == str(actor_id)`, before any lock is taken. This closes
+the exact gap `docs/security-review/ADV-01-adversarial-exfiltration.md`
+already records as **ADV-2 (Medium, Fixed)**: a `members.manage` holder
+could previously name _themselves_ as any member's supervisor and inherit
+read access — released evaluations, training records, time-off decisions —
+that `members.manage` alone does not grant. This file was not in
+Scheduling's declared scope before this pass (it backs the pass 14
+requester's-supervisor time-off path, reviewed opportunistically then too);
+the fix itself is cross-referenced from ADV-01, not a new finding recorded
+here. Verified by reading the full diff: the check runs before
+`self._lock_organization`, so a self-assignment attempt never reaches the
+locking/write path at all.
+
+### Frontend — grep sweep, no risky pattern found
+
+`git diff --stat` since pass 14 touches 53 files under `modules/scheduling`
+and `pages/scheduling` (+7246/−2094), dominated by `pastShiftsModel.ts`
+(211 L, new — the "Past Shifts" screen's client-side grouping of the two
+new routes' already-scoped, already-reviewed response data) and its test.
+Swept the full diff for `window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, a bare `toHaveBeenCalledWith()`, the banned
+locale-method/`date-fns` imports, and a raw `localStorage.setItem` in
+application code (as opposed to a test fixture) — zero hits; the one
+`localStorage.setItem` match is inside
+`ShiftReportsTab.test.tsx`, exercising the pre-existing, already-reviewed
+`shiftReportDrafts.ts` mechanism (Pitfall #16/EC-14 pass 16), not new
+application code.
+
+### Out of declared scope, seen and not reviewed here
+
+`20261113_1200_533f8aba187e_shift_evaluation_preceptor_links.py` adds
+`shift_evaluation_links` (a SHA-256-hashed, no-login preceptor link token)
+and widens two template-type enums. This table belongs to the Shift
+Evaluations feature, declared under Feature 03 (Public surface & webhooks)
+and Feature 17 (Training core) per `PROGRESS.md`'s rotation table, not
+Feature 15 — flagged here only so the next reviewer of either of those
+rows knows it is waiting, not reviewed as part of this pass.
+
+**EC-17/SCH-20 unaffected.** Neither standing item's file changed in this
+window.
+
+**0 fixed in Scheduling itself, 0 new findings.**
+`docs/module-audit/scheduling.md` and `docs/app-review/scheduling.md`
+re-grepped for `🚩`/`OPEN`/`FLAGGED` — both zero for this feature.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 788
+revisions, single head `790a86084359`; `check_route_permissions.py
+--strict` — 327 routes, 0 errors/0 warnings; scoped backend pytest (`-k
+"scheduling or time_off or supervisor or seat_override or widget or
+eligibility or member_hours or on_call or shift_history or standing_shift
+or call_tracking"`, run under `python3.13`) — 722 passed, 1 pre-existing
+environment-only skip (`py_vapid`); standing guard suites (capacity
+locking, org-scoping ratchet, LIKE escaping, CSV sweep, migration chain,
+`create_all`-table tolerance, account-status gates, log-call shape,
+baseline member grants) — 203 passed; `npm run typecheck` — 0 errors;
+`npm run lint` — 0 errors, 0 warnings; `npx vitest run
+src/modules/scheduling src/pages/scheduling` — 1263 passed (78 files).
+
+Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ---
 

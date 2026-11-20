@@ -130,6 +130,20 @@ Flow** enabled with a dedicated least-privilege **Run As** user. The Logbook
 stores no Salesforce user password. See [Salesforce CRM
 Integration](Integration-Salesforce#service-account-client-credentials).
 
+### QuickBooks Online _(2026-11-06)_
+
+| Variable            | Description                                                                                                                     | Default   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `QBO_CLIENT_ID`     | Client ID of the Intuit app (QuickBooks Online Accounting scope) behind **Finance → QuickBooks Export → Connect to QuickBooks** | —         |
+| `QBO_CLIENT_SECRET` | That app's client secret                                                                                                        | —         |
+| `QBO_REDIRECT_URI`  | Must exactly match a redirect URI listed on the Intuit app (`.../api/v1/finance/quickbooks/oauth/callback`)                     | —         |
+| `QBO_ENVIRONMENT`   | `sandbox` or `production`; must match the keys above. Any other value refuses to start                                          | `sandbox` |
+
+Leave the first three blank to keep the live connection off: the page reads
+"not configured" and the CSV export works as before. See
+"QuickBooks Online connection" in
+[the Finance module guide](https://github.com/thegspiro/the-logbook/blob/main/docs/FINANCE_MODULE.md).
+
 ### Calendar Publishing
 
 | Variable                          | Description                                                                                                                            | Default |
@@ -194,11 +208,12 @@ sections.
 
 ## Redis
 
-| Variable         | Description    | Default                  |
-| ---------------- | -------------- | ------------------------ |
-| `REDIS_HOST`     | Redis hostname | `redis`                  |
-| `REDIS_PORT`     | Redis port     | `6379`                   |
-| `REDIS_PASSWORD` | Redis password | (required in production) |
+| Variable         | Description                                                                                                           | Default                  |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `REDIS_HOST`     | Redis hostname                                                                                                        | `redis`                  |
+| `REDIS_PORT`     | Redis port                                                                                                            | `6379`                   |
+| `REDIS_PASSWORD` | Redis password                                                                                                        | (required in production) |
+| `REDIS_REQUIRED` | `true` refuses to start when Redis cannot be reached; `false` starts without it, with caching disabled _(2026-11-04)_ | `false`                  |
 
 ---
 
@@ -327,6 +342,7 @@ organization's settings (`enabled_modules`), configured inside the app
 | `BACKUP_TIME`                          | Backup sidecar run time, UTC `HH:MM` _(2026-07-31)_                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `02:00`               |
 | `BACKUP_RETENTION_DAYS`                | Days of backup archives to keep _(2026-07-31)_                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `30`                  |
 | `VERIFY_EVERY_N_BACKUPS`               | Automated restore-drill cadence; `0` disables _(2026-07-31)_                                                                                                                                                                                                                                                                                                                                                                                                                                               | `7`                   |
+| `BACKUP_ENCRYPT_EXISTING`              | Once `./backup-keys` holds a key (`scripts/backup-keygen.sh`), encrypt the plaintext archives already on disk and remove each after a verified round trip _(2026-10-23)_                                                                                                                                                                                                                                                                                                                                   | `true`                |
 | `ACCESS_TOKEN_EXPIRE_MINUTES`          | Access token lifetime, in **minutes**. Kept short on purpose; the session is renewed with the refresh token                                                                                                                                                                                                                                                                                                                                                                                                | `30`                  |
 | `REFRESH_TOKEN_EXPIRE_DAYS`            | Refresh token lifetime (days)                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `7`                   |
 | `RATE_LIMIT_ENABLED`                   | Turns request rate limiting on or off. The app refuses to start in production with it off                                                                                                                                                                                                                                                                                                                                                                                                                  | `true`                |
@@ -440,13 +456,22 @@ Each provider is fully disabled until its `*_ENABLED` flag is
 
 ## File Storage
 
-| Variable                | Description                                                                                                                                                                | Default            |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| `MAX_REQUEST_BODY_SIZE` | Largest request the backend accepts, in bytes. Anything bigger — an upload included — is refused before it is read into memory. Keep it above your largest expected upload | `62914560` (60 MB) |
+| Variable                    | Description                                                                                                                                                                                                                                                                                                                                                              | Default            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------ |
+| `MAX_REQUEST_BODY_SIZE`     | Largest request the backend accepts, in bytes. Anything bigger — an upload included — is refused before it is read into memory. Keep it above your largest expected upload                                                                                                                                                                                               | `62914560` (60 MB) |
+| `S3_ALLOWED_ENDPOINTS`      | Comma-separated self-hosted S3-compatible endpoints (MinIO, Ceph, Garage…) a department may choose for its own bucket. Matched exactly on scheme, host, port and path; no user name or password. Empty means Amazon S3 only. **A department already using an endpoint not listed here stops using its bucket** (uploads and downloads refused with a 503) _(2026-11-03)_ | _(empty)_          |
+| `S3_ALLOW_PRIVATE_ENDPOINT` | Allow a listed endpoint to be a private address or plain HTTP — the bundled MinIO at `http://minio:9000` is both. Cloud-metadata addresses stay blocked either way _(2026-11-03)_                                                                                                                                                                                        | `false`            |
 
-Uploads are always written under `/app/uploads` inside the backend container,
-which the Compose files mount as the `uploads` volume; there is no setting to
-move them and no S3, Azure or GCS storage. `STORAGE_TYPE`, `UPLOAD_DIR` and
+Uploads are written under `/app/uploads` inside the backend container, which
+the Compose files mount as the `uploads` volume, unless a department moves its
+files to its own S3 or MinIO bucket or a Google Shared Drive. That choice is
+made per department under **Organization Settings → File Storage**, not here;
+the only installation-level part is which self-hosted endpoints may be chosen
+(`S3_ALLOWED_ENDPOINTS` above). See
+[Upgrading](https://github.com/thegspiro/the-logbook/blob/main/docs/UPGRADING.md)
+for moving existing files. There is no installation-wide S3, Azure or GCS
+storage: the `AWS_*` variables in `.env.example.full` are not read
+(CI3-33-4). `STORAGE_TYPE`, `UPLOAD_DIR` and
 `MAX_FILE_SIZE` were removed on 2026-10-08 because nothing read them; a `.env`
 that still names them boots and logs a warning asking for the line to be
 removed. `RATE_LIMIT_PER_MINUTE` and `DB_POOL_MIN` were retired the same way.

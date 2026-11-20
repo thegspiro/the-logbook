@@ -159,6 +159,29 @@ export const ALL_ROUTES: RouteCheck[] = [
   // without it this route's header renders none, and a lopsided row or a
   // stretched icon button in it would never be seen.
   { path: '/events', maxSmallTargets: 0, maxTinyText: 0, permissions: ['events.manage'] },
+  // The rest of the Events section strip. Each `expectText` is drawn only by
+  // its populated fixture (helpers.ts), never by an empty state.
+  {
+    path: '/events/templates',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+    expectText: 'Pancake Breakfast',
+  },
+  {
+    path: '/events/attendance-requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+    expectText: 'My phone died before I could scan the QR code; I was there the whole time.',
+  },
+  {
+    path: '/events/analytics',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['analytics.view'],
+    expectText: 'Annual Awards Banquet and Installation of Officers',
+  },
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
   // Every member reaches it; the fixture puts a request to decide on screen.
   { path: '/members/leave-requests', maxSmallTargets: 0, maxTinyText: 0 },
@@ -1053,6 +1076,31 @@ export const ALL_ROUTES: RouteCheck[] = [
     expectText: 'Inbound payments',
   },
   { path: '/prospective-members', maxSmallTargets: 0, maxTinyText: 0, permissions: ['prospective_members.manage'] },
+  // The coordinator's pipeline settings and the assigned member's two lists.
+  // `prospectiveMembers` serves their data opt-in (helpers.ts says why), and
+  // each `expectText` is drawn only from it, never by an empty state.
+  {
+    path: '/prospective-members/settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['prospective_members.manage'],
+    fixture: { prospectiveMembers: true },
+    expectText: 'Volunteer Firefighter Recruitment',
+  },
+  {
+    path: '/prospective-members/my-applicants',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    fixture: { prospectiveMembers: true },
+    expectText: 'Anastasia Vandenberg-Okonkwo',
+  },
+  {
+    path: '/prospective-members/sign-offs',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    fixture: { prospectiveMembers: true },
+    expectText: 'Panel interview with two officers; both sign once the interview is complete.',
+  },
   // /analytics and /profile were listed here from the day this file was written
   // and match no <Route>: both fell through the catch-all to the dashboard,
   // which is why the three of them reported an identical 24 targets and 1249

@@ -77,25 +77,25 @@ frontend/src/modules/medical-screening/
 
 ### `screening_records` Table
 
-| Column            | Type               | Description                                          |
-| ----------------- | ------------------ | ---------------------------------------------------- |
-| `id`              | `String(36)`       | UUID primary key                                     |
-| `organization_id` | `String(36)`       | FK to organizations                                  |
-| `requirement_id`  | `String(36)`       | FK to screening_requirements, `SET NULL` (see below) |
-| `user_id`         | `String(36)`       | FK to users (nullable — NULL if prospect)            |
-| `prospect_id`     | `String(36)`       | FK to prospective_members (nullable — NULL if user)  |
-| `screening_type`  | `ScreeningType`    | Type of screening                                    |
-| `status`          | `EncryptedEnum` 🔒 | Current status (`ScreeningStatus`)                   |
-| `scheduled_date`  | `DateTime`         | When screening is scheduled                          |
-| `completed_date`  | `DateTime`         | When screening was completed                         |
-| `expiration_date` | `DateTime`         | When this screening expires                          |
-| `provider_name`   | `EncryptedText` 🔒 | Name of medical provider                             |
-| `result_summary`  | `EncryptedText` 🔒 | Brief result description                             |
-| `result_data`     | `EncryptedJSON` 🔒 | Structured result data (scores, measurements)        |
-| `reviewed_by`     | `String(36)`       | FK to users (reviewer)                               |
-| `reviewed_at`     | `DateTime`         | When review occurred                                 |
-| `self_recorded`   | `Boolean`          | Status last set by the record's own subject (MS-7)   |
-| `notes`           | `EncryptedText` 🔒 | Additional notes                                     |
+| Column            | Type                    | Description                                                |
+| ----------------- | ----------------------- | ---------------------------------------------------------- |
+| `id`              | `String(36)`            | UUID primary key                                           |
+| `organization_id` | `String(36)`            | FK to organizations                                        |
+| `requirement_id`  | `EncryptedReference` 🔒 | Link to screening_requirements; no foreign key (see below) |
+| `user_id`         | `String(36)`            | FK to users (nullable — NULL if prospect)                  |
+| `prospect_id`     | `String(36)`            | FK to prospective_members (nullable — NULL if user)        |
+| `screening_type`  | `EncryptedEnum` 🔒      | Type of screening (`ScreeningType`)                        |
+| `status`          | `EncryptedEnum` 🔒      | Current status (`ScreeningStatus`)                         |
+| `scheduled_date`  | `DateTime`              | When screening is scheduled                                |
+| `completed_date`  | `DateTime`              | When screening was completed                               |
+| `expiration_date` | `DateTime`              | When this screening expires                                |
+| `provider_name`   | `EncryptedText` 🔒      | Name of medical provider                                   |
+| `result_summary`  | `EncryptedText` 🔒      | Brief result description                                   |
+| `result_data`     | `EncryptedJSON` 🔒      | Structured result data (scores, measurements)              |
+| `reviewed_by`     | `String(36)`            | FK to users (reviewer)                                     |
+| `reviewed_at`     | `DateTime`              | When review occurred                                       |
+| `self_recorded`   | `Boolean`               | Status last set by the record's own subject (MS-7)         |
+| `notes`           | `EncryptedText` 🔒      | Additional notes                                           |
 
 > **Deleting a requirement keeps its records** _(2026-09-29)_. `requirement_id`
 > is `ondelete="SET NULL"`, but `ScreeningRequirement.records` was declared
@@ -105,6 +105,14 @@ frontend/src/modules/medical-screening/
 > requirement only unlinks its records, which stay in each member's history.
 > Pinned by `tests/test_medical_screening_requirement_delete_keeps_records.py`.
 > Records deleted that way before the fix are gone.
+>
+> **No foreign key since 2026-11-10** (MS-18). `requirement_id` is ciphertext,
+> which the database cannot match, so migration `ac1687769b62` dropped the key
+> and the ORM relationship. The link is checked in-org when it is written, and
+> `delete_requirement` clears its records' links in code, over the deleting
+> department's records only. It locks the requirement and scans with a locking
+> read, and a save that links a record locks the requirement it links to, so a
+> link cannot be committed between the scan and the delete.
 
 > 🔒 **Encrypted at rest** _(2026-08-09, app-review MS-1)_. These four columns
 > carry the module's PHI and use the transparent `EncryptedText` /
@@ -131,10 +139,21 @@ frontend/src/modules/medical-screening/
 > hub's missed-appointment item, and the pipeline's screening stage gate.
 > Migration `80fa2c83bf9d`.
 >
-> Still plaintext: the screening type, the dates and the member and
-> requirement links, which every query filters, sorts and joins on. The type
-> also leaks through the requirement a record is linked to and through older
-> audit-log entries; see `docs/KNOWN_LIMITATIONS.md` (MS-18). Cross-reference:
+> **The type and the requirement link are encrypted too** _(2026-11-10,
+> MS-18, owner decision of 2026-11-06)_. A record's `screening_type` is
+> `EncryptedEnum` and its `requirement_id` is `EncryptedReference`, which also
+> refuses SQL comparison. Migration `ac1687769b62` encrypts existing rows in
+> place (legacy upper-case types normalised) and **refuses to run without
+> `ENCRYPTION_KEY` when rows exist**. The records list's type filter, the
+> expiring list's requirement match and the pipeline gate's type lookup now
+> compare in Python. New audit entries carry neither the type (record created)
+> nor the type filter's value (the records list logs only
+> `screening_type_filtered`). A requirement's own type stays plaintext: it
+> describes the department's policy, not a person.
+>
+> Still plaintext: the dates and the member link, which queries filter and
+> sort on, and the type in audit entries written before 2026-11-10; see
+> `docs/KNOWN_LIMITATIONS.md` (MS-18). Cross-reference:
 > [wiki/Security-Encryption](../wiki/Security-Encryption.md#what-is-encrypted).
 
 > **Schema note.** [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) is the generated,
@@ -211,7 +230,9 @@ Displays:
 Create/edit form with:
 
 - Name, description, screening type
-- Frequency (months) — leave empty for one-time screenings
+- Frequency (months) — a new requirement starts recurring every 12 months
+  with **One-time requirement (not recurring)** unticked _(2026-11-10,
+  W71b-5)_; an existing one opens as saved
 - Role applicability selector
 - Grace period configuration
 - Active/inactive toggle
@@ -255,7 +276,29 @@ When a prospective member is converted to a full member:
 | ------------------- | ----------------------------------------------------------------------------------- |
 | Prospective Members | Screening records can be linked to prospects; compliance status visible in pipeline |
 | Compliance          | Medical screening compliance feeds into overall compliance calculations             |
-| Notifications       | Expiring screening alerts can trigger email notifications                           |
+| Notifications       | Expiry reminder emails, behind the `medical_screening_expiry` rule (see below)      |
+
+### Expiry reminders _(2026-11-10, W71b-4)_
+
+`screening_reminder_service.py`, run daily by the scheduled task
+`medical_screening_expiry_reminders`. The member is emailed 90, 60, 30
+and 7 days before a screening falls due, as for certifications. Only the most
+urgent tier reached is sent, and the tiers skipped are marked spent.
+
+- **Which screenings:** the Compliance tab's own expiring list
+  (`get_reminder_candidates`), narrowed to current members, screenings not
+  yet due, and requirements the member is graded on.
+- **Gates:** the module is on; the **Medical Screening Expiry** notification
+  rule is not disabled (with no rule, reminders are on); and the member's
+  **Training and certification reminders** email choice
+  (`EmailKind.TRAINING_REMINDERS`).
+- **Email only.** No text and no bell entry, since a bell entry is stored in
+  plaintext. The subject names nothing; the body names the requirement and
+  the due date only.
+- **Runs twice, sends once.** `(screening_record_id, tier_days, due_date)` is
+  unique on `screening_reminder_sends` (migration `cf93f3b65274`). A run
+  claims, sends and commits one screening at a time; a crash after the send
+  sends again the next day.
 
 ---
 

@@ -7,6 +7,7 @@ overdue), the morning email names each once, and nothing is removed.
 """
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -21,6 +22,7 @@ from app.services.google_workspace_attention_digest import (
     SETTINGS_KEY,
     send_google_workspace_attention_digest,
 )
+from tests.clock_support import reread_each_test
 from tests.test_directory_departure_check import (
     _account,
     _check,
@@ -31,7 +33,15 @@ from tests.test_directory_departure_check import (
 from tests.test_google_workspace_attention import _with_permissions
 from tests.test_google_workspace_provisioning import FakeDirectory
 
-NOW = datetime.now(timezone.utc)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    return {"NOW": now}
+
+
+(NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 async def _long_gone(db_session, *, days: int, account_id="g-gone"):

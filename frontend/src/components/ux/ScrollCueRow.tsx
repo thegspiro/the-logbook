@@ -151,8 +151,11 @@ export const ScrollCueRow: React.FC<ScrollCueRowProps> = ({
     }, ${right ? 'black calc(100% - 3rem), transparent 100%' : 'black 100%'})`;
   const maskImage = canScrollLeft || canScrollRight ? fade(canScrollLeft, canScrollRight) : undefined;
 
+  // Opaque, unlike `bg-theme-surface`: in dark mode that token is white at 6%,
+  // and the chevron sits on top of a chip, so a translucent fill let the chip's
+  // label show through the arrow and the button all but disappeared.
   const chevronClass =
-    'border-theme-surface-border bg-theme-surface text-theme-text-primary absolute top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border shadow-md';
+    'border-theme-surface-border bg-theme-surface-modal text-theme-text-primary absolute top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border shadow-md';
 
   return (
     <div className="relative">

@@ -5,14 +5,14 @@ import { bucketLabel, niceMax, type TypeSlice } from './communityEngagement';
 
 /*
  * Series colours from the validated categorical palette, light then dark.
- * Signed-in guests take the first slot because they are the figure the
+ * Counted guests take the first slot because they are the figure the
  * department can prove; estimates take the second. Text is never drawn in a
  * series colour: the orange is under 3:1 on the light surface, so the legend
  * and tooltip carry the meaning in words.
  */
-const SIGNED_IN = 'fill-[#2a78d6] dark:fill-[#3987e5]';
+const COUNTED = 'fill-[#2a78d6] dark:fill-[#3987e5]';
 const ESTIMATED = 'fill-[#eb6834] dark:fill-[#d95926]';
-const SIGNED_IN_BG = 'bg-[#2a78d6] dark:bg-[#3987e5]';
+const COUNTED_BG = 'bg-[#2a78d6] dark:bg-[#3987e5]';
 const ESTIMATED_BG = 'bg-[#eb6834] dark:bg-[#d95926]';
 const TOTAL_BG = 'bg-[#1baf7a] dark:bg-[#199e70]';
 
@@ -24,8 +24,8 @@ const roundedTop = (x: number, top: number, w: number, h: number): string => {
 export const ReachLegend: React.FC = () => (
   <div className="text-theme-text-secondary flex flex-wrap gap-x-4 gap-y-1 text-xs">
     <span className="inline-flex items-center gap-1.5">
-      <span className={`inline-block h-2.5 w-2.5 rounded-sm ${SIGNED_IN_BG}`} aria-hidden="true" />
-      Signed in
+      <span className={`inline-block h-2.5 w-2.5 rounded-sm ${COUNTED_BG}`} aria-hidden="true" />
+      Counted
     </span>
     <span className="inline-flex items-center gap-1.5">
       <span className={`inline-block h-2.5 w-2.5 rounded-sm ${ESTIMATED_BG}`} aria-hidden="true" />
@@ -48,7 +48,7 @@ const COLUMN = 40;
 const BAR = 22;
 
 /**
- * People reached per month (or year), signed-in guests with the requesters'
+ * People reached per month (or year), counted guests with the requesters'
  * estimates stacked above them. Hover or tap a column for its figures; the
  * same figures sit in a disclosure table below, since a pointer-only tooltip
  * is no use to a keyboard or screen-reader user.
@@ -62,7 +62,7 @@ export const ReachByPeriodChart: React.FC<ReachChartProps> = ({ buckets, narrow 
   const count = Math.max(1, buckets.length);
   const width = count * COLUMN;
   const plotH = PLOT_H - TOP_PAD;
-  const top = niceMax(Math.max(0, ...buckets.map((b) => b.signed_in + b.estimated)));
+  const top = niceMax(Math.max(0, ...buckets.map((b) => b.counted + b.estimated)));
   const y = (v: number) => TOP_PAD + plotH - (v / top) * plotH;
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * top);
   const labelEvery = Math.max(1, Math.ceil(count / (narrow ? 6 : 12)));
@@ -89,7 +89,7 @@ export const ReachByPeriodChart: React.FC<ReachChartProps> = ({ buckets, narrow 
             preserveAspectRatio="none"
             className="block h-full w-full"
             role="img"
-            aria-label="People reached over the period: signed-in guests and estimated audiences"
+            aria-label="People reached over the period: counted guests and estimated audiences"
           >
             {ticks.map((t) => (
               <line
@@ -106,19 +106,19 @@ export const ReachByPeriodChart: React.FC<ReachChartProps> = ({ buckets, narrow 
             ))}
             {buckets.map((b, i) => {
               const x = i * COLUMN + (COLUMN - BAR) / 2;
-              const signedTop = y(b.signed_in);
-              const signedH = TOP_PAD + plotH - signedTop;
+              const countedTop = y(b.counted);
+              const countedH = TOP_PAD + plotH - countedTop;
               // A 2px surface gap between the two segments keeps them readable as two.
-              const gap = b.signed_in > 0 && b.estimated > 0 ? 2 : 0;
-              const estTop = y(b.signed_in + b.estimated);
-              const estH = Math.max(0, signedTop - gap - estTop);
+              const gap = b.counted > 0 && b.estimated > 0 ? 2 : 0;
+              const estTop = y(b.counted + b.estimated);
+              const estH = Math.max(0, countedTop - gap - estTop);
               return (
                 <g key={b.period} opacity={active != null && active !== i ? 0.55 : 1}>
-                  {b.signed_in > 0 &&
+                  {b.counted > 0 &&
                     (b.estimated > 0 ? (
-                      <rect x={x} y={signedTop} width={BAR} height={signedH} className={SIGNED_IN} />
+                      <rect x={x} y={countedTop} width={BAR} height={countedH} className={COUNTED} />
                     ) : (
-                      <path d={roundedTop(x, signedTop, BAR, signedH)} className={SIGNED_IN} />
+                      <path d={roundedTop(x, countedTop, BAR, countedH)} className={COUNTED} />
                     ))}
                   {b.estimated > 0 && estH > 0 && <path d={roundedTop(x, estTop, BAR, estH)} className={ESTIMATED} />}
                   {/* The whole column is the hover target, not just the bar: a month with ten people is a sliver. */}
@@ -146,10 +146,10 @@ export const ReachByPeriodChart: React.FC<ReachChartProps> = ({ buckets, narrow 
               aria-hidden="true"
             >
               <div className="text-theme-text-primary font-semibold">
-                {bucketLabel(shown.period, true)} · {formatNumber(shown.signed_in + shown.estimated)} people
+                {bucketLabel(shown.period, true)} · {formatNumber(shown.counted + shown.estimated)} people
               </div>
               <div className="text-theme-text-secondary">
-                {shown.events} {shown.events === 1 ? 'event' : 'events'} · {formatNumber(shown.signed_in)} signed in,{' '}
+                {shown.events} {shown.events === 1 ? 'event' : 'events'} · {formatNumber(shown.counted)} counted,{' '}
                 {formatNumber(shown.estimated)} estimated
               </div>
             </div>
@@ -187,7 +187,7 @@ export const ReachByPeriodChart: React.FC<ReachChartProps> = ({ buckets, narrow 
                 Events
               </th>
               <th scope="col" className="py-1 pr-2 text-right font-medium">
-                Signed in
+                Counted
               </th>
               <th scope="col" className="py-1 text-right font-medium">
                 Estimated
@@ -201,7 +201,7 @@ export const ReachByPeriodChart: React.FC<ReachChartProps> = ({ buckets, narrow 
                   {bucketLabel(b.period, true)}
                 </th>
                 <td className="py-0.5 pr-2 text-right">{formatNumber(b.events)}</td>
-                <td className="py-0.5 pr-2 text-right">{formatNumber(b.signed_in)}</td>
+                <td className="py-0.5 pr-2 text-right">{formatNumber(b.counted)}</td>
                 <td className="py-0.5 text-right">{formatNumber(b.estimated)}</td>
               </tr>
             ))}
@@ -215,7 +215,7 @@ export const ReachByPeriodChart: React.FC<ReachChartProps> = ({ buckets, narrow 
 /**
  * People reached by type of outreach, one bar each. A single series, so one
  * colour — the palette's third slot rather than the blue, which the chart
- * beside this one uses to mean "signed in" and this total is not. It is under
+ * beside this one uses to mean "counted" and this total is not. It is under
  * 3:1 on the light surface, so every bar carries its value in text. Other is
  * the neutral grey so it never reads as a fourth category.
  */

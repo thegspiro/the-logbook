@@ -113,17 +113,14 @@ from app.services.training_compliance import (
     UNGRADED_STATUSES,
     ComplianceGrading,
     _load_compliance_config,
-    classify_standing,
     evaluate_member_requirement,
     evaluate_member_requirement_detail,
-    get_org_include_current_month,
     get_requirement_date_window,
     load_credited_shift_dates,
     load_evaluation_credits,
     load_graded_records,
     load_held_sessions,
     member_join_date,
-    requirement_applies_to_user,
     tally_standing,
 )
 from app.services.training_course_links import (
@@ -2573,6 +2570,25 @@ async def get_user_stats(
     return stats
 
 
+# The traffic-light vocabulary for each classify_standing() value, shared by
+# the profile card and the period roster. A member nothing grades is
+# "not_applicable", not green: no screen may show a member as passing what
+# nobody measured (TR4-4). Both maps cover every classify_standing() output,
+# so a new standing raises KeyError rather than being shown under a wrong one.
+_STANDING_COLOR = {
+    "compliant": "green",
+    "at_risk": "yellow",
+    "non_compliant": "red",
+    STANDING_NOT_APPLICABLE: STANDING_NOT_APPLICABLE,
+}
+_STANDING_LABEL = {
+    "compliant": "Compliant",
+    "at_risk": "At Risk",
+    "non_compliant": "Non-Compliant",
+    STANDING_NOT_APPLICABLE: "Not Applicable",
+}
+
+
 @router.get("/compliance-summary/{user_id}", response_model=ComplianceSummary)
 async def get_compliance_summary(
     user_id: UUID,
@@ -2582,15 +2598,19 @@ async def get_compliance_summary(
     """
     Get a compliance summary for a member's profile card.
 
-    Returns requirements met/total, cert expiration counts, and a
-    green/yellow/red compliance indicator.
+    Returns requirements met/total, cert expiration counts, and the member's
+    compliance matrix standing as a green/yellow/red indicator.
 
     Uses ``_evaluate_member_requirement()`` for consistent per-type
     evaluation (hours, certification, shifts, calls, courses, fallback).
     The requirements counted are the ones ``ComplianceGrading.for_member``
     resolves — the member's matching compliance profile narrows them, as on
     the compliance matrix and the dashboard — so the card's "N of M" matches
-    those screens (D10).
+    those screens (D10). The indicator is ``ComplianceGrading.classify`` over
+    that tally: the profile's threshold overrides, else the department's
+    thresholds, and the department's threshold type — the matrix's standing
+    for the member (owner decision 2026-11-20). The certificate counts are
+    reported for display only.
     """
     await _require_self_or_training_officer(db, current_user, user_id)
     org_id = current_user.organization_id
@@ -2650,7 +2670,8 @@ async def get_compliance_summary(
         await _load_compliance_config(db, str(org_id))
     )
     org_include_current = grading.include_current_month
-    requirements = grading.for_member(target_user, all_requirements).requirements
+    member_grading = grading.for_member(target_user, all_requirements)
+    requirements = member_grading.requirements
 
     # The member's records the grader can read for these requirements.
     member_records = await load_graded_records(
@@ -2689,28 +2710,18 @@ async def get_compliance_summary(
         for req in requirements
     )
 
-    # Determine compliance status
+    # The colour is the matrix's standing, never the certificate counts. The
+    # counts include records a renewal has superseded
+    # (TrainingService.get_user_training_stats) and measure expiry against
+    # today, while the grader reads only the latest matching record and judges
+    # it at the requirement's as-of cut-off, which with the current month left
+    # out is the end of last month. A certificate the department grades
+    # already lowers the tally through its requirement's "expired" status.
+    standing, _ = grading.classify(member_grading, requirements_met, requirements_total)
+    compliance_status = _STANDING_COLOR[standing]
+    compliance_label = _STANDING_LABEL[standing]
     certs_expiring_soon = stats.expiring_soon
     certs_expired = stats.expired
-
-    if certs_expired > 0 or (
-        requirements_total > 0 and requirements_met < requirements_total * 0.5
-    ):
-        compliance_status = "red"
-        compliance_label = "Non-Compliant"
-    elif certs_expiring_soon > 0 or (
-        requirements_total > 0 and requirements_met < requirements_total
-    ):
-        compliance_status = "yellow"
-        compliance_label = "At Risk"
-    elif requirements_total == 0:
-        # Nothing grades this member, and no certificate is lapsing: there is
-        # no standing to report, which is not the same as passing (TR4-4).
-        compliance_status = STANDING_NOT_APPLICABLE
-        compliance_label = "Not Applicable"
-    else:
-        compliance_status = "green"
-        compliance_label = "Compliant"
 
     return ComplianceSummary(
         user_id=user_id,
@@ -3616,6 +3627,11 @@ class RequirementStatusItem(BaseModel):
     catch_up_deadline: str | None = None
     # Met by a Chief's override rather than by the count.
     overridden: bool = False
+    # HOURS only: average hours a month in the months not excused, and the
+    # department's monthly pace (training_compliance.MonthlyPace). Shown
+    # beside the total; the status above is still graded on the total.
+    monthly_average: float | None = None
+    monthly_needed: float | None = None
 
 
 class MemberComplianceRow(BaseModel):
@@ -3964,6 +3980,8 @@ async def get_compliance_matrix(
                     as_of=ev.as_of,
                     catch_up_deadline=ev.catch_up_deadline,
                     overridden=ev.overridden,
+                    monthly_average=ev.monthly_average,
+                    monthly_needed=ev.monthly_needed,
                 )
             )
 
@@ -4038,17 +4056,6 @@ class MemberPeriodStatusRow(BaseModel):
     requirements_total: int
 
 
-# The roster's traffic-light vocabulary for each classify_standing() value. A
-# member nothing grades is "not_applicable", not green: the roster must not
-# show a member as passing what nobody measured (TR4-4).
-_PERIOD_STATUS_COLOR = {
-    "compliant": "green",
-    "at_risk": "yellow",
-    "non_compliant": "red",
-    STANDING_NOT_APPLICABLE: STANDING_NOT_APPLICABLE,
-}
-
-
 @router.get("/records/member-status")
 async def get_member_period_status(
     start_date: date = Query(..., description="Period start (inclusive)"),
@@ -4098,7 +4105,14 @@ async def get_member_period_status(
         }
 
     today = await resolve_org_today(db, org_id)
-    org_include_current = await get_org_include_current_month(db, str(org_id))
+    # One config load for the whole roster: which requirements grade each
+    # member, the thresholds and the current-month cut-off, as the matrix
+    # resolves them (owner decision 2026-11-20, CLAUDE.md pitfall 29).
+    # get_org_include_current_month() would repeat the same query.
+    grading = ComplianceGrading.from_config(
+        await _load_compliance_config(db, str(org_id))
+    )
+    org_include_current = grading.include_current_month
 
     # The records the standing grades from, plus the selected period's
     # completions the activity columns count — not every record on file.
@@ -4138,13 +4152,6 @@ async def get_member_period_status(
 
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
-    # Compliance thresholds, read as the matrix reads them. `or` here turned a
-    # configured 0% threshold into the 100% default.
-    config = await _load_compliance_config(db, str(org_id))
-    compliant_threshold = config.compliant_threshold if config else 100.0
-    at_risk_threshold = config.at_risk_threshold if config else 75.0
-    threshold_type = (config.threshold_type if config else None) or "percentage"
-
     rows: list[MemberPeriodStatusRow] = []
     for member in members:
         member_records = records_by_user.get(member.id, [])
@@ -4183,9 +4190,9 @@ async def get_member_period_status(
             )
             continue
 
-        applicable = [
-            req for req in requirements if requirement_applies_to_user(req, member)
-        ]
+        # The member's profile narrows the set and may override the
+        # thresholds; applicability by type, rank and join date follows.
+        member_grading = grading.for_member(member, list(requirements))
         join_date = member_join_date(member)
         met, total = tally_standing(
             _evaluate_member_requirement(
@@ -4199,12 +4206,10 @@ async def get_member_period_status(
                 held_sessions=held_sessions,
                 evaluation_credits=evaluations_by_user.get(str(member.id), {}),
             )[0]
-            for req in applicable
+            for req in member_grading.requirements
         )
-        standing, _ = classify_standing(
-            met, total, compliant_threshold, at_risk_threshold, threshold_type
-        )
-        status_color = _PERIOD_STATUS_COLOR[standing]
+        standing, _ = grading.classify(member_grading, met, total)
+        status_color = _STANDING_COLOR[standing]
 
         rows.append(
             MemberPeriodStatusRow(
