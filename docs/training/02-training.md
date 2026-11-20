@@ -4595,6 +4595,21 @@ form**, in four steps — **Event Details**, **Training Info**, **Settings**,
 and moves forward; **Previous** goes back. Steps 1 to 5 below are on **Event
 Details**; the course is on **Training Info**.
 
+> **Starting from a template** _(2026-11-20)_. While **Event Details** is
+> open, **Start from a Template** above the form offers the department's
+> active Training templates. Picking one fills the event's details and, when
+> the template saved them, **Training Info**: the course, training type,
+> credit hours, lead instructor and certification settings. It replaces what
+> was already typed. Requirement and program links, **Counts toward
+> attendance** and the completion settings are not saved on a template and
+> start on their defaults. If the template's course is no longer in the
+> Course Library, **Training Info** starts on **No course yet**; if its lead
+> instructor is no longer a current member, **Lead instructor** starts empty.
+> A note on **Training Info** says which. Templates are made and edited under
+> **Events → ⋯ → Event Templates**, or with **More → Save as Template** on a
+> Training event's page (see
+> [Templates](./04-events-meetings.md#templates)).
+
 1. Give the session a **Title** and, if you like, a description. With no
    course chosen, the title is also what members' records are filed under.
 2. Set the **Start Date & Time**. The time is three lists — hour, minute and

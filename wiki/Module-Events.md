@@ -96,7 +96,8 @@ single-page `EventForm` for every type but **Training**, and the step-by-step
 Changing the type swaps the form in place and carries every value across, both
 ways. Training Admin's **Create Session** renders the same composer with the
 type fixed. `?template=<id>` on Create Event applies a template; a Training
-template opens the wizard.
+template opens the wizard and, when it saved training details, fills Training
+Info too _(2026-11-20)_.
 
 - **Compact layout** — a two-column grid pairing related sections, with
   **Check-In Settings** and **Notifications** side by side.
@@ -1022,6 +1023,17 @@ modal (`EventTemplateForm`), active toggle and delete confirmation.
 - Templates carry the event defaults: type, title, description, location,
   duration, RSVP, capacity, guests, attendee visibility, check-in rules
   (including **Minutes After End**), reminders and custom fields.
+- **A Training template also carries the session's training details**
+  _(owner decision 2026-11-20)_ in `event_templates.training_details`: the
+  course (library, one-off name and code, or none), training type, credit
+  hours and their source, lead instructor, and certification settings. Not
+  the requirement/program links, Counts toward attendance or the completion
+  settings. The editor's **Training Details** section (TrainingInfoStep's
+  `template` variant) edits them; **Save as Template** on a Training event
+  saves its session's. Applying one checks the course and instructor against
+  the Course Library and member list (`reconcileTemplateTraining`): a course
+  no longer listed falls back to No course yet, an instructor no longer a
+  member is cleared, each with a note on Training Info.
 
 ---
 
