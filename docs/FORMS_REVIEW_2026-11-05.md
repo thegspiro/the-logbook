@@ -655,6 +655,58 @@ form under each utility account is converted with it.
 builder (`EquipmentCheckTemplateBuilder`, some 7,300 lines, its own batch). The
 other rows of the batch 18 list are unchanged.
 
+## Rollout status, 2026-11-20 (batch 24)
+
+The same steps, on these:
+
+| Area           | Converted                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Communications | intake questions (as a member answers them, and as the box dialog writes them); the member's suggestion form; email templates (the editor) |
+| Scheduling     | the shift template dialog; Settings › General's overtime advisory and automatic-generation cards                                           |
+
+The shift template dialog had main's field errors and form already. It gains
+the discard question, a counter on the name (200, its column width; the schema
+sets none) and the single-save rule on edit; a refused start or end also holds
+back the length derived from both. The templates page memoises the dialog's
+initial data on the record, because the modal reseeded its form whenever that
+object changed and the list refresh after a keep-open save threw away what was
+typed.
+
+The member's suggestion form leaned on the browser's `required` bubble and a
+greyed-out Submit. It is `noValidate` now: an unanswered required question is
+named on the question, a missing title or details on its field. The server
+answers a submission with a 400 string, not a 422, and names a question by its
+label in quotes; such a refusal goes back to the questions step with the reason
+on that question, and any other stays in the form by the button.
+
+In the box dialog, a question with no wording, a choice question with no
+options, or an option with no label is named on the question before anything is
+sent; a 422 on the questions (`intakeQuestions.N.key`) lands on the questions
+section instead of a "label: ..." line at the top.
+
+The email template's Save is no longer greyed out while a copy list is wrong.
+A refused subject, body or copy list is left out of the update and keeps what
+was typed, put back after the draft re-seeds from the saved template.
+
+Scheduling settings' typed numbers held `Number(value)`, so a cleared hours
+limit was saved as 0 and switched the overtime advisory off. They hold what
+was typed now, are checked against the schema's bounds, and a refused one is
+named on its box while the card's other number still saves.
+
+Two items on the list were looked at and left. Photo consent is a read-only
+roster with filters, not a form. "Communications templates" and "email
+templates" are one screen pair: the template list holds only a search filter,
+and the backups panel has no form.
+
+**Still not converted**, from the batch 18 list's last row: the minutes editor
+and the rest of its settings; the remaining report dialogs; the rest of
+Scheduling › Settings (shift reports, eligibility, outside apparatus,
+notifications, platoons, and the defaults cards under the footer's Save
+Settings); applicant conversion, stage configuration, detail dialog, interviews
+and pipeline settings; onboarding, the public portal, membership, history, the
+org chart node and IP security admin. The other rows are as batches 21 to 23
+left them.
+
 ## Suggested order
 
 1. **F-1** — small, backend-led, stops a data-integrity hole.

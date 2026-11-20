@@ -129,6 +129,7 @@ const mockOrg = {
   email: 'info@springfieldfd.org',
   website: 'https://springfieldfd.org',
   county: 'Springfield County',
+  short_name: '',
   founded_year: 1920,
   logo: null,
   mailing_address: {

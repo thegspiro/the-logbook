@@ -428,10 +428,16 @@ app/api/v1/endpoints/scheduling.py::get_eligible_positions_bulk
 # (tests/test_member_hours_history.py::TestMemberHoursEndpoint). A dependency
 # cannot express "or is that member", hence the check in the body.
 app/api/v1/endpoints/scheduling.py::get_member_hours_history
+# Same rule as get_member_hours_history above, for the shift-by-shift rows
+# behind those totals (tests/test_member_shift_history.py::TestEndpoints).
+app/api/v1/endpoints/scheduling.py::get_member_shift_history
 app/api/v1/endpoints/scheduling.py::get_my_assignments
 app/api/v1/endpoints/scheduling.py::get_my_attendance
 app/api/v1/endpoints/scheduling.py::get_my_attendance_history
 app/api/v1/endpoints/scheduling.py::get_my_hours_history
+# Scoped to the caller: reads current_user.id only, never an id from the
+# request (tests/test_member_shift_history.py::TestEndpoints).
+app/api/v1/endpoints/scheduling.py::get_my_shift_history
 app/api/v1/endpoints/scheduling.py::get_my_shifts
 app/api/v1/endpoints/scheduling.py::get_open_shifts
 app/api/v1/endpoints/scheduling.py::get_pre_shift_eligible_shifts

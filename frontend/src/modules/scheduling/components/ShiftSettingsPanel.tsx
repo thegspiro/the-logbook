@@ -7,7 +7,7 @@
  * delegates rendering to focused card components.
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { Truck, Users } from 'lucide-react';
@@ -32,6 +32,9 @@ import { ShiftReportsSettingsPanel } from './ShiftReportsSettingsPanel';
 import { PlatoonRosterPanel } from './PlatoonRosterPanel';
 import { OutsideApparatusSettings } from './OutsideApparatusSettings';
 import { useFirstLoadHold } from '../../../hooks/useFirstLoadHold';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { saveExceptRefused } from '../../../utils/saveExceptRefused';
 
 /**
  * The three ways a department can record call volume.
@@ -86,6 +89,30 @@ interface ShiftSettingsPanelProps {
   /** Section to render. Owned by the page so it can mirror it into the URL. */
   activeTab: SettingsTab;
   onTabChange: (tab: SettingsTab) => void;
+}
+
+// The typed-number settings, saved from their own card. SchedulingFeatureSettings
+// is snake_case, so a 422 names them as written.
+type FeatureNumberField = 'max_hours_per_window' | 'hours_window_days' | 'auto_generate_weeks';
+const FEATURE_NUMBER_FIELDS: FieldSpecs<FeatureNumberField> = {
+  max_hours_per_window: { id: 'overtime-hours-limit', label: 'Hours limit' },
+  hours_window_days: { id: 'overtime-window-days', label: 'Window (days)' },
+  auto_generate_weeks: { id: 'auto-generate-weeks', label: 'Weeks ahead' },
+};
+
+/**
+ * A whole number within the bounds SchedulingFeatureSettings enforces
+ * (schemas/scheduling.py), or the reason it is not. A blank box is refused:
+ * read as Number('') it became 0, which for the hours limit quietly switched
+ * the overtime advisory off.
+ */
+function wholeNumberIn(value: string, min: number, max: number): { value: number } | { error: string } {
+  const trimmed = value.trim();
+  const n = Number(trimmed);
+  if (trimmed === '' || !Number.isInteger(n) || n < min || n > max) {
+    return { error: `Enter a whole number from ${min} to ${max}.` };
+  }
+  return { value: n };
 }
 
 export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
@@ -146,30 +173,36 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     };
   }, []);
 
+  /** Send a patch and mirror the answer into the store; throws on a refusal. */
+  const applyFeature = async (patch: Partial<SchedulingFeatureSettings>) => {
+    const updated = await schedulingService.updateFeatureSettings(patch);
+    setFeature(updated);
+    // Mirror into the store the rest of the app reads. `loadSettings` is a
+    // once-per-session cache, so without this an admin who switched call
+    // tracking on kept seeing the old close-out — which never asks for a
+    // count — while the backend had already moved to count-only and would
+    // finalize the shift with none recorded.
+    useSchedulingStore.setState({
+      platoonsEnabled: updated.platoons_enabled,
+      requireEndOfShiftChecks: updated.require_end_of_shift_checks,
+      callTrackingMode: updated.call_tracking?.mode || 'detailed',
+      // Without this a rename shows the old label everywhere else in the
+      // session — loadSettings is a once-per-session cache and will not
+      // fetch again.
+      callTypeLabels: Object.fromEntries((updated.call_tracking?.call_types ?? []).map((t) => [t.slug, t.label])),
+      // `??`, not `||`: 0 means "closes exactly at the start", which `||`
+      // would silently replace with the default.
+      signupClosesMinutesBefore: updated.signup_closes_minutes_before ?? 0,
+      lateSignupGraceMinutes: updated.late_signup_grace_minutes ?? 60,
+      settingsLoaded: true,
+    });
+    return updated;
+  };
+
   const saveFeature = async (patch: Partial<SchedulingFeatureSettings>) => {
     setSavingFeature(true);
     try {
-      const updated = await schedulingService.updateFeatureSettings(patch);
-      setFeature(updated);
-      // Mirror into the store the rest of the app reads. `loadSettings` is a
-      // once-per-session cache, so without this an admin who switched call
-      // tracking on kept seeing the old close-out — which never asks for a
-      // count — while the backend had already moved to count-only and would
-      // finalize the shift with none recorded.
-      useSchedulingStore.setState({
-        platoonsEnabled: updated.platoons_enabled,
-        requireEndOfShiftChecks: updated.require_end_of_shift_checks,
-        callTrackingMode: updated.call_tracking?.mode || 'detailed',
-        // Without this a rename shows the old label everywhere else in the
-        // session — loadSettings is a once-per-session cache and will not
-        // fetch again.
-        callTypeLabels: Object.fromEntries((updated.call_tracking?.call_types ?? []).map((t) => [t.slug, t.label])),
-        // `??`, not `||`: 0 means "closes exactly at the start", which `||`
-        // would silently replace with the default.
-        signupClosesMinutesBefore: updated.signup_closes_minutes_before ?? 0,
-        lateSignupGraceMinutes: updated.late_signup_grace_minutes ?? 60,
-        settingsLoaded: true,
-      });
+      await applyFeature(patch);
       toast.success('Settings saved');
     } catch (err) {
       // `PUT /scheduling/settings` refuses a call-type list for reasons only it
@@ -180,6 +213,83 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       // sentence with "Failed to save settings" left the chief with a refusal
       // and no way to tell which type was blocking it.
       toast.error(getErrorMessage(err, 'Failed to save settings'));
+    } finally {
+      setSavingFeature(false);
+    }
+  };
+
+  // The two typed-number cards hold what was typed as text, so a cleared box
+  // can be named rather than read as 0. Seeded from the settings when they load.
+  const numberErrors = useFieldErrors(FEATURE_NUMBER_FIELDS);
+  const [numbers, setNumbers] = useState<Record<FeatureNumberField, string>>({
+    max_hours_per_window: '',
+    hours_window_days: '',
+    auto_generate_weeks: '',
+  });
+  /** Which card a refusal no field answers for belongs to, and what it said. */
+  const [cardError, setCardError] = useState<{ card: 'overtime' | 'generation'; message: string } | null>(null);
+  // Seeded once, when the settings first arrive: a save's answer must not
+  // overwrite a refused value the officer is still fixing.
+  const numbersSeeded = useRef(false);
+  useEffect(() => {
+    if (!feature || numbersSeeded.current) return;
+    numbersSeeded.current = true;
+    setNumbers({
+      max_hours_per_window: String(feature.max_hours_per_window ?? 0),
+      hours_window_days: String(feature.hours_window_days),
+      auto_generate_weeks: String(feature.auto_generate_weeks),
+    });
+  }, [feature]);
+
+  const typeNumber = (field: FeatureNumberField, value: string) => {
+    setNumbers((prev) => ({ ...prev, [field]: value }));
+    numberErrors.setError(field, null);
+  };
+
+  /**
+   * Save one card's numbers. Each is checked before anything is sent and named
+   * on its box (forms review F-3). A setting is saved on its own key, so the
+   * card's other number still saves when one is refused (owner rule,
+   * 2026-11-05); a 422 on one is resent without it.
+   */
+  const saveNumbers = async (card: 'overtime' | 'generation', fields: readonly FeatureNumberField[]) => {
+    const bounds: Record<FeatureNumberField, [number, number]> = {
+      max_hours_per_window: [0, 336],
+      hours_window_days: [1, 31],
+      auto_generate_weeks: [1, 52],
+    };
+    const payload: Record<string, unknown> = {};
+    const refused: FieldErrors<FeatureNumberField> = {};
+    for (const field of fields) {
+      const [min, max] = bounds[field];
+      const checked = wholeNumberIn(numbers[field], min, max);
+      if ('error' in checked) refused[field] = checked.error;
+      else payload[field] = checked.value;
+    }
+    setCardError(null);
+    numberErrors.setErrors(refused);
+    if (Object.keys(payload).length === 0) {
+      numberErrors.focusFirst(refused);
+      return;
+    }
+    setSavingFeature(true);
+    try {
+      const { refused: held } = await saveExceptRefused<FeatureNumberField, SchedulingFeatureSettings>({
+        payload,
+        refused,
+        send: (body) => applyFeature(body),
+        place: (err) => placeApiError(FEATURE_NUMBER_FIELDS, err),
+      });
+      numberErrors.setErrors(held);
+      if (Object.keys(held).length > 0) {
+        numberErrors.focusFirst(held);
+        setCardError({ card, message: 'Saved, except the flagged setting, which keeps its stored value.' });
+      } else {
+        toast.success('Settings saved');
+      }
+    } catch (err) {
+      // Said in the card that sent it, not in a toast that leaves.
+      setCardError({ card, message: getErrorMessage(err, 'Could not save these settings. Try again.') });
     } finally {
       setSavingFeature(false);
     }
@@ -300,45 +410,69 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 Warn, without blocking, when you assign a member whose scheduled hours within the window exceed the
                 limit. Set the limit to 0 to turn this off.
               </p>
-              <div className="mt-3 flex flex-wrap items-end gap-4">
-                <label className="text-sm">
-                  <span className="text-theme-text-secondary mb-1 block text-xs font-medium">Hours limit</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="336"
-                    step="1"
-                    value={feature.max_hours_per_window ?? 0}
-                    onChange={(e) => setFeature({ ...feature, max_hours_per_window: Number(e.target.value) })}
-                    className="form-input w-28"
-                  />
-                </label>
-                <label className="text-sm">
-                  <span className="text-theme-text-secondary mb-1 block text-xs font-medium">Window (days)</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="31"
-                    step="1"
-                    value={feature.hours_window_days}
-                    onChange={(e) => setFeature({ ...feature, hours_window_days: Number(e.target.value) })}
-                    className="form-input w-28"
-                  />
-                </label>
+              <form
+                noValidate
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void saveNumbers('overtime', ['max_hours_per_window', 'hours_window_days']);
+                }}
+                className="mt-3 flex flex-wrap items-start gap-4"
+              >
+                <FormField
+                  id={FEATURE_NUMBER_FIELDS.max_hours_per_window.id}
+                  label="Hours limit"
+                  labelClassName="text-theme-text-secondary mb-1 block text-xs font-medium"
+                  error={numberErrors.errors.max_hours_per_window}
+                  className="w-40"
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      max="336"
+                      step="1"
+                      value={numbers.max_hours_per_window}
+                      onChange={(e) => typeNumber('max_hours_per_window', e.target.value)}
+                      className="form-input w-28"
+                    />
+                  )}
+                </FormField>
+                <FormField
+                  id={FEATURE_NUMBER_FIELDS.hours_window_days.id}
+                  label="Window (days)"
+                  labelClassName="text-theme-text-secondary mb-1 block text-xs font-medium"
+                  error={numberErrors.errors.hours_window_days}
+                  className="w-40"
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      max="31"
+                      step="1"
+                      value={numbers.hours_window_days}
+                      onChange={(e) => typeNumber('hours_window_days', e.target.value)}
+                      className="form-input w-28"
+                    />
+                  )}
+                </FormField>
                 <button
-                  type="button"
+                  type="submit"
                   disabled={savingFeature}
-                  onClick={() => {
-                    void saveFeature({
-                      max_hours_per_window: feature.max_hours_per_window ?? 0,
-                      hours_window_days: feature.hours_window_days,
-                    });
-                  }}
-                  className="btn-primary px-4 py-2 text-sm disabled:opacity-50"
+                  className="btn-primary mt-5 px-4 py-2 text-sm disabled:opacity-50"
                 >
                   Save
                 </button>
-              </div>
+              </form>
+              {cardError?.card === 'overtime' && (
+                <p role="alert" className={`mt-2 text-sm ${FIELD_ERROR_CLASS}`}>
+                  {cardError.message}
+                </p>
+              )}
             </div>
           )}
 
@@ -371,30 +505,50 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 </button>
               </div>
               {feature.auto_generate_enabled && (
-                <div className="mt-3 flex flex-wrap items-end gap-4">
-                  <label className="text-sm">
-                    <span className="text-theme-text-secondary mb-1 block text-xs font-medium">Weeks ahead</span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="52"
-                      step="1"
-                      value={feature.auto_generate_weeks}
-                      onChange={(e) => setFeature({ ...feature, auto_generate_weeks: Number(e.target.value) })}
-                      className="form-input w-28"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    disabled={savingFeature}
-                    onClick={() => {
-                      void saveFeature({ auto_generate_weeks: feature.auto_generate_weeks });
+                <>
+                  <form
+                    noValidate
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void saveNumbers('generation', ['auto_generate_weeks']);
                     }}
-                    className="btn-primary px-4 py-2 text-sm disabled:opacity-50"
+                    className="mt-3 flex flex-wrap items-start gap-4"
                   >
-                    Save
-                  </button>
-                </div>
+                    <FormField
+                      id={FEATURE_NUMBER_FIELDS.auto_generate_weeks.id}
+                      label="Weeks ahead"
+                      labelClassName="text-theme-text-secondary mb-1 block text-xs font-medium"
+                      error={numberErrors.errors.auto_generate_weeks}
+                      className="w-40"
+                    >
+                      {(field) => (
+                        <input
+                          {...field}
+                          type="number"
+                          inputMode="numeric"
+                          min="1"
+                          max="52"
+                          step="1"
+                          value={numbers.auto_generate_weeks}
+                          onChange={(e) => typeNumber('auto_generate_weeks', e.target.value)}
+                          className="form-input w-28"
+                        />
+                      )}
+                    </FormField>
+                    <button
+                      type="submit"
+                      disabled={savingFeature}
+                      className="btn-primary mt-5 px-4 py-2 text-sm disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                  </form>
+                  {cardError?.card === 'generation' && (
+                    <p role="alert" className={`mt-2 text-sm ${FIELD_ERROR_CLASS}`}>
+                      {cardError.message}
+                    </p>
+                  )}
+                </>
               )}
             </div>
           )}
