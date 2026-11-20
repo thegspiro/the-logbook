@@ -388,8 +388,6 @@ const mockViewportWidth = (width: number) => {
 };
 
 describe('EventRequestsTab at desktop width', () => {
-  const phoneMatchMedia = window.matchMedia;
-
   beforeEach(() => {
     listRequests.mockReset();
     getRequest.mockReset();
@@ -402,7 +400,11 @@ describe('EventRequestsTab at desktop width', () => {
   });
 
   afterEach(() => {
-    vi.mocked(window.matchMedia).mockImplementation(phoneMatchMedia);
+    // Back to the phone default src/test/setup.ts installs, where every
+    // min-width query answers false. This used to hand the mock its own
+    // function as an implementation, so any test after this block recursed
+    // until the stack ran out; it went unseen while the block came last.
+    mockViewportWidth(0);
   });
 
   it('labels the drawer actions in words and keeps Take it beside the row', async () => {
