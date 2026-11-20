@@ -830,6 +830,25 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Anonymising a member also deletes the files on their training records (2026-11-20)
+
+Nothing blocks a restart, and no migration ships with this change.
+
+- **Download any officer-uploaded evidence you must keep before upgrading.**
+  Anonymising a member now permanently deletes the files attached to that
+  member's own training records — by an officer or by the member — as well as
+  the certificates they uploaded with self-reported training (owner decision
+  of 2026-11-20). The training records themselves stay, so completions and
+  hours still count, but the files cannot be recovered from the application
+  afterwards. A file another member's record also names is kept. If your
+  department relies on evidence attached to the records of members you may
+  anonymise (sign-in rosters, skills sheets, certification cards), download it
+  first, or keep it somewhere other than the member's training record.
+- The `user_anonymized` audit event and the anonymise response gain three
+  integer counts: `training_record_files_deleted`,
+  `training_record_files_not_deleted` and `training_record_files_shared_kept`.
+  A file that could not be deleted keeps its entry, renamed `attachment.<ext>`.
+
 ### My Training follows compliance profiles; scheduling notification settings are read back; a Source column on exports (2026-11-19)
 
 Nothing blocks a restart, and no migration ships in this range: `main` at
