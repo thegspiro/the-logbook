@@ -51,7 +51,9 @@ reports.
   requests, with separation of duties on review
 - **Shift Templates & Patterns** — reusable shift configurations (hours, crew
   seats, vehicle, named checklists) and daily, weekly, platoon and custom
-  patterns for bulk generation
+  patterns for bulk generation. Patterns are created, **edited** and generated
+  only on **Shift Planning → Patterns**; the Templates tab is templates only
+  _(2026-11-17, W32-6, #4388)_
 - **Shift Pattern Presets** — 24/48, 48/96, Kelly Schedule, California
   3-Platoon, ABCAB, plus a custom pattern builder with a 30-day preview
 - **Bulk Shift Generation** — generate shifts from templates and patterns;
@@ -579,7 +581,9 @@ shift**:
 - **Department** and **Apparatus** from a list scheduling officers keep under
   **Settings → Outside Apparatus** (`/scheduling/admin/settings/outside-apparatus`).
   A unit with shifts logged on it cannot be deleted, only turned off; each entry
-  keeps the names it was logged under.
+  keeps the names it was logged under, except that **merging** one department
+  into another (two spellings of the same department) moves its units across,
+  combines a unit both list, and relabels every shift logged with it.
 - **Counts as soon as it is saved**, unless the department has switched on
   **Settings → Require approval for outside-department shifts**: then it is
   **Awaiting approval** and counts toward nothing until a scheduling officer
@@ -821,6 +825,16 @@ decline/drop alerts (`org.settings["scheduling"]`), assignment notifications
 (`org.settings["scheduling_assignment"]`, in-app plus optional email), shift
 reminders, and equipment-check failure alerts.
 
+`GET /organization/settings` (and the PATCH response) now return those four
+sections to settings administrators and `scheduling.manage` holders, and
+`station_mode` to everyone _(2026-11-18, #4401)_. Before, the response model
+dropped them, so the panel always showed its built-in defaults and a save from
+it overwrote the department's configuration. `EquipmentCheckAlertSettings`
+(`schemas/organization.py`) is the one definition of the equipment-check
+defaults; the sender reads it through `from_stored()`, so a department that
+never saved the section alerts the Chief and Captain positions in the app, as
+the panel shows (before, it alerted nobody).
+
 Notification links open the scheduling page with the shift pre-selected;
 `SchedulingPage` accepts `?tab=schedule|my-shifts|open-shifts|requests|shift-reports`.
 
@@ -834,7 +848,11 @@ Notification links open the scheduling page with the shift pre-selected;
   (`POST /scheduling/calendar-feed/rotate`).
 - **My Shifts** has **Upcoming**, **Past** and **Hours** views and honours
   `?view=past` / `?view=hours`. The past view includes walk-on attendance as
-  completed entries; the dashboard Standby card links to it. Pending
+  completed entries. Its hours are the **Hours** view's credited figures
+  (`GET /scheduling/my-hours-history` → `history`), with time on shifts not
+  yet finalized shown as "awaiting close-out", and it pages through
+  `GET /scheduling/my-attendance-history?offset=` so a member with more than
+  50 attended shifts no longer loses the older ones _(2026-11-17, #4381)_; the dashboard Standby card links to it. Pending
   assignments can be confirmed or declined in bulk, with the UI rolling back on
   failure.
 - **Overtime advisory** — **Settings → General → Overtime advisory**: an
@@ -921,7 +939,11 @@ and not an empty result.
 - **Member Hours** — hours per member from shift assignments, with the
   **Outside Hours** column, the **Outside apparatus staffed** summary, and
   reject/restore of outside entries.
-- **Coverage** — staffing coverage over a range.
+- **Coverage** — staffing coverage over a range. Coverage, Call Volume and
+  Availability reflow to labelled cards on a phone; Coverage and Availability
+  use `rwd-table-container` with the narrow tier, so they also do on a tablet
+  with the side navigation open _(2026-11-18, #4415;
+  `e2e/table-fit-scheduling-phone.spec.ts`)_.
 - **Call Volume** — detailed-mode shift calls grouped by day/week/month (see
   [Reading the call volume report](#reading-the-call-volume-report)).
 - **Shift Compliance** — grades **only shift-credited requirements**: a SHIFTS

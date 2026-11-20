@@ -45,6 +45,7 @@ from app.models.event import (
     EventType,
     RSVPStatus,
 )
+from app.models.historical_import import ImportedRecordKind
 from app.models.notification import NotificationChannel
 from app.models.user import (
     ACTIVE_ACCOUNT_STATUSES,
@@ -54,6 +55,9 @@ from app.models.user import (
 )
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
+    MANDATORY_RSVP_WINDOW_DAYS_DEFAULT,
+    MANDATORY_RSVP_WINDOW_DAYS_MAX,
+    MANDATORY_RSVP_WINDOW_DAYS_MIN,
     AnalyticsSummary,
     AttachmentUploadResponse,
     BulkAddAttendees,
@@ -127,6 +131,12 @@ from app.services.file_storage_service import (
     StorageArea,
 )
 from app.services.guest_check_in_service import GuestCheckInService
+from app.services.import_provenance import (
+    imported_event_ids,
+    imported_record_ids,
+    kind_for,
+    label_for,
+)
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
 )
@@ -145,7 +155,7 @@ from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.contact_visibility import load_contact_policy
 from app.utils.model_updates import apply_updates
-from app.utils.org_scoping import assert_in_org
+from app.utils.org_scoping import assert_current_members, assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
 
 router = APIRouter()
@@ -699,10 +709,19 @@ def _build_rsvp_response(rsvp, user=None, event=None) -> RSVPResponse:
 async def _list_items(
     db: AsyncSession, organization_id: str, rows: list[dict]
 ) -> list[EventListItem]:
+    event_ids = [str(row["event"].id) for row in rows]
     counted = await TrainingSessionService(db).events_counting_toward_attendance(
-        [str(row["event"].id) for row in rows], organization_id
+        event_ids, organization_id
     )
-    return [_to_list_item(row, str(row["event"].id) in counted) for row in rows]
+    imported = await imported_event_ids(db, organization_id, event_ids)
+    items = []
+    for row in rows:
+        item = _to_list_item(row, str(row["event"].id) in counted)
+        was_imported = str(row["event"].id) in imported
+        item.source = kind_for(was_imported)
+        item.source_label = label_for(was_imported)
+        items.append(item)
+    return items
 
 
 def _to_list_item(row: dict, counts_toward_attendance: bool = False) -> EventListItem:
@@ -1132,7 +1151,29 @@ EVENT_SETTINGS_DEFAULTS = {
     # request the event's organizer and alternate cannot take; an unset type
     # goes to the Secretary (event_organizer_service).
     FALLBACK_POSITIONS_SETTING: {},
+    # Days before an unanswered mandatory event starts that members are asked
+    # to respond. Served to every member through /visible-event-types, since
+    # the events page needs it and /settings is gated on events.manage.
+    "mandatory_rsvp_window_days": MANDATORY_RSVP_WINDOW_DAYS_DEFAULT,
 }
+
+
+def mandatory_rsvp_window_days(org_settings: Any) -> int:
+    """The organization's mandatory-RSVP window, or the default.
+
+    The PATCH validates the value, but organization settings are free-form
+    JSON that other paths can write, so a stored value outside the accepted
+    range falls back to the default rather than reaching every member's page.
+    """
+    events_settings = (org_settings or {}).get("events") or {}
+    value = events_settings.get("mandatory_rsvp_window_days")
+    if (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and MANDATORY_RSVP_WINDOW_DAYS_MIN <= value <= MANDATORY_RSVP_WINDOW_DAYS_MAX
+    ):
+        return value
+    return MANDATORY_RSVP_WINDOW_DAYS_DEFAULT
 
 
 @router.get("/analytics/summary", response_model=AnalyticsSummary)
@@ -1284,6 +1325,20 @@ async def update_event_settings(
                 allow_none=True,
                 label="default coordinator",
             )
+            # Only a current member can be made the default coordinator. The
+            # one already saved may stay after leaving; that is a separate
+            # decision from choosing them again.
+            await assert_current_members(
+                db,
+                [pipeline_update["default_assignee_id"]],
+                current_user.organization_id,
+                keep=[
+                    (current_events.get("request_pipeline") or {}).get(
+                        "default_assignee_id"
+                    )
+                ],
+                label="default coordinator",
+            )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=safe_error_detail(e))
     for key, value in updates_dict.items():
@@ -1359,6 +1414,7 @@ async def get_visible_event_types(
             {"value": tier.id, "label": tier.name}
             for tier in mandatory_for_tiers(org.settings)
         ],
+        "mandatory_rsvp_window_days": mandatory_rsvp_window_days(org.settings),
     }
 
 
@@ -2427,6 +2483,15 @@ async def list_event_rsvps(
     responses = [
         _build_rsvp_response(rsvp, user=rsvp.user, event=rsvp.event) for rsvp in rsvps
     ]
+    imported = await imported_record_ids(
+        db,
+        str(current_user.organization_id),
+        ImportedRecordKind.EVENT_RSVP,
+        [str(r.id) for r in rsvps],
+    )
+    for response, rsvp in zip(responses, rsvps):
+        response.source = kind_for(str(rsvp.id) in imported)
+        response.source_label = label_for(str(rsvp.id) in imported)
     if access != ACCESS_EVENTS_MANAGER:
         # An organizer can be any member, so off the events.manage path the
         # roster's email column answers to the same contact policy as

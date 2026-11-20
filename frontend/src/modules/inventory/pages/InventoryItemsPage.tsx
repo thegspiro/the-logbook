@@ -42,7 +42,7 @@ import { inventoryService, locationsService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getTodayLocalDate, formatNumber } from '../../../utils/dateFormatting';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { getErrorMessage, getLoadFailureMessage } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { useInventoryWebSocket } from '../../../hooks/useInventoryWebSocket';
 import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefresh';
@@ -1046,7 +1046,8 @@ const InventoryItemsPage: React.FC = () => {
   const [locSummary, setLocSummary] = useState<LocationInventorySummary[]>([]);
 
   const [loading, setLoading] = useState(true);
-  const [itemsLoadFailed, setItemsLoadFailed] = useState(false);
+  // Why the last item load failed, or null when it did not.
+  const [itemsLoadError, setItemsLoadError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState('');
   const [fCat, setFCat] = useState('');
@@ -1239,11 +1240,12 @@ const InventoryItemsPage: React.FC = () => {
         // export taken from live state describes rows the file does not
         // contain.
         setLoadedParams(params);
-        setItemsLoadFailed(false);
+        setItemsLoadError(null);
         if (reset) setSkip(0);
       } catch (err: unknown) {
-        setItemsLoadFailed(true);
-        toast.error(getErrorMessage(err, 'Failed to load items'));
+        const message = getLoadFailureMessage(err, 'the items');
+        setItemsLoadError(message);
+        toast.error(message);
       }
     },
     [filterParams, skip]
@@ -2399,11 +2401,11 @@ const InventoryItemsPage: React.FC = () => {
           an item needs a category and a storage place to go into. */}
       {!loading &&
         items.length === 0 &&
-        (itemsLoadFailed ? (
+        (itemsLoadError ? (
           <EmptyState
             icon={Package}
             title="The items did not load"
-            description="Check your connection and try again."
+            description={itemsLoadError}
             actions={[{ label: 'Retry', onClick: () => void loadItems(true), icon: RefreshCw }]}
           />
         ) : search ||

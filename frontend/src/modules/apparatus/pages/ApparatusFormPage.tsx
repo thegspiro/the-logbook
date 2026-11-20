@@ -8,11 +8,22 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Truck, Save, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getErrorMessage } from '@/utils/errorHandling';
 import { useRanks } from '@/hooks/useRanks';
 import { positionLabel } from '@/modules/scheduling/utils/positionLabels';
 import { getPositionOptions } from '@/modules/scheduling/components/shiftTemplateTypes';
 import { ensureShiftSettingsLoaded } from '@/modules/scheduling/services/shiftSettingsApi';
+import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
+import { ErrorSummary } from '@/components/ux/ErrorSummary';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
+import {
+  placeApiError,
+  useFieldErrors,
+  type FieldErrors,
+  type FieldSpec,
+  type FieldSpecs,
+} from '@/hooks/useFieldErrors';
+import { firstRefused, saveExceptRefused } from '@/utils/saveExceptRefused';
 import { useApparatusStore } from '../store/apparatusStore';
 import { apparatusService, evocLevelService } from '../services/api';
 import { useApparatusNfpaSettings } from '../hooks/useApparatusNfpaSettings';
@@ -40,6 +51,196 @@ const CREW_POSITION_CODES = [
   'volunteer',
   'other',
 ] as const;
+
+/** The boxes on this form a check or a refusal can point at, in page order. */
+type ApparatusFormField =
+  | 'unitNumber'
+  | 'name'
+  | 'apparatusTypeId'
+  | 'statusId'
+  | 'statusReason'
+  | 'vin'
+  | 'radioId'
+  | 'year'
+  | 'make'
+  | 'model'
+  | 'bodyManufacturer'
+  | 'licensePlate'
+  | 'licenseState'
+  | 'color'
+  | 'assetTag'
+  | 'minStaffing'
+  | 'requiredEvocLevelId'
+  | 'seatingCapacity'
+  | 'crewPositions'
+  | 'gvwr'
+  | 'fuelType'
+  | 'fuelCapacityGallons'
+  | 'pumpCapacityGpm'
+  | 'tankCapacityGallons'
+  | 'foamCapacityGallons'
+  | 'ladderLengthFeet'
+  | 'currentMileage'
+  | 'currentHours'
+  | 'purchaseDate'
+  | 'purchasePrice'
+  | 'purchaseVendor'
+  | 'inServiceDate'
+  | 'financingCompany'
+  | 'monthlyPayment'
+  | 'financingEndDate'
+  | 'registrationExpiration'
+  | 'inspectionExpiration'
+  | 'insuranceExpiration'
+  | 'warrantyExpiration'
+  | 'description'
+  | 'notes';
+
+const FIELD_LABELS: Record<ApparatusFormField, string> = {
+  unitNumber: 'Unit Number',
+  name: 'Name/Nickname',
+  apparatusTypeId: 'Apparatus Type',
+  statusId: 'Status',
+  statusReason: 'Reason',
+  vin: 'VIN',
+  radioId: 'Radio ID',
+  year: 'Year',
+  make: 'Make',
+  model: 'Model',
+  bodyManufacturer: 'Body Manufacturer',
+  licensePlate: 'License Plate',
+  licenseState: 'License State',
+  color: 'Color',
+  assetTag: 'Asset Tag',
+  minStaffing: 'Minimum Staffing',
+  requiredEvocLevelId: 'Required EVOC Level',
+  seatingCapacity: 'Seating Capacity',
+  crewPositions: 'Crew Positions / Seats',
+  gvwr: 'GVWR (lbs)',
+  fuelType: 'Fuel Type',
+  fuelCapacityGallons: 'Fuel Capacity (gal)',
+  pumpCapacityGpm: 'Pump Capacity (GPM)',
+  tankCapacityGallons: 'Water Tank (gal)',
+  foamCapacityGallons: 'Foam Tank (gal)',
+  ladderLengthFeet: 'Ladder Length (ft)',
+  currentMileage: 'Current Mileage',
+  currentHours: 'Current Hours',
+  purchaseDate: 'Purchase Date',
+  purchasePrice: 'Purchase Price',
+  purchaseVendor: 'Vendor',
+  inServiceDate: 'In Service Date',
+  financingCompany: 'Financing Company',
+  monthlyPayment: 'Monthly Payment',
+  financingEndDate: 'Financing End Date',
+  registrationExpiration: 'Registration Expiration',
+  inspectionExpiration: 'Inspection Expiration',
+  insuranceExpiration: 'Insurance Expiration',
+  warrantyExpiration: 'Warranty Expiration',
+  description: 'Description',
+  notes: 'Additional Notes',
+};
+
+const snakeCase = (name: string) => name.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+
+// The apparatus API is camelCase (alias_generator=to_camel), so a refusal
+// names the field as the form sends it; the snake_case attribute is listed in
+// case one reports that instead. Crew seats are focused through Add Seat, the
+// one control the seat list always has.
+const FIELD_ORDER = Object.keys(FIELD_LABELS) as ApparatusFormField[];
+
+const APPARATUS_FORM_FIELDS: FieldSpecs<ApparatusFormField> = (() => {
+  const specs = {} as Record<ApparatusFormField, FieldSpec>;
+  for (const name of FIELD_ORDER) {
+    specs[name] = {
+      id: name === 'crewPositions' ? 'apparatus-crewPositions-add' : `apparatus-${name}`,
+      label: FIELD_LABELS[name],
+      apiKeys: [snakeCase(name)],
+    };
+  }
+  return specs;
+})();
+
+// Mirrors ApparatusBase / ApparatusUpdate (forms review F-2). License State
+// keeps the two-letter box it has always had, inside the server's 50.
+const TEXT_LIMITS: Partial<Record<ApparatusFormField, number>> = {
+  unitNumber: 50,
+  name: 200,
+  vin: 17,
+  licensePlate: 20,
+  licenseState: 2,
+  radioId: 50,
+  assetTag: 50,
+  make: 100,
+  model: 100,
+  bodyManufacturer: 100,
+  color: 50,
+  purchaseVendor: 200,
+  financingCompany: 200,
+};
+
+type NumberRule = { min: number; max?: number; whole: boolean };
+
+// The bounds ApparatusBase enforces on each number, said on the field before
+// anything is sent rather than coming back as a refusal.
+const NUMBER_RULES: Partial<Record<ApparatusFormField, NumberRule>> = {
+  year: { min: 1900, max: 2100, whole: true },
+  minStaffing: { min: 1, max: 50, whole: true },
+  seatingCapacity: { min: 1, whole: true },
+  gvwr: { min: 0, whole: true },
+  fuelCapacityGallons: { min: 0, whole: false },
+  pumpCapacityGpm: { min: 0, whole: true },
+  tankCapacityGallons: { min: 0, whole: true },
+  foamCapacityGallons: { min: 0, whole: true },
+  ladderLengthFeet: { min: 0, whole: true },
+  currentMileage: { min: 0, whole: true },
+  currentHours: { min: 0, whole: false },
+  purchasePrice: { min: 0, whole: false },
+  monthlyPayment: { min: 0, whole: false },
+};
+
+function numberProblem(value: unknown, rule: NumberRule): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  const n = Number(value);
+  const ok =
+    Number.isFinite(n) &&
+    (!rule.whole || Number.isInteger(n)) &&
+    n >= rule.min &&
+    (rule.max === undefined || n <= rule.max);
+  if (ok) return null;
+  const kind = rule.whole ? 'a whole number' : 'a number';
+  return rule.max !== undefined
+    ? `Enter ${kind} from ${rule.min} to ${rule.max}.`
+    : `Enter ${kind}, ${rule.min} or more.`;
+}
+
+/**
+ * What the form can tell before anything is sent. The required messages keep
+ * the wording this form has always shown.
+ */
+function checkApparatus(
+  form: ApparatusCreate,
+  selectedStatus: { name: string; requiresReason: boolean } | undefined
+): FieldErrors<ApparatusFormField> {
+  const problems: FieldErrors<ApparatusFormField> = {};
+  if (!form.unitNumber.trim()) problems.unitNumber = 'Unit number is required';
+  if (!form.apparatusTypeId) problems.apparatusTypeId = 'Apparatus type is required';
+  if (!form.statusId) problems.statusId = 'Status is required';
+  else if (selectedStatus?.requiresReason && !form.statusReason?.trim())
+    problems.statusReason = `Give a reason for ${selectedStatus.name}`;
+  for (const name of FIELD_ORDER) {
+    const rule = NUMBER_RULES[name];
+    const problem = rule ? numberProblem(form[name], rule) : null;
+    if (problem) problems[name] = problem;
+  }
+  return problems;
+}
+
+const LABEL_CLASS = 'text-theme-text-secondary mb-1 block text-sm';
+
+/** Put one box back to its stored value, for a field the save left out. */
+function restoreField<K extends keyof ApparatusCreate>(target: ApparatusCreate, source: ApparatusCreate, key: K) {
+  target[key] = source[key];
+}
 
 export const ApparatusFormPage: React.FC = () => {
   const navigate = useNavigate();
@@ -86,12 +287,15 @@ export const ApparatusFormPage: React.FC = () => {
   } = useApparatusStore();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const fieldErrors = useFieldErrors(APPARATUS_FORM_FIELDS);
+  const errors = fieldErrors.errors;
+  const [summaryFocus, setSummaryFocus] = useState(0);
+  const [savedExcept, setSavedExcept] = useState<string | null>(null);
   const [evocLevels, setEvocLevels] = useState<EvocLevel[]>([]);
 
   // Form state
   const clearedNumbers = useRef(new Set<string>());
-  const [formData, setFormData] = useState<ApparatusCreate>({
+  const emptyForm: ApparatusCreate = {
     unitNumber: '',
     name: '',
     vin: '',
@@ -144,7 +348,11 @@ export const ApparatusFormPage: React.FC = () => {
     nfpaTrackingEnabled: false,
     description: '',
     notes: '',
-  });
+  };
+  const [formData, setFormData] = useState<ApparatusCreate>(emptyForm);
+  // What the boxes held when the form opened (or last saved), so leaving with
+  // typed changes asks first (forms review F-6).
+  const [baseline, setBaseline] = useState<ApparatusCreate>(emptyForm);
 
   useEffect(() => {
     // Check authentication via session flag (tokens are in httpOnly cookies)
@@ -170,7 +378,7 @@ export const ApparatusFormPage: React.FC = () => {
   // Populate form when editing
   useEffect(() => {
     if (isEditing && currentApparatus) {
-      setFormData({
+      const loaded: ApparatusCreate = {
         unitNumber: currentApparatus.unitNumber,
         name: currentApparatus.name || '',
         vin: currentApparatus.vin || '',
@@ -223,9 +431,25 @@ export const ApparatusFormPage: React.FC = () => {
         nfpaTrackingEnabled: currentApparatus.nfpaTrackingEnabled,
         description: currentApparatus.description || '',
         notes: currentApparatus.notes || '',
-      });
+      };
+      setFormData(loaded);
+      setBaseline(loaded);
     }
   }, [isEditing, currentApparatus]);
+
+  const isDirty = JSON.stringify(formData) !== JSON.stringify(baseline);
+  useUnsavedChanges({ hasChanges: isDirty && !isSubmitting });
+  // Cancel leaves the page, which throws away what was typed into it.
+  const handleCancel = useDiscardGuard({
+    isDirty,
+    onClose: () => {
+      void navigate('/apparatus');
+    },
+  });
+
+  const clearFieldError = (name: string) => {
+    if (name in APPARATUS_FORM_FIELDS) fieldErrors.setError(name as ApparatusFormField, null);
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -250,18 +474,13 @@ export const ApparatusFormPage: React.FC = () => {
       ...(name === 'statusId' && processedValue !== prev.statusId ? { statusReason: '' } : {}),
     }));
 
-    // Clear error when field is modified
-    if (errors[name]) {
-      setErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
-    }
+    clearFieldError(name);
+    if (name === 'statusId') clearFieldError('statusReason');
   };
 
   const addCrewPosition = () => {
     setFormData((prev) => ({ ...prev, crewPositions: [...(prev.crewPositions ?? []), ''] }));
+    clearFieldError('crewPositions');
   };
 
   const updateCrewPosition = (index: number, rankCode: string) => {
@@ -271,6 +490,7 @@ export const ApparatusFormPage: React.FC = () => {
         positionIndex === index ? rankCode : position
       ),
     }));
+    clearFieldError('crewPositions');
   };
 
   const removeCrewPosition = (index: number) => {
@@ -278,34 +498,24 @@ export const ApparatusFormPage: React.FC = () => {
       ...prev,
       crewPositions: (prev.crewPositions ?? []).filter((_, positionIndex) => positionIndex !== index),
     }));
+    clearFieldError('crewPositions');
   };
 
   const selectedStatus = statuses.find((status) => status.id === formData.statusId);
 
-  const validate = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.unitNumber.trim()) {
-      newErrors.unitNumber = 'Unit number is required';
-    }
-    if (!formData.apparatusTypeId) {
-      newErrors.apparatusTypeId = 'Apparatus type is required';
-    }
-    if (!formData.statusId) {
-      newErrors.statusId = 'Status is required';
-    } else if (selectedStatus?.requiresReason && !formData.statusReason?.trim()) {
-      newErrors.statusReason = `Give a reason for ${selectedStatus.name}`;
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSavedExcept(null);
 
-    if (!validate()) {
-      toast.error('Fix the highlighted fields, then save again');
+    const problems = checkApparatus(formData, selectedStatus);
+    fieldErrors.setFormError(null);
+    fieldErrors.setErrors(problems);
+
+    // A new vehicle is created only once every flagged field is fixed. An edit
+    // follows the single-save rule (owner, 2026-11-05): the flagged fields are
+    // left out and keep their stored values, and the rest is written.
+    if (!isEditing && Object.keys(problems).length > 0) {
+      setSummaryFocus((n) => n + 1);
       return;
     }
 
@@ -336,22 +546,173 @@ export const ApparatusFormPage: React.FC = () => {
             update[key] = null;
           }
         });
-        await apparatusService.updateApparatus(id, update);
+        const { refused } = await saveExceptRefused<ApparatusFormField, unknown>({
+          payload: Object.fromEntries(Object.entries(update)),
+          refused: problems,
+          // A status that needs a reason is only ever saved with one: a refused
+          // reason holds the status change back with it, so the rig is not
+          // marked Out of Service with no record of why.
+          keysFor: (field) => (field === 'statusReason' ? ['statusReason', 'statusId'] : [field]),
+          send: (body) => apparatusService.updateApparatus(id, body),
+          place: (err) => placeApiError(APPARATUS_FORM_FIELDS, err),
+        });
+        const first = firstRefused(FIELD_ORDER, refused);
+        if (first) {
+          fieldErrors.setErrors(refused);
+          // The refused boxes still differ from what is stored; everything
+          // else now matches it.
+          setBaseline((prev) => {
+            const next: ApparatusCreate = { ...formData };
+            for (const field of Object.keys(refused) as ApparatusFormField[]) {
+              restoreField(next, prev, field);
+              if (field === 'statusReason') restoreField(next, prev, 'statusId');
+            }
+            return next;
+          });
+          clearedNumbers.current = new Set([...clearedNumbers.current].filter((key) => key in refused));
+          setSavedExcept(`Apparatus saved, except ${FIELD_LABELS[first].toLowerCase()}. Fix it and save again.`);
+          setSummaryFocus((n) => n + 1);
+          return;
+        }
         toast.success('Apparatus updated');
       } else {
         await apparatusService.createApparatus(cleanedData as ApparatusCreate);
         toast.success('Apparatus added');
       }
 
+      setBaseline(formData);
       void navigate('/apparatus');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save apparatus'));
+      // Nothing was saved. A refusal lands on the field it names; anything no
+      // field answers for is said at the top of the form, by the summary.
+      fieldErrors.setFromApiError(err, 'Failed to save apparatus');
+      setSummaryFocus((n) => n + 1);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const fuelTypes: FuelType[] = ['gasoline', 'diesel', 'electric', 'hybrid', 'propane', 'cng', 'other'];
+
+  const fieldValue = (name: ApparatusFormField): string => {
+    const value: unknown = formData[name];
+    return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+  };
+
+  /** A text box through the shared field, with its counter where the server has a limit. */
+  const textField = (
+    name: ApparatusFormField,
+    options: {
+      required?: boolean;
+      placeholder?: string;
+      literal?: boolean;
+      className?: string;
+    } = {}
+  ) => {
+    const value = fieldValue(name);
+    const limit = TEXT_LIMITS[name];
+    return (
+      <FormField
+        id={APPARATUS_FORM_FIELDS[name].id}
+        label={FIELD_LABELS[name]}
+        labelClassName={LABEL_CLASS}
+        required={options.required}
+        error={errors[name]}
+        {...(limit !== undefined ? { maxLength: limit, count: value.length } : {})}
+      >
+        {(props) => (
+          <input
+            {...props}
+            type="text"
+            name={name}
+            value={value}
+            onChange={handleChange}
+            className={`form-input w-full min-w-0 ${options.className ?? ''}`}
+            {...(options.placeholder ? { placeholder: options.placeholder } : {})}
+            {...(options.literal ? { autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false } : {})}
+          />
+        )}
+      </FormField>
+    );
+  };
+
+  /** A number box through the shared field, with the bound the server enforces. */
+  const numberField = (
+    name: ApparatusFormField,
+    options: { required?: boolean; placeholder?: string; step?: string; hint?: string; fallback?: number } = {}
+  ) => {
+    const rule = NUMBER_RULES[name];
+    const raw: unknown = formData[name];
+    const value = typeof raw === 'number' ? raw : (options.fallback ?? '');
+    return (
+      <FormField
+        id={APPARATUS_FORM_FIELDS[name].id}
+        label={FIELD_LABELS[name]}
+        labelClassName={LABEL_CLASS}
+        required={options.required}
+        error={errors[name]}
+        hint={options.hint}
+      >
+        {(props) => (
+          <input
+            {...props}
+            type="number"
+            name={name}
+            value={value}
+            onChange={handleChange}
+            className="form-input w-full min-w-0"
+            {...(rule ? { min: rule.min } : {})}
+            {...(rule?.max !== undefined ? { max: rule.max } : {})}
+            {...(options.step ? { step: options.step } : {})}
+            {...(options.placeholder ? { placeholder: options.placeholder } : {})}
+          />
+        )}
+      </FormField>
+    );
+  };
+
+  /** A date box through the shared field, so a refused date lands on it. */
+  const dateField = (name: ApparatusFormField) => (
+    <FormField
+      id={APPARATUS_FORM_FIELDS[name].id}
+      label={FIELD_LABELS[name]}
+      labelClassName={LABEL_CLASS}
+      error={errors[name]}
+    >
+      {(props) => (
+        <input
+          {...props}
+          type="date"
+          name={name}
+          value={fieldValue(name)}
+          onChange={handleChange}
+          className="form-input w-full min-w-0"
+        />
+      )}
+    </FormField>
+  );
+
+  /** A textarea through the shared field. */
+  const textAreaField = (name: ApparatusFormField, placeholder: string) => (
+    <FormField
+      id={APPARATUS_FORM_FIELDS[name].id}
+      label={FIELD_LABELS[name]}
+      labelClassName={LABEL_CLASS}
+      error={errors[name]}
+    >
+      {(props) => (
+        <textarea
+          {...props}
+          name={name}
+          value={fieldValue(name)}
+          onChange={handleChange}
+          rows={3}
+          className="form-input w-full min-w-0"
+          placeholder={placeholder}
+        />
+      )}
+    </FormField>
+  );
 
   if (storeLoading && isEditing) {
     return (
@@ -384,11 +745,23 @@ export const ApparatusFormPage: React.FC = () => {
             : {})}
         />
         <form
+          noValidate
           onSubmit={(e) => {
             void handleSubmit(e);
           }}
           className="space-y-8"
         >
+          {savedExcept && (
+            <p role="status" className={`text-sm font-medium ${FIELD_ERROR_CLASS}`}>
+              {savedExcept}
+            </p>
+          )}
+          <ErrorSummary
+            items={fieldErrors.summary}
+            formError={fieldErrors.formError}
+            focusKey={summaryFocus}
+            title={isEditing ? 'These were not saved' : 'Fix these before adding the apparatus'}
+          />
           {!isEditing && (
             <p className="text-theme-text-secondary text-sm">
               Only the fields marked * are needed to start. Everything else can be filled in later with Edit.
@@ -398,164 +771,90 @@ export const ApparatusFormPage: React.FC = () => {
           <div className="card p-6">
             <h2 className="text-theme-text-primary mb-6 font-bold">Basic Information</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              <div>
-                <label htmlFor="apparatus-unitNumber" className="text-theme-text-secondary mb-1 block text-sm">
-                  Unit Number <span className="text-red-700 dark:text-red-400">*</span>
-                </label>
-                <input
-                  id="apparatus-unitNumber"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  type="text"
-                  name="unitNumber"
-                  value={formData.unitNumber}
-                  onChange={handleChange}
-                  className={`form-input ${errors.unitNumber ? 'border-red-500' : 'border-theme-input-border'}`}
-                  aria-invalid={Boolean(errors.unitNumber)}
-                  aria-describedby={errors.unitNumber ? 'apparatus-unitNumber-error' : undefined}
-                  placeholder="E-1"
-                />
-                {errors.unitNumber && (
-                  <p id="apparatus-unitNumber-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-                    {errors.unitNumber}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label htmlFor="apparatus-name" className="text-theme-text-secondary mb-1 block text-sm">
-                  Name/Nickname
-                </label>
-                <input
-                  id="apparatus-name"
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  className="form-input"
-                  placeholder="Old Reliable"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-apparatusTypeId" className="text-theme-text-secondary mb-1 block text-sm">
-                  Apparatus Type <span className="text-red-700 dark:text-red-400">*</span>
-                </label>
-                <select
-                  id="apparatus-apparatusTypeId"
-                  name="apparatusTypeId"
-                  value={formData.apparatusTypeId}
-                  onChange={handleChange}
-                  className={`form-input ${errors.apparatusTypeId ? 'border-red-500' : 'border-theme-input-border'}`}
-                  aria-invalid={Boolean(errors.apparatusTypeId)}
-                  aria-describedby={errors.apparatusTypeId ? 'apparatus-apparatusTypeId-error' : undefined}
-                >
-                  <option value="">Select Type</option>
-                  {types.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.apparatusTypeId && (
-                  <p id="apparatus-apparatusTypeId-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-                    {errors.apparatusTypeId}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label htmlFor="apparatus-statusId" className="text-theme-text-secondary mb-1 block text-sm">
-                  Status <span className="text-red-700 dark:text-red-400">*</span>
-                </label>
-                <select
-                  id="apparatus-statusId"
-                  name="statusId"
-                  value={formData.statusId}
-                  onChange={handleChange}
-                  className={`form-input ${errors.statusId ? 'border-red-500' : 'border-theme-input-border'}`}
-                  aria-invalid={Boolean(errors.statusId)}
-                  aria-describedby={errors.statusId ? 'apparatus-statusId-error' : undefined}
-                >
-                  <option value="">Select Status</option>
-                  {statuses
-                    .filter((s) => !s.isArchivedStatus)
-                    .map((status) => (
-                      <option key={status.id} value={status.id}>
-                        {status.name}
+              {textField('unitNumber', { required: true, placeholder: 'E-1', literal: true })}
+              {textField('name', { placeholder: 'Old Reliable' })}
+              <FormField
+                id={APPARATUS_FORM_FIELDS.apparatusTypeId.id}
+                label={FIELD_LABELS.apparatusTypeId}
+                labelClassName={LABEL_CLASS}
+                required
+                error={errors.apparatusTypeId}
+              >
+                {(props) => (
+                  <select
+                    {...props}
+                    name="apparatusTypeId"
+                    value={formData.apparatusTypeId}
+                    onChange={handleChange}
+                    className="form-input w-full min-w-0"
+                  >
+                    <option value="">Select Type</option>
+                    {types.map((type) => (
+                      <option key={type.id} value={type.id}>
+                        {type.name}
                       </option>
                     ))}
-                </select>
-                {errors.statusId && (
-                  <p id="apparatus-statusId-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-                    {errors.statusId}
-                  </p>
+                  </select>
                 )}
+              </FormField>
+              <div>
+                <FormField
+                  id={APPARATUS_FORM_FIELDS.statusId.id}
+                  label={FIELD_LABELS.statusId}
+                  labelClassName={LABEL_CLASS}
+                  required
+                  error={errors.statusId}
+                >
+                  {(props) => (
+                    <select
+                      {...props}
+                      name="statusId"
+                      value={formData.statusId}
+                      onChange={handleChange}
+                      className="form-input w-full min-w-0"
+                    >
+                      <option value="">Select Status</option>
+                      {statuses
+                        .filter((s) => !s.isArchivedStatus)
+                        .map((status) => (
+                          <option key={status.id} value={status.id}>
+                            {status.name}
+                          </option>
+                        ))}
+                    </select>
+                  )}
+                </FormField>
                 {/* Statuses flagged requires_reason (Out of Service, as seeded)
                     are refused without one by POST /apparatus/{id}/status; this
                     form saves through the plain update, which does not check,
                     so the requirement is enforced here. */}
                 {formData.statusId && (
-                  <div className="mt-3">
-                    <label htmlFor="apparatus-statusReason" className="text-theme-text-secondary mb-1 block text-sm">
-                      Reason{' '}
-                      {selectedStatus?.requiresReason ? (
-                        <span className="text-red-700 dark:text-red-400">*</span>
-                      ) : (
-                        <span className="text-theme-text-muted">(optional)</span>
-                      )}
-                    </label>
-                    <input
-                      id="apparatus-statusReason"
-                      name="statusReason"
-                      type="text"
-                      value={formData.statusReason ?? ''}
-                      onChange={handleChange}
-                      placeholder="e.g. Pump seal leaking, at the shop"
-                      className={`form-input ${errors.statusReason ? 'border-red-500' : 'border-theme-input-border'}`}
-                      aria-invalid={Boolean(errors.statusReason)}
-                      aria-describedby={`apparatus-statusReason-help${errors.statusReason ? ' apparatus-statusReason-error' : ''}`}
-                    />
-                    <p id="apparatus-statusReason-help" className="text-theme-text-muted mt-1 text-xs">
-                      Shown next to the status on the apparatus page.
-                    </p>
-                    {errors.statusReason && (
-                      <p id="apparatus-statusReason-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-                        {errors.statusReason}
-                      </p>
+                  <FormField
+                    id={APPARATUS_FORM_FIELDS.statusReason.id}
+                    className="mt-3"
+                    label={FIELD_LABELS.statusReason}
+                    labelClassName={LABEL_CLASS}
+                    required={Boolean(selectedStatus?.requiresReason)}
+                    optional={!selectedStatus?.requiresReason}
+                    error={errors.statusReason}
+                    hint="Shown next to the status on the apparatus page."
+                  >
+                    {(props) => (
+                      <input
+                        {...props}
+                        name="statusReason"
+                        type="text"
+                        value={formData.statusReason ?? ''}
+                        onChange={handleChange}
+                        placeholder="e.g. Pump seal leaking, at the shop"
+                        className="form-input w-full min-w-0"
+                      />
                     )}
-                  </div>
+                  </FormField>
                 )}
               </div>
-              <div>
-                <label htmlFor="apparatus-vin" className="text-theme-text-secondary mb-1 block text-sm">
-                  VIN
-                </label>
-                <input
-                  id="apparatus-vin"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  type="text"
-                  name="vin"
-                  value={formData.vin}
-                  onChange={handleChange}
-                  className="form-input font-mono"
-                  placeholder="1HGCM82633A123456"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-radioId" className="text-theme-text-secondary mb-1 block text-sm">
-                  Radio ID
-                </label>
-                <input
-                  id="apparatus-radioId"
-                  type="text"
-                  name="radioId"
-                  value={formData.radioId}
-                  onChange={handleChange}
-                  className="form-input"
-                  placeholder="E1"
-                />
-              </div>
+              {textField('vin', { placeholder: '1HGCM82633A123456', literal: true, className: 'font-mono' })}
+              {textField('radioId', { placeholder: 'E1' })}
             </div>
           </div>
 
@@ -563,128 +862,14 @@ export const ApparatusFormPage: React.FC = () => {
           <div className="card p-6">
             <h2 className="text-theme-text-primary mb-6 font-bold">Vehicle Details</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
-              <div>
-                <label htmlFor="apparatus-year" className="text-theme-text-secondary mb-1 block text-sm">
-                  Year
-                </label>
-                <input
-                  id="apparatus-year"
-                  type="number"
-                  name="year"
-                  value={formData.year ?? ''}
-                  onChange={handleChange}
-                  className="form-input"
-                  placeholder="2024"
-                  min="1900"
-                  max="2100"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-make" className="text-theme-text-secondary mb-1 block text-sm">
-                  Make
-                </label>
-                <input
-                  id="apparatus-make"
-                  type="text"
-                  name="make"
-                  value={formData.make}
-                  onChange={handleChange}
-                  className="form-input"
-                  placeholder="Pierce"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-model" className="text-theme-text-secondary mb-1 block text-sm">
-                  Model
-                </label>
-                <input
-                  id="apparatus-model"
-                  type="text"
-                  name="model"
-                  value={formData.model}
-                  onChange={handleChange}
-                  className="form-input"
-                  placeholder="Enforcer"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-bodyManufacturer" className="text-theme-text-secondary mb-1 block text-sm">
-                  Body Manufacturer
-                </label>
-                <input
-                  id="apparatus-bodyManufacturer"
-                  type="text"
-                  name="bodyManufacturer"
-                  value={formData.bodyManufacturer}
-                  onChange={handleChange}
-                  className="form-input"
-                  placeholder="Pierce"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-licensePlate" className="text-theme-text-secondary mb-1 block text-sm">
-                  License Plate
-                </label>
-                <input
-                  id="apparatus-licensePlate"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  type="text"
-                  name="licensePlate"
-                  value={formData.licensePlate}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-licenseState" className="text-theme-text-secondary mb-1 block text-sm">
-                  License State
-                </label>
-                <input
-                  id="apparatus-licenseState"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  type="text"
-                  name="licenseState"
-                  value={formData.licenseState}
-                  onChange={handleChange}
-                  className="form-input"
-                  placeholder="NY"
-                  maxLength={2}
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-color" className="text-theme-text-secondary mb-1 block text-sm">
-                  Color
-                </label>
-                <input
-                  id="apparatus-color"
-                  type="text"
-                  name="color"
-                  value={formData.color}
-                  onChange={handleChange}
-                  className="form-input"
-                  placeholder="Red"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-assetTag" className="text-theme-text-secondary mb-1 block text-sm">
-                  Asset Tag
-                </label>
-                <input
-                  id="apparatus-assetTag"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  type="text"
-                  name="assetTag"
-                  value={formData.assetTag}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
+              {numberField('year', { placeholder: '2024' })}
+              {textField('make', { placeholder: 'Pierce' })}
+              {textField('model', { placeholder: 'Enforcer' })}
+              {textField('bodyManufacturer', { placeholder: 'Pierce' })}
+              {textField('licensePlate', { literal: true })}
+              {textField('licenseState', { placeholder: 'NY', literal: true })}
+              {textField('color', { placeholder: 'Red' })}
+              {textField('assetTag', { literal: true })}
             </div>
           </div>
 
@@ -692,69 +877,47 @@ export const ApparatusFormPage: React.FC = () => {
           <div className="card p-6">
             <h2 className="text-theme-text-primary mb-6 font-bold">Staffing & Specifications</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
-              <div>
-                <label htmlFor="apparatus-minStaffing" className="text-theme-text-secondary mb-1 block text-sm">
-                  Minimum Staffing <span className="text-red-700 dark:text-red-400">*</span>
-                </label>
-                <input
-                  id="apparatus-minStaffing"
-                  type="number"
-                  name="minStaffing"
-                  value={formData.minStaffing ?? 1}
-                  onChange={handleChange}
-                  className="form-input"
-                  min={1}
-                  max={50}
-                />
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  Minimum crew members required to staff this apparatus
-                </p>
-              </div>
+              {numberField('minStaffing', {
+                required: true,
+                fallback: 1,
+                hint: 'Minimum crew members required to staff this apparatus',
+              })}
               {evocLevels.length > 0 && (
-                <div>
-                  <label
-                    htmlFor="apparatus-requiredEvocLevelId"
-                    className="text-theme-text-secondary mb-1 block text-sm"
-                  >
-                    Required EVOC Level
-                  </label>
-                  <select
-                    id="apparatus-requiredEvocLevelId"
-                    name="requiredEvocLevelId"
-                    value={formData.requiredEvocLevelId ?? ''}
-                    onChange={handleChange}
-                    className="form-input"
-                  >
-                    <option value="">No EVOC requirement</option>
-                    {evocLevels.map((level) => (
-                      <option key={level.id} value={level.id}>
-                        Level {level.levelNumber} — {level.name}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-theme-text-muted mt-1 text-xs">EVOC level required to drive this apparatus</p>
-                </div>
+                <FormField
+                  id={APPARATUS_FORM_FIELDS.requiredEvocLevelId.id}
+                  label={FIELD_LABELS.requiredEvocLevelId}
+                  labelClassName={LABEL_CLASS}
+                  error={errors.requiredEvocLevelId}
+                  hint="EVOC level required to drive this apparatus"
+                >
+                  {(props) => (
+                    <select
+                      {...props}
+                      name="requiredEvocLevelId"
+                      value={formData.requiredEvocLevelId ?? ''}
+                      onChange={handleChange}
+                      className="form-input w-full min-w-0"
+                    >
+                      <option value="">No EVOC requirement</option>
+                      {evocLevels.map((level) => (
+                        <option key={level.id} value={level.id}>
+                          Level {level.levelNumber} — {level.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </FormField>
               )}
-              <div>
-                <label htmlFor="apparatus-seatingCapacity" className="text-theme-text-secondary mb-1 block text-sm">
-                  Seating Capacity
-                </label>
-                <input
-                  id="apparatus-seatingCapacity"
-                  type="number"
-                  name="seatingCapacity"
-                  value={formData.seatingCapacity ?? ''}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
+              {numberField('seatingCapacity')}
               <div className="md:col-span-2">
                 <div className="mb-2 flex items-center justify-between">
-                  <label className="text-theme-text-secondary block text-sm">Crew Positions / Seats</label>
+                  <span className="text-theme-text-secondary block text-sm">{FIELD_LABELS.crewPositions}</span>
                   <button
                     type="button"
+                    id={APPARATUS_FORM_FIELDS.crewPositions.id}
                     onClick={addCrewPosition}
-                    className="text-theme-accent-blue hover:bg-theme-accent-blue/10 flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition-colors"
+                    aria-describedby={errors.crewPositions ? 'apparatus-crewPositions-error' : undefined}
+                    className="text-theme-accent-blue hover:bg-theme-accent-blue/10 touch:min-h-11 flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition-colors"
                   >
                     <Plus className="h-3 w-3" aria-hidden="true" /> Add Seat
                   </button>
@@ -773,7 +936,7 @@ export const ApparatusFormPage: React.FC = () => {
                           aria-label={`Crew seat ${index + 1} position`}
                           value={position}
                           onChange={(event) => updateCrewPosition(index, event.target.value)}
-                          className="form-input flex-1"
+                          className="form-input min-w-0 flex-1"
                         >
                           <option value="">Select a crew position</option>
                           {isLegacyPosition && <option value={position}>{position} (legacy position)</option>}
@@ -788,7 +951,7 @@ export const ApparatusFormPage: React.FC = () => {
                           type="button"
                           onClick={() => removeCrewPosition(index)}
                           aria-label={`Remove crew seat ${index + 1}`}
-                          className="text-theme-text-muted rounded-sm p-1.5 transition-colors hover:text-red-500"
+                          className="text-theme-text-muted touch:min-h-11 touch:min-w-11 rounded-sm p-1.5 transition-colors hover:text-red-500"
                         >
                           <X className="h-4 w-4" aria-hidden="true" />
                         </button>
@@ -801,108 +964,45 @@ export const ApparatusFormPage: React.FC = () => {
                     </p>
                   )}
                 </div>
+                {errors.crewPositions && (
+                  <p id="apparatus-crewPositions-error" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+                    {errors.crewPositions}
+                  </p>
+                )}
                 <p className="text-theme-text-muted mt-1 text-xs">
                   List seats in riding order. Each option shows the ranks that can fill it. Repeat a position for each
                   seat of that kind. New shifts on this apparatus start with these seats.
                 </p>
               </div>
-              <div>
-                <label htmlFor="apparatus-gvwr" className="text-theme-text-secondary mb-1 block text-sm">
-                  GVWR (lbs)
-                </label>
-                <input
-                  id="apparatus-gvwr"
-                  type="number"
-                  name="gvwr"
-                  value={formData.gvwr ?? ''}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-fuelType" className="text-theme-text-secondary mb-1 block text-sm">
-                  Fuel Type
-                </label>
-                <select
-                  id="apparatus-fuelType"
-                  name="fuelType"
-                  value={formData.fuelType ?? ''}
-                  onChange={handleChange}
-                  className="form-input"
-                >
-                  <option value="">Select Fuel Type</option>
-                  {fuelTypes.map((ft) => (
-                    <option key={ft} value={ft}>
-                      {FUEL_TYPE_LABELS[ft]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="apparatus-fuelCapacityGallons" className="text-theme-text-secondary mb-1 block text-sm">
-                  Fuel Capacity (gal)
-                </label>
-                <input
-                  id="apparatus-fuelCapacityGallons"
-                  type="number"
-                  name="fuelCapacityGallons"
-                  value={formData.fuelCapacityGallons ?? ''}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-pumpCapacityGpm" className="text-theme-text-secondary mb-1 block text-sm">
-                  Pump Capacity (GPM)
-                </label>
-                <input
-                  id="apparatus-pumpCapacityGpm"
-                  type="number"
-                  name="pumpCapacityGpm"
-                  value={formData.pumpCapacityGpm ?? ''}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-tankCapacityGallons" className="text-theme-text-secondary mb-1 block text-sm">
-                  Water Tank (gal)
-                </label>
-                <input
-                  id="apparatus-tankCapacityGallons"
-                  type="number"
-                  name="tankCapacityGallons"
-                  value={formData.tankCapacityGallons ?? ''}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-foamCapacityGallons" className="text-theme-text-secondary mb-1 block text-sm">
-                  Foam Tank (gal)
-                </label>
-                <input
-                  id="apparatus-foamCapacityGallons"
-                  type="number"
-                  name="foamCapacityGallons"
-                  value={formData.foamCapacityGallons ?? ''}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-ladderLengthFeet" className="text-theme-text-secondary mb-1 block text-sm">
-                  Ladder Length (ft)
-                </label>
-                <input
-                  id="apparatus-ladderLengthFeet"
-                  type="number"
-                  name="ladderLengthFeet"
-                  value={formData.ladderLengthFeet ?? ''}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
+              {numberField('gvwr')}
+              <FormField
+                id={APPARATUS_FORM_FIELDS.fuelType.id}
+                label={FIELD_LABELS.fuelType}
+                labelClassName={LABEL_CLASS}
+                error={errors.fuelType}
+              >
+                {(props) => (
+                  <select
+                    {...props}
+                    name="fuelType"
+                    value={formData.fuelType ?? ''}
+                    onChange={handleChange}
+                    className="form-input w-full min-w-0"
+                  >
+                    <option value="">Select Fuel Type</option>
+                    {fuelTypes.map((ft) => (
+                      <option key={ft} value={ft}>
+                        {FUEL_TYPE_LABELS[ft]}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
+              {numberField('fuelCapacityGallons', { step: 'any' })}
+              {numberField('pumpCapacityGpm')}
+              {numberField('tankCapacityGallons')}
+              {numberField('foamCapacityGallons')}
+              {numberField('ladderLengthFeet')}
             </div>
           </div>
 
@@ -910,32 +1010,8 @@ export const ApparatusFormPage: React.FC = () => {
           <div className="card p-6">
             <h2 className="text-theme-text-primary mb-6 font-bold">Usage Tracking</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div>
-                <label htmlFor="apparatus-currentMileage" className="text-theme-text-secondary mb-1 block text-sm">
-                  Current Mileage
-                </label>
-                <input
-                  id="apparatus-currentMileage"
-                  type="number"
-                  name="currentMileage"
-                  value={formData.currentMileage ?? ''}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-currentHours" className="text-theme-text-secondary mb-1 block text-sm">
-                  Current Hours
-                </label>
-                <input
-                  id="apparatus-currentHours"
-                  type="number"
-                  name="currentHours"
-                  value={formData.currentHours ?? ''}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
+              {numberField('currentMileage')}
+              {numberField('currentHours', { step: 'any' })}
             </div>
           </div>
 
@@ -943,59 +1019,10 @@ export const ApparatusFormPage: React.FC = () => {
           <div className="card p-6">
             <h2 className="text-theme-text-primary mb-6 font-bold">Purchase Information</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
-              <div>
-                <label htmlFor="apparatus-purchaseDate" className="text-theme-text-secondary mb-1 block text-sm">
-                  Purchase Date
-                </label>
-                <input
-                  id="apparatus-purchaseDate"
-                  type="date"
-                  name="purchaseDate"
-                  value={formData.purchaseDate}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-purchasePrice" className="text-theme-text-secondary mb-1 block text-sm">
-                  Purchase Price
-                </label>
-                <input
-                  id="apparatus-purchasePrice"
-                  type="number"
-                  name="purchasePrice"
-                  value={formData.purchasePrice ?? ''}
-                  onChange={handleChange}
-                  className="form-input"
-                  step="0.01"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-purchaseVendor" className="text-theme-text-secondary mb-1 block text-sm">
-                  Vendor
-                </label>
-                <input
-                  id="apparatus-purchaseVendor"
-                  type="text"
-                  name="purchaseVendor"
-                  value={formData.purchaseVendor}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-inServiceDate" className="text-theme-text-secondary mb-1 block text-sm">
-                  In Service Date
-                </label>
-                <input
-                  id="apparatus-inServiceDate"
-                  type="date"
-                  name="inServiceDate"
-                  value={formData.inServiceDate}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
+              {dateField('purchaseDate')}
+              {numberField('purchasePrice', { step: '0.01' })}
+              {textField('purchaseVendor')}
+              {dateField('inServiceDate')}
             </div>
 
             {/* Financing */}
@@ -1015,52 +1042,9 @@ export const ApparatusFormPage: React.FC = () => {
               </div>
               {formData.isFinanced && (
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                  <div>
-                    <label
-                      htmlFor="apparatus-financingCompany"
-                      className="text-theme-text-secondary mb-1 block text-sm"
-                    >
-                      Financing Company
-                    </label>
-                    <input
-                      id="apparatus-financingCompany"
-                      type="text"
-                      name="financingCompany"
-                      value={formData.financingCompany}
-                      onChange={handleChange}
-                      className="form-input"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="apparatus-monthlyPayment" className="text-theme-text-secondary mb-1 block text-sm">
-                      Monthly Payment
-                    </label>
-                    <input
-                      id="apparatus-monthlyPayment"
-                      type="number"
-                      name="monthlyPayment"
-                      value={formData.monthlyPayment ?? ''}
-                      onChange={handleChange}
-                      className="form-input"
-                      step="0.01"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="apparatus-financingEndDate"
-                      className="text-theme-text-secondary mb-1 block text-sm"
-                    >
-                      Financing End Date
-                    </label>
-                    <input
-                      id="apparatus-financingEndDate"
-                      type="date"
-                      name="financingEndDate"
-                      value={formData.financingEndDate}
-                      onChange={handleChange}
-                      className="form-input"
-                    />
-                  </div>
+                  {textField('financingCompany')}
+                  {numberField('monthlyPayment', { step: '0.01' })}
+                  {dateField('financingEndDate')}
                 </div>
               )}
             </div>
@@ -1070,64 +1054,10 @@ export const ApparatusFormPage: React.FC = () => {
           <div className="card p-6">
             <h2 className="text-theme-text-primary mb-6 font-bold">Expiration Dates</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
-              <div>
-                <label
-                  htmlFor="apparatus-registrationExpiration"
-                  className="text-theme-text-secondary mb-1 block text-sm"
-                >
-                  Registration Expiration
-                </label>
-                <input
-                  id="apparatus-registrationExpiration"
-                  type="date"
-                  name="registrationExpiration"
-                  value={formData.registrationExpiration}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="apparatus-inspectionExpiration"
-                  className="text-theme-text-secondary mb-1 block text-sm"
-                >
-                  Inspection Expiration
-                </label>
-                <input
-                  id="apparatus-inspectionExpiration"
-                  type="date"
-                  name="inspectionExpiration"
-                  value={formData.inspectionExpiration}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-insuranceExpiration" className="text-theme-text-secondary mb-1 block text-sm">
-                  Insurance Expiration
-                </label>
-                <input
-                  id="apparatus-insuranceExpiration"
-                  type="date"
-                  name="insuranceExpiration"
-                  value={formData.insuranceExpiration}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-warrantyExpiration" className="text-theme-text-secondary mb-1 block text-sm">
-                  Warranty Expiration
-                </label>
-                <input
-                  id="apparatus-warrantyExpiration"
-                  type="date"
-                  name="warrantyExpiration"
-                  value={formData.warrantyExpiration}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
+              {dateField('registrationExpiration')}
+              {dateField('inspectionExpiration')}
+              {dateField('insuranceExpiration')}
+              {dateField('warrantyExpiration')}
             </div>
           </div>
 
@@ -1164,34 +1094,8 @@ export const ApparatusFormPage: React.FC = () => {
           <div className="card p-6">
             <h2 className="text-theme-text-primary mb-6 font-bold">Notes</h2>
             <div className="space-y-4">
-              <div>
-                <label htmlFor="apparatus-description" className="text-theme-text-secondary mb-1 block text-sm">
-                  Description
-                </label>
-                <textarea
-                  id="apparatus-description"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  rows={3}
-                  className="form-input"
-                  placeholder="Brief description of this apparatus..."
-                />
-              </div>
-              <div>
-                <label htmlFor="apparatus-notes" className="text-theme-text-secondary mb-1 block text-sm">
-                  Additional Notes
-                </label>
-                <textarea
-                  id="apparatus-notes"
-                  name="notes"
-                  value={formData.notes}
-                  onChange={handleChange}
-                  rows={3}
-                  className="form-input"
-                  placeholder="Any additional notes..."
-                />
-              </div>
+              {textAreaField('description', 'Brief description of this apparatus...')}
+              {textAreaField('notes', 'Any additional notes...')}
             </div>
           </div>
 
@@ -1199,7 +1103,7 @@ export const ApparatusFormPage: React.FC = () => {
           <div className="flex flex-wrap items-center justify-end gap-4">
             <button
               type="button"
-              onClick={() => void navigate('/apparatus')}
+              onClick={handleCancel}
               className="bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary rounded-lg px-6 py-3 transition-colors"
             >
               Cancel

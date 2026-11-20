@@ -13,8 +13,10 @@ per-row corrections, and the decisions taken while reviewing (who a name is,
 which unit a vehicle name means, whether two rows are the same shift). A draft
 can take days of cleaning, so it is stored rather than held in the browser.
 
-A committed import is final. Its shifts are ordinary shifts afterwards and are
-corrected one at a time like any other; there is deliberately no batch undo.
+A committed import uploaded here is final. Its shifts are ordinary shifts
+afterwards and are corrected one at a time like any other. A batch a
+Historical Data Import sent here is the exception: undoing that import's shift
+hours step removes what its batches wrote (``historical_import_undo``).
 """
 
 from datetime import datetime

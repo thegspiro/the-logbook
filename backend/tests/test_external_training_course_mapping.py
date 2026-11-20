@@ -10,8 +10,10 @@ never applied.
 """
 
 import io
+import random
 import uuid
 from datetime import date
+from difflib import SequenceMatcher
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -48,6 +50,7 @@ from app.schemas.training import (
 )
 from app.services.email_service import EmailService
 from app.services.external_course_mapping import (
+    SUGGESTION_THRESHOLD,
     SuggestionCandidates,
     _course_lines,
     normalize_course_title,
@@ -157,6 +160,50 @@ class TestPickSuggestion:
         )
 
         assert candidates.pick("3088740", HIPAA_2026[0]) is None
+
+    def test_skipping_hopeless_pairs_picks_what_comparing_every_pair_picks(self):
+        # pick() skips a pair whose cheap upper bound cannot reach the
+        # threshold or beat the best so far. Against a brute-force reference
+        # over names built to sit near the threshold, the course chosen must
+        # be the same every time.
+        rng = random.Random(4418)
+        words = (
+            "cpr refresher ladder operations hazmat awareness ems continuing "
+            "education pump driver hose rope rescue vehicle extrication "
+            "incident command firefighter safety survival bloodborne "
+            "pathogens respiratory protection scba ventilation search"
+        ).split()
+
+        def title():
+            return " ".join(rng.choices(words, k=rng.randint(2, 5)))
+
+        def typo(text):
+            i = rng.randrange(len(text))
+            return text[:i] + rng.choice("aeiou ") + text[i + 1 :]
+
+        library = [_course(title()) for _ in range(60)]
+        candidates = self._candidates(library=library)
+        names = [title() for _ in range(150)]
+        names += [typo(c.name) for c in library] + [c.name.upper() for c in library]
+
+        def reference(name):
+            target = normalize_course_title(name)
+            best, chosen = 0.0, None
+            for course in library:
+                other = normalize_course_title(course.name)
+                score = (
+                    1.0
+                    if target == other
+                    else (SequenceMatcher(None, target, other).ratio())
+                )
+                if score > best:
+                    best, chosen = score, course
+            return chosen if best >= SUGGESTION_THRESHOLD else None
+
+        picked = [candidates.pick("x", name) for name in names]
+        assert picked == [reference(name) for name in names]
+        assert any(p is not None for p in picked)
+        assert any(p is None for p in picked)
 
 
 @pytest.mark.unit

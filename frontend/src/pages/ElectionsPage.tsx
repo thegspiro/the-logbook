@@ -45,6 +45,7 @@ import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
 import { Vote } from 'lucide-react';
 import { ElectionsAreaNav } from '../modules/elections/components/ElectionsAreaNav';
+import { getLoadFailureMessage } from '../utils/errorHandling';
 
 interface PositionSuggestion {
   key: string;
@@ -192,25 +193,26 @@ export const ElectionsPage: React.FC = () => {
       setError(null);
       const data = await electionService.getElections();
       setElections(data);
-    } catch (_err) {
-      setError("Couldn't load elections. Check your connection and refresh the page.");
+    } catch (err: unknown) {
+      setError(getLoadFailureMessage(err, 'elections'));
     } finally {
       setLoading(false);
     }
   };
 
+  // Settled separately, never through one Promise.all: /meetings sits behind
+  // the Minutes module switch and the meetings.view / minutes.view grants,
+  // /events behind neither. A department running with Minutes off keeps its
+  // business meetings as events, and a single refusal used to empty both
+  // halves of the picker, leaving only "No linked meeting".
   const fetchMeetings = useCallback(async () => {
-    try {
-      const today = getTodayLocalDate(tz);
-      const [meetingsData, eventsData] = await Promise.all([
-        meetingsService.getMeetings({ from_date: today, limit: 100 }),
-        eventService.getEvents({ start_after: today, limit: 100 }),
-      ]);
-      setMeetings(meetingsData.meetings);
-      setBusinessMeetingEvents(eventsData);
-    } catch {
-      // Non-critical — meeting selector will just be empty
-    }
+    const today = getTodayLocalDate(tz);
+    const [meetingsResult, eventsResult] = await Promise.allSettled([
+      meetingsService.getMeetings({ from_date: today, limit: 100 }),
+      eventService.getEvents({ start_after: today, limit: 100 }),
+    ]);
+    if (meetingsResult.status === 'fulfilled') setMeetings(meetingsResult.value.meetings);
+    if (eventsResult.status === 'fulfilled') setBusinessMeetingEvents(eventsResult.value);
   }, [tz]);
 
   useEffect(() => {

@@ -63,6 +63,10 @@ from app.services.file_storage_service import (
     FileRules,
     StorageArea,
 )
+from app.services.member_files import (
+    confined_attachment_path,
+    confined_attachment_paths,
+)
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.services.training_submission_service import (
     TrainingSubmissionService,
@@ -771,24 +775,17 @@ async def _load_submission_for_attachment(
 
 
 def _confined_path(attachment, organization_id) -> str | None:
-    """Real path of a stored attachment, or None if it escapes the org's area.
-
-    file_path is server-generated, but the column round-trips through JSON —
-    this is what keeps a tampered value from becoming an arbitrary file read
-    (or, on delete, an arbitrary unlink). Confined to the submission's *own
-    organization*: a root-level check would still serve another tenant's
-    certificate.
-    """
-    if not isinstance(attachment, dict):
-        return None
-    return file_storage.resolve(
-        attachment.get("file_path"), organization_id, StorageArea.SELF_REPORTS
+    """A stored self-report attachment of the submission's own organization;
+    see :func:`app.services.member_files.confined_attachment_path`."""
+    return confined_attachment_path(
+        attachment, organization_id, StorageArea.SELF_REPORTS
     )
 
 
 def _confined_attachment_paths(attachments, organization_id) -> list[str]:
-    paths = [_confined_path(a, organization_id) for a in attachments or []]
-    return [path for path in paths if path]
+    return confined_attachment_paths(
+        attachments, organization_id, StorageArea.SELF_REPORTS
+    )
 
 
 async def _store_attachment_file(

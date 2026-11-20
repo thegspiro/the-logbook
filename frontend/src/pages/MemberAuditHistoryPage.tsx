@@ -21,6 +21,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import type { MemberAuditLogEntry } from '../types/user';
 import type { UserRoleResponse } from '../types/role';
 import { Breadcrumbs } from '../components/ux';
+import { getLoadFailureMessage } from '../utils/errorHandling';
 
 type EventTypeFilter =
   'all' | 'profile_update' | 'status_change' | 'role_change' | 'password_reset' | 'membership_change';
@@ -98,8 +99,8 @@ export const MemberAuditHistoryPage: React.FC = () => {
 
         // If fewer than 50 results returned, there are no more pages
         setHasMore(data.length >= 50);
-      } catch (_err) {
-        setError('Unable to load audit history. Check your connection and try again.');
+      } catch (err: unknown) {
+        setError(getLoadFailureMessage(err, 'audit history'));
       } finally {
         setLoading(false);
         setLoadingMore(false);
