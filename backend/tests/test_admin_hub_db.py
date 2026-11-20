@@ -22,6 +22,12 @@ from app.models.medical_screening import (
     ScreeningType,
 )
 from app.models.membership_pipeline import ProspectiveMember, ProspectStatus
+from app.models.training import (
+    TrainingCourse,
+    TrainingRecord,
+    TrainingStatus,
+    TrainingType,
+)
 from app.models.user import Organization, Position, User, UserStatus
 from app.schemas.admin_hub import AdminMetricSettingsUpdate
 from app.services.admin_hub_service import (
@@ -31,6 +37,7 @@ from app.services.admin_hub_service import (
     AdminHubService,
 )
 from app.services.medical_screening_service import MedicalScreeningService
+from app.services.training_course_links import TrainingCourseLinkService
 from tests.clock_support import reread_each_test
 
 pytestmark = [pytest.mark.integration]
@@ -682,6 +689,110 @@ class TestOverdueScreenings:
         await _screening(db_session, org, member, status=ScreeningStatus.COMPLETED)
 
         assert (await _queue(db_session, org, member))["overdue_screenings"].count == 1
+
+
+# ── The training queue: Course Links ────────────────────────────────────────
+
+
+async def _library_course(db_session, org, name) -> TrainingCourse:
+    course = TrainingCourse(
+        id=str(uuid.uuid4()),
+        organization_id=org.id,
+        name=name,
+        training_type=TrainingType.CERTIFICATION,
+        active=True,
+    )
+    db_session.add(course)
+    await db_session.flush()
+    return course
+
+
+async def _named_record(db_session, org, user, name, course=None) -> TrainingRecord:
+    record = TrainingRecord(
+        id=str(uuid.uuid4()),
+        organization_id=org.id,
+        user_id=user.id,
+        course_name=name,
+        course_id=course.id if course else None,
+        training_type=TrainingType.CONTINUING_EDUCATION,
+        completion_date=TODAY - timedelta(days=30),
+        hours_completed=2,
+        status=TrainingStatus.COMPLETED,
+    )
+    db_session.add(record)
+    await db_session.flush()
+    return record
+
+
+class TestUnlinkedCourseNames:
+    """Names the library has a suggestion for, and only those (owner decision
+    2026-11-17): a name nothing matches would keep the row open for good."""
+
+    HREF = "/training/admin?page=curriculum&tab=course-links"
+
+    async def test_counts_names_with_a_suggested_course(self, db_session):
+        org = await _org(db_session)
+        member = await _member(db_session, org)
+        await _library_course(db_session, org, "CPR Refresher")
+        await _library_course(db_session, org, "Ladder Operations")
+        # Two spellings of one name are one name.
+        await _named_record(db_session, org, member, "CPR Refresher")
+        await _named_record(db_session, org, member, "C.P.R. refresher")
+        await _named_record(db_session, org, member, "Ladder Operations")
+
+        item = (await _queue(db_session, org, member, "training"))[
+            "unlinked_course_names"
+        ]
+
+        assert item.count == 2
+        assert item.title == "2 training names can be linked to a course"
+        assert item.detail == "across 3 records"
+        assert item.href == self.HREF
+
+    async def test_a_name_the_library_cannot_match_is_not_counted(self, db_session):
+        org = await _org(db_session)
+        member = await _member(db_session, org)
+        await _library_course(db_session, org, "CPR Refresher")
+        await _named_record(db_session, org, member, "1998 Chili Cook-off Safety")
+
+        queue = await _queue(db_session, org, member, "training")
+
+        assert "unlinked_course_names" not in queue
+
+    async def test_linked_records_and_other_departments_are_not_counted(
+        self, db_session
+    ):
+        org = await _org(db_session)
+        member = await _member(db_session, org)
+        course = await _library_course(db_session, org, "CPR Refresher")
+        await _named_record(db_session, org, member, "CPR Refresher", course=course)
+        other = await _org(db_session)
+        outsider = await _member(db_session, other)
+        await _library_course(db_session, other, "CPR Refresher")
+        await _named_record(db_session, other, outsider, "CPR Refresher")
+
+        queue = await _queue(db_session, org, member, "training")
+
+        assert "unlinked_course_names" not in queue
+
+    async def test_a_failing_lookup_leaves_the_rest_of_the_queue(
+        self, db_session, monkeypatch
+    ):
+        org = await _org(db_session)
+        member = await _member(db_session, org)
+        expired = await _named_record(db_session, org, member, "EMT-B")
+        expired.training_type = TrainingType.CERTIFICATION
+        expired.expiration_date = TODAY - timedelta(days=5)
+        await db_session.flush()
+
+        async def broken(self, organization_id):
+            raise RuntimeError("lookup failed")
+
+        monkeypatch.setattr(TrainingCourseLinkService, "unlinked_names", broken)
+        queue = await _queue(db_session, org, member, "training")
+
+        assert "unlinked_course_names" not in queue
+        assert queue["expired_certifications"].count == 1
 
 
 class TestQueueAgreesWithItsMetrics:

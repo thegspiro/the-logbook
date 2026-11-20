@@ -75,7 +75,8 @@
       { "key": "date", "header": "Date" },
       { "key": "hours", "header": "Hours" },
       { "key": "entry_method", "header": "Method" },
-      { "key": "status", "header": "Status" }
+      { "key": "status", "header": "Status" },
+      { "key": "source", "header": "Source" }
     ]
   },
   "department_overview": {
@@ -98,7 +99,8 @@
       { "key": "completion_date", "header": "Completed" },
       { "key": "expiration_date", "header": "Expires" },
       { "key": "days_until_expiry", "header": "Days Until Expiry" },
-      { "key": "expiry_status", "header": "Status" }
+      { "key": "expiry_status", "header": "Status" },
+      { "key": "source", "header": "Source" }
     ]
   },
   "compliance_status": {

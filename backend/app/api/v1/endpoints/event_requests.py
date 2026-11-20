@@ -935,6 +935,15 @@ async def assign_request(
     assignee = assignee_result.scalar_one_or_none()
     if not assignee:
         raise HTTPException(status_code=404, detail="User not found")
+    # Only a current member can be made coordinator. Re-assigning the one the
+    # request already has is allowed even after they have left.
+    if not assignee.is_active and str(data.assigned_to) != str(
+        event_request.assigned_to
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Only current members can be chosen as coordinator",
+        )
 
     old_assignee = event_request.assigned_to
     event_request.assigned_to = data.assigned_to

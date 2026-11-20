@@ -37,7 +37,7 @@ const summary = {
   requirements_at_risk: [],
 };
 
-const LOAD_ERROR = 'Failed to load the dashboard. Check your connection and refresh the page.';
+const LOAD_ERROR = 'Could not load the dashboard. Refresh the page, and if it keeps happening, tell IT.';
 
 describe('TrainingOfficerDashboard', () => {
   beforeEach(() => {

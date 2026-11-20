@@ -6,7 +6,9 @@ import { DialogPortal } from '@/components/DialogPortal';
 import { DialogPanel } from '@/components/ux/DialogPanel';
 import { facilitiesService } from '../../../services/facilitiesServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { useFieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { placeApiError, useFieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { saveExceptRefused } from '../../../utils/saveExceptRefused';
 import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
 import type { FacilityStatus, FacilityType, MaintenanceType } from '../types';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
@@ -115,6 +117,7 @@ export default function FacilitiesSettingsPage() {
             setEditing(null);
             await load();
           }}
+          onPartlySaved={() => void load()}
         />
       )}
     </div>
@@ -214,28 +217,40 @@ function LookupDialog({
   item,
   onClose,
   onSaved,
+  onPartlySaved,
 }: {
   kind: Kind;
   item?: Lookup;
   onClose: () => void;
   onSaved: () => Promise<void>;
+  /** The list behind the dialog refreshes while the dialog stays open on a refused field. */
+  onPartlySaved: () => void;
 }) {
   const [name, setName] = useState(item?.name ?? ''),
     [active, setActive] = useState(item?.isActive !== false),
     [saving, setSaving] = useState(false);
+  // What the dialog held when it opened (or last saved), so Escape, the X and
+  // Cancel ask before throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState({ name: item?.name ?? '', active: item?.isActive !== false });
   const fieldErrors = useFieldErrors(LOOKUP_FIELDS);
+  const requestClose = useDiscardGuard({
+    isDirty: name !== baseline.name || active !== baseline.active,
+    onClose,
+  });
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     // Checked here rather than by greying out Save, which told an officer
     // nothing about why it would not press (forms review F-3).
     fieldErrors.setFormError(null);
-    if (!name.trim()) {
-      const problems = { name: `Enter a name for the ${definitions[kind].singular}.` };
-      fieldErrors.setErrors(problems);
+    const problems: { name?: string } = {};
+    if (!name.trim()) problems.name = `Enter a name for the ${definitions[kind].singular}.`;
+    fieldErrors.setErrors(problems);
+    // A new lookup is not created until its name is fixed; an edit saves the
+    // rest (the Active switch) and keeps the stored name (owner rule, 2026-11-05).
+    if (!item && problems.name) {
       fieldErrors.focusFirst(problems);
       return;
     }
-    fieldErrors.setErrors({});
     setSaving(true);
     // No sort_order: none of the three lookup models has that column and no
     // schema declares it, so Pydantic dropped it and the ordering the dialog
@@ -243,14 +258,35 @@ function LookupDialog({
     // left writing nothing (CLAUDE.md pitfall #19).
     const payload = { name: name.trim(), is_active: active };
     try {
-      if (kind === 'types') {
-        if (item) await facilitiesService.updateType(item.id, payload);
-        else await facilitiesService.createType(payload);
+      if (item) {
+        const update = (body: Record<string, unknown>) =>
+          kind === 'types'
+            ? facilitiesService.updateType(item.id, body)
+            : kind === 'statuses'
+              ? facilitiesService.updateStatus(item.id, body)
+              : facilitiesService.updateMaintenanceType(item.id, body);
+        const { refused } = await saveExceptRefused<'name', unknown>({
+          payload,
+          refused: problems,
+          send: update,
+          place: (err) => placeApiError(LOOKUP_FIELDS, err),
+        });
+        if (refused.name) {
+          // Saved without the name; the dialog stays open with it flagged, and
+          // only the name still counts as unsaved.
+          onPartlySaved();
+          fieldErrors.setErrors(refused);
+          fieldErrors.setFormError(
+            `${capitalize(definitions[kind].singular)} saved, except name. Fix it and save again.`
+          );
+          fieldErrors.focusFirst(refused);
+          setBaseline({ name: baseline.name, active });
+          return;
+        }
+      } else if (kind === 'types') {
+        await facilitiesService.createType(payload);
       } else if (kind === 'statuses') {
-        if (item) await facilitiesService.updateStatus(item.id, payload);
-        else await facilitiesService.createStatus(payload);
-      } else if (item) {
-        await facilitiesService.updateMaintenanceType(item.id, payload);
+        await facilitiesService.createStatus(payload);
       } else {
         await facilitiesService.createMaintenanceType(payload);
       }
@@ -270,7 +306,7 @@ function LookupDialog({
     <DialogPortal>
       <div className="modal-overlay z-50 flex items-center justify-center p-4">
         <DialogPanel
-          onClose={onClose}
+          onClose={requestClose}
           className="modal-panel modal-panel-scroll w-full max-w-md space-y-4 p-5"
           role="dialog"
           aria-modal="true"
@@ -280,13 +316,19 @@ function LookupDialog({
             <h2 id="lookup-title" className="text-lg font-semibold">
               {item ? 'Edit' : 'Add'} {definitions[kind].singular}
             </h2>
-            <FormField id={LOOKUP_FIELDS.name.id} label="Name" required error={fieldErrors.errors.name}>
+            <FormField
+              id={LOOKUP_FIELDS.name.id}
+              label="Name"
+              required
+              error={fieldErrors.errors.name}
+              maxLength={definitions[kind].nameMax}
+              count={name.length}
+            >
               {(field) => (
                 <input
                   {...field}
                   className="form-input w-full"
                   value={name}
-                  maxLength={definitions[kind].nameMax}
                   onChange={(e) => {
                     setName(e.target.value);
                     fieldErrors.setError('name', null);
@@ -309,7 +351,7 @@ function LookupDialog({
               </p>
             )}
             <div className="flex justify-end gap-2">
-              <button type="button" className="btn-secondary" onClick={onClose}>
+              <button type="button" className="btn-secondary" onClick={requestClose}>
                 Cancel
               </button>
               <button className="btn-primary" disabled={saving}>

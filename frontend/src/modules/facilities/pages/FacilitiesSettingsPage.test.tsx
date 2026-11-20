@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   deleteStatus: vi.fn(),
   deleteMaintenanceType: vi.fn(),
   createType: vi.fn(),
+  updateType: vi.fn(),
   error: vi.fn(),
   success: vi.fn(),
 }));
@@ -120,5 +121,40 @@ describe('FacilitiesSettingsPage', () => {
     expect(
       await within(dialog).findByRole('textbox', { name: 'Name', description: 'Value is too long.' })
     ).toHaveFocus();
+  });
+
+  // Forms review F-6: Cancel, Escape and the X threw a typed name away.
+  it('asks before Cancel throws a typed name away', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Add facility type' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add facility type' });
+    await user.type(within(dialog).getByRole('textbox', { name: 'Name' }), 'Annex');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByRole('dialog', { name: 'Add facility type' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('textbox', { name: 'Name' })).toHaveValue('Annex');
+  });
+
+  // Owner rule 2026-11-05: an edit saves the rest and keeps a refused field
+  // flagged. A blank name used to hold back the Active switch with it.
+  it('saves the Active switch on an edit whose name is refused, and keeps the dialog open', async () => {
+    mocks.updateType.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Edit Annex' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit facility type' });
+    await user.clear(within(dialog).getByRole('textbox', { name: 'Name' }));
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Active' }));
+
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(mocks.updateType).toHaveBeenCalledWith('free', { is_active: true }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Facility type saved, except name.');
+    expect(within(dialog).getByRole('textbox', { name: 'Name' })).toHaveAccessibleDescription(
+      'Enter a name for the facility type.'
+    );
   });
 });
