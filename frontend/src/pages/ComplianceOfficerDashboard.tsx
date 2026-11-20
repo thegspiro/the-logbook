@@ -15,6 +15,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
+import { STANDING_TEXT_COLORS } from '../constants/enums';
+import type { Standing } from '../constants/enums';
 import { COMPLIANCE_CONFIG_HREF, COMPLIANCE_CONFIG_PERMISSIONS } from '../components/training/trainingAdminAreas';
 import {
   Shield,
@@ -1160,7 +1162,7 @@ const ForecastSection: React.FC = () => {
                     {f.user_name}
                   </td>
                   <td data-label="Current" className="px-4 py-2 text-center">
-                    <PctBadge pct={f.current_compliance_percentage} />
+                    <StandingPct pct={f.current_compliance_percentage} standing={f.current_standing} />
                   </td>
                   <td data-label="30 Days" className="px-4 py-2 text-center">
                     <PctBadge pct={f.forecast_30_days} />
@@ -1266,6 +1268,19 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     </span>
   );
 };
+
+/**
+ * The forecast's current figure, coloured by the standing the server
+ * classified it with (the member's profile or the department's thresholds),
+ * so this table and the Training Enhancements tab cannot disagree about a
+ * member (CLAUDE.md pitfall #29).
+ */
+const StandingPct: React.FC<{ pct: number | null; standing: Standing }> = ({ pct, standing }) =>
+  pct === null ? (
+    <span className="text-theme-text-muted text-sm">N/A</span>
+  ) : (
+    <span className={`text-sm font-semibold ${STANDING_TEXT_COLORS[standing]}`}>{pct.toFixed(1)}%</span>
+  );
 
 const PctBadge: React.FC<{ pct: number | null }> = ({ pct }) =>
   pct === null ? (

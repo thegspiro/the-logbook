@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**391 tables · 6216 columns · 1301 foreign keys**
+**391 tables · 6217 columns · 1302 foreign keys**
 
 ---
 
@@ -217,7 +217,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`evaluation_parts`](#evaluation_parts) | `EvaluationPart` | 11 | A block of authored content: the evaluator's ratings and narrative, the |
 | [`evaluation_periods`](#evaluation_periods) | `EvaluationPeriod` | 9 | A review period a manager opens, e.g. "2026 Annual Review". |
 | [`evaluation_signatures`](#evaluation_signatures) | `EvaluationSignature` | 14 | A signature given on one step of one revision. |
-| [`evaluation_steps`](#evaluation_steps) | `EvaluationStep` | 16 | The state of one workflow step on one revision of an evaluation. |
+| [`evaluation_steps`](#evaluation_steps) | `EvaluationStep` | 17 | The state of one workflow step on one revision of an evaluation. |
 | [`evaluation_template_versions`](#evaluation_template_versions) | `EvaluationTemplateVersion` | 11 | One version of a template's content and workflow. |
 | [`evaluation_templates`](#evaluation_templates) | `EvaluationTemplate` | 11 | A department's evaluation form for one kind of member. |
 | [`evaluations`](#evaluations) | `Evaluation` | 20 | One member's evaluation for one period. |
@@ -2867,7 +2867,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `guest_headcount_reminder`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -2931,7 +2931,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `guest_headcount_reminder`, `custom`) | no |  |  |  |
 | `to_emails` | TEXT | no |  |  |  |
 | `cc_emails` | TEXT | yes |  |  |  |
 | `bcc_emails` | TEXT | yes |  |  |  |
@@ -3168,11 +3168,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reminder_sent_at` | DATETIME | yes |  |  |  |
 | `overdue_notice_sent_at` | DATETIME | yes |  |  |  |
 | `flagged_items` | JSON | yes |  |  |  |
+| `assignee_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
 **Indexes**
 
+- `ix_evaluation_steps_assignee_id` (`assignee_id`)
 - `ix_evaluation_steps_org_due` (`organization_id`, `status`, `due_date`)
 
 **Constraints**
@@ -13379,7 +13381,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (475 references)
+### → `users` (476 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13491,6 +13493,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `evaluation_parts` | `author_id` | SET NULL | yes |
 | `evaluation_periods` | `created_by` | SET NULL | yes |
 | `evaluation_signatures` | `signer_id` | SET NULL | yes |
+| `evaluation_steps` | `assignee_id` | SET NULL | yes |
 | `evaluation_steps` | `completed_by` | SET NULL | yes |
 | `evaluation_template_versions` | `created_by` | SET NULL | yes |
 | `evaluation_template_versions` | `published_by` | SET NULL | yes |

@@ -262,28 +262,23 @@ Compliant. N/A members are in neither side of it, and if nobody is graded it is
 blank. A department with no active requirements shows **Not set up**, not 100%.
 
 This one standing is shared by the Compliance Matrix, the dashboard
-percentage, the Department Compliance card, the monthly status roster and the
-compliance reports.
+percentage, the Department Compliance card, the member profile's Compliance
+Summary card, the monthly status roster and the compliance reports.
 
-### The member profile's Compliance Summary is a different rule
+### The member profile's Compliance Summary shows the same standing
 
-The **Compliance Summary** card on a member's profile uses its own fixed rule,
-not the thresholds or profiles above:
+Since 2026-11-20 the **Compliance Summary** card on a member's profile (and on
+My Crew and the printed training record) shows the member's matrix standing:
+**Compliant** green, **At Risk** yellow, **Non-Compliant** red, plus
+**Not Applicable** and **Exempt**. It uses the member's profile and the
+thresholds above, so it cannot disagree with the matrix.
 
-| Indicator               | When                                                                                                     |
-| ----------------------- | -------------------------------------------------------------------------------------------------------- |
-| **Non-Compliant** (red) | Any certificate on their records has passed its expiry date, or fewer than half the requirements are met |
-| **At Risk** (yellow)    | Any certificate expires within 90 days, or any requirement is unmet                                      |
-| **Not Applicable**      | No requirement applies and no certificate is lapsing                                                     |
-| **Compliant** (green)   | Otherwise                                                                                                |
-
-It counts every requirement that applies to the member (ignoring profiles), and
-its certificate counts look at every completed record with a certificate
-number — including an older record that a renewal has since replaced. So a
-member can read **At Risk** on their profile and **Non-Compliant** on the
-matrix (2 of 4 above), or red on the profile because of a superseded
-certificate. When the two disagree, the **Compliance Matrix** is the
-department's standing.
+Its certificate figures are for information only. They count every completed
+record with a certificate number — including an older record a renewal has
+since replaced — and do not set the colour. An expired certificate lowers the
+standing only when a requirement grades it. With the current month left out of
+compliance, a certificate that lapsed this month counts as met until the month
+ends, while the card's figure already shows it as expired.
 
 ## Settings that do not change the calculation
 

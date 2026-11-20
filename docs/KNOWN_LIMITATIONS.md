@@ -1476,17 +1476,20 @@ the owner, because closing them changes how members get into their accounts:
   is; the email change itself is now ceiling-bound, step-up gated, audited and
   reported to the previous address.
 
-## Separation of Duties — Five Decisions Left Open (ADV-02, 2026-11-14)
+## Separation of Duties — Four Decisions Left Open (ADV-02, 2026-11-14)
 
 The adversarial pass over the month to 2026-11-14 found these items. Its
 findings are in `docs/security-review/ADV-02-adversarial-last-month.md`. Each
 fix changes a workflow some departments rely on, so the owner decides:
 
-- **One officer can conduct, calibrate and approve a personnel evaluation
-  (ADV2-4).** Only the subject is barred from the approval step and from
-  calibration. Refusing the evaluator stalls every evaluation where they are
-  the only holder of the step's position, because no action reassigns or skips
-  a step.
+- ~~**One officer can conduct, calibrate and approve a personnel evaluation
+  (ADV2-4).**~~ ✅ Resolved 2026-11-16 (owner: refuse, and add a reassign
+  action). The evaluator never approves or calibrates their own evaluation,
+  and nobody signs two approvals on one revision. Where that leaves nobody
+  eligible, an `evaluations.manage` holder names who takes the step, with
+  step-up. On upgrade, an evaluation already waiting on an approval whose only
+  position holder is its evaluator stays open until a manager names someone.
+  See `docs/EVALUATIONS_MODULE.md`.
 - **A shift officer can write their own close-out hours (ADV2-8).** Pre-shift
   work and event attendance refuse the self case. On a one-person shift nobody
   else could record it.
@@ -6947,18 +6950,93 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   on My Training. No migration. Tests:
   `tests/test_my_training_compliance_profiles.py`.
 - **The profile card's colour re-derives its thresholds (D10 follow-up) —
-  open, owner decision needed.** `get_compliance_summary` colours the card
-  red / yellow / green with its own fixed rule instead of
-  `classify_standing` with the matching profile's threshold overrides, so the
-  card can disagree with the matrix's standing for the same member (CLAUDE.md
-  pitfall #29). D10 narrowed its denominator only and left the colour rule
-  as it was; narrowing can still flip a member's colour. Remaining surfaces
-  that are not yet profile-aware, all officer-facing: the period roster
-  (`GET /training/records/member-status`, which also ignores profile
-  threshold overrides), the competency matrix, the compliance CSV/PDF export
-  cells, the compliance forecast and Scheduling's Shift Compliance report.
-  Separately, `optional_requirement_ids` has no reader, and two active
-  profiles of equal priority resolve in an undefined order.
+  ✅ fixed, owner decision 2026-11-20 ("card uses profile limits").**
+  `get_compliance_summary` coloured the card red / yellow / green with its own
+  fixed rule — red for any expired certificate or under half the requirements
+  met, yellow for any certificate expiring within 90 days or anything unmet —
+  so the card could disagree with the matrix's standing for the same member
+  (CLAUDE.md pitfall #29). It now colours the member by
+  `ComplianceGrading.classify` over the member's `ComplianceGrading.for_member`
+  grading: the matching profile's threshold overrides, else the department's
+  thresholds, and the department's threshold type — the matrix's own
+  standing. Compliant is green, at risk yellow, non-compliant red; not
+  applicable and exempt are unchanged. The profile card, My Crew and the
+  member training print page all show it. **Colours change in every
+  department, including one with no compliance configuration**: under the
+  default 100% / 75% thresholds a member meeting at least half but under 75%
+  now reads red (Non-Compliant) where the card read yellow; a member who meets
+  everything but holds a certificate expiring within 90 days reads green, not
+  yellow; a member whose only expired certificate is superseded by a renewal,
+  or graded by no requirement, reads by standing rather than red; a member
+  nothing grades reads Not Applicable whatever their certificates. A
+  department with lowered thresholds — on the configuration or on a profile —
+  and one using "all required" now see those honoured on the card. The
+  certificate counts stay in the response and on the card's Expiring Soon
+  tile for information. An expired certificate a requirement grades still
+  lowers the standing through that requirement's "expired" status, so under
+  lowered thresholds such a member can read yellow or green, as on the
+  matrix, while the tile still says "(1 expired)". The tile and the colour can
+  also differ for up to a month: with the current month left out of
+  compliance, the grader judges a certificate at the end of last month, so
+  one that lapsed this month is graded completed until the month ends, while
+  the tile counts it expired from its expiry date. No migration. Tests:
+  `tests/test_profile_card_standing.py`.
+- **Officer-facing compliance views were not compliance-profile-aware (D10
+  follow-up) — ✅ fixed, owner decision 2026-11-20 ("officer compliance
+  views").** The period roster (`GET /training/records/member-status`), the
+  competency matrix (`GET /training/competency-matrix`), the compliance CSV
+  and PDF export cells, the compliance forecast
+  (`GET /training/reports/compliance-forecast`) and Scheduling's Shift
+  Compliance report graded every applicable requirement against the
+  department's settings. Each now resolves the member through
+  `ComplianceGrading.for_member`, as the compliance matrix does, with one
+  compliance-config load per request. The views that classify a standing take
+  the profile's threshold overrides too: the roster's colour, and the
+  forecast's new `current_standing`, which the Training Enhancements tab and
+  the Compliance Officer dashboard now colour the current figure by instead
+  of their own fixed 80% / 50% rule. The others show no member standing, so
+  the profile narrows their cells only: a requirement outside the member's
+  profile reads `not_applicable` on the competency matrix, prints **N/A** in
+  the CSV and PDF (the PDF's unmet-cell count falls with it), and the member
+  is no longer listed under it on the Shift Compliance report.
+  **Reported numbers change for departments that use compliance profiles**:
+  a profiled member's roster met/total and colour, competency readiness,
+  export cells, forecast percentages and at-risk list, and a shift
+  requirement's member count and compliance rate. The forecast's 30/60/90
+  projections can **fall** for a profiled member: they still subtract every
+  certificate expiring in the window, whatever grades it, now from the
+  profile's smaller set (two requirements met plus one unrelated certificate
+  expiring in 20 days read 50% at 30 days, where three requirements read
+  33.3%). The exports and forecast also now use the department's
+  include-current-month setting, as the matrix does, instead of always
+  counting the current month, so with it off a cell or figure can move near
+  a month boundary (a certificate that lapsed this month stays Met until the
+  month ends). Unchanged: a department with no compliance configuration or
+  whose profiles match nobody, each view's population (the roster's
+  "exempt" rows, and the Shift Compliance report still listing
+  compliance-exempt members), row order, response shapes apart from the
+  added forecast field, waivers, catch-up and not-yet-held handling. No
+  migration. Tests: `tests/test_officer_compliance_views_profiles.py`.
+- **Profiles: optional requirements and equal priorities (D10 follow-up) —
+  open.** `optional_requirement_ids` has no reader, and two active profiles of
+  equal priority resolve in an undefined order.
+- **The compliance exports grade Met / Not Met from the report period's
+  records only — open, found 2026-11-20, not confirmed by running.**
+  `ReportExportService.stream_compliance_csv` and `generate_compliance_pdf`
+  hand `_requirement_cells` only the member's records completed inside the
+  report period (Jan 1 to today by default), while the compliance matrix
+  grades each requirement from the records its own window needs
+  (`load_graded_records`). By reading the code, a certification or one-time
+  requirement completed before the period would print **Not Met** in the
+  export beside a matrix that shows it met (CLAUDE.md pitfall #29). Fixing it
+  changes what the export's period means, so it needs its own decision.
+- **The Compliance Officer dashboard's forecast summary cards keep fixed
+  colour bands — open.** The department "Current" average card colours green
+  at 80% or more and yellow below, and the 30/60/90 average cards and every
+  member's 30/60/90 badge keep their 80% / 50% bands. These are averages and
+  estimates, not a member's standing, so the 2026-11-20 change colours only
+  each member's current figure by its standing; whether the averages should
+  take the department's thresholds is not decided.
 - **A requirement with zero currently-applicable members renders as a
   failing 0% (CMP4-4, LOW) — ✅ fixed 2026-09-29, workflow review W29-4.**
   `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`

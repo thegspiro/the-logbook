@@ -586,6 +586,10 @@ class ComplianceForecast(BaseModel):
     user_name: Optional[str] = None
     # None for a member no requirement grades (not applicable).
     current_compliance_percentage: Optional[float]
+    # The current figure's compliance matrix standing (compliant, at_risk,
+    # non_compliant, not_applicable), by the member's profile thresholds or
+    # the department's. Screens colour the current figure by it.
+    current_standing: str = "not_applicable"
     forecast_30_days: Optional[float]
     forecast_60_days: Optional[float]
     forecast_90_days: Optional[float]
