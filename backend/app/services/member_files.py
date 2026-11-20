@@ -10,8 +10,9 @@ self-report or training-record attachment calls it rather than restating it
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Optional
+from typing import Any, Collection, Iterable, Optional
 
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -194,20 +195,32 @@ async def referenced_elsewhere(
     organization_id: str,
     paths: set[str],
     exclude_rows: set[tuple[str, str]],
+    *,
+    areas: Optional[Collection[StorageArea]] = None,
 ) -> set[str]:
     """Which of *paths* a row other than *exclude_rows* still names.
 
-    ``collect_references`` covers every writer of the SELF_REPORTS,
-    TRAINING_RECORDS and ATTENDANCE_WAIVERS areas, but not every file column
-    in the schema, so this answers "does another row of those kinds point at
-    it" rather than "is it referenced anywhere at all". It reads the whole
-    organization's references, which is acceptable for a rare, step-up-gated
-    action; call it once per operation, never per path.
+    ``collect_references`` lists every column that names a stored file, which
+    ``tests/test_file_reference_coverage_ratchet.py`` holds it to: a new
+    file-path column fails that test until it is collected or allowlisted with
+    a reason. The allowlisted columns hold client-supplied text or a
+    ``document:<id>`` reference, never a path of their own, so this answers
+    "does any other row point at it".
+
+    It reads the organization's references: all of them, or with *areas*
+    (every area *paths* can lie in) only the tables whose references can
+    resolve there. Its callers are the member erasures (anonymisation and
+    hard delete) and a member removing a self-report attachment or deleting a
+    submission, which passes ``SELF_REPORTS`` so a member-facing request does
+    not read the department's documents, events and minutes; call it once
+    per operation, never per path.
     """
     if not paths:
         return set()
     shared: set[str] = set()
-    for ref in await upload_relocation.collect_references(db, str(organization_id)):
+    for ref in await upload_relocation.collect_references(
+        db, str(organization_id), areas=areas
+    ):
         if (ref.table, ref.row_id) in exclude_rows:
             continue
         real = file_storage.resolve(
@@ -226,3 +239,63 @@ class FileRemoval:
     deleted: int = 0
     not_deleted: int = 0
     shared_kept: int = 0
+
+
+async def remove_unreferenced_files(
+    db: AsyncSession,
+    organization_id: str,
+    paths: set[str],
+    *,
+    subject_id: str,
+    areas: Optional[Collection[StorageArea]] = None,
+) -> FileRemoval:
+    """Delete each of *paths* that no collected row names any more. Never raises.
+
+    The one post-commit removal for a file a row stopped naming: call it after
+    the commit that dropped the reference, so a refused change has touched no
+    file and the caller's own row no longer counts. A path another row still
+    names is kept (a voided training record left behind by a reversal names
+    the certificate it was copied from). If that check itself fails, nothing
+    is deleted: unable to tell, an orphan costs disk while a deleted file
+    another record needs loses evidence (the precedent is
+    ``AttendanceWaiverAttachments._abandon``). *subject_id* names the row or
+    member in log lines, never a path or file name. *areas*, when given, must
+    hold every area *paths* lie in; see :func:`referenced_elsewhere`.
+
+    A process killed between the commit and these deletes leaves orphans no
+    later run can find. That is accepted for a single removed attachment; a
+    permanent member delete, which removes many files at once, queues them in
+    ``pending_file_deletions`` instead (``app.services.pending_file_deletions``).
+    """
+    if not paths:
+        return FileRemoval()
+    try:
+        # Looked up on the module at call time, so a test patching
+        # member_files.referenced_elsewhere reaches every caller.
+        shared = await referenced_elsewhere(
+            db, organization_id, paths, set(), areas=areas
+        )
+    except Exception:
+        logger.exception(
+            "Could not check file references after removing files of {}", subject_id
+        )
+        return FileRemoval(not_deleted=len(paths))
+
+    deleted = not_deleted = 0
+    for path in sorted(paths - shared):
+        try:
+            gone = await file_storage.delete(path)
+        except Exception:
+            # delete() reports rather than raises, but a remote store's client
+            # is not this module's to vouch for, and the caller must go on.
+            logger.exception("Could not remove a file of {}", subject_id)
+            gone = False
+        if gone:
+            deleted += 1
+        else:
+            not_deleted += 1
+    if not_deleted:
+        logger.warning("{} file(s) of {} could not be removed", not_deleted, subject_id)
+    return FileRemoval(
+        deleted=deleted, not_deleted=not_deleted, shared_kept=len(shared)
+    )

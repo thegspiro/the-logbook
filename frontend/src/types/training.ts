@@ -615,7 +615,6 @@ export interface TrainingRecordCreate {
   instructor?: string;
   location?: string;
   notes?: string;
-  attachments?: string[];
   rank_at_completion?: string;
   station_at_completion?: string;
 }
@@ -640,7 +639,6 @@ export interface TrainingRecordUpdate {
   instructor?: string | null | undefined;
   location?: string | null | undefined;
   notes?: string;
-  attachments?: string[];
   rank_at_completion?: string | undefined;
   station_at_completion?: string | undefined;
 }
@@ -2030,7 +2028,6 @@ export interface TrainingSubmissionCreate {
   issuing_agency?: string | undefined;
   expiration_date?: string | undefined;
   category_id?: string | undefined;
-  attachments?: string[] | undefined;
   /** Park the submission in the member's own list instead of sending it for review. */
   save_as_draft?: boolean | undefined;
   /**
@@ -2061,7 +2058,6 @@ export interface TrainingSubmissionUpdate {
   issuing_agency?: string | null | undefined;
   expiration_date?: string | null | undefined;
   category_id?: string | null | undefined;
-  attachments?: string[] | undefined;
 }
 
 export interface SubmissionReviewRequest {
@@ -2414,6 +2410,15 @@ export interface RequirementDetail {
    * target was prorated by. Null for every other requirement type.
    */
   monthly_hours?: RequirementMonth[] | null;
+  /**
+   * For an hours requirement: the average hours a month in the months nothing
+   * excused, and the department's monthly pace (its unadjusted level over
+   * `window_months`). Worked out on the server from `monthly_hours`. Shown
+   * beside the total; `is_met` is still decided on the total. Null for every
+   * other type, and absent from an older server.
+   */
+  monthly_average?: number | null;
+  monthly_needed?: number | null;
   /**
    * Shifts worked or calls run per calendar month, for a shift or call
    * requirement: `monthly_hours`' counterpart, with `count` in place of

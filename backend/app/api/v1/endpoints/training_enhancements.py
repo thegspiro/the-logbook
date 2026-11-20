@@ -819,6 +819,14 @@ async def upload_record_attachment(
 
     record = await _load_record_for_attachment(db, record_id, current_user)
 
+    # A void is final, as update_record holds: evidence added afterwards would
+    # sit on a record the department removed, behind the member's notice.
+    if record.voided_at is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="A voided training record can't take new attachments",
+        )
+
     stored = await FileStorageService(db).store_upload(
         file,
         organization_id=current_user.organization_id,
