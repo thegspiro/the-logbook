@@ -881,6 +881,18 @@ Nothing blocks a restart, and no migration ships in this range: `main` at
   requirement progress list only that profile's requirements. "X of Y
   requirements met", average progress and the Upcoming list will move for
   those members. Departments without profiles see no change.
+- **The profile card's colour is the member's Compliance Matrix standing**
+  (owner decision 2026-11-20). The compliance card on a member's profile, the
+  My Crew badge and the printed training record now read green / yellow / red
+  exactly as the matrix classifies the member — the profile's thresholds, else
+  the department's — instead of their own 50% / 100% rule and certificate
+  overlay. Colours move in **every** department, including one with no
+  compliance settings: under the default 100% / 75% thresholds a member
+  meeting half but under three quarters of their requirements turns from
+  yellow to red, and a member who meets everything but holds a certificate
+  expiring within 90 days turns from yellow to green. The expiring and expired
+  certificate counts are still shown, for information. Nothing blocks a
+  restart and no migration ships.
 - **Check Scheduling → Settings → Notifications** _(#4401)_. Before this
   version the section never received the saved settings, so it showed the
   built-in defaults and any save from it overwrote the department's decline /

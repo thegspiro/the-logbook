@@ -50,13 +50,14 @@ from app.models.user import ACTIVE_ACCOUNT_STATUSES, Position, User
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
     NOT_YET_HELD_STATUS,
+    ComplianceGrading,
     EvaluationCredits,
     HeldSession,
+    _load_compliance_config,
     load_credited_shift_dates,
     load_evaluation_credits,
     load_held_sessions,
     member_join_date,
-    requirement_applies_to_user,
     tally_standing,
 )
 from app.services.training_record_source import (
@@ -148,20 +149,26 @@ def _requirement_cells(
     held_sessions: Mapping[str, Sequence[HeldSession]],
     waivers: Sequence[WaiverPeriod],
     evaluation_credits: EvaluationCredits,
+    grading: ComplianceGrading,
 ) -> List[str]:
     """One export cell per requirement column for ``user``.
 
-    "N/A" where the requirement does not grade this member — their membership
-    type, role, or a grandfathering cutoff exempts them — so an exempt member
-    is not printed as failing a standard that was never theirs. "Due <date>"
-    while an existing member's catch-up period runs.
+    "N/A" where the requirement does not grade this member — their compliance
+    profile does not list it, or their membership type, role, or a
+    grandfathering cutoff exempts them — so a member is not printed as failing
+    a standard that was never theirs. ``grading.for_member`` decides, as on the
+    compliance matrix (CLAUDE.md pitfall 29). "Due <date>" while an existing
+    member's catch-up period runs.
     """
     from app.services.training_service import TrainingService
 
     join_date = member_join_date(user)
+    graded = {
+        str(r.id) for r in grading.for_member(user, list(requirements)).requirements
+    }
     cells: List[str] = []
     for req in requirements:
-        if not requirement_applies_to_user(req, user):
+        if str(req.id) not in graded:
             cells.append("N/A")
             continue
         detail = TrainingService.evaluate_requirement_detail(
@@ -169,6 +176,7 @@ def _requirement_cells(
             records,
             today,
             waivers=list(waivers),
+            org_include_current_month=grading.include_current_month,
             join_date=join_date,
             shift_dates=shift_dates,
             held_sessions=held_sessions,
@@ -1239,11 +1247,27 @@ class ReportExportService:
         # "Met" is judged as of the department's today, the same day the
         # compliance screens use; a caller's end_date only bounds the rows.
         today = await resolve_org_today(self.db, organization_id)
+        # Which requirements grade each member, and the department's
+        # current-month cut-off, as the compliance matrix resolves them.
+        grading = ComplianceGrading.from_config(
+            await _load_compliance_config(self.db, str(organization_id))
+        )
+        include_current = grading.include_current_month
         shifts_by_user = await load_credited_shift_dates(
-            self.db, organization_id, [u.id for u in users], requirements, today, True
+            self.db,
+            organization_id,
+            [u.id for u in users],
+            requirements,
+            today,
+            include_current,
         )
         evaluations_by_user = await load_evaluation_credits(
-            self.db, organization_id, [u.id for u in users], requirements, today, True
+            self.db,
+            organization_id,
+            [u.id for u in users],
+            requirements,
+            today,
+            include_current,
         )
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), requirements
@@ -1292,6 +1316,7 @@ class ReportExportService:
                         held_sessions,
                         waivers_by_user.get(str(user.id), []),
                         evaluations_by_user.get(str(user.id), {}),
+                        grading,
                     )
                 )
 
@@ -1433,6 +1458,13 @@ class ReportExportService:
             )
         )
         all_requirements = req_result.scalars().all()
+        # Which requirements grade each member, their thresholds and the
+        # department's current-month cut-off, as the compliance matrix
+        # resolves them (owner decision 2026-11-20, CLAUDE.md pitfall 29).
+        grading = ComplianceGrading.from_config(
+            await _load_compliance_config(self.db, str(organization_id))
+        )
+        include_current = grading.include_current_month
         # Full history: a rolling requirement's due date, which the at-risk
         # list below reads, anchors on the latest shift or evaluation however
         # old.
@@ -1442,7 +1474,7 @@ class ReportExportService:
             [u.id for u in users],
             all_requirements,
             today,
-            True,
+            include_current,
             full_history=True,
         )
         evaluations_by_user = await load_evaluation_credits(
@@ -1451,7 +1483,7 @@ class ReportExportService:
             [u.id for u in users],
             all_requirements,
             today,
-            True,
+            include_current,
             full_history=True,
         )
         held_sessions = await load_held_sessions(
@@ -1460,12 +1492,10 @@ class ReportExportService:
         waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
 
         for user in users:
-            # Only what grades this member — by type, role, and grandfathering.
-            requirements = [
-                req
-                for req in all_requirements
-                if requirement_applies_to_user(req, user)
-            ]
+            # Only what grades this member: their compliance profile's list,
+            # then type, role, and grandfathering.
+            member_grading = grading.for_member(user, list(all_requirements))
+            requirements = member_grading.requirements
             join_date = member_join_date(user)
             records_result = await self.db.execute(
                 select(TrainingRecord).where(
@@ -1489,6 +1519,7 @@ class ReportExportService:
                     records,
                     today,
                     waivers=waivers_by_user.get(str(user.id), []),
+                    org_include_current_month=include_current,
                     join_date=join_date,
                     shift_dates=shifts_by_user.get(str(user.id), []),
                     held_sessions=held_sessions,
@@ -1525,12 +1556,20 @@ class ReportExportService:
             expiring_30 = sum(1 for e in expiring if e["days_remaining"] <= 30)
             expiring_60 = sum(1 for e in expiring if e["days_remaining"] <= 60)
             expiring_90 = len(expiring)
+            # The current figure's standing, by the member's profile
+            # thresholds or the department's, so a screen colours it as the
+            # matrix does instead of by thresholds of its own. The projections
+            # stay plain percentages: they subtract every certificate
+            # expiring in the window, whatever grades it, so they are an
+            # estimate rather than a standing.
+            current_standing, _ = grading.classify(member_grading, met, total)
 
             forecasts.append(
                 {
                     "user_id": str(user.id),
                     "user_name": f"{user.first_name} {user.last_name}",
                     "current_compliance_percentage": _forecast_pct(met, total, 0),
+                    "current_standing": current_standing,
                     "forecast_30_days": _forecast_pct(met, total, expiring_30),
                     "forecast_60_days": _forecast_pct(met, total, expiring_60),
                     "forecast_90_days": _forecast_pct(met, total, expiring_90),
@@ -1611,13 +1650,16 @@ class ReportExportService:
         # tomorrow for a US department every evening.
         org_tz = await resolve_scheduling_timezone(self.db, organization_id)
         generated_on = datetime.now(org_tz).date()
+        grading = ComplianceGrading.from_config(
+            await _load_compliance_config(self.db, str(organization_id))
+        )
         shifts_by_user = await load_credited_shift_dates(
             self.db,
             organization_id,
             [u.id for u in users],
             requirements,
             generated_on,
-            True,
+            grading.include_current_month,
         )
         evaluations_by_user = await load_evaluation_credits(
             self.db,
@@ -1625,7 +1667,7 @@ class ReportExportService:
             [u.id for u in users],
             requirements,
             generated_on,
-            True,
+            grading.include_current_month,
         )
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), requirements
@@ -1663,6 +1705,7 @@ class ReportExportService:
                         held_sessions,
                         waivers_by_user.get(str(user.id), []),
                         evaluations_by_user.get(str(user.id), {}),
+                        grading,
                     ),
                 )
             )
