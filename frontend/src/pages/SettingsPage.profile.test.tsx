@@ -23,6 +23,7 @@ const profile = {
   email: '',
   website: '',
   county: '',
+  short_name: '',
   founded_year: null,
   logo: null as string | null,
   mailing_address: { line1: '', line2: '', city: '', state: '', zip: '' },
