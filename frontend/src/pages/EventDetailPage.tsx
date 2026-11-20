@@ -7,7 +7,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { eventService, meetingsService } from '../services/api';
+import { eventService, meetingsService, trainingSessionService } from '../services/api';
 import type { TrainingSessionResponse } from '../services/api';
 import { electionService } from '../services/electionService';
 import type { ElectionListItem } from '../types/election';
@@ -60,6 +60,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { fromSession, toTemplateTrainingDetails } from '../components/training-event/trainingDetailsModel';
 import { Breadcrumbs, PromptDialog } from '../components/ux';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { SimpleMarkdown } from '../utils/simpleMarkdown';
@@ -2346,6 +2347,28 @@ export const EventDetailPage: React.FC = () => {
                     templateData.check_in_minutes_before = event.check_in_minutes_before;
                   if (event.check_in_minutes_after != null)
                     templateData.check_in_minutes_after = event.check_in_minutes_after;
+                  // A Training template carries the session's training
+                  // details (owner decision 2026-11-20). The linkage card
+                  // reports no session while it loads or after a failed
+                  // load, so the session is fetched here rather than the
+                  // template saved without them; a failed fetch refuses the
+                  // save rather than dropping them behind "Template saved".
+                  // fromSession reads a library session's hours as typed, so
+                  // the template keeps the exact figure.
+                  if (event.event_type === EventTypeEnum.TRAINING) {
+                    let session = trainingSession;
+                    if (!session) {
+                      try {
+                        session = await trainingSessionService.getSessionByEvent(event.id);
+                      } catch {
+                        toast.error(
+                          "Could not read this event's training details, so the template was not saved. Try again."
+                        );
+                        return;
+                      }
+                    }
+                    if (session) templateData.training_details = toTemplateTrainingDetails(fromSession(session, event));
+                  }
                   await eventService.createTemplate(templateData);
                   setShowTemplateModal(false);
                   toast.success('Template saved');

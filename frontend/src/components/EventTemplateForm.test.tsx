@@ -1,9 +1,26 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const getCourses = vi.fn();
+const getUsers = vi.fn();
+vi.mock('../services/api', () => ({
+  trainingService: { getCourses: (...args: unknown[]) => getCourses(...args) as unknown },
+  userService: { getUsers: (...args: unknown[]) => getUsers(...args) as unknown },
+}));
+vi.mock('../hooks/useRanks', () => ({ useRanks: () => ({ formatRank: (rank: string) => rank }) }));
 
 import { EventTemplateForm } from './EventTemplateForm';
 import type { EventTemplate } from '../types/event';
+
+// Every block starts from these; a block that needs others installs them in
+// its own beforeEach (pitfall #28).
+beforeEach(() => {
+  getCourses.mockReset();
+  getCourses.mockResolvedValue([]);
+  getUsers.mockReset();
+  getUsers.mockResolvedValue([]);
+});
 
 describe('EventTemplateForm reminder audience', () => {
   it('persists the selected reminder audience in the template', async () => {
@@ -282,5 +299,242 @@ describe('EventTemplateForm required name and save errors', () => {
     await user.click(screen.getByRole('button', { name: 'Save Template' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Server unavailable');
+  });
+});
+
+// Owner decision 2026-11-20: a Training template stores the session's
+// training details, edited in a Training Details section.
+describe('EventTemplateForm training details', () => {
+  const PUMP = {
+    id: 'course-pump',
+    organization_id: 'org-1',
+    name: 'Pump Operations',
+    code: 'PUMP',
+    training_type: 'skills_practice',
+    credit_hours: 2,
+    expiration_months: 24,
+    instructor: 'Owen Kittredge',
+    max_participants: 40,
+    active: true,
+    created_at: '',
+    updated_at: '',
+  };
+  const OWEN = { id: 'm-owen', username: 'okitt', first_name: 'Owen', last_name: 'Kittredge', status: 'active' };
+  const stored: EventTemplate = {
+    id: 'tpl-1',
+    organization_id: 'org-1',
+    name: 'Pump Drill',
+    event_type: 'training',
+    default_title: 'Pump Drill',
+    default_duration_minutes: 120,
+    max_attendees: 12,
+    requires_rsvp: false,
+    is_mandatory: false,
+    allow_guests: false,
+    require_checkout: false,
+    send_reminders: false,
+    reminder_target: 'none',
+    reminder_schedule: [],
+    is_active: true,
+    created_at: '',
+    updated_at: '',
+    training_details: {
+      course_mode: 'library',
+      course_id: PUMP.id,
+      course_name: null,
+      course_code: null,
+      training_type: 'skills_practice',
+      credit_hours: 2,
+      credit_hours_source: 'course',
+      instructor_id: OWEN.id,
+      instructor: 'Owen Kittredge',
+      issues_certification: false,
+      certification_number_prefix: null,
+      issuing_agency: null,
+      expiration_months: null,
+    },
+  };
+
+  beforeEach(() => {
+    getCourses.mockReset();
+    getCourses.mockResolvedValue([PUMP]);
+    getUsers.mockReset();
+    getUsers.mockResolvedValue([OWEN]);
+  });
+
+  const save = (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+  it('loads the Course Library and members only once the type is Training', async () => {
+    const user = userEvent.setup();
+    render(<EventTemplateForm onSubmit={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(screen.queryByRole('heading', { name: 'Training Details' })).not.toBeInTheDocument();
+    expect(getCourses).not.toHaveBeenCalled();
+    expect(getUsers).not.toHaveBeenCalled();
+
+    await user.selectOptions(screen.getByLabelText('Event Type'), 'training');
+    expect(screen.getByRole('heading', { name: 'Training Details' })).toBeInTheDocument();
+    await waitFor(() => expect(getCourses).toHaveBeenCalledTimes(1));
+    expect(getUsers).toHaveBeenCalledTimes(1);
+  });
+
+  it('saves a new Training template with its whole training details', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<EventTemplateForm onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByRole('textbox', { name: 'Template Name' }), 'Rope Rescue');
+    await user.selectOptions(screen.getByLabelText('Event Type'), 'training');
+    await user.click(screen.getByRole('radio', { name: /One-off course name/ }));
+    await user.type(screen.getByLabelText(/^Course Name/), 'Rope Rescue Ops');
+    await user.selectOptions(screen.getByLabelText(/Training Type/), 'refresher');
+    await save(user);
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        event_type: 'training',
+        training_details: {
+          course_mode: 'oneoff',
+          course_id: null,
+          course_name: 'Rope Rescue Ops',
+          course_code: null,
+          training_type: 'refresher',
+          credit_hours: null,
+          credit_hours_source: 'duration',
+          instructor_id: null,
+          instructor: null,
+          issues_certification: false,
+          certification_number_prefix: null,
+          issuing_agency: null,
+          expiration_months: null,
+        },
+      })
+    );
+  });
+
+  it('leaves the key out of a new template of another type', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<EventTemplateForm onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByRole('textbox', { name: 'Template Name' }), 'Monthly Meeting');
+    await save(user);
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0]?.[0]).not.toHaveProperty('training_details');
+  });
+
+  it('clears them when an edited Training template becomes another type', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<EventTemplateForm initialData={stored} onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+    await user.selectOptions(screen.getByLabelText('Event Type'), 'business_meeting');
+    await save(user);
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ event_type: 'business_meeting', training_details: null })
+    );
+  });
+
+  it('opens a stored template on its details, refreshed from the course', async () => {
+    getCourses.mockResolvedValue([{ ...PUMP, credit_hours: 3 }]);
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<EventTemplateForm initialData={stored} onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(3));
+    expect(screen.getByLabelText(/^Course/, { selector: 'select' })).toHaveValue(PUMP.id);
+    expect(screen.getByLabelText(/Lead Instructor/)).toHaveValue(OWEN.id);
+    await save(user);
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        training_details: expect.objectContaining({
+          course_id: PUMP.id,
+          credit_hours: 3,
+          credit_hours_source: 'course',
+        }),
+      })
+    );
+  });
+
+  it('opens on No course yet, with a note, when the stored course is no longer listed', async () => {
+    getCourses.mockResolvedValue([]);
+    render(<EventTemplateForm initialData={stored} onSubmit={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(
+      await screen.findByText(
+        "This template's course is no longer in the Course Library, so the session starts on No course yet."
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /No course yet/ })).toBeChecked();
+  });
+
+  it('pre-fills from a picked library course without touching Max Attendees', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <EventTemplateForm initialData={{ ...stored, training_details: null }} onSubmit={onSubmit} onCancel={vi.fn()} />
+    );
+
+    await user.click(screen.getByRole('radio', { name: /From the Course Library/ }));
+    expect(await screen.findByRole('option', { name: 'PUMP - Pump Operations' })).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText(/^Course/, { selector: 'select' }), PUMP.id);
+    expect(screen.getByLabelText(/Training Type/)).toHaveValue('skills_practice');
+    expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(2);
+    await save(user);
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        max_attendees: 12,
+        training_details: expect.objectContaining({
+          course_mode: 'library',
+          course_id: PUMP.id,
+          credit_hours: 2,
+          credit_hours_source: 'course',
+          instructor_id: OWEN.id,
+          issues_certification: true,
+          expiration_months: 24,
+        }),
+      })
+    );
+  });
+
+  it('names a library choice with no course under Course, and does not save', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <EventTemplateForm initialData={{ ...stored, training_details: null }} onSubmit={onSubmit} onCancel={vi.fn()} />
+    );
+
+    await user.click(screen.getByRole('radio', { name: /From the Course Library/ }));
+    await save(user);
+
+    expect(screen.getByLabelText(/^Course/, { selector: 'select' })).toHaveAccessibleDescription(
+      'Choose a course from the Course Library.'
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("puts a 422 on a training detail's field", async () => {
+    const onSubmit = vi.fn().mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'training_details.course_name', message: 'Value is too long.' }] },
+      },
+    });
+    const user = userEvent.setup();
+    render(<EventTemplateForm onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByRole('textbox', { name: 'Template Name' }), 'Ropes');
+    await user.selectOptions(screen.getByLabelText('Event Type'), 'training');
+    await user.click(screen.getByRole('radio', { name: /One-off course name/ }));
+    await user.type(screen.getByLabelText(/^Course Name/), 'Ropes');
+    await save(user);
+
+    const field = await screen.findByRole('textbox', { description: /Value is too long\./ });
+    expect(field).toHaveAccessibleName(/Course Name/);
   });
 });
