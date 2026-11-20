@@ -15,6 +15,7 @@ Three changes the department asked for on 2026-10-18:
 import uuid
 from datetime import date, timedelta
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -38,10 +39,19 @@ from app.schemas.equipment_check import (
 )
 from app.services.equipment_check_service import EquipmentCheckService
 from app.utils.check_types import describe_status
+from tests.clock_support import reread_each_test
 
-TODAY = date.today()
-YESTERDAY = TODAY - timedelta(days=1)
-NEXT_YEAR = TODAY + timedelta(days=365)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    next_year = today + timedelta(days=365)
+    return {"TODAY": today, "YESTERDAY": yesterday, "NEXT_YEAR": next_year}
+
+
+TODAY, YESTERDAY, NEXT_YEAR = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 # ---------------------------------------------------------------------------
 # Pure pieces

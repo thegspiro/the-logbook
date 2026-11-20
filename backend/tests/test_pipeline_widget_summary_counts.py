@@ -10,6 +10,7 @@ saying the rest are behind the "View all" queue link (owner decision).
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -20,10 +21,19 @@ from app.api.v1.endpoints.membership_pipeline import (
 )
 from app.models.membership_pipeline import ProspectiveMember, ProspectStatus
 from app.models.user import Organization
+from tests.clock_support import reread_each_test
 
 pytestmark = [pytest.mark.integration]
 
-NOW = datetime.now(timezone.utc)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    return {"NOW": now}
+
+
+(NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 async def _org(db_session) -> Organization:
