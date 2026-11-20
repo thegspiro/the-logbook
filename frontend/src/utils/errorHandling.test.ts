@@ -4,6 +4,8 @@ import {
   toAppError,
   getErrorDetail,
   getErrorMessage,
+  getActionFailureMessage,
+  getLoadFailureMessage,
   getSaveFailureMessage,
   isNetworkError,
   isNonRetryableHttpError,
@@ -178,7 +180,7 @@ describe('errorHandling', () => {
       const result = toAppError(axiosError);
 
       expect(result.status).toBe(422);
-      expect(result.message).toBe('date_of_birth: Invalid date format. emergency_contacts.0.email: Invalid value.');
+      expect(result.message).toBe('Date of birth: Invalid date format. Emergency contacts email: Invalid value.');
     });
 
     it('does not double the period on messages that already carry one', () => {
@@ -216,7 +218,7 @@ describe('errorHandling', () => {
         },
       };
 
-      expect(toAppError(axiosError).message).toBe('email: field required.');
+      expect(toAppError(axiosError).message).toBe('Email: field required.');
     });
 
     it('extracts the message from a structured object detail (not "[object Object]")', () => {
@@ -466,7 +468,46 @@ describe('errorHandling', () => {
           },
         },
       };
-      expect(getErrorDetail(error)).toBe('title: Field required. end_datetime: Invalid date.');
+      expect(getErrorDetail(error)).toBe('Title: Field required. End datetime: Invalid date.');
+    });
+
+    // W42-7: the toast named a column, "charge_amount: Value is out of the allowed range."
+    it('labels the field rather than showing its API name', () => {
+      const error = {
+        response: { data: { detail: [{ field: 'charge_amount', message: 'Value is out of the allowed range.' }] } },
+      };
+      expect(getErrorDetail(error)).toBe('Charge amount: Value is out of the allowed range.');
+    });
+
+    // W40-8: "expected_return_at: expected_return_at must be in the future."
+    it('does not repeat a field the message already names', () => {
+      const error = {
+        response: {
+          data: { detail: [{ field: 'expected_return_at', message: 'expected_return_at must be in the future.' }] },
+        },
+      };
+      expect(getErrorDetail(error)).toBe('Expected return must be in the future.');
+    });
+
+    it('labels a camelCase field and drops a trailing id', () => {
+      const error = {
+        response: {
+          data: {
+            detail: [
+              { field: 'unitNumber', message: 'Value is too long.' },
+              { field: 'category_id', message: 'Invalid ID format.' },
+            ],
+          },
+        },
+      };
+      expect(getErrorDetail(error)).toBe('Unit number: Value is too long. Category: Invalid ID format.');
+    });
+
+    it('replaces only the whole field name, not a longer name that starts with it', () => {
+      const error = {
+        response: { data: { detail: [{ field: 'unit_no', message: 'Both unit_nos and unit_no are set.' }] } },
+      };
+      expect(getErrorDetail(error)).toBe('Both unit_nos and unit no are set.');
     });
 
     it("surfaces a structured detail's message", () => {
@@ -555,6 +596,93 @@ describe('errorHandling', () => {
       expect(isNonRetryableHttpError({ response: { status: 429 } })).toBe(false);
     });
   });
+  describe('getActionFailureMessage', () => {
+    const http = (status: number, data: Record<string, unknown> = {}) => ({ response: { status, data } });
+
+    it('blames the connection only when nothing came back', () => {
+      expect(
+        getActionFailureMessage({ request: {}, code: 'ERR_NETWORK', message: 'Network Error' }, 'delete the document')
+      ).toBe('Could not delete the document. Check your connection and try again.');
+    });
+
+    it('says the server failed, with the support code, on a 5xx', () => {
+      expect(
+        getActionFailureMessage(
+          http(500, { detail: 'Internal server error', code: 'LB-SYS-001' }),
+          'delete the document'
+        )
+      ).toBe(
+        'Could not delete the document: the server hit a problem on its end. Try again in a moment. If it keeps happening, tell IT (Error code: LB-SYS-001).'
+      );
+    });
+
+    it('says permission is missing on a 403, with the server’s reason', () => {
+      expect(
+        getActionFailureMessage(
+          http(403, { detail: 'That position carries more than you hold.' }),
+          'remove the position'
+        )
+      ).toBe(
+        'You do not have permission to remove the position. That position carries more than you hold. Ask an administrator if you need to.'
+      );
+    });
+
+    it('passes a refusal through as the server wrote it', () => {
+      expect(
+        getActionFailureMessage(http(409, { detail: 'This meeting has approved minutes.' }), 'delete the meeting')
+      ).toBe('This meeting has approved minutes.');
+    });
+
+    it('keeps a developer message off screen when the page itself failed', () => {
+      expect(getActionFailureMessage(new TypeError('blob is undefined'), 'download the document')).toBe(
+        'Could not download the document. Try again, and if it keeps happening, tell IT.'
+      );
+    });
+  });
+
+  describe('getLoadFailureMessage', () => {
+    const http = (status: number, data: Record<string, unknown> = {}) => ({ response: { status, data } });
+
+    it('blames the connection only when nothing came back', () => {
+      expect(
+        getLoadFailureMessage({ request: {}, code: 'ERR_NETWORK', message: 'Network Error' }, 'members and positions')
+      ).toBe('Could not load members and positions. Check your connection and refresh the page.');
+    });
+
+    it('says the server failed, with the support code, on a 5xx', () => {
+      const message = getLoadFailureMessage(
+        http(500, { detail: 'Internal server error', code: 'LB-SYS-001' }),
+        'members and positions'
+      );
+
+      expect(message).toBe(
+        'Could not load members and positions: the server hit a problem on its end. Refresh the page in a moment. If it keeps happening, tell IT (Error code: LB-SYS-001).'
+      );
+      expect(message).not.toContain('connection');
+    });
+
+    it('says permission is missing on a 403, with the server’s reason', () => {
+      expect(getLoadFailureMessage(http(403, { detail: 'Requires positions.view.' }), 'members and positions')).toBe(
+        'You do not have permission to see members and positions. Requires positions.view. Ask an administrator if you need it.'
+      );
+    });
+
+    it('keeps a developer message off screen when the page itself failed', () => {
+      const message = getLoadFailureMessage(
+        new TypeError('The training dashboard response was not a summary'),
+        'the dashboard'
+      );
+
+      expect(message).toBe('Could not load the dashboard. Refresh the page, and if it keeps happening, tell IT.');
+    });
+
+    it('passes any other answer through as the server wrote it', () => {
+      expect(getLoadFailureMessage(http(404, { detail: 'Organization not found' }), 'members and positions')).toBe(
+        'Organization not found'
+      );
+    });
+  });
+
   describe('getSaveFailureMessage', () => {
     it('names the action, reassures, and keeps the support code on a server fault', () => {
       const message = getSaveFailureMessage(

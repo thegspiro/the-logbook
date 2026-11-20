@@ -224,8 +224,15 @@ async def delete_location(
     **Authentication required**
     **Permissions required:** locations.delete or locations.manage
 
-    **Note:** A location that events, event templates or apparatus still
-    reference is deactivated rather than deleted, so those records keep it.
+    **Note:** A location still referenced by an event, an event template, an
+    apparatus (home station, current location or location history), training
+    history (a record, a class, a cohort or a cohort class), a meeting or an
+    event request is deactivated rather than deleted, so those records keep
+    it. ``_RESTRICTING_LOCATION_REFERENCES`` in ``location_service.py`` is
+    the list.
+
+    **409** when a reference appears between the check and the delete; the
+    request can be retried, and the retry deactivates the location instead.
     """
     service = LocationService(db)
 

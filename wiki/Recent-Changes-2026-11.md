@@ -5,6 +5,83 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 18 – 19, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-18--19-2026).
+
+- **My Training follows compliance profiles.** A member on a profile with its
+  own required list now sees only those requirements on My Training and their
+  profile card, matching the Compliance Matrix. See
+  [Compliance](Module-Compliance).
+- **Scheduling notification settings**: the Notifications section now shows
+  what your department saved. Before, it showed defaults, and saving it
+  overwrote your choices, so **check it once**. Failed equipment checks now
+  alert Chief and Captain in a department that never set that group, as the
+  screen always showed. See [Scheduling](Module-Scheduling).
+- **Exports say where rows came from**: a **Source** column (Imported, The
+  Logbook, or the training provider) ends the training record and
+  certification exports, the Admin Hours exports and the event exports.
+- **Training providers** stay verified when you only change their schedule;
+  before, that silently stopped automatic syncs. **Test** any provider showing
+  _Connection not verified_. Sync History marks **Manual pull**.
+- **Department Store**: **Record refund** asks for an amount and a reason,
+  then confirms. A typed payment cannot exceed the balance; an overpaid order
+  offers a refund of the excess. Shipped orders read **Ready to ship** and
+  **Shipped**. No item or option can be priced below zero, and reloading
+  checkout keeps your cart.
+- **Attendance Requests** lists requests passed on to you as well as those on
+  your own events; the toggle reads **Sent to me**. See [Events](Module-Events).
+- **Inventory**: a new item in a Consumable or Medical category starts as
+  **Pool**. The Impact Planner PDF numbers its pages. See
+  [Inventory](Module-Inventory).
+- **Elections**: the election page's meeting picker lists the next 100
+  upcoming events, so a business meeting weeks away can be linked.
+- **Error messages** say whether the problem is your connection, a missing
+  permission or the server (with an error code for IT).
+- **Phones**: Scheduling Reports tables become cards; an installed Android app
+  shows a white strip under the bottom bar in every theme.
+- **Training videos**: Shorts 8A–8F have been produced, and their scripts now
+  match what was recorded.
+
+## Recent changes: November 17 – 18, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-17--18-2026).
+
+- **Shift patterns live in one place**: make, **Edit** and generate them on
+  **Shift Planning → Patterns**. The Templates tab no longer has its own
+  Patterns switch. See [Scheduling](Module-Scheduling).
+- **My Shifts → Past** shows the same credited hours as **Hours**. A shift an
+  officer has not closed out yet reads "awaiting close-out" instead of adding
+  to the total, and members with more than 50 past shifts now see all of them.
+- **Event check-in**: when an officer checks a member in after the event has
+  started, the member is credited from the scheduled start. Use **Edit Times**
+  for someone who really arrived late. Members' own taps are unchanged.
+- **Mandatory events**: how far ahead an unanswered mandatory event asks for a
+  response is now a setting, **Event settings → Attendance → Mandatory event
+  responses** (60 days unless changed).
+- **Training requirements**: the **Operational members** button also ticks
+  **Senior** if your department has that tier. Requirements scoped with it
+  earlier don't include Senior: open them and select the button again. A
+  rolling evaluated-shifts, calls, transports or refusals requirement now shows
+  a due date from the member's latest evaluation.
+- **Course cohorts**: the wizard lists only courses that have classes on
+  their syllabus.
+- **Imported training**: re-mapping a course after its hours were edited now
+  moves the right hours.
+- **Anonymizing a member** also deletes the certificates they uploaded with
+  self-reported training (the training record stays). Permanently deleting a
+  member removes their training and waiver files. See
+  [Privacy](Security-Privacy).
+- **Elections**: **Linked Meeting** lists upcoming events even when the
+  Minutes module is off.
+- **Phones and reports**: many more tables become labelled cards on a phone
+  (grants, expense line items, message history, member import, inventory
+  imports, election integrity report), and report results show as cards in the
+  report window on every screen size. The inventory stock matrix keeps its
+  Size column pinned.
+
 ## Recent changes: November 15 – 17, 2026
 
 The engineering audit is
@@ -54,6 +131,54 @@ The engineering audit is
 the old tab bar and need re-shooting; the list is in
 [`docs/training/SCREENSHOT_CURRENCY.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/training/SCREENSHOT_CURRENCY.md).
 YouTube scripts 04, 05, 12 and 16 have beats marked for re-recording.
+
+## Recent changes: November 16, 2026 (Google Workspace and Microsoft 365)
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-google-workspace-and-microsoft-365-settings-november-16-2026).
+
+- **Google Workspace and Microsoft 365**: the guide now explains **Settings**
+  on a connected card, which organization administrators already had. Change
+  the admin, domain, groups and other settings without disconnecting; a blank
+  key or secret keeps the saved one, and a new Microsoft secret goes in with
+  its new expiry date. See [Google Workspace Integration](Integration-Google-Workspace)
+  and [Microsoft 365 Integration](Integration-Microsoft-365).
+
+## Recent changes: November 16, 2026 (Salesforce)
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-salesforce-settings-november-16-2026).
+
+- **Salesforce**: a connected Salesforce card has a **Settings** button. Change
+  contact matching, sync direction and the sync options without disconnecting,
+  or **Re-authorize with Salesforce** if the sign-in was revoked or expired.
+  The Instance URL and Environment can't be changed there: to change org,
+  disconnect and connect again. See
+  [Salesforce Integration](Integration-Salesforce).
+- **Reconnecting Salesforce** now keeps the sync settings you had, instead of
+  resetting them to the defaults.
+
+## Recent changes: November 16, 2026 (Documenso)
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-documenso-settings-november-16-2026).
+
+- **Documenso**: a connected Documenso card has a **Settings** button. Change
+  the API token, base URL or webhook secret without disconnecting; blank token
+  and secret boxes keep the saved ones. Moving to a different Documenso server
+  needs that server's API token in the same save. See
+  [Documenso Integration](Integration-Documenso).
+
+## Recent changes: November 16, 2026 (Cal.com)
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-calcom-settings-november-16-2026).
+
+- **Cal.com**: a connected Cal.com card has a **Settings** button. Change the
+  API key, base URL or webhook secret without disconnecting; blank key and
+  secret boxes keep the saved ones. Moving to a different Cal.com server needs
+  that server's API key in the same save. See
+  [Cal.com Integration](Integration-Calcom).
 
 ## Recent changes: November 14 – 15, 2026
 

@@ -383,8 +383,10 @@ Confirm with **Commit import**, or choose **Keep reviewing**.
 
 - The import page shows a summary of what was written.
 - The Imports list keeps a record of it.
-- **There is no batch undo.** To correct an imported shift, open it on the
-  schedule and fix it like any other.
+- **There is no batch undo for a file uploaded here.** To correct an imported
+  shift, open it on the schedule and fix it like any other. Batches sent here
+  by a **Historical Data Import** are the exception: undo them together from
+  that import's page (Shift hours, **Undo this step**).
 
 ![A committed import's summary: 3 shifts created, 6 attendance records, 1 outside-agency entry, 1 former member created and 1 row skipped](images/history-import-committed.png)
 
@@ -503,7 +505,7 @@ app. Twice a year the clock is ambiguous, and the standard rule applies:
 | All hours look an hour or more off                           | Change the time zone on **Columns & time zone**                                                               |
 | Positions tab is empty                                       | Positions appear once every member and unit is settled                                                        |
 | "Nothing in this file is new"                                | Every row is excluded, skipped or already recorded, so there is nothing to commit. Discard the draft          |
-| Imported something wrong                                     | Fix the affected shifts on the schedule. There is no batch undo                                               |
+| Imported something wrong                                     | Fix the affected shifts on the schedule. A Historical Data Import's batches can be undone from its page       |
 
 ---
 

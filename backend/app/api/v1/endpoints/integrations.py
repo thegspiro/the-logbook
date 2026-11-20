@@ -769,6 +769,23 @@ def _missing_required_fields(
     return missing
 
 
+# Salesforce sync reuses the cached access token until Salesforce answers 401.
+# The token was issued to one grant (a refresh token, or a Connected App's
+# client credentials), so a save that stores a new one of these must discard
+# it; otherwise the next sync keeps acting as the previous grant until that
+# token expires, and a mistyped credential goes unnoticed for as long.
+SALESFORCE_GRANT_SECRETS = frozenset({"refresh_token", "client_id", "client_secret"})
+
+
+def _discard_stale_salesforce_token(
+    integration: Integration, secrets: dict[str, Any]
+) -> None:
+    if integration.integration_type == "salesforce" and SALESFORCE_GRANT_SECRETS & set(
+        secrets
+    ):
+        integration.clear_secret("access_token")
+
+
 def _extract_secrets(
     config: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, str]]:
@@ -1260,6 +1277,7 @@ async def connect_integration(
         integration.set_secret(key, value)
     for key in secrets_to_clear:
         integration.clear_secret(key)
+    _discard_stale_salesforce_token(integration, secrets)
     if clear_salesforce_refresh_token:
         # An explicit blank switches Salesforce from the interactive refresh
         # grant to client credentials. Discard the cached access token as well
@@ -1486,6 +1504,7 @@ async def update_integration(
         integration.set_secret(key, value)
     for key in secrets_to_clear:
         integration.clear_secret(key)
+    _discard_stale_salesforce_token(integration, secrets)
     if clear_salesforce_refresh_token:
         integration.clear_secret("refresh_token")
         integration.clear_secret("access_token")

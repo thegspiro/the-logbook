@@ -147,7 +147,10 @@ export const DocumentCatalogueFields: React.FC<DocumentCatalogueFieldsProps> = (
               </option>
             ))}
         </select>
-        <Link to="/history/settings" className="text-theme-text-secondary mt-1 inline-block text-xs underline">
+        <Link
+          to="/history/settings"
+          className="text-theme-text-secondary touch:min-h-11 mt-1 inline-flex items-center text-xs underline"
+        >
           Manage the source and type lists
         </Link>
       </label>

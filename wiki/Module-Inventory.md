@@ -48,7 +48,11 @@ batch scanner is titled **Distribute Items**.
 ### Tracking and stock
 
 - **Individual & Pool Items** — individual items (serialized, assigned to one
-  person) and pool/quantity items (shared stock), selected by `tracking_type`
+  person) and pool/quantity items (shared stock), selected by `tracking_type`.
+  A new item's tracking type follows its category until the officer picks one:
+  `consumable` and `medical` categories start it as **Pool**, anything else
+  (or no category) as **Individual** _(2026-11-18, W38-3, #4399;
+  `defaultTrackingTypeFor` in `modules/inventory/types`)_. Edits never change it
 - **Item Issuances** — full lifecycle for pool issue/return with user,
   quantity, reason and condition. Issuing more than is on hand, or returning
   more than was issued, is refused with the counts rather than silently
@@ -587,7 +591,7 @@ new issue end to end and acts on the result. Saved plans live in
 | **Bulk-issue**                  | Issues matching on-hand pool stock through `issue_from_pool`; skips are reported with reasons; respects allowances; publishes a WebSocket event                                                                                            |
 | **Allowance-aware warnings**    | Flags members at or over their per-category `issuance_allowances` cap (a role-specific allowance beats an org-wide one); bulk-issue skips them                                                                                             |
 | **Request sizes**               | In-app notification to members with no size on file, linking to self-service preferences                                                                                                                                                   |
-| **PDF / CSV**                   | Print-ready PDF summary (ReportLab; organization name, filter parameters, member names and contact strings are XML-escaped) and client-side CSV export                                                                                     |
+| **PDF / CSV**                   | Print-ready PDF summary (ReportLab; organization name, filter parameters, member names and contact strings are XML-escaped) and client-side CSV export. Every page is footed "Inventory Impact Plan · Page N of M" (2026-11-18, #4421)     |
 | **Saved plans**                 | Named filter sets for reuse (annual refresh, seasonal cycles)                                                                                                                                                                              |
 
 Member contact details follow the org's `contact_info_visibility` settings

@@ -23,6 +23,7 @@ from app.schemas.organization import (
     DepartmentEmailSettings,
     EmailServiceSettings,
     EnabledModulesResponse,
+    EquipmentCheckAlertSettings,
     FileStorageSettings,
     FormsSettings,
     MembershipIdSettings,
@@ -433,6 +434,10 @@ class OrganizationService:
             else SchedulingNotificationSettings()
         )
 
+        equipment_alert_settings = EquipmentCheckAlertSettings.from_stored(
+            settings_dict.get("equipment_check_alerts")
+        )
+
         # Parse forms settings. Rebuilt from the valid entries only: the list
         # is free-form JSON underneath, and a stored entry that is not an exact
         # https origin would otherwise make this whole read raise, for every
@@ -462,6 +467,7 @@ class OrganizationService:
             "department_email",
             "setup",
             "scheduling",
+            "equipment_check_alerts",
             "forms",
         }
         extra_settings = {k: v for k, v in settings_dict.items() if k not in known_keys}
@@ -476,6 +482,7 @@ class OrganizationService:
             department_email=dept_email_settings,
             setup=setup_settings,
             scheduling=scheduling_settings,
+            equipment_check_alerts=equipment_alert_settings,
             forms=forms_settings,
             **extra_settings,
         )
