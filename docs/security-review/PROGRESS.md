@@ -16,8 +16,50 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_(cleared — #4464 merged as `2a5ca8e31`; this iteration continues to the
-next feature below.)_
+**PR [#4465](https://github.com/thegspiro/the-logbook/pull/4465)** (branch
+`claude/security-review-scheduling-p15` — the bare name and the
+`-p12`/`-p14` branches all have merged PRs against them per this
+feature's own findings-file header, so `-p15` was used directly):
+Feature 15 (Scheduling), pass 15 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable). PR #4464
+(Feature 14, Equipment check & shifts, pass 16) had already merged
+(`2a5ca8e31`) before this iteration started. A fresh `list_pull_requests`
+(state `open`) found no `claude/security-review-*` head, and row 15 was
+confirmed the next `⬜` row.
+
+**0 fixed in Scheduling itself, 0 new findings — real delta, mostly
+already-landed defense-in-depth and one cross-feature fix.** Baseline
+`df47203db` (PR #4115's merge, pass 14) — a genuine ancestor of current
+`main`. Real changes in five declared files: two new self/permission-
+scoped member-shift-history routes (same shape pass 14's hours-history
+route already established), evaluation-credit resync on assignment
+change/delete/finalize/reopen, a notify-role sender moved to the shared
+current-member-aware helper (the same fix already reviewed under
+`EC-14-equipment-check-shifts.md`'s pass 16), an assignment-status
+tightening closing a call/training-credit correctness gap, and —
+opportunistically reviewed, outside prior declared scope — a
+self-supervisor-assignment refusal in `member_supervisor_service.py` that
+closes ADV-2, already tracked as Fixed in
+`ADV-01-adversarial-exfiltration.md`. SCH-20 unaffected. Full write-up:
+`docs/security-review/SCH-15-scheduling.md`'s **Pass 15** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 788
+revisions, single head `790a86084359`; `check_route_permissions.py
+--strict` — 327 routes, 0 errors/warnings; scoped backend pytest (`-k
+"scheduling or time_off or supervisor or seat_override or widget or
+eligibility or member_hours or on_call or shift_history or standing_shift
+or call_tracking"`) — 722 passed, 1 pre-existing environment-only skip
+(`py_vapid`); standing guard suites (capacity locking, org-scoping
+ratchet, LIKE escaping, CSV sweep, migration chain, `create_all`-table
+tolerance, account-status gates, log-call shape, baseline member grants)
+— 203 passed; `npm run typecheck` — 0 errors; `npm run lint` — 0 errors,
+0 warnings; `npx vitest run src/modules/scheduling src/pages/scheduling`
+— 1263 passed (78 files).
+
+Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 16, PR #4464, merged), preserved for history</summary>
