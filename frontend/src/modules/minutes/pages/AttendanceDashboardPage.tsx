@@ -227,7 +227,7 @@ const AttendanceDashboardPage: React.FC = () => {
                         {m.voting_eligible ? (
                           <span className="text-green-800 dark:text-green-400">Eligible</span>
                         ) : (
-                          <span className="text-red-700 dark:text-red-400">
+                          <span className="text-red-900 dark:text-red-300">
                             Not eligible
                             {m.voting_blocked_reason && (
                               <span className="text-theme-text-muted block text-xs">{m.voting_blocked_reason}</span>

@@ -246,7 +246,8 @@ Next year is built in a **draft** fiscal year, which moves through stages on
    last year** (current amounts, owners and stations; amendments and spending are
    not copied) and sets a **Request deadline** (inclusive, on the department's
    calendar). Each line's owner opens **Next year's budget**, chooses **Request
-   an amount** with a justification, and submits. A position holder can also
+   an amount** with a justification, and submits. A draft may be saved with
+   either blank; Submit needs both _(2026-11-11)_. A position holder can also
    **Propose a new line**. The Treasurer reviews them on **Budget requests**:
    **Approve as requested**, **Approve a different amount** or **Decline** (a
    note is required for the last two).

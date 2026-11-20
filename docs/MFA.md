@@ -123,7 +123,11 @@ MFA is required they are sent to setup at their next sign-in. See
   the browser's response and stores the public key. When the passkey is the
   member's **first** second factor the response carries a fresh set of
   recovery codes, shown once. Adding a passkey when the member already has a
-  second factor, or removing one, needs a fresh **step-up**.
+  second factor, or removing one, needs a fresh **step-up**. _(2026-11-15,
+  ADV2-1)_ So does adding an authenticator app (`POST /auth/mfa/setup`,
+  `/auth/mfa/verify-setup`) when a passkey is already enrolled; before, those
+  checked only `mfa_enabled`, so a stolen session of a passkey-only member
+  could enroll its own app and replace the recovery codes.
 - **Sign in:** after the password (or SSO) step returns `mfa_token`, the
   client calls `POST /auth/mfa/challenge` for `{ totp, passkey_options }`,
   runs `navigator.credentials.get()` and sends the result to

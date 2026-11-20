@@ -61,6 +61,62 @@ lists events when Minutes is off); 10 mobile segments (more tables reflow to
 cards; report results show as cards on desktop too). See
 [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-17--18-2026).
 
+## Audit of 2026-10-16 → 11-16 changes, edited 2026-11-16 (not re-recorded)
+
+A pass over a month of merges for script text that had become wrong. Labels
+were checked against `frontend/src`; each edit that needs new footage carries a
+2026-11-16 production note. Nothing was re-recorded or re-timed. The upgrade
+side of the same audit is in [UPGRADING](../UPGRADING.md).
+
+| Script  | What changed                                                                                                                                                                                                                                                                                 |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 02      | Membership ladder no longer sets voting or the attendance threshold (Election Settings does, since 2026-11-13); callout and the short's title "The Setting That Decides Who Votes" changed                                                                                                   |
+| 03 IT   | Voter Eligibility beat rewritten for rows per member type and four kinds of vote; sign-in rate limit is per account at an address; Approvals row button is **Approve as admin**; **Compliance** tab (was Compliance Settings)                                                                |
+| 04 / 07 | Voter rules by member type and **Kind of vote** (04); **Publish Results** is gone — closing releases results, **Send Me a Copy** (04, 07); 07's Dues note: the page now has Record payment, Waive, Reverse waiver                                                                            |
+| 05 / 16 | **Import History** (was Import Past Training) and **Compliance** (was Compliance Settings) under Settings & Data                                                                                                                                                                             |
+| 08      | Shorts 8M and 8N un-held (Dues page has the buttons); 8M no longer says the reversal reason goes to the audit log (neither reason is kept); 8N cues; Approvals short row button **Approve as admin**                                                                                         |
+| 11      | "Counts toward certification requirements" is a checkbox on the training-event form's Training Info step                                                                                                                                                                                     |
+| 12      | Voter Eligibility beat and the five layers (tiers apply only to elections created before 2026-11-13); early close releases results; Publish & Report uses **Send Me a Copy**; **Short 12c's premise is gone** — corrected and marked do-not-film-as-written; quorum lines say "may not vote" |
+
+The 2026-10-04 row for Short 12c further down ("**Publish Results** (then
+**Hide Results**)") is superseded: neither button exists.
+
+**Flagged, not edited:**
+
+- **13 Store:** no beat for the PayPal card's **Settings** button, the store's
+  **PayPal account members pay into** choice (the account entered below / the
+  connected PayPal account), the admin **Cancel order**, or the 2026-11-14
+  status rules (an order no longer moves back into Submitted, Awaiting payment
+  or Paid; picking Cancelled sends the cancellation email). Chapter 6's
+  "two statuses" beat is still true.
+- **06 Member:** "your membership tier" as a reason you can't vote is true only
+  for elections created before 2026-11-13.
+- **03 IT / 04 Chief:** no beat for weather alerts and generic webhooks now
+  working, applicant assignments and `prospective_members.view_all`, the
+  Historian's History permissions, or shift-evaluation preceptor links for
+  outside agencies.
+- **05 / 09 / 16:** linked Evaluated shifts / Transports / Refusals
+  requirements count evaluations, not records; no-show crew are excused from
+  trainee reports and evaluations.
+
+## Edited 2026-11-16 (not re-recorded)
+
+The November 15 – 16 changes made screens named in four scripts disappear, so
+the narration and SCREEN cues were rewritten and each carries a 2026-11-16
+production note. Nothing was re-recorded or re-timed. See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-15--16-2026).
+
+| Script   | What changed                                                                                                                                                              |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 04 Chief | Create Event → Training now switches to the training-event form; "Training details (optional)" and "Continuing Education" default gone; Counts toward attendance cue      |
+| 05       | **Require sign-off** (was Require instructor confirmation) on Training Info, step 2 (was step 3); Counts toward attendance and Edit training details; the screenshot note |
+| 16       | Training events beat rewritten for the one form and the **Training details** card                                                                                         |
+| 12       | Forensics tab → **Integrity & Audit** section; production note on the election header, section addresses and the Elections pages row                                      |
+
+**Flagged, not edited:** 05, 09 and 16 could add a beat on **Course Links** and
+the **Evaluated Calls** requirement type; 04 and 06 on Needs You's two-month
+window for mandatory events. No script quotes a label these change.
+
 ## 2026-11-15 pass
 
 **Edited:** 07 Secretary. Its Email Templates chapter quoted the old category
@@ -2833,7 +2889,8 @@ gap is fixed; the claim as scripted is now accurate in full. Take it as
 written.
 
 **Optional aside, `THE ELIGIBILITY ROSTER` (14:00 – 15:30):** the roster is
-now linkable — `/elections/<id>?tab=eligibility` — worth ten seconds when
+now linkable — `/elections/<id>/eligibility` since 2026-11-15 (it was
+`?tab=eligibility`, which still forwards) — worth ten seconds when
 the narration says "send this to your co-officer."
 
 ### 06 — The Member Experience

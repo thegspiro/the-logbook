@@ -141,7 +141,7 @@ the **Requirements** tab to see them. Each row shows the name, **Active** or
 | **Name** (required)                        | A clear name, such as "Annual NFPA 1582 Physical"                                                                             |
 | **Screening Type**                         | One of the six types above                                                                                                    |
 | **Description**                            | Instructions or notes                                                                                                         |
-| **One-time requirement (not recurring)**   | Tick for a screening needed only once. Leave unticked for a repeating one                                                     |
+| **One-time requirement (not recurring)**   | Tick for a screening needed only once. A new requirement starts unticked, repeating every 12 months _(2026-11-10)_            |
 | **Frequency (months)**                     | How often it repeats. Shown only for repeating requirements; must be at least 1                                               |
 | **Applies to Positions (comma-separated)** | Members are graded on this only if they hold one of these positions — see [Role-Based Requirements](#role-based-requirements) |
 | **Grace Period (days past expiration)**    | How many days a member stays compliant after a screening falls due — see [Grace Period](#grace-period)                        |
@@ -568,6 +568,23 @@ When nothing is due, it reads _"No screenings expire in the next 60 days."_
 | Status Scheduled, Pending Review, Failed | They do not count toward compliance either         |
 | Passed, then a newer Failed record       | The failure is the result that counts              |
 
+### Reminder Emails _(2026-11-10)_
+
+Members are emailed before one of their screenings falls due: 90, 60, 30 and 7
+days before, as for certifications. A member gets only the most urgent one
+reached, so a screening recorded 20 days before it is due sends the 30-day
+email once, not three emails on one morning.
+
+- The email names the requirement and the due date, nothing else. The subject
+  names neither. There is no text message and no bell notice.
+- Only current members are reminded, and only about requirements they are
+  graded on. Prospects are not emailed.
+- To stop them for the whole department, disable the **Medical Screening
+  Expiry** rule on the **Notification Rules** tab of **Notifications**. With
+  no rule, they are on.
+- A member who turns off **Training and certification reminders** in **My
+  Account → Notifications** gets no screening reminders either.
+
 ---
 
 ## Prospect Screening
@@ -856,6 +873,9 @@ If you are following older notes or an SOP, these things work differently.
   when they are screened again.
 - **Waivers about to run out are listed.** The expiring list used to leave
   waived records out, even though the count above the tabs included them.
+- **Members are emailed before a screening falls due** _(2026-11-10)_. There
+  were no screening reminders before; see
+  [Reminder Emails](#reminder-emails-2026-11-10).
 
 ---
 
