@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this commit)** (branch `claude/security-review-facilities-p16` — the
+**PR [#4446](https://github.com/thegspiro/the-logbook/pull/4446)** (branch `claude/security-review-facilities-p16` — the
 plain `claude/security-review-facilities` has multiple merged PRs against it
 going back to pass 1 and must not be reused per CLAUDE.md Pitfall #24; no
 `-pN`-suffixed branch for this feature survives on the remote (GitHub
