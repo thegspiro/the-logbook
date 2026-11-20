@@ -839,6 +839,9 @@ class EvaluationStepResponse(BaseModel):
     status: str
     due_date: Optional[date] = None
     completed_at: Optional[datetime] = None
+    # The person a manager named to act on an approval or calibration step,
+    # in place of the workflow's actor. None when the workflow decides.
+    assignee: Optional[PersonRef] = None
 
 
 class EvaluationPartResponse(BaseModel):
@@ -905,6 +908,9 @@ class EvaluationViewer(BaseModel):
     can_delete: bool = False
     # A holder of evaluations.manage, on a finalized evaluation not their own.
     can_amend: bool = False
+    # A holder of evaluations.manage, on an evaluation in progress not their
+    # own: may name who acts on an approval or calibration step not yet done.
+    can_assign_steps: bool = False
     # The member, on their finalized evaluation, inside the response window,
     # before their response is submitted.
     can_respond: bool = False
@@ -1225,6 +1231,23 @@ class ResponseWrite(BaseModel):
         if not v:
             raise ValueError("Write your response before saving it")
         return v
+
+
+# ------------------------------------------------------- step assignment
+
+
+class StepAssignment(BaseModel):
+    """Who acts on an approval or calibration step. None hands the step back
+    to the workflow's actor: the position's holders, or the view_all holders
+    for calibration."""
+
+    assignee_id: Optional[str] = Field(default=None, min_length=1, max_length=36)
+
+
+class AssigneeCandidates(BaseModel):
+    """The current members who may be named on the step."""
+
+    candidates: List[PersonRef]
 
 
 # -------------------------------------------------------------- calibration
