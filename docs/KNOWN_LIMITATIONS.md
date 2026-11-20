@@ -10812,19 +10812,53 @@ each case):
   other.
 - **Files orphaned by permanent deletes before this fix** are not found or
   cleaned up; there is no sweep for them.
-- **Bare-string attachment entries** (the column's pre-upload-endpoint shape)
-  are invisible to `upload_relocation.collect_references`, so the shared-file
-  check cannot see them. They carry no path, so nothing deletes them either.
-- **The `TrainingRecordUpdate` path sets `attachments` blindly**, and can
-  replace dict entries with strings, which then name no file for either
-  erasure path to find.
-- **`delete_submission_attachment` does not check voided records** before
-  unlinking: a certificate a voided record still names can be deleted by the
-  member while the record's entry remains.
-- The shared-file check (`member_files.referenced_elsewhere`) covers every
-  writer of the self-report, training-record and waiver-document storage
-  areas, not every file column in the schema; there is no ratchet tying
-  `collect_references` to every file column.
+- **A certificate kept for a voided record is outside the retention sweep**
+  once the submission stops naming it. Removing a submission attachment, or
+  deleting the submission, now keeps a file another row still names (closed
+  2026-11-20, below), and after a reversal that row is the voided record.
+  `self_report_attachment_retention` walks submissions only, so it never
+  reaches that certificate again; it stays until the member is anonymised or
+  permanently deleted.
+- **An approval racing an attachment removal can lose the file.** Neither
+  `delete_submission_attachment`, `delete_submission` nor the approval locks
+  the submission (`TrainingSubmissionService.get_submission` reads without
+  `FOR UPDATE`). An approval that read the list before the member's removal
+  committed copies the removed entry onto its new record; if the member's
+  post-commit reference check runs before the approval commits, it misses
+  that record and deletes the file. Closing it is pitfall #27's shape: lock
+  the submission in both delete paths and in the approval. Escalated, not
+  fixed: it changes the approval path, which this change does not otherwise
+  touch.
+- **`DELETE /training/submissions/{id}/attachments/{index}` is not safe to
+  repeat** (pitfall #36). A retry after a lost 204 removes whichever entry has
+  moved into that index, and its file. Fixing it needs an entry identity the
+  client can name (the entries carry none) — an API change, so escalated.
+- **File names on path-less entries survive anonymisation.** The
+  anonymisation step relabels only entries naming a stored file, so a
+  `{"file_name": ...}` entry with no `file_path` (what the 2026-11-20
+  migration made of the old bare strings) keeps the uploader's filename, which
+  can be the member's name, on their submissions and records.
+- **A training record's own uploaded file has no removal route.** Officers
+  and members can add one (`POST /training/records/{id}/attachments`) but not
+  remove it; it leaves only with retention, anonymisation or a permanent
+  delete. A `DELETE /training/records/{id}/attachments/{index}` mirroring the
+  submission route is the shape if the owner wants one.
+
+**Closed 2026-11-20** (file-handling gaps, owner decision of that date):
+
+- Request bodies can no longer write `attachments` on a training record or a
+  training submission: `TrainingRecordCreate`, `TrainingRecordUpdate`,
+  `TrainingSubmissionCreate` and `TrainingSubmissionUpdate` answer 422 for the
+  field, null and `[]` included. The upload routes and the approval copy are
+  its only writers. Migration `0c22a95b94b8` settled the bare-string entries
+  already stored as `{"file_name": ...}`, losslessly.
+- Removing a submission attachment, and deleting a whole submission, go
+  through `member_files.remove_unreferenced_files`: a file a voided record (or
+  any other collected row) still names is kept.
+- An upload to a voided training record is refused, as an edit already was.
+- `tests/test_file_reference_coverage_ratchet.py` ties every file-path column
+  to `upload_relocation.collect_references` or to a commented allowlist, so
+  the shared-file check's "every other row" is enforced rather than assumed.
 
 Related, still open: **LIFE-11** (the separation letter in Documents), and the
 Member Files personal-folder documents, which neither path touches.

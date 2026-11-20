@@ -3616,6 +3616,11 @@ class RequirementStatusItem(BaseModel):
     catch_up_deadline: str | None = None
     # Met by a Chief's override rather than by the count.
     overridden: bool = False
+    # HOURS only: average hours a month in the months not excused, and the
+    # department's monthly pace (training_compliance.MonthlyPace). Shown
+    # beside the total; the status above is still graded on the total.
+    monthly_average: float | None = None
+    monthly_needed: float | None = None
 
 
 class MemberComplianceRow(BaseModel):
@@ -3964,6 +3969,8 @@ async def get_compliance_matrix(
                     as_of=ev.as_of,
                     catch_up_deadline=ev.catch_up_deadline,
                     overridden=ev.overridden,
+                    monthly_average=ev.monthly_average,
+                    monthly_needed=ev.monthly_needed,
                 )
             )
 

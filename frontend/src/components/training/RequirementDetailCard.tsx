@@ -1,6 +1,6 @@
 /**
- * One training requirement as a member's standing against it: the total, the
- * progress bar, the month-by-month hours and why a target was reduced.
+ * One training requirement as a member's standing against it: the total (led
+ * by the monthly average for an hours requirement), the progress bar, the month-by-month hours and why a target was reduced.
  *
  * Shared by the member's own My Training page and the training officer's view
  * of that member, so the two read the same server figures the same way
@@ -16,6 +16,7 @@ import { formatCalendarDate, formatDate } from '../../utils/dateFormatting';
 import { getProgressBarColor } from '../../utils/trainingColors';
 import { excusedMonthsPhrase } from '../../utils/requirementMonths';
 import { requirementUnitSuffix } from '../../utils/requirementUnits';
+import { monthlyPaceOf, paceLabel, paceSpoken } from '../../utils/requirementPace';
 import type { RequirementDetail } from '../../types/training';
 
 interface RequirementDetailCardProps {
@@ -43,6 +44,10 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
   // of leave can bring it to zero. That is met, and reads as such, not 0/0.
   const nothingOwed =
     !notYetHeld && req.required_hours === 0 && (req.original_required_hours ?? 0) > 0 && (req.waived_months ?? 0) > 0;
+  // An hours requirement leads with the member's monthly average, and the
+  // total moves to a line underneath. The total is still what decides
+  // whether the requirement is met, so it stays on the card.
+  const pace = monthlyPaceOf(req.monthly_average, req.monthly_needed);
 
   return (
     <div
@@ -78,6 +83,11 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
               <span className="text-theme-text-muted font-normal">No sessions held yet</span>
             ) : nothingOwed ? (
               <>Nothing owed (on leave)</>
+            ) : pace ? (
+              <>
+                <span className="sr-only">{paceSpoken(pace)}</span>
+                <span aria-hidden="true">{paceLabel(pace)}</span>
+              </>
             ) : (
               <>
                 {req.completed_hours}/{req.required_hours}
@@ -85,6 +95,12 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
               </>
             )}
           </span>
+          {pace && !notYetHeld && !nothingOwed && (
+            <p className="text-theme-text-muted mt-0.5 text-xs">
+              {req.completed_hours}/{req.required_hours}
+              {unitFor(req.required_hours)} total
+            </p>
+          )}
         </div>
       </div>
 

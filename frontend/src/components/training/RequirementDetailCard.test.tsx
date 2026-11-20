@@ -154,4 +154,50 @@ describe('RequirementDetailCard', () => {
     render(<RequirementDetailCard requirement={{ ...base, requirement_type: 'hours' }} timezone="UTC" />);
     expect(screen.queryByRole('button', { name: /required courses/ })).not.toBeInTheDocument();
   });
+
+  describe('an hours requirement', () => {
+    const hours: RequirementDetail = {
+      ...base,
+      name: 'Annual Training Hours',
+      requirement_type: 'hours',
+      required_hours: 72,
+      original_required_hours: 72,
+      completed_hours: 83.25,
+      progress_percentage: 100,
+      is_met: true,
+      due_date: null,
+      days_until_due: null,
+      window_months: 12,
+      monthly_average: 6.94,
+      monthly_needed: 6,
+      monthly_hours: [
+        { month: '2026-10', hours: 6.94, waived: false },
+        { month: '2026-11', hours: 6.94, waived: false },
+      ],
+    };
+
+    it('leads with the monthly average and keeps the total underneath', () => {
+      render(<RequirementDetailCard requirement={hours} timezone="UTC" />);
+      expect(screen.getByText('6.9/6 hrs/mo avg')).toBeInTheDocument();
+      expect(screen.getByText('Averaging 6.9 hours a month of 6 needed')).toBeInTheDocument();
+      expect(screen.getByText('83.25/72 hrs total')).toBeInTheDocument();
+      expect(screen.getByText('Complete')).toBeInTheDocument();
+    });
+
+    it('shows the server average in the monthly panel too', async () => {
+      const user = userEvent.setup();
+      // The two rows average 6.94, but the server's figure is what prints.
+      render(<RequirementDetailCard requirement={{ ...hours, monthly_average: 7.2 }} timezone="UTC" />);
+      await user.click(screen.getByRole('button', { name: /show monthly hours/i }));
+      expect(screen.getByText(/average 7\.2 hrs\/month/)).toBeInTheDocument();
+      expect(screen.getByText('7.2/6 hrs/mo avg')).toBeInTheDocument();
+    });
+
+    it('shows the total alone when the server sends no average', () => {
+      render(<RequirementDetailCard requirement={{ ...hours, monthly_average: null }} timezone="UTC" />);
+      expect(screen.getByText('83.25/72 hrs')).toBeInTheDocument();
+      expect(screen.queryByText(/hrs\/mo avg/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/total$/)).not.toBeInTheDocument();
+    });
+  });
 });

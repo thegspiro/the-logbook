@@ -1239,6 +1239,8 @@ class TestEvaluateRequirementDetailFields:
             "window_end",
             "window_months",
             "monthly_hours",
+            "monthly_average",
+            "monthly_needed",
             "monthly_counts",
             "course_checklist",
         }
