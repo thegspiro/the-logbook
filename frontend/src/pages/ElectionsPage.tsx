@@ -45,6 +45,7 @@ import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
 import { Vote } from 'lucide-react';
 import { ElectionsAreaNav } from '../modules/elections/components/ElectionsAreaNav';
+import { getLoadFailureMessage } from '../utils/errorHandling';
 
 interface PositionSuggestion {
   key: string;
@@ -192,8 +193,8 @@ export const ElectionsPage: React.FC = () => {
       setError(null);
       const data = await electionService.getElections();
       setElections(data);
-    } catch (_err) {
-      setError("Couldn't load elections. Check your connection and refresh the page.");
+    } catch (err: unknown) {
+      setError(getLoadFailureMessage(err, 'elections'));
     } finally {
       setLoading(false);
     }

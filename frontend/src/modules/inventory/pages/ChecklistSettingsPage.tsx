@@ -28,11 +28,25 @@ import { organizationService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { CHECKIN_BOUNDS, DEFAULT_CHECKLIST_TIMING, type ChecklistTimingSettings } from '../types/checklistSettings';
 import { useSchedulingStore } from '../../scheduling/store/schedulingStore';
+import { FIELD_ERROR_CLASS } from '../../../components/ux/FormField';
+
+type TimingField = keyof ChecklistTimingSettings;
 
 export const ChecklistSettingsPage: React.FC = () => {
   const [timing, setTiming] = useState<ChecklistTimingSettings>(DEFAULT_CHECKLIST_TIMING);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // What happened to a control's last change, said on that control rather than
+  // in a toast that vanished (forms review F-2, F-3): a refused save, an entry
+  // that could not be used, or a number folded back into range.
+  const [notes, setNotes] = useState<Partial<Record<TimingField, string>>>({});
+  const note = (field: TimingField, message: string | null) =>
+    setNotes((current) => {
+      const next = { ...current };
+      if (message) next[field] = message;
+      else delete next[field];
+      return next;
+    });
 
   // The two bounds as typed text, so a box can be empty mid-edit without that
   // being saved as 0. Re-synced whenever the saved values change, which is also
@@ -63,8 +77,9 @@ export const ChecklistSettingsPage: React.FC = () => {
     void load();
   }, []);
 
-  const save = useCallback(async (updated: ChecklistTimingSettings) => {
+  const save = useCallback(async (updated: ChecklistTimingSettings, field: TimingField): Promise<boolean> => {
     setSaving(true);
+    note(field, null);
     try {
       await organizationService.updateSettings({ shift_reports: { checklist_timing: updated } });
       setTiming(updated);
@@ -87,8 +102,10 @@ export const ChecklistSettingsPage: React.FC = () => {
       // cushion back as loaded.
       useSchedulingStore.getState().invalidateSettings();
       toast.success('Checklist settings saved');
+      return true;
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save checklist settings'));
+      note(field, getErrorMessage(err, 'Failed to save checklist settings'));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -96,7 +113,7 @@ export const ChecklistSettingsPage: React.FC = () => {
 
   const updateTiming = useCallback(
     (field: keyof ChecklistTimingSettings, value: boolean | number) => {
-      void save({ ...timing, [field]: value });
+      void save({ ...timing, [field]: value }, field);
     },
     [timing, save]
   );
@@ -115,19 +132,28 @@ export const ChecklistSettingsPage: React.FC = () => {
       const saved = timing[field];
       const trimmed = raw.trim();
       const parsed = Number(trimmed);
+      const { min, max } = CHECKIN_BOUNDS[field];
       if (trimmed === '' || !Number.isFinite(parsed)) {
         restore(String(saved));
+        // The box used to snap back without a word, which read as the change
+        // having been saved.
+        note(field, `Enter whole hours, from ${min} to ${max}. ${saved} is kept.`);
         return;
       }
-      const { min, max } = CHECKIN_BOUNDS[field];
       const clamped = Math.min(max, Math.max(min, Math.round(parsed)));
+      // Said rather than done silently: 999 typed and 24 stored, with nothing
+      // on screen to say why, read as the field ignoring what was typed.
+      const folded = clamped !== parsed ? `${clamped} is the ${clamped === max ? 'most' : 'least'} allowed.` : null;
       if (clamped === saved) {
         // Nothing to save, but the box may hold "02" or an out-of-range number
         // the clamp folded back onto the saved value.
         restore(String(saved));
+        note(field, folded ? `${folded} It stays at ${saved}.` : null);
         return;
       }
-      void save({ ...timing, [field]: clamped });
+      void save({ ...timing, [field]: clamped }, field).then((ok) => {
+        if (ok && folded) note(field, `${folded} ${clamped} was saved.`);
+      });
     },
     [timing, save]
   );
@@ -172,6 +198,7 @@ export const ChecklistSettingsPage: React.FC = () => {
             label="Start-of-shift checklists"
             description="Members are prompted to complete equipment checks when their shift begins."
             checked={timing.start_of_shift_enabled}
+            note={notes.start_of_shift_enabled}
             disabled={saving}
             onChange={(checked) => updateTiming('start_of_shift_enabled', checked)}
           />
@@ -180,6 +207,7 @@ export const ChecklistSettingsPage: React.FC = () => {
             label="End-of-shift checklists"
             description="Members are reminded to complete equipment checks before their shift ends."
             checked={timing.end_of_shift_enabled}
+            note={notes.end_of_shift_enabled}
             disabled={saving}
             onChange={(checked) => updateTiming('end_of_shift_enabled', checked)}
           />
@@ -202,8 +230,12 @@ export const ChecklistSettingsPage: React.FC = () => {
             label="Opens before the start"
             unit="hours early"
             value={opensDraft}
+            note={notes.checkin_opens_hours_before}
             disabled={saving}
-            onChange={setOpensDraft}
+            onChange={(value) => {
+              setOpensDraft(value);
+              note('checkin_opens_hours_before', null);
+            }}
             onCommit={() => commitCheckinBound('checkin_opens_hours_before', opensDraft, setOpensDraft)}
           />
           <HoursRow
@@ -211,8 +243,12 @@ export const ChecklistSettingsPage: React.FC = () => {
             label="Closes after the end"
             unit="hours late"
             value={closesDraft}
+            note={notes.checkin_closes_hours_after}
             disabled={saving}
-            onChange={setClosesDraft}
+            onChange={(value) => {
+              setClosesDraft(value);
+              note('checkin_closes_hours_after', null);
+            }}
             onCommit={() => commitCheckinBound('checkin_closes_hours_after', closesDraft, setClosesDraft)}
           />
         </div>
@@ -226,6 +262,8 @@ interface SwitchRowProps {
   label: string;
   description: string;
   checked: boolean;
+  /** Why the last change did not take, said under the row. */
+  note?: string | undefined;
   disabled: boolean;
   onChange: (checked: boolean) => void;
 }
@@ -235,29 +273,36 @@ interface SwitchRowProps {
  * words on the left, the switch on the right. The whole row is the button, so
  * the tap target is the text as well as the 44px track beside it.
  */
-const SwitchRow: React.FC<SwitchRowProps> = ({ id, label, description, checked, disabled, onChange }) => (
-  <button
-    type="button"
-    role="switch"
-    aria-checked={checked}
-    aria-labelledby={`${id}-label`}
-    aria-describedby={`${id}-description`}
-    disabled={disabled}
-    onClick={() => onChange(!checked)}
-    className="flex min-h-[44px] w-full items-center justify-between gap-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-60"
-  >
-    <span className="min-w-0">
-      <span id={`${id}-label`} className="text-theme-text-primary block text-sm font-medium">
-        {label}
+const SwitchRow: React.FC<SwitchRowProps> = ({ id, label, description, checked, note, disabled, onChange }) => (
+  <div>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-labelledby={`${id}-label`}
+      aria-describedby={note ? `${id}-description ${id}-note` : `${id}-description`}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className="flex min-h-[44px] w-full items-center justify-between gap-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      <span className="min-w-0">
+        <span id={`${id}-label`} className="text-theme-text-primary block text-sm font-medium">
+          {label}
+        </span>
+        <span id={`${id}-description`} className="text-theme-text-muted block text-xs">
+          {description}
+        </span>
       </span>
-      <span id={`${id}-description`} className="text-theme-text-muted block text-xs">
-        {description}
+      <span aria-hidden="true" className={`toggle-track-sm ${checked ? 'bg-blue-600' : 'bg-theme-surface-border'}`}>
+        <span className={`toggle-knob-sm ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
       </span>
-    </span>
-    <span aria-hidden="true" className={`toggle-track-sm ${checked ? 'bg-blue-600' : 'bg-theme-surface-border'}`}>
-      <span className={`toggle-knob-sm ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
-    </span>
-  </button>
+    </button>
+    {note && (
+      <p id={`${id}-note`} role="alert" className={`pb-3 text-xs ${FIELD_ERROR_CLASS}`}>
+        {note}
+      </p>
+    )}
+  </div>
 );
 
 interface HoursRowProps {
@@ -265,6 +310,8 @@ interface HoursRowProps {
   label: string;
   unit: string;
   value: string;
+  /** What happened to the last entry, said under the row. */
+  note?: string | undefined;
   disabled: boolean;
   onChange: (value: string) => void;
   onCommit: () => void;
@@ -281,33 +328,40 @@ interface HoursRowProps {
  * `commitCheckinBound`, which also turns anything that is not a number back into
  * the saved value.
  */
-const HoursRow: React.FC<HoursRowProps> = ({ id, label, unit, value, disabled, onChange, onCommit }) => (
-  <div className="flex min-h-[44px] items-center justify-between gap-4 py-3">
-    <label htmlFor={id} className="text-theme-text-primary text-sm font-medium">
-      {label}
-    </label>
-    <span className="flex shrink-0 items-center gap-2">
-      <input
-        id={id}
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        enterKeyHint="done"
-        autoComplete="off"
-        aria-describedby={`${id}-unit`}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onCommit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur();
-        }}
-        disabled={disabled}
-        className="form-input w-20 text-center"
-      />
-      <span id={`${id}-unit`} className="text-theme-text-muted w-[4.5rem] text-xs">
-        {unit}
+const HoursRow: React.FC<HoursRowProps> = ({ id, label, unit, value, note, disabled, onChange, onCommit }) => (
+  <div className="py-3">
+    <div className="flex min-h-[44px] items-center justify-between gap-4">
+      <label htmlFor={id} className="text-theme-text-primary text-sm font-medium">
+        {label}
+      </label>
+      <span className="flex shrink-0 items-center gap-2">
+        <input
+          id={id}
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          enterKeyHint="done"
+          autoComplete="off"
+          aria-describedby={note ? `${id}-unit ${id}-note` : `${id}-unit`}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onCommit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+          }}
+          disabled={disabled}
+          className="form-input w-20 text-center"
+        />
+        <span id={`${id}-unit`} className="text-theme-text-muted w-[4.5rem] text-xs">
+          {unit}
+        </span>
       </span>
-    </span>
+    </div>
+    {note && (
+      <p id={`${id}-note`} role="alert" className={`mt-1 text-xs ${FIELD_ERROR_CLASS}`}>
+        {note}
+      </p>
+    )}
   </div>
 );
 

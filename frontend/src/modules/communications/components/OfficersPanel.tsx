@@ -17,6 +17,7 @@ import { FormField } from '../../../components/ux/FormField';
 import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
+import { isActiveAccount } from '../../../constants/enums';
 
 interface OfficersPanelProps {
   /** Org members, used to populate the "who holds this office" picker. */
@@ -28,6 +29,7 @@ interface OfficersPanelProps {
     last_name?: string | undefined;
     preferred_name?: string | null | undefined;
     email?: string | undefined;
+    status?: string | undefined;
   }[];
   isLoadingMembers: boolean;
 }
@@ -251,11 +253,17 @@ const OfficerRow: React.FC<OfficerRowProps> = ({ office, members, isSaving, onSa
                   className="form-input"
                 >
                   <option value="">— None (use the name below) —</option>
-                  {members.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {memberLabel(m)}
-                    </option>
-                  ))}
+                  {/* Only a current member can be named to an office. The
+                    member who holds it now stays listed even after leaving,
+                    so the select still shows who that is. */}
+                  {members
+                    .filter((m) => isActiveAccount(m.status) || m.id === office.user_id)
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {memberLabel(m)}
+                        {isActiveAccount(m.status) ? '' : ' (former member)'}
+                      </option>
+                    ))}
                 </select>
               )}
             </FormField>

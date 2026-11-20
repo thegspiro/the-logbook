@@ -47,6 +47,12 @@ const mockAuthState: Record<string, unknown> = {
   checkPermission: vi.fn().mockReturnValue(false),
   user: null,
 };
+const downloadCsv = vi.fn();
+vi.mock('../utils/csv', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../utils/csv')>();
+  return { ...actual, downloadCsv: (...args: unknown[]) => downloadCsv(...args) as unknown };
+});
+
 vi.mock('../stores/authStore', () => ({
   useAuthStore: vi.fn((selector?: (state: Record<string, unknown>) => unknown) =>
     selector ? selector(mockAuthState) : mockAuthState
@@ -543,6 +549,29 @@ describe('EventsPage', () => {
       await user.click(screen.getByRole('button', { name: /select monthly business meeting/i }));
       expect(screen.getByRole('region', { name: /bulk event actions/i })).toHaveTextContent('1 selected');
       expect(screen.getByRole('button', { name: /export csv/i })).toBeEnabled();
+    });
+
+    it('exports where each selected event came from', async () => {
+      const user = userEvent.setup();
+      downloadCsv.mockReset();
+      mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
+      vi.mocked(eventService.getEvents).mockResolvedValue([
+        { ...mockEvents[0], source: 'imported', source_label: 'Imported' } as EventListItem,
+      ]);
+
+      renderWithRouter(<EventsPage />);
+
+      await screen.findByText('Monthly Business Meeting');
+      await user.click(screen.getByRole('button', { name: /more event actions/i }));
+      await user.click(screen.getByRole('button', { name: /select events/i }));
+      await user.click(screen.getByRole('button', { name: /select monthly business meeting/i }));
+      await user.click(screen.getByRole('button', { name: /export csv/i }));
+
+      expect(downloadCsv).toHaveBeenCalledTimes(1);
+      const [csv] = downloadCsv.mock.calls[0] as [string];
+      const [header, row] = csv.trim().split(/\r?\n/);
+      expect(header).toBe('Title,Type,Date,Location,Mandatory,Cancelled,Source');
+      expect(row?.endsWith(',Imported')).toBe(true);
     });
 
     it('should drop the selection when Done leaves the mode', async () => {

@@ -844,6 +844,8 @@ class StoreOrderResponse(UTCResponseBase):
     total: Decimal
     amount_paid: Decimal
     balance_due: Decimal = Decimal("0")
+    # Recorded beyond the total and owed back to the member (W67b-7).
+    overpaid_amount: Decimal = Decimal("0")
     payment_reference: Optional[str] = None
     payment_reported_at: Optional[datetime] = None
     paid_at: Optional[datetime] = None

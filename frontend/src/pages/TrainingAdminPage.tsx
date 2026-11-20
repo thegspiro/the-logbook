@@ -90,7 +90,9 @@ const TabContent: React.FC<{
   tab: string;
   view: string | null;
   onMetricsSaved: () => void;
-}> = ({ area, tab, view, onMetricsSaved }) => {
+  /** Re-reads the hub's attention queue after a tab resolves an item in it. */
+  onQueueChanged: () => void;
+}> = ({ area, tab, view, onMetricsSaved, onQueueChanged }) => {
   // These two areas are single components that switch on the destination themselves.
   if (area === 'enhancements') return <TrainingEnhancementsTab activeTab={tab} />;
   if (area === 'compliance') return <ComplianceOfficerDashboard activeTab={tab} />;
@@ -121,7 +123,7 @@ const TabContent: React.FC<{
     case 'courses':
       return <CourseLibraryPage embedded />;
     case 'course-links':
-      return <CourseLinksPanel />;
+      return <CourseLinksPanel onLinksChanged={onQueueChanged} />;
     case 'pipelines':
       return view === PROGRAM_WIZARD_VIEW ? <CreatePipelinePage /> : <TrainingProgramsPage embedded />;
     case 'skill-evaluations':
@@ -310,6 +312,7 @@ export const TrainingAdminPage: React.FC = () => {
                       tab={destination.id}
                       view={searchParams.get('view')}
                       onMetricsSaved={() => setFrameToken((token) => token + 1)}
+                      onQueueChanged={() => setFrameToken((token) => token + 1)}
                     />
                   </Suspense>
                 )}

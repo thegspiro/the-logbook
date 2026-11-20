@@ -24,20 +24,26 @@ officer linked by hand keeps its course.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
-from typing import Dict, List, Optional, Sequence, Set
+from datetime import date, datetime, timezone
+from types import SimpleNamespace
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from loguru import logger
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.training import TrainingCourse, TrainingRecord
+from app.models.training_course_link import (
+    TrainingCourseLink,
+    TrainingCourseLinkRecord,
+)
 from app.services.external_course_mapping import (
     SuggestionCandidates,
     course_category_id,
     normalize_course_title,
 )
 from app.services.qualification_service import QualificationService
+from app.utils.edit_window import changed_since
 from app.utils.sql_results import rows_affected
 from app.utils.training_match_key import training_match_key
 
@@ -79,6 +85,16 @@ class UnlinkedName:
     def label(self) -> str:
         """The spelling most records use, as the name to show."""
         return max(self.spellings, key=lambda s: (s.records, s.name)).name
+
+
+@dataclass
+class UnlinkResult:
+    reverted: int
+    kept: int
+
+
+def _label_of(spellings: Sequence[str]) -> str:
+    return sorted(spellings)[0] if spellings else ""
 
 
 @dataclass
@@ -152,7 +168,13 @@ class TrainingCourseLinkService:
             entry.suggested_course = candidates.pick("", entry.label)
         return sorted(names.values(), key=lambda n: (-n.records, n.key))
 
-    async def link(self, organization_id: str, key: str, course_id: str) -> LinkResult:
+    async def link(
+        self,
+        organization_id: str,
+        key: str,
+        course_id: str,
+        linked_by: Optional[str] = None,
+    ) -> LinkResult:
         """Link every unlinked record carrying this name to the course.
 
         Raises ``ValueError`` for a course outside the department or retired,
@@ -172,10 +194,14 @@ class TrainingCourseLinkService:
         spellings = await self._spellings(org_id, [key])
         if not spellings.get(key):
             raise ValueError("No unlinked training records carry that name.")
-        records = await self._apply(org_id, spellings[key], course)
+        records = await self._apply(
+            org_id, spellings[key], course, key, _label_of(spellings[key]), linked_by
+        )
         return LinkResult(names=1, records=records)
 
-    async def link_suggested(self, organization_id: str) -> LinkResult:
+    async def link_suggested(
+        self, organization_id: str, linked_by: Optional[str] = None
+    ) -> LinkResult:
         """Link every name that has a suggestion to its suggested course."""
         org_id = str(organization_id)
         names = records = 0
@@ -183,7 +209,12 @@ class TrainingCourseLinkService:
             if entry.suggested_course is None:
                 continue
             records += await self._apply(
-                org_id, [s.name for s in entry.spellings], entry.suggested_course
+                org_id,
+                [s.name for s in entry.spellings],
+                entry.suggested_course,
+                entry.key,
+                entry.label,
+                linked_by,
             )
             names += 1
         return LinkResult(names=names, records=records)
@@ -208,44 +239,189 @@ class TrainingCourseLinkService:
         return found
 
     async def _apply(
-        self, org_id: str, spellings: Sequence[str], course: TrainingCourse
+        self,
+        org_id: str,
+        spellings: Sequence[str],
+        course: TrainingCourse,
+        key: str,
+        label: str,
+        linked_by: Optional[str],
     ) -> int:
+        """Link the records and keep what each held before, so the link can be
+        undone (``unlink``)."""
         values: Dict[str, object] = {"course_id": str(course.id)}
         category_id = await course_category_id(self.db, str(course.id), org_id)
         if category_id:
             values["category_id"] = category_id
         if course.training_type:
             values["training_type"] = course.training_type
-        linked_ids: List[str] = []
-        changed = 0
+        before: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
         for start in range(0, len(spellings), _NAME_CHUNK):
             chunk = list(spellings[start : start + _NAME_CHUNK])
             # Only records still without a course: the guard is what makes a
             # second link a no-op, and what keeps a hand-picked course.
-            match = (
-                (TrainingRecord.organization_id == org_id)
-                & TrainingRecord.course_id.is_(None)
-                & TrainingRecord.course_name.in_(chunk)
-            )
-            if course.grants_qualification:
-                linked_ids.extend(
-                    str(rid)
-                    for rid in (
-                        await self.db.execute(select(TrainingRecord.id).where(match))
-                    )
-                    .scalars()
-                    .all()
+            rows = await self.db.execute(
+                select(
+                    TrainingRecord.id,
+                    TrainingRecord.category_id,
+                    TrainingRecord.training_type,
+                ).where(
+                    TrainingRecord.organization_id == org_id,
+                    TrainingRecord.course_id.is_(None),
+                    TrainingRecord.course_name.in_(chunk),
                 )
+            )
+            for rid, category, training_type in rows.all():
+                before[str(rid)] = (
+                    str(category) if category else None,
+                    getattr(training_type, "value", training_type),
+                )
+        if not before:
+            return 0
+        link = TrainingCourseLink(
+            organization_id=org_id,
+            course_id=str(course.id),
+            course_name=course.name[:255],
+            name_key=key[:255],
+            label=label[:255],
+            record_count=len(before),
+            linked_by=str(linked_by) if linked_by else None,
+        )
+        self.db.add(link)
+        await self.db.flush()
+        ids = sorted(before)
+        changed = 0
+        for start in range(0, len(ids), _NAME_CHUNK):
+            chunk = ids[start : start + _NAME_CHUNK]
             result = await self.db.execute(
                 update(TrainingRecord)
-                .where(match)
+                .where(
+                    TrainingRecord.organization_id == org_id,
+                    TrainingRecord.course_id.is_(None),
+                    TrainingRecord.id.in_(chunk),
+                )
                 .values(**values)
                 .execution_options(synchronize_session=False)
             )
             changed += int(rows_affected(result) or 0)
-        if linked_ids:
-            await self._sync_qualifications(org_id, linked_ids)
+            self.db.add_all(
+                TrainingCourseLinkRecord(
+                    link_id=link.id,
+                    record_id=rid,
+                    previous_category_id=before[rid][0],
+                    previous_training_type=before[rid][1],
+                )
+                for rid in chunk
+            )
+        await self.db.flush()
+        if course.grants_qualification:
+            await self._sync_qualifications(org_id, ids)
         return changed
+
+    async def history(
+        self, organization_id: str, offset: int, limit: int
+    ) -> Tuple[List[TrainingCourseLink], int]:
+        """The department's links, newest first."""
+        org_id = str(organization_id)
+        total = await self.db.scalar(
+            select(func.count())
+            .select_from(TrainingCourseLink)
+            .where(TrainingCourseLink.organization_id == org_id)
+        )
+        rows = await self.db.execute(
+            select(TrainingCourseLink)
+            .where(TrainingCourseLink.organization_id == org_id)
+            .order_by(TrainingCourseLink.linked_at.desc(), TrainingCourseLink.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(rows.scalars().all()), int(total or 0)
+
+    async def unlink(
+        self, organization_id: str, link_id: str, undone_by: str
+    ) -> UnlinkResult:
+        """Put a link's records back as they were: no course, and the category
+        and training type each had before.
+
+        A record changed since the link, or since linked to another course by
+        hand, is the officer's and keeps its course; it is counted as kept.
+        Raises ``ValueError`` for a link not in the department or already undone.
+        """
+        org_id = str(organization_id)
+        link = (
+            await self.db.execute(
+                select(TrainingCourseLink)
+                .where(
+                    TrainingCourseLink.id == str(link_id),
+                    TrainingCourseLink.organization_id == org_id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if link is None:
+            raise ValueError("That link was not found.")
+        if link.undone_at is not None:
+            raise ValueError("That link has already been undone.")
+        rows = await self.db.execute(
+            select(
+                TrainingCourseLinkRecord.record_id,
+                TrainingCourseLinkRecord.previous_category_id,
+                TrainingCourseLinkRecord.previous_training_type,
+                TrainingRecord.course_id,
+                TrainingRecord.updated_at,
+                TrainingRecord.user_id,
+            )
+            .join(
+                TrainingRecord, TrainingRecord.id == TrainingCourseLinkRecord.record_id
+            )
+            .where(
+                TrainingCourseLinkRecord.link_id == link.id,
+                TrainingRecord.organization_id == org_id,
+            )
+        )
+        restore: Dict[Tuple[Optional[str], Optional[str]], List[str]] = {}
+        users: set[str] = set()
+        kept = 0
+        for rid, category, training_type, course_id, updated_at, user_id in rows.all():
+            if str(course_id or "") != str(link.course_id or "") or changed_since(
+                updated_at, link.linked_at
+            ):
+                kept += 1
+                continue
+            restore.setdefault((category, training_type), []).append(str(rid))
+            users.add(str(user_id))
+        reverted = 0
+        for (category, training_type), ids in restore.items():
+            values: Dict[str, object] = {"course_id": None, "category_id": category}
+            if training_type:
+                values["training_type"] = training_type
+            for start in range(0, len(ids), _NAME_CHUNK):
+                result = await self.db.execute(
+                    update(TrainingRecord)
+                    .where(
+                        TrainingRecord.organization_id == org_id,
+                        TrainingRecord.id.in_(ids[start : start + _NAME_CHUNK]),
+                    )
+                    .values(**values)
+                    .execution_options(synchronize_session=False)
+                )
+                reverted += int(rows_affected(result) or 0)
+        if link.course_id and users:
+            # A recompute from the records still on the course: one that no
+            # longer supports a granted qualification removes it.
+            service = QualificationService(self.db)
+            for user_id in sorted(users):
+                await service.sync_from_training_record(
+                    SimpleNamespace(
+                        organization_id=org_id,
+                        user_id=user_id,
+                        course_id=link.course_id,
+                    )
+                )
+        link.undone_at = datetime.now(timezone.utc)
+        link.undone_by = str(undone_by)
+        await self.db.flush()
+        return UnlinkResult(reverted=reverted, kept=kept)
 
     async def _sync_qualifications(self, org_id: str, record_ids: List[str]) -> None:
         """A course that grants a qualification certifies the members whose
