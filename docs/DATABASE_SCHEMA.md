@@ -864,7 +864,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`member_leaves_of_absence`](#member_leaves_of_absence) | `MemberLeaveOfAbsence` | 14 | Records periods where a member is on leave from the department. |
 | [`member_service_periods`](#member_service_periods) | `MemberServicePeriod` | 11 | One continuous stint of membership, for calculating length of service. |
-| [`organizations`](#organizations) | `Organization` | 38 | Organization/Department model |
+| [`organizations`](#organizations) | `Organization` | 39 | Organization/Department model |
 | [`password_history`](#password_history) | `PasswordHistory` | 4 | Password history for HIPAA compliance (§164.312(d)) |
 | [`positions`](#positions) | `Position` | 12 | Corporate Position model for permission-based access control. |
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
@@ -13002,6 +13002,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `name` | VARCHAR(255) | no |  |  |  |
+| `short_name` | VARCHAR(20) | yes |  |  |  |
 | `slug` | VARCHAR(100) | no | UQ |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `reorder_vendor_required` | BOOL | no |  | `0` |  |
