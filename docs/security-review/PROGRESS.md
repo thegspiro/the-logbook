@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (pending push)** (branch `claude/security-review-apparatus-nfc` — confirmed
+**PR [#4450](https://github.com/thegspiro/the-logbook/pull/4450)** (branch `claude/security-review-apparatus-nfc` — confirmed
 free of any prior merged/closed PR with `git ls-remote --heads origin
 'refs/heads/claude/security-review-apparatus*'`, which returned nothing):
 Feature 13 (Apparatus & NFC), pass 23 — watchdog pickup (the dedicated
