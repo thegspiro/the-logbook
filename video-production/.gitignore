@@ -1,0 +1,8 @@
+# Everything generated: renders, frames, narration, the virtualenv and the
+# downloaded voices. Only the tool and each short's definition are tracked.
+build/
+__pycache__/
+
+# The root .gitignore ignores every lib/ (Python packaging boilerplate); this
+# one holds the tool's source.
+!lib/

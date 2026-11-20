@@ -214,7 +214,7 @@ describe('MessageComposeForm when the server refuses', () => {
     mockGetRoles.mockReset();
     mockGetRoles.mockResolvedValue([]);
     mockGetUsers.mockReset();
-    mockGetUsers.mockResolvedValue([{ id: 'u1', first_name: 'Jordan', last_name: 'Avery' }]);
+    mockGetUsers.mockResolvedValue([{ id: 'u1', first_name: 'Jordan', last_name: 'Avery', status: 'active' }]);
     mockCreate.mockReset();
     mockCreate.mockRejectedValue(createMockApiError('The expiry time must be in the future'));
   });
@@ -262,7 +262,7 @@ describe('MessageComposeForm editing a message whose audience has since gone', (
     mockGetRoles.mockReset();
     mockGetRoles.mockResolvedValue([{ id: 'role-officer', name: 'Officer', slug: 'officer' }]);
     mockGetUsers.mockReset();
-    mockGetUsers.mockResolvedValue([{ id: 'u1', first_name: 'Jordan', last_name: 'Avery' }]);
+    mockGetUsers.mockResolvedValue([{ id: 'u1', first_name: 'Jordan', last_name: 'Avery', status: 'active' }]);
     mockUpdate.mockReset();
     mockUpdate.mockResolvedValue({ id: 'm1' });
     mockCreate.mockReset();
@@ -305,5 +305,53 @@ describe('MessageComposeForm editing a message whose audience has since gone', (
     await waitFor(() => expect(mockUpdate.mock.calls.length).toBe(1));
     const [, payload] = mockUpdate.mock.calls[0] as [string, Record<string, unknown>];
     expect(payload.target_member_ids).toEqual(['u1']);
+  });
+});
+
+describe('MessageComposeForm targeting specific members', () => {
+  beforeEach(() => {
+    mockGetRoles.mockReset();
+    mockGetRoles.mockResolvedValue([]);
+    mockGetUsers.mockReset();
+    mockGetUsers.mockResolvedValue([
+      { id: 'u1', first_name: 'Jordan', last_name: 'Avery', status: 'active' },
+      { id: 'u2', first_name: 'Lee', last_name: 'Park', status: 'archived' },
+    ]);
+    mockUpdate.mockReset();
+    mockUpdate.mockResolvedValue({ id: 'm1' });
+  });
+
+  it('does not offer a former member', async () => {
+    const user = userEvent.setup();
+    render(<MessageComposeForm onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.selectOptions(screen.getByLabelText('Audience'), 'members');
+
+    expect(await screen.findByRole('checkbox', { name: /Jordan Avery/ })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /Lee Park/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps a former member already in the audience listed, ticked and marked', async () => {
+    render(
+      <MessageComposeForm
+        message={{
+          id: 'm1',
+          organization_id: 'org1',
+          title: 'Original',
+          body: 'Original body',
+          priority: 'normal',
+          is_pinned: false,
+          is_active: true,
+          is_persistent: false,
+          requires_acknowledgment: false,
+          target_type: 'members',
+          target_member_ids: ['u2'],
+        }}
+        onSaved={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByRole('checkbox', { name: 'Lee Park (former member)' })).toBeChecked();
   });
 });

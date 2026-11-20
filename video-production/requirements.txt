@@ -1,0 +1,5 @@
+# Narration and its transcription check. Separate from backend/requirements.txt:
+# nothing here is installed into, or imported by, the application.
+piper-tts==1.8.0
+faster-whisper==1.2.1
+numpy==2.5.5

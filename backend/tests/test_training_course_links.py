@@ -7,20 +7,22 @@ its category and its training type, and compliance counts it from then on.
 """
 
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 
 from app.api.v1.endpoints import training as training_endpoints
 from app.api.v1.endpoints.training import (
+    course_link_history,
     link_course_name,
     link_suggested_course_names,
     list_course_links,
+    undo_course_link,
 )
 from app.models.training import (
     TrainingCategory,
@@ -378,3 +380,135 @@ class TestLinking:
         assert certification_record_matches(
             requirement, await _reload(db_session, record)
         )
+
+
+class TestUndoingALink:
+    async def _linked(self, db_session, org_id, officer):
+        member = await _member(db_session, org_id)
+        medical = await _category(db_session, org_id)
+        old = await _category(db_session, org_id, name="Old")
+        cpr = await _course(
+            db_session, org_id, "CPR Refresher", category_ids=[medical.id]
+        )
+        first = await _record(
+            db_session,
+            org_id,
+            member.id,
+            "CPR Refresher",
+            date(2019, 5, 1),
+            category_id=old.id,
+        )
+        second = await _record(
+            db_session, org_id, member.id, "C.P.R. refresher", date(2020, 5, 1)
+        )
+        await link_course_name(
+            payload=CourseLinkRequest(key=name_key("CPR Refresher"), course_id=cpr.id),
+            db=db_session,
+            current_user=officer,
+        )
+        history = await course_link_history(
+            offset=0, limit=10, db=db_session, current_user=officer
+        )
+        return cpr, old, first, second, history.items[0]
+
+    async def test_a_link_is_recorded_and_undoing_it_restores_each_record(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, _admin = setup_org_and_admin
+        officer = await _member(db_session, org_id)
+        cpr, old, first, second, link = await self._linked(db_session, org_id, officer)
+
+        assert (link.course_name, link.record_count, link.undone_at) == (
+            "CPR Refresher",
+            2,
+            None,
+        )
+        assert link.linked_by_name == "Pat Member"
+
+        result = await undo_course_link(
+            link_id=link.id, db=db_session, current_user=officer
+        )
+
+        assert (result.reverted, result.kept) == (2, 0)
+        restored = await _reload(db_session, first)
+        assert (
+            restored.course_id,
+            restored.category_id,
+            restored.training_type,
+        ) == (None, old.id, TrainingType.CONTINUING_EDUCATION)
+        assert (await _reload(db_session, second)).course_id is None
+        after = await course_link_history(
+            offset=0, limit=10, db=db_session, current_user=officer
+        )
+        assert after.items[0].undone_at is not None
+        # The name is unlinked again, so it can be linked anew.
+        view = await _view(db_session, officer)
+        assert [i.records for i in view.items] == [2]
+
+    async def test_a_record_changed_since_keeps_its_course(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, _admin = setup_org_and_admin
+        officer = await _member(db_session, org_id)
+        cpr, _old, first, second, link = await self._linked(db_session, org_id, officer)
+        await db_session.execute(
+            update(TrainingRecord)
+            .where(TrainingRecord.id == second.id)
+            .values(updated_at=datetime.now(timezone.utc) + timedelta(hours=1))
+        )
+        await db_session.commit()
+
+        result = await undo_course_link(
+            link_id=link.id, db=db_session, current_user=officer
+        )
+
+        assert (result.reverted, result.kept) == (1, 1)
+        assert (await _reload(db_session, first)).course_id is None
+        assert (await _reload(db_session, second)).course_id == cpr.id
+
+    async def test_a_link_is_undone_once_and_only_in_its_department(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, _admin = setup_org_and_admin
+        officer = await _member(db_session, org_id)
+        *_, link = await self._linked(db_session, org_id, officer)
+        other = Organization(
+            id=str(uuid.uuid4()), name="Other", slug=f"o-{uuid.uuid4().hex[:8]}"
+        )
+        db_session.add(other)
+        await db_session.flush()
+        stranger = await _member(db_session, other.id)
+
+        with pytest.raises(HTTPException) as elsewhere:
+            await undo_course_link(
+                link_id=link.id, db=db_session, current_user=stranger
+            )
+        await undo_course_link(link_id=link.id, db=db_session, current_user=officer)
+        with pytest.raises(HTTPException) as again:
+            await undo_course_link(link_id=link.id, db=db_session, current_user=officer)
+
+        assert "not found" in elsewhere.value.detail
+        assert "already been undone" in again.value.detail
+
+    async def test_undoing_takes_back_a_qualification_the_link_granted(
+        self, db_session, setup_org_and_admin, monkeypatch
+    ):
+        org_id, _admin = setup_org_and_admin
+        member = await _member(db_session, org_id)
+        emt = await _course(db_session, org_id, "EMT Basic", grants_qualification="emt")
+        await _record(db_session, org_id, member.id, "EMT-Basic", date(2019, 5, 1))
+        synced = AsyncMock()
+        monkeypatch.setattr(
+            "app.services.training_course_links.QualificationService"
+            ".sync_from_training_record",
+            synced,
+        )
+        service = TrainingCourseLinkService(db_session)
+        await service.link(org_id, name_key("EMT Basic"), emt.id, linked_by=member.id)
+        links, _total = await service.history(org_id, 0, 10)
+        synced.reset_mock()
+
+        await service.unlink(org_id, links[0].id, member.id)
+
+        call = synced.await_args_list[0].args[0]
+        assert (call.user_id, call.course_id) == (member.id, emt.id)

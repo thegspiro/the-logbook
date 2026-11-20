@@ -2542,3 +2542,275 @@ class TestOrderStatusTransitions:
         paid = await service.get_order(waiting_id, org_id)
         assert paid.status == StoreOrderStatus.PAID
         assert paid.payment_status == StorePaymentStatus.PAID
+
+
+class TestNoPriceBelowZero:
+    """W67b-6: a size could take a line below zero, and a total of zero or
+    less is created already paid."""
+
+    async def test_a_product_with_an_option_below_zero_is_refused(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+
+        with pytest.raises(ValueError, match="below zero"):
+            await service.create_product(
+                org.id,
+                {
+                    "name": "Patch",
+                    "price": Decimal("3.00"),
+                    "status": StoreProductStatus.ACTIVE,
+                    "requires_variant": True,
+                    "variants": [{"label": "Youth", "price_delta": Decimal("-5.00")}],
+                },
+                None,
+            )
+
+    async def test_a_cheaper_option_that_stays_at_or_above_zero_is_fine(
+        self, db_session
+    ):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+
+        product = await service.create_product(
+            org.id,
+            {
+                "name": "Patch",
+                "price": Decimal("5.00"),
+                "status": StoreProductStatus.ACTIVE,
+                "variants": [{"label": "Youth", "price_delta": Decimal("-5.00")}],
+            },
+            None,
+        )
+        assert product.variants[0].price_delta == Decimal("-5.00")
+
+    async def test_lowering_the_price_under_an_option_is_refused(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        product = await service.create_product(
+            org.id,
+            {
+                "name": "Patch",
+                "price": Decimal("8.00"),
+                "status": StoreProductStatus.ACTIVE,
+                "variants": [{"label": "Youth", "price_delta": Decimal("-5.00")}],
+            },
+            None,
+        )
+
+        with pytest.raises(ValueError, match="below zero"):
+            await service.update_product(product.id, org.id, {"price": Decimal("3.00")})
+
+    async def test_a_window_price_under_an_option_is_refused(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        product = await service.create_product(
+            org.id,
+            {
+                "name": "Patch",
+                "price": Decimal("8.00"),
+                "status": StoreProductStatus.ACTIVE,
+                "variants": [{"label": "Youth", "price_delta": Decimal("-5.00")}],
+            },
+            None,
+        )
+
+        with pytest.raises(ValueError, match="below zero"):
+            await service.create_window(
+                org.id,
+                {
+                    "name": "Clearance",
+                    "include_all_products": False,
+                    "offerings": [
+                        {"product_id": product.id, "price_override": Decimal("2.00")}
+                    ],
+                },
+                None,
+            )
+
+    async def test_an_order_line_below_zero_is_refused(self, db_session):
+        # A price saved before the save-time check existed still reaches the
+        # order path, which is the guard that cannot be bypassed.
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        member = await _make_member(db_session, org)
+        product = await _make_product(
+            db_session, org, price=Decimal("3.00"), requires_variant=True
+        )
+        youth = StoreProductVariant(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            product_id=product.id,
+            label="Youth",
+            price_delta=Decimal("-5.00"),
+        )
+        db_session.add(youth)
+        await _make_open_window(db_session, org)
+        await db_session.flush()
+
+        with pytest.raises(ValueError, match="below zero"):
+            await service.create_order(
+                org.id, member, _cart(product.id, 7, variant_id=youth.id)
+            )
+
+
+class TestTypedOverpayment:
+    """W67b-7, owner decision 2026-11-15: a payment staff type in is refused
+    above the balance; a PayPal capture records what arrived."""
+
+    async def _unpaid_order(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        member = await _make_member(db_session, org)
+        product = await _make_product(db_session, org, price=Decimal("15.00"))
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+        return service, org, order
+
+    async def test_more_than_the_balance_is_refused(self, db_session):
+        service, org, order = await self._unpaid_order(db_session)
+        order_id, org_id = str(order.id), str(org.id)
+
+        with pytest.raises(ValueError, match="more than the 15.00 still owed"):
+            await service.record_payment(
+                order_id, org_id, Decimal("150.00"), None, notify_member=False
+            )
+        await db_session.rollback()
+
+        current = await service.get_order(order_id, org_id)
+        assert current.amount_paid == Decimal("0.00")
+
+    async def test_a_payment_on_an_order_paid_in_full_is_refused(self, db_session):
+        service, org, order = await self._unpaid_order(db_session)
+        order_id, org_id = str(order.id), str(org.id)
+        await service.record_payment(
+            order_id, org_id, Decimal("15.00"), None, notify_member=False
+        )
+
+        with pytest.raises(ValueError, match="already paid in full"):
+            await service.record_payment(
+                order_id, org_id, Decimal("15.00"), None, notify_member=False
+            )
+
+    async def test_the_exact_balance_still_settles(self, db_session):
+        service, org, order = await self._unpaid_order(db_session)
+        await service.record_payment(
+            order.id, org.id, Decimal("5.00"), None, notify_member=False
+        )
+
+        paid = await service.record_payment(
+            order.id, org.id, Decimal("10.00"), None, notify_member=False
+        )
+
+        assert paid.amount_paid == Decimal("15.00")
+        assert paid.payment_status == StorePaymentStatus.PAID
+
+
+class TestPickupKeepsNoAddress:
+    """W67b-9: a pickup order stored whatever address came with it."""
+
+    async def test_a_pickup_order_stores_no_shipping_address(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org, allow_shipping=True)
+        member = await _make_member(db_session, org)
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+
+        order = await service.create_order(
+            org.id,
+            member,
+            {
+                **_cart(product.id),
+                "fulfillment_method": StoreFulfillmentMethod.PICKUP,
+                "shipping_address": "12 Elm St, Springfield",
+            },
+        )
+
+        assert order.fulfillment_method == StoreFulfillmentMethod.PICKUP
+        assert order.shipping_address is None
+
+    async def test_a_shipped_order_keeps_its_address(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org, allow_shipping=True)
+        member = await _make_member(db_session, org)
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+
+        order = await service.create_order(
+            org.id,
+            member,
+            {
+                **_cart(product.id),
+                "fulfillment_method": StoreFulfillmentMethod.SHIP,
+                "shipping_address": "12 Elm St, Springfield",
+            },
+        )
+
+        assert order.shipping_address == "12 Elm St, Springfield"
+
+
+class TestShippedOrderWording:
+    """W67b-18, owner decision 2026-11-17: a shipped order uses the same
+    statuses, but reads "Ready to ship" and "Shipped" where a pickup order
+    reads "Ready for pickup" and "Fulfilled"."""
+
+    async def _order(self, db_session, fulfillment):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(
+            service,
+            org,
+            allow_shipping=True,
+            payment_policy=StorePaymentPolicy.NONE,
+        )
+        member = await _make_member(db_session, org)
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+        payload = {**_cart(product.id), "fulfillment_method": fulfillment}
+        if fulfillment == StoreFulfillmentMethod.SHIP:
+            payload["shipping_address"] = "12 Elm St"
+        order = await service.create_order(org.id, member, payload)
+        service.notifications.send_order_update = AsyncMock()
+        return service, org, order
+
+    async def _latest_message(self, db_session, order_id):
+        rows = await db_session.execute(
+            select(StoreOrderEvent.message)
+            .where(StoreOrderEvent.order_id == order_id)
+            .where(StoreOrderEvent.event_type == StoreOrderEventType.STATUS_CHANGED)
+            .order_by(StoreOrderEvent.created_at.desc())
+        )
+        return rows.scalars().first()
+
+    async def test_a_shipped_order_is_ready_to_ship_then_shipped(self, db_session):
+        service, org, order = await self._order(db_session, StoreFulfillmentMethod.SHIP)
+
+        await service.update_order_status(
+            order.id, org.id, StoreOrderStatus.READY_FOR_PICKUP, None
+        )
+        sent = service.notifications.send_order_update.await_args
+        assert sent.kwargs["status_label"] == "Ready to ship"
+        assert await self._latest_message(db_session, order.id) == (
+            "Status changed to Ready to ship"
+        )
+
+        await service.update_order_status(
+            order.id, org.id, StoreOrderStatus.FULFILLED, None
+        )
+        sent = service.notifications.send_order_update.await_args
+        assert sent.kwargs["status_label"] == "Shipped"
+
+    async def test_a_pickup_order_keeps_its_wording(self, db_session):
+        service, org, order = await self._order(
+            db_session, StoreFulfillmentMethod.PICKUP
+        )
+
+        await service.update_order_status(
+            order.id, org.id, StoreOrderStatus.READY_FOR_PICKUP, None
+        )
+
+        sent = service.notifications.send_order_update.await_args
+        assert sent.kwargs["status_label"] == "Ready for pickup"

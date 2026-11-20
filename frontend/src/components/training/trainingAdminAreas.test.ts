@@ -105,6 +105,13 @@ describe('attentionCountsByTab', () => {
     ).toEqual({ submissions: 3, 'expiring-certs': 3 });
   });
 
+  // The backend's unlinked_course_names row links here; the badge is that link.
+  it('badges Course Links from the unlinked course names row', () => {
+    expect(attentionCountsByTab([attention('/training/admin?page=curriculum&tab=course-links', 5)])).toEqual({
+      'course-links': 5,
+    });
+  });
+
   it('ignores links that name no destination of this hub', () => {
     expect(
       attentionCountsByTab([

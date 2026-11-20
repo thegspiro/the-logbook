@@ -382,6 +382,23 @@ async def update_provider(
                 detail="Default category not found",
             )
 
+    # Decided against the stored values, before they are overwritten. The edit
+    # form sends api_base_url on every save, so resetting on the key's mere
+    # presence un-verified the provider whenever an officer changed its
+    # schedule, and the auto-sync task (which requires connection_verified)
+    # then skipped it with nothing on screen to say why. A secret counts as a
+    # change when one is supplied (the form sends one only when it was typed,
+    # and the stored value is ciphertext) or when a stored one is cleared.
+    connection_changed = any(
+        update_data.get(k) != getattr(provider, k)
+        for k in ("api_base_url", "client_id", "auth_type")
+        if k in update_data
+    ) or any(
+        update_data[k] or getattr(provider, k)
+        for k in ("api_key", "api_secret", "client_secret")
+        if k in update_data
+    )
+
     # Encrypt sensitive credential fields before storing
     _secret_fields = ("api_key", "api_secret", "client_secret")
     for field in _secret_fields:
@@ -413,11 +430,7 @@ async def update_provider(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
-    # Reset connection verification if credentials changed
-    if any(
-        k in update_data
-        for k in ["api_key", "api_secret", "client_id", "client_secret", "api_base_url"]
-    ):
+    if connection_changed:
         provider.connection_verified = False
         provider.connection_error = None
 

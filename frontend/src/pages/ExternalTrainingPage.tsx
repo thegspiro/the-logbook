@@ -44,6 +44,7 @@ import type {
   TrainingCourse,
 } from '../types/training';
 import type { User } from '../types/user';
+import { isActiveAccount } from '../constants/enums';
 import { useTablist } from '../hooks/useTablist';
 import ExternalSyncHistoryPanel from '../components/training/ExternalSyncHistoryPanel';
 
@@ -1026,7 +1027,9 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
       setCategoryMappings(unmappedFirst(categories));
       setUserMappings(unmappedFirst(users));
       setInternalCategories(internal);
-      setMembers(roster);
+      // Only current members are offered; a mapping already made to someone
+      // who has left is kept and shown by the fallback option below.
+      setMembers(roster.filter((m) => isActiveAccount(m.status)));
       setCourseMappings(unmappedFirst(courses));
       setLibraryCourses(library);
     } catch (_err) {
@@ -1373,9 +1376,10 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                           className="form-input-sm w-full sm:w-56"
                         >
                           <option value="">Not mapped</option>
-                          {/* A member the roster no longer lists (deleted since)
-                              would otherwise leave the select showing "Not
-                              mapped" while the mapping still credits them. */}
+                          {/* A member the picker does not offer (deleted, or no
+                              longer a current member) would otherwise leave the
+                              select showing "Not mapped" while the mapping
+                              still credits them. */}
                           {mapping.internal_user_id && !members.some((m) => m.id === mapping.internal_user_id) && (
                             <option value={mapping.internal_user_id}>
                               {mapping.internal_user_name ?? 'A former member'}

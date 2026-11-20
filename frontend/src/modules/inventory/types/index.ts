@@ -474,3 +474,14 @@ export function getConditionColor(condition: string): string {
 export function getItemTypeFromCategory(category: InventoryCategory | null | undefined): string {
   return category?.item_type ?? 'equipment';
 }
+
+/**
+ * The tracking a new item under this category starts with: stock that is used
+ * up is counted by quantity, everything else is one record per item. Medical
+ * supplies are lot-tracked, and lots exist only on pool items. A starting
+ * value only; the officer can still choose either.
+ */
+export function defaultTrackingTypeFor(category: InventoryCategory | null | undefined): 'pool' | 'individual' {
+  const type = category?.item_type;
+  return type === 'consumable' || type === 'medical' ? 'pool' : 'individual';
+}

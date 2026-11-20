@@ -1354,6 +1354,12 @@ class CourseCohortService:
                 continue
             if key in existing:
                 continue
+            # Only current members are enrolled. Like a member from another
+            # organization, a former one is skipped with a warning rather than
+            # failing the whole generation.
+            if not valid_users[key].is_active:
+                warnings.append("A selected member is no longer a current member.")
+                continue
 
             enrollment_id: Optional[str] = None
             if enroll_in_program and cohort.program_id:
