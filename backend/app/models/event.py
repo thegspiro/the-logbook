@@ -106,6 +106,7 @@ EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS = (
     "validation_notification_sent",
     "series_end_reminder_sent",
     "attendance_finalized",
+    "guest_headcount_reminder_sent",
 )
 
 

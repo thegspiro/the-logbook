@@ -64,6 +64,9 @@ Recommended crontab (add to host or container cron):
 # Every 30 minutes — post-event validation notifications
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=post_event_validation
 
+# Daily at 7:40 AM — ask the officer running an outreach event that ended yesterday to record its guest headcount
+40 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=guest_headcount_reminders
+
 # Every 30 minutes — post-shift validation notifications
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=post_shift_validation
 
@@ -493,6 +496,17 @@ SCHEDULE = {
         "frequency": "every 30 minutes",
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
+    },
+    "guest_headcount_reminders": {
+        "description": (
+            "Email and notify the organizer, alternate or creator holding "
+            "events.manage of an outreach event that ended before today with "
+            "no guest headcount, once per event, for events ended in the last "
+            "14 days"
+        ),
+        "frequency": "daily",
+        "recommended_time": "07:40",
+        "cron": "40 7 * * *",
     },
     "post_shift_validation": {
         "description": "Notify shift officers to validate attendance and timing after their shift ends",
@@ -1978,6 +1992,19 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
         "total_emails_sent": total_emails,
         "organizations": results,
     }
+
+
+async def run_guest_headcount_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Remind outreach organizers to record a guest headcount; see the service."""
+    from app.services.guest_headcount_reminder_service import (
+        GuestHeadcountReminderService,
+    )
+
+    async def _process(db_session, org):
+        counts = await GuestHeadcountReminderService(db_session).send_reminders(org)
+        return counts.emails
+
+    return await _for_each_org(db, "guest_headcount_reminders", _process)
 
 
 async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
@@ -8681,6 +8708,7 @@ TASK_RUNNERS = {
     "inventory_notifications": run_inventory_notifications,
     "event_reminders": run_event_reminders,
     "post_event_validation": run_post_event_validation,
+    "guest_headcount_reminders": run_guest_headcount_reminders,
     "post_shift_validation": run_post_shift_validation,
     "shift_reminders": run_shift_reminders,
     "end_of_shift_checklist_reminders": run_end_of_shift_checklist_reminders,
@@ -8784,6 +8812,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Every 30 minutes
     "event_reminders": 1800,
     "post_event_validation": 1800,
+    # Daily; each event is reminded once (guest_headcount_reminder_service).
+    "guest_headcount_reminders": 86400,
     "post_shift_validation": 1800,
     "shift_reminders": 1800,
     "end_of_shift_checklist_reminders": 1800,

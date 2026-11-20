@@ -1043,7 +1043,13 @@ modal (`EventTemplateForm`), active toggle and delete confirmation.
   previous period. `GET /dashboard/community-engagement/events?period=` returns
   every event in the period, for the export. An outreach event's **Guest
   headcount** card (`PUT /events/{id}/guest-headcount`, `events.manage`) sets or
-  clears `events.guest_headcount`.
+  clears `events.guest_headcount`. The daily `guest_headcount_reminders` task
+  emails and notifies, once, the organizer and alternate (else the creator) who
+  hold `events.manage` of an outreach event that ended before today, within the
+  last 14 days, with no headcount. The email is the switchable **Guest Headcount
+  Reminder** template, under the member's **Event officer duties** preference;
+  the event's `custom_fields.guest_headcount_reminder_sent` records that it was
+  sent, and postponing clears it.
 
 ---
 
