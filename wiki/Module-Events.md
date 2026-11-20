@@ -96,7 +96,8 @@ single-page `EventForm` for every type but **Training**, and the step-by-step
 Changing the type swaps the form in place and carries every value across, both
 ways. Training Admin's **Create Session** renders the same composer with the
 type fixed. `?template=<id>` on Create Event applies a template; a Training
-template opens the wizard.
+template opens the wizard and, when it saved training details, fills Training
+Info too _(2026-11-20)_.
 
 - **Compact layout** — a two-column grid pairing related sections, with
   **Check-In Settings** and **Notifications** side by side.
@@ -1022,6 +1023,54 @@ modal (`EventTemplateForm`), active toggle and delete confirmation.
 - Templates carry the event defaults: type, title, description, location,
   duration, RSVP, capacity, guests, attendee visibility, check-in rules
   (including **Minutes After End**), reminders and custom fields.
+- **A Training template also carries the session's training details**
+  _(owner decision 2026-11-20)_ in `event_templates.training_details`: the
+  course (library, one-off name and code, or none), training type, credit
+  hours and their source, lead instructor, and certification settings. Not
+  the requirement/program links, Counts toward attendance or the completion
+  settings. The editor's **Training Details** section (TrainingInfoStep's
+  `template` variant) edits them; **Save as Template** on a Training event
+  saves its session's. Applying one checks the course and instructor against
+  the Course Library and member list (`reconcileTemplateTraining`): a course
+  no longer listed falls back to No course yet, an instructor no longer a
+  member is cleared, each with a note on Training Info.
+
+---
+
+## Apparatus Events
+
+Outreach that puts an apparatus on the road with a named crew — a Santamobile
+run, a parade, a touch-a-truck — but is **not a shift**. Under **Events
+Administration → Community Outreach → Apparatus Events**
+(`ApparatusEventsTab`, `apparatus_events.manage`).
+
+- **Templates** name the apparatus, free-text seats (Driver, Navigator, Santa,
+  Elf × 4), the Driver seat's **EVOC rule** (Enforce / Warn only / Don't
+  check), whether members may self sign-up, and the **Admin Hours category**
+  the crew's time goes to. **Duplicate** copies a template with per-seat
+  counts, for a smaller or larger version.
+- **Schedule nights** turns a template into one or many ordinary events, each
+  with its own crew (`event_apparatus_plans` / `_units` / `_seats`). A night
+  whose apparatus is on another apparatus night, or out of service, is
+  flagged; the coordinator can schedule over it.
+- **Crew card** on the event page: members take or leave an open seat
+  (`apparatus_events.signup`), which also sets their RSVP; coordinators
+  assign, clear, **Edit this night** (this night only) and **Remove crew**
+  (while no seat is filled). The Driver seat uses the same EVOC rule and
+  driver exceptions as shift driver assignment.
+- **Hours**: check in as usual, then **Finalize Attendance**. A night's
+  category **replaces** the event type's Admin Hours mapping — never both.
+- **Shift Scheduling** shows nights as read-only `Outreach · not a shift`
+  chips; they never count toward shift staffing.
+- **Public requests**: a scheduled request's drawer has **Apparatus Crew →
+  Add apparatus crew** (`POST /event-requests/{id}/apparatus-crew`, needs
+  `events.manage` and `apparatus_events.manage`). The crew goes on the
+  request's own calendar event, so a new date moves it and a cancellation
+  stands it down. Volunteer signups stay available alongside it.
+
+API under `/api/v1/apparatus-events/` (uncacheable — crew boards name
+members). Choices the first release made without a ruling are in
+`docs/KNOWN_LIMITATIONS.md` → "Apparatus Events".
 
 ---
 
@@ -1096,7 +1145,9 @@ tab of the Events admin hub.
 - **Volunteer staffing** — for a scheduled request, open a volunteer signup
   sheet (an open-to-all shift on the confirmed date, filled through the
   ordinary Open Shifts flow) and email the membership asking who can help
-  (email only — not an SMS alert).
+  (email only — not an SMS alert). Bringing an apparatus? **Add apparatus
+  crew** puts a template's crew on the request's calendar event — see
+  [Apparatus Events](#apparatus-events).
 - **Comment thread** — internal discussion visible to coordinators.
 - **Cancel / postpone** — both the requester (from the status page) and the
   department can cancel or postpone; a postponed request can have a new date or
@@ -1150,6 +1201,8 @@ Settings are stored in `organization.settings.events`; nested JSON writes use
 | `events.view`                              | Attendee list (subject to attendee visibility), attachments, event folder                                                        |
 | `events.manage`                            | Create, edit, delete, cancel, templates, rosters, check-in, finalize, settings, outreach pipeline, decide any attendance request |
 | `events.reopen_attendance`                 | Reopen finalized attendance (deliberately not part of `events.manage`)                                                           |
+| `apparatus_events.signup`                  | Take or leave a crew seat on an apparatus night (seeded wherever `events.view` is)                                               |
+| `apparatus_events.manage`                  | Apparatus event templates, scheduling nights, assigning seats (seeded wherever `events.manage` is)                               |
 | `analytics.view`                           | Event analytics pages                                                                                                            |
 | `locations.manage_nfc_tags`                | Write room NFC tags; switch kiosk badge check-in                                                                                 |
 | `apparatus.manage_nfc_tags`                | Write apparatus NFC tags                                                                                                         |

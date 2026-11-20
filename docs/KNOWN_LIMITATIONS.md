@@ -89,6 +89,62 @@ eight hours, until #4333 carried the merge revision from #4331.
 - **CI fast enough** that a pull request usually finishes before `main` moves
   would make the up-to-date setting workable again.
 
+## Apparatus Events — What the First Release Leaves Out (2026-11-16)
+
+Apparatus events (Events Administration → Community Outreach → Apparatus
+Events) shipped from the owner's decisions of 2026-11-16: seats are both
+self-claimed and coordinator-assigned, the Driver seat's EVOC rule is set per
+template, nights show on Shift Scheduling as a read-only overlay, each night
+has its own crew, and hours post when a coordinator finalizes attendance.
+Three things in the reviewed mockups were left out, and three boundaries
+were drawn without a ruling; each is listed so the owner can confirm or ask
+for it.
+
+### Left out, because nothing would read them yet (pitfall #19)
+
+- **"Email the membership that seats are open"** on Schedule nights. A switch
+  that sent nothing would claim an email went out. Notifying members is a
+  follow-up that should go through the existing notification rules.
+- **"Coordinator approves self sign-ups."** A claimed seat is taken at once.
+  An approval step needs a pending state on the seat and a reviewer's screen.
+- **"Message crew"** on the night. The existing event reminders reach a
+  night's RSVPs, which every seat holder has.
+
+### Boundaries chosen without a ruling
+
+- **The confirmation step is the event's own Finalize Attendance.** There is
+  no second crew-confirmation screen: "Needs confirmation" lists ended nights
+  and links to each event, where the existing check-in, time overrides,
+  walk-up attendees and Finalize already live. Whether a posted entry is
+  Approved or Pending follows the chosen Admin Hours category's own approval
+  setting, as every event credit does.
+- **A night's own category replaces the event-type mapping; it is never
+  added to it.** A department that maps Public Education to an Admin Hours
+  category would otherwise pay a Santamobile crew twice. A night with no
+  category set falls back to the mapping.
+- **Conflict checks consider other apparatus nights and the apparatus's
+  status, not shifts.** The in-service engine is on a shift every day, so
+  checking shifts would flag every night ever planned. A conflict is a
+  warning the coordinator can schedule over, never a block.
+- **The new permissions reach seeded positions only.** Migration
+  `3f8a1c6e2b94` adds them to every system position holding `events.view` or
+  `events.manage`. A position a department created itself is left alone, per
+  the seeded-grant rule; grant them on the positions screen if wanted.
+
+### Public requests (2026-11-17)
+
+The owner ruled that a request's crew rides on the request's existing
+calendar event, that volunteer signups and a crew may both be used, and that
+the coordinator picks the template each time (no default per outreach type).
+
+- **A moved date is not re-checked for apparatus conflicts.** Postponing a
+  request to a new date moves its event and the crew with it; the conflict
+  check ran only when the crew was added.
+- **A postponement to a date TBD leaves the crew on the cancelled event.**
+  Rescheduling opens a new calendar event without a crew, and the
+  coordinator adds it again. Carrying it over automatically would seat members
+  on a date they never agreed to.
+
 ## Attendance Waiver Emails and Template Copies — Choices Made Without a Ruling (2026-11-11)
 
 The waiver emails and the template-CC fix (defect D1) follow the owner
@@ -8662,13 +8718,41 @@ single-page form. What it changes, and what it leaves:
   the training details.** The rest of Training Info is drawn locked; reopen
   attendance to change it. The event's own fields keep the finalized-event
   rules under "Events — Edit Form Gaps" below.
-- **A Training template fills the event's own fields, not its training
+- ~~**A Training template fills the event's own fields, not its training
   details.** Training Admin's Create Session now offers the department's
   Training templates, as the Events page does, but `EventTemplate` has no
   training fields (course, type, hours, instructor, certification, links),
   so Training Info opens on its defaults. Carrying them needs template
   fields that do not exist yet: an owner decision, since it changes what a
-  saved template is.
+  saved template is.~~ **Resolved 2026-11-20 (owner decision, "Templates
+  keep training"):** a Training template stores the course (a library
+  course, a one-off name and code, or none), the training type, credit hours
+  and their source, the lead instructor and the certification settings
+  (issues certification, number prefix, issuing agency, expiry), in
+  `event_templates.training_details`, and picking it fills Training Info as
+  well as the event. The Event Templates editor has a Training Details
+  section for them, and Save as Template on a Training event saves its
+  session's. Still not carried, because they were not in the owner's list:
+  the category, program, phase and requirement links, Counts toward
+  attendance, and the completion settings (counts toward certification,
+  auto-create records, completion sign-off and its deadline); they start on
+  their defaults. A template whose library course is no longer in the Course
+  Library opens on No course yet, and one whose lead instructor is no longer
+  a current member opens with Lead instructor empty, each with a note on
+  Training Info. The entry below still applies to an event made from a
+  template: a library-course template saved with a blank instructor or
+  expiry gets the course's.
+- **A template's lead instructor survives that member's anonymisation, as a
+  training session's instructor does.** `training_details` holds the
+  instructor's member id and name as JSON, and neither
+  `member_anonymization_service.py` nor `user_deletion_service.py` touches
+  it — nor `training_sessions.instructor`, the free-text name a session
+  stores beside its `instructor_id`, which has the same gap and was not
+  recorded before. Neither carries a foreign key, so a removed member leaves
+  a dangling id, which applying the template clears. Scrubbing both on
+  anonymisation is a change to the anonymisation service, left for an owner
+  decision. A department-template export writes `training_details` as null,
+  so neither the name nor an org-local course id leaves the installation.
 - **Under a library course, a blank Lead Instructor or Expiration is saved
   as the course's.** The backend reads `null` for those two as "use the
   course's value", on create and on edit, so an officer cannot clear either
@@ -10872,11 +10956,27 @@ each case):
 
 **Accepted residuals:**
 
-- **A permanent delete's files go after its commit.** A process killed, or a
-  remote store unreachable, between the commit and the deletes leaves files no
-  later run can find. A failed delete is logged and counted
-  (`files_not_deleted` in the `user_hard_deleted` audit event); closing the
-  crash window would need a durable pending-deletion table and a migration.
+- ~~**A permanent delete's files go after its commit.**~~ **Resolved
+  2026-11-20** (owner decision "Hard-delete crash gap"): the files are queued
+  in `pending_file_deletions` in the delete's own transaction, removed right
+  after the commit, and an hourly `pending_file_deletions` sweep retries what
+  a crash or an unreachable store left. `files_not_deleted` in the
+  `user_hard_deleted` audit event now means files left queued for the sweep.
+- **A queued file that never deletes is visible only in logs and the
+  table.** A remote store that is gone, or a path that no longer confines to
+  its department's area (a moved uploads root), keeps its row, retried every
+  hour and logged as a warning after 24 failures. There is no screen listing
+  them and no way to dismiss one short of a database edit.
+- **A crash after the delete commits can lose its audit record.** The
+  `user_hard_deleted` event is written after the delete's commit and committed
+  with the request, so a process killed in between keeps the delete (and now
+  the queued files) but loses the critical audit row. Writing the event
+  inside the delete's transaction would close it, but changes the event's
+  shape (the per-file counts are known only after the commit), so it awaits
+  the owner.
+- **Member deletes outside the endpoint queue nothing**:
+  `historical_import_undo` and the onboarding reset delete users directly and
+  leave any files their rows named.
 - **An upload racing a permanent delete** (a certificate stored for the member
   after the files were collected) is orphaned.
 - **A relocation or remote migration running at the same moment** can rewrite

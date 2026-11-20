@@ -41,6 +41,17 @@ from app.models.apparatus import (
     MaintenanceCategory,
     MaintenanceIntervalUnit,
 )
+from app.models.apparatus_event import (
+    ApparatusEventEvocMode,
+    ApparatusEventSeatMethod,
+    ApparatusEventSeatType,
+    ApparatusEventTemplate,
+    ApparatusEventTemplateSeat,
+    ApparatusEventTemplateUnit,
+    EventApparatusPlan,
+    EventApparatusSeat,
+    EventApparatusUnit,
+)
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
     AttendanceWaiverAttachment,
@@ -445,6 +456,10 @@ from app.models.org_chart import OrgChartNode, OrgChartNodeHolder
 from app.models.organization_lock import OrganizationLock
 from app.models.organization_officer import OrganizationOfficer
 from app.models.passkey import UserPasskey, WebAuthnChallenge
+from app.models.pending_file_deletion import (
+    PendingDeletionReason,
+    PendingFileDeletion,
+)
 from app.models.public_portal import (
     PublicPortalAccessLog,
     PublicPortalAPIKey,
@@ -779,6 +794,16 @@ __all__ = [
     # Open shift swap notices
     "OpenSwapNotice",
     # Event request models
+    # Apparatus event models
+    "ApparatusEventEvocMode",
+    "ApparatusEventSeatMethod",
+    "ApparatusEventSeatType",
+    "ApparatusEventTemplate",
+    "ApparatusEventTemplateSeat",
+    "ApparatusEventTemplateUnit",
+    "EventApparatusPlan",
+    "EventApparatusSeat",
+    "EventApparatusUnit",
     "EventRequest",
     "EventRequestActivity",
     "EventRequestEmailTemplate",
@@ -842,6 +867,8 @@ __all__ = [
     "SchedulingModuleConfig",
     # Malware scan of files stored before upload scanning
     "StoredFileScan",
+    "PendingDeletionReason",
+    "PendingFileDeletion",
     "ScanVerdict",
     # Security alert models
     "SecurityAlertRecord",

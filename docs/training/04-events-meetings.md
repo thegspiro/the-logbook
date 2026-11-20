@@ -45,18 +45,19 @@ _RSVP_, _check-in window_ and _finalize_.
 5. [Creating Events (Officers)](#creating-events-officers)
 6. [Ending and Finalizing an Event](#ending-and-finalizing-an-event)
 7. [Event Templates and Recurring Events](#event-templates-and-recurring-events)
-8. [Calendar View and Attendance Trends](#calendar-view-and-attendance-trends)
-9. [Event Notifications](#event-notifications)
-10. [Managing Many Events at Once](#managing-many-events-at-once)
-11. [Event Settings](#event-settings)
-12. [Meeting Minutes](#meeting-minutes)
-13. [Action Items](#action-items)
-14. [Elections and Voting](#elections-and-voting)
-15. [Public Outreach Request Pipeline](#public-outreach-request-pipeline)
-16. [Realistic Example: Outreach Request from Submission to Completion](#realistic-example-outreach-request-from-submission-to-completion)
-17. [Event, Check-In & RSVP Edge Cases](#event-check-in--rsvp-edge-cases)
-18. [Troubleshooting](#troubleshooting)
-19. [If You Learned an Older Version](#if-you-learned-an-older-version)
+8. [Apparatus Events: Crews Without Shifts](#apparatus-events-crews-without-shifts)
+9. [Calendar View and Attendance Trends](#calendar-view-and-attendance-trends)
+10. [Event Notifications](#event-notifications)
+11. [Managing Many Events at Once](#managing-many-events-at-once)
+12. [Event Settings](#event-settings)
+13. [Meeting Minutes](#meeting-minutes)
+14. [Action Items](#action-items)
+15. [Elections and Voting](#elections-and-voting)
+16. [Public Outreach Request Pipeline](#public-outreach-request-pipeline)
+17. [Realistic Example: Outreach Request from Submission to Completion](#realistic-example-outreach-request-from-submission-to-completion)
+18. [Event, Check-In & RSVP Edge Cases](#event-check-in--rsvp-edge-cases)
+19. [Troubleshooting](#troubleshooting)
+20. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
@@ -901,7 +902,8 @@ Select **Create Event** on the Events page. It opens the **Create Event** tab
 of **Manage Events**.
 
 1. Optionally pick a template under **Start from a Template** — _"Pick a
-   template to pre-fill common settings, or start blank."_
+   template to pre-fill common settings, or start blank. A Training template
+   opens the step-by-step form and fills its training details."_
 2. Set the **event type**, **title**, start and end date and time. Moving the
    start past the end carries the end with it, keeping the event's length.
 3. Add a **location** and a **description**.
@@ -933,7 +935,10 @@ of **Manage Events**.
 > instructor, credit hours, certification and sign-off on **Training Info**. A
 > note at the top says **Switched to the training form**, with a **Change back
 > to …** button; picking another type also brings the single-page form back,
-> again with your entries. See
+> again with your entries. A Training template that saved training details
+> also fills **Training Info** _(2026-11-20)_: the course, training type,
+> credit hours, lead instructor and certification settings (see
+> [Templates](#templates)). See
 > [Training Credit from Events](#training-credit-from-events).
 
 > **What if Require RSVP is on but there is no deadline?** On a single event,
@@ -1367,11 +1372,36 @@ credited automatically.
 A template saves the settings you use again and again — title, type,
 location, time, length, description and reminders.
 
+**A Training template also saves the session's training details**
+_(2026-11-20)_: the course (from the Course Library, a one-off name and code,
+or none), the training type, the credit hours and where they come from (the
+event's length, the course, or a typed figure), the lead instructor, and the
+certification settings — whether it issues one, the number prefix, the
+issuing agency and the expiry in months. Picking the template fills
+**Training Info** with them, replacing what was there. A template does not
+save requirement or program links, **Counts toward attendance**, or the
+completion settings; those start on their defaults for each session.
+
+- If the template's course is no longer in the Course Library, the session
+  starts on **No course yet**, with a note saying so on **Training Info**.
+- If its lead instructor is no longer a current member, **Lead instructor**
+  starts empty, with a note.
+- Hours that come from the course are refreshed to the course's current
+  figure when the template is picked.
+- Under a library course, a blank **Lead Instructor** or **Expiration** is
+  still saved as the course's, as on any training event.
+
 **Making one:**
 
-- On an event's page, select **More → Save as Template**; or
+- On an event's page, select **More → Save as Template**. On a Training
+  event this saves its training details too. If they cannot be read, the
+  template is not saved and a message says so; try again; or
 - on the Events page, open the **⋯** menu → **Event Templates** and select
-  **Create Template**.
+  **Create Template**. With **Event Type** set to **Training**, a **Training
+  Details** section offers the course, type, hours, lead instructor and
+  certification. Picking a library course fills type, hours, instructor and
+  expiry from it, but leaves the template's **Max Attendees** alone. Saving
+  a template as another type clears any training details it had.
 
 **Using one:** pick it under **Start from a Template** on **Create Event**, or
 choose it from **Create from Template** in the Events page's **⋯** menu.
@@ -1487,6 +1517,112 @@ the events list. On any occurrence's page:
 | Editing a series with finalized occurrences | Refused when the save would change a finalized occurrence's times, type, category or check-in rules — for example "(2 of 3 finalized occurrences would change)". Saved from a finalized occurrence, those fields are left out, so a description-only edit goes through. Saved from an open occurrence, its type, category and check-in rules are copied onto every later one, so even a description-only edit is refused when a finalized later one differs. Edit those occurrences one at a time |
 | Cancelling or deleting a series             | Refused whenever any occurrence is finalized                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Duplicating an occurrence                   | Makes a stand-alone event. The recurrence is not copied. A Training event's training details and **Counts toward attendance** links are copied, but not its finalized attendance (2026-11-11)                                                                                                                                                                                                                                                                                                     |
+
+---
+
+## Apparatus Events: Crews Without Shifts
+
+_(2026-11-16)_ Some outreach puts an apparatus on the road with a named crew
+but is **not a shift**: a Santamobile run (Driver, Navigator, Santa, Elves), a
+holiday parade, or a touch-a-truck. Apparatus events cover these. Each night
+is an ordinary event, so members check in the usual way and the crew's hours go
+to **Admin Hours**. Nothing about it counts toward shift hours, shift coverage
+or shift reports.
+
+**Where:** **Events → Events Administration → Community Outreach → Apparatus
+Events**. Building templates and scheduling nights need the **Manage apparatus
+event templates** permission (`apparatus_events.manage`). Taking a seat needs
+**Sign up for crew seats** (`apparatus_events.signup`), which every position
+that can see events has by default.
+
+### Building a template
+
+A template is the plan you reuse: which apparatus goes out, which seats it
+needs, and how many of each.
+
+1. Select **New template**.
+2. Name it (for example _Santamobile — Full_), pick the **Event type** and
+   the **Admin Hours category** the crew's time should go to.
+3. Choose an apparatus, then list its seats. Seat names are free text. Mark
+   the seat that drives as **Driver · EVOC**; every other seat is **General**.
+   Set a **Count** for seats you need more than one of (Elf × 4).
+4. Choose the **Driver EVOC rule**:
+   - **Enforce** — only members at the apparatus's required EVOC level, or
+     with an approved driver exception, can take the Driver seat. The same
+     rule shifts use.
+   - **Warn only** — anyone can take it; a member below the level is flagged.
+   - **Don't check** — for a static display where nobody drives.
+5. Leave **Members can take open seats themselves** on unless a coordinator
+   should fill every seat. Select **Save template**.
+
+> **A smaller or larger version.** Select **Duplicate** on a template's card.
+> Give the copy a name, change the apparatus if you like, and set a count for
+> each seat — **0** leaves a seat off. The original is not changed.
+
+### Scheduling one night or many
+
+1. On the template's card, select **Schedule nights**.
+2. Give the run a title (for example _Santamobile 2026_) and add each night:
+   date, start time, length, and the route or place. **Repeat weekly** adds
+   the same night a week apart.
+3. If the apparatus is already committed at that time — another apparatus
+   night, or a status that is out of service — the night is flagged with the
+   reason. You can still go ahead by ticking **Schedule anyway** once you have
+   confirmed the apparatus can cover both.
+4. Select **Create** _n_ **nights**. Each night is its own event with its own
+   crew, so a member can sign up for Monday and not Wednesday.
+
+Each night can be changed on its own afterwards. On the night's event page,
+**Edit this night** adds or removes seats, changes the EVOC rule or the hours
+category, and **Remove crew** takes the apparatus off an event while nobody
+holds a seat. The template and the other nights are not touched.
+
+### Taking a seat (members)
+
+Open the night's event. The **Apparatus & Crew** card lists every seat. Select
+**Sign me up** on an open seat; you are added as going to the event. Select
+**Leave seat** to give it back before the night (once you have checked in,
+the coordinator corrects attendance instead). You can hold one seat per night.
+
+A Driver seat under **Enforce** is offered only to members who meet the
+apparatus's EVOC level or hold an approved exception. If you are not eligible,
+the seat says so.
+
+Coordinators see **Assign…** and **Change…** on every seat. For a Driver seat,
+the list starts with the members who qualify, each judged by the same EVOC
+rule the seat uses.
+
+### On the schedule
+
+Apparatus nights appear on **Shift Scheduling** as dashed
+**Outreach · not a shift** chips beside the day's shifts, with a card in the
+day panel that links to the night. They are there so officers see the engine
+is committed; they never count toward a shift's staffing.
+
+### Confirming the crew and posting hours
+
+After the night, it appears under **Needs confirmation**. Open it and finish
+the way you finish any event: correct any times, add anyone who helped
+without signing up, then **Finalize Attendance**. The crew's hours post to the
+template's **Admin Hours** category **instead of** the category the event type
+normally maps to — never both. Whether an entry is approved straight away or
+waits for review follows that category's own approval setting.
+
+### Staffing a public request with an apparatus
+
+A scheduled [public outreach request](#public-outreach-request-pipeline) can
+use a template too. Open the request, scroll to **Apparatus Crew**, choose a
+template and select **Add apparatus crew**. The crew goes on the request's own
+calendar event — there is still one event for the visit — so moving the
+request to a new date moves the crew with it, and cancelling it stands the crew
+down. Manage the crew on that event's page.
+
+> **Postponed to a date TBD?** That cancels the request's calendar event, and
+> rescheduling the request later opens a new one. The crew stayed on the
+> cancelled event, so add it again from the request once it is rescheduled.
+> A moved date is not re-checked for apparatus conflicts; look at **Shift
+> Scheduling** for that day if the engine might be committed elsewhere. **Volunteer signups** for the same request stay
+available; a visit can have an engine crew and extra educators.
 
 ---
 
@@ -2669,7 +2805,9 @@ In the panel you can also:
    department calendar. A room that is already booked at that time is
    refused.
 4. **Open volunteer signups** and **Email the Membership**, on a scheduled
-   request.
+   request. Bringing an apparatus? Add a crew from a template under
+   **Apparatus Crew** as well, or instead — see
+   [Staffing a public request with an apparatus](#staffing-a-public-request-with-an-apparatus).
 5. **Add comments** for internal notes. The requester never sees them.
 6. **Copy status link**, under **Contact**, to send to the requester.
 

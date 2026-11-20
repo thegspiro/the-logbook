@@ -89,6 +89,18 @@ _LATER_LINKS = (
 )
 
 
+#: Later revisions whose ``upgrade()`` also creates tables, so only their grant
+#: step is replayed here — it is the part that acts on a ``positions`` row.
+#: ``3f8a1c6e2b94`` adds the apparatus event grants to every seeded position
+#: holding events.view or events.manage, 2026-11-16.
+_LATER_GRANT_REWRITES = (
+    (
+        _VERSIONS / "20261116_1602_3f8a1c6e2b94_apparatus_events_tables_and_grants.py",
+        "_apparatus_event_grants",
+    ),
+)
+
+
 def _heuristic_output(slug):
     """The row the old editor wrote, from the repair migration's frozen table."""
     return list(_load(_REPAIR_PATH, "_restore_seeded_grants")._REWRITES[slug]["old"])
@@ -194,6 +206,11 @@ class TestTheEndState:
             with positions_table.begin() as conn:
                 module.op = _Op(conn)
                 module.upgrade()
+
+        for path, name in _LATER_GRANT_REWRITES:
+            module = _load(path, name)
+            with positions_table.begin() as conn:
+                module._rewrite(conn, module._grant)
 
         with positions_table.connect() as conn:
             result = _stored(conn, "row")

@@ -7,7 +7,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { eventService, meetingsService } from '../services/api';
+import { eventService, meetingsService, trainingSessionService } from '../services/api';
 import type { TrainingSessionResponse } from '../services/api';
 import { electionService } from '../services/electionService';
 import type { ElectionListItem } from '../types/election';
@@ -60,6 +60,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { fromSession, toTemplateTrainingDetails } from '../components/training-event/trainingDetailsModel';
 import { Breadcrumbs, PromptDialog } from '../components/ux';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { SimpleMarkdown } from '../utils/simpleMarkdown';
@@ -84,6 +85,7 @@ import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplate
 import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
 import EventGuestsCard from '../components/event-detail/EventGuestsCard';
+import EventApparatusCrewCard from '../components/event-detail/EventApparatusCrewCard';
 import EventGuestHeadcountCard from '../components/event-detail/EventGuestHeadcountCard';
 import { GuestCheckInQRCard } from '../components/events/GuestCheckInQRCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
@@ -1818,6 +1820,13 @@ export const EventDetailPage: React.FC = () => {
                 business events, so this is intentionally not type-gated. */}
             <EventProspectsCard eventId={event.id} createsProspects={event.guest_check_in_creates_prospect ?? false} />
 
+            {/* The seats on an apparatus night (Santamobile, a parade). Renders
+                nothing on an ordinary event; asked only of someone who could
+                take or assign a seat. */}
+            {(checkPermission('apparatus_events.signup') || checkPermission('apparatus_events.manage')) && (
+              <EventApparatusCrewCard eventId={event.id} timezone={tz} />
+            )}
+
             {/* The headcount for an outreach event nobody signed in at.
                 Merged rather than replaced: the save answers with a plain
                 event, which lacks the detail-only fields this page shows. */}
@@ -2360,6 +2369,28 @@ export const EventDetailPage: React.FC = () => {
                     templateData.check_in_minutes_before = event.check_in_minutes_before;
                   if (event.check_in_minutes_after != null)
                     templateData.check_in_minutes_after = event.check_in_minutes_after;
+                  // A Training template carries the session's training
+                  // details (owner decision 2026-11-20). The linkage card
+                  // reports no session while it loads or after a failed
+                  // load, so the session is fetched here rather than the
+                  // template saved without them; a failed fetch refuses the
+                  // save rather than dropping them behind "Template saved".
+                  // fromSession reads a library session's hours as typed, so
+                  // the template keeps the exact figure.
+                  if (event.event_type === EventTypeEnum.TRAINING) {
+                    let session = trainingSession;
+                    if (!session) {
+                      try {
+                        session = await trainingSessionService.getSessionByEvent(event.id);
+                      } catch {
+                        toast.error(
+                          "Could not read this event's training details, so the template was not saved. Try again."
+                        );
+                        return;
+                      }
+                    }
+                    if (session) templateData.training_details = toTemplateTrainingDetails(fromSession(session, event));
+                  }
                   await eventService.createTemplate(templateData);
                   setShowTemplateModal(false);
                   toast.success('Template saved');

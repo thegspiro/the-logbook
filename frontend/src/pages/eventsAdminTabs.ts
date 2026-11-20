@@ -12,11 +12,22 @@
  */
 
 import type { LucideIcon } from 'lucide-react';
-import { CalendarDays, CalendarPlus, History, Inbox, Megaphone, Nfc, QrCode, ScanLine, Settings } from 'lucide-react';
+import {
+  CalendarDays,
+  CalendarPlus,
+  History,
+  Inbox,
+  Megaphone,
+  Nfc,
+  QrCode,
+  ScanLine,
+  Settings,
+  Truck,
+} from 'lucide-react';
 import type { AdminHubCardTab } from '../components/admin/AdminHubCardTabs';
 
 export type EventsAdminTab =
-  'create' | 'past_events' | 'requests' | 'analytics' | 'community' | 'card_checkins' | 'settings';
+  'create' | 'past_events' | 'requests' | 'analytics' | 'community' | 'apparatus_events' | 'card_checkins' | 'settings';
 
 /**
  * Settings is always last — the frame's rule, on every module. Every tab is
@@ -39,6 +50,12 @@ export const EVENTS_ADMIN_TABS: AdminHubCardTab<EventsAdminTab>[] = [
     label: 'Community Engagement',
     description: 'How far public outreach events reach',
     icon: Megaphone,
+  },
+  {
+    id: 'apparatus_events',
+    label: 'Apparatus Events',
+    description: 'Outreach that uses an apparatus and a crew, but is not a shift',
+    icon: Truck,
   },
   {
     id: 'card_checkins',
@@ -89,7 +106,7 @@ export const EVENTS_ADMIN_AREAS: EventsAdminArea[] = [
     label: 'Community Outreach',
     description: 'Requests from the public, and how far outreach reaches',
     icon: Megaphone,
-    destinations: [tabById('requests'), tabById('community')],
+    destinations: [tabById('requests'), tabById('community'), tabById('apparatus_events')],
   },
   {
     id: 'check_ins',
