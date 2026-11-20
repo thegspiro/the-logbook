@@ -15,7 +15,8 @@ import { EventComposer } from '../components/event-form/EventComposer';
 import type { ConflictEvent } from '../components/event-form/eventFormTypes';
 import toast from 'react-hot-toast';
 import { useTimezone } from '../hooks/useTimezone';
-import { templateToInitialData } from '../utils/eventTemplates';
+import { templateToInitialData, templateToInitialTraining } from '../utils/eventTemplates';
+import type { TrainingDetailsForm } from '../components/training-event/trainingDetailsModel';
 import { EventTemplatePicker } from '../components/event-form/EventTemplatePicker';
 
 export const EventCreatePage: React.FC = () => {
@@ -25,6 +26,8 @@ export const EventCreatePage: React.FC = () => {
   const [templates, setTemplates] = useState<EventTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [templateInitialData, setTemplateInitialData] = useState<Partial<EventCreate> | undefined>(undefined);
+  // A Training template's saved training details, for Training Info.
+  const [templateInitialTraining, setTemplateInitialTraining] = useState<TrainingDetailsForm | undefined>(undefined);
   const [userEvents, setUserEvents] = useState<ConflictEvent[]>([]);
   // The picker is offered on the form's first page only: a pick starts the
   // form afresh, which on a later training step would discard every step.
@@ -65,6 +68,7 @@ export const EventCreatePage: React.FC = () => {
         if (requested) {
           setSelectedTemplateId(requested.id);
           setTemplateInitialData(templateToInitialData(requested, tz));
+          setTemplateInitialTraining(templateToInitialTraining(requested));
         }
       })
       .catch(() => {
@@ -110,11 +114,13 @@ export const EventCreatePage: React.FC = () => {
     setSelectedTemplateId(id);
     if (!id) {
       setTemplateInitialData(undefined);
+      setTemplateInitialTraining(undefined);
       return;
     }
     const template = templates.find((t) => t.id === id);
     if (template) {
       setTemplateInitialData(templateToInitialData(template, tz));
+      setTemplateInitialTraining(templateToInitialTraining(template));
     }
   };
 
@@ -142,7 +148,7 @@ export const EventCreatePage: React.FC = () => {
             templates={templates}
             value={selectedTemplateId}
             onChange={handleTemplateChange}
-            hint="Pick a template to pre-fill common settings, or start blank. A Training template opens the step-by-step form."
+            hint="Pick a template to pre-fill common settings, or start blank. A Training template opens the step-by-step form and fills its training details."
             markTraining
           />
         )}
@@ -151,6 +157,7 @@ export const EventCreatePage: React.FC = () => {
         <EventComposer
           key={selectedTemplateId || 'no-template'}
           initialData={templateInitialData}
+          initialTraining={templateInitialTraining}
           onSubmit={handleSubmit}
           onSubmitRecurring={handleSubmitRecurring}
           onCancel={handleCancel}

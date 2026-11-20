@@ -622,6 +622,17 @@ class EventTemplate(Base):
         JSON, nullable=True
     )
 
+    # The training details a Training template fills in when it is picked
+    # (owner decision 2026-11-20). Training templates only, and one canonical
+    # shape settled at the write by EventTemplateTrainingDetails (pitfall #20);
+    # NULL means none were saved, and the form opens on its defaults. The
+    # course and instructor ids inside carry no foreign key, so either can
+    # disappear; applying the template falls back to no course or no
+    # instructor, with a note.
+    training_details: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+
     # Metadata
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"

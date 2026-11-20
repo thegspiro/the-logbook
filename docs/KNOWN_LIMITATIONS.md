@@ -8662,13 +8662,41 @@ single-page form. What it changes, and what it leaves:
   the training details.** The rest of Training Info is drawn locked; reopen
   attendance to change it. The event's own fields keep the finalized-event
   rules under "Events — Edit Form Gaps" below.
-- **A Training template fills the event's own fields, not its training
+- ~~**A Training template fills the event's own fields, not its training
   details.** Training Admin's Create Session now offers the department's
   Training templates, as the Events page does, but `EventTemplate` has no
   training fields (course, type, hours, instructor, certification, links),
   so Training Info opens on its defaults. Carrying them needs template
   fields that do not exist yet: an owner decision, since it changes what a
-  saved template is.
+  saved template is.~~ **Resolved 2026-11-20 (owner decision, "Templates
+  keep training"):** a Training template stores the course (a library
+  course, a one-off name and code, or none), the training type, credit hours
+  and their source, the lead instructor and the certification settings
+  (issues certification, number prefix, issuing agency, expiry), in
+  `event_templates.training_details`, and picking it fills Training Info as
+  well as the event. The Event Templates editor has a Training Details
+  section for them, and Save as Template on a Training event saves its
+  session's. Still not carried, because they were not in the owner's list:
+  the category, program, phase and requirement links, Counts toward
+  attendance, and the completion settings (counts toward certification,
+  auto-create records, completion sign-off and its deadline); they start on
+  their defaults. A template whose library course is no longer in the Course
+  Library opens on No course yet, and one whose lead instructor is no longer
+  a current member opens with Lead instructor empty, each with a note on
+  Training Info. The entry below still applies to an event made from a
+  template: a library-course template saved with a blank instructor or
+  expiry gets the course's.
+- **A template's lead instructor survives that member's anonymisation, as a
+  training session's instructor does.** `training_details` holds the
+  instructor's member id and name as JSON, and neither
+  `member_anonymization_service.py` nor `user_deletion_service.py` touches
+  it — nor `training_sessions.instructor`, the free-text name a session
+  stores beside its `instructor_id`, which has the same gap and was not
+  recorded before. Neither carries a foreign key, so a removed member leaves
+  a dangling id, which applying the template clears. Scrubbing both on
+  anonymisation is a change to the anonymisation service, left for an owner
+  decision. A department-template export writes `training_details` as null,
+  so neither the name nor an org-local course id leaves the installation.
 - **Under a library course, a blank Lead Instructor or Expiration is saved
   as the course's.** The backend reads `null` for those two as "use the
   course's value", on create and on edit, so an officer cannot clear either
