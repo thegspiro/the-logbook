@@ -16,9 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#4450](https://github.com/thegspiro/the-logbook/pull/4450)** (branch `claude/security-review-apparatus-nfc` — confirmed
-free of any prior merged/closed PR with `git ls-remote --heads origin
-'refs/heads/claude/security-review-apparatus*'`, which returned nothing):
+**PR [#4452](https://github.com/thegspiro/the-logbook/pull/4452)** (branch
+`claude/security-review-apparatus-nfc-p23` — the bare
+`claude/security-review-apparatus-nfc` was tried first and opened as #4450,
+but `git ls-remote --heads origin 'refs/heads/claude/security-review-apparatus*'`
+only shows _live_ refs, and that name had actually been reused by several
+already-merged passes (15/17/18/19) whose remote heads GitHub had since
+deleted — exactly the branch-reuse CLAUDE.md Pitfall #24 warns against, and
+exactly why passes 21/22 had already moved to the `-pN` suffix. #4450 was
+closed and replaced by this PR, same commits, correct branch name — check a
+feature's own findings-file header for its actual prior branch names before
+trusting `ls-remote` alone next time):
 Feature 13 (Apparatus & NFC), pass 23 — watchdog pickup (the dedicated
 `/loop 30m /security-review` session remains unreachable). PR #4446
 (Feature 12, Facilities, pass 16) had already merged (`c5a93595d`) before
