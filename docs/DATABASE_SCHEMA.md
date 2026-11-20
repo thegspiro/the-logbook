@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**390 tables · 6206 columns · 1300 foreign keys**
+**390 tables · 6207 columns · 1300 foreign keys**
 
 ---
 
@@ -242,7 +242,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 18 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 29 | Event Template model for reusable event configurations |
-| [`events`](#events) | `Event` | 59 | Event model for managing department events |
+| [`events`](#events) | `Event` | 60 | Event model for managing department events |
 | [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 9 | RSVP History model for tracking RSVP status changes. |
 
 ### External_Shift_Hours
@@ -3533,6 +3533,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `end_datetime` | DATETIME | no |  |  |  |
 | `actual_start_time` | DATETIME | yes |  |  |  |
 | `actual_end_time` | DATETIME | yes |  |  |  |
+| `guest_headcount` | INTEGER | yes |  |  |  |
 | `requires_rsvp` | BOOL | no |  | `0` |  |
 | `rsvp_deadline` | DATETIME | yes |  |  |  |
 | `max_attendees` | INTEGER | yes |  |  |  |
