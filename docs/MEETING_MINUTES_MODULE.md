@@ -271,17 +271,31 @@ The generated HTML includes:
 
 ### System Folders
 
-7 system folders are auto-created on first access:
+System folders are created for each department (`SYSTEM_FOLDERS` in
+`app/models/document.py`). _(2026-11-16)_ This table listed seven, with slugs
+that had drifted; it now follows the model.
 
-| Folder             | Slug                 | Icon          | Description                      |
-| ------------------ | -------------------- | ------------- | -------------------------------- |
-| SOPs               | `sops`               | FileText      | Standard Operating Procedures    |
-| Policies           | `policies`           | Shield        | Organization policies and bylaws |
-| Forms & Templates  | `forms-templates`    | ClipboardList | Printable forms and templates    |
-| Reports            | `reports`            | BarChart      | Generated and uploaded reports   |
-| Training Materials | `training-materials` | GraduationCap | Training documents and manuals   |
-| Meeting Minutes    | `meeting-minutes`    | BookOpen      | Published meeting minutes        |
-| General Documents  | `general`            | Folder        | Uncategorized documents          |
+| Folder             | Slug                 | Description                                    |
+| ------------------ | -------------------- | ---------------------------------------------- |
+| Meeting Minutes    | `meeting-minutes`    | Published meeting minutes                      |
+| SOPs & Procedures  | `sops`               | Standard Operating Procedures                  |
+| Policies           | `policies`           | Department policies and guidelines             |
+| Forms & Templates  | `forms`              | Blank forms and document templates             |
+| Reports            | `reports`            | Monthly, quarterly, and annual reports         |
+| Training Materials | `training`           | Training manuals and reference materials       |
+| General Documents  | `general`            | Miscellaneous department files                 |
+| Member Files       | `members`            | Per-member folders, access-controlled          |
+| Apparatus Files    | `apparatus`          | Per-vehicle folders with sub-folders           |
+| Facility Files     | `facilities`         | Per-facility folders with sub-folders          |
+| Event Attachments  | `events`             | Per-event attachment folders                   |
+| Member Separations | `member-separations` | Property-return reports for departed members   |
+| Finance            | `finance`            | Receipts and finance records                   |
+| History            | `history`            | The archive's documents, catalogued in History |
+
+_(2026-11-14)_ **History** opens to `history.manage` only. A document with
+`source_type = "history_document"` is owned by the History module: the
+Documents endpoints may download it but refuse to rename, move or delete it
+(409), and nothing may be uploaded or moved into the History tree from here.
 
 ### Custom Folders
 
@@ -665,6 +679,19 @@ addition. The bell task is unchanged.
 - **Upgrading:** the reminders are on by default, so a department that has open
   items on adopted minutes will start receiving these emails the day after the
   upgrade. They can be switched off in **Minutes → Settings → Reminders** before or after.
+- **Editable wording** _(2026-11-14)_: the five minutes and action-item
+  emails — circulated (`minutes_circulated`), items assigned
+  (`minutes_action_items`), the minutes reminder
+  (`minutes_action_item_reminder`), the weekly digest
+  (`minutes_open_items_digest`) and the meeting-record reminder
+  (`meeting_action_item_reminder`) — are email templates. Migration
+  `c4e81b7a2d95` adds the template types; `ensure_default_templates` creates
+  each department's rows with the text that used to be built in code
+  (`app/services/email_templates_minutes.py`). Each `template_type` is the name
+  the sender already logged under, so the send log is unbroken. Item lists are
+  built and escaped by the sender and passed as `action_items_html` /
+  `open_items_html`, which render unescaped. They are listed under
+  **Communications → Email Templates → Meetings & Minutes**.
 
 ### Printable minutes
 
@@ -1283,6 +1310,42 @@ The minutes module was refactored to follow the standard module conventions used
 
 ---
 
+## Meeting attendance records _(2026-11-11 – 2026-11-13)_
+
+Written up from the merged changes; the rules themselves are in
+`backend/app/docs/TRAINING_WAIVERS.md` (the waiver engine both workflows share)
+and `docs/UPGRADING.md`.
+
+- **One row per member per meeting.** Migration `7b6db9dd8e4f` adds a unique
+  `(meeting_id, user_id)` index on `meeting_attendees`, after deleting extra
+  rows (it keeps a row carrying a waiver, else the newest, and carries
+  "present" and "excused" over). The downgrade cannot restore them. Adding a
+  member who is already on a meeting is refused ("already an attendee").
+- **Check-in wins.** A member marked present counts as attending even when they
+  also hold a waiver for that meeting. A waiver excuses only a missed meeting.
+  This applies to the voting check, the attendance dashboard and the
+  evaluation's business-meeting figure.
+- **Secretary's grant** — `POST /meetings/{id}/attendance-waiver` reads
+  `user_id` and `reason` from a JSON body.
+- **Member requests** — `/api/v1/meetings/waiver-requests` (policy, eligibility,
+  `mine`, the queue, and per-request withdraw, confirm, approve, deny, override
+  and respond). The router is registered ahead of `/meetings` so its paths are
+  not read as a meeting id. An approved request writes the waiver onto the
+  attendee row, "Excused: approved request" plus the category, never the
+  member's reason, and links it by `meeting_attendees.waiver_request_id`. The
+  screens are `/minutes/attendance/waiver-settings` and
+  `/meetings/waiver-requests`.
+- **Where a row came from** — migration `7d4374ffee39` adds `checked_in_at`,
+  `recorded_by` (SET NULL) and `recorded_via` to `meeting_attendees`:
+  `manual`, `event_check_in`, `event_rsvp`, `waiver` or `waiver_request`
+  (`AttendanceRecordedVia` in `app/models/meeting.py`). All three are NULL on
+  older rows.
+- **The dashboard's Voting column** — `AttendanceDashboardService` asks
+  `ElectionService.voting_reason_under_rules` with the department's regular
+  business meeting voter rules (`election_defaults._defaults_for_kind`), the
+  gate a ballot applies, rather than reading tier benefits. The **Period**
+  filter changes only the attendance columns.
+
 ## Meetings and minutes are two records _(2026-10-03)_
 
 The **Minutes** page (`/minutes`) lists **meeting** records (`/api/v1/meetings`)
@@ -1305,7 +1368,7 @@ Found driving workflow review W51 (`docs/workflow-review/W51-minutes.md`):
 | W51-6 The submitter was offered Approve                                     | Replaced by the "Waiting for another officer to approve" notice; Reject stays as a withdraw                                                                                                                                                                                                                                                                                                                                                                      |
 | W51-7 Meetings list                                                         | Dates read "Thu, Oct 1, 2026 at 7:00 PM" instead of `2026-10-01` / `19:00`; the create dialog is a named modal dialog; **Start Recording** stays disabled without the required date; the card's icon buttons have `aria-label`s naming the meeting and are 44px on phones                                                                                                                                                                                        |
 | W51-8 (flagged) Minutes already created from meetings keep the shifted date | A backfill could recompute from `meeting_id`, but cannot tell a date a secretary corrected by hand from a shifted one — owner decision, `docs/KNOWN_LIMITATIONS.md`                                                                                                                                                                                                                                                                                              |
-| W51-9 (open) A meeting's own status badge never moves                       | Nothing advances a meeting record's status, so it reads "Draft" beside approved minutes                                                                                                                                                                                                                                                                                                                                                                          |
+| W51-9 A meeting's own status badge never moved                              | **Fixed 2026-11-03.** Approving minutes now approves the meeting they record (`MinuteService._approve_linked_meeting`): same approver and moment; an already-approved meeting keeps its stamp; recalling the minutes leaves the meeting approved. Migration `6b81e95d4157` approves meetings whose minutes were already approved                                                                                                                                 |
 
 Related, 2026-09-26: a meeting created from an event copied its date and times
 from the event's UTC timestamp, so a 7 PM Eastern meeting read 11 PM and one

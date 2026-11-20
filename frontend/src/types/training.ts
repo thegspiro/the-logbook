@@ -615,7 +615,6 @@ export interface TrainingRecordCreate {
   instructor?: string;
   location?: string;
   notes?: string;
-  attachments?: string[];
   rank_at_completion?: string;
   station_at_completion?: string;
 }
@@ -640,7 +639,6 @@ export interface TrainingRecordUpdate {
   instructor?: string | null | undefined;
   location?: string | null | undefined;
   notes?: string;
-  attachments?: string[];
   rank_at_completion?: string | undefined;
   station_at_completion?: string | undefined;
 }
@@ -700,7 +698,12 @@ export interface ComplianceSummary {
   requirements_total: number;
   certs_expiring_soon: number;
   certs_expired: number;
-  /** `not_applicable`: no requirement grades the member and no certificate is lapsing. */
+  /**
+   * The member's compliance matrix standing: green compliant, yellow at risk,
+   * red non-compliant. `not_applicable`: no requirement grades the member,
+   * whatever their certificates say. The certificate counts above are
+   * informational and do not set it.
+   */
   compliance_status: 'green' | 'yellow' | 'red' | 'exempt' | 'not_applicable';
   compliance_label: string;
   hours_this_year: number;
@@ -1881,7 +1884,7 @@ export interface BulkImportResponse {
 // ==================== Self-Reported Training Types ====================
 
 // Import enum type from the canonical source and re-export
-import type { SubmissionStatus } from '../constants/enums';
+import type { Standing, SubmissionStatus } from '../constants/enums';
 export type { SubmissionStatus };
 
 export interface FieldConfig {
@@ -2030,7 +2033,6 @@ export interface TrainingSubmissionCreate {
   issuing_agency?: string | undefined;
   expiration_date?: string | undefined;
   category_id?: string | undefined;
-  attachments?: string[] | undefined;
   /** Park the submission in the member's own list instead of sending it for review. */
   save_as_draft?: boolean | undefined;
   /**
@@ -2061,7 +2063,6 @@ export interface TrainingSubmissionUpdate {
   issuing_agency?: string | null | undefined;
   expiration_date?: string | null | undefined;
   category_id?: string | null | undefined;
-  attachments?: string[] | undefined;
 }
 
 export interface SubmissionReviewRequest {
@@ -2414,6 +2415,15 @@ export interface RequirementDetail {
    * target was prorated by. Null for every other requirement type.
    */
   monthly_hours?: RequirementMonth[] | null;
+  /**
+   * For an hours requirement: the average hours a month in the months nothing
+   * excused, and the department's monthly pace (its unadjusted level over
+   * `window_months`). Worked out on the server from `monthly_hours`. Shown
+   * beside the total; `is_met` is still decided on the total. Null for every
+   * other type, and absent from an older server.
+   */
+  monthly_average?: number | null;
+  monthly_needed?: number | null;
   /**
    * Shifts worked or calls run per calendar month, for a shift or call
    * requirement: `monthly_hours`' counterpart, with `count` in place of
@@ -3127,6 +3137,12 @@ export interface ComplianceForecast {
   user_name?: string;
   /** Each is null when no requirement grades the member (not applicable). */
   current_compliance_percentage: number | null;
+  /**
+   * The current figure's compliance matrix standing, by the member's profile
+   * thresholds or the department's. Colour the current figure by this, never
+   * by thresholds of a screen's own. The projections carry no standing.
+   */
+  current_standing: Standing;
   forecast_30_days: number | null;
   forecast_60_days: number | null;
   forecast_90_days: number | null;

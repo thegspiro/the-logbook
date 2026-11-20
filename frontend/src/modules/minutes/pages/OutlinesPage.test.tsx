@@ -66,15 +66,15 @@ describe('OutlinesPage', () => {
   it('only offers "Make default" on an outline that is not already the default', async () => {
     renderWithRouter(<OutlinesPage />);
     await screen.findByText('Regular order');
-    expect(screen.queryByRole('button', { name: 'Make Regular order the default' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Make Short order the default' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Make default: Regular order' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Make default: Short order' })).toBeInTheDocument();
   });
 
   it('makes an outline the default and reloads the list', async () => {
     const user = userEvent.setup();
     renderWithRouter(<OutlinesPage />);
     await screen.findByText('Regular order');
-    await user.click(screen.getByRole('button', { name: 'Make Short order the default' }));
+    await user.click(screen.getByRole('button', { name: 'Make default: Short order' }));
     await waitFor(() => expect(mockUpdateOutline).toHaveBeenCalledWith('o2', { is_default: true }));
     await waitFor(() => expect(mockGetOutlines).toHaveBeenCalledTimes(2));
   });

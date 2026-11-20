@@ -121,9 +121,9 @@ def _value_for(column: Any, prop: dict[str, Any]) -> Any:
     if getattr(column.type, "enums", None):
         return column.type.enums[0]
     python_type = column.type.python_type
-    if python_type is datetime:
+    if issubclass(python_type, datetime):
         return datetime.now(timezone.utc)
-    if python_type is date:
+    if issubclass(python_type, date):
         return date(2026, 1, 1)
     if python_type is str:
         return "Bench"

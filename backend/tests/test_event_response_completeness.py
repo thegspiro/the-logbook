@@ -83,6 +83,10 @@ CALLER_SUPPLIED = {
     # or training.manage on a Training event. Per caller, detail endpoint only.
     "can_edit_event",
     "can_reopen_attendance",
+    # Whether this caller may record a guest headcount: events.manage on an
+    # outreach event that has started (guest_headcount_offered). Per caller,
+    # detail endpoint only; False is the honest default elsewhere.
+    "can_record_guest_headcount",
     # The rest of the list card's derived fields, per caller: whether this
     # member checked in (their own RSVP row), what the event would credit (the
     # org's hour mappings) and whether the attendee list will answer them (the

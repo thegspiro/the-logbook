@@ -162,6 +162,7 @@ Scheduling's and Organization's settings.
 | Membership IDs     | `/members/admin/settings/ids`        | Numbering and prefixes                  | `settings.edit` or `organization.update_settings`                                         |
 | Operational Ranks  | `/members/admin/settings/ranks`      | The ladder, and who may fill which seat | `settings.manage` or `members.manage`                                                     |
 | Membership Tiers   | `/members/admin/settings/tiers`      | The ladder, and what each tier confers  | `members.manage`                                                                          |
+| Leave of Absence   | `/members/admin/settings/leave`      | Ending reminders and leave requests     | `members.manage` _(added 2026-11-14)_                                                     |
 | EVOC Levels        | `/members/admin/settings/evoc`       | Driver certification ladder             | `apparatus.manage`                                                                        |
 
 `/members/admin/settings` itself redirects to the first section.
@@ -192,7 +193,12 @@ Contact Visibility and Membership IDs came from the global Organization
 Settings screen and **their old addresses redirect**, so existing links and
 bookmarks still arrive. Operational Ranks and EVOC came from the same global
 screen; Membership Tiers is new, and shares its editor with the setup wizard's
-step 4.
+step 4. Leave of Absence _(2026-11-14)_ is new too: it reads and writes
+`Organization.settings["leave_of_absence"]` through
+`GET`/`PUT /users/leaves-of-absence/settings`, and every save is audited.
+The member-facing page it governs, `/members/leave-requests`, carries no
+permission gate: asking needs none, and the server decides who may see or
+decide each request.
 
 ## Metrics count on the department's calendar _(2026-09-26)_
 

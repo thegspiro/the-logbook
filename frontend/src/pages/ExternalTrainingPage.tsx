@@ -1986,7 +1986,7 @@ const ExternalTrainingPage: React.FC = () => {
         ) : activeTab === 'providers' ? (
           <div className="grid gap-6 md:grid-cols-2" role="tabpanel">
             {providers.length === 0 ? (
-              <div className="card col-span-2 py-12 text-center">
+              <div className="card col-span-2 px-4 py-12 text-center">
                 <Link2 className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
                 <h2 className="text-theme-text-primary mb-2 text-lg font-semibold">No Integrations Yet</h2>
                 <p className="text-theme-text-muted mb-4">

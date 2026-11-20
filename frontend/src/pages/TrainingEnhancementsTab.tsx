@@ -64,7 +64,7 @@ import type {
   ParticipatingOrganization,
 } from '../types/training';
 import type { User } from '../types/user';
-import { isActiveAccount } from '../constants/enums';
+import { STANDING_TEXT_COLORS, isActiveAccount } from '../constants/enums';
 import { StatGrid } from '../components/ux/StatGrid';
 
 const inputClass = 'form-input px-3 focus:ring-red-500/50 focus:border-red-500';
@@ -1640,15 +1640,10 @@ const ReportsSection: React.FC = () => {
                         // No requirement grades this member.
                         <span className="text-theme-text-muted">N/A</span>
                       ) : (
-                        <span
-                          className={
-                            f.current_compliance_percentage >= 80
-                              ? 'text-green-700 dark:text-green-600'
-                              : f.current_compliance_percentage >= 50
-                                ? 'text-yellow-700 dark:text-yellow-600'
-                                : 'text-red-600'
-                          }
-                        >
+                        // The server's standing for this figure, by the
+                        // member's profile or the department's thresholds
+                        // (CLAUDE.md pitfall #29).
+                        <span className={STANDING_TEXT_COLORS[f.current_standing]}>
                           {f.current_compliance_percentage}%
                         </span>
                       )}

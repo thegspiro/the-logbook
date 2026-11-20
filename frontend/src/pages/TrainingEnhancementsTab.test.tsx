@@ -9,6 +9,7 @@ const createQualification = vi.fn();
 const getUsers = vi.fn();
 const getExercises = vi.fn();
 const createExercise = vi.fn();
+const getComplianceForecast = vi.fn();
 
 vi.mock('../services/trainingServices', () => ({
   recertificationService: {},
@@ -22,7 +23,9 @@ vi.mock('../services/trainingServices', () => ({
     getExercises: (...args: unknown[]) => getExercises(...args) as unknown,
     createExercise: (...args: unknown[]) => createExercise(...args) as unknown,
   },
-  reportExportService: {},
+  reportExportService: {
+    getComplianceForecast: (...args: unknown[]) => getComplianceForecast(...args) as unknown,
+  },
 }));
 
 vi.mock('../services/api', () => ({
@@ -244,5 +247,49 @@ describe('TrainingEnhancementsTab add dialogs name every control', () => {
 
     const unnamed = labels.filter((label) => within(dialog).queryByLabelText(label, { exact: true }) === null);
     expect(unnamed).toEqual([]);
+  });
+});
+
+describe('TrainingEnhancementsTab compliance forecast', () => {
+  beforeEach(() => {
+    getComplianceForecast.mockReset();
+    getComplianceForecast.mockResolvedValue([
+      {
+        user_id: 'u-at-risk',
+        user_name: 'Ada Risk',
+        current_compliance_percentage: 85,
+        current_standing: 'at_risk',
+        forecast_30_days: 84,
+        forecast_60_days: 83,
+        forecast_90_days: 82,
+        at_risk_requirements: [],
+        expiring_certifications: [],
+      },
+      {
+        user_id: 'u-compliant',
+        user_name: 'Cy Lowbar',
+        current_compliance_percentage: 60,
+        current_standing: 'compliant',
+        forecast_30_days: 59,
+        forecast_60_days: 58,
+        forecast_90_days: 57,
+        at_risk_requirements: [],
+        expiring_certifications: [],
+      },
+    ]);
+  });
+
+  it('colours the current figure by the standing the server classified', async () => {
+    // The department's (or the profile's) thresholds decide, not a fixed
+    // 80 / 50: 85% can be at risk under a 100% bar, 60% compliant under 50%.
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingEnhancementsTab activeTab="reports" />);
+
+    await user.click(screen.getByRole('button', { name: /Load Forecast/ }));
+
+    const atRisk = await screen.findByText('85%');
+    expect(atRisk).toHaveClass('text-orange-700');
+    expect(atRisk).not.toHaveClass('text-green-700');
+    expect(screen.getByText('60%')).toHaveClass('text-green-700');
   });
 });

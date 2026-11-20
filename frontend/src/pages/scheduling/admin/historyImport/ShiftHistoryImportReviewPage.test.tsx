@@ -425,6 +425,73 @@ describe('ShiftHistoryImportReviewPage', () => {
     expect(mockDecideAll).toHaveBeenCalledWith('imp-1', 'accept');
   });
 
+  describe('undoing an answer about a shift already on the schedule', () => {
+    const withExisting = (existing_status: 'accepted' | 'separated' | 'auto'): HistoryImportDetail => {
+      const base = draft();
+      const [shift] = base.analysis?.shifts ?? [];
+      return draft({
+        issues: [],
+        blocking_issue_count: 0,
+        rows: [fileRow('r2', 2, { shift_key: 'r2' }), fileRow('r3', 3, { shift_key: 'r2' })],
+        shifts: shift
+          ? [
+              {
+                ...shift,
+                existing_shift_id: 'shift-9',
+                existing_confidence: 75,
+                existing_status,
+                attendances: [attendance()],
+              },
+            ]
+          : [],
+      });
+    };
+
+    it('undoes "Add to that shift" from the Shifts tab', async () => {
+      mockGet.mockResolvedValue(withExisting('accepted'));
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('tab', { name: /Shifts/ }));
+
+      expect(screen.getByText(/You chose to add these members to that shift/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Undo' }));
+      expect(mockMappings).toHaveBeenCalledWith('imp-1', { existing_shifts: { r2: null } });
+    });
+
+    it('undoes "Import separately" from the Shifts tab', async () => {
+      mockGet.mockResolvedValue(withExisting('separated'));
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('tab', { name: /Shifts/ }));
+
+      expect(screen.getByText(/You chose to import it as a separate shift/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Undo' }));
+      expect(mockMappings).toHaveBeenCalledWith('imp-1', { existing_shifts: { r2: null } });
+    });
+
+    it('offers no undo for a match made without asking', async () => {
+      mockGet.mockResolvedValue(withExisting('auto'));
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('tab', { name: /Shifts/ }));
+
+      expect(screen.getByText(/added to the shift already on the schedule/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+    });
+
+    it('undoes the answer from any row of that shift on the Rows tab', async () => {
+      mockGet.mockResolvedValue(withExisting('accepted'));
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('tab', { name: /^Rows/ }));
+      await user.click(screen.getByRole('button', { name: /^All \(/ }));
+
+      expect(screen.getAllByText(/Decided: add to the shift already on the schedule/)).toHaveLength(2);
+      await user.click(nth(screen.getAllByRole('button', { name: 'Undo' }), 1));
+      expect(mockMappings).toHaveBeenCalledWith('imp-1', { existing_shifts: { r2: null } });
+    });
+  });
+
   it('labels an on-call shift', async () => {
     const [shift] = draft().analysis?.shifts ?? [];
     mockGet.mockResolvedValue(draft({ shifts: shift ? [{ ...shift, duty_type: 'on_call' }] : [] }));
