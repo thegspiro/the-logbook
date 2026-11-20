@@ -1107,7 +1107,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
               </div>
             ) : inactiveApplicants.length === 0 ? (
-              <div className="card bg-theme-input-bg border-dashed py-20 text-center">
+              <div className="card bg-theme-input-bg border-dashed px-4 py-20 text-center">
                 <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-700 dark:text-emerald-600" />
                 <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No inactive applications</h3>
                 <p className="text-theme-text-muted text-sm">
@@ -1289,7 +1289,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
               </div>
             ) : rejectedApplicants.length === 0 ? (
-              <div className="card bg-theme-input-bg border-dashed py-20 text-center">
+              <div className="card bg-theme-input-bg border-dashed px-4 py-20 text-center">
                 <XCircle className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
                 <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No rejected applications</h3>
                 <p className="text-theme-text-muted text-sm">
@@ -1458,7 +1458,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
               </div>
             ) : withdrawnApplicants.length === 0 ? (
-              <div className="card bg-theme-input-bg border-dashed py-20 text-center">
+              <div className="card bg-theme-input-bg border-dashed px-4 py-20 text-center">
                 <Archive className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
                 <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No withdrawn applications</h3>
                 <p className="text-theme-text-muted text-sm">
@@ -1626,7 +1626,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
               </div>
             ) : convertedApplicants.length === 0 ? (
-              <div className="card bg-theme-input-bg border-dashed py-20 text-center">
+              <div className="card bg-theme-input-bg border-dashed px-4 py-20 text-center">
                 <CheckCircle2 className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
                 <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No converted applications</h3>
                 <p className="text-theme-text-muted text-sm">
