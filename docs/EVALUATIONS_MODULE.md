@@ -96,6 +96,20 @@ content on `manage` alone; reading needs `view_all`, being the evaluator, or
 being an approver at an open approval step. Approval steps are signed by
 holders of the step's position.
 
+**Separation of duties** _(owner decision 2026-11-16, ADV2-4)_. The evaluator
+never approves or calibrates their own evaluation, and nobody signs two
+approval steps on one revision. Where that leaves a step with nobody
+eligible -- a department whose only Captain wrote the evaluation, say -- a
+`manage` holder names who takes it (`PUT /{id}/steps/{key}/assignee`, with
+step-up). The person named replaces the step's position holders (or the
+`view_all` holders, for calibration) on that one evaluation, reads it as an
+approver does, and is emailed if the step is already open. Any current
+member may be named except the member and the evaluator, and, on an
+approval, anyone who signed another approval on the revision. Clearing the
+name hands the step back. An amendment's new revision starts with no names.
+A position holder replaced by a name no longer sees the evaluation unless
+they have another part in it.
+
 The member's supervisor today, by the dated Reports To assignments, also
 reads their evaluations, by relationship rather than by grant (owner decision
 2026-11-01, built 2026-11-04). `GET /crew` lists every evaluation of the
@@ -184,6 +198,36 @@ that code (pitfall #29).
 A figure that cannot honestly be given is reported unavailable with a note,
 never as zero or 100%.
 
+`calls.response_pct` _(2026-11-13)_ divides over `Coverage.included()`, the
+stretches no exclusion touches: calls during a leave or a gap in membership
+count on neither side. `calls.responses`, `shifts.hours` and `shifts.count`
+still use the whole coverage. A rate already frozen into a snapshot keeps its
+old value.
+
+**Counts behind a figure** _(2026-11-13)_. Each source stores its supporting
+counts beside its value (`met` / `total`, `attended` / `held`, `responses` /
+`department_calls`, `capped`, `external_hours`, a waiver `breakdown`).
+`figureDetail()` in `utils/evaluationRecord.ts` and `figure_detail()` in
+`evaluation_document_service.py` word them alike ("75% · 6 of 8 meetings
+attended"); change both together. Older snapshots that hold the counts show
+them on screen; stored PDFs stay as signed.
+
+**In the builder** _(2026-11-14)_:
+
+- **Data shown with this item** groups sources by their catalogue `module`
+  (`groupDataSources()`), in catalogue order; an unknown module goes under
+  "Other". `events.meeting_attendance_pct` is tagged `meetings`; its key is
+  unchanged.
+- `GET /data-sources` sets `unavailable_reason` when the Training module is
+  off (training sources), the Scheduling module is off (shift and call
+  sources) or call tracking is off (call sources). Such a source reads
+  "(turned off)" and stays selectable, since a published template may use it.
+- `scoringGaps()` reports values no score band covers (below the first band,
+  between bands, above a closed top band, and an exclusive upper bound such
+  as exactly 100%) as "No rating is suggested for values …". Overlapping
+  bands are still refused by the backend.
+- The PDF's "Left out" dates use the page's date format.
+
 ### Waiver requests
 
 Four more sources show the member's requests to be excused from a session
@@ -199,8 +243,7 @@ Four more sources show the member's requests to be excused from a session
 Each reads `attendance_waiver_requests` for one workflow, counting a request
 by the date of the session it excuses, within the review period and the
 member's coverage: a session held between stints of membership is dropped, one
-held during a leave is kept. Business-meeting requests read zero until that
-workflow writes them.
+held during a leave is kept.
 
 The summary's value is the number of requests; beside it are `approved` (what
 counts toward the cap, a Chief's override of a denial included), `overridden`
@@ -350,7 +393,9 @@ All under `/api/v1/evaluations`.
 | `GET /crew`                                                                                                                   | sign-in; lists only the evaluations of members the caller supervises today                    |
 | `GET /{id}` and its actions                                                                                                   | anyone with a part in it; the service decides who may do what, and answers 404 to anyone else |
 | `POST /{id}/sign`                                                                                                             | the signer the open step waits on, with step-up                                               |
-| `POST /{id}/calibration/complete`                                                                                             | `view_all`                                                                                    |
+| `POST /{id}/calibration/complete`                                                                                             | the person named on the step, else `view_all`; never the evaluator                            |
+| `GET /{id}/steps/{key}/assignee-candidates`                                                                                   | `manage`                                                                                      |
+| `PUT /{id}/steps/{key}/assignee`                                                                                              | `manage`, with step-up                                                                        |
 | `POST /{id}/amend`                                                                                                            | `manage`                                                                                      |
 | `POST /{id}/delete`                                                                                                           | `delete`, with step-up                                                                        |
 | `PUT /{id}/response`, `POST /{id}/response/submit`                                                                            | the member                                                                                    |
@@ -361,7 +406,7 @@ In order: `3fbd0fe30e5b` (tables), `b65eaef983b9` and `1476abf56dd3`
 (Chief grants), `0ebd6603289b` (documents), `38e0f552242d` (notices, step
 stamps), `857291750c67` (delete grant, deleted email), `6b2f0c9d4e71`
 (amended email), `9d3a71c5e2b8` (response PDF, response email),
-`4c8e2f61a9d7` (calibration flags). Each is safe to run twice and tolerates a
+`4c8e2f61a9d7` (calibration flags), `a6c3e8d17f42` (step assignee). Each is safe to run twice and tolerates a
 table `create_all` has not built (pitfall #26).
 
 ## Tests

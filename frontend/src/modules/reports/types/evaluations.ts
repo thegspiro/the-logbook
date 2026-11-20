@@ -340,6 +340,9 @@ export interface EvaluationStep {
   status: 'pending' | 'open' | 'completed' | 'skipped';
   due_date: string | null;
   completed_at: string | null;
+  /** The person a manager named to act on an approval or calibration step,
+   * in place of the workflow's actor. Null when the workflow decides. */
+  assignee?: PersonRef | null | undefined;
 }
 
 export interface EvaluationPart {
@@ -414,6 +417,9 @@ export interface EvaluationViewer {
   can_amend?: boolean | undefined;
   /** The member, inside the response window, before submitting a response. */
   can_respond?: boolean | undefined;
+  /** A holder of evaluations.manage, on an evaluation in progress not their
+   * own: may name who acts on an approval or calibration step not yet done. */
+  can_assign_steps?: boolean | undefined;
 }
 
 /** A finalized evaluation reopened as a new revision, and why. */

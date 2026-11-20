@@ -286,20 +286,20 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/events/templates',
     source: 'src/modules/events/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/events/attendance-requests',
     source: 'src/modules/events/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/events/analytics',
     source: 'src/modules/events/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/events/admin',
@@ -1213,23 +1213,20 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/minutes/attendance',
     source: 'src/modules/minutes/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      'secretary report built from the shared rwd-table, card and form-input utilities; /minutes is the representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/minutes/attendance/waiver-settings',
     source: 'src/modules/minutes/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      'the session waiver settings panel bound to the meeting workflow; its training twin under /training/admin covers the same form-input, toggle and card utilities',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/meetings/waiver-requests',
     source: 'src/modules/minutes/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      'the /attendance-waivers approver queue bound to the meeting workflow; it lists only requests routed to the viewer, so it is empty for the e2e member',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/meetings/waiver-requests/:id',
@@ -1241,16 +1238,14 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/minutes/outlines',
     source: 'src/modules/minutes/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      'outline list built from the shared card, btn-secondary and Modal utilities; /minutes is the representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/minutes/settings',
     source: 'src/modules/minutes/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      'settings screen built on the shared SettingsLayout, form-input and btn-primary utilities; /minutes is the representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/minutes/:minutesId',
@@ -1424,20 +1419,20 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/prospective-members/settings',
     source: 'src/modules/prospective-members/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/prospective-members/my-applicants',
     source: 'src/modules/prospective-members/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/prospective-members/sign-offs',
     source: 'src/modules/prospective-members/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/prospective-members/:applicantId/interview',

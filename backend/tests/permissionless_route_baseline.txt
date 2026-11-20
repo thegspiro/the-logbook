@@ -145,8 +145,9 @@ app/api/v1/endpoints/elections.py::submit_member_ballot
 # each write further requires the author of that part (403 otherwise).
 # The PDF download (2026-11-02) admits exactly whom the evaluation page shows
 # the finalized record to; signing requires the signer the open step waits
-# on (an approval's position holder, or the member), a re-verified session,
-# and the signer's own name typed.
+# on (the person a manager named on an approval, else its position holder,
+# never the evaluator or a second approval by one person; or the member), a
+# re-verified session, and the signer's own name typed.
 app/api/v1/endpoints/evaluations.py::download_evaluation_document
 app/api/v1/endpoints/evaluations.py::get_evaluation
 # /attention returns two counts scoped to the caller: their own evaluations
@@ -167,6 +168,12 @@ app/api/v1/endpoints/evaluations.py::submit_evaluation_response
 app/api/v1/endpoints/evaluations.py::refresh_evaluation_data
 app/api/v1/endpoints/evaluations.py::save_evaluation_part
 app/api/v1/endpoints/evaluations.py::sign_evaluation
+# Calibration left its evaluations.view_all gate on 2026-11-16 (ADV2-4): the
+# person a manager names on a calibration step may hold no view_all. The
+# service admits that person, else a view_all holder, never the evaluation's
+# evaluator or member; a caller who cannot see the evaluation gets 404, and
+# anyone else who sees it but may not calibrate gets 403.
+app/api/v1/endpoints/evaluations.py::complete_evaluation_calibration
 app/api/v1/endpoints/evaluations.py::submit_evaluation_part
 
 app/api/v1/endpoints/equipment_check.py::download_csv_sample
@@ -428,10 +435,16 @@ app/api/v1/endpoints/scheduling.py::get_eligible_positions_bulk
 # (tests/test_member_hours_history.py::TestMemberHoursEndpoint). A dependency
 # cannot express "or is that member", hence the check in the body.
 app/api/v1/endpoints/scheduling.py::get_member_hours_history
+# Same rule as get_member_hours_history above, for the shift-by-shift rows
+# behind those totals (tests/test_member_shift_history.py::TestEndpoints).
+app/api/v1/endpoints/scheduling.py::get_member_shift_history
 app/api/v1/endpoints/scheduling.py::get_my_assignments
 app/api/v1/endpoints/scheduling.py::get_my_attendance
 app/api/v1/endpoints/scheduling.py::get_my_attendance_history
 app/api/v1/endpoints/scheduling.py::get_my_hours_history
+# Scoped to the caller: reads current_user.id only, never an id from the
+# request (tests/test_member_shift_history.py::TestEndpoints).
+app/api/v1/endpoints/scheduling.py::get_my_shift_history
 app/api/v1/endpoints/scheduling.py::get_my_shifts
 app/api/v1/endpoints/scheduling.py::get_open_shifts
 app/api/v1/endpoints/scheduling.py::get_pre_shift_eligible_shifts

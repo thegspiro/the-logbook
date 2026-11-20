@@ -630,6 +630,12 @@ class EventResponse(EventBase, UTCResponseBase):
     # Reopen finalized attendance: events.reopen_attendance, or training.manage
     # on a Training event. Detail endpoint only.
     can_reopen_attendance: bool = False
+    # Guests a coordinator counted, for an outreach event nobody signed in at.
+    guest_headcount: Optional[int] = None
+    # May this caller record that count: events.manage, on an outreach event
+    # (outreach_event_clause) that has started and is not cancelled — the
+    # checks the save applies. Detail endpoint only.
+    can_record_guest_headcount: bool = False
     updated_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
@@ -910,6 +916,17 @@ class RSVPOverride(BaseModel):
     def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
         # Stored in DATETIME columns and compared by the service; see as_utc.
         return as_utc(v)
+
+
+#: A ceiling no real outreach event reaches, so a mistyped extra digit is
+#: refused rather than reported as reach.
+MAX_GUEST_HEADCOUNT = 100_000
+
+
+class GuestHeadcountUpdate(BaseModel):
+    """Set, or clear with null, the guests counted at an outreach event."""
+
+    guest_headcount: Optional[int] = Field(None, ge=0, le=MAX_GUEST_HEADCOUNT)
 
 
 class RecordActualTimes(BaseModel):

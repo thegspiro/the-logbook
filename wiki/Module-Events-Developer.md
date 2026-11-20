@@ -152,6 +152,7 @@ POST   /events/{id}/self-check-in                # Member self check-in / check-
 POST   /events/{id}/check-in                     # Checks a member in (attendance access)
 GET    /events/{id}/check-in-monitoring          # Live monitoring (manage)
 POST   /events/{id}/record-times                 # Record actual start/end (manage, or training.manage on Training)
+PUT    /events/{id}/guest-headcount              # Set or clear the guests counted at an outreach event (manage)
 POST   /events/{id}/end-event                    # End now + bulk checkout + finalize durations (manage, or training.manage on Training)
 POST   /events/{id}/finalize-attendance          # Finalize attendance (manage, or training.manage on Training)
 POST   /events/{id}/reopen-attendance            # Reopen (events.reopen_attendance, or training.manage on Training)

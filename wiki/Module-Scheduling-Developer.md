@@ -117,6 +117,8 @@ GET    /availability                    # Member availability (scheduling.assign
 GET    /my-shifts                       # Caller's shifts
 GET    /my-assignments                  # Caller's assignments, with embedded shift data
 GET    /my-hours-history                # Caller's hours (year's months, totals, all time, and `history`: every month on record)
+GET    /my-shift-history                # Caller's shifts in a year, own department's and outside, one row each
+GET    /members/{id}/shift-history      # The same for a member's profile (self, or scheduling.report)
 GET    /standing-shifts/preview         # Preview a standing series
 GET    /standing-shifts                 # Caller's standing claims
 POST   /standing-shifts                 # Create a standing claim
@@ -337,6 +339,20 @@ seven tiles (`today_staffing`, `future_coverage_gaps`, `open_slots`,
 `pending_staffing_changes`, `incomplete_closeouts`, `workload_balance`,
 `special_operations`); an unknown widget key on save is a `422`, and a
 saved station or platoon that no longer exists is dropped on read.
+
+**Member shift history** _(2026-11-20, #4394)_. `my-shift-history` and
+`members/{id}/shift-history` take `?year=` and return `MemberShiftHistoryResponse`:
+`department_shifts` (one `MemberDepartmentShift` per shift: `hours` is
+attendance plus approved pre-shift work, `credited` false until finalized, when
+`calls` is also `null`) and `external_shifts` of every status, which the screen
+interleaves by date; `external_total` exceeds the list only when a year holds
+more than one response returns. The hours-history responses gain `years` (each
+year with its twelve months and totals, sliced from the same aggregate as
+`months`, so a year heading cannot disagree with its chart) and
+`department_label`: `organizations.short_name` (new, `VARCHAR(20)`, nullable,
+migration `a541e82fef9f`) or the full name when unset. `short_name` is set on
+`PATCH` organization profile (a blank clears it) and is deliberately **not** an
+email template variable: emails name the department in full.
 
 ### Shifts with other departments — `/api/v1/scheduling/external-hours`
 

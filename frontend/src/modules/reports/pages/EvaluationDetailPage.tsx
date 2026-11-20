@@ -19,6 +19,7 @@ import { formatCalendarDate, formatDateTime } from '../../../utils/dateFormattin
 import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { saveBlob } from '../../../utils/saveBlob';
 import { AmendEvaluationDialog } from '../components/evaluations/AmendEvaluationDialog';
+import { AssignStepDialog } from '../components/evaluations/AssignStepDialog';
 import { CalibrationDialog } from '../components/evaluations/CalibrationDialog';
 import { DeleteEvaluationDialog } from '../components/evaluations/DeleteEvaluationDialog';
 import { EvaluationForm } from '../components/evaluations/EvaluationForm';
@@ -31,6 +32,7 @@ import { evaluationsService } from '../services/evaluationsApi';
 import type {
   EvaluationDetail,
   EvaluationPartKind,
+  EvaluationStep,
   PartContent,
   SignatureWrite,
   SigningOption,
@@ -81,6 +83,7 @@ const EvaluationDetailPage: React.FC = () => {
   const [deleting, setDeleting] = useState(false);
   const [amending, setAmending] = useState(false);
   const [calibrating, setCalibrating] = useState(false);
+  const [assigning, setAssigning] = useState<EvaluationStep | null>(null);
   const navigate = useNavigate();
   const signerName = useAuthStore((state) => state.user?.full_name ?? '');
   const sectionPermission = useSectionPermission();
@@ -202,6 +205,20 @@ const EvaluationDetailPage: React.FC = () => {
       toast.success('Calibration recorded');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not record calibration.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const assignStep = async (assigneeId: string | null) => {
+    if (!assigning) return;
+    setBusy(true);
+    try {
+      adopt(await evaluationsService.assignStep(detail.id, assigning.key, assigneeId), editRevision.current);
+      setAssigning(null);
+      toast.success(assigneeId ? 'Step assigned' : 'Step handed back');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not assign the step.'));
     } finally {
       setBusy(false);
     }
@@ -488,7 +505,7 @@ const EvaluationDetailPage: React.FC = () => {
               onSave={(text) => void saveResponse(text)}
               onSubmit={() => void submitResponse()}
             />
-            <StepList steps={detail.steps} />
+            <StepList steps={detail.steps} onAssign={detail.viewer.can_assign_steps ? setAssigning : undefined} />
             {detail.previous_review && <PreviousReviewPanel review={detail.previous_review} />}
             {(detail.amendments ?? []).length > 0 && (
               <section aria-labelledby="amendments-heading" className="card p-4 sm:p-6">
@@ -552,6 +569,13 @@ const EvaluationDetailPage: React.FC = () => {
         </div>
       </div>
       <SignDialog option={signing} signerName={signerName} busy={busy} onClose={() => setSigning(null)} onSign={sign} />
+      <AssignStepDialog
+        evaluationId={detail.id}
+        step={assigning}
+        busy={busy}
+        onClose={() => setAssigning(null)}
+        onAssign={(assigneeId) => void assignStep(assigneeId)}
+      />
       <CalibrationDialog
         isOpen={calibrating}
         definition={detail.definition}

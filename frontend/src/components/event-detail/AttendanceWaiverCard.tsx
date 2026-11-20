@@ -29,14 +29,23 @@ import { capSummary, latestDecisionNote } from '../../utils/attendanceWaivers';
 import AttendanceWaiverRequestDialog from './AttendanceWaiverRequestDialog';
 
 /**
- * Refusals worth telling the member about: the session does count against
- * them, but they can no longer ask. The others (the department takes no
- * requests, the session does not count, the member is exempt) mean there is
- * nothing to excuse, and a notice would only be noise on the page.
- * `no_decider` is the Chief's or President's own request while the other
- * office is vacant and no alternate is named: they can fix it by asking.
+ * Refusals worth telling the member about. Most say the session does count
+ * against them but they can no longer ask. `no_decider` is the Chief's or
+ * President's own request while the other office is vacant and no alternate
+ * is named: they can fix it by asking. `not_counted` and `exempt` say there
+ * is nothing to excuse; they are shown because a member who came to this page
+ * to ask otherwise found no button and no reason, and could not tell "you do
+ * not need to" from "you cannot". The department taking no requests at all
+ * stays silent: that is the same on every session and a notice would be noise.
  */
-const SHOWN_REFUSALS: ReadonlySet<string> = new Set(['checked_in', 'deadline_passed', 'no_waivers_left', 'no_decider']);
+const SHOWN_REFUSALS: ReadonlySet<string> = new Set([
+  'checked_in',
+  'deadline_passed',
+  'no_waivers_left',
+  'no_decider',
+  'not_counted',
+  'exempt',
+]);
 
 interface AttendanceWaiverCardProps {
   eventId: string;

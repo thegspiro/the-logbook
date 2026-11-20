@@ -789,3 +789,38 @@ describe('a Chief override', () => {
     expect(counted.overrideNote).toBeNull();
   });
 });
+
+describe('an hours requirement with a monthly average', () => {
+  const hours = (overrides: Partial<ComplianceMatrixCell> = {}) =>
+    cell({
+      status: 'completed',
+      progress_current: 108.5,
+      progress_required: 72,
+      progress_unit: 'hours',
+      monthly_average: 9.04,
+      monthly_needed: 6,
+      ...overrides,
+    });
+
+  it('leads with the average and keeps the total underneath', () => {
+    const result = evaluateCell(hours(), requirement(), AS_OF);
+    expect(result.progressLabel).toBe('9/6 hrs/mo avg');
+    expect(result.progressSpoken).toBe('Averaging 9 hours a month of 6 needed');
+    expect(result.totalLabel).toBe('108.5 of 72 hours total');
+  });
+
+  it('still takes the tone and the bar from the total', () => {
+    // Behind pace, but the total is met: the server graded it completed.
+    const result = evaluateCell(hours({ monthly_average: 2.5 }), requirement(), AS_OF);
+    expect(result.tone).toBe(CellTone.MET);
+    expect(result.pct).toBe(100);
+    expect(result.progressLabel).toBe('2.5/6 hrs/mo avg');
+  });
+
+  it('keeps the total as the label when the server sends no average', () => {
+    const result = evaluateCell(hours({ monthly_average: null }), requirement(), AS_OF);
+    expect(result.progressLabel).toBe('108.5 of 72 hours');
+    expect(result.progressSpoken).toBeNull();
+    expect(result.totalLabel).toBeNull();
+  });
+});

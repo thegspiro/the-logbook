@@ -127,6 +127,13 @@ nothing, and you keep everything.
 
 Open the console and select **Store Settings**.
 
+**Saving** _(2026-11-20)_. **Save settings** at the foot of the page saves
+every section together, because the payment settings depend on each other. A
+value it would refuse, such as a tax rate over 100 or a notification recipient
+that is not an email address, is named under its own field, and a list at the
+top (**Fix these before saving the settings**) links to each. Nothing is saved
+until all of them are fixed. Leaving the page with unsaved changes asks first.
+
 ### Identity
 
 The **Storefront** section holds:
@@ -403,7 +410,7 @@ and send. They share a template, so word it to read for both. The standard
 wording does.
 
 Everything the store sends is logged in **Communications → Message History**,
-with a type beginning **storefront_**. So "did she ever get the reminder?" has
+with a type beginning `storefront_`. So "did she ever get the reminder?" has
 an answer.
 
 ![The Department Store console on Store Settings: the activity counts, the four area cards with Store Settings chosen, and the Settings page with Store is live for members, the storefront details, the payment method checkboxes and the three choices under What happens to an unpaid order?](./images/18-02-store-admin.png)
@@ -421,7 +428,7 @@ _options_. This guide does too.
 | --------------------------------------------- | ------------------------------------------------------------------- |
 | **Name**, **SKU (optional)**, **Description** |                                                                     |
 | **Category**                                  | Used for grouping                                                   |
-| **Price**                                     | The price before any option adds to it                              |
+| **Price**                                     | Required. The price before any option adds to it. Type 0 for free   |
 | **Department cost (optional)**                | What you pay the vendor. Never shown to members                     |
 | **Status**                                    | **Draft** (hidden), **Active (for sale)** or **Archived** (retired) |
 | **Max per member**                            | How many one member can order                                       |
@@ -552,11 +559,12 @@ Select **Department Store** in the sidebar.
    current catalog, and a line whose product or size is no longer offered is
    dropped. The saved cart is removed when you place the order, when the window
    closes, and at sign-out. _(2026-10-27)_
-6. On the checkout page, choose pickup or shipping. Shipping asks for an
-   address. _(2026-11-18)_ An address is sent and kept only for a shipped
-   order: if you type one and then switch to pickup, it is dropped. Reloading
-   or bookmarking the checkout page now keeps you on it with your cart, rather
-   than sending you back to the store.
+6. On the checkout page, under **Pickup or shipping**, choose **Pick up** or
+   **Ship to me**. Shipping asks for a **Shipping address**; leave it blank and
+   the box is flagged before anything is sent. _(2026-11-18)_ An address is sent
+   and kept only for a shipped order: if you type one and then switch to
+   pickup, it is dropped. Reloading or bookmarking the checkout page now keeps
+   you on it with your cart, rather than sending you back to the store.
 7. Choose how you will pay.
 8. Add **Notes for the quartermaster (optional)** if you need to, then tap
    **Submit order**.
@@ -656,6 +664,7 @@ Open an order to work on it:
 | **Change status** → **Update status** | Moves the order on: Awaiting payment, Paid, Ordered from vendor, Ready for pickup, Fulfilled (Ready to ship and Shipped on a shipped order) |
 | **Send an update** → **Send update**  | Sends the member a note, in the app, by email, or both                                                                                      |
 | **Internal notes** → **Save notes**   | Notes only staff see                                                                                                                        |
+| **Cancel order**                      | For an order that will not be filled. Takes an optional **Reason for cancelling (shown to the member)** and emails the member               |
 
 The order also shows its **Timeline**: everything that has happened to it.
 
@@ -665,7 +674,7 @@ shipped order, and the **Member's notes** from checkout. Below the total are
 the lines behind it: **Subtotal**, then **Tax**, **Shipping** and **Discount**
 when the order has them. A pickup order never shows an address, even if one
 was typed at checkout. The member sees the same details on their order in
-**My Orders**.
+**My Orders**, labelled **Ship to me** and **Your notes**.
 
 **A shipped order says shipped** _(2026-11-18)_. An order the member chose to
 have shipped goes through the same statuses, but wherever that one order is
@@ -681,7 +690,9 @@ among **Ordered from vendor**, **Ready for pickup** and **Fulfilled**. Moving
 an order back from **Fulfilled** clears when it was fulfilled and the
 quantities handed over. An order never goes back to Submitted, Awaiting
 payment or Paid. Choosing the status it already has does nothing and sends no
-email. Anything else is refused with a message saying why. In a bulk change,
+email. Anything else is refused with a message saying why, such as _"An order
+cannot move back from ordered from vendor to paid. Its payment stages follow
+the payments recorded against it."_ In a bulk change,
 a refused order is skipped and listed, and the rest move.
 
 ### Cancelling an order _(2026-11-14)_

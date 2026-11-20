@@ -86,7 +86,14 @@ Fire Attack & Live-Fire, Certification.]**
 > "Now lay out the journey. Add your phases in order — **Orientation & Safety**,
 > **Fireground Skills**, **Fire Attack & Live-Fire**, **Certification**. Give
 > each a name, an optional description, and an optional per-phase time limit.
-> Drag to reorder any time."
+> Once the pipeline is saved, its page has up and down arrows to reorder
+> phases — and the requirements inside them — any time."
+
+> **2026-11-20 PASS:** the narration said "Drag to reorder"; nothing in the
+> pipeline builder drags. Phases and requirements are reordered with the
+> up and down arrow buttons ("Move phase up", "Move requirement up") on the
+> pipeline's page (reordering
+> requirements stopped showing a false error on 2026-11-19, #4390).
 
 ### THE MANUAL-ADVANCE FLAG (4:00 – 4:30)
 
@@ -196,8 +203,11 @@ steps editor; toggle the eye icon closed on one of them.]**
 > a course imported from an outside provider should be able to satisfy this
 > requirement. Leave it off for requirements that must be delivered in-house."
 
-**[SCREEN: On the Create Session form, show the "Counts toward certification
-requirements" toggle.]**
+**[SCREEN: On the training-event form's **Training Info** step (Training Admin
+→ Create Session), show the "Counts toward certification requirements"
+checkbox.]** **[PRODUCTION NOTE — 2026-11-16. Create Session now opens the
+training-event form shared with Events → Create Event; re-shoot this cue on
+its Training Info step.]**
 
 > "And on the session side there's **'Counts toward certification requirements.'**
 > Leave it on for real, certification-grade delivery. Turn it off for an informal

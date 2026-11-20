@@ -132,6 +132,18 @@ Test Label", though it never printed anything). The inventory page's own
 buttons are **PDF**, **Print Labels**, **Print to _printer name_** and
 **Download Test Label**.
 
+**Printer resolution for a browser print** _(2026-11-03, #3971)_. A browser
+print of a **Code 128** label draws each bar a whole number of printer dots
+wide (#3824), so it needs the printer's resolution, which a browser cannot ask
+for. Both browser print pages (`LabelPrintPage` and
+`InventoryBarcodePrintPage`) show a **Printer resolution** select under the
+barcode style, for Code 128 only: **Auto** (300 dpi for Dymo and Letter, 203
+for every other size; the option names what it resolves to), **203**, **300**
+or **600 dpi**. The choice is stored per label size, per computer, in
+`localStorage` (`labels:printerDpi`, `{presetId: dpi}`); a malformed value
+reads as Auto. No backend change. The PDF and network-printer paths size in
+dots from their own settings and ignore it.
+
 **Station documents** — built from live records on request and printed at the
 watch desk. Nothing is stored; these are separate from `/documents`, which is
 the file store.

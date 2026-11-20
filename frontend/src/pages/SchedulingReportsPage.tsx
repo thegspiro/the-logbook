@@ -442,7 +442,7 @@ export const SchedulingReportsPage: React.FC = () => {
           />
 
           {!hasSearched ? (
-            <div className="card-secondary py-12 text-center">
+            <div className="card-secondary px-4 py-12 text-center">
               <Clock className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
               <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Pick the dates to cover</h3>
               <p className="text-theme-text-muted">Choose start and end dates to generate the member hours report</p>
@@ -490,7 +490,7 @@ export const SchedulingReportsPage: React.FC = () => {
 
               {/* Table */}
               {memberHoursReport.members.length === 0 ? (
-                <div className="card-secondary py-8 text-center">
+                <div className="card-secondary px-4 py-8 text-center">
                   <AlertCircle className="text-theme-text-muted mx-auto mb-3 h-10 w-10" aria-hidden="true" />
                   <p className="text-theme-text-muted">No data for this period</p>
                 </div>
@@ -593,7 +593,7 @@ export const SchedulingReportsPage: React.FC = () => {
               />
             </div>
           ) : (
-            <div className="card-secondary py-8 text-center">
+            <div className="card-secondary px-4 py-8 text-center">
               <AlertCircle className="text-theme-text-muted mx-auto mb-3 h-10 w-10" aria-hidden="true" />
               <p className="text-theme-text-muted">No report data available</p>
             </div>
@@ -616,7 +616,7 @@ export const SchedulingReportsPage: React.FC = () => {
           />
 
           {!hasSearched ? (
-            <div className="card-secondary py-12 text-center">
+            <div className="card-secondary px-4 py-12 text-center">
               <Shield className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
               <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Pick the dates to cover</h3>
               <p className="text-theme-text-muted">Choose start and end dates to view shift coverage data</p>
@@ -627,7 +627,7 @@ export const SchedulingReportsPage: React.FC = () => {
               <span className="sr-only">Loading report...</span>
             </div>
           ) : coverageData.length === 0 ? (
-            <div className="card-secondary py-8 text-center">
+            <div className="card-secondary px-4 py-8 text-center">
               <AlertCircle className="text-theme-text-muted mx-auto mb-3 h-10 w-10" aria-hidden="true" />
               <p className="text-theme-text-muted">No coverage data for this period</p>
             </div>
@@ -756,7 +756,7 @@ export const SchedulingReportsPage: React.FC = () => {
           />
 
           {!hasSearched ? (
-            <div className="card-secondary py-12 text-center">
+            <div className="card-secondary px-4 py-12 text-center">
               <Phone className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
               <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Pick the dates to cover</h3>
               <p className="text-theme-text-muted">Choose start and end dates to view call volume data</p>
@@ -767,7 +767,7 @@ export const SchedulingReportsPage: React.FC = () => {
               <span className="sr-only">Loading report...</span>
             </div>
           ) : callVolumeData.length === 0 ? (
-            <div className="card-secondary py-8 text-center">
+            <div className="card-secondary px-4 py-8 text-center">
               <AlertCircle className="text-theme-text-muted mx-auto mb-3 h-10 w-10" aria-hidden="true" />
               <p className="text-theme-text-muted">No call volume data for this period</p>
             </div>
@@ -871,7 +871,7 @@ export const SchedulingReportsPage: React.FC = () => {
           />
 
           {!hasSearched ? (
-            <div className="card-secondary py-12 text-center">
+            <div className="card-secondary px-4 py-12 text-center">
               <Users className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
               <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Pick the dates to cover</h3>
               <p className="text-theme-text-muted">Choose start and end dates to check member availability</p>
@@ -882,7 +882,7 @@ export const SchedulingReportsPage: React.FC = () => {
               <span className="sr-only">Loading availability...</span>
             </div>
           ) : availabilityData.length === 0 ? (
-            <div className="card-secondary py-8 text-center">
+            <div className="card-secondary px-4 py-8 text-center">
               <AlertCircle className="text-theme-text-muted mx-auto mb-3 h-10 w-10" aria-hidden="true" />
               <p className="text-theme-text-muted">No availability data for this period</p>
             </div>
@@ -1024,7 +1024,7 @@ export const SchedulingReportsPage: React.FC = () => {
           </form>
 
           {!hasSearched ? (
-            <div className="card-secondary py-12 text-center">
+            <div className="card-secondary px-4 py-12 text-center">
               <CheckCircle2 className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
               <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Shift Compliance</h3>
               <p className="text-theme-text-muted">
@@ -1039,7 +1039,7 @@ export const SchedulingReportsPage: React.FC = () => {
               <span className="sr-only">Loading compliance...</span>
             </div>
           ) : complianceData.length === 0 ? (
-            <div className="card-secondary py-8 text-center">
+            <div className="card-secondary px-4 py-8 text-center">
               <AlertCircle className="text-theme-text-muted mx-auto mb-3 h-10 w-10" aria-hidden="true" />
               <p className="text-theme-text-muted">
                 No active shift or hours requirements found.

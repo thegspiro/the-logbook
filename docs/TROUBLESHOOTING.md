@@ -3109,15 +3109,29 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 1. Stale data — the card reflects the last calculation
 2. A waiver was recently created or deactivated
 3. A certification just expired
+4. The member's compliance profile sets its own thresholds or required requirements
 
-**Status logic**:
+**Status logic** _(2026-11-20)_: the card shows the member's standing on the
+Compliance Matrix — the share of the requirements that grade them which are
+met, against their compliance profile's thresholds or else the department's
+(100% compliant / 75% at risk by default).
 
-- **Red**: Any expired certification OR fewer than 50% of requirements met
-- **Yellow**: Any certification expiring within 90 days OR fewer than 100% of requirements met
-- **Green**: All requirements met and no certification issues
+- **Green**: Compliant on the matrix
+- **Yellow**: At risk on the matrix
+- **Red**: Non-compliant on the matrix
+- **Not Applicable**: no requirement grades the member
+
+The Expiring Soon figures (expiring and expired certificates) are
+informational and do not set the colour. An expired certificate lowers the
+standing only through a requirement that grades it, so a card can read green
+or yellow while it shows "(1 expired)" — for a certificate a renewal has
+replaced, one no requirement grades, or, with the current month left out of
+compliance, one that lapsed this month and is graded as of last month's end.
 
 **Solutions**:
 
+- Compare the member's row on the Compliance Matrix: the card and the matrix
+  use one rule, so they should agree
 - Refresh the page to trigger a recalculation
 - Check individual requirement progress to identify which requirements are not met
 - Verify waiver adjustments are correctly applied (see Training Admin > Training Waivers tab)

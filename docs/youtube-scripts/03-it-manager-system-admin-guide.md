@@ -513,7 +513,9 @@ breached password, CAPTCHA — with the "on failure" column highlighted.]**
 > cover different gaps. It's worth knowing which is which, because if you tune
 > one down thinking it's redundant, it usually isn't."
 
-> "**Rate limiting** counts all attempts in a short window, per IP. **Account
+> "**Rate limiting** counts all attempts in a short window — for sign-in, per
+> account at an address, with a looser limit for the whole address so a
+> station signing in together at shift change isn't turned away. **Account
 > lockout** counts consecutive failures against one user — five, then fifteen
 > minutes by default. Both numbers are settings. And for a two-factor account,
 > wrong codes count too. Typing the right password again doesn't reset the
@@ -635,7 +637,7 @@ thresholds]**
 
 **[SCREEN: Show the training programs configuration]**
 
-**[SCREEN: Training Admin → Settings & Data → Compliance Settings, then Compliance Reporting → Configure. Thresholds tab with the Months on leave choice; Profiles tab with "Applies to Members Holding a Position".]**
+**[SCREEN: Training Admin → Settings & Data → Compliance, then Compliance Reporting → Configure. Thresholds tab with the Months on leave choice; Profiles tab with "Applies to Members Holding a Position".]**
 
 > "How compliance is graded lives in one place, now listed under **Settings &
 > Data** as **Compliance Settings** as well as behind **Configure** in
@@ -690,14 +692,14 @@ Outside Apparatus is new (2026-09-27). New footage needed.]**
 > so you can preview what members see. Voting method, victory condition and
 > ballot secrecy are chosen per election, on the election's own form."
 
-**[SCREEN: Elections → Settings → Voter Eligibility. Regular business meeting vs Annual meeting at the top; Rules every voter must meet — meeting attendance and a waiting period per member type.]**
+**[SCREEN: Elections → Settings → Voter Eligibility. The four kinds of vote at the top (Regular business meeting, Annual meeting, Bylaws amendment, Special meeting); Rules by member type — one row per type with May vote, Waiting period and meeting-attendance rules.]** **[PRODUCTION NOTE — 2026-11-16. Rewritten for the per-member-type rows of 2026-11-13; re-shoot this cue.]**
 
 > "One section matters most for the secretary's life and yours: **Voter
-> Eligibility**. It holds the department's default rules for who may vote —
-> a meeting-attendance requirement and a waiting period for each member type,
-> from none, to a number of months, to never eligible. There's one set for
-> regular business meetings and, if you switch it on, a different set for the
-> annual meeting. Each new election copies the defaults when it's created and
+> Eligibility**. It holds the department's default rules for who may vote — one
+> row per member type: may they vote, a waiting period, and any
+> meeting-attendance rules they must all meet. The regular business meeting
+> has a set, and an annual meeting, a bylaws amendment or a special meeting can
+> each be given its own; until then they use the regular set. Each new election copies the defaults when it's created and
 > can change its own copy until voting opens. Changing the settings later never
 > alters an election that already exists, and a secretary's voter override still
 > lets in a member who fails the rules. Each change saves as you make it."
@@ -753,6 +755,18 @@ Outside Apparatus is new (2026-09-27). New footage needed.]**
 > requirements you choose, so those requirements grade your history correctly.
 > A date fewer members logged stays an ordinary record. Running the same file
 > twice is safe, and the log tells you what became of every row."
+
+**[SCREEN: A committed step's "Undo this step" button; the "Undo the training records?" confirmation with its counts. ADDED 2026-11-20]**
+
+> "And if a step went in wrong — a subject mapped to the wrong course, a member
+> matched to the wrong person — every committed step has **Undo this step**. It
+> tells you how many records it will remove before it removes anything, keeps
+> any record an officer has already corrected, and goes in order: undo the
+> drills before the training they're built on. Then fix the decision and commit
+> again."
+
+**[EDITOR: The beat above is new (2026-11-20) and adds about 20 seconds; re-time
+Chapter 7.]**
 
 ### SALESFORCE SERVICE-ACCOUNT SYNC (22:30 – 24:30)
 
@@ -1744,8 +1758,8 @@ purchase request's detail page showing the same two buttons]**
 
 **[SCREEN: Finance → Approvals: "Requests waiting on you.", the Waiting on
 column, and a row badged "Not assigned to you" on an admin's screen; click
-through to the "Approve as approvals admin" dialog and its Override reason
-box]**
+the row's "Approve as admin" through to the "Approve as approvals admin" dialog
+and its Override reason box]**
 
 > "One correction to that, and it matters for how you set the chains up. A step
 > in an approval chain names its approver — a position, a permission, a

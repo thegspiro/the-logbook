@@ -66,8 +66,8 @@ describe('TemplateEditor', () => {
   it('renders subject and HTML body fields', () => {
     render(<Harness template={makeTemplate()} />);
 
-    expect(screen.getByLabelText('Subject Line')).toHaveValue('Welcome to {{organization_name}}');
-    expect(screen.getByLabelText('HTML Body')).toHaveValue('<p>Hello {{first_name}}</p>');
+    expect(screen.getByLabelText(/^Subject Line/)).toHaveValue('Welcome to {{organization_name}}');
+    expect(screen.getByLabelText(/^HTML Body/)).toHaveValue('<p>Hello {{first_name}}</p>');
   });
 
   it('does not draw its own save button', () => {
@@ -90,7 +90,7 @@ describe('TemplateEditor', () => {
     const user = userEvent.setup();
     render(<Harness template={makeTemplate()} />);
 
-    const subjectInput = screen.getByLabelText('Subject Line');
+    const subjectInput = screen.getByLabelText(/^Subject Line/);
     await user.clear(subjectInput);
     await user.type(subjectInput, 'New Subject');
 
@@ -102,7 +102,7 @@ describe('TemplateEditor', () => {
     const onSave = vi.fn();
     render(<Harness template={makeTemplate()} onSave={onSave} />);
 
-    const subjectInput = screen.getByLabelText('Subject Line');
+    const subjectInput = screen.getByLabelText(/^Subject Line/);
     await user.clear(subjectInput);
     await user.type(subjectInput, 'New Subject');
 
@@ -212,7 +212,7 @@ describe('TemplateEditor', () => {
       const user = userEvent.setup();
       render(<Harness template={makeTemplate({ html_body: '<p>A</p><p>B</p>' })} />);
 
-      const body = screen.getByLabelText<HTMLTextAreaElement>('HTML Body');
+      const body = screen.getByLabelText<HTMLTextAreaElement>(/^HTML Body/);
       // Between the two paragraphs.
       body.focus();
       body.setSelectionRange(8, 8);
@@ -226,7 +226,7 @@ describe('TemplateEditor', () => {
       const user = userEvent.setup();
       render(<Harness template={makeTemplate({ html_body: '<p>OLD</p>' })} />);
 
-      const body = screen.getByLabelText<HTMLTextAreaElement>('HTML Body');
+      const body = screen.getByLabelText<HTMLTextAreaElement>(/^HTML Body/);
       body.focus();
       body.setSelectionRange(0, body.value.length);
 

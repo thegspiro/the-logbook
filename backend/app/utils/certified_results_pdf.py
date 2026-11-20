@@ -18,7 +18,7 @@ one set when they are filed together.
 """
 
 from io import BytesIO
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle
@@ -79,8 +79,10 @@ def _quorum_cell(results: Dict[str, Any]) -> str:
     return "Met" if met else "NOT MET"
 
 
-def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
-    """Render the certified results, returning a BytesIO at position 0.
+def _layout(
+    data: Dict[str, Any], meta: Dict[str, Any], total_pages: Optional[int]
+) -> Tuple[bytes, int]:
+    """One layout pass: the PDF bytes, before PDF/A, and its page count.
 
     *data*: ``election`` (display fields), ``results`` (ElectionResults
     dump), ``stats`` (ElectionStats dump), ``batches`` (paper batches with
@@ -386,7 +388,22 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
         )
     )
 
-    footer = page_footer(f"Certified Election Results · {election.get('title') or ''}")
+    footer = page_footer(
+        f"Certified Election Results · {election.get('title') or ''}", total_pages
+    )
     doc.build(story, onFirstPage=footer, onLaterPages=footer)
+    return buf.getvalue(), doc.page
+
+
+def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
+    """Render the certified results, returning a BytesIO at position 0.
+
+    See :func:`_layout` for *data* and *meta*.
+    """
+    # Laid out twice: the footer is drawn on the canvas, outside the frame, so
+    # it cannot change the layout, and the first pass's page count is the
+    # second's total.
+    _, pages = _layout(data, meta, None)
+    pdf, _ = _layout(data, meta, pages)
     # A certified result is a record kept for years: archival PDF/A-2b.
-    return BytesIO(to_pdfa(buf.getvalue()))
+    return BytesIO(to_pdfa(pdf))
