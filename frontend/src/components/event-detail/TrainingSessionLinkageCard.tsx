@@ -381,6 +381,7 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
         requirements={requirements}
         loaded={requirementsLoaded ?? true}
         retiredNames={retiredAttendanceNames}
+        canManage={canManage}
       />
     </div>
   );

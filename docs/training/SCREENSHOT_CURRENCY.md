@@ -1,5 +1,41 @@
 # Screenshot currency
 
+## Queued by the November 19 – 20 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-19--20-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 03 | My Shifts → **Hours**, new layout: cards with the two-colour split bar, year arrows, the "<year> at a glance" chart and its summary tiles | **Replace** `03-104-my-shifts-hours` (shows the always-visible table and no chart) |
+| 03 | **All shifts** list: a department shift labelled with the short name, outside shifts with a blue edge, one **Not counted** with its reason, the filter chips, **Log outside shift** | **Replace** `03-108-member-outside-shifts` (the card it shows was removed) |
+| 03 | Hours with outside hours: a card reading "N FCVFD" / "+24 with other departments", **All shifts** below | **Replace** `03-113-member-hours-with-outside` |
+| 03 | A month bar selected on the chart, its shifts highlighted in the list | Optional |
+| 01 | Profile **Shift & Call History** in the new layout, officer view without **Log outside shift** | Optional |
+| 08 | Settings → Profile with **Short Name** and its hint | Create |
+| 03 | Shift template dialog reading "Template saved, except name" with the field flagged; the **Discard changes** confirmation | Create |
+| 03 | Settings → General, Overtime advisory card with a cleared Hours limit flagged "Enter a whole number from 0 to 336." | Create |
+| 16 | Historical import: a committed step's **Undo this step**, the **Undo the training records?** confirmation with counts, the greyed-out "first undo the company drills step" line, the kept-records notice | Create |
+| 02 | Curriculum → Course Links with **Recent links**, one row reading "undone … by …", and the Undo confirmation (**Undo link** / **Keep it**) | Create |
+| 02 | Training Admin attention row "N training names can be linked to a course" with **Review links**, and the Course Links badge | Create |
+| 02 | Competency heat-map at 390px: pinned names, wrapping, scroll cue | Create. **Check** `02-67-competency-matrix`: the name column is now capped at 7rem and long names wrap |
+| 10 | My Training History tab and Expiring Certifications as cards at 390px | Create. `10-18-training-table-phone` stays valid |
+| 02 | `02-107-my-training-history-tab`, `02-01-my-training` | Check only: at 1440px these should still be tables |
+| 02, 04, 07, 12 | A picker showing a saved "Name (former member)" | Optional |
+| 05 | My Issued Gear row reading **Quartermaster notified** _date_ in place of the button | Create. `05-66-my-equipment`, `05-98-my-equipment-empty` stay valid |
+| 05 | Checklist Settings with the note under an hours box ("24 is the most allowed. 24 was saved.") | Create. `05-153-checklist-settings-phone` stays valid |
+| 06 | Apparatus edit with **These were not saved** and "Apparatus saved, except …" | Create. Check `06-29-add-apparatus-form` (layout unchanged, likely valid) |
+| 06 | A facility extended section (e.g. Insurance) with a field error and a character counter; the "Discard your changes?" dialog | Create |
+| 07 | Suggestion submit step with "Answer “…”." under a question; Step 2 with "Give your suggestion a title." | Create. **Check** `07-15-suggestion-submit-anonymous` and `07-36-compliance-details-step`; replace if Submit appears greyed out |
+| 07 | Suggestion box dialog with a flagged question ("Write the question members will be asked.") | Create. `07-14-suggestion-box-dialog` stays valid |
+| 18 | Store Settings with **Fix these before saving the settings** and a flagged tax rate | Create. `18-02-store-admin` stays valid |
+| 08 | Template editor with a flagged CC field and **Save** enabled | Optional. `08-56-template-discard` stays valid |
+| 04 | `04-68-minutes-outlines`: the Default badge is a darker green | Check (colour only) |
+| wiki | Shift history import edit dialog, "Other lines in these issues" with **Include line N** | Optional |
+
+**Made wrong by this range:** `03-104`, `03-108`, `03-113` (My Hours
+redesign). `03-111` and `03-122` (Member Hours report) stay valid.
+
 ## Queued by the November 18 – 19 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-18--19-2026).

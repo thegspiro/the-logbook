@@ -268,7 +268,7 @@ export const ShiftTemplatesPage: React.FC = () => {
             </div>
           )}
           {templates.length === 0 ? (
-            <div className="card-secondary py-12 text-center">
+            <div className="card-secondary px-4 py-12 text-center">
               <LayoutTemplate className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
               <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">No Templates Yet</h3>
               <p className="text-theme-text-muted mb-4">

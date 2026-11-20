@@ -100,6 +100,15 @@ that suggestion only.
 - **Emails carry a link, never the content.** Anonymous submitters are never
   emailed.
 - **Not gated by the Communications module switch**, which defaults off.
+- **Missing answers are named on the field** _(2026-11-20, forms batch 24)_.
+  The member's form is `noValidate`; Continue and Submit are never disabled.
+  An unanswered required question, a missing title or details is named on its
+  field. The submit endpoint answers a refused answer with a 400 string naming
+  the question's label in quotes, and the form returns to the questions step
+  with the reason on that question. The box dialog names a question with no
+  wording, a choice question with no options or an option with no label before
+  sending, and maps a 422 on `intakeQuestions.N.key` onto the Questions
+  section.
 
 **Added 2026-09-24 → 09-30:**
 
@@ -192,6 +201,12 @@ See the member/officer how-to in the
 
 ## Email Templates (2026-08-07)
 
+**Saving with a refused field** _(2026-11-20, forms batch 24)_. The editor's
+**Save** is no longer greyed out while a CC or BCC list holds a bad address.
+A refused subject, body or copy list is named on its field and left out of the
+update, so the rest saves; what was typed is put back after the draft
+re-seeds from the saved template, and the field stays flagged until fixed.
+
 ### Catalogue Categories
 
 The template catalogue had grown past three dozen entries rendered as a single
@@ -277,6 +292,12 @@ Secretary, Assistant Secretary, Treasurer, Safety Officer, Training Officer,
 Quartermaster, Compliance Officer, EMS Supply Officer — exposes
 `{{<office>_name}}`, `{{<office>_title}}`, `{{<office>_email}}` and
 `{{<office>_phone}}`.
+
+**Former members** _(2026-11-19, #4380)_: the Officers panel's office-holder
+picker, a message's **Specific members** list and the template preview's member
+picker offer current members only (active or probationary). A holder or
+recipient already saved who has since left stays listed, marked "(former
+member)".
 
 **Resolution order** for a holder: an admin override on the office → the member
 the office is linked to (so the values track that member's profile) →

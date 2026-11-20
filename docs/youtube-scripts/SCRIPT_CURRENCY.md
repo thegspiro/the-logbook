@@ -1,5 +1,27 @@
 # Script currency
 
+## 2026-11-20 pass
+
+**Edited:**
+
+- **06 Member guide, Chapter 5** — the outside-shift beat rewritten for the
+  one **All shifts** list on My Hours (#4394), with a note to re-record it
+  and the Chapter 7 profile beat.
+- **08 Short 8BN** — the opening screen is now **All shifts**; re-shoot the
+  first frame only.
+- **03 IT Manager, Chapter 7** — a new beat for **Undo this step** on the
+  Historical Data Import (#4353), about 20 seconds; re-time noted.
+- **11 Building a Pipeline** — the narration said "Drag to reorder" phases;
+  nothing in the pipeline builder drags. It now names the up and down arrows
+  on the pipeline page. This error predates the range.
+
+**Flagged, not edited:** 05, 09 and 16 could add a beat for undoing a Course
+Links link (**Recent links → Undo**, #4389); no wording in them is wrong.
+05 mentions historical-import training rows, still accurate. The 2026-11-05
+note below that a Shift History Import commit "cannot be undone" stays true
+for direct uploads; only the Historical Data Import's steps gained Undo. See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-19--20-2026).
+
 ## 2026-11-19 pass
 
 **Produced (new):** Shorts **8A–8F** were rendered for the first time by the

@@ -78,6 +78,40 @@ describe('SessionAttendanceRequirements', () => {
     expect(screen.getByText('A requirement no longer active')).toBeInTheDocument();
   });
 
+  it('says a session linked only to inactive requirements counts against no one', () => {
+    render(
+      <SessionAttendanceRequirements
+        session={session(['retired'])}
+        requirements={REQUIREMENTS}
+        retiredNames={{ retired: 'Legacy drills' }}
+      />
+    );
+
+    expect(screen.getByText('Legacy drills (no longer active)')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'That requirement is no longer active, so this session counts against no one and members cannot ask to be ' +
+        'excused from it.'
+    );
+    expect(screen.getByRole('status')).not.toHaveTextContent(/Edit training details/);
+  });
+
+  it('tells a manager how to fix an inactive link beside an active one', () => {
+    render(
+      <SessionAttendanceRequirements session={session(['active', 'retired'])} requirements={REQUIREMENTS} canManage />
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'The requirement no longer active counts this session against no one. Use Edit training details to link an ' +
+        'active requirement or untick the one no longer active.'
+    );
+  });
+
+  it('adds no notice when every link is active', () => {
+    render(<SessionAttendanceRequirements session={session(['active'])} requirements={REQUIREMENTS} canManage />);
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
   it('renders nothing where the department has no attendance requirement', () => {
     const { container } = render(
       <SessionAttendanceRequirements session={session()} requirements={[REQUIREMENTS[2] ?? requirement({})]} />

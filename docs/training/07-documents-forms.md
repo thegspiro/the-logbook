@@ -786,7 +786,11 @@ or a chosen group.
    - **Everyone** — the whole department.
    - **By role** — one or more roles, such as Probationary Members.
    - **By status** — member statuses, such as Active or Leave.
-   - **Specific members** — people you pick from a searchable list.
+   - **Specific members** — people you pick from a searchable list. The list
+     offers current members only _(2026-11-20)_. When you edit a saved message
+     whose audience already names someone who has since left, they stay
+     listed, ticked and marked **(former member)**, so you can see them and
+     untick them rather than have them dropped without notice.
 5. If you like, tick **Pin to top**, **Keep in inbox after it is read** or
    **Require acknowledgment**. Set **Expires (optional)** and **Schedule for
    later (optional)** if needed.
@@ -1035,6 +1039,14 @@ anonymous, and follow-up is allowed.
    something arrives (see [Reviewing submissions](#reviewing-submissions)).
 9. Leave **Accepting submissions** ticked, and select **Save box**.
 
+**A question that cannot be saved is named on the question** _(2026-11-20)_.
+Before anything is sent, **Save box** checks each question: one with no
+wording reads "Write the question members will be asked.", a choice question
+with no options "Add at least one option to choose from.", and an option with
+no label "Give every option a label." The top of the dialog says "Fix the
+flagged question." A question the server refuses is flagged in the
+**Questions** section in the same way, not in a line at the top of the dialog.
+
 ![The New suggestion box dialog filled in: name, description, the Questions section with Add question directly under the description, Anonymity set to Submitter chooses, Allow follow-up and Public idea board ticked, the note that managing boxes does not let you read them, two reviewer positions ticked, and the Also notify pickers below](./images/07-14-suggestion-box-dialog.png)
 
 To close a box, untick **Accepting submissions**. Its reviewers can still read
@@ -1117,6 +1129,12 @@ that before writing anything. A box with no questions keeps its single page.
    their first frame.
 5. If the box lets you choose, tick **Submit anonymously**.
 6. Select **Submit** (or **Submit anonymously**).
+
+**Submit and Continue are never greyed out** _(2026-11-20)_. If something is
+missing, the form says what, on the field: an unanswered required question
+reads "Answer “_question_”.", an empty title "Give your suggestion a title.",
+empty details "Describe your suggestion." If the server refuses an answer, the
+form goes back to the questions step with the reason under that question.
 
 Named submissions appear under **My submissions**, where you can follow the
 status and reply if the box allows follow-up. In a follow-up box, **Status

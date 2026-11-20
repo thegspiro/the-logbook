@@ -340,6 +340,20 @@ seven tiles (`today_staffing`, `future_coverage_gaps`, `open_slots`,
 `special_operations`); an unknown widget key on save is a `422`, and a
 saved station or platoon that no longer exists is dropped on read.
 
+**Member shift history** _(2026-11-20, #4394)_. `my-shift-history` and
+`members/{id}/shift-history` take `?year=` and return `MemberShiftHistoryResponse`:
+`department_shifts` (one `MemberDepartmentShift` per shift: `hours` is
+attendance plus approved pre-shift work, `credited` false until finalized, when
+`calls` is also `null`) and `external_shifts` of every status, which the screen
+interleaves by date; `external_total` exceeds the list only when a year holds
+more than one response returns. The hours-history responses gain `years` (each
+year with its twelve months and totals, sliced from the same aggregate as
+`months`, so a year heading cannot disagree with its chart) and
+`department_label`: `organizations.short_name` (new, `VARCHAR(20)`, nullable,
+migration `a541e82fef9f`) or the full name when unset. `short_name` is set on
+`PATCH` organization profile (a blank clears it) and is deliberately **not** an
+email template variable: emails name the department in full.
+
 ### Shifts with other departments — `/api/v1/scheduling/external-hours`
 
 ```

@@ -754,6 +754,11 @@ What the dialog says about approvers is the rule The Logbook applies:
   **Specific member** step takes that member; an **Email** step takes the
   member whose account email it is (or the outside approver, through the
   emailed link). A step with **None** takes any approver.
+- **A Specific member step offers current members only** _(2026-11-19)_ —
+  active or probationary, not the former members a roster import brings in.
+  A step that already names someone who has since left keeps them, marked
+  "(former member)", so editing its other fields does not swap them out;
+  choose a current member if the step should still have someone to act on it.
 - **An approvals administrator can override.** An approvals administrator (the
   Treasurer, by default) can approve or deny
   a step that is not theirs by giving an **Override reason**, which goes to the
