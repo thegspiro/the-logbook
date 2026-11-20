@@ -61,7 +61,11 @@ from app.utils.org_timezone import resolve_org_today
 
 pytestmark = [pytest.mark.integration]
 
-_NOW = datetime.now(timezone.utc)
+
+def _now() -> datetime:
+    # Read when a row is written, not at import (CLAUDE.md pitfall 40).
+    return datetime.now(timezone.utc)
+
 
 # The roster's colour for each matrix standing, written out rather than
 # imported so a wrong map in the endpoint fails here.
@@ -238,7 +242,7 @@ async def _config(
             "c": compliant,
             "a": at_risk,
             "icm": 1 if include_current_month else 0,
-            "now": _NOW,
+            "now": _now(),
         },
     )
     await db.flush()
@@ -276,7 +280,7 @@ async def _profile(
             "co": compliant_override,
             "ao": at_risk_override,
             "prio": priority,
-            "now": _NOW,
+            "now": _now(),
         },
     )
     await db.flush()
