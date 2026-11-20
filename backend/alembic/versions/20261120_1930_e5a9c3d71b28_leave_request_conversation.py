@@ -30,7 +30,7 @@ would violate it, so those earlier rounds' votes are deleted first), deletes
 any rows of the new template types, and narrows the enum.
 
 Revision ID: e5a9c3d71b28
-Revises: 24c9eca002a2
+Revises: bc58d756a179
 Create Date: 2026-11-16 12:00:00
 """
 
@@ -41,7 +41,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "e5a9c3d71b28"
-down_revision: Union[str, None] = "24c9eca002a2"
+down_revision: Union[str, None] = "bc58d756a179"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -56,7 +56,7 @@ _NEW_TEMPLATE_TYPES = (
 )
 
 # EmailTemplateType as this revision finds it (73f64017f9e2's ALL_TYPES,
-# reached through the 24c9eca002a2 merge). Written out rather than imported
+# reached through the bc58d756a179 merge). Written out rather than imported
 # so a later edit to the enum cannot rewrite this step.
 _EXISTING_TEMPLATE_TYPES = (
     "welcome",
