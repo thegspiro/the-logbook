@@ -16,7 +16,7 @@ Downgrade drops the table with any rows still pending. The files those rows
 named are then orphans nothing records: no later run can find them.
 
 Revision ID: d5946cb2bd41
-Revises: 790a86084359
+Revises: 0c22a95b94b8
 Create Date: 2026-11-20 15:13:00.000000
 
 """
@@ -28,7 +28,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d5946cb2bd41"
-down_revision: Union[str, None] = "790a86084359"
+down_revision: Union[str, None] = "0c22a95b94b8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
