@@ -363,6 +363,12 @@ Requires `events.manage` permission. Drawn with the same two-level navigation as
 
 A missing or unknown `?tab=` opens Create Event.
 
+| Route                           | Page                                 | Access          |
+| ------------------------------- | ------------------------------------ | --------------- |
+| `/events/admin/community/print` | Community Engagement summary (print) | `events.manage` |
+
+> The Community Engagement tab's **Print summary** opens this page for the period chosen on the tab (`?period=`), and it opens the print dialog once the report has loaded. Every figure comes from the same two endpoints the tab and its CSV export read.
+
 > _(2026-11-11)_ **Create Event hands a Training event to the training-event form.** Picking **Training** as the type, or a Training template, swaps the single-page form for the step-by-step one in place, carrying every value typed so far; picking another type swaps it back. `?tab=create&template=<id>` (the Events list's **Use template** link) opens with that template applied.
 
 **Legacy redirects:**

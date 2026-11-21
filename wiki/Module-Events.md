@@ -1058,7 +1058,9 @@ modal (`EventTemplateForm`), active toggle and delete confirmation.
   breakdown, a by-type breakdown in two groups (public request types and
   department event types) and recent events, against the same span of the
   previous period. `GET /dashboard/community-engagement/events?period=` returns
-  every event in the period, for the export. An outreach event's **Guest
+  every event in the period, for the export and for the printable summary at
+  `/events/admin/community/print?period=` (`events.manage`), which the tab's
+  **Print summary** opens. An outreach event's **Guest
   headcount** card (`PUT /events/{id}/guest-headcount`, `events.manage`) sets or
   clears `events.guest_headcount`. The daily `guest_headcount_reminders` task
   emails and notifies, once, the organizer and alternate (else the creator) who
