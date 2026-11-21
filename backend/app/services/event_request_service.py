@@ -378,7 +378,8 @@ def lead_time_error(
     pipeline: dict,
     date_flexibility: Optional[str],
     preferred_date_start: Optional[date],
-    today: Optional[date] = None,
+    *,
+    today: date,
     preferred_date_end: Optional[date] = None,
 ) -> Optional[str]:
     """Reject a request whose earliest requested date is inside the lead time.
@@ -394,8 +395,9 @@ def lead_time_error(
     nothing to measure against and nothing to refuse.
 
     The requested dates are calendar dates, measured against ``today`` on the
-    department's calendar (``org_today``); callers pass it. A datetime is still
-    accepted and read as its own calendar date.
+    department's calendar (``org_today``), which every caller must pass: the
+    server's date is UTC, already tomorrow for a US department each evening.
+    A datetime is still accepted and read as its own calendar date.
     """
     try:
         min_days = int(pipeline.get("min_lead_time_days") or 0)
@@ -413,8 +415,7 @@ def lead_time_error(
 
     if isinstance(requested, datetime):
         requested = requested.date()
-    reference = today or datetime.now(timezone.utc).date()
-    if requested >= reference + timedelta(days=min_days):
+    if requested >= today + timedelta(days=min_days):
         return None
 
     day_word = "day" if min_days == 1 else "days"

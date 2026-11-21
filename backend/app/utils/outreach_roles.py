@@ -15,6 +15,8 @@ with no duplicates, no blanks, and no count outside the seat limits.
 
 from typing import Any, Dict, List, Optional
 
+from app.core.utils import list_within_detail_limit
+
 # A sheet this size is a data error, not a staffing plan: the seat list that
 # backs it is capped at 50 by app/utils/positions, so a larger count here would
 # promise seats the shift cannot hold.
@@ -106,8 +108,10 @@ def settle_type_role_presets(types: Any, configured_roles: Any) -> List[Dict[str
             unknown = sorted({need["role"] for need in preset} - set(known))
             if unknown:
                 raise ValueError(
-                    f"{item.get('label') or item['value']}: unknown role(s) "
-                    + ", ".join(unknown)
+                    list_within_detail_limit(
+                        f"{item.get('label') or item['value']}: unknown role(s) ",
+                        unknown,
+                    )
                 )
             if sum(need["count"] for need in preset) > MAX_TOTAL_SEATS:
                 raise ValueError(

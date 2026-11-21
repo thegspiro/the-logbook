@@ -2408,6 +2408,7 @@ class TestALatestOnlyRangeIsStillASpecificDate:
             "specific_dates",
             None,
             preferred_date_end=datetime.now(timezone.utc) + timedelta(days=1),
+            today=datetime.now(timezone.utc).date(),
         )
 
         assert error is not None
@@ -2422,6 +2423,7 @@ class TestALatestOnlyRangeIsStillASpecificDate:
                 "specific_dates",
                 None,
                 preferred_date_end=datetime.now(timezone.utc) + timedelta(days=30),
+                today=datetime.now(timezone.utc).date(),
             )
             is None
         )
@@ -2435,6 +2437,7 @@ class TestALatestOnlyRangeIsStillASpecificDate:
             "specific_dates",
             now + timedelta(days=2),
             preferred_date_end=now + timedelta(days=60),
+            today=datetime.now(timezone.utc).date(),
         )
 
         assert error is not None

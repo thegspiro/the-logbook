@@ -1578,6 +1578,31 @@ fix changes a workflow some departments rely on, so the owner decides:
 | **A requirement cannot name one policy acknowledgment**                                 | ✅ Resolved (2026-10-07, owner decision: map provider courses to library courses) | A requirement graded only by training type (`training_compliance.py`) is still met by **any** record of that type. A particular policy is now required by mapping its Target Solutions Course ID to a library course (`external_course_mappings`) and linking a COURSES requirement to that course; imports set `TrainingRecord.course_id` from the mapping. Every version of a course maps to the same library course, so a reissued course never needs the requirement edited. **Residual, accepted:** members who complete a new version read as not current until an officer maps it. Training officers are emailed when a new course resembles a library course, and mapping it backfills the records already imported. See [16-integrations.md](./training/16-integrations.md). |
 | **Requirement grandfathering reads a missing hire date as the account's creation date** | Accepted (owner to note, 2026-10-03)                                              | A requirement's `new_member_cutoff_date` separates existing members from new ones by join date: `hire_date`, else the UTC date the account was created (`training_compliance.member_join_date`). A roster imported into The Logbook without hire dates therefore reads every imported member as having joined on the import day. If that day falls on or after a cutoff, veterans are graded as new members. Before relying on a cutoff, record hire dates for the existing roster, or choose a cutoff earlier than the import. Members already enrolled in a training program are governed separately, by the per-program `apply_to_current_enrollments` choice made when a requirement is added to it.                                                                              |
 
+## Outreach Events — What the 2026-11-20 Changes Do Not Cover Yet
+
+The owner decisions of 2026-11-20 (staff-entered requests, calendar-date
+preferences, event signup sheets, volunteer RSVPs, close-out) left these edges
+for a later decision rather than guessing at them:
+
+- **A series cancel does not stand an event's own signup sheet down.**
+  Cancelling one event, or deleting it, cancels its sheet and tells the crew;
+  `cancel_event_series` cancels each occurrence with a deferred commit, and the
+  stand-down (`cancel_shift` commits on its own) is not run on that path. Only
+  an outreach event an officer created directly can own a sheet, and a
+  recurring one is unusual, but a cancelled series leaves its sheets on the
+  schedule until someone cancels them.
+- **A seat moved by a shift swap does not update the event's RSVPs.** Volunteer
+  RSVPs follow a seat that is created, edited, declined or removed through
+  `SchedulingService`; a swap trades the seat on another path. The next seat
+  change on the sheet settles the RSVPs again, because the sync compares the
+  whole sheet each time.
+- **An event's own signup sheet has no "Email the membership" call.** A
+  request's sheet does (`send_volunteer_call`, which is written around a
+  request's details). Members find an event's sheet on Open Shifts.
+- **A volunteer RSVP skips the event's capacity and waitlist.** The volunteers
+  are the crew, not the audience, so they are given a going RSVP directly. An
+  outreach event with a `max_attendees` set counts them toward it.
+
 ## Outreach Requests — Two Deliberate Choices in the Public Pipeline (2026-09-09)
 
 Both are decisions rather than gaps, written down because each looks like an
