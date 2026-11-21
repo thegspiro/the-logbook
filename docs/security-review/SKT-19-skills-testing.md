@@ -3201,3 +3201,133 @@ hook added to `complete_test` and `validate_test` — traced safe end-to-end.
 Every standing fix from passes 1–13 re-confirmed present at its current
 citation. Route surface (29/29) and route-permission registry (305, 0
 errors) unchanged in shape. No open findings remain in this feature.
+
+---
+
+## Pass 15 (2026-11-21) — watchdog pickup, true zero delta, 0 new findings
+
+**Prefix:** `SKT15` · **PR:** see `PROGRESS.md`'s **Open PR** row.
+
+**Watchdog note.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents` → "No
+reachable agents"). `list_pull_requests` (state `open`) found zero PRs with a
+`claude/security-review-` head — PR #4494 (Feature 18, Training extended,
+pass 15) had just merged (`b07b25cab`). Row 19 (Skills testing) confirmed the
+next `⬜` row directly against a freshly fetched `main`.
+
+**Process note, not a security finding.** This file's own git history shows
+its pass-14 content (and the milestone-hook code pass 14 reviewed) landing on
+`main` in a single commit, `c0baae039` — the merge for PR #4179, "Postpone an
+event to a new time," an unrelated feature. `git log --oneline -3 --
+backend/app/api/v1/endpoints/skills_testing.py` shows no other commit has
+touched that file since. This means pass 14's own review branch never
+produced an independent merge commit visible in `main`'s history; its content
+arrived riding along on a side branch that happened to carry both. The code
+pass 14 described was verified to genuinely match current `main` byte-for-byte
+(every cited line number — `:764`, `:1610`, `:2447`, `:3098`, `:3268`, `:785`,
+`:891`, `:2830`, `:1315` — checked directly below), so there is no reason to
+doubt pass 14's findings; this is flagged only so a future reader does not
+expect to find a `claude/security-review-skills-testing-p14` PR and conclude
+one is missing.
+
+### Scope check — zero delta since pass 14
+
+```
+git diff c0baae039..origin/main -- \
+  backend/app/api/v1/endpoints/skills_testing.py \
+  backend/app/services/skills_testing_service.py \
+  backend/app/schemas/skills_testing.py \
+  backend/app/models/skills_testing.py
+```
+
+Empty output — byte-identical across all four declared scope files. No
+commit has touched any of them since `c0baae039`. No frontend file under
+`frontend/src/modules/training/` matching the skills-testing service/store
+changed either (`git diff --stat` empty for that path over the same window).
+No new migration touches a skills-testing table.
+
+### Re-verification, by direct grep/read against current code
+
+- **SKT-1** — `update_template` still routes through `apply_updates`
+  (`skills_testing.py:764`).
+- **SKT-2/SKT-3 and all four separation-of-duties sites** —
+  `assert_different_person(...)` present at `create_test` (`:1610`),
+  `validate_test` (`:2447`), `void_test` (`:3098`),
+  `return_test_for_correction` (`:3268`) — 4 call sites, unchanged.
+- **SKT-4** — `lock_attempt_capacity`'s `.with_for_update()` (`service.py:785`)
+  and the capacity count's `.with_for_update(of=SkillTest)` (`:891`) both
+  still present.
+- **SKT2-1** — zero `is_practice ==` literal comparisons (`grep -c` → 0,
+  checked across both endpoint and service files).
+- **SKT3-1** — `add_test_viewer` still rejects naming the examiner
+  ("The examiner already sees this result in full", `:2830`).
+- **SKT5-1** — `redact_test_for_view`'s `scores` branch still scrubs
+  `waive_reason` (`service.py:1315`).
+- **SKT3-2 / SKT4-1 / SKT4-2** — `SkillTemplateCreate`/`Update.sections`,
+  `SkillTemplateSectionSchema.criteria`, `SkillTestUpdate.section_results`,
+  `SectionResultSchema.criteria_results`, and `result_viewer_positions` all
+  still carry `max_length` caps (`MAX_SECTION_CRITERIA`,
+  `MAX_TEMPLATE_SECTIONS`, `MAX_RESULT_VIEWER_POSITIONS`, `MAX_CHECKLIST_ITEMS`
+  in `schemas/skills_testing.py`); `list_tests`/`export_tests_csv`/
+  `list_templates` remain paginated/bounded.
+- **SKT4-7** — read `update_test` in full
+  (`skills_testing.py:1774-1913`). The handler still computes
+  `refused = {"result", "overall_score"} & set(update_data) | ({"status"} if
+status present and != "in_progress" else set())` and 400s on any of those —
+  the comment at `:1849` names the owner decision directly. The schema
+  (`SkillTestUpdate`) still declares `status`/`result`/`overall_score` as
+  fields (so the one legal value, `status="in_progress"`, keeps working), but
+  the handler — not the schema — is what enforces the refusal, confirmed by
+  reading the body rather than trusting the schema shape alone.
+- **Pitfall #32** — `search_candidates` still uses
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` (`:1055`), not a literal
+  `== ACTIVE`.
+- **Milestone hook (pass 14's finding)** — `process_milestones_for_user` still
+  called from `complete_test` and `validate_test` under the same
+  `result == PASS and not is_practice and validated_at` guard
+  (`:2180`, `:2486`), org-scoped to `current_user.organization_id`, fails
+  closed per `program_milestones.py`'s own docstring.
+
+**Route surface.** Fresh AST walk over every `@router.get/post/put/patch/delete`
+decorator: **29/29 routes**, identical count to pass 14 and every prior pass.
+`python3 scripts/check_route_permissions.py --strict` (repo root): **329
+total application routes, 0 errors, 0 warnings** (up from pass 14's 305 from
+other features merging in the interim — confirms no new top-level page from
+this feature, Pitfall #30a n/a).
+
+### Findings
+
+**0 new findings.** No code in this feature's declared scope changed since
+the last reviewed state. Every standing fix (SKT-1 through SKT5-1, plus
+pass 14's milestone-hook finding) re-confirmed present at its current
+citation, by direct read rather than by trusting the prior write-up's line
+numbers. No open or flagged item existed entering this pass, and none is
+newly opened.
+
+### Corrections to prior write-ups
+
+None, beyond the process note above (not a correction to any finding).
+
+### Guard tests added
+
+None — no code change to guard.
+
+### Completion gate (pass 15)
+
+| Check                                                                                                   | Result                                                   |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, CI's pin, installed this pass — ambient resolved 7.5.0) | ✅ 0 violations                                          |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, CI's pin)                                       | ✅ 3367 files unchanged                                  |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, CI's pin)                                    | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                       | ✅ 803 revisions, single head `7b4e2d9c1a63`             |
+| `python3 scripts/check_route_permissions.py --strict` (root)                                            | ✅ 329 routes, 0 errors, 0 warnings                      |
+| `pytest tests/ -q -k "skill or skt"` (via `python3.13`)                                                 | ✅ 642 passed, 1 skipped (pre-existing `pywebpush` skip) |
+| `cd frontend && npm run typecheck`                                                                      | ✅ 0 errors                                              |
+| `cd frontend && npm run lint`                                                                           | ✅ 0 errors, 0 warnings                                  |
+
+**Final disposition: 0 fixed, 0 newly flagged, 0 findings closed.** True zero
+delta — no file in this feature's declared scope changed since pass 14. Every
+standing fix re-confirmed present by direct code read. Route surface (29/29)
+and route-permission registry (329, 0 errors) unchanged in shape beyond the
+expected growth from other features. No open findings remain in this
+feature.

@@ -9,6 +9,7 @@ const createQualification = vi.fn();
 const getUsers = vi.fn();
 const getExercises = vi.fn();
 const createExercise = vi.fn();
+const getComplianceForecast = vi.fn();
 
 vi.mock('../services/trainingServices', () => ({
   recertificationService: {},
@@ -22,7 +23,9 @@ vi.mock('../services/trainingServices', () => ({
     getExercises: (...args: unknown[]) => getExercises(...args) as unknown,
     createExercise: (...args: unknown[]) => createExercise(...args) as unknown,
   },
-  reportExportService: {},
+  reportExportService: {
+    getComplianceForecast: (...args: unknown[]) => getComplianceForecast(...args) as unknown,
+  },
 }));
 
 vi.mock('../services/api', () => ({
@@ -38,13 +41,20 @@ vi.mock('react-hot-toast', () => ({
 import TrainingEnhancementsTab from './TrainingEnhancementsTab';
 
 const MEMBERS = [
-  { id: 'b5b0c5d2-0000-4000-8000-000000000002', username: 'zwells', first_name: 'Zoe', last_name: 'Wells' },
+  {
+    id: 'b5b0c5d2-0000-4000-8000-000000000002',
+    username: 'zwells',
+    first_name: 'Zoe',
+    last_name: 'Wells',
+    status: 'active',
+  },
   {
     id: 'b5b0c5d2-0000-4000-8000-000000000001',
     username: 'aboone',
     first_name: 'Adam',
     last_name: 'Boone',
     membership_number: '114',
+    status: 'active',
   },
 ];
 
@@ -68,6 +78,25 @@ describe('TrainingEnhancementsTab instructor qualifications', () => {
 
   // The form asked for a raw member UUID in a text box, which nobody filling
   // it in has to hand; the backend's InstructorQualificationCreate.user_id is a UUID.
+  it('does not offer a former member', async () => {
+    getUsers.mockResolvedValue([
+      ...structuredClone(MEMBERS),
+      {
+        id: 'b5b0c5d2-0000-4000-8000-000000000003',
+        username: 'lpark',
+        first_name: 'Lee',
+        last_name: 'Park',
+        status: 'archived',
+      },
+    ]);
+    const user = userEvent.setup();
+    const dialog = await openAddModal(user);
+
+    const member = within(dialog).getByRole('combobox', { name: /Member/ });
+    await waitFor(() => expect(within(member).getByRole('option', { name: 'Zoe Wells' })).toBeInTheDocument());
+    expect(within(member).queryByRole('option', { name: /Lee Park/ })).not.toBeInTheDocument();
+  });
+
   it('picks the member from the roster and sends their id', async () => {
     const user = userEvent.setup();
     const dialog = await openAddModal(user);
@@ -218,5 +247,62 @@ describe('TrainingEnhancementsTab add dialogs name every control', () => {
 
     const unnamed = labels.filter((label) => within(dialog).queryByLabelText(label, { exact: true }) === null);
     expect(unnamed).toEqual([]);
+  });
+});
+
+describe('TrainingEnhancementsTab compliance forecast', () => {
+  beforeEach(() => {
+    getComplianceForecast.mockReset();
+    getComplianceForecast.mockResolvedValue([
+      {
+        user_id: 'u-at-risk',
+        user_name: 'Ada Risk',
+        current_compliance_percentage: 85,
+        current_standing: 'at_risk',
+        forecast_30_days: 84,
+        forecast_60_days: 83,
+        forecast_90_days: 82,
+        at_risk_requirements: [],
+        expiring_certifications: [],
+      },
+      {
+        user_id: 'u-compliant',
+        user_name: 'Cy Lowbar',
+        current_compliance_percentage: 60,
+        current_standing: 'compliant',
+        forecast_30_days: 59,
+        forecast_60_days: 58,
+        forecast_90_days: 57,
+        at_risk_requirements: [],
+        expiring_certifications: [],
+      },
+    ]);
+  });
+
+  it('colours the current figure by the standing the server classified', async () => {
+    // The department's (or the profile's) thresholds decide, not a fixed
+    // 80 / 50: 85% can be at risk under a 100% bar, 60% compliant under 50%.
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingEnhancementsTab activeTab="reports" />);
+
+    await user.click(screen.getByRole('button', { name: /Load Forecast/ }));
+
+    const atRisk = await screen.findByText('85%');
+    expect(atRisk).toHaveClass('text-orange-700');
+    expect(atRisk).not.toHaveClass('text-green-700');
+    expect(screen.getByText('60%')).toHaveClass('text-green-700');
+  });
+});
+
+describe('TrainingEnhancementsTab compliance report export', () => {
+  it('says the status columns are the current standing and what the period covers', () => {
+    // The export grades as the Compliance Matrix does, as of today; only the
+    // hours and record counts run from 1 January (owner decision 2026-11-21).
+    renderWithRouter(<TrainingEnhancementsTab activeTab="reports" />);
+
+    const card = screen.getByRole('button', { name: /Compliance Report/ });
+    expect(card).toHaveTextContent(/current standing on every requirement/);
+    expect(card).toHaveTextContent(/as the Compliance Matrix shows it/);
+    expect(card).toHaveTextContent(/training hours and records since January 1/);
   });
 });

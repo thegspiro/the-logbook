@@ -45,6 +45,7 @@ from app.models.event import (
     EventType,
     RSVPStatus,
 )
+from app.models.historical_import import ImportedRecordKind
 from app.models.notification import NotificationChannel
 from app.models.user import (
     ACTIVE_ACCOUNT_STATUSES,
@@ -52,6 +53,7 @@ from app.models.user import (
     Position,
     User,
 )
+from app.schemas.base import as_utc
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
     MANDATORY_RSVP_WINDOW_DAYS_DEFAULT,
@@ -85,7 +87,9 @@ from app.schemas.event import (
     ExternalAttendeeCheckInResponse,
     FinalizeAttendanceResponse,
     GuestCheckInLinkResponse,
+    GuestHeadcountUpdate,
     ManagerAddAttendee,
+    OutreachCloseoutUpdate,
     QRCheckInData,
     RecordActualTimes,
     RecurringEventCreate,
@@ -100,9 +104,15 @@ from app.schemas.event import (
     UserRSVPSummary,
     VisibleEventTypesResponse,
 )
+from app.schemas.event_request import (
+    EventRequestStaffingCreate,
+    EventStaffingResponse,
+)
 from app.schemas.organization import mandatory_for_tiers
 from app.schemas.training_session import TrainingSessionAttach
 from app.services import file_storage_service as file_storage
+from app.services.community_engagement_service import CommunityEngagementService
+from app.services.dashboard_widget_service import is_outreach_event
 from app.services.documents_service import DocumentsService
 from app.services.event_attendance_petition_service import (
     EventAttendancePetitionService,
@@ -124,12 +134,22 @@ from app.services.event_service import (
     attendance_lock_reason,
     resolve_attendee_visibility,
 )
+from app.services.event_staffing_service import (
+    get_event_staffing,
+    open_event_staffing,
+)
 from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
 )
 from app.services.guest_check_in_service import GuestCheckInService
+from app.services.import_provenance import (
+    imported_event_ids,
+    imported_record_ids,
+    kind_for,
+    label_for,
+)
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
 )
@@ -148,8 +168,9 @@ from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.contact_visibility import load_contact_policy
 from app.utils.model_updates import apply_updates
-from app.utils.org_scoping import assert_in_org
+from app.utils.org_scoping import assert_current_members, assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
+from app.utils.outreach_roles import settle_type_role_presets
 
 router = APIRouter()
 
@@ -553,6 +574,11 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         postponement_reason=event.postponement_reason,
         attendance_finalized_at=event.attendance_finalized_at,
         attendance_finalized_by=event.attendance_finalized_by,
+        guest_headcount=event.guest_headcount,
+        outreach_outcome_note=event.outreach_outcome_note,
+        outreach_apparatus_ids=event.outreach_apparatus_ids,
+        outreach_materials=event.outreach_materials,
+        outreach_photos=event.outreach_photos,
         created_by=event.created_by,
         organizer_id=event.organizer_id,
         alternate_organizer_id=event.alternate_organizer_id,
@@ -702,10 +728,19 @@ def _build_rsvp_response(rsvp, user=None, event=None) -> RSVPResponse:
 async def _list_items(
     db: AsyncSession, organization_id: str, rows: list[dict]
 ) -> list[EventListItem]:
+    event_ids = [str(row["event"].id) for row in rows]
     counted = await TrainingSessionService(db).events_counting_toward_attendance(
-        [str(row["event"].id) for row in rows], organization_id
+        event_ids, organization_id
     )
-    return [_to_list_item(row, str(row["event"].id) in counted) for row in rows]
+    imported = await imported_event_ids(db, organization_id, event_ids)
+    items = []
+    for row in rows:
+        item = _to_list_item(row, str(row["event"].id) in counted)
+        was_imported = str(row["event"].id) in imported
+        item.source = kind_for(was_imported)
+        item.source_label = label_for(was_imported)
+        items.append(item)
+    return items
 
 
 def _to_list_item(row: dict, counts_toward_attendance: bool = False) -> EventListItem:
@@ -1309,6 +1344,34 @@ async def update_event_settings(
                 allow_none=True,
                 label="default coordinator",
             )
+            # Only a current member can be made the default coordinator. The
+            # one already saved may stay after leaving; that is a separate
+            # decision from choosing them again.
+            await assert_current_members(
+                db,
+                [pipeline_update["default_assignee_id"]],
+                current_user.organization_id,
+                keep=[
+                    (current_events.get("request_pipeline") or {}).get(
+                        "default_assignee_id"
+                    )
+                ],
+                label="default coordinator",
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if updates_dict.get("outreach_event_types") is not None:
+        try:
+            updates_dict["outreach_event_types"] = settle_type_role_presets(
+                updates_dict["outreach_event_types"],
+                (
+                    updates_dict.get("outreach_roles")
+                    if updates_dict.get("outreach_roles") is not None
+                    else current_events.get(
+                        "outreach_roles", EVENT_SETTINGS_DEFAULTS["outreach_roles"]
+                    )
+                ),
+            )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=safe_error_detail(e))
     for key, value in updates_dict.items():
@@ -1631,6 +1694,14 @@ async def get_event(
         can_reopen_attendance=(
             user_has_permission(current_user, "events.reopen_attendance")
             or training_manager_administers(event, current_user)
+        ),
+        can_record_guest_headcount=await guest_headcount_offered(
+            db, event, current_user
+        ),
+        can_staff_event=(
+            user_has_permission(current_user, EVENT_MANAGER_PERMISSION)
+            and not event.is_cancelled
+            and await is_outreach_event(db, current_user.organization_id, event.id)
         ),
         user_attended=user_attended,
         credited_hours=credited_hours,
@@ -2453,6 +2524,15 @@ async def list_event_rsvps(
     responses = [
         _build_rsvp_response(rsvp, user=rsvp.user, event=rsvp.event) for rsvp in rsvps
     ]
+    imported = await imported_record_ids(
+        db,
+        str(current_user.organization_id),
+        ImportedRecordKind.EVENT_RSVP,
+        [str(r.id) for r in rsvps],
+    )
+    for response, rsvp in zip(responses, rsvps):
+        response.source = kind_for(str(rsvp.id) in imported)
+        response.source_label = label_for(str(rsvp.id) in imported)
     if access != ACCESS_EVENTS_MANAGER:
         # An organizer can be any member, so off the events.manage path the
         # roster's email column answers to the same contact policy as
@@ -3045,6 +3125,228 @@ async def record_actual_times(
         raise _event_error(error or "An unexpected error occurred")
 
     return _build_event_response(event)
+
+
+async def guest_headcount_offered(
+    db: AsyncSession, event: Event, current_user: User
+) -> bool:
+    """Whether the event page offers this caller a guest headcount.
+
+    The same refusals set_guest_headcount applies — events.manage, an outreach
+    event, started, not cancelled — decided here so the page offers the
+    control exactly when a save would be accepted (CLAUDE.md #29).
+    """
+    return (
+        user_has_permission(current_user, EVENT_MANAGER_PERMISSION)
+        and not event.is_cancelled
+        and as_utc(event.start_datetime) <= datetime.now(dt_timezone.utc)
+        and await is_outreach_event(db, current_user.organization_id, event.id)
+    )
+
+
+@router.put("/{event_id}/guest-headcount", response_model=EventResponse)
+async def set_guest_headcount(
+    event_id: UUID,
+    body: GuestHeadcountUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Record how many guests were counted at an outreach event, or clear it.
+
+    For an assembly or a block party nobody signs in at: the Community
+    Engagement report reads the count as the event's actual audience. Not
+    locked by finalized attendance, which governs members' credited time and
+    not a count of the public.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = CommunityEngagementService(db)
+    try:
+        event = await service.set_guest_headcount(
+            str(current_user.organization_id), str(event_id), body.guest_headcount
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+    await log_audit_event(
+        db=db,
+        event_type="event_guest_headcount_recorded",
+        event_category="events",
+        severity="info",
+        event_data={"event_id": str(event_id), "guest_headcount": body.guest_headcount},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+    # The commit expired the row, and the builder is synchronous: read it back
+    # with what it touches loaded, or it lazy-loads outside the event loop.
+    event = await service.load_event(str(current_user.organization_id), str(event_id))
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+    return _build_event_response(
+        event,
+        can_record_guest_headcount=True,
+        can_edit_event=True,
+    )
+
+
+@router.put("/{event_id}/outreach-closeout", response_model=EventResponse)
+async def set_outreach_closeout(
+    event_id: UUID,
+    body: OutreachCloseoutUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Record what happened at an outreach event: how it went, which apparatus
+    attended, what was handed out and whether photos were taken with consent.
+
+    Owner decision, 2026-11-20. Replaces what was recorded. Refused for an
+    event that is not outreach, a cancelled one, or one that has not started.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = CommunityEngagementService(db)
+    try:
+        event = await service.set_outreach_closeout(
+            str(current_user.organization_id),
+            str(event_id),
+            body.outcome_note,
+            body.apparatus_ids,
+            [m.model_dump() for m in body.materials],
+            body.photos,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+    await log_audit_event(
+        db=db,
+        event_type="event_outreach_closeout_recorded",
+        event_category="events",
+        severity="info",
+        # Ids and counts only: the outcome note is free text.
+        event_data={
+            "event_id": str(event_id),
+            "apparatus": len(event.outreach_apparatus_ids or []),
+            "materials": len(event.outreach_materials or []),
+            "photos": event.outreach_photos,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+    event = await service.load_event(str(current_user.organization_id), str(event_id))
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+    return _build_event_response(
+        event,
+        can_record_guest_headcount=True,
+        can_edit_event=True,
+    )
+
+
+async def _staffed_event(db: AsyncSession, current_user: User, event_id: UUID):
+    """The event and its organization, org-scoped (pitfall #14a), or a 404."""
+    event = await db.scalar(
+        select(Event).where(
+            Event.id == str(event_id),
+            Event.organization_id == str(current_user.organization_id),
+        )
+    )
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+    org = await db.scalar(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    return event, org
+
+
+@router.get("/{event_id}/staffing", response_model=EventStaffingResponse)
+async def get_event_staffing_sheet(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    The volunteer signup sheet that staffs this event, and who has signed up.
+
+    The sheet is the request's when the event was scheduled from a public
+    request (``request_id`` names it), otherwise the event's own.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    event, org = await _staffed_event(db, current_user, event_id)
+    return await get_event_staffing(db, event, org)
+
+
+@router.post(
+    "/{event_id}/staffing",
+    response_model=EventStaffingResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def open_event_staffing_sheet(
+    event_id: UUID,
+    data: EventRequestStaffingCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Open a volunteer signup sheet on an outreach event created directly.
+
+    Owner decision, 2026-11-20: the same role-based sheet a request opens, for
+    an outreach event with no request behind it. Members claim a role from
+    Scheduling → Open Shifts. Refused for an event that came from a request
+    (its sheet is opened from the request), a cancelled event, an event that is
+    not an outreach event, and an event that already has one.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    event, org = await _staffed_event(db, current_user, event_id)
+    error = await open_event_staffing(
+        db,
+        event,
+        org,
+        [role.model_dump() for role in data.roles],
+        str(current_user.id),
+        notes=data.notes,
+    )
+    if error:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    roles = event.staffing_roles
+    await log_audit_event(
+        db=db,
+        event_type="event_staffing_opened",
+        event_category="events",
+        severity="info",
+        event_data={"event_id": str(event_id), "staffing_roles": roles},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+    event, org = await _staffed_event(db, current_user, event_id)
+    return await get_event_staffing(db, event, org)
 
 
 @router.post(

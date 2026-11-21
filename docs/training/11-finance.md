@@ -106,6 +106,20 @@ The **Finance** menu shows what you can use:
 **Reports**, **Dues** and **QuickBooks Export** open from the dashboard's
 **Quick Links**.
 
+> **When a setting cannot be saved** _(2026-11-16)_. The cards on **Finance >
+> Settings**, the fiscal-year and category dialogs, the approval step dialog,
+> **Who can charge**, the dues and advance exports, and the QuickBooks **Post
+> payments made on or after** date name a missing or refused value under its
+> own box. Any other reason is said inside the card or dialog, where it stays,
+> rather than in a message that disappears. A rule that is one decision (the
+> second approver for large requests, the receipt rule, who can charge a
+> category) saves all of it or none of it, so a half-changed rule is never in
+> force. Editing a category is the exception: its other settings save, the
+> refused box keeps its stored value, and the dialog says _"Saved, except the
+> field flagged below"_. Its charge rule and position list still save or fail
+> together. Nothing changes about the amounts, statuses or permissions that are
+> sent.
+
 ---
 
 ## Finance Dashboard
@@ -151,10 +165,15 @@ A fiscal year defines the accounting period for your department. All budgets, pu
 1. Open **Finance > Settings**.
 2. Select **New Fiscal Year**.
 3. Enter a **name** (for example, "FY 2026-2027").
-4. Set the **start date** and **end date**.
+4. Set the **Start Date** and **End Date**.
 5. Select **Create**.
 
 The new fiscal year is created in **Draft** status.
+
+_(2026-11-16)_ A missing name or date is named under its box before anything
+is sent, and so is an **End Date** before the **Start Date** ("The end date
+cannot be before the start date."). That order used to be accepted and stored
+as typed.
 
 ![Fiscal year settings listing fiscal years with status badges](./images/11-02-fiscal-year-settings.png)
 
@@ -233,8 +252,8 @@ If your position owns a budget line (see [Budget Owners](#budget-owners)), you p
 
 1. Open **Finance > Next year's budget**. The entry appears once your position owns a line in next year's draft budget, or you have made a request.
 2. The banner says _"Requests close {date}"_ (or _"No deadline set"_). After the deadline it reads _"Requests are closed"_ and everything on the page is read-only.
-3. Each of your lines shows this year's **Budgeted** and **Spent** for comparison. Select **Request an amount**, enter the **Amount requested** and a **Justification**, and select **Save draft**.
-4. Check the draft, then select **Submit**. The Treasurer is emailed. Until the deadline you can still **Edit** a submitted request, or **Withdraw** it back to a draft (you are asked to confirm). A draft can be deleted with **Delete draft**.
+3. Each of your lines shows this year's **Budgeted** and **Spent** for comparison. Select **Request an amount**, enter the **Amount requested** and a **Justification**, and select **Save draft**. A draft can be saved with either left blank and finished later _(2026-11-11)_; its card then shows **Requested** as _Not entered yet_.
+4. Check the draft, then select **Submit**. Submitting needs both the amount and the justification: if either is blank, the draft opens instead with the missing field flagged (_"Enter the amount you are requesting before you submit."_ or _"Say what the money is for before you submit."_), and nothing is sent. The Treasurer is emailed. Editing a submitted request cannot clear either field. Until the deadline you can still **Edit** a submitted request, or **Withdraw** it back to a draft (you are asked to confirm). A draft can be deleted with **Delete draft**.
 5. When the Treasurer decides, you are emailed and the card shows **Approved**, **Adjusted** (with the approved amount and the Treasurer's note) or **Declined** (with the note). A decided request can no longer be changed; after a decline you may **Request again** while requests are open.
 
 **Proposing a new line.** If a line your position needs does not exist yet, select **Propose a new line**, choose the **Category**, optionally a **Station**, and **For your position** (only positions you hold are listed), then the amount and justification. Submit it the same way. If it is approved, the line is created and your position owns it.
@@ -247,7 +266,7 @@ As a finance manager, open **Finance > Budget requests** (or **Review requests**
 
 1. Pick the draft **Fiscal year** if there is more than one. The page shows the deadline and whether owners can still change requests.
 2. The **Status** filter starts on **Submitted** — the requests waiting for you — and each option shows its count. Choose **All** to see everything.
-3. Each row shows the line, the owner position, who submitted it and when, this year's budgeted and spent, the amount requested, the amount approved and the status. The **Total** row adds up the requested, this-year-budgeted and approved amounts of the rows shown.
+3. Each row shows the line, the owner position, who submitted it and when, this year's budgeted and spent, the amount requested, the amount approved and the status. A draft with no amount yet reads _Not entered yet_. The **Total** row adds up the requested, this-year-budgeted and approved amounts of the rows shown, counting only amounts that have been entered.
 4. Select **Review** on a row to read the justification, then choose:
    - **Approve as requested** — the requested amount becomes the line's budget.
    - **Approve a different amount** — enter the **Amount approved** and a note saying why (required).
@@ -677,7 +696,7 @@ check requests). Notes:
 
 ### Chain Resolution (Specificity)
 
-When multiple chains could apply to a request, the system selects the most specific match using a point-based scoring system:
+Only chains whose **Applies To** is the request's own type are considered. A purchase request chain is never used for an expense report or a check request _(2026-10-18)_; with no chain for that type, the request is decided by hand. When multiple chains could apply to a request, the system selects the most specific match using a point-based scoring system:
 
 | Criterion              | Points | Description                                                                                                                                                                         |
 | ---------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -754,6 +773,11 @@ What the dialog says about approvers is the rule The Logbook applies:
   **Specific member** step takes that member; an **Email** step takes the
   member whose account email it is (or the outside approver, through the
   emailed link). A step with **None** takes any approver.
+- **A Specific member step offers current members only** _(2026-11-19)_ —
+  active or probationary, not the former members a roster import brings in.
+  A step that already names someone who has since left keeps them, marked
+  "(former member)", so editing its other fields does not swap them out;
+  choose a current member if the step should still have someone to act on it.
 - **An approvals administrator can override.** An approvals administrator (the
   Treasurer, by default) can approve or deny
   a step that is not theirs by giving an **Override reason**, which goes to the
@@ -896,8 +920,9 @@ showing **Request**, **Type**, **Requested by**, **Amount**, **Step**,
 The page reads _"Requests waiting on you."_ and lists only the steps **you are
 the named approver for**. A **Waiting on** column says who each step is assigned
 to. If you are an approvals administrator you also see the steps assigned to other people,
-marked **Not assigned to you**, with **Approve as approvals admin** and **Deny
-as approvals admin** buttons: those open a dialog that names who the step is
+marked **Not assigned to you**, with **Approve as admin** and **Deny as admin**
+buttons: those open **Approve as approvals admin** or **Deny as approvals
+admin**, a dialog that names who the step is
 assigned to and requires an **Override reason** (up to 2,000 characters,
 _"Recorded in the audit log."_) as well as the usual notes. When nothing is
 waiting on you the page says _"Nothing is waiting on you."_ The dashboard's
@@ -908,6 +933,10 @@ waiting on you the page says _"Nothing is waiting on you."_ The dashboard's
   moves to the next one.
 - **Deny** opens **Deny request** and requires a **Reason**. Denying ends the
   request — no later steps run — and the reason is saved on the request.
+- Once you have typed in either dialog, Escape, the X and **Cancel** ask
+  **Keep editing** or **Discard changes** first _(2026-11-11)_. If the server
+  refuses the notes or reason, its message is shown under the box and the
+  dialog stays open.
 
 If you raised the request yourself, the approval is refused with the
 separation-of-duties message (see [Separation of Duties](#separation-of-duties)).
@@ -2203,15 +2232,15 @@ The Treasurer regularly:
 | "I submitted a request but no one received the approval notification" | Only **Email** approver steps send anything. Position, Permission and Specific member steps notify nobody — the request appears on **Finance > Approvals** for the approvers the step names. If the department expects an email, use an Email step, and check that email sending is set up.                                                                     |
 | "Insufficient available budget"                                       | The approval, payment or check would take the budget's spent plus encumbered past its amount budgeted, and the cap has no override. Raise the budget amount, or cancel or deny other requests against it.                                                                                                                                                       |
 | "Cannot edit my purchase request"                                     | Purchase requests can only be edited in **Draft** or **Submitted** status. Once in Pending Approval or later, they cannot be modified. Cancel and re-create if changes are needed.                                                                                                                                                                              |
-| "Dues show as Overdue immediately"                                    | Check the schedule's **due date**. There is no grace period: dues still unpaid the day after the due date turn Overdue. If the due date had passed when you generated them, edit the schedule's due date before generating.                                                                                                                                     |
+| "Dues show as Overdue immediately"                                    | Check the schedule's **due date**. Dues with nothing paid turn Overdue the day after the due date; the **Grace period (days)** only delays the late fee. If the due date had passed when you generated them, edit the schedule's due date before generating.                                                                                                    |
 | "QuickBooks export is missing some transactions"                      | The export only includes Purchase Requests with Paid status, Check Requests with Issued status, and Expense Reports with Paid status within the selected date range. Verify the transactions have reached the correct terminal status. Also check that account mappings are configured for all categories.                                                      |
-| "Approval chain not matching the expected chain"                      | The most specific match wins -- see [Chain Resolution](#chain-resolution-specificity) for the scoring rules. There is no preview on the page; submit a test request and read its approval timeline.                                                                                                                                                             |
+| "Approval chain not matching the expected chain"                      | The most specific match wins -- see [Chain Resolution](#chain-resolution-specificity) for the scoring rules. Start a request with that amount and budget line and read **Who will approve this** on its form; nothing is sent until it is submitted.                                                                                                            |
 | "Cannot void an issued check"                                         | Voiding is only permitted for checks with **Issued** status. If the check has already been voided, it cannot be voided again.                                                                                                                                                                                                                                   |
 | "Member dues not generated for a new member"                          | The **Generate Dues** action only creates records for members who do not already have a record for that schedule. If a member joined after the initial generation, run Generate Dues again -- it will create a record only for that member.                                                                                                                     |
-| "Deleting a category removed its budgets"                             | That is what deleting does: a category's budgets in every fiscal year are deleted with it, and requests charged to them lose their budget. It cannot be undone. To retire a category and keep its history, leave it in place and stop adding lines to it.                                                                                                       |
+| "Deleting a category removed its budgets"                             | It no longer does. A category that budget lines, budget requests or approval chains use is deactivated instead, and keeps its lines and history. Only a category nothing uses is deleted. See [Retiring a Category](#retiring-a-category).                                                                                                                      |
 | "Should I delete an old approval chain?"                              | Turn it off instead: **Edit chain**, untick **Active**. A chain any request has been routed through cannot be deleted, because that would erase those requests' approval history.                                                                                                                                                                               |
 | "Encumbered amount not released after denial"                         | This is expected behavior. Denial happens during the approval flow, before the request reaches Approved status, so no encumbrance was ever created. The budget was never affected.                                                                                                                                                                              |
-| "Late fee not applied"                                                | The Logbook does not charge late fees. If your department charges one, record it outside The Logbook.                                                                                                                                                                                                                                                           |
+| "Late fee not applied"                                                | Check the schedule has a **Late fee** and that its **Grace period (days)** has ended. A daily check adds it, once. A schedule set up before 2026-11-06 adds none until it is saved, and then only for lateness after the save.                                                                                                                                  |
 | "I need to change the amount on an approved purchase request"         | The estimated amount cannot be changed after the request leaves Draft/Submitted status. However, when marking the request as **Paid**, you can enter the **actual amount**, which is what gets recorded against the budget. The difference between estimated (encumbered) and actual (spent) is reconciled automatically.                                       |
 | "External email approver link expired"                                | Emailed approval links are valid for 7 days. If the link has expired, the request must be handled through the system by an internal approver, or the approval chain can be modified to add a new step.                                                                                                                                                          |
 | "Payment recorded but status still shows Partial"                     | Payments add up. The status changes to Paid only when the total paid reaches the amount due. Record another payment for the remaining balance to reach the full amount.                                                                                                                                                                                         |
@@ -2238,10 +2267,10 @@ work differently from what they may say.
 - **Expense reports need a receipt on every line.** Older reports show _"No
   receipt"_ on their lines. Reports submitted before late-claim checks existed
   were never checked against the deadline.
-- **Dues have no grace period or late fee.** Older notes may describe both.
-  Neither is applied.
-- **Categories cannot be switched off.** Older notes may say to deactivate a
-  category; there is no such control.
+- **Dues have a grace period and a late fee** _(2026-11-06)_. Older notes may
+  say neither is applied.
+- **Deleting a used category deactivates it.** Older notes may say deleting a
+  category deletes its budgets, or that a category cannot be switched off.
 - **Older QuickBooks exports may differ for evening payments.** Exports once
   used the server's date rather than the department's.
 - **At one time nobody could approve anything**, because no position held

@@ -137,7 +137,16 @@ class SelfReportAttachmentRetention:
                         .where(
                             TrainingSubmission.organization_id == org_id,
                             TrainingSubmission.status.in_(DECIDED_STATUSES),
-                            TrainingSubmission.reviewed_at < cutoff,
+                            # An auto-approved submission is decided as it
+                            # is submitted and never reviewed, so its
+                            # reviewed_at stays NULL; NULL < cutoff matches
+                            # nothing and its certificate would be kept for
+                            # ever. Its submission time is its decision time.
+                            func.coalesce(
+                                TrainingSubmission.reviewed_at,
+                                TrainingSubmission.submitted_at,
+                            )
+                            < cutoff,
                             func.json_length(TrainingSubmission.attachments) > 0,
                             TrainingSubmission.id > after_id,
                         )
@@ -205,11 +214,18 @@ class SelfReportAttachmentRetention:
         rows = (
             (
                 await self.db.execute(
-                    select(TrainingRecord).where(
+                    select(TrainingRecord)
+                    .where(
                         TrainingRecord.organization_id == submission.organization_id,
                         TrainingRecord.user_id == submission.submitted_by,
                         func.json_length(TrainingRecord.attachments) > 0,
                     )
+                    # The list below is written back whole, so an officer's
+                    # upload committed between this read and that write would
+                    # vanish and its file be orphaned. Submissions first, then
+                    # records: the order every member-file path takes.
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
                 )
             )
             .scalars()

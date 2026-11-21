@@ -283,6 +283,8 @@ export interface AdminHoursReportEntry {
   hours: number;
   entry_method: string;
   status: string;
+  /** "Imported" or "The Logbook", decided by the server. */
+  source: string;
 }
 
 export interface AdminHoursReportSummary {
@@ -347,6 +349,8 @@ export interface CertExpirationEntry {
   expiration_date?: string;
   days_until_expiry?: number;
   expiry_status: 'expired' | 'expiring_soon' | 'valid' | 'no_expiry';
+  /** The provider, "Imported" or "The Logbook", decided by the server. */
+  source: string;
 }
 
 export interface CertExpirationReport {

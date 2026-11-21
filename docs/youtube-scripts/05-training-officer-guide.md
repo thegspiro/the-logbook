@@ -190,6 +190,15 @@ back on All.]**
 > a month that's only partly covered by leave is treated is a department setting
 > called **Months on leave**. Part 2 shows where."
 
+**[PRODUCTION NOTE — 2026-11-21. Footage check, no narration change required.
+Since 2026-11-20 an hours requirement in a member's detail leads with the
+monthly average against the monthly pace — "2/2 hrs/mo avg" — and the total
+moves to the line beneath ("6 of 24 hours total"); the colour still follows
+the total. Any take showing an hours cell with only "6 of 24 hours" is dated.
+Optional one-line add after "the number behind it": _"For hours you also get
+their monthly average against the pace you need, so you can see who's falling
+behind before the year runs out."_]**
+
 **[PRODUCTION NOTE — 2026-11-05. Two new beats, about 35 seconds; re-time
 Chapter 2. The member-class switch (2026-10-27) and the class-split printout
 need a department with more than one member class. Leave beside the hours is
@@ -324,9 +333,11 @@ form shows "Sessions to Attend (%)" and no hours box.]**
 > as a percentage."
 
 > "A drill counts toward it only if it's linked, so when you create a training
-> session, tick the requirement under **Connect to Requirements & Programs**.
-> You can change the links later from the event page, even after attendance is
-> finalized. Members see a **Counts toward attendance** badge beside
+> session, tick the requirement under **Counts toward attendance** on the
+> **Training Info** step. Ticking it also suggests who the session is
+> mandatory for, on the next step — check that suggestion. You can change the
+> links later with **Edit training details** on the event page, even after
+> attendance is finalized. Members see a **Counts toward attendance** badge beside
 > **Mandatory** on the event."
 
 **[CALLOUT: "Session Attendance = turn up, not hours logged"]**
@@ -449,11 +460,11 @@ record to open the Attachments panel]**
 
 ### FINALIZING A TRAINING SESSION (9:00 – 9:30)
 
-**[SCREEN: Show the Create Training Session form, Step 3, highlighting the
-"Require instructor confirmation" checkbox]**
+**[SCREEN: Show the training-event form's **Training Info** step (step 2),
+highlighting the **Require sign-off** checkbox under _Training completion_]**
 
-> "When you create a training session, Step 3 has a **Require instructor
-> confirmation** box. This controls what happens when the class is over and
+> "When you create a training session, the second step, **Training Info**, has a
+> **Require sign-off** box under _Training completion_. This controls what happens when the class is over and
 > someone presses **Finalize Attendance** on the event page. Leave it unchecked
 > — the default — and finalizing completes every checked-in attendee's training
 > record, with the minutes they were actually there. Check it, and those
@@ -472,7 +483,12 @@ no record for most events, and the emailed link opened nothing. A Training
 event can be finalized only after it ends. Approving needs `training.manage`,
 not `events.manage`. New footage needed; re-time Chapter 4.]**
 
-**[SCREENSHOT NEEDED]:** _The Create Training Session form Step 3 with the "Require instructor confirmation" checkbox and its 'records marked pending until instructor confirms' helper text._
+**[PRODUCTION NOTE — 2026-11-16. The box was renamed from "Require instructor
+confirmation" and moved from step 3 to step 2 when Create Session became the
+training-event form (#4347). The training card on the event page is now the
+read-only **Training details** card; **Review and approve** is still on it.]**
+
+**[SCREENSHOT NEEDED]:** _The training-event form's Training Info step, Training completion fieldset, with the **Require sign-off** checkbox and its helper text (guide image `02-91-session-confirmation-toggle`, queued for replacement)._
 
 > "Use the default for routine drills you want closed out the moment you
 > finalize. Turn it on only when a second officer must sign off."
@@ -496,13 +512,19 @@ not `events.manage`. New footage needed; re-time Chapter 4.]**
 > "One click and everyone's records are updated. This is the fastest way to
 > process training after a class."
 
-**[SCREEN: Training Admin → Settings & Data → Import Past Training, the preview
+**[SCREEN: Training Admin → Settings & Data → Import History, the preview
 step.]**
 
-> "Moving over from another system? **Import Past Training**, under Settings and
+> "Moving over from another system? **Import History**, under Settings and
 > Data, brings in years of records from a CSV. Match members by membership
 > number, check the preview, confirm. Every row needs a completion date. A row
 > without one is listed under Errors and isn't imported."
+
+**[EDITOR — 2026-11-17. Re-record the first line: the tab reads **Import
+History** since 2026-11-08 (it was "Import Past Training"). Records it imports
+since 2026-11-15 show the source "Imported". A name that matches no course can
+be linked later under Curriculum → **Course Links** — a candidate one-line add
+here, about 8 seconds.]**
 
 **[PRODUCTION NOTE — 2026-11-05. New beat, about 20 seconds; re-time Chapter 4.
 The department's historical data import also turns training rows into completed
@@ -567,7 +589,13 @@ approval or rejection; empty means keep forever). A daily job then deletes the
 uploaded files from the submission and from the member's training record — the
 record itself stays. Nothing is deleted on upgrade; a department has to set a
 number. Updated 2026-10-06; the earlier take said retention was not a setting
-in the product.]**
+in the product. **Corrected 2026-11-21:** uploads are also malware-scanned
+when ClamAV is on, which it is by default, so do not say "not scanned". A
+submission approved automatically (no approval required, or under the
+auto-approve hours) counts from the day it was submitted. A certificate a
+voided record still names — after **Reverse Approval** — is kept when the
+member removes it from the submission, and the retention period no longer
+reaches it.]**
 
 **[CALLOUT: "Member submissions require Training Officer approval"]**
 

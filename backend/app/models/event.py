@@ -39,6 +39,10 @@ class EventType(str, Enum):
     RECRUITMENT = "recruitment"
 
 
+#: Whether photos were taken at an outreach event, and with the host's consent.
+OUTREACH_PHOTO_CHOICES = ("none", "consented", "not_consented")
+
+
 class RSVPStatus(str, Enum):
     """RSVP status enumeration"""
 
@@ -106,6 +110,7 @@ EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS = (
     "validation_notification_sent",
     "series_end_reminder_sent",
     "attendance_finalized",
+    "guest_headcount_reminder_sent",
 )
 
 
@@ -174,6 +179,37 @@ class Event(Base):
     actual_end_time: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )  # Recorded by secretary when event actually ends
+    # Guests a coordinator counted at an outreach event nobody signed in at —
+    # an assembly, a block party. Community Engagement reads it as the event's
+    # actual audience in place of guest sign-ins; NULL means nobody counted.
+    guest_headcount: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # A volunteer signup sheet opened on this event directly (owner decision,
+    # 2026-11-20), for an outreach event with no public request behind it. An
+    # event a request was scheduled onto keeps its sheet on the request
+    # (event_requests.staffing_shift_id) and never sets these. The shift is a
+    # plain `volunteer` seat per person; staffing_roles says which seat is which
+    # job, in app/utils/outreach_roles' canonical shape (pitfall #20).
+    staffing_shift_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True
+    )
+    staffing_roles: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
+
+    # What happened at an outreach event, recorded when it closes (owner
+    # decision, 2026-11-20). Written only by CommunityEngagementService.
+    # set_outreach_closeout, which settles each to one shape (pitfall #20):
+    # apparatus ids checked in-org, materials as [{"item": str, "quantity":
+    # int}] with one entry per item, photos one of OUTREACH_PHOTO_CHOICES.
+    outreach_outcome_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    outreach_apparatus_ids: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )
+    outreach_materials: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
+    outreach_photos: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     # RSVP settings
     requires_rsvp: Mapped[bool] = mapped_column(
@@ -614,6 +650,17 @@ class EventTemplate(Base):
 
     # Custom fields template (structure for custom data fields)
     custom_fields_template: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+
+    # The training details a Training template fills in when it is picked
+    # (owner decision 2026-11-20). Training templates only, and one canonical
+    # shape settled at the write by EventTemplateTrainingDetails (pitfall #20);
+    # NULL means none were saved, and the form opens on its defaults. The
+    # course and instructor ids inside carry no foreign key, so either can
+    # disappear; applying the template falls back to no course or no
+    # instructor, with a note.
+    training_details: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSON, nullable=True
     )
 

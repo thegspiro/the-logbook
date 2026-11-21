@@ -6,13 +6,13 @@ and self-report configuration.
 """
 
 from datetime import date, datetime, time
-from typing import Optional
+from typing import NoReturn, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.training import TrainingType as ModelTrainingType
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCResponseBase, refuse_attachment_writes
 from app.schemas.column_bounds import FLOAT32_MAX
 from app.schemas.enum_validation import validate_enum_value
 
@@ -86,6 +86,11 @@ class SelfReportConfigUpdate(BaseModel):
 
 # ==================== Training Submission Schemas ====================
 
+SUBMISSION_UPLOAD_ROUTES = (
+    "POST /training/submissions/with-attachment or "
+    "POST /training/submissions/{id}/attachments"
+)
+
 
 class TrainingSubmissionCreate(BaseModel):
     """Schema for submitting self-reported training"""
@@ -116,7 +121,14 @@ class TrainingSubmissionCreate(BaseModel):
     expiration_date: Optional[date] = None
 
     category_id: Optional[UUID] = None
+    # Declared only so a body that sends it is refused at body.attachments:
+    # files are added through the upload routes, which write the stored shape.
     attachments: Optional[list[str]] = None
+
+    @field_validator("attachments", mode="before")
+    @classmethod
+    def _refuse_attachments(cls, value: object) -> NoReturn:
+        refuse_attachment_writes(SUBMISSION_UPLOAD_ROUTES)
 
     # A draft is parked in the member's own list and never reaches the review
     # queue until POST /{id}/submit promotes it.
@@ -167,7 +179,14 @@ class TrainingSubmissionUpdate(BaseModel):
     expiration_date: Optional[date] = None
 
     category_id: Optional[UUID] = None
+    # Declared only so a body that sends it is refused at body.attachments:
+    # files are added through the upload routes, which write the stored shape.
     attachments: Optional[list[str]] = None
+
+    @field_validator("attachments", mode="before")
+    @classmethod
+    def _refuse_attachments(cls, value: object) -> NoReturn:
+        refuse_attachment_writes(SUBMISSION_UPLOAD_ROUTES)
 
     @field_validator("training_type")
     @classmethod
@@ -183,6 +202,9 @@ class SubmissionAttachment(BaseModel):
     """
 
     index: int
+    # The entry's stable id; None only on an entry written before ids existed
+    # and not yet reached by the backfill. Routes take it in place of index.
+    id: Optional[str] = None
     file_name: Optional[str] = None
     file_type: Optional[str] = None
     file_size: Optional[int] = None
@@ -201,6 +223,7 @@ def sanitize_attachments(attachments: Optional[list]) -> list[dict]:
             result.append(
                 {
                     "index": i,
+                    "id": a.get("id"),
                     "file_name": a.get("file_name"),
                     "file_type": a.get("file_type"),
                     "file_size": a.get("file_size"),
@@ -208,7 +231,7 @@ def sanitize_attachments(attachments: Optional[list]) -> list[dict]:
                 }
             )
         else:
-            result.append({"index": i, "file_name": str(a)})
+            result.append({"index": i, "id": None, "file_name": str(a)})
     return result
 
 

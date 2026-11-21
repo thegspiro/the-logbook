@@ -61,13 +61,17 @@ Profiles** (`/training/compliance-config?tab=profiles`, needs `settings.manage`
 or `compliance.manage`).
 
 - Profiles are tried **highest Priority first**; the first one that matches
-  the member is used and the rest are ignored.
+  the member is used and the rest are ignored. At equal Priority the older
+  profile is tried first.
 - A profile matches on **Applies to Membership Types**. A profile with no
   membership types selected **matches every member**.
 - **Required Training Requirements** replaces the department's list for those
   members. If you save a profile with **none** ticked, the members it matches
   are graded against nothing and read **N/A**.
-- **Optional/Tracked Requirements** are not graded.
+- **Optional Requirements** are listed on the member's My Training page and
+  the officer's view of the member, marked Optional, and are not graded. A
+  requirement ticked as both is required. A profile created through the API
+  with no required list grades every requirement except its optional ones.
 - **Compliant / At-Risk Threshold Override** replace the department thresholds
   for those members.
 - A member no profile matches is graded against every active requirement, at
@@ -165,9 +169,24 @@ its course name and certificate number with case, spacing and punctuation
 removed (`match_key`, `certification_key`), and the requirement's name or code
 is reduced the same way. "c.p.r." matches "CPR"; "CPR Refresher" does not.
 
-**Every-2-years hours and courses** have one more rule: if the newest matching
-record that carries an expiry date has expired, the requirement reads
-**expired** whatever the hours.
+**Every-2-years hours and courses** have one more rule: if, among the records
+the requirement counts in its window, the one with the latest expiry date has
+expired, the requirement reads **expired** whatever the hours or courses. A
+lapsed certificate on a record outside the window does not count. Since
+2026-11-21 My Training and the requirement-progress check apply this exact
+rule (`lapsed_biannual_certificate`); before, My Training read every record
+of the training type for hours and had no check for courses, so it could
+disagree with the matrix in either direction.
+
+**What an hours requirement shows** _(2026-11-20)_. My Training and the
+matrix detail lead with the member's monthly average against the monthly
+pace ("6.9/6 hrs/mo avg") and put the total underneath. The average is the
+hours in months nothing excused divided by those months; the pace is the
+unadjusted target over the window's months. It is display only: the table
+above, on the total, decides whether the requirement is met.
+
+**Optional requirements** on a member's profile are not in this table at all:
+they are listed, never graded _(2026-11-21)_.
 
 Each requirement ends up in one status:
 
@@ -262,34 +281,31 @@ Compliant. N/A members are in neither side of it, and if nobody is graded it is
 blank. A department with no active requirements shows **Not set up**, not 100%.
 
 This one standing is shared by the Compliance Matrix, the dashboard
-percentage, the Department Compliance card, the monthly status roster and the
-compliance reports.
+percentage, the Department Compliance card, the member profile's Compliance
+Summary card, the monthly status roster and the compliance reports.
 
-### The member profile's Compliance Summary is a different rule
+### The member profile's Compliance Summary shows the same standing
 
-The **Compliance Summary** card on a member's profile uses its own fixed rule,
-not the thresholds or profiles above:
+Since 2026-11-20 the **Compliance Summary** card on a member's profile (and on
+My Crew and the printed training record) shows the member's matrix standing:
+**Compliant** green, **At Risk** yellow, **Non-Compliant** red, plus
+**Not Applicable** and **Exempt**. It uses the member's profile and the
+thresholds above, so it cannot disagree with the matrix.
 
-| Indicator               | When                                                                                                     |
-| ----------------------- | -------------------------------------------------------------------------------------------------------- |
-| **Non-Compliant** (red) | Any certificate on their records has passed its expiry date, or fewer than half the requirements are met |
-| **At Risk** (yellow)    | Any certificate expires within 90 days, or any requirement is unmet                                      |
-| **Not Applicable**      | No requirement applies and no certificate is lapsing                                                     |
-| **Compliant** (green)   | Otherwise                                                                                                |
-
-It counts every requirement that applies to the member (ignoring profiles), and
-its certificate counts look at every completed record with a certificate
-number — including an older record that a renewal has since replaced. So a
-member can read **At Risk** on their profile and **Non-Compliant** on the
-matrix (2 of 4 above), or red on the profile because of a superseded
-certificate. When the two disagree, the **Compliance Matrix** is the
-department's standing.
+Its certificate figures are for information only. They count every completed
+record with a certificate number — including an older record a renewal has
+since replaced — and do not set the colour. An expired certificate lowers the
+standing only when a requirement grades it. With the current month left out of
+compliance, a certificate that lapsed this month counts as met until the month
+ends, while the card's figure already shows it as expired.
 
 ## Settings that do not change the calculation
 
 - **Grace Period (days)** on the Thresholds tab is saved but **not read** by
   any compliance calculation; the screen says so.
-- **Optional/Tracked Requirements** on a profile are not graded.
+- **Optional Requirements** on a profile are listed but not graded — except
+  that a profile with no required list set (API only) leaves them out of what
+  it grades.
 
 ## Programs that link a department requirement
 
@@ -308,7 +324,10 @@ Training alike.
   `get_requirement_date_window` / `rolling_window` / `biannual_window`,
   `certification_record_matches`, `requirement_applies_to_user`,
   `ComplianceGrading.for_member` (profiles), `tally_standing`,
-  `classify_standing`, `compute_org_compliance_tally`.
+  `classify_standing`, `compute_org_compliance_tally`, `grade_members` (the
+  loop the matrix, member notices, exports and forecast share),
+  `lapsed_biannual_certificate`, `monthly_pace`. Profile order (priority, then
+  oldest): `app/utils/compliance_profiles.py`.
 - **As-of date:** `app/services/training_period.py`
   (`resolve_as_of_date`, `effective_include_current_month`).
 - **Waivers:** `app/services/training_waiver_service.py` (`adjust_required`,

@@ -155,9 +155,11 @@ webhooks, Cal.com and Documenso. Use the service's public web address.
 
 **Keys are needed before it connects** _(2026-10-28)_. PayPal, Documenso,
 Cal.com and Salesforce refuse to connect until their keys are filled in, with a
-message naming what is missing, such as "PayPal needs: client_id,
-client_secret". Before, they connected with blank keys and showed as connected
-until a test failed.
+message naming what is missing, such as "PayPal needs: `client_id`,
+`client_secret`". Before, they connected with blank keys and showed as connected
+until a test failed. Slack, Discord, Microsoft Teams and the generic webhook
+likewise refuse to connect without the address to post to, with "Enter the
+webhook URL for {name}" _(2026-10-16)_.
 
 > **What if a test fails with a general message?** When something unexpected
 > goes wrong, the message reads "An unexpected error occurred. Please try
@@ -200,6 +202,19 @@ Two tick boxes finish the form:
   while you are still building your Salesforce setup.
 - **Sync automatically every 30 minutes** in the direction you chose. The
   manual sync buttons still work.
+
+**To change these later**, use **Settings** on the connected card. Contact
+matching, sync direction and the two tick boxes take effect from the next sync.
+A Client ID, Client Secret or Refresh Token box left blank keeps what is saved.
+**Re-authorize with Salesforce** signs in again and replaces the stored token,
+for when it was revoked or has expired; sign in to the same org.
+
+The **Instance URL** and **Environment** are shown but cannot be changed in
+Settings. The saved sign-in belongs to one Salesforce org, so moving to another
+org would keep syncing to the old one. To change org, disconnect and connect
+again.
+
+![Salesforce settings on a connected card: the Instance URL and Environment shown read-only with the note to disconnect and connect again to change org, Contact Matching, the Re-authorize with Salesforce button, the Client ID, Client Secret and Refresh Token boxes with notes that blank keeps what is saved, Sync Direction, the two tick boxes, and the notice that saved settings apply from the next sync](./images/16-29-salesforce-settings.png)
 
 ### Choose an Authentication Method
 
@@ -325,6 +340,17 @@ acknowledgments. It works with Documenso Cloud or your own Documenso server.
 
 After saving, select **Test** on the card to check the token.
 
+To change any of these later, use **Settings** on the connected card. Documenso
+stays connected and the webhook address does not change. Leave the **API
+Token** or **Webhook Secret** box blank to keep the saved one. The **API Base
+URL** box shows the address in use. **Moving to a different Documenso server
+needs that server's API token in the same save**: a token works only on the
+server it was created on, so The Logbook will not send the saved token to a new
+address. To return to Documenso Cloud, enter `https://app.documenso.com/api/v1`
+with a Cloud token.
+
+![Documenso settings on a connected card: the API Token box reading Leave blank to keep the current token, the API Base URL box showing the department's own Documenso server with the note that changing it needs that server's token in the same save, the Webhook Secret box with its note that a blank box keeps the saved secret, the webhook address, and the notice that a new token or base URL is used from the next request to Documenso](./images/16-28-documenso-settings.png)
+
 ### Auto-Advancing a Signing Stage (Webhooks)
 
 When you set a **Webhook Secret**, the connect window shows a **callback URL**
@@ -371,6 +397,16 @@ or your own Cal.com server.
 | **Webhook Secret** _(optional)_ | A shared secret. It lets a finished meeting move the applicant on by itself      |
 
 After saving, select **Test** on the card to check the key.
+
+To change any of these later, use **Settings** on the connected card. Cal.com
+stays connected and the webhook address does not change. Leave the **API Key**
+or **Webhook Secret** box blank to keep the saved one. The **API Base URL** box
+shows the address in use. **Moving to a different Cal.com server needs that
+server's API key in the same save**: a key works only on the server it was
+created on, so The Logbook will not send the saved key to a new address. To
+return to Cal.com Cloud, enter `https://api.cal.com/v1` with a Cloud key.
+
+![Cal.com settings on a connected card: the API Key box reading Leave blank to keep the current key, the API Base URL box showing the department's own Cal.com server with the note that changing it needs that server's key in the same save, the Webhook Secret box with its note that a blank box keeps the saved secret, the webhook address, and the notice that a new key or base URL is used from the next booking lookup](./images/16-27-calcom-settings.png)
 
 ### Viewing Bookings
 
@@ -609,6 +645,7 @@ twice, however it arrives. **Sync now** on the Zeffy page runs it at once.
 The sync reads payments by the day they were made and looks back seven days
 each time. A refund made more than seven days after the sale is therefore seen
 only through the webhook.
+
 ---
 
 ## Google Workspace — Member Accounts
@@ -626,6 +663,10 @@ only through the webhook.
 | **Groups** _(optional)_ | Up to 20 group addresses each new member is added to.                                                               |
 
 Authorize the service account's client ID in the Google Admin console (**Security → API controls → Domain-wide delegation**) for `admin.directory.user` and `admin.directory.group.member`, plus the read-only `admin.directory.orgunit.readonly` that lets **Test** confirm the organizational unit exists. Each account uses a Workspace license.
+
+**To change these later**, an organization administrator selects **Settings** on the connected Google Workspace card. The form opens with the saved admin, domain, organizational unit, groups and retirement setting. The key is never shown: choose a key file only to replace it, and the saved key is kept otherwise. A save applies to the next member converted. Accounts already created are not moved or changed. The domain must still match **Organization Settings → Department Email**, or the save is refused.
+
+![Google Workspace settings on a connected card: the service account key note saying a key is stored and a file is chosen only to replace it, the saved admin, domain, organizational unit and groups, the Suspend the account when a member retires box, and the notice that saved settings apply to the next member converted](./images/16-30-google-workspace-settings.png)
 
 ### What Happens at Conversion
 
@@ -685,6 +726,10 @@ The app registration needs the Microsoft Graph application permissions `User.Rea
 Enter the secret's **Expires** date as **Client secret expires on**. From 30 days before it, the card shows the days left and administrators get a morning email at 30 days, 7 days and on the day. A new secret needs its new date entered with it. The Microsoft setting is **Block sign-in when a member retires**, and a group that assigns licenses is never edited, because removing the member would remove the license. Accounts still in the directory 90 days after suspension are listed under **N need attention** for information only; The Logbook never deletes an account.
 
 ![The Microsoft 365 card connected, with Client secret expires in 12 days, 3 need attention, Link existing members, Settings and Details](./images/16-20-microsoft-365-card.png)
+
+**To change these later**, or to replace the client secret before it expires, an organization administrator selects **Settings** on that card. The form opens with every saved value except the secret. Leave **Client secret value** blank to keep the saved one. To replace it, enter the new secret and its new **Client secret expires on** date in the same save; clearing the date stops the expiry warnings. Clearing **License SKU ID** leaves licensing to your groups for accounts created after the save. As with Google Workspace, a save applies to the next member converted, existing accounts are not changed, and the domain must still match **Department Email**.
+
+![Microsoft 365 settings on a connected card: the saved tenant and client IDs, the Client secret value box with its note that a secret is stored and is entered only to replace it, Client secret expires on, Domain, Usage location, License SKU ID, groups, Block sign-in when a member retires, and the notice that saved settings apply to the next member converted](./images/16-31-microsoft-365-settings.png)
 
 Conversion, the member's profile, **N need attention** and **Link existing members** work as for Google Workspace. Two differences: an account whose license could not be assigned is kept and its profile offers **Retry**; and an account synced from on-premises Active Directory is never blocked from here — the profile says to disable it in Active Directory.
 
@@ -951,6 +996,48 @@ to decide stay in view; open it to change any of them.
 Running the same file twice is safe. Full detail is in the wiki page
 [Historical Data Import](../../wiki/Integration-Historical-Data-Import.md).
 
+### Undoing a step
+
+_(2026-11-19)_ Each committed step of a historical import can be taken back,
+so a wrong decision (a subject mapped to the wrong course, a member matched to
+the wrong person, the wrong drill threshold) can be corrected and the step
+committed again. Before, there was no undo: every wrong record had to be fixed
+or deleted by hand.
+
+**Where:** on the import's page, under each committed step: administrative
+hours, training, company drills, the staffing roster, and shift hours (which
+undoes every committed shift review batch the import sent). The line reads
+_"Undoing removes the … this step wrote, so you can change the decisions and
+commit it again."_ Select **Undo this step**.
+
+The confirmation, **Undo the …?**, says what will happen before anything is
+removed: how many records go; how many were **changed since the import and are
+kept**; for the roster and shift hours, how many shifts and seats the step used
+but did not make, which are left alone; and that former members the import
+created are removed too, unless something else still refers to them. Select
+**Undo this step** to go ahead, or **Keep it**.
+
+The rules, and why:
+
+- **One step at a time, in order.** A step a later one builds on waits for
+  that one: training cannot be undone while the company drills stand (the
+  drill sessions hold the training records), and shift hours cannot be undone
+  while the staffing roster stands (the roster fills the shifts the hours
+  made). The button is greyed out with _"To undo this step, first undo the …
+  step, which builds on it."_ Shift hours also waits while any of its batches
+  is still in review: commit or discard those first.
+- **Records an officer changed are kept.** A record edited after the import
+  wrote it is treated as a correction, not as import output. It stays, and a
+  notice after the undo lists it ("3 records were kept because they were
+  changed after the import…"). Committing the step again leaves it as it is,
+  so it is never written twice; fix or delete it by hand if it is still wrong.
+- **A record already deleted by hand** is simply forgotten, so committing the
+  step again writes it afresh.
+
+The toast says how many records (and former members) were removed. Only
+holders of `integrations.historical_import` (the IT Manager by default) can
+undo.
+
 ### Importing training
 
 _(2026-11-04)_ Training rows become **completed** training records in one
@@ -985,8 +1072,10 @@ greyed out until a column is marked as training hours), then:
   (**Create all unmatched as archived** does every one at once).
 
 **Import training records** asks first, saying how many records it will write.
-There is no batch undo: a wrong record is corrected on its own. Rows already
-imported are counted and skipped, so running it again adds only what is new.
+To take the whole commit back, use **Undo this step** (see
+[Undoing a step](#undoing-a-step)); a single wrong record can still be
+corrected on its own. Rows already imported are counted and skipped, so
+running it again adds only what is new.
 
 ### Where the imported hours show up
 
@@ -1382,7 +1471,7 @@ Details:
 - The provider card's **Auto-Sync** line shows both, for example "Every 1h ·
   review daily at 02:00".
 
-Other providers show only "Every _N_h". Their form has a single **Sync
+Other providers show only the interval, such as "Every 6h". Their form has a single **Sync
 Interval**, counted from the previous sync.
 
 #### Course mappings

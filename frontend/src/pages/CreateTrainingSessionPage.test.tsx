@@ -204,7 +204,7 @@ describe('CreateTrainingSessionPage templates', () => {
         .map((o) => o.textContent)
     ).toEqual(['— No template —', 'Company Drill']);
     expect(picker).toHaveAccessibleDescription(
-      "Training templates only. A template fills the event's own fields, replacing what is already typed."
+      'Training templates only. A template fills the event and its training details, replacing what is already typed.'
     );
     await user.selectOptions(picker, 'tpl-drill');
 
@@ -227,6 +227,143 @@ describe('CreateTrainingSessionPage templates', () => {
     await user.click(screen.getByRole('button', { name: 'Previous' }));
     expect(await screen.findByRole('combobox', { name: 'Start from a template' })).toHaveValue('tpl-drill');
     expect(screen.getByLabelText(/^Title/)).toHaveValue('Company Drill');
+  });
+
+  // Owner decision 2026-11-20: a Training template carries the session's
+  // training details, and picking it fills Training Info.
+  const DETAILS = {
+    course_mode: 'library',
+    course_id: CPR.id,
+    course_name: null,
+    course_code: null,
+    training_type: 'skills_practice',
+    credit_hours: 3,
+    credit_hours_source: 'course',
+    instructor_id: INSTRUCTOR_ID,
+    instructor: 'Rita Cole',
+    issues_certification: true,
+    certification_number_prefix: 'CPR-',
+    issuing_agency: 'American Heart Association',
+    expiration_months: 24,
+  };
+  const withDetails = (details: Record<string, unknown> = DETAILS) =>
+    getTemplates.mockResolvedValue([template('tpl-cpr', 'CPR Class', 'training', { training_details: details })]);
+
+  it('fills Training Info from a Training template and saves it', async () => {
+    withDetails();
+    getCourses.mockResolvedValue([CPR]);
+    getUsers.mockResolvedValue([RITA]);
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Start from a template' }), 'tpl-cpr');
+    await next(user);
+
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /From the Course Library/ })).toBeChecked();
+    expect(screen.getByLabelText(/^Course/, { selector: 'select' })).toHaveValue(CPR.id);
+    expect(screen.getByLabelText(/Training Type/)).toHaveValue('skills_practice');
+    // The course's current figure: it now runs four hours.
+    await waitFor(() => expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(4));
+    await waitFor(() => expect(screen.getByLabelText(/Lead Instructor/)).toHaveValue(INSTRUCTOR_ID));
+    expect(screen.getByRole('checkbox', { name: 'This training issues a certification' })).toBeChecked();
+    expect(screen.getByLabelText(/Issuing Agency/)).toHaveValue('American Heart Association');
+    expect(screen.getByLabelText(/Cert Number Prefix/)).toHaveValue('CPR-');
+    expect(screen.getByLabelText(/Expiration \(months\)/)).toHaveValue(24);
+
+    await toReview(user);
+    await submit(user);
+    await waitFor(() => expect(createEvent).toHaveBeenCalledTimes(1));
+    expect(sentEvent().training_details).toEqual(
+      expect.objectContaining({
+        course_id: CPR.id,
+        training_type: 'skills_practice',
+        credit_hours: 4,
+        instructor_id: INSTRUCTOR_ID,
+        instructor: 'Rita Cole',
+        issues_certification: true,
+        certification_number_prefix: 'CPR-',
+        issuing_agency: 'American Heart Association',
+        expiration_months: 24,
+      })
+    );
+  });
+
+  it("starts on No course yet, with a note, when the template's course is no longer listed", async () => {
+    withDetails();
+    getUsers.mockResolvedValue([RITA]);
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Start from a template' }), 'tpl-cpr');
+    await next(user);
+
+    expect(
+      await screen.findByText(
+        "This template's course is no longer in the Course Library, so the session starts on No course yet."
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /No course yet/ })).toBeChecked();
+  });
+
+  it('clears an instructor who is no longer a member, with a note', async () => {
+    withDetails();
+    getCourses.mockResolvedValue([CPR]);
+    getUsers.mockResolvedValue([{ ...RITA, status: 'retired' }]);
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Start from a template' }), 'tpl-cpr');
+    await next(user);
+
+    expect(
+      await screen.findByText(
+        "This template's lead instructor is no longer a current member, so Lead instructor starts empty."
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/Lead Instructor/)).toHaveValue('');
+  });
+
+  it('leaves at once after a pick when nothing was changed, however late the lists load', async () => {
+    // The template's own check-in lead equals the form's standard one, so the
+    // form's settling of it on open is not a change either; only the training
+    // details' reading is under test here.
+    getTemplates.mockResolvedValue([
+      template('tpl-cpr', 'CPR Class', 'training', { training_details: DETAILS, check_in_minutes_before: 60 }),
+    ]);
+    let releaseCourses: (list: unknown[]) => void = () => undefined;
+    getCourses.mockReturnValue(new Promise((resolve) => (releaseCourses = resolve)));
+    getUsers.mockResolvedValue([RITA]);
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Start from a template' }), 'tpl-cpr');
+    await act(async () => {
+      releaseCourses([{ ...CPR, duration_hours: 6 }]);
+      await Promise.resolve();
+    });
+    await user.click(screen.getAllByRole('button', { name: 'Cancel' })[0] as HTMLElement);
+
+    expect(navigate).toHaveBeenCalledWith('/training/admin');
+    expect(screen.queryByText('Discard this event?')).not.toBeInTheDocument();
+  });
+
+  it("saves with the template's stored hours when the Course Library fails to load", async () => {
+    withDetails();
+    getCourses.mockRejectedValue(new Error('offline'));
+    getUsers.mockResolvedValue([RITA]);
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Start from a template' }), 'tpl-cpr');
+    await next(user);
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(3);
+    await toReview(user);
+    await submit(user);
+
+    await waitFor(() => expect(createEvent).toHaveBeenCalledTimes(1));
+    expect(sentEvent().training_details).toEqual(expect.objectContaining({ course_id: CPR.id, credit_hours: 3 }));
   });
 
   it('records the template a series was created from', async () => {
@@ -630,6 +767,28 @@ describe('CreateTrainingSessionPage training info step', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: /^Course/ }), 'course-cpr');
 
     expect(screen.getByLabelText(/Lead Instructor/)).toHaveValue(INSTRUCTOR_ID);
+  });
+
+  it('does not offer a former member as lead instructor, nor pick one a course names', async () => {
+    getUsers.mockResolvedValue([
+      RITA,
+      { id: 'u-gone', username: 'opike', first_name: 'Owen', last_name: 'Pike', status: 'retired' },
+    ]);
+    getCourses.mockResolvedValue([{ ...CPR, instructor: 'Owen Pike' }]);
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /From the Course Library/ }));
+    await screen.findByRole('option', { name: 'CPR - CPR / BLS' });
+    await waitFor(() =>
+      expect(within(screen.getByLabelText(/Lead Instructor/)).getByRole('option', { name: 'Rita Cole' })).toBeVisible()
+    );
+    expect(within(screen.getByLabelText(/Lead Instructor/)).queryByRole('option', { name: /Owen Pike/ })).toBeNull();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /^Course/ }), 'course-cpr');
+
+    expect(screen.getByLabelText(/Lead Instructor/)).toHaveValue('');
   });
 
   it('offers only session-attendance requirements under Counts toward attendance', async () => {

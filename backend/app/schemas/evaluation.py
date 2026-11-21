@@ -543,6 +543,12 @@ class EvaluationTemplateCreate(_Matching):
     # filled from it instead of left empty. Checked by the service, which
     # owns the catalog.
     starter: Optional[str] = Field(default=None, max_length=50)
+    # Rank codes that receive a starter's officer-only sections. Required by,
+    # and only accepted with, a starter that has them; checked against the
+    # department's ranks by the service.
+    officer_ranks: Optional[
+        List[Annotated[str, Field(min_length=1, max_length=50)]]
+    ] = Field(default=None, max_length=50)
 
     @field_validator("name")
     @classmethod
@@ -582,6 +588,8 @@ class EvaluationStarterResponse(BaseModel):
     member_class: Optional[str] = None
     member_status: Optional[str] = None
     section_titles: List[str]
+    # Creating from it needs ``officer_ranks``.
+    needs_officer_ranks: bool = False
 
 
 class TemplateDraftWrite(BaseModel):
@@ -839,6 +847,9 @@ class EvaluationStepResponse(BaseModel):
     status: str
     due_date: Optional[date] = None
     completed_at: Optional[datetime] = None
+    # The person a manager named to act on an approval or calibration step,
+    # in place of the workflow's actor. None when the workflow decides.
+    assignee: Optional[PersonRef] = None
 
 
 class EvaluationPartResponse(BaseModel):
@@ -879,6 +890,9 @@ class EvaluationSummary(BaseModel):
     current_step: Optional[str] = None
     current_step_due: Optional[date] = None
     created_at: Optional[datetime] = None
+    # The finalized review's overall grade, for a caller holding
+    # ``evaluations.view_all`` on the conduct list only; None otherwise.
+    overall_grade: Optional[str] = None
 
 
 class SigningOption(BaseModel):
@@ -905,6 +919,9 @@ class EvaluationViewer(BaseModel):
     can_delete: bool = False
     # A holder of evaluations.manage, on a finalized evaluation not their own.
     can_amend: bool = False
+    # A holder of evaluations.manage, on an evaluation in progress not their
+    # own: may name who acts on an approval or calibration step not yet done.
+    can_assign_steps: bool = False
     # The member, on their finalized evaluation, inside the response window,
     # before their response is submitted.
     can_respond: bool = False
@@ -990,6 +1007,31 @@ class GradeRequest(BaseModel):
     content: PartContent
 
 
+class PreviousSectionGrade(BaseModel):
+    key: str
+    title: str
+    label: str
+
+
+class PreviousGoal(BaseModel):
+    key: str
+    label: str
+    text: str
+
+
+class PreviousReview(BaseModel):
+    """The member's last finalized review on the same form, as the caller may
+    see it: the grade that stood, each section's grade, the goals it set."""
+
+    evaluation_id: str
+    period_name: Optional[str] = None
+    period_start: date
+    period_end: date
+    overall: Optional[str] = None
+    sections: List[PreviousSectionGrade] = Field(default_factory=list)
+    goals: List[PreviousGoal] = Field(default_factory=list)
+
+
 class EvaluationDetail(EvaluationSummary):
     coverage_start: Optional[date] = None
     coverage_end: Optional[date] = None
@@ -1025,6 +1067,8 @@ class EvaluationDetail(EvaluationSummary):
     response_document_available: bool = False
     # Keys of the evaluator's items the calibrator flagged to revisit.
     calibration_flags: List[str] = Field(default_factory=list)
+    # The member's last review on the same form, when the caller may read it.
+    previous_review: Optional[PreviousReview] = None
     viewer: EvaluationViewer
 
 
@@ -1225,6 +1269,23 @@ class ResponseWrite(BaseModel):
         if not v:
             raise ValueError("Write your response before saving it")
         return v
+
+
+# ------------------------------------------------------- step assignment
+
+
+class StepAssignment(BaseModel):
+    """Who acts on an approval or calibration step. None hands the step back
+    to the workflow's actor: the position's holders, or the view_all holders
+    for calibration."""
+
+    assignee_id: Optional[str] = Field(default=None, min_length=1, max_length=36)
+
+
+class AssigneeCandidates(BaseModel):
+    """The current members who may be named on the step."""
+
+    candidates: List[PersonRef]
 
 
 # -------------------------------------------------------------- calibration

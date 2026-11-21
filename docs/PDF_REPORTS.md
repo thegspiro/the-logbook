@@ -98,6 +98,9 @@ Letter only, no duplex hint).
   `HEADER_BAND` and draws the band in the space freed, inside the document's
   own top margin. Label sheets and ID cards are stock-sized and have none.
   `tests/test_pdf_running_header.py` checks every document for it.
+- **Minutes and the impact plan carry the logo on page 1** (2026-11-16). They
+  had the department name only; `beside_logo()` in `election_pdf_style.py`
+  sets the logo beside their existing heading.
 - **Documents leave scaling to the viewer.** A page shrunk to 97% by "Fit"
   is still readable.
 - **Label sheets and ID cards ask to print at actual size**
@@ -256,10 +259,12 @@ Recorded in `docs/KNOWN_LIMITATIONS.md` under "PDF Reports".
   embedded), by owner decision: their text is fitted to physical stock.
 - **Minutes that append attachment PDFs are not PDF/A.** Pages from outside
   cannot be vouched for, so that file makes no claim.
-- **Older layouts.** Minutes, the impact plan and the election documents keep
-  their own layouts. Minutes, the evaluation and the election documents number
-  their pages "Page N" rather than "of Y" (the ballot excepted), and the impact
-  plan has no footer or page numbers at all.
+- **Older layouts.** Minutes, the impact plan, the evaluation and the election
+  documents keep their own layouts rather than the report kit's. Every one of
+  them is numbered "Page X of Y" (since 2026-11-20 for minutes, the
+  evaluation, certified results and the pre-meeting package): each is laid
+  out twice, the first pass counting the pages. Minutes count their own pages
+  only; attachment PDFs appended after them carry no minutes footer.
 
 ## Roadmap (owner decisions of 2026-11-09)
 

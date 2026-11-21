@@ -106,7 +106,8 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
           {canEdit && !isEditing && (
             <button
               onClick={onEditClick}
-              className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+              className="touch:min-h-11 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+              aria-label="Edit contact information"
             >
               Edit
             </button>

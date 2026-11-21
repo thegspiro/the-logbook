@@ -56,15 +56,32 @@ program enrollments, external training integrations, and compliance reporting.
   **Not set up** instead of 100%; My Training, Programs and Course Library
   explain themselves to a member with nothing in them
 - **Competency Matrix** — Department readiness heat-map with color-coded
-  proficiency levels
+  proficiency levels. Since 2026-11-20 (#4413) it scrolls both ways inside a
+  bounded, keyboard-focusable box, with the member column pinned left and the
+  skill row pinned on top; member names wrap within a 7rem column instead of
+  truncating
 - **Expiring Certifications** — Tiered alerts at 90/60/30/7 days with
   escalation for expired certs
 - **Compliance Summary** — Per-member green/yellow/red compliance card on
-  profiles
+  profiles. Since 2026-11-18 (D10, #4403) the card, **My Training**, the
+  officer's per-member requirements view and requirement progress list only
+  the requirements of the member's matching compliance profile, through
+  `ComplianceGrading.for_member`; since 2026-11-20 (#4456) the card's colour is
+  the member's Compliance Matrix standing, and the remaining officer views
+  grade through profiles too. See [Compliance](Module-Compliance) and
+  [Compliance, member files and templates](#compliance-member-files-and-templates-2026-11-20--21)
 - **Training Waivers** — Leave of Absence auto-linking, waiver management,
   proportional requirement adjustment. Supports permanent waivers (no end date),
   a New Member waiver type, and multi-select "Applies To" (Training + Meetings +
   Shifts can be combined)
+- **Session Waiver Requests** _(2026-11-11)_ — a member asks to be excused from
+  one training session that counts toward their attendance requirement
+  (**Request to be excused** on the event page; **My Training > My Waiver
+  Requests**). Policy at **Training Admin > Settings & Data > Session
+  Waivers**; deciders use **Training Admin > Records > Waiver Requests** or
+  `/attendance-waivers/{id}`, which never decides on load. Optional supporting
+  documents, emails at each step, a seven-day expiry. See
+  `backend/app/docs/TRAINING_WAIVERS.md`, "Session Waiver Requests"
 - **Bulk Record Creation** — Up to 500 records per request with duplicate
   detection (same member + course name + completion date within ±1 day)
 - **Rank & Station Snapshots** — `rank_at_completion` and
@@ -111,7 +128,7 @@ program enrollments, external training integrations, and compliance reporting.
 - **Manual Shift Report Page** — `/training/log-shift`, for departments without
   the Scheduling module
 - **Manual Entry Admin Config** — `ManualEntrySettingsPanel` (Training Admin →
-  Settings & Data → Manual Entry Rules) controls manual entry availability,
+  Settings & Data → Manual Entry) controls manual entry availability,
   allowed apparatus types, default start times, and default shift duration
 
 ---
@@ -127,7 +144,13 @@ requirements; a session linked to none charges nobody. The rule is written once
 (`training_compliance.tally_session_attendance`) and every grader reads it, with
 `load_held_sessions` passed through each caller. `PUT
 /training/sessions/{id}/attendance-requirements` replaces a session's links and
-is allowed after attendance is finalized.
+is allowed after attendance is finalized. The **Counts toward attendance**
+badge (event cards, calendar, event page) shows only when a linked requirement
+is **active** _(2026-11-18, #4378)_: `events_counting_toward_attendance` joins
+the requirement, and `TrainingSessionResponse.counts_toward_attendance`
+carries the same answer to the event page, which no longer counts
+`attendance_requirement_ids` (that list still includes stale links so the
+editor can remove them).
 
 A requirement with `allows_chief_override` accepts rows in
 `training_requirement_overrides` (who, when, dates, encrypted reason; revoked,
@@ -142,7 +165,8 @@ fall short. Certification-style requirements now match records by the stored
 ### Types, frequency and targeting
 
 A requirement has a `requirement_type` (hours, courses, certification, shifts,
-calls, skills_evaluation, checklist, knowledge_test, session_attendance), a `frequency` (annual,
+calls, skills_evaluation, checklist, knowledge_test, evaluated_shifts,
+transports, refusals, evaluated_calls, session_attendance), a `frequency` (annual,
 biannual, quarterly, monthly, one_time) and a `due_date_type`
 (calendar_period, rolling, certification_period, fixed_date). `due_date` only
 means anything for `fixed_date`: create and update clear it for every other
@@ -161,8 +185,9 @@ custom tier such as `senior` can be ticked; a type the requirement already
 carries is always shown. Shift and call requirements return `monthly_counts`
 from `evaluate_requirement_detail` (null for other types), the counterpart of
 `monthly_hours`, with the same leave fields; a target that leave reduces to
-zero reads "Nothing owed (on leave)". Evaluated shifts, transports and
-refusals requirements linked into a program with **Link existing** are graded
+zero reads "Nothing owed (on leave)". Evaluated shifts, transports,
+refusals and _(2026-11-15)_ evaluated calls requirements linked into a program
+with **Link existing** are graded
 from shift evaluations (`load_evaluation_credits`, rules in
 `shift_evaluation_rules.py`), not from training records. `PUT
 /compliance/config` writes a `compliance_config_updated` audit entry naming
@@ -226,6 +251,68 @@ courses/certification clears the links.
 checklist and knowledge test) is limited to legacy records
 (`name_match_until`) and compares stored match keys, not text; see
 [Compliance](Module-Compliance#one-definition-of-who-is-graded-and-how-2026-10-05).
+
+### Course Links: records that name no course _(2026-11-16, #4345)_
+
+Compliance credits a course or certification requirement only through a
+record's `course_id`. Records with a free-text name, and imported records whose
+name matched no library course, have none, and name matching is switched off
+for requirements created since 2026-10 (`name_match_until`). **Training Admin →
+Curriculum → Course Links** (`CourseLinksPanel`, a tab inside `/training/admin`)
+lists those names and lets an officer link each to a library course.
+
+- **Suggestions only** (owner decision, 2026-11-15). Compliance grading does
+  not fuzzy-match; nothing is linked until an officer confirms.
+- **Grouping.** `name_key` (in `app/services/training_course_links.py`) is the
+  provider-course normalizer followed by `training_match_key`, the key
+  certification grading uses, so case, punctuation, a trailing provider id and
+  a "CAPCE" prefix fold into one name. The suggestion comes from
+  `SuggestionCandidates` (0.85 similarity), the provider-course mapping's
+  matcher.
+- **Writes.** A link sets `course_id`, the course's category
+  (`course_category_id`) and training type on every record carrying the name
+  with `course_id IS NULL`, so a second link is a no-op and a hand-picked course
+  is kept. The spellings are read from the database, not the client; the course
+  must be active and in the caller's org (XC-1). A qualification-granting course
+  syncs through `QualificationService`. Both link endpoints are audited.
+- **Endpoints** (all `training.manage`): `GET /training/course-links`
+  (`search`, `offset`, `limit`), `POST /training/course-links` `{key,
+course_id}`, `POST /training/course-links/link-suggested`. Snake_case like the
+  rest of the module.
+
+**Undo and the attention badge** _(2026-11-19, #4389, migration
+`0d54dd90d6ba`)_:
+
+- **Recorded links.** Every link (single or link-all) writes a
+  `training_course_links` row (course, label, `name_key`, `record_count`,
+  `linked_by` / `linked_at`, `undone_by` / `undone_at`) and one
+  `training_course_link_records` row per record it changed, holding the
+  record's `previous_category_id` and `previous_training_type`. Both tables are
+  new; no existing row changes, so **links made before this revision have no
+  row and cannot be undone**.
+- **Undo** (`POST /training/course-links/{link_id}/undo`, `training.manage`,
+  audited as `training_course_link_undone`) locks the link row, then puts back
+  `course_id = NULL` and the previous category and type on each record still
+  on that course and not updated since the link. "Not updated since" is
+  `app/utils/edit_window.changed_since` with a two-minute `EDIT_TOLERANCE` —
+  the helper the historical import undo uses — so the link's own write does
+  not count as an edit. Records edited since are kept and counted (`kept` in
+  the response). Members' qualifications are recomputed from the records still
+  on the course, so a qualification only the link supported is removed. A link
+  can be undone once; a second attempt is a 400 ("That link has already been
+  undone.").
+- **History**: `GET /training/course-links/history` (`offset`, `limit`),
+  newest first; the panel shows it as **Recent links**, ten a page.
+- **Badge.** The training attention queue gains an `unlinked_course_names` row
+  ("N training names can be linked to a course", **Review links**) counting
+  only names with a suggested course — **Link all suggested** clears every
+  one, while an unmatchable name would hold the row open for good (owner
+  decision 2026-11-17). The hub maps it onto **Curriculum → Course Links**.
+  It is read live on each hub load, and the panel tells the hub to re-read
+  after a link, link-all or undo. A failure building this row is contained
+  and logged so it cannot drop the queue's other rows, and the suggestion
+  matcher skips pairs whose quick-ratio bound cannot reach 0.85 (2,000 names
+  against 200 courses: 12.3 s to 0.63 s).
 
 ### Freshness window
 
@@ -296,6 +383,13 @@ forecast print N/A where a requirement does not apply.
   row (Fire, EMS, Hazmat, Rescue, …); categories carry an optional
   `registry_code` for NREMT NCCR areas, and category-based compliance (NCCR
   hours, the compliance matrix) reads it.
+- **Source.** `record_sources` labels a record by its provider, "Imported", or
+  The Logbook, reading the `imported_source_records` ledger. Since 2026-11-15
+  (#4344) both Training CSV importers (`POST /training/import/confirm` and
+  `POST /training/records/import-csv`) ledger each record under source system
+  `logbook.training-csv-import`, with the record's own id as `source_id`, in the
+  same transaction. Records they wrote earlier have no ledger row and read The
+  Logbook (see `docs/KNOWN_LIMITATIONS.md`).
 - **Start time.** `start_time` is stored on self-reported submissions and on
   the record an approval creates. A record without one reads blank rather than
   a guessed time.
@@ -306,11 +400,14 @@ forecast print N/A where a requirement does not apply.
 JPEG, PNG, GIF, WEBP, DOC or DOCX, detected by magic bytes and malware-scanned)
 through `FileStorageService` under
 `/app/uploads/<org_id>/training-records/<record_id>/<uuid><ext>`, with metadata
-in the `TrainingRecord.attachments` JSON column. `GET .../attachments/{index}/download`
-streams a stored file. Access is the record owner or `training.manage`; server
+in the `TrainingRecord.attachments` JSON column. `GET .../attachments/{entry}/download`
+streams a stored file, named by the entry's id (or, for older clients, its index). Access is the record owner or `training.manage`; server
 file paths are never returned. The record download route also accepts the
 self-reports storage area, because approving a submission copies its
-attachment entries onto the record verbatim.
+attachment entries onto the record verbatim (keeping each entry's `id`). A
+voided record refuses an upload (400), and the record create/update bodies
+refuse an `attachments` field (422); see
+[Member files](#compliance-member-files-and-templates-2026-11-20--21).
 
 ---
 
@@ -343,16 +440,24 @@ would not accept do not inflate a member's certificate.
 the recurring events via `EventService` and links a `TrainingSession` to each
 occurrence.
 
+**One form creates and edits a Training event** _(2026-11-16, #4347)_. Training
+Admin's **Create Session**, Events → **Create Event** with the type
+**Training**, and **Edit** on a Training event open the same four-step
+training-event form (`TrainingEventWizard`). The course is optional; with none,
+records are filed under the event's title. Developer detail is in
+[Module-Training-Developer](Module-Training-Developer).
+
 **Session form helpers:**
 
-- **Course auto-populate** — selecting a course fills training type, credit
-  hours, instructor, expiration months, and max participants, with a details
-  preview card.
+- **Course auto-populate** — choosing **From the Course Library** and a course
+  fills training type, credit hours, instructor, expiry, category, program and
+  maximum attendees, with a details card.
 - **Quarter-hour time picker** — the `DateTimeQuarterHour` UX component splits
   date/time into a native date picker and a select restricted to `:00`, `:15`,
   `:30`, `:45` (browser `datetime-local` inputs ignore `step="900"`).
 - **Quick duration buttons** — 1, 2, 4 and 8 hours, matching EventForm. They
-  appear once a start date is set and fill the end date/time.
+  fill the end date/time; with no start date a button reads "Set a start date
+  first".
 
 ---
 
@@ -371,11 +476,14 @@ extension cannot survive the trip and nothing is executed server-side. Files
 are stored by `FileStorageService` in the organization's self-reports area
 (`/app/uploads/<org_id>/self-reports/...`).
 
-**Deleting or withdrawing a submission unlinks its file.** That is safe only
-because a submission is deletable in `draft`, `pending_review` and
-`revision_requested` alone — never after approval, the one state where a
-`TrainingRecord` also references the same file. **If that guard is ever
-widened, the delete must stop unlinking.** A voided record keeps its file by
+**Deleting or withdrawing a submission unlinks its file only if nothing else
+names it** _(2026-11-20, #4458)_. A submission is deletable in `draft`,
+`pending_review` and `revision_requested`, but `reverse_approval` reopens an
+approved one while the voided record it created keeps naming the same
+certificates. So the delete, and the single-attachment removal, commit first
+and then call `member_files.remove_unreferenced_files` (scoped to the
+self-reports area), which keeps any file another collected row still names
+and deletes nothing if that check fails. A voided record keeps its file by
 design.
 
 ### Malware scanning
@@ -409,7 +517,11 @@ daily `self_report_attachment_retention` task unlinks the files and removes the
 references from the submission and the member's training records; the
 submission and record rows stay. Audited per organization as
 `self_report_attachment_retention`; changes to the period as
-`self_report_attachment_retention_updated`.
+`self_report_attachment_retention_updated`. The decision date is
+`coalesce(reviewed_at, submitted_at)` _(2026-11-20, #4476)_: a submission
+auto-approved at creation has no `reviewed_at`, and before this its files
+were never deleted. The task walks submissions only, so a certificate kept
+for a voided record after the submission stopped naming it is not reached.
 
 ### Review, notifications and integrity
 
@@ -880,6 +992,65 @@ offline queue covers an evaluation run with **no connectivity at all** (see
 
 ---
 
+## Shift Evaluations: credit and the frozen requirement list
+
+A submitted shift evaluation credits program requirements of type
+`evaluated_shifts` (one per evaluation), `transports`, `refusals` and, since
+2026-11-15 (#4314, migration `9d044fc1d81b`), `evaluated_calls`, which reads
+`statistics["calls"]`. `evaluated_calls` reuses the `required_calls` target
+column; every reader of that column for the `calls` type checks the type first,
+and `calls` stays fed by shift reports only, so nothing is counted twice. The
+shared table is `EVALUATION_REQUIREMENT_TARGETS` in
+`app/services/shift_evaluation_rules.py`.
+
+- **Frozen at shift end** (#4312, migration `611204dcf8d1`). After a department
+  shift ends, `ShiftEvaluationService._requirements` stores each crew member's
+  requirements in `shifts.evaluation_requirements` (nullable JSON, NULL = not
+  stored yet) on the first read; before it ends the list is computed live
+  (`_live_requirements`). Crew is always read live; forms are reloaded by id,
+  org-scoped. Close-out passes `store=False` so it does not commit inside its
+  shift lock; its own commit saves the value.
+- **Credit re-sync** (#4305). `sync_credit` credits a department-shift
+  evaluation only while its member holds a worked seat
+  (`WORKING_ASSIGNMENT_STATUSES`); `SchedulingService.update_assignment` and
+  `delete_assignment` re-sync. `update_training_requirement` calls
+  `sync_credit_for_requirement` when `requirement_type` or
+  `evaluation_excludes_lowest_rating` changes, revoking credit when the new
+  type takes none. A combined evaluation whose scope shrinks (#4376,
+  2026-11-16) has the credit it gave a dropped program revoked on its next
+  save: the credit pass reads from the ledger every row the evaluation
+  credited outside its current scope, so no record of the earlier scope is
+  needed (`tests/test_combined_scope_shrink.py`). An outside entry moved to a
+  non-evaluating agency keeps its credit by owner decision
+  (`docs/KNOWN_LIMITATIONS.md`).
+- **Forms in use** (#4302). `update_template` refuses `is_active: false` while
+  a program or the general-form setting names the form; an inactive form is
+  refused as a new general form or on program create/update (a program already
+  holding one keeps it). Existing 400s; no API shape change.
+- **Linked department requirements** (#4311, 2026-11-14). A department-level
+  `evaluated_shifts`, `transports` or `refusals` requirement linked into a
+  program is graded in `training_compliance.py` from
+  `load_evaluation_credits`, not from training records. An evaluation counted
+  for several programs counts once; general-form evaluations count.
+- **Worked crew only** (#4300). `WORKING_ASSIGNMENT_STATUSES` (Assigned,
+  Confirmed) decides who close-out asks for a trainee report or an evaluation;
+  no-show and pending crew are not asked and get no draft report.
+- **Review fixes** (#4275, 2026-11-13). A department shift counts only toward
+  enrollments begun by its date (`_Scope.as_of`); under required report review
+  a member with no report sees the evaluation once the shift is finalized; a
+  COMPLETED requirement keeps taking credit and reopens to In progress when
+  credit falls below target (a manual completion stays); waiver proration
+  rounds evaluation targets to whole units; an edit to a submitted evaluation
+  is held to the submission rules.
+- **Preceptor links** (#4264, migration `533f8aba187e`). For an outside shift,
+  the member or a training manager makes a single-use, no-login link
+  (`/shift-evaluation/:token`), shown as a QR code, copied or emailed (10
+  emails per member per hour). It stays open
+  `training_module_configs.shift_evaluation_link_days` (default 7, 1–60) after
+  the shift; one open link per evaluation; rejecting the shift or the member
+  leaving closes it. Outside shifts awaiting approval are now evaluated too;
+  credit and visibility wait for approval.
+
 ## Shift Completion Reports
 
 Officers file a report per trainee after a shift; an approved report credits
@@ -1010,7 +1181,7 @@ A descriptive scale with no labels falls back to numeric display (1–5).
 Scheduling module. Officers enter shift date, start/end times, apparatus, crew
 members, and trainee evaluations, with apparatus-specific skill/task
 auto-population. Availability, allowed apparatus types, default start times and
-default duration come from **Manual Entry Rules** in the admin hub.
+default duration come from **Manual Entry** in the admin hub.
 
 ---
 
@@ -1036,6 +1207,15 @@ errors. Its scheduled sync is an hourly pull plus a daily 30-day **review** at
 sync log (`sync_type = "review"`). Detail:
 [16-integrations › Setting up Target Solutions](https://github.com/thegspiro/the-logbook/blob/main/docs/training/16-integrations.md#setting-up-target-solutions).
 
+**Verification and the scheduler** _(2026-11-18, #4419)_. Auto-sync runs only
+for a provider with `connection_verified`. A save now resets it only when the
+connection changes (`api_base_url`, `client_id` or `auth_type` differs from the
+stored value, a new secret arrives, or a stored secret is cleared). Before,
+the edit form's every save sent `api_base_url` and un-verified the provider,
+so editing the sync interval silently stopped its scheduled pulls. Sync
+History labels a run with `initiated_by` set as **Manual pull**; the scheduler
+never sets it.
+
 ---
 
 ## Member & Officer Exports
@@ -1046,10 +1226,17 @@ sync log (`sync_type = "review"`). Detail:
   either is off). Omitting `start_date` returns the member's entire history.
 - **Officer exports** (`POST /training/reports/export`, `training.manage`):
   `compliance`, `individual`, `member_records` (bulk, all active members),
-  `hours_summary`, and `certification` as CSV. PDF is available only for
+  `hours_summary`, and `certification` as CSV. `member_records` and
+  `certification` end with a **Source** column (provider name, **Imported** or
+  **The Logbook**) _(2026-11-19, #4355)_, labelled from
+  `training_record_source.load_source_lookup`, which loads every label before
+  the server-side cursor opens. PDF is available only for
   `individual`, `member_records`, and `compliance`; bulk PDFs are merged with
   `pypdf` (an empty result gets a placeholder page). An unknown `report_type`
-  returns 400.
+  returns 400. The `compliance` export's status cells come from
+  `training_compliance.grade_members`, the matrix's grader, as of the
+  department's today; `start_date` / `end_date` scope only the hours and
+  completed-record columns, whose CSV headers carry the dates _(2026-11-21)_.
 - **Personal-data exports** apply the module's result-visibility setting to
   `ShiftCompletionReport` fields: officer-only evaluation data hidden from the
   trainee in the application is also omitted from a newly generated export;
@@ -1185,7 +1372,189 @@ requirement _count_ never moves. No print page shows the leave period, the
 waived months or the adjusted target — the sheet reports the outcome, not the
 allowance behind it.
 
+_(2026-11-13, #4272)_ A recorded leave and the training waiver it writes are
+read as one leave, not as months both on leave and waived. A leave marked
+`exempt_from_training_waiver` (Applies To without **Training Requirements**)
+now excuses no training month; before, it still did.
+
 ---
+
+## Former members in pickers _(2026-11-19, #4380, #4432)_
+
+`GET /users` returns every account, including the archived, retired, dropped
+and inactive members a roster import brings in. The training pickers that
+listed them all now offer current members only (`isActiveAccount`: active or
+probationary): cohort roster, add instructor qualification, manual shift
+report crew, training session lead instructor (a course's named instructor
+pre-fills only when it matches a current member) and the external-provider
+user mapping. A value already saved that names someone who has left stays in
+the select, marked "(former member)" (the mapping shows the stored name), so
+saving does not swap it out.
+
+The write paths behind them refuse a **newly chosen** former member with a 400
+"Only current members can be chosen as …" (`assert_current_members` in
+`app/utils/org_scoping.py`, which lets the record's stored ids through via
+`keep` and gives the same message for a former, deleted or other-org id):
+instructor qualification create, `POST /shift-completion/batch` with no
+linked shift, and the lead instructor on training-event create/edit and
+`POST /training/sessions` / `/recurring`. Cohort generation skips a former
+member with the warning "A selected member is no longer a current member."
+A batch linked to a scheduled shift and cohorts generated from class templates
+are not checked, because a member who worked the shift or was named on the
+template may have left since.
+
+## Phones and fixes, 2026-11-19 – 20
+
+- **Tables reflow to cards** (#4413): My Training's recent, self-reported and
+  History tables, the historical import preview and Member Training Status
+  use `rwd-table-wide` (cards on a tablet with the side navigation open too);
+  Expiring Certifications and the annual report's requirement analysis use
+  `rwd-table-narrow`. Held by `e2e/table-fit-training-phone.spec.ts`.
+- **Reordering a program's requirements** (#4390) answered 500 after the new
+  order had committed (the response lazy-loaded each link's requirement on the
+  async session). The service now eager-loads it.
+- **Headline Metrics settings** (#4426) no longer jump on a slow load: the
+  placeholder and loaded screen are keyed separately, so React replaces one
+  with the other instead of morphing it (a 0.35 layout shift on a phone).
+
+## Compliance, member files and templates, 2026-11-20 – 21
+
+**Monthly average on hours requirements** (#4454, owner decision 2026-11-20).
+`training_compliance.monthly_pace` is the one definition: `average` is the
+hours in the months nothing excused over the number of those months (hours
+earned on leave stay in the total but not in the average; `None` when every
+month so far was excused), and `needed` is the unadjusted `required_hours`
+over `total_months_in_period` of the whole window (72 over 12 is 6). Both
+evaluators report it — `monthly_average` / `monthly_needed` on My Training's
+requirement detail (`TrainingService.evaluate_requirement_detail`) and on each
+`GET /training/compliance-matrix` cell (measured through
+`min(window_end, today)`) — so the two screens print one figure (pitfall 29).
+`RequirementDetailCard` and the matrix detail lead with "6.9/6 hrs/mo avg"
+(`utils/requirementPace.ts`, which only formats, with an `sr-only` spoken
+form) and put the total beneath it. **The status is still graded on the
+total.** `RequirementMonthlyHours` prints the server's figure for hours; shifts
+and calls still average client-side.
+
+**The officer views grade through profiles** (#4460 via #4456, owner decision
+2026-11-20). The member period-status roster, competency matrix, compliance
+CSV/PDF cells, compliance forecast and Scheduling's Shift Compliance report
+resolve each member through `ComplianceGrading.for_member`, with one config
+load per request. The roster classifies with the profile's thresholds; the
+others have no member standing, so the profile only narrows cells (a
+requirement outside it reads `not_applicable` / N/A, or the member is not
+listed). The forecast gains `current_standing`; its 30/60/90 projections stay
+plain percentages. The exports and forecast take the department's
+`include_current_month` instead of a hard-coded `True`. The profile card's
+colour is the matrix standing too (see [Compliance](Module-Compliance)).
+
+**Profile ties and optional requirements** (#4480, owner decisions
+2026-11-21). `app/utils/compliance_profiles.py` defines the one order: higher
+`priority`, then older `created_at`, then smaller id. `_find_matching_profile`,
+`ComplianceGrading.from_config`, the admin-hours lookup and
+`ComplianceConfigResponse.profiles` use it; a tie used to go to whichever row
+MySQL returned first. `MemberGrading` gains `optional_requirements` beside
+`requirements`, so nothing that reads `.requirements` can count one. My
+Training and the officer's member view return them as
+`optional_requirements_detail`, drawn by `OptionalRequirementsGroup` with an
+**Optional** badge and no overdue state. A profile whose
+`required_requirement_ids` is null grades everything except its optional ids;
+create and update store an id sent in both lists as required only. The editor
+makes the two lists exclusive, keeps a null required list null across an
+unrelated save (it used to send `[]`, switching the profile to grading
+nothing) and warns, without refusing, when another active profile shares the
+priority.
+
+**Every-2-years certificate lapse** (#4488).
+`training_compliance.lapsed_biannual_certificate(req, counted, as_of)` is the
+one rule for a BIANNUAL hours or courses requirement: the certificate expiring
+last among the records the requirement's own branch counts in its window, if
+it expired before `as_of`, makes the requirement `expired`. The grader,
+`evaluate_requirement_detail` and `check_requirement_progress` all call it.
+My Training used to read every completed record of the training type, in or
+out of the window, for hours, and had no check for courses.
+
+**Certification card states** (#4488). A `certification` requirement's detail
+gains `expiry_date` (the graded certificate's expiration date, null when none
+is on file or it never expires). The card reads **On file** (Expires …),
+**Expired** (…) or **Not recorded** instead of 1/1 or 0/1, and a missing
+certificate's warning says no certification is on file rather than calling it
+expired.
+
+**Compliance exports grade like the matrix** (#4477) — see
+[Member & Officer Exports](#member--officer-exports).
+
+**Rolling requirements in the member compliance emails** (#4482).
+`compliance_member_notices` read a rolling requirement's `window_end` — the
+grading day — as its deadline and as part of the notice key, so both emails
+went out daily. A rolling requirement (`get_rolling_period_months`) now has no
+deadline (a catch-up deadline still counts) and its notice key is the
+requirement id alone. `_already_noticed` treats a pre-upgrade
+`id|window_end` log key for the same id as sent, so the first run after the
+upgrade does not re-notify. Known cost (`docs/KNOWN_LIMITATIONS.md`): a member
+who meets it and later falls short again is not told again by this notice.
+
+**Course Links under concurrency** (#4479). `_apply` reads the unlinked
+records with a locking read and re-reads and locks them just before each
+UPDATE, so only the records it changed are updated, counted and given undo
+rows; a link that changed nothing is not recorded. A deadlock or lock-wait
+timeout between two overlapping links (`CourseLinkBusy`) answers 409
+"Another course link was changing these records at the same time. Nothing was
+linked; try again." The undo's revert UPDATE re-checks, in its WHERE, that the
+record is still on the link's course and untouched since the link
+(`EDIT_TOLERANCE`); every record it skips is counted as kept.
+
+**Training templates keep the session's training details** (#4459, migration
+`56377b666eb3`). A Training event template carries
+`event_templates.training_details`: course (library, one-off name and code,
+or none), training type, credit hours and their source, lead instructor and
+certification settings — not requirement/program links, Counts toward
+attendance or completion settings. Picking the template on Training Admin's
+**Create Session** or Events' **Create Event** fills **Training Info**;
+`reconcileTemplateTraining` falls back to No course yet for a course no longer
+in the library and clears an instructor who is no longer a current member,
+with a note. Editing is in **Events → Event Templates** (the editor's
+**Training Details** section); **Save as Template** on a Training event saves
+its session's details. See [Events](Module-Events).
+
+**Member files** (#4458, #4483, #4476):
+
+- **Request bodies refuse `attachments`.** `TrainingRecordCreate`,
+  `TrainingRecordUpdate`, `TrainingSubmissionCreate` and
+  `TrainingSubmissionUpdate` answer 422 at `body.attachments` for any value,
+  `null` and `[]` included ("attachments cannot be set here; add a file by
+  uploading it to …"). The upload routes and the approval copy are the only
+  writers. A stored entry carries a `file_path` no client sees, so a body
+  could only replace it with bare names, orphaning the files and letting a
+  fake name satisfy the required-evidence setting. Migration `0c22a95b94b8`
+  settled the bare strings already stored as `{"file_name": s}`.
+- **Stable entry ids.** Every entry carries `id = str(uuid4())`
+  (`app/utils/training_attachments.py` is the write-side authority; the
+  approval copy keeps the submission entry's id). The submission removal and
+  both download routes take an id or a legacy index; a removal naming an
+  absent id is a 204 no-op, and a legacy index takes `?expected_id=` and
+  answers 409 when the list has moved. Migration `7d6769fca85c` stamps the
+  stored entries.
+- **Shared certificates are kept.** Removing a submission attachment or
+  deleting a submission goes through `member_files.remove_unreferenced_files`
+  after the commit, so a file a voided record (left by `reverse_approval`) or
+  any other collected row still names is kept.
+  `tests/test_file_reference_coverage_ratchet.py` ties every file-path column
+  to `upload_relocation.collect_references` or a commented allowlist.
+- **Locks.** `get_submission(for_update=True)` is taken by review, submit,
+  update, delete, reverse-approval and attachment removal; review and submit
+  lock the member's `users` row `FOR SHARE` first (member, submission,
+  records — the order anonymisation and the permanent delete take). The
+  approval commits once, with its record. Uploads store outside the lock,
+  then re-read the row locked and check again; a refused upload deletes its
+  stored file. Retention locks the records it rewrites.
+- **An upload to a voided record** is a 400 ("A voided training record can't
+  take new attachments").
+- **Retention counts auto-approved submissions from `submitted_at`**
+  (`coalesce(reviewed_at, submitted_at)`); `reviewed_at` is written only by an
+  officer's review, so an auto-approved submission's files were never deleted.
+- Still open (`docs/KNOWN_LIMITATIONS.md`): a certificate kept for a voided
+  record is outside the retention sweep, a record's own file has no removal
+  route, and file names on path-less entries survive anonymisation.
 
 ## Cross-Module Connections
 

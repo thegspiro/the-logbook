@@ -48,7 +48,11 @@ batch scanner is titled **Distribute Items**.
 ### Tracking and stock
 
 - **Individual & Pool Items** — individual items (serialized, assigned to one
-  person) and pool/quantity items (shared stock), selected by `tracking_type`
+  person) and pool/quantity items (shared stock), selected by `tracking_type`.
+  A new item's tracking type follows its category until the officer picks one:
+  `consumable` and `medical` categories start it as **Pool**, anything else
+  (or no category) as **Individual** _(2026-11-18, W38-3, #4399;
+  `defaultTrackingTypeFor` in `modules/inventory/types`)_. Edits never change it
 - **Item Issuances** — full lifecycle for pool issue/return with user,
   quantity, reason and condition. Issuing more than is on hand, or returning
   more than was issued, is refused with the counts rather than silently
@@ -106,7 +110,13 @@ batch scanner is titled **Distribute Items**.
   purchases; quartermasters approve, decline and fulfil (see
   [Gear Requests](#gear-requests))
 - **Return Requests** — members submit return notices from My Issued Gear;
-  a quartermaster reviews them before processing
+  a quartermaster reviews them before processing. While an item has an open
+  (`requested`) notice, its row on My Issued Gear reads **Quartermaster
+  notified** with the date instead of offering the button again — the same
+  one-open-notice-per-item rule `create_return_request` refuses a second
+  notice by _(W39-9, 2026-11-20)_. The page loads gear requests and return
+  notices independently (`Promise.allSettled`), so one failing no longer
+  blanks the other
 - **Gear Kits** — named bundles (e.g. "New Recruit PPE Kit") issued in one
   operation with per-component tracking. A component can be flagged
   **optional** (`equipment_kit_items.optional`), and an optional component
@@ -124,9 +134,13 @@ batch scanner is titled **Distribute Items**.
   their own sizes (`/inventory/my/size-preferences`) and quartermasters edit
   any member's (`/inventory/members/{user_id}/size-preferences`). Nine fields
   (shirt size, garment fit, pant waist/inseam, jacket, boot size/width, glove,
-  hat) plus a `custom_sizes` JSON column. Unset sizes return 404 and open the
-  form blank. Used for auto-selection during kit issuance, the request form
-  and the impact planner
+  hat) plus a `custom_sizes` JSON column. Unset sizes return 200 with a `null`
+  body and open the form blank _(2026-11-15; until then a 404, which the
+  frontend service still reads as "none saved" during a rolling upgrade)_. A
+  refused size is left out and the rest save ("Sizes saved, except …"); a
+  failed load keeps **Save Sizes** off so a blank form cannot clear stored
+  sizes. Used for auto-selection during kit issuance, the request form and the
+  impact planner
 - **Departure Clearance** — full lifecycle (initiate → resolve line items →
   complete) for tracking property return when members depart; each clearance
   has its own page at `/inventory/admin/clearances/:clearanceId`
@@ -532,6 +546,11 @@ results beyond the exact ones are ordered by match quality.
 
 Absence means the defaults, never "off".
 
+Each control saves on its own. Since 2026-11-20 the page says under the
+control what happened to a change: a refused save's reason, an empty or
+unusable entry ("Enter whole hours, from 0 to 24. 2 is kept."), or a number
+folded back into range ("24 is the most allowed. 24 was saved.").
+
 ### Permissions
 
 | Permission               | Grants                                                |
@@ -583,7 +602,7 @@ new issue end to end and acts on the result. Saved plans live in
 | **Bulk-issue**                  | Issues matching on-hand pool stock through `issue_from_pool`; skips are reported with reasons; respects allowances; publishes a WebSocket event                                                                                            |
 | **Allowance-aware warnings**    | Flags members at or over their per-category `issuance_allowances` cap (a role-specific allowance beats an org-wide one); bulk-issue skips them                                                                                             |
 | **Request sizes**               | In-app notification to members with no size on file, linking to self-service preferences                                                                                                                                                   |
-| **PDF / CSV**                   | Print-ready PDF summary (ReportLab; organization name, filter parameters, member names and contact strings are XML-escaped) and client-side CSV export                                                                                     |
+| **PDF / CSV**                   | Print-ready PDF summary (ReportLab; organization name, filter parameters, member names and contact strings are XML-escaped) and client-side CSV export. Every page is footed "Inventory Impact Plan · Page N of M" (2026-11-18, #4421)     |
 | **Saved plans**                 | Named filter sets for reuse (annual refresh, seasonal cycles)                                                                                                                                                                              |
 
 Member contact details follow the org's `contact_info_visibility` settings

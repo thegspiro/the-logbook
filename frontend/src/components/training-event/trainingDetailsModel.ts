@@ -9,9 +9,10 @@
  * pitfall #1).
  */
 
-import type { EventTrainingDetails, EventTrainingDetailsUpdate } from '../../types/event';
+import type { EventTemplateTrainingDetails, EventTrainingDetails, EventTrainingDetailsUpdate } from '../../types/event';
 import type { TrainingCourse, TrainingType } from '../../types/training';
 import type { TrainingSessionResponse } from '../../services/api';
+import { TRAINING_TYPE_LABELS } from '../../constants/enums';
 import { localToUTC } from '../../utils/dateFormatting';
 import { blankToNull, numberOrNull } from '../../utils/formValues';
 import type { ServerFieldSpec } from '../../utils/serverFieldErrors';
@@ -112,6 +113,11 @@ export interface InstructorOption {
   name: string;
   /** The name with the member's rank, as the picker lists them. */
   label: string;
+  /**
+   * No longer a current member. Kept so a session that already names them
+   * still shows them, but never offered or matched as a new instructor.
+   */
+  former?: boolean | undefined;
 }
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -454,6 +460,151 @@ export const toUpdatePayload = (
     : {}),
   attendance_requirement_ids: value.attendance_requirement_ids,
 });
+
+/**
+ * The training details a Training template saves (owner decision
+ * 2026-11-20): the course, training type, credit hours and their source, lead
+ * instructor and certification settings, and nothing else. Category, program,
+ * requirement, attendance links and the completion settings are not carried.
+ *
+ * The backend's EventTemplateTrainingDetails (schemas/event.py) settles the
+ * same shape and is the authority: this builds the request the same way, and
+ * must not refuse anything that accepts. 'course' hours keep the figure the
+ * form holds, so the template can still be saved, and applied, without the
+ * Course Library.
+ */
+export const toTemplateTrainingDetails = (value: TrainingDetailsForm): EventTemplateTrainingDetails => {
+  const hours = value.credit_hours_source === 'duration' ? undefined : toNumber(value.credit_hours);
+  return {
+    course_mode: value.course_mode,
+    course_id: value.course_mode === 'library' ? value.course_id || null : null,
+    course_name: value.course_mode === 'oneoff' ? value.course_name.trim() || null : null,
+    course_code: value.course_mode === 'oneoff' ? value.course_code.trim() || null : null,
+    training_type: value.training_type,
+    credit_hours: hours ?? null,
+    credit_hours_source: value.credit_hours_source,
+    instructor_id: value.instructor_id || null,
+    instructor: value.instructor.trim() || null,
+    issues_certification: value.issues_certification,
+    certification_number_prefix: value.issues_certification ? value.certification_number_prefix.trim() || null : null,
+    issuing_agency: value.issues_certification ? value.issuing_agency.trim() || null : null,
+    expiration_months: value.issues_certification ? (toNumber(value.expiration_months) ?? null) : null,
+  };
+};
+
+const COURSE_MODES: readonly CourseMode[] = ['none', 'library', 'oneoff'];
+const HOURS_SOURCES: readonly CreditHoursSource[] = ['duration', 'course', 'manual'];
+
+/**
+ * Training Info for a template's saved details: they are laid onto the
+ * defaults, so every field the template does not carry starts where a new
+ * session does. A value the form cannot hold falls back to its default
+ * rather than failing (pitfall #19): the template is read, not refused.
+ */
+export const fromTemplateTrainingDetails = (details: EventTemplateTrainingDetails): TrainingDetailsForm => {
+  const mode = COURSE_MODES.includes(details.course_mode) ? details.course_mode : 'none';
+  const source = HOURS_SOURCES.includes(details.credit_hours_source) ? details.credit_hours_source : 'duration';
+  const hours = typeof details.credit_hours === 'number' ? String(details.credit_hours) : '';
+  const issues = details.issues_certification === true;
+  return {
+    ...DEFAULT_TRAINING_DETAILS,
+    course_mode: mode,
+    course_id: mode === 'library' ? (details.course_id ?? '') : '',
+    course_name: mode === 'oneoff' ? (details.course_name ?? '') : '',
+    course_code: mode === 'oneoff' ? (details.course_code ?? '') : '',
+    training_type:
+      details.training_type in TRAINING_TYPE_LABELS
+        ? (details.training_type as TrainingType)
+        : DEFAULT_TRAINING_DETAILS.training_type,
+    // Hours the form would have to show without a figure follow the length.
+    credit_hours: source === 'duration' ? '' : hours,
+    credit_hours_source: source !== 'duration' && !hours ? 'duration' : source,
+    instructor_id: details.instructor_id ?? '',
+    instructor: details.instructor ?? '',
+    issues_certification: issues,
+    certification_number_prefix: issues ? (details.certification_number_prefix ?? '') : '',
+    issuing_agency: issues ? (details.issuing_agency ?? '') : '',
+    expiration_months: issues && details.expiration_months ? String(details.expiration_months) : '',
+  };
+};
+
+export const TEMPLATE_COURSE_GONE_NOTE =
+  "This template's course is no longer in the Course Library, so the session starts on No course yet.";
+export const TEMPLATE_INSTRUCTOR_GONE_NOTE =
+  "This template's lead instructor is no longer a current member, so Lead instructor starts empty.";
+
+/**
+ * A template's training details checked against the Course Library and the
+ * member list once they have loaded. Neither is tied to the template by a
+ * foreign key, so a course can be deactivated or removed and an instructor
+ * can leave:
+ *
+ * - a library course the library no longer lists starts on No course yet,
+ *   with a note — the same course the wizard marks as no longer listed;
+ * - a listed course whose hours follow it gets its current figure, or follows
+ *   the event's length if it has none;
+ * - an instructor who names no current member is cleared, with a note; a
+ *   current one's name is refreshed. A name with no member id is kept.
+ *
+ * `courses` or `members` undefined means that list failed to load: that part
+ * is skipped, so a network blip never drops the template's choice (event
+ * create still refuses a former instructor, under Lead instructor).
+ *
+ * Only a field that still equals what the template seeded (`seeded`) is
+ * touched: an officer who typed before the lists arrived keeps what they
+ * typed.
+ */
+export const reconcileTemplateTraining = (
+  value: TrainingDetailsForm,
+  seeded: TrainingDetailsForm,
+  courses: readonly TrainingCourse[] | undefined,
+  members: readonly InstructorOption[] | undefined
+): { value: TrainingDetailsForm; notes: string[] } => {
+  let next = value;
+  const notes: string[] = [];
+  const courseUntouched =
+    seeded.course_mode === 'library' &&
+    value.course_mode === seeded.course_mode &&
+    value.course_id === seeded.course_id &&
+    value.course_id !== '';
+  const hoursUntouched =
+    value.credit_hours_source === seeded.credit_hours_source && value.credit_hours === seeded.credit_hours;
+  if (courses && courseUntouched) {
+    const course = courses.find((c) => c.id === value.course_id);
+    if (!course) {
+      next = {
+        ...next,
+        course_mode: 'none',
+        course_id: '',
+        ...(hoursUntouched && value.credit_hours_source === 'course'
+          ? { credit_hours: '', credit_hours_source: 'duration' as const }
+          : {}),
+      };
+      notes.push(TEMPLATE_COURSE_GONE_NOTE);
+    } else if (hoursUntouched && value.credit_hours_source === 'course') {
+      const hours = courseCreditHours(course);
+      next =
+        hours === undefined
+          ? { ...next, credit_hours: '', credit_hours_source: 'duration' }
+          : { ...next, credit_hours: String(hours) };
+    }
+  }
+  if (
+    members &&
+    seeded.instructor_id &&
+    value.instructor_id === seeded.instructor_id &&
+    value.instructor === seeded.instructor
+  ) {
+    const member = members.find((m) => m.id === value.instructor_id);
+    if (!member || member.former) {
+      next = { ...next, instructor_id: '', instructor: '' };
+      notes.push(TEMPLATE_INSTRUCTOR_GONE_NOTE);
+    } else if (member.name !== value.instructor) {
+      next = { ...next, instructor: member.name };
+    }
+  }
+  return { value: next, notes };
+};
 
 /**
  * An edit of a finalized event changes only which attendance requirements the

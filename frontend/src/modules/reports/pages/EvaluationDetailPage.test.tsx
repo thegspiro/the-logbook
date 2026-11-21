@@ -25,6 +25,8 @@ const amend = vi.fn();
 const saveResponse = vi.fn();
 const submitResponse = vi.fn();
 const saveBlob = vi.fn();
+const listStepAssigneeCandidates = vi.fn();
+const assignStep = vi.fn();
 vi.mock('../../../utils/saveBlob', () => ({ saveBlob: (...a: unknown[]) => saveBlob(...a) as unknown }));
 vi.mock('../../../stores/authStore', () => ({
   useAuthStore: (selector: (s: { user: { full_name: string } }) => unknown) =>
@@ -43,6 +45,8 @@ vi.mock('../services/evaluationsApi', () => ({
     amend: (...a: unknown[]) => amend(...a) as unknown,
     saveResponse: (...a: unknown[]) => saveResponse(...a) as unknown,
     submitResponse: (...a: unknown[]) => submitResponse(...a) as unknown,
+    listStepAssigneeCandidates: (...a: unknown[]) => listStepAssigneeCandidates(...a) as unknown,
+    assignStep: (...a: unknown[]) => assignStep(...a) as unknown,
   },
 }));
 
@@ -171,6 +175,8 @@ describe('EvaluationDetailPage', () => {
       amend,
       saveResponse,
       submitResponse,
+      listStepAssigneeCandidates,
+      assignStep,
     ])
       m.mockReset();
     get.mockResolvedValue(detail());
@@ -180,6 +186,38 @@ describe('EvaluationDetailPage', () => {
     renderPage();
     expect(await screen.findAllByText('11.5 h')).not.toHaveLength(0);
     expect(screen.getByText('Suggested: Level 4')).toBeInTheDocument();
+  });
+
+  it('shows the last review’s grades and goals, and links to it', async () => {
+    get.mockResolvedValue(
+      detail({
+        previous_review: {
+          evaluation_id: 'ev0',
+          period_name: '2025 Annual',
+          period_start: '2025-01-01',
+          period_end: '2025-12-31',
+          overall: 'Exceeds expectations',
+          sections: [{ key: 'core', title: 'Core duties', label: 'Meets expectations' }],
+          goals: [{ key: 'next', label: 'Goals for next year', text: 'Finish driver training.' }],
+        },
+      })
+    );
+    renderPage();
+
+    const panel = await screen.findByRole('region', { name: 'Last review' });
+    expect(within(panel).getByText('Exceeds expectations')).toBeInTheDocument();
+    expect(within(panel).getByText('Meets expectations')).toBeInTheDocument();
+    expect(within(panel).getByText('Finish driver training.')).toBeInTheDocument();
+    expect(within(panel).getByRole('link', { name: 'Open the last review' })).toHaveAttribute(
+      'href',
+      '/reports/evaluations/ev0'
+    );
+  });
+
+  it('shows no last review when the server sends none', async () => {
+    renderPage();
+    expect(await screen.findAllByText('11.5 h')).not.toHaveLength(0);
+    expect(screen.queryByRole('region', { name: 'Last review' })).not.toBeInTheDocument();
   });
 
   it('asks for a reason only when the rating departs from the suggestion', async () => {
@@ -586,5 +624,76 @@ describe('EvaluationDetailPage', () => {
       await user.click(screen.getByRole('button', { name: 'Download PDF' }));
       await waitFor(() => expect(saveBlob).toHaveBeenLastCalledWith(blob, 'evaluation-2026-12-31-with-response.pdf'));
     });
+  });
+});
+
+describe('EvaluationDetailPage — naming who takes a step', () => {
+  const approval = {
+    key: 'chief_approval',
+    type: 'approval' as const,
+    label: 'Chief approval',
+    order: 2,
+    status: 'pending' as const,
+    due_date: '2027-02-10',
+    completed_at: null,
+  };
+  const managed = (overrides: Partial<EvaluationDetail> = {}) =>
+    detail({
+      steps: [...detail().steps, approval],
+      viewer: { ...detail().viewer, is_evaluator: false, can_edit_evaluation: false, can_assign_steps: true },
+      ...overrides,
+    });
+
+  beforeEach(() => {
+    get.mockReset();
+    listStepAssigneeCandidates.mockReset();
+    assignStep.mockReset();
+    listStepAssigneeCandidates.mockResolvedValue([
+      { id: 'u2', name: 'Riley Lieutenant' },
+      { id: 'u3', name: 'Sam Captain' },
+    ]);
+  });
+
+  it('names the chosen member on the step and shows them', async () => {
+    get.mockResolvedValue(managed());
+    assignStep.mockResolvedValue(
+      managed({ steps: [...detail().steps, { ...approval, assignee: { id: 'u2', name: 'Riley Lieutenant' } }] })
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Assign Chief approval' }));
+    expect(listStepAssigneeCandidates).toHaveBeenCalledWith('ev1', 'chief_approval');
+    const select = await screen.findByLabelText('Completed by');
+    await screen.findByRole('option', { name: 'Riley Lieutenant' });
+    await user.selectOptions(select, 'u2');
+    await user.click(screen.getByRole('button', { name: 'Assign' }));
+
+    await waitFor(() => expect(assignStep).toHaveBeenCalledWith('ev1', 'chief_approval', 'u2'));
+    expect(await screen.findByText('Assigned to Riley Lieutenant')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Change who takes Chief approval' })).toBeInTheDocument();
+  });
+
+  it('hands a named step back to the position with null', async () => {
+    const named = { ...approval, assignee: { id: 'u2', name: 'Riley Lieutenant' } };
+    get.mockResolvedValue(managed({ steps: [...detail().steps, named] }));
+    assignStep.mockResolvedValue(managed());
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Change who takes Chief approval' }));
+    await screen.findByRole('option', { name: 'Riley Lieutenant' });
+    await user.selectOptions(screen.getByLabelText('Completed by'), '');
+    await user.click(screen.getByRole('button', { name: 'Hand back' }));
+
+    await waitFor(() => expect(assignStep).toHaveBeenCalledWith('ev1', 'chief_approval', null));
+  });
+
+  it('offers no assigning to a viewer the server did not allow it', async () => {
+    get.mockResolvedValue(detail({ steps: [...detail().steps, approval] }));
+    renderPage();
+
+    expect(await screen.findByText('Chief approval')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Assign Chief approval/ })).not.toBeInTheDocument();
   });
 });

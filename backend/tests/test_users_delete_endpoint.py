@@ -20,6 +20,7 @@ from fastapi import HTTPException
 from app.api.v1.endpoints import users as users_endpoint
 from app.models.user import UserStatus
 from app.services.member_files import FileRemoval, MemberFiles
+from app.services.user_deletion_service import ApplicantRecordRemoval
 from tests.fake_request import fake_request
 
 
@@ -95,7 +96,19 @@ class TestDeleteUserHard:
         )
         monkeypatch.setattr(
             users_endpoint,
-            "remove_files_after_hard_delete",
+            "delete_transferred_applications",
+            AsyncMock(
+                return_value=ApplicantRecordRemoval(applications=0, document_paths={})
+            ),
+        )
+        monkeypatch.setattr(
+            users_endpoint,
+            "enqueue_pending_file_deletions",
+            MagicMock(return_value=[]),
+        )
+        monkeypatch.setattr(
+            users_endpoint,
+            "process_pending_file_deletions",
             AsyncMock(return_value=FileRemoval()),
         )
 
@@ -360,10 +373,17 @@ class TestAssignUserRoles:
         monkeypatch.setattr(users_endpoint, "_enforce_role_grant_ceiling", AsyncMock())
         monkeypatch.setattr(users_endpoint, "get_client_ip", lambda request: "1.2.3.4")
 
-        kept = SimpleNamespace(id="role-kept", permissions=[], slug="member")
-        added = SimpleNamespace(id="role-added", permissions=[], slug="treasurer")
+        kept = SimpleNamespace(
+            id="role-kept", permissions=[], slug="member", name="Member"
+        )
+        added = SimpleNamespace(
+            id="role-added", permissions=[], slug="treasurer", name="Treasurer"
+        )
         target = _member(
-            roles=[kept, SimpleNamespace(id="role-dropped", slug="driver")]
+            roles=[
+                kept,
+                SimpleNamespace(id="role-dropped", slug="driver", name="Driver"),
+            ]
         )
         db = _db(
             _result(scalar_one=target),
@@ -395,8 +415,12 @@ class TestAssignUserRoles:
         monkeypatch.setattr(users_endpoint, "_enforce_role_grant_ceiling", ceiling)
         monkeypatch.setattr(users_endpoint, "get_client_ip", lambda request: "1.2.3.4")
 
-        chief = SimpleNamespace(id="role-chief", permissions=["*"], slug="chief")
-        driver = SimpleNamespace(id="role-driver", permissions=[], slug="driver")
+        chief = SimpleNamespace(
+            id="role-chief", permissions=["*"], slug="chief", name="Chief"
+        )
+        driver = SimpleNamespace(
+            id="role-driver", permissions=[], slug="driver", name="Driver"
+        )
         target = _member(roles=[chief])
         db = _db(
             _result(scalar_one=target),
@@ -414,3 +438,35 @@ class TestAssignUserRoles:
 
         checked = ceiling.await_args.args[1]
         assert checked == [driver]
+
+    async def test_the_audit_row_names_what_was_added_and_removed(self, monkeypatch):
+        """W11-13: the row stored only the resulting ids, so the member's
+        history could say no more than "All roles replaced"."""
+        monkeypatch.setattr(users_endpoint, "_enforce_role_grant_ceiling", AsyncMock())
+        monkeypatch.setattr(users_endpoint, "get_client_ip", lambda request: "1.2.3.4")
+
+        kept = SimpleNamespace(
+            id="role-kept", permissions=[], slug="member", name="Member"
+        )
+        added = SimpleNamespace(
+            id="role-added", permissions=[], slug="historian", name="Historian"
+        )
+        dropped = SimpleNamespace(id="role-dropped", slug="driver", name="Driver")
+        target = _member(roles=[kept, dropped])
+        db = _db(
+            _result(scalar_one=target),
+            _result(scalars_all=[kept, added]),
+            _result(scalar_one=target),
+        )
+
+        await users_endpoint.assign_user_roles(
+            user_id=target.id,
+            role_assignment=SimpleNamespace(role_ids=["role-kept", "role-added"]),
+            request=MagicMock(),
+            db=db,
+            current_user=_member(id="admin-1"),
+        )
+
+        event_data = users_endpoint.log_audit_event.await_args.kwargs["event_data"]
+        assert event_data["roles_added"] == ["Historian"]
+        assert event_data["roles_removed"] == ["Driver"]

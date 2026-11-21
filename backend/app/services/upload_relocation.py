@@ -32,7 +32,7 @@ import shutil
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Callable, Collection, Iterable, Optional
 
 from loguru import logger
 from sqlalchemy import select
@@ -193,310 +193,341 @@ def _json_paths(value: Any) -> list[str]:
 
 
 async def collect_references(
-    db: AsyncSession, organization_id: Optional[str]
+    db: AsyncSession,
+    organization_id: Optional[str],
+    *,
+    areas: Optional[Collection[StorageArea]] = None,
 ) -> list[Reference]:
     """Every stored file reference, in every table that holds one. Also the
-    list ``remote_migration`` moves into a department's bucket."""
+    list ``remote_migration`` moves into a department's bucket.
+
+    With *areas*, only the tables whose references can resolve into one of
+    them are read (by :func:`areas_for`); a reference from any other table is
+    confined to its own area and could never name a file there, so leaving
+    it out changes no answer about those areas. ``None`` reads every table.
+    """
     refs: list[Reference] = []
+
+    def wanted(area: StorageArea) -> bool:
+        return areas is None or not set(areas_for(area)).isdisjoint(areas)
 
     def scoped(query, column):
         return query.where(column == organization_id) if organization_id else query
 
     # Self-report submissions before training records: an approved
     # certificate is referenced by both, and should move under its submission.
-    for row in (
-        await db.execute(
-            scoped(
-                select(
-                    TrainingSubmission.id,
+    if wanted(StorageArea.SELF_REPORTS):
+        for row in (
+            await db.execute(
+                scoped(
+                    select(
+                        TrainingSubmission.id,
+                        TrainingSubmission.organization_id,
+                        TrainingSubmission.attachments,
+                    ),
                     TrainingSubmission.organization_id,
-                    TrainingSubmission.attachments,
-                ),
-                TrainingSubmission.organization_id,
-            )
-        )
-    ).all():
-        for path in _json_paths(row.attachments):
-            refs.append(
-                Reference(
-                    "training_submissions",
-                    str(row.id),
-                    str(row.organization_id),
-                    StorageArea.SELF_REPORTS,
-                    str(row.id),
-                    path,
                 )
             )
-    for row in (
-        await db.execute(
-            scoped(
-                select(
-                    TrainingRecord.id,
+        ).all():
+            for path in _json_paths(row.attachments):
+                refs.append(
+                    Reference(
+                        "training_submissions",
+                        str(row.id),
+                        str(row.organization_id),
+                        StorageArea.SELF_REPORTS,
+                        str(row.id),
+                        path,
+                    )
+                )
+    if wanted(StorageArea.TRAINING_RECORDS):
+        for row in (
+            await db.execute(
+                scoped(
+                    select(
+                        TrainingRecord.id,
+                        TrainingRecord.organization_id,
+                        TrainingRecord.attachments,
+                    ),
                     TrainingRecord.organization_id,
-                    TrainingRecord.attachments,
-                ),
-                TrainingRecord.organization_id,
-            )
-        )
-    ).all():
-        for path in _json_paths(row.attachments):
-            refs.append(
-                Reference(
-                    "training_records",
-                    str(row.id),
-                    str(row.organization_id),
-                    StorageArea.TRAINING_RECORDS,
-                    str(row.id),
-                    path,
                 )
             )
-    for row in (
-        await db.execute(
-            scoped(
-                select(Event.id, Event.organization_id, Event.attachments),
-                Event.organization_id,
-            )
-        )
-    ).all():
-        for path in _json_paths(row.attachments):
-            refs.append(
-                Reference(
-                    "events",
-                    str(row.id),
-                    str(row.organization_id),
-                    StorageArea.EVENT_ATTACHMENTS,
-                    str(row.id),
-                    path,
+        ).all():
+            for path in _json_paths(row.attachments):
+                refs.append(
+                    Reference(
+                        "training_records",
+                        str(row.id),
+                        str(row.organization_id),
+                        StorageArea.TRAINING_RECORDS,
+                        str(row.id),
+                        path,
+                    )
+                )
+    if wanted(StorageArea.EVENT_ATTACHMENTS):
+        for row in (
+            await db.execute(
+                scoped(
+                    select(Event.id, Event.organization_id, Event.attachments),
+                    Event.organization_id,
                 )
             )
-    for row in (
-        await db.execute(
-            scoped(
-                select(Document.id, Document.organization_id, Document.file_path),
-                Document.organization_id,
-            ).where(Document.file_path.isnot(None))
-        )
-    ).all():
-        refs.append(
-            Reference(
-                "documents",
-                str(row.id),
-                str(row.organization_id),
-                StorageArea.DOCUMENTS,
-                str(row.id),
-                row.file_path,
+        ).all():
+            for path in _json_paths(row.attachments):
+                refs.append(
+                    Reference(
+                        "events",
+                        str(row.id),
+                        str(row.organization_id),
+                        StorageArea.EVENT_ATTACHMENTS,
+                        str(row.id),
+                        path,
+                    )
+                )
+    if wanted(StorageArea.DOCUMENTS):
+        for row in (
+            await db.execute(
+                scoped(
+                    select(Document.id, Document.organization_id, Document.file_path),
+                    Document.organization_id,
+                ).where(Document.file_path.isnot(None))
             )
-        )
-    for row in (
-        await db.execute(
-            scoped(
-                select(
-                    ProspectDocument.id,
-                    ProspectDocument.prospect_id,
+        ).all():
+            refs.append(
+                Reference(
+                    "documents",
+                    str(row.id),
+                    str(row.organization_id),
+                    StorageArea.DOCUMENTS,
+                    str(row.id),
+                    row.file_path,
+                )
+            )
+    if wanted(StorageArea.APPLICANTS):
+        for row in (
+            await db.execute(
+                scoped(
+                    select(
+                        ProspectDocument.id,
+                        ProspectDocument.prospect_id,
+                        ProspectiveMember.organization_id,
+                        ProspectDocument.file_path,
+                    ).join(
+                        ProspectiveMember,
+                        ProspectiveMember.id == ProspectDocument.prospect_id,
+                    ),
                     ProspectiveMember.organization_id,
-                    ProspectDocument.file_path,
-                ).join(
-                    ProspectiveMember,
-                    ProspectiveMember.id == ProspectDocument.prospect_id,
-                ),
-                ProspectiveMember.organization_id,
+                )
             )
-        )
-    ).all():
-        refs.append(
-            Reference(
-                "prospect_documents",
-                str(row.id),
-                str(row.organization_id),
-                StorageArea.APPLICANTS,
-                str(row.prospect_id),
-                row.file_path,
+        ).all():
+            refs.append(
+                Reference(
+                    "prospect_documents",
+                    str(row.id),
+                    str(row.organization_id),
+                    StorageArea.APPLICANTS,
+                    str(row.prospect_id),
+                    row.file_path,
+                )
             )
-        )
-    for row in (
-        await db.execute(
-            scoped(
-                select(
-                    SuggestionAttachment.id,
+    if wanted(StorageArea.SUGGESTIONS):
+        for row in (
+            await db.execute(
+                scoped(
+                    select(
+                        SuggestionAttachment.id,
+                        SuggestionAttachment.organization_id,
+                        SuggestionAttachment.suggestion_id,
+                        SuggestionAttachment.file_path,
+                    ),
                     SuggestionAttachment.organization_id,
-                    SuggestionAttachment.suggestion_id,
-                    SuggestionAttachment.file_path,
-                ),
-                SuggestionAttachment.organization_id,
+                )
             )
-        )
-    ).all():
-        refs.append(
-            Reference(
-                "suggestion_attachments",
-                str(row.id),
-                str(row.organization_id),
-                StorageArea.SUGGESTIONS,
-                str(row.suggestion_id),
-                row.file_path,
+        ).all():
+            refs.append(
+                Reference(
+                    "suggestion_attachments",
+                    str(row.id),
+                    str(row.organization_id),
+                    StorageArea.SUGGESTIONS,
+                    str(row.suggestion_id),
+                    row.file_path,
+                )
             )
-        )
-    for row in (
-        await db.execute(
-            scoped(
-                select(
-                    EmailAttachment.id,
-                    EmailAttachment.template_id,
+    if wanted(StorageArea.EMAIL_ATTACHMENTS):
+        for row in (
+            await db.execute(
+                scoped(
+                    select(
+                        EmailAttachment.id,
+                        EmailAttachment.template_id,
+                        EmailTemplate.organization_id,
+                        EmailAttachment.storage_path,
+                    ).join(
+                        EmailTemplate, EmailTemplate.id == EmailAttachment.template_id
+                    ),
                     EmailTemplate.organization_id,
-                    EmailAttachment.storage_path,
-                ).join(EmailTemplate, EmailTemplate.id == EmailAttachment.template_id),
-                EmailTemplate.organization_id,
+                )
             )
-        )
-    ).all():
-        refs.append(
-            Reference(
-                "email_attachments",
-                str(row.id),
-                str(row.organization_id),
-                StorageArea.EMAIL_ATTACHMENTS,
-                str(row.template_id),
-                row.storage_path,
+        ).all():
+            refs.append(
+                Reference(
+                    "email_attachments",
+                    str(row.id),
+                    str(row.organization_id),
+                    StorageArea.EMAIL_ATTACHMENTS,
+                    str(row.template_id),
+                    row.storage_path,
+                )
             )
-        )
     # Minutes attachments were born under the org-first layout, so relocation
     # always finds them current; they are listed for the bucket migration.
-    for row in (
-        await db.execute(
-            scoped(
-                select(
-                    MinutesAttachment.id,
+    if wanted(StorageArea.MINUTES_ATTACHMENTS):
+        for row in (
+            await db.execute(
+                scoped(
+                    select(
+                        MinutesAttachment.id,
+                        MinutesAttachment.organization_id,
+                        MinutesAttachment.minutes_id,
+                        MinutesAttachment.file_path,
+                    ),
                     MinutesAttachment.organization_id,
-                    MinutesAttachment.minutes_id,
-                    MinutesAttachment.file_path,
-                ),
-                MinutesAttachment.organization_id,
+                )
             )
-        )
-    ).all():
-        refs.append(
-            Reference(
-                "minutes_attachments",
-                str(row.id),
-                str(row.organization_id),
-                StorageArea.MINUTES_ATTACHMENTS,
-                str(row.minutes_id),
-                row.file_path,
+        ).all():
+            refs.append(
+                Reference(
+                    "minutes_attachments",
+                    str(row.id),
+                    str(row.organization_id),
+                    StorageArea.MINUTES_ATTACHMENTS,
+                    str(row.minutes_id),
+                    row.file_path,
+                )
             )
-        )
     # Finalized evaluation PDFs, likewise born org-first; listed so a bucket
     # migration carries the signed records with it.
-    for row in (
-        await db.execute(
-            scoped(
-                select(
-                    EvaluationDocument.id,
+    if wanted(StorageArea.EVALUATIONS):
+        for row in (
+            await db.execute(
+                scoped(
+                    select(
+                        EvaluationDocument.id,
+                        EvaluationDocument.organization_id,
+                        EvaluationDocument.evaluation_id,
+                        EvaluationDocument.file_path,
+                    ),
                     EvaluationDocument.organization_id,
-                    EvaluationDocument.evaluation_id,
-                    EvaluationDocument.file_path,
-                ),
-                EvaluationDocument.organization_id,
+                )
             )
-        )
-    ).all():
-        refs.append(
-            Reference(
-                "evaluation_documents",
-                str(row.id),
-                str(row.organization_id),
-                StorageArea.EVALUATIONS,
-                str(row.evaluation_id),
-                row.file_path,
+        ).all():
+            refs.append(
+                Reference(
+                    "evaluation_documents",
+                    str(row.id),
+                    str(row.organization_id),
+                    StorageArea.EVALUATIONS,
+                    str(row.evaluation_id),
+                    row.file_path,
+                )
             )
-        )
     # Waiver request documents, born org-first like the two above.
-    for row in (
-        await db.execute(
-            scoped(
-                select(
-                    AttendanceWaiverAttachment.id,
+    if wanted(StorageArea.ATTENDANCE_WAIVERS):
+        for row in (
+            await db.execute(
+                scoped(
+                    select(
+                        AttendanceWaiverAttachment.id,
+                        AttendanceWaiverAttachment.organization_id,
+                        AttendanceWaiverAttachment.request_id,
+                        AttendanceWaiverAttachment.file_path,
+                    ),
                     AttendanceWaiverAttachment.organization_id,
-                    AttendanceWaiverAttachment.request_id,
-                    AttendanceWaiverAttachment.file_path,
-                ),
-                AttendanceWaiverAttachment.organization_id,
+                )
             )
-        )
-    ).all():
-        refs.append(
-            Reference(
-                "attendance_waiver_attachments",
-                str(row.id),
-                str(row.organization_id),
-                StorageArea.ATTENDANCE_WAIVERS,
-                str(row.request_id),
-                row.file_path,
+        ).all():
+            refs.append(
+                Reference(
+                    "attendance_waiver_attachments",
+                    str(row.id),
+                    str(row.organization_id),
+                    StorageArea.ATTENDANCE_WAIVERS,
+                    str(row.request_id),
+                    row.file_path,
+                )
             )
-        )
     # History photos and media, born org-first: an original, its viewing copy
     # and its thumbnail, a row each. The row has no organization of its own;
     # its media item does.
-    for row in (
-        await db.execute(
-            scoped(
-                select(
-                    HistoryMediaFile.id,
+    if wanted(StorageArea.HISTORY_MEDIA):
+        for row in (
+            await db.execute(
+                scoped(
+                    select(
+                        HistoryMediaFile.id,
+                        HistoryMedia.organization_id,
+                        HistoryMediaFile.media_id,
+                        HistoryMediaFile.file_path,
+                    ).join(HistoryMedia, HistoryMedia.id == HistoryMediaFile.media_id),
                     HistoryMedia.organization_id,
-                    HistoryMediaFile.media_id,
-                    HistoryMediaFile.file_path,
-                ).join(HistoryMedia, HistoryMedia.id == HistoryMediaFile.media_id),
-                HistoryMedia.organization_id,
+                )
             )
-        )
-    ).all():
-        refs.append(
-            Reference(
-                "history_media_files",
-                str(row.id),
-                str(row.organization_id),
-                StorageArea.HISTORY_MEDIA,
-                str(row.media_id),
-                row.file_path,
+        ).all():
+            refs.append(
+                Reference(
+                    "history_media_files",
+                    str(row.id),
+                    str(row.organization_id),
+                    StorageArea.HISTORY_MEDIA,
+                    str(row.media_id),
+                    row.file_path,
+                )
             )
-        )
     # History documents' stripped copies and previews, beside the photos. The
     # originals are ``documents`` rows, collected above with every other one.
-    for row in (
-        await db.execute(
-            scoped(
-                select(
-                    HistoryDocumentFile.id,
+    if wanted(StorageArea.HISTORY_MEDIA):
+        for row in (
+            await db.execute(
+                scoped(
+                    select(
+                        HistoryDocumentFile.id,
+                        HistoryDocument.organization_id,
+                        HistoryDocumentFile.document_id,
+                        HistoryDocumentFile.file_path,
+                    ).join(
+                        HistoryDocument,
+                        HistoryDocument.document_id == HistoryDocumentFile.document_id,
+                    ),
                     HistoryDocument.organization_id,
-                    HistoryDocumentFile.document_id,
-                    HistoryDocumentFile.file_path,
-                ).join(
-                    HistoryDocument,
-                    HistoryDocument.document_id == HistoryDocumentFile.document_id,
-                ),
-                HistoryDocument.organization_id,
+                )
             )
-        )
-    ).all():
-        refs.append(
-            Reference(
-                "history_document_files",
-                str(row.id),
-                str(row.organization_id),
-                StorageArea.HISTORY_MEDIA,
-                str(row.document_id),
-                row.file_path,
+        ).all():
+            refs.append(
+                Reference(
+                    "history_document_files",
+                    str(row.id),
+                    str(row.organization_id),
+                    StorageArea.HISTORY_MEDIA,
+                    str(row.document_id),
+                    row.file_path,
+                )
             )
-        )
     return refs
 
 
-def candidate_areas(ref: Reference) -> tuple[StorageArea, ...]:
+def areas_for(area: StorageArea) -> tuple[StorageArea, ...]:
+    """The areas a reference collected under *area* may resolve into."""
     # A training record can hold an approved self-report certificate, which
     # lives in the self-reports tree; that tree is nested in the records one,
     # so it is checked first.
-    if ref.area is StorageArea.TRAINING_RECORDS:
+    if area is StorageArea.TRAINING_RECORDS:
         return (StorageArea.SELF_REPORTS, StorageArea.TRAINING_RECORDS)
-    return (ref.area,)
+    return (area,)
+
+
+def candidate_areas(ref: Reference) -> tuple[StorageArea, ...]:
+    return areas_for(ref.area)
 
 
 def plan(refs: list[Reference]) -> RelocationReport:

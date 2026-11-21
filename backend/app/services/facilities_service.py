@@ -1008,7 +1008,9 @@ class FacilitiesService:
         await self.db.commit()
         await self.db.refresh(facility)
 
-        return facility
+        # Loaded without relationships, and the refresh leaves them unloaded;
+        # the response nests type and status, which must not lazy-load here.
+        return await self.get_facility(facility_id, organization_id)
 
     async def restore_facility(
         self,
@@ -1032,7 +1034,9 @@ class FacilitiesService:
         await self.db.commit()
         await self.db.refresh(facility)
 
-        return facility
+        # Loaded without relationships, and the refresh leaves them unloaded;
+        # the response nests type and status, which must not lazy-load here.
+        return await self.get_facility(facility_id, organization_id)
 
     # =========================================================================
     # Photo Methods

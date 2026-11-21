@@ -41,6 +41,18 @@ from app.models.apparatus import (
     MaintenanceCategory,
     MaintenanceIntervalUnit,
 )
+from app.models.apparatus_event import (
+    ApparatusEventEvocMode,
+    ApparatusEventSeatCall,
+    ApparatusEventSeatMethod,
+    ApparatusEventSeatType,
+    ApparatusEventTemplate,
+    ApparatusEventTemplateSeat,
+    ApparatusEventTemplateUnit,
+    EventApparatusPlan,
+    EventApparatusSeat,
+    EventApparatusUnit,
+)
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
     AttendanceWaiverAttachment,
@@ -356,8 +368,10 @@ from app.models.knowledge_test import (
 from app.models.label_printer import LabelPrinter
 from app.models.leave_request import (
     LeaveDecisionRule,
+    LeaveMessageKind,
     LeaveNoticeSend,
     LeaveRequest,
+    LeaveRequestMessage,
     LeaveRequestStatus,
     LeaveRequestVote,
     LeaveVote,
@@ -443,6 +457,10 @@ from app.models.org_chart import OrgChartNode, OrgChartNodeHolder
 from app.models.organization_lock import OrganizationLock
 from app.models.organization_officer import OrganizationOfficer
 from app.models.passkey import UserPasskey, WebAuthnChallenge
+from app.models.pending_file_deletion import (
+    PendingDeletionReason,
+    PendingFileDeletion,
+)
 from app.models.public_portal import (
     PublicPortalAccessLog,
     PublicPortalAPIKey,
@@ -541,6 +559,10 @@ from app.models.training import (
     TrainingSession,
     TrainingSessionRequirement,
 )
+from app.models.training_course_link import (
+    TrainingCourseLink,
+    TrainingCourseLinkRecord,
+)
 from app.models.user import (
     LeaveType,
     MemberLeaveOfAbsence,
@@ -560,6 +582,8 @@ from app.models.zeffy import (
 )
 
 __all__ = [
+    "TrainingCourseLink",
+    "TrainingCourseLinkRecord",
     # Admin hours models
     "AdminHoursCategory",
     "AdminHoursEntry",
@@ -673,6 +697,8 @@ __all__ = [
     "AttendanceWaiverWorkflow",
     # Leave of absence requests and scheduled leave notices
     "LeaveDecisionRule",
+    "LeaveMessageKind",
+    "LeaveRequestMessage",
     "LeaveNoticeSend",
     "LeaveRequest",
     "LeaveRequestStatus",
@@ -769,6 +795,17 @@ __all__ = [
     # Open shift swap notices
     "OpenSwapNotice",
     # Event request models
+    # Apparatus event models
+    "ApparatusEventEvocMode",
+    "ApparatusEventSeatMethod",
+    "ApparatusEventSeatType",
+    "ApparatusEventSeatCall",
+    "ApparatusEventTemplate",
+    "ApparatusEventTemplateSeat",
+    "ApparatusEventTemplateUnit",
+    "EventApparatusPlan",
+    "EventApparatusSeat",
+    "EventApparatusUnit",
     "EventRequest",
     "EventRequestActivity",
     "EventRequestEmailTemplate",
@@ -832,6 +869,8 @@ __all__ = [
     "SchedulingModuleConfig",
     # Malware scan of files stored before upload scanning
     "StoredFileScan",
+    "PendingDeletionReason",
+    "PendingFileDeletion",
     "ScanVerdict",
     # Security alert models
     "SecurityAlertRecord",

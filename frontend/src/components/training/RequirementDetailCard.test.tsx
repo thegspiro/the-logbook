@@ -106,13 +106,14 @@ describe('RequirementDetailCard', () => {
     expect(screen.queryByText(/hrs/)).not.toBeInTheDocument();
   });
 
+  // A certification reads by state and date instead (see "a certification").
   it('shows no unit for a requirement graded done or not done', () => {
     render(
       <RequirementDetailCard
         requirement={{
           ...base,
-          name: 'CPR/BLS',
-          requirement_type: 'certification',
+          name: 'Ladder Skills Check',
+          requirement_type: 'skills_evaluation',
           required_hours: 1,
           completed_hours: 0,
         }}
@@ -153,5 +154,171 @@ describe('RequirementDetailCard', () => {
   it('offers no course list for any other requirement', () => {
     render(<RequirementDetailCard requirement={{ ...base, requirement_type: 'hours' }} timezone="UTC" />);
     expect(screen.queryByRole('button', { name: /required courses/ })).not.toBeInTheDocument();
+  });
+
+  describe('an hours requirement', () => {
+    const hours: RequirementDetail = {
+      ...base,
+      name: 'Annual Training Hours',
+      requirement_type: 'hours',
+      required_hours: 72,
+      original_required_hours: 72,
+      completed_hours: 83.25,
+      progress_percentage: 100,
+      is_met: true,
+      due_date: null,
+      days_until_due: null,
+      window_months: 12,
+      monthly_average: 6.94,
+      monthly_needed: 6,
+      monthly_hours: [
+        { month: '2026-10', hours: 6.94, waived: false },
+        { month: '2026-11', hours: 6.94, waived: false },
+      ],
+    };
+
+    it('leads with the monthly average and keeps the total underneath', () => {
+      render(<RequirementDetailCard requirement={hours} timezone="UTC" />);
+      expect(screen.getByText('6.9/6 hrs/mo avg')).toBeInTheDocument();
+      expect(screen.getByText('Averaging 6.9 hours a month of 6 needed')).toBeInTheDocument();
+      expect(screen.getByText('83.25/72 hrs total')).toBeInTheDocument();
+      expect(screen.getByText('Complete')).toBeInTheDocument();
+    });
+
+    it('shows the server average in the monthly panel too', async () => {
+      const user = userEvent.setup();
+      // The two rows average 6.94, but the server's figure is what prints.
+      render(<RequirementDetailCard requirement={{ ...hours, monthly_average: 7.2 }} timezone="UTC" />);
+      await user.click(screen.getByRole('button', { name: /show monthly hours/i }));
+      expect(screen.getByText(/average 7\.2 hrs\/month/)).toBeInTheDocument();
+      expect(screen.getByText('7.2/6 hrs/mo avg')).toBeInTheDocument();
+    });
+
+    it('shows the total alone when the server sends no average', () => {
+      render(<RequirementDetailCard requirement={{ ...hours, monthly_average: null }} timezone="UTC" />);
+      expect(screen.getByText('83.25/72 hrs')).toBeInTheDocument();
+      expect(screen.queryByText(/hrs\/mo avg/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/total$/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('a certification', () => {
+    const cpr: RequirementDetail = {
+      ...base,
+      name: 'CPR/BLS Certification',
+      requirement_type: 'certification',
+      frequency: 'biannual',
+      training_type: 'certification',
+      required_hours: 1,
+      original_required_hours: 1,
+      completed_hours: 1,
+      progress_percentage: 100,
+      is_met: true,
+      due_date: null,
+      days_until_due: null,
+      expiry_date: '2027-03-14',
+    };
+
+    it('reads as on file with its expiry, not 1/1', () => {
+      render(<RequirementDetailCard requirement={cpr} timezone="UTC" />);
+      expect(screen.getByText('On file')).toBeInTheDocument();
+      expect(screen.getByText('(Expires Mar 14, 2027)')).toBeInTheDocument();
+      expect(screen.queryByText(/1\/1/)).not.toBeInTheDocument();
+      expect(screen.getByText('Complete')).toBeInTheDocument();
+    });
+
+    it('reads as on file alone when the certificate never expires', () => {
+      render(<RequirementDetailCard requirement={{ ...cpr, expiry_date: null }} timezone="UTC" />);
+      expect(screen.getByText('On file')).toBeInTheDocument();
+      expect(screen.queryByText(/Expires/)).not.toBeInTheDocument();
+    });
+
+    it('says when a lapsed certificate expired, not 0/1', () => {
+      render(
+        <RequirementDetailCard
+          requirement={{
+            ...cpr,
+            completed_hours: 0,
+            progress_percentage: 0,
+            is_met: false,
+            cert_expired: true,
+            blocks_activity: true,
+            expiry_date: '2026-03-14',
+          }}
+          timezone="UTC"
+        />
+      );
+      expect(screen.getByText('Expired')).toBeInTheDocument();
+      expect(screen.getByText('(Mar 14, 2026)')).toBeInTheDocument();
+      expect(screen.queryByText(/0\/1/)).not.toBeInTheDocument();
+      expect(screen.getByText(/Certification expired — renew ASAP/)).toBeInTheDocument();
+    });
+
+    it('says not recorded when nothing is on file, rather than expired', () => {
+      render(
+        <RequirementDetailCard
+          requirement={{
+            ...cpr,
+            completed_hours: 0,
+            progress_percentage: 0,
+            is_met: false,
+            cert_expired: true,
+            blocks_activity: true,
+            expiry_date: null,
+          }}
+          timezone="UTC"
+          audience="officer"
+        />
+      );
+      expect(screen.getAllByText('Not recorded')).toHaveLength(2);
+      expect(screen.getByText(/No certification on file\. This may prevent the member/)).toBeInTheDocument();
+      expect(screen.queryByText(/expired/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('an optional requirement', () => {
+    it('does not colour a missing optional certificate as a failure', () => {
+      render(
+        <RequirementDetailCard
+          requirement={{
+            ...base,
+            name: 'Hazmat Technician',
+            requirement_type: 'certification',
+            required_hours: 1,
+            completed_hours: 0,
+            progress_percentage: 0,
+            expiry_date: null,
+          }}
+          timezone="UTC"
+          optional
+        />
+      );
+      expect(screen.getByText('Not recorded')).toHaveClass('text-theme-text-primary');
+    });
+
+    it('carries an Optional badge and no overdue wording, however late', () => {
+      render(
+        <RequirementDetailCard
+          requirement={{ ...base, name: 'Rope Rescue', due_date: '2026-01-31', days_until_due: -40 }}
+          timezone="UTC"
+          optional
+        />
+      );
+      expect(screen.getByText('Optional')).toBeInTheDocument();
+      expect(screen.getByText('Not required for compliance')).toBeInTheDocument();
+      expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
+    });
+
+    it('still reads Complete once met', () => {
+      render(
+        <RequirementDetailCard
+          requirement={{ ...base, is_met: true, completed_hours: 4, progress_percentage: 100 }}
+          timezone="UTC"
+          optional
+        />
+      );
+      expect(screen.getByText('Complete')).toBeInTheDocument();
+      expect(screen.queryByText('Not required for compliance')).not.toBeInTheDocument();
+    });
   });
 });

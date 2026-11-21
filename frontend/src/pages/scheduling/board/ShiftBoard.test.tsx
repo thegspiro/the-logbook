@@ -8,6 +8,8 @@ const mockCancelSwap = vi.fn();
 const mockGetShifts = vi.fn();
 const mockTimeOff = vi.fn();
 const mockMyLeaves = vi.fn();
+const mockOutreach = vi.fn();
+const mockCheckPermission = vi.fn();
 
 vi.mock('../../../modules/scheduling', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('../../../modules/scheduling');
@@ -35,12 +37,16 @@ vi.mock('../../../services/api', async () => {
     memberStatusService: {
       getMyLeaves: (...args: unknown[]) => mockMyLeaves(...args) as unknown,
     },
+    apparatusEventService: {
+      getCalendar: (...args: unknown[]) => mockOutreach(...args) as unknown,
+    },
   };
 });
 
 vi.mock('../../../stores/authStore', () => {
   const state = () => ({
     user: { id: 'me-1', full_name: 'Sam Poe', timezone: 'America/New_York' },
+    checkPermission: (permission: string) => mockCheckPermission(permission) as boolean,
   });
   // Callable and carrying getState, as the real store is: consumers that read
   // it outside React (the org-scoped scheduling settings cache) use the latter.
@@ -58,6 +64,7 @@ vi.mock('../../../stores/authStore', () => {
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import type { ShiftRecord } from '../../../modules/scheduling';
 import ShiftBoard from './ShiftBoard';
 
@@ -123,6 +130,10 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
   mockGetMonth.mockResolvedValue([SHORT_DAY, MINE]);
+  mockOutreach.mockReset();
+  mockOutreach.mockResolvedValue([]);
+  mockCheckPermission.mockReset();
+  mockCheckPermission.mockReturnValue(true);
   mockGetWeek.mockResolvedValue([]);
   mockSignup.mockResolvedValue({ id: 'a9' });
   mockEligible.mockResolvedValue({ 'day-25': ['firefighter', 'driver'], 'mine-26': ['firefighter'] });
@@ -729,5 +740,59 @@ describe("the board's today", () => {
     });
     renderBoard();
     expect(await screen.findByText(/The next shift on the schedule is on Mon, Sep 7/)).toBeInTheDocument();
+  });
+});
+
+describe('apparatus outreach on the board', () => {
+  const SANTA = {
+    event_id: 'night-1',
+    title: 'Santamobile 2026',
+    // 6 PM in New York on Aug 25 is already Aug 26 in UTC; the chip belongs
+    // on the 25th, the department's day.
+    start_datetime: '2026-08-25T22:00:00Z',
+    end_datetime: '2026-08-26T01:30:00Z',
+    unit_numbers: ['E1'],
+    filled: 5,
+    total: 7,
+    is_mine: false,
+  };
+
+  it('draws a night as outreach, on its local day, apart from the shift counts', async () => {
+    mockOutreach.mockResolvedValue([SANTA]);
+    const user = userEvent.setup();
+    // The outreach card links to the night, so this render needs a router.
+    render(
+      <MemoryRouter>
+        <ShiftBoard
+          view="month"
+          visibleDate={new Date(2026, 7, 15)}
+          onVisibleDateChange={vi.fn()}
+          onViewChange={vi.fn()}
+        />
+      </MemoryRouter>
+    );
+    await screen.findByText(/open seats this month/i);
+
+    const cell = await grid().findByRole('gridcell', { name: /Tuesday, August 25/ });
+    expect(within(cell).getByText(/5\/7 Santamobile 2026/)).toBeInTheDocument();
+    expect(cell).toHaveAccessibleName(/outreach event, not shifts/);
+    // The shift's own open-seat count is unchanged by the outreach beside it.
+    expect(cell).toHaveAccessibleName(/2 open seats/);
+
+    await user.click(cell);
+    // The desktop panel and the phone sheet are both in the document (only
+    // CSS hides one), so every copy is checked.
+    const cards = await screen.findAllByRole('region', { name: 'Outreach' });
+    for (const card of cards) {
+      expect(within(card).getByRole('link', { name: /Santamobile 2026/ })).toHaveAttribute('href', '/events/night-1');
+    }
+  });
+
+  it('is not asked for by someone who cannot see events', async () => {
+    mockCheckPermission.mockImplementation((permission: string) => permission !== 'events.view');
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+
+    expect(mockOutreach).not.toHaveBeenCalled();
   });
 });

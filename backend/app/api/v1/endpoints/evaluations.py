@@ -30,7 +30,7 @@ Member performance evaluation endpoints — setup.
 
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,6 +47,7 @@ from app.core.utils import ensure_found, handle_service_errors
 from app.models.evaluation import EvaluationTemplateKind
 from app.models.user import User
 from app.schemas.evaluation import (
+    AssigneeCandidates,
     AttentionCounts,
     BuilderOptions,
     BulkDraftPreview,
@@ -78,6 +79,7 @@ from app.schemas.evaluation import (
     ResponseWrite,
     SignatureWrite,
     SignResult,
+    StepAssignment,
     SubmitResult,
     TemplateDraftWrite,
     TemplatePreviewRequest,
@@ -527,6 +529,36 @@ async def list_evaluations(
     )
 
 
+@router.get("/export")
+async def export_period_results(
+    period_id: str = Query(min_length=1, max_length=36),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.view_all")),
+):
+    """A review period's evaluations as CSV, with each finalized one's overall
+    grade. Requires ``evaluations.view_all``: grades are personnel content,
+    and a manager runs the process without reading it."""
+    csv_text = await EvaluationService(db).period_results_csv(
+        current_user.organization_id, current_user, period_id
+    )
+    if csv_text is None:
+        raise HTTPException(status_code=404, detail="Review period not found")
+    await _audit(
+        db,
+        current_user,
+        "evaluation_period_exported",
+        {"period_id": period_id},
+    )
+    return Response(
+        content=csv_text,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="evaluation-results.csv"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @router.get("/draft-options", response_model=DraftOptions)
 async def get_draft_options(
     db: AsyncSession = Depends(get_db),
@@ -791,10 +823,17 @@ async def complete_evaluation_calibration(
     evaluation_id: str,
     data: Optional[CalibrationComplete] = Body(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("evaluations.view_all")),
+    current_user: User = Depends(get_current_user),
 ):
     """Record that calibration happened. The body is optional: without one,
-    nothing is flagged, as before flags existed."""
+    nothing is flagged, as before flags existed.
+
+    Completed by the person a manager named on the calibration step, or else
+    a holder of ``evaluations.view_all`` -- never the evaluation's own
+    evaluator or member. The service decides, since a named calibrator may
+    hold no view_all; everyone else gets 404 or 403 as for any other part of
+    an evaluation they may not see or act on.
+    """
     flagged = data.flagged_items if data else []
     service = EvaluationService(db)
     async with handle_service_errors("Failed to complete calibration"):
@@ -809,6 +848,83 @@ async def complete_evaluation_calibration(
         current_user,
         "evaluation_calibration_completed",
         {"evaluation_id": evaluation_id, "flagged_items": len(set(flagged))},
+    )
+    return await _evaluation(service, current_user, evaluation_id)
+
+
+@router.get(
+    "/{evaluation_id}/steps/{step_key}/assignee-candidates",
+    response_model=AssigneeCandidates,
+)
+async def list_step_assignee_candidates(
+    evaluation_id: str,
+    step_key: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.manage")),
+):
+    """The current members who may be named on an approval or calibration
+    step: everyone except the member, the evaluator and, on an approval,
+    anyone who signed another approval on this revision.
+
+    **Permissions required:** evaluations.manage
+    """
+    service = EvaluationService(db)
+    async with handle_service_errors("Failed to list who may take this step"):
+        candidates = ensure_found(
+            await service.assignee_candidates(
+                current_user.organization_id, evaluation_id, current_user, step_key
+            ),
+            "Evaluation",
+        )
+    return AssigneeCandidates(candidates=candidates)
+
+
+@router.put(
+    "/{evaluation_id}/steps/{step_key}/assignee", response_model=EvaluationDetail
+)
+async def assign_evaluation_step(
+    evaluation_id: str,
+    step_key: str,
+    data: StepAssignment,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.manage")),
+    _stepup: User = Depends(require_stepup),
+):
+    """Name the one person who acts on an approval or calibration step not
+    yet done, or clear the name to hand it back to the workflow's actor.
+
+    For the evaluation whose only holder of the step's position may not act
+    on it -- the evaluator never approves or calibrates their own work, and
+    nobody signs two approvals on one revision (owner decision 2026-11-16,
+    ADV2-4). Choosing who signs a personnel record needs a recently
+    re-verified session, as signing does. Audited at ``warning`` with both
+    names; the new assignee is emailed when the step is already open.
+
+    **Permissions required:** evaluations.manage
+    """
+    service = EvaluationService(db)
+    async with handle_service_errors("Failed to assign the step"):
+        change = ensure_found(
+            await service.assign_step(
+                current_user.organization_id,
+                evaluation_id,
+                current_user,
+                step_key,
+                data.assignee_id,
+            ),
+            "Evaluation",
+        )
+    await _audit(
+        db,
+        current_user,
+        "evaluation_step_assigned",
+        {
+            "evaluation_id": evaluation_id,
+            "step_key": step_key,
+            "previous_assignee_id": change["previous"],
+            "assignee_id": change["assignee"],
+        },
+        severity="warning",
     )
     return await _evaluation(service, current_user, evaluation_id)
 

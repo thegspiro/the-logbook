@@ -47,15 +47,15 @@ The hub shows seven areas as cards. `?page=` selects the area and `&tab=` the
 destination; the areas are declared in
 `frontend/src/components/training/trainingAdminAreas.ts`.
 
-| Area (`?page=`)                         | Destinations (`&tab=`)                                                                                 |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| **Overview** (`dashboard`)              | Dashboard (`overview`), Compliance Matrix, Expiring Certs, Training Waivers                            |
-| **Records** (`records`)                 | Submissions to Review, Sessions, Course Cohorts, Shift Reports, Monthly Status                         |
-| **Curriculum** (`curriculum`)           | Requirements, Course Library, Programs (`pipelines`)                                                   |
-| **Evaluations** (`evaluations`)         | Skill Evaluations, Knowledge Tests, Skills Test Templates (`templates`), Skills Test Records (`tests`) |
-| **Program Management** (`enhancements`) | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                         |
-| **Compliance Reporting** (`compliance`) | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast                                   |
-| **Settings & Data** (`settings`)        | Manual Entry Rules, Integrations, Import Past Training, Headline Metrics (`metrics`)                   |
+| Area (`?page=`)                         | Destinations (`&tab=`)                                                                                                                                                         |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Overview** (`dashboard`)              | Dashboard (`overview`), Compliance Matrix, Expiring Certs, Training Waivers                                                                                                    |
+| **Records** (`records`)                 | Submissions to Review, Waiver Requests, Sessions, Course Cohorts, Shift Reports, Monthly Status                                                                                |
+| **Curriculum** (`curriculum`)           | Requirements, Course Library, Course Links, Programs (`pipelines`)                                                                                                             |
+| **Evaluations** (`evaluations`)         | Skill Evaluations, Knowledge Tests, Skills Test Templates (`templates`), Skills Test Records (`tests`)                                                                         |
+| **Program Management** (`enhancements`) | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                                                                                 |
+| **Compliance Reporting** (`compliance`) | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast                                                                                                           |
+| **Settings & Data** (`settings`)        | Manual Entry, Practical Skills, Session Waivers, Shift Evaluations, Requirements (`requirements-link`), Compliance, Integrations, Import History, Headline Metrics (`metrics`) |
 
 Destination ids are unique across the hub, so a link is resolved by its
 `&tab=` first. Links that name the `setup` and `skills-testing` section ids, or
@@ -138,6 +138,11 @@ GET    /api/v1/training/courses/{id}/classes               # List a course's syl
 POST   /api/v1/training/courses/{id}/classes               # Add a class to the syllabus (training.manage)
 PATCH  /api/v1/training/courses/{id}/classes/{class_id}    # Update one syllabus class (training.manage)
 DELETE /api/v1/training/courses/{id}/classes/{class_id}    # Remove a class; generated cohorts keep their copy (training.manage)
+GET    /api/v1/training/course-links                       # Unlinked record names, with suggested courses (training.manage)
+POST   /api/v1/training/course-links                       # Link one name's records to a course; recorded for undo (training.manage)
+POST   /api/v1/training/course-links/link-suggested        # Link every name that has a suggestion (training.manage)
+GET    /api/v1/training/course-links/history               # Recorded links, newest first (training.manage, 2026-11-19)
+POST   /api/v1/training/course-links/{link_id}/undo        # Undo a link once; records edited since are kept (training.manage, 2026-11-19)
 POST   /api/v1/training/courses/{id}/classes/reorder       # Set the syllabus order (order only, not the dates) (training.manage)
 POST   /api/v1/training/courses/{id}/classes/autofill      # Recompute every day offset from a meeting pattern (training.manage)
 GET    /api/v1/training/stats/user/{user_id}               # User training stats
@@ -157,6 +162,17 @@ percentage. `GET /training/dashboard-summary` reports `graded_members` and
 population is not 100%. `GET /training/compliance-matrix` rows carry
 `standing` (`compliant` / `at_risk` / `non_compliant` / `not_applicable`)
 and `completion_pct`, which is `null` for a `not_applicable` member.
+
+**Fields added 2026-11-20 – 21.** An HOURS cell on the matrix and an hours
+requirement on My Training's detail carry `monthly_average` and
+`monthly_needed` (`training_compliance.monthly_pace`, display only — the
+status is graded on the total). A `certification` requirement's detail
+carries `expiry_date`, the graded certificate's expiry. The member
+requirement responses (My Training and the officer's member view) add
+`optional_requirements_detail`, the profile's optional requirements, which are
+never graded. `POST /training/course-links` and `/link-suggested` answer 409
+when two links collide on the same records ("…Nothing was linked; try
+again.").
 
 ### Training Programs
 
@@ -427,8 +443,8 @@ DELETE /api/v1/training/submissions/{id}                   # Delete submission (
 POST   /api/v1/training/submissions/{id}/submit            # Hand a saved draft to the department (submitter only)
 POST   /api/v1/training/submissions/{id}/attachments       # Add a certificate to a submission
 GET    /api/v1/training/submissions/{id}/attachments       # List a submission's attachments
-GET    /api/v1/training/submissions/{id}/attachments/{index}/download  # Download one attachment
-DELETE /api/v1/training/submissions/{id}/attachments/{index}  # Remove one attachment
+GET    /api/v1/training/submissions/{id}/attachments/{entry}/download  # Download one attachment ({entry}: its id, or a legacy index)
+DELETE /api/v1/training/submissions/{id}/attachments/{entry}  # Remove one attachment by id (a repeat is a 204 no-op); a legacy index takes ?expected_id=
 GET    /api/v1/training/submissions/pending                # Pending submissions (training.manage)
 GET    /api/v1/training/submissions/pending/count          # Pending count (training.manage)
 GET    /api/v1/training/submissions/all                    # All submissions (training.manage)
@@ -444,10 +460,23 @@ the `TrainingRecord` verbatim, and the record download route accepts the
 self-reports area as well as its own. Only the submitter or a
 `training.manage` holder can read a submission's attachments (`403`
 otherwise); paths are confined to the submission's own organization.
-**Deleting a submission unlinks its files** — safe only because deletion is
-limited to `draft`, `pending_review` and `revision_requested`, never after
-approval, the one state where a record also references the file. If that
-guard is ever widened, the delete must stop unlinking.
+**Deleting a submission, or removing one attachment, unlinks a file only when
+no other row names it** _(2026-11-20)_: both commit, then call
+`member_files.remove_unreferenced_files`, because `reverse_approval` reopens a
+submission while its voided record keeps naming the same certificates.
+
+Since 2026-11-20 every request body (`TrainingRecordCreate` / `Update`,
+`TrainingSubmissionCreate` / `Update`) answers **422 at `body.attachments`**
+for any value, `null` and `[]` included; files reach a row only through the
+upload routes and the approval copy (`refuse_attachment_writes` in
+`app/schemas/base.py`). Each stored entry carries a stable `id` (a uuid4
+string, `app/utils/training_attachments.py`) beside its `index` in responses;
+`{entry}` in the routes above takes either, a repeat removal of an id is a 204
+no-op, and a legacy index takes `?expected_id=` and answers 409 if the list
+has moved. Review, submit, update, delete, reverse-approval and attachment
+removal lock the submission row (`get_submission(for_update=True)`), after a
+`FOR SHARE` lock on the member for review and submit. A voided record refuses
+an upload with 400.
 
 `attachment_retention_days` on the config is `null` (keep — the default) or
 90–36500; changing it is audited as
@@ -699,7 +728,7 @@ GET    /api/v1/training/reports/compliance-forecast         # Compliance forecas
 ```
 GET    /api/v1/training/records/{id}/attachments                       # List attachments (metadata only, no file paths)
 POST   /api/v1/training/records/{id}/attachments                       # Upload attachment (multipart, ≤25MB, magic-byte type check, malware scan)
-GET    /api/v1/training/records/{id}/attachments/{index}/download       # Download a stored attachment by index
+GET    /api/v1/training/records/{id}/attachments/{entry}/download       # Download a stored attachment by id (or a legacy index)
 ```
 
 Access is the record owner or `training.manage`.

@@ -134,9 +134,16 @@ export const AdminMetricsSettings: React.FC<AdminMetricsSettingsProps> = ({
     }
   };
 
+  // Each state's root carries its own key so the screen replaces the
+  // placeholder rather than growing out of it. Unkeyed, React reconciled the
+  // placeholder's div and its two bars into the loaded grid and its two
+  // columns: the second bar became the preview column and leapt from the fold
+  // to some 1,400px below it on a phone, a layout shift of 0.35 whenever this
+  // answer arrived after the hub had shown its body. A node drawn fresh is not
+  // a shift, and nothing on screen sits below this one to be pushed.
   if (loading) {
     return (
-      <div className="card p-6" aria-busy="true">
+      <div key="loading" className="card p-6" role="status" aria-label="Loading headline metrics" aria-busy="true">
         <div className="shimmer-skeleton h-5 w-40 rounded" />
         <div className="shimmer-skeleton mt-3 h-24 w-full rounded" />
       </div>
@@ -145,7 +152,7 @@ export const AdminMetricsSettings: React.FC<AdminMetricsSettingsProps> = ({
 
   if (!settings) {
     return (
-      <div className="alert-danger">
+      <div key="error" className="alert-danger">
         <p className="text-theme-alert-danger-title text-sm font-semibold">Headline metrics unavailable</p>
         <p className="text-theme-alert-danger-text mt-1 text-sm">{loadError}</p>
         <button type="button" onClick={() => void load()} className="btn-secondary btn-md mt-3 text-sm">
@@ -159,7 +166,7 @@ export const AdminMetricsSettings: React.FC<AdminMetricsSettingsProps> = ({
   const fixedOption = settings.options.find((option) => option.fixed);
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <div key="loaded" className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="flex flex-col gap-5">
         {/* The four slots */}
         <section className="card p-4 sm:p-5">

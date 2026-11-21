@@ -41,6 +41,7 @@ import { MyAttendanceWaiverRequests } from '../components/training/MyAttendanceW
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { MyTrainingHistory } from '../components/training/MyTrainingHistory';
 import { RequirementDetailCard } from '../components/training/RequirementDetailCard';
+import { OptionalRequirementsGroup } from '../components/training/OptionalRequirementsGroup';
 import { LeaveOfAbsenceSummary } from '../components/training/LeaveOfAbsenceSummary';
 import { UpcomingDueList } from '../components/training/UpcomingDueList';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
@@ -863,32 +864,39 @@ const MyTrainingPage: React.FC = () => {
           {/* Outstanding Requirements. Gated on `show_requirement_details`,
               which previously only reached the copy nested under Pipeline
               Progress while this list ignored it. */}
-          {v?.show_requirement_details && data.requirements_detail && data.requirements_detail.length > 0 && (
-            <Section title="Training Requirements" icon={ClipboardList}>
-              <LeaveOfAbsenceSummary leaves={data.leaves_of_absence ?? []} rule={data.leave_month_rule} />
-              <div className="space-y-3">
-                {/* Outstanding (not met) first, then met */}
-                {[...data.requirements_detail]
-                  .sort((a: RequirementDetail, b: RequirementDetail) => {
-                    // Outstanding first, then by days until due (soonest first)
-                    if (a.is_met !== b.is_met) return a.is_met ? 1 : -1;
-                    if (a.days_until_due != null && b.days_until_due != null)
-                      return a.days_until_due - b.days_until_due;
-                    return 0;
-                  })
-                  .map((req: RequirementDetail) => (
-                    <RequirementDetailCard key={req.id} requirement={req} timezone={tz} />
-                  ))}
-              </div>
-            </Section>
-          )}
+          {v?.show_requirement_details &&
+            ((data.requirements_detail?.length ?? 0) > 0 || (data.optional_requirements_detail?.length ?? 0) > 0) && (
+              <Section title="Training Requirements" icon={ClipboardList}>
+                <LeaveOfAbsenceSummary leaves={data.leaves_of_absence ?? []} rule={data.leave_month_rule} />
+                <div className="space-y-3">
+                  {/* Outstanding (not met) first, then met */}
+                  {[...(data.requirements_detail ?? [])]
+                    .sort((a: RequirementDetail, b: RequirementDetail) => {
+                      // Outstanding first, then by days until due (soonest first)
+                      if (a.is_met !== b.is_met) return a.is_met ? 1 : -1;
+                      if (a.days_until_due != null && b.days_until_due != null)
+                        return a.days_until_due - b.days_until_due;
+                      return 0;
+                    })
+                    .map((req: RequirementDetail) => (
+                      <RequirementDetailCard key={req.id} requirement={req} timezone={tz} />
+                    ))}
+                </div>
+                <OptionalRequirementsGroup requirements={data.optional_requirements_detail ?? []} timezone={tz} />
+              </Section>
+            )}
 
           {/* Recent training: the newest few records. The full history, which
               the summary caps at the newest 100, lives on the History tab. */}
           {v?.show_training_history && recentRecords.length > 0 && (
             <Section title="Recent Training" icon={FileText}>
-              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Training records">
-                <table className="w-full text-left text-sm">
+              <div
+                className="rwd-table-container overflow-x-auto"
+                tabIndex={0}
+                role="region"
+                aria-label="Training records"
+              >
+                <table className="rwd-table rwd-table-wide w-full text-left text-sm">
                   <thead className="text-theme-text-muted bg-theme-surface-secondary text-xs uppercase">
                     <tr>
                       <th scope="col" className="px-4 py-2">
@@ -913,15 +921,21 @@ const MyTrainingPage: React.FC = () => {
                   <tbody className="divide-theme-surface-border divide-y">
                     {recentRecords.map((r) => (
                       <tr key={r.id} className="text-theme-text-secondary">
-                        <td className="px-4 py-2">{r.course_name}</td>
-                        <td className="px-4 py-2 whitespace-nowrap">
+                        <td className="rwd-table-lead px-4 py-2" data-label="Course">
+                          {r.course_name}
+                        </td>
+                        <td className="px-4 py-2 whitespace-nowrap" data-label="Type">
                           {TRAINING_TYPE_LABELS[r.training_type] ?? r.training_type.replace('_', ' ')}
                         </td>
-                        <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.completion_date, tz)}</td>
+                        <td className="px-4 py-2 whitespace-nowrap" data-label="Date">
+                          {formatDate(r.completion_date, tz)}
+                        </td>
                         {v.show_training_hours && (
-                          <td className="px-4 py-2 whitespace-nowrap">{formatHours(r.hours_completed)}</td>
+                          <td className="px-4 py-2 whitespace-nowrap" data-label="Hours">
+                            {formatHours(r.hours_completed)}
+                          </td>
                         )}
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-2" data-label="Status">
                           {r.voided_at ? (
                             <span className="w-fit rounded-sm bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
                               voided
@@ -1210,8 +1224,13 @@ const MyTrainingPage: React.FC = () => {
           {/* Submission History */}
           {v?.show_submission_history && data.submissions && data.submissions.length > 0 && (
             <Section title="Self-Reported Training" icon={Send} defaultOpen={false}>
-              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Training records">
-                <table className="w-full text-left text-sm">
+              <div
+                className="rwd-table-container overflow-x-auto"
+                tabIndex={0}
+                role="region"
+                aria-label="Training records"
+              >
+                <table className="rwd-table rwd-table-wide w-full text-left text-sm">
                   <thead className="text-theme-text-muted bg-theme-surface-secondary text-xs uppercase">
                     <tr>
                       <th scope="col" className="px-4 py-2">
@@ -1234,15 +1253,24 @@ const MyTrainingPage: React.FC = () => {
                   <tbody className="divide-theme-surface-border divide-y">
                     {data.submissions.map((s) => (
                       <tr key={s.id} className="text-theme-text-secondary">
-                        <td className="px-4 py-2 whitespace-nowrap">{s.course_name}</td>
-                        <td className="px-4 py-2 whitespace-nowrap">{formatDate(s.completion_date, tz)}</td>
-                        <td className="px-4 py-2 whitespace-nowrap">{formatHours(s.hours_completed)}</td>
-                        <td className="px-4 py-2">
+                        <td className="rwd-table-lead px-4 py-2" data-label="Course">
+                          {s.course_name}
+                        </td>
+                        <td className="px-4 py-2 whitespace-nowrap" data-label="Date">
+                          {formatDate(s.completion_date, tz)}
+                        </td>
+                        <td className="px-4 py-2 whitespace-nowrap" data-label="Hours">
+                          {formatHours(s.hours_completed)}
+                        </td>
+                        <td className="px-4 py-2" data-label="Status">
                           <span className={`rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(s.status)}`}>
                             {getTrainingStatusLabel(s.status)}
                           </span>
                         </td>
-                        <td className="text-theme-text-muted px-4 py-2 text-xs whitespace-nowrap">
+                        <td
+                          className="text-theme-text-muted px-4 py-2 text-xs whitespace-nowrap"
+                          data-label="Submitted"
+                        >
                           {formatDate(s.submitted_at, tz)}
                         </td>
                       </tr>

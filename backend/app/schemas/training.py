@@ -7,7 +7,7 @@ Request and response schemas for training-related endpoints.
 import re
 from datetime import date, datetime
 from enum import Enum
-from typing import List, Literal, Optional, Sequence, Union
+from typing import List, Literal, NoReturn, Optional, Sequence, Union
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -16,7 +16,7 @@ from app.core.logging import redact_url_secrets
 from app.models.training import RequirementFrequency as ModelRequirementFrequency
 from app.models.training import TrainingStatus as ModelTrainingStatus
 from app.models.training import TrainingType as ModelTrainingType
-from app.schemas.base import RefusesNull, UTCResponseBase
+from app.schemas.base import RefusesNull, UTCResponseBase, refuse_attachment_writes
 from app.schemas.checklist import ChecklistItem, coerce_checklist_items
 from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 from app.schemas.enum_validation import validate_enum_value
@@ -216,18 +216,21 @@ class TrainingCourseResponse(TrainingCourseBase, UTCResponseBase):
 
 # Training Record Schemas
 
+RECORD_UPLOAD_ROUTE = "POST /training/records/{id}/attachments"
+
 
 class TrainingAttachment(BaseModel):
     """One file on a training record, as clients are allowed to see it.
 
     The stored attachment also carries `file_path` — an absolute path on the
     server's disk — and `uploaded_by`. Neither belongs in a response, so this
-    schema lists what does and a validator drops the rest. `index` is how a
-    client names an attachment on the download route; the stored records have
-    no id of their own.
+    schema lists what does and a validator drops the rest. `id` is the
+    entry's stable id, which the routes take; `index` is its position, kept
+    for clients written against the older index-addressed routes.
     """
 
     index: Optional[int] = None
+    id: Optional[str] = None
     file_name: Optional[str] = None
     file_type: Optional[str] = None
     file_size: Optional[int] = None
@@ -260,9 +263,10 @@ class TrainingRecordBase(BaseModel):
     instructor: Optional[str] = Field(None, max_length=255)
     location: Optional[str] = Field(None, max_length=255)
     notes: Optional[str] = None
-    # Declared here so the field keeps its place in both schemas, and as wide
-    # as either subclass needs: a create takes file names, a response returns
-    # the stored attachment records. Each subclass narrows it to its own.
+    # Declared here so the field keeps its place in both schemas. A response
+    # returns the stored attachment records; a create refuses the field
+    # (refuse_attachment_writes), so it is declared there only to locate the
+    # 422. Each subclass narrows it to its own.
     attachments: Optional[Sequence[Union[str, TrainingAttachment]]] = None
     rank_at_completion: Optional[str] = Field(None, max_length=100)
     station_at_completion: Optional[str] = Field(None, max_length=100)
@@ -283,7 +287,14 @@ class TrainingRecordCreate(TrainingRecordBase):
 
     user_id: UUID
     course_id: Optional[UUID] = None
+    # Declared only so a body that sends it is refused at body.attachments:
+    # files are added through the upload route, which writes the stored shape.
     attachments: Optional[List[str]] = None
+
+    @field_validator("attachments", mode="before")
+    @classmethod
+    def _refuse_attachments(cls, value: object) -> NoReturn:
+        refuse_attachment_writes(RECORD_UPLOAD_ROUTE)
 
 
 class TrainingRecordUpdate(RefusesNull):
@@ -308,9 +319,17 @@ class TrainingRecordUpdate(RefusesNull):
     instructor: Optional[str] = Field(None, max_length=255)
     location: Optional[str] = Field(None, max_length=255)
     notes: Optional[str] = None
-    attachments: Optional[List[str]] = None
     rank_at_completion: Optional[str] = Field(None, max_length=100)
     station_at_completion: Optional[str] = Field(None, max_length=100)
+
+    # Declared only so a body that sends it is refused at body.attachments:
+    # files are added through the upload route, which writes the stored shape.
+    attachments: Optional[List[str]] = None
+
+    @field_validator("attachments", mode="before")
+    @classmethod
+    def _refuse_attachments(cls, value: object) -> NoReturn:
+        refuse_attachment_writes(RECORD_UPLOAD_ROUTE)
 
     @field_validator("training_type")
     @classmethod
@@ -369,8 +388,8 @@ class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
     def number_the_attachments(cls, v):
         """Stamp each attachment with its position.
 
-        The stored attachments have no id; the download route addresses them
-        by index, so a client that never sees one cannot fetch a file. Legacy
+        The stored entry's own id is carried through as it is; the position is
+        added beside it for clients that still address entries by index. Legacy
         rows hold bare strings (the column's original shape) and are carried
         through as a file name.
         """
@@ -904,9 +923,13 @@ class ComplianceSummary(BaseModel):
     user_id: UUID
     requirements_met: int
     requirements_total: int
+    # Shown for information; they do not drive compliance_status. They count
+    # every certificate record, including ones a renewal has superseded.
     certs_expiring_soon: int  # Within 90 days
     certs_expired: int
-    # "green", "yellow", "red", "exempt", "not_applicable"
+    # The member's compliance matrix standing in traffic-light form:
+    # compliant "green", at_risk "yellow", non_compliant "red",
+    # "not_applicable"; or "exempt" for a compliance-exempt member.
     compliance_status: str
     # "Compliant", "At Risk", "Non-Compliant", "Exempt", "Not Applicable"
     compliance_label: str
@@ -1577,3 +1600,31 @@ class CourseLinkRequest(BaseModel):
 class CourseLinkResult(BaseModel):
     names: int
     records: int
+
+
+class CourseLinkHistoryItem(BaseModel):
+    """One past link, for the Course Links screen's history."""
+
+    id: UUID
+    course_id: Optional[UUID] = None
+    course_name: str
+    label: str
+    record_count: int
+    linked_by_name: Optional[str] = None
+    linked_at: datetime
+    undone_at: Optional[datetime] = None
+    undone_by_name: Optional[str] = None
+
+
+class CourseLinkHistory(BaseModel):
+    items: List[CourseLinkHistoryItem]
+    total: int
+    offset: int
+    limit: int
+
+
+class CourseUnlinkResult(BaseModel):
+    reverted: int
+    # Records changed since the link, or linked to another course by hand:
+    # they keep their course.
+    kept: int

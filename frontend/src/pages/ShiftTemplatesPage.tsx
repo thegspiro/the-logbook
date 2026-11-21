@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -35,6 +35,43 @@ import {
   getPositionOptions,
 } from '../modules/scheduling/components/shiftTemplateTypes';
 import { useConfirm } from '../contexts/ConfirmContext';
+
+function templateToForm(t: ShiftTemplate): TemplateFormData {
+  let eventType: EventType | '' = '';
+  let resources: ResourceUnit[] = [];
+  let positions: PositionEntry[] = [];
+
+  if ((t.category || 'standard') === 'event' && t.positions && !Array.isArray(t.positions)) {
+    const meta = t.positions;
+    eventType = (meta.event_type as EventType) || '';
+    resources = meta.resources || [];
+  } else if (Array.isArray(t.positions)) {
+    positions = normalizePositions(t.positions);
+  }
+
+  return {
+    name: t.name,
+    description: t.description || '',
+    start_time_of_day: t.start_time_of_day,
+    end_time_of_day: t.end_time_of_day,
+    duration_hours: String(t.duration_hours),
+    color: t.color || '#dc2626',
+    min_staffing: String(t.min_staffing),
+    is_default: t.is_default,
+    open_to_all_members: t.open_to_all_members ?? false,
+    positions,
+    category: (t.category as TemplateCategory) || 'standard',
+    apparatus_type: t.apparatus_type || '',
+    apparatus_id: t.apparatus_id || '',
+    // Seeded even when the Inventory module is off and the picker is
+    // hidden: the form sends this field on every save, so dropping it here
+    // would delete a template's checklist links the first time anyone edited
+    // it in that state.
+    equipment_check_template_ids: t.equipment_check_template_ids ?? [],
+    event_type: eventType,
+    resources,
+  };
+}
 
 /**
  * Shift templates: what a shift is. The patterns that repeat a template are
@@ -93,12 +130,15 @@ export const ShiftTemplatesPage: React.FC = () => {
     void loadTemplates();
   };
 
-  const handleUpdateTemplate = async (data: Record<string, unknown>) => {
+  const handleUpdateTemplate = async (data: Record<string, unknown>, options?: { keepOpen?: boolean }) => {
     if (!editingTemplate) return;
     await schedulingService.updateTemplate(editingTemplate.id, data);
+    void loadTemplates();
+    // A save that kept a refused field back leaves the dialog open with that
+    // field flagged (owner rule, 2026-11-05); the list behind it still refreshes.
+    if (options?.keepOpen) return;
     toast.success('Template updated');
     setEditingTemplate(null);
-    void loadTemplates();
   };
 
   const handleDeleteTemplate = async (id: string) => {
@@ -143,43 +183,14 @@ export const ShiftTemplatesPage: React.FC = () => {
     }
   };
 
-  const templateToForm = (t: ShiftTemplate): TemplateFormData => {
-    let eventType: EventType | '' = '';
-    let resources: ResourceUnit[] = [];
-    let positions: PositionEntry[] = [];
-
-    if ((t.category || 'standard') === 'event' && t.positions && !Array.isArray(t.positions)) {
-      const meta = t.positions;
-      eventType = (meta.event_type as EventType) || '';
-      resources = meta.resources || [];
-    } else if (Array.isArray(t.positions)) {
-      positions = normalizePositions(t.positions);
-    }
-
-    return {
-      name: t.name,
-      description: t.description || '',
-      start_time_of_day: t.start_time_of_day,
-      end_time_of_day: t.end_time_of_day,
-      duration_hours: String(t.duration_hours),
-      color: t.color || '#dc2626',
-      min_staffing: String(t.min_staffing),
-      is_default: t.is_default,
-      open_to_all_members: t.open_to_all_members ?? false,
-      positions,
-      category: (t.category as TemplateCategory) || 'standard',
-      apparatus_type: t.apparatus_type || '',
-      apparatus_id: t.apparatus_id || '',
-      // Seeded even when the Inventory module is off and the picker is
-      // hidden: the form sends this field on every save, so dropping it here
-      // would delete a template's checklist links the first time anyone edited
-      // it in that state.
-      equipment_check_template_ids: t.equipment_check_template_ids ?? [],
-      event_type: eventType,
-      resources,
-    };
-  };
-
+  // Memoised on the record, not rebuilt each render: the modal reseeds its
+  // form whenever this object changes, so a fresh one per render threw away
+  // what was typed, and the flagged field, every time the list behind the
+  // dialog refreshed after a save that kept a refused field back.
+  const editingTemplateForm = useMemo(
+    () => (editingTemplate ? templateToForm(editingTemplate) : undefined),
+    [editingTemplate]
+  );
   return (
     // Vertical padding only: this renders inside SchedulingPlanningPage, which
     // already pads the sides; the doubled gutter took 48px from every card.
@@ -257,7 +268,7 @@ export const ShiftTemplatesPage: React.FC = () => {
             </div>
           )}
           {templates.length === 0 ? (
-            <div className="card-secondary py-12 text-center">
+            <div className="card-secondary px-4 py-12 text-center">
               <LayoutTemplate className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
               <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">No Templates Yet</h3>
               <p className="text-theme-text-muted mb-4">
@@ -506,7 +517,7 @@ export const ShiftTemplatesPage: React.FC = () => {
         isOpen={!!editingTemplate}
         onClose={() => setEditingTemplate(null)}
         onSubmit={handleUpdateTemplate}
-        initialData={editingTemplate ? templateToForm(editingTemplate) : undefined}
+        initialData={editingTemplateForm}
         title="Edit Template"
         apparatusOptions={apparatusOptions}
         apparatusSource={apparatusSource}

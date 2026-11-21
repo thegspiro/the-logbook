@@ -34,7 +34,7 @@ from app.api.v1.endpoints.event_requests import (
 )
 from app.api.v1.endpoints.events import EVENT_SETTINGS_DEFAULTS
 from app.models.event_request import EventRequestStatus
-from app.models.user import User
+from app.models.user import User, UserStatus
 from app.schemas.event_request import (
     EventRequestAssign,
     EventRequestCreate,
@@ -147,6 +147,7 @@ class TestLeadTime:
             {"min_lead_time_days": 21},
             "specific_dates",
             datetime.now(timezone.utc) + timedelta(days=3),
+            today=datetime.now(timezone.utc).date(),
         )
         assert error is not None
         assert "21 days" in error
@@ -157,6 +158,7 @@ class TestLeadTime:
                 {"min_lead_time_days": 21},
                 "specific_dates",
                 datetime.now(timezone.utc) + timedelta(days=30),
+                today=datetime.now(timezone.utc).date(),
             )
             is None
         )
@@ -169,6 +171,7 @@ class TestLeadTime:
                     {"min_lead_time_days": 21},
                     flexibility,
                     datetime.now(timezone.utc) + timedelta(days=1),
+                    today=datetime.now(timezone.utc).date(),
                 )
                 is None
             )
@@ -179,6 +182,7 @@ class TestLeadTime:
                 {"min_lead_time_days": 0},
                 "specific_dates",
                 datetime.now(timezone.utc) + timedelta(hours=1),
+                today=datetime.now(timezone.utc).date(),
             )
             is None
         )
@@ -190,6 +194,7 @@ class TestLeadTime:
                 {"min_lead_time_days": "three weeks"},
                 "specific_dates",
                 datetime.now(timezone.utc) + timedelta(hours=1),
+                today=datetime.now(timezone.utc).date(),
             )
             is None
         )
@@ -310,6 +315,7 @@ class TestEmailTriggers:
             first_name="Sam",
             last_name="Ortiz",
             email="sam@fire.example.org",
+            status=UserStatus.ACTIVE,
         )
         db = _seq_db([_result(event_request), _result(assignee), _result(org)])
         current_user = SimpleNamespace(id=USER_ID, organization_id=ORG_ID)
@@ -326,6 +332,57 @@ class TestEmailTriggers:
             )
 
         assert notify.await_args.args[2] == "on_assigned"
+
+    @pytest.mark.asyncio
+    async def test_a_former_member_cannot_be_made_coordinator(self):
+        event_request = _request_row()
+        former = User(
+            id=USER_ID,
+            first_name="Lee",
+            last_name="Park",
+            email="lee@fire.example.org",
+            status=UserStatus.RETIRED,
+        )
+        db = _seq_db([_result(event_request), _result(former)])
+        current_user = SimpleNamespace(id=USER_ID, organization_id=ORG_ID)
+
+        with pytest.raises(HTTPException) as refused:
+            await assign_request(
+                request_id=REQUEST_ID,
+                data=EventRequestAssign(assigned_to=USER_ID),
+                db=db,
+                current_user=current_user,
+            )
+
+        assert refused.value.status_code == 400
+        assert event_request.assigned_to is None
+
+    @pytest.mark.asyncio
+    async def test_the_coordinator_it_already_has_may_have_left(self):
+        org = _org()
+        event_request = _request_row(assigned_to=USER_ID)
+        former = User(
+            id=USER_ID,
+            first_name="Lee",
+            last_name="Park",
+            email="lee@fire.example.org",
+            status=UserStatus.RETIRED,
+        )
+        db = _seq_db([_result(event_request), _result(former), _result(org)])
+        current_user = SimpleNamespace(id=USER_ID, organization_id=ORG_ID)
+
+        with patch(
+            "app.api.v1.endpoints.event_requests._send_request_notification",
+            AsyncMock(),
+        ):
+            await assign_request(
+                request_id=REQUEST_ID,
+                data=EventRequestAssign(assigned_to=USER_ID),
+                db=db,
+                current_user=current_user,
+            )
+
+        assert event_request.assigned_to == USER_ID
 
 
 # ============================================

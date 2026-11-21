@@ -4,11 +4,16 @@ import type { TrainingCourse } from '../../types/training';
 import {
   DEFAULT_TRAINING_DETAILS,
   applyLibraryCourse,
+  TEMPLATE_COURSE_GONE_NOTE,
+  TEMPLATE_INSTRUCTOR_GONE_NOTE,
   fromSession,
+  fromTemplateTrainingDetails,
   hasSettingCopies,
+  reconcileTemplateTraining,
   scheduledHours,
   strippedForFinalized,
   toAttachPayload,
+  toTemplateTrainingDetails,
   toUpdatePayload,
   validateTrainingDetails,
   withCourseChoice,
@@ -491,5 +496,150 @@ describe('validateTrainingDetails', () => {
     expect(
       validateTrainingDetails(form({ require_completion_confirmation: true, approval_deadline_days: '99' }), 2)
     ).toEqual({ approval_deadline_days: 'Enter between 1 and 30 days.' });
+  });
+});
+
+describe('template training details', () => {
+  const library = form({
+    course_mode: 'library',
+    course_id: COURSE.id,
+    training_type: 'skills_practice',
+    credit_hours: '2',
+    credit_hours_source: 'course',
+    instructor_id: 'm-1',
+    instructor: 'Owen Kittredge',
+    issues_certification: true,
+    certification_number_prefix: 'PUMP-',
+    issuing_agency: 'State Academy',
+    expiration_months: '24',
+    // Not carried by a template.
+    category_id: 'cat-app',
+    program_id: 'prog-dop',
+    requirement_id: 'req-1',
+    attendance_requirement_ids: ['att-1'],
+    require_completion_confirmation: true,
+  });
+  const members = [
+    { id: 'm-1', name: 'Owen Kittredge', label: 'Capt. Owen Kittredge' },
+    { id: 'm-2', name: 'Jo Former', label: 'Jo Former', former: true },
+  ];
+
+  it("saves only the owner's list, in the canonical shape", () => {
+    expect(toTemplateTrainingDetails(library)).toEqual({
+      course_mode: 'library',
+      course_id: COURSE.id,
+      course_name: null,
+      course_code: null,
+      training_type: 'skills_practice',
+      credit_hours: 2,
+      credit_hours_source: 'course',
+      instructor_id: 'm-1',
+      instructor: 'Owen Kittredge',
+      issues_certification: true,
+      certification_number_prefix: 'PUMP-',
+      issuing_agency: 'State Academy',
+      expiration_months: 24,
+    });
+  });
+
+  it('drops hours that follow the length and certification settings not issued', () => {
+    const out = toTemplateTrainingDetails(
+      form({ credit_hours: '5', issuing_agency: 'Kept nowhere', course_mode: 'oneoff', course_name: ' Ropes ' })
+    );
+    expect(out.credit_hours).toBeNull();
+    expect(out.issuing_agency).toBeNull();
+    expect(out.course_name).toBe('Ropes');
+    expect(out.course_id).toBeNull();
+  });
+
+  it('reads back to the form with every uncarried field at its default', () => {
+    const back = fromTemplateTrainingDetails(toTemplateTrainingDetails(library));
+    expect(back).toEqual({
+      ...DEFAULT_TRAINING_DETAILS,
+      course_mode: 'library',
+      course_id: COURSE.id,
+      training_type: 'skills_practice',
+      credit_hours: '2',
+      credit_hours_source: 'course',
+      instructor_id: 'm-1',
+      instructor: 'Owen Kittredge',
+      issues_certification: true,
+      certification_number_prefix: 'PUMP-',
+      issuing_agency: 'State Academy',
+      expiration_months: '24',
+    });
+  });
+
+  it('reads a value it cannot hold as the default rather than failing', () => {
+    const back = fromTemplateTrainingDetails({
+      ...toTemplateTrainingDetails(DEFAULT_TRAINING_DETAILS),
+      training_type: 'juggling',
+      course_mode: 'sideways' as 'none',
+    });
+    expect(back.training_type).toBe('continuing_education');
+    expect(back.course_mode).toBe('none');
+  });
+
+  describe('reconcileTemplateTraining', () => {
+    const seeded = fromTemplateTrainingDetails(toTemplateTrainingDetails(library));
+
+    it('starts on No course yet, with a note, when the course is no longer listed', () => {
+      const { value, notes } = reconcileTemplateTraining(seeded, seeded, [], members);
+      expect(value.course_mode).toBe('none');
+      expect(value.course_id).toBe('');
+      expect(value.credit_hours_source).toBe('duration');
+      expect(notes).toEqual([TEMPLATE_COURSE_GONE_NOTE]);
+    });
+
+    it("refreshes course hours to the course's current figure", () => {
+      const { value, notes } = reconcileTemplateTraining(seeded, seeded, [{ ...COURSE, credit_hours: 3.5 }], members);
+      expect(value.credit_hours).toBe('3.5');
+      expect(value.credit_hours_source).toBe('course');
+      expect(notes).toEqual([]);
+    });
+
+    it('follows the length when the course has no hours any more', () => {
+      const { credit_hours: _hours, duration_hours: _duration, ...bare } = COURSE;
+      const { value } = reconcileTemplateTraining(seeded, seeded, [bare], members);
+      expect(value.credit_hours_source).toBe('duration');
+    });
+
+    it('clears a former or unknown instructor, with a note', () => {
+      for (const id of ['m-2', 'm-gone']) {
+        const s = { ...seeded, instructor_id: id, instructor: 'Someone' };
+        const { value, notes } = reconcileTemplateTraining(s, s, [COURSE], members);
+        expect(value.instructor_id).toBe('');
+        expect(value.instructor).toBe('');
+        expect(notes).toEqual([TEMPLATE_INSTRUCTOR_GONE_NOTE]);
+      }
+    });
+
+    it("refreshes a current instructor's name and keeps a free-text one", () => {
+      const renamed = { ...seeded, instructor: 'O. Kittredge' };
+      expect(reconcileTemplateTraining(renamed, renamed, [COURSE], members).value.instructor).toBe('Owen Kittredge');
+      const text = { ...seeded, instructor_id: '', instructor: 'Visiting Lt. Ames' };
+      const { value, notes } = reconcileTemplateTraining(text, text, [COURSE], members);
+      expect(value.instructor).toBe('Visiting Lt. Ames');
+      expect(notes).toEqual([]);
+    });
+
+    it('leaves alone what the officer changed before the lists loaded', () => {
+      const typed = { ...seeded, course_id: 'course-other', instructor_id: 'm-2', instructor: 'Jo Former' };
+      const { value, notes } = reconcileTemplateTraining(typed, seeded, [], members);
+      expect(value).toEqual(typed);
+      expect(notes).toEqual([]);
+    });
+
+    it('skips a list that failed to load', () => {
+      const withFormer = { ...seeded, instructor_id: 'm-2', instructor: 'Jo Former' };
+      const { value, notes } = reconcileTemplateTraining(withFormer, withFormer, undefined, undefined);
+      expect(value).toEqual(withFormer);
+      expect(notes).toEqual([]);
+    });
+
+    it('keeps course hours saveable while the Course Library is unavailable', () => {
+      const { value } = reconcileTemplateTraining(seeded, seeded, undefined, members);
+      expect(validateTrainingDetails(value, null).credit_hours).toBeUndefined();
+    });
   });
 });

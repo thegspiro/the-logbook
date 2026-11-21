@@ -413,6 +413,25 @@ early — ADDED 2026-08-24]**
 > department has set for you are met. If it says **None assigned**, nothing is
 > asked of you yet — that isn't a fault."
 
+**[SCREEN: The Training Requirements cards: an hours card reading "6.9/6 hrs/mo
+avg" with "69/72 hrs total" beneath, a certification card reading "On file
+(Expires …)", and an Optional group below with its badge.]**
+
+> "Each requirement card tells you where you stand. For hours, the big number
+> is your monthly average against the pace you need — six point nine a month
+> against six, say — with your total underneath. The total is what counts in
+> the end; the average tells you whether you're keeping up. A certification
+> just says **On file**, with its expiry date, or **Expired**, or **Not
+> recorded**. And anything under **Optional** is there for your information:
+> it never counts against you."
+
+**[PRODUCTION NOTE — 2026-11-21. New beat, about 20 seconds; re-time Chapter 4.
+The monthly average is 2026-11-20, the certification states and the Optional
+group 2026-11-21. Needs a member with an hours requirement, a certification
+requirement and a compliance profile that lists an optional requirement. Any
+earlier take showing "1/1" or "0/1" on a certification card, or an hours card
+headed only by its total, is dated.]**
+
 **[B-ROLL: A brand-new member's My Training — "Nothing is on your training
 record yet", with the three ways training reaches the page and the "Submit
 External Training" button. Added 2026-10-04; about 10 seconds, re-time
@@ -769,12 +788,17 @@ officer to find cover and that no member sees it; that is no longer true. About
 > you withdraw, an officer reassigns you, your time off is approved — any
 > swap still waiting on that seat is cancelled, and both of you are told."
 
-**[SCREEN: My Shifts → Hours → "Shifts with other departments" → "Log outside
-shift"]**
+**[SCREEN: My Shifts → Hours → scroll to "All shifts" → "Log outside shift"]**
 
 > "One more thing on the Hours tab: if you ride on another department's
-> apparatus, **Log outside shift** under **Shifts with other departments**
-> records it, and it counts toward your hours."
+> apparatus, **Log outside shift** in **All shifts** records it, and it counts
+> toward your hours. It's listed right in among your own department's shifts,
+> and the cards at the top add it into your totals."
+
+**[PRODUCTION NOTE — 2026-11-20. The Hours tab was redesigned: the separate
+"Shifts with other departments" card is gone, outside shifts sit in one
+**All shifts** list, and the cards total both departments. Re-record this beat
+and the profile beat in Chapter 7 against the new screen.]**
 
 > "Some departments switch on **Require approval for outside-department shifts**.
 > If yours has, the shift shows **Awaiting approval** and stays out of your totals

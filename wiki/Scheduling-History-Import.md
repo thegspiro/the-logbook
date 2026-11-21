@@ -320,6 +320,12 @@ see all of them.
   already on your schedule. Choose:
   - **Add to that shift** to add these members to the existing shift;
   - **Import separately** to create a new shift.
+
+  Once answered, the card reads "You chose …" with an **Undo** link. **Undo**
+  clears the answer and asks the question again, so a wrong choice can be
+  taken back before you commit. The Rows tab ("Decided: …") and a row's edit
+  dialog offer the same **Undo** (2026-11-20).
+
 - **Joined from _N_ entries** marks back-to-back entries that were
   [joined into one](#shifts-logged-in-pieces). If they were really separate
   shifts, click **Split apart**.
@@ -342,6 +348,14 @@ Filters: **Need attention** (the default), **All**, **Skipped** and
   the file's value.
 - **Exclude / Include:** leave a row out of the import entirely, or bring it
   back.
+- **Other lines in these issues** _(edit dialog)_: when a row's issue joins it
+  to other lines (an overlap, a duplicate), the edit dialog lists them with
+  **Exclude line N** / **Include line N**. Since 2026-11-20 a line you exclude
+  from here stays in the list while the dialog is open, so you can bring it
+  back. Before, excluding it
+  usually settled the issue that linked the two, so the line vanished from the
+  dialog along with its **Include** button, and you had to find it under
+  **Excluded** instead.
 - **Undo** reverses a _Same shift_ or _Keep separate_ decision.
 - **Rejoin** reverses a _Split apart_.
 
@@ -383,8 +397,10 @@ Confirm with **Commit import**, or choose **Keep reviewing**.
 
 - The import page shows a summary of what was written.
 - The Imports list keeps a record of it.
-- **There is no batch undo.** To correct an imported shift, open it on the
-  schedule and fix it like any other.
+- **There is no batch undo for a file uploaded here.** To correct an imported
+  shift, open it on the schedule and fix it like any other. Batches sent here
+  by a **Historical Data Import** are the exception: undo them together from
+  that import's page (Shift hours, **Undo this step**).
 
 ![A committed import's summary: 3 shifts created, 6 attendance records, 1 outside-agency entry, 1 former member created and 1 row skipped](images/history-import-committed.png)
 
@@ -503,7 +519,7 @@ app. Twice a year the clock is ambiguous, and the standard rule applies:
 | All hours look an hour or more off                           | Change the time zone on **Columns & time zone**                                                               |
 | Positions tab is empty                                       | Positions appear once every member and unit is settled                                                        |
 | "Nothing in this file is new"                                | Every row is excluded, skipped or already recorded, so there is nothing to commit. Discard the draft          |
-| Imported something wrong                                     | Fix the affected shifts on the schedule. There is no batch undo                                               |
+| Imported something wrong                                     | Fix the affected shifts on the schedule. A Historical Data Import's batches can be undone from its page       |
 
 ---
 

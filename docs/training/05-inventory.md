@@ -384,6 +384,15 @@ Every item is tracked one of two ways:
 > (pool). The line under **Tracking Type** on the item form describes the one
 > you picked.
 
+**The category picks a starting tracking type** _(2026-11-18)_. On a new item,
+choosing a **Consumable** or **Medical** category sets **Tracking Type** to
+**Pool**, because stock that is used up is counted by quantity and medical lots
+exist only on pool items. Any other category, or no category, sets
+**Individual**. It is only a starting point: once you pick a tracking type
+yourself, changing the category leaves your choice alone. Editing an existing
+item never changes it. Before, every new item started as Individual, and a box
+of gloves saved that way could not be issued by count.
+
 ![The Firefighting Gloves pool card with Issuances open: its on-hand and issued counts, and three members holding pairs, each with the count, the date issued and a Return button](./images/05-94-pool-issuances.png)
 
 ### Reading the stock numbers
@@ -647,6 +656,12 @@ planning orders, and the request form uses them to pick the right size.
 If a member has never saved sizes, the form simply opens blank. Fields you leave
 empty are not stored.
 
+_(2026-11-15)_ If one size is refused, the others still save. The window stays
+open, says _"Sizes saved, except …"_ and marks the refused box, which keeps its
+stored value until you fix it and save again. If the current sizes cannot be
+loaded, the window says so with **Try again**, and **Save Sizes** stays off
+until they load, so a blank form cannot clear sizes already on file.
+
 ### How Size Preferences Are Used
 
 - **Request Equipment** starts the size step from the member's sizes on file
@@ -870,6 +885,10 @@ The member is told: "This tells the quartermaster you are bringing it back.
 Hand the item in as usual; it stays on your list until they confirm they have
 it."
 
+Once the notice is sent, the row reads **Quartermaster notified** with the
+date in place of the button, so it is not offered twice. The button returns if
+the quartermaster denies the notice, or after they receive the item.
+
 The notice appears on **Inventory Administration → Return Requests**, and as a
 "Pending return" row in **Waiting for action**. When the gear arrives:
 
@@ -990,13 +1009,18 @@ Below them:
 - **Issued to Me** lists everything you hold, newest first. Each row shows
   what its record carries: serial number, asset tag and condition for a tracked
   item; quantity and size for issued stock. Each has **Notify quartermaster of
-  return**.
+  return**, or **Quartermaster notified** with the date once a notice is
+  waiting to be received.
 - **Active Temporary Loans** is its own list, because a due date is something
   you must act on. Overdue loans are marked.
 - **My Requests** shows your gear requests with their status: Awaiting review,
   Approved, Declined or Issued. The quartermaster's note appears under a
   request ("Quartermaster: …").
 - **Request Equipment** and **My Sizes** are at the top.
+
+If your requests or your return notices fail to load, the other still shows,
+with one error message for what failed. Before 2026-11-20 one failure blanked
+both.
 
 Empty sections explain themselves. "Nothing has been issued to you yet." is
 followed by how gear arrives and a link to the Learning Center's **Your Issued
@@ -1417,17 +1441,18 @@ rigs to visit. For the opposite question ("what is expiring on my trucks?"), use
 
 ### Stock Lot Edge Cases
 
-| What happens                                               | What it means                                                                                                                                              |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A lot passes its expiration date                           | It stops counting toward on hand, is flagged in the list, and an equipment-check swap refuses it                                                           |
-| Every lot of an item has expired                           | On hand reads **zero**                                                                                                                                     |
-| An item has no lots                                        | Nothing changes. It reports its pool figures                                                                                                               |
-| A swap uses up a lot                                       | The lot is removed. What went onto the truck keeps its own copy of the lot number and expiration                                                           |
-| A lot is deleted while some of it is on an apparatus       | The truck's record keeps its lot number and expiration                                                                                                     |
-| One line of **Receive Stock** has a problem                | **Nothing is saved.** Fix the line and submit the whole delivery again                                                                                     |
-| An **Add Several** line names an item you already have     | It is skipped and named. The rest are created                                                                                                              |
-| A lot has no expiration date                               | It counts toward on hand and is used **last**                                                                                                              |
-| You open **On hand** or **Quantity** on a lot-stocked item | The box is replaced by the lot figure ("_N_ from stock lots — adjust by receiving a delivery or editing the item's lots"). Saving the form leaves it alone |
+| What happens                                               | What it means                                                                                                                                                                          |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A lot passes its expiration date                           | It stops counting toward on hand, is flagged in the list, and an equipment-check swap refuses it                                                                                       |
+| Every lot of an item has expired                           | On hand reads **zero**                                                                                                                                                                 |
+| An item has no lots                                        | Nothing changes. It reports its pool figures                                                                                                                                           |
+| A swap uses up a lot                                       | The lot is removed. What went onto the truck keeps its own copy of the lot number and expiration                                                                                       |
+| A lot is deleted while some of it is on an apparatus       | The truck's record keeps its lot number and expiration                                                                                                                                 |
+| One line of **Receive Stock** has a problem                | **Nothing is saved.** Fix the line and submit the whole delivery again                                                                                                                 |
+| An **Add Several** line names an item you already have     | It is skipped and named. The rest are created                                                                                                                                          |
+| A lot has no expiration date                               | It counts toward on hand and is used **last**                                                                                                                                          |
+| You open **On hand** or **Quantity** on a lot-stocked item | The box is replaced by the lot figure ("_N_ from stock lots — adjust by receiving a delivery or editing the item's lots"). Saving the form leaves it alone                             |
+| **Add lot** is refused                                     | The reason is shown under the field it is about ("Enter how many units, a whole number 0 or more."), and what you typed stays. Closing the form after typing asks first _(2026-11-20)_ |
 
 ---
 
@@ -2748,6 +2773,9 @@ the analysis has no size on file.
 
 - The PDF includes your department name, the date, every filter you used, and
   the size breakdown.
+- _(2026-11-18)_ Every page of the PDF ends with "Inventory Impact Plan · Page
+  N of M", so loose pages handed round at a purchasing meeting can be put back
+  in order and shown to be complete. Before, the plan had no footer.
 - Email and phone columns are included only if your department's contact
   settings allow it.
 - Useful for budget meetings and purchasing paperwork.
@@ -3044,6 +3072,11 @@ number boxes when you click away or press Enter. There is no Save button.
 Clearing a number box and leaving it empty puts back the saved value. A number
 outside the range is changed to the nearest allowed value.
 
+Each of these is said under the box rather than done silently. An empty box
+reads "Enter whole hours, from 0 to 24. 2 is kept."; a typed 99 reads "24 is
+the most allowed. 24 was saved."; a save the server refuses shows its reason
+under the control it came from.
+
 On a phone each setting is one row with its switch or number box at the right,
 under a compact page top.
 
@@ -3080,6 +3113,10 @@ Build checklists in the **Template builder**, from the checklist console.
   the name. The position's required quantity and minimum stay with that
   position; they never become a department-wide reorder point, because one item
   (gauze, say) is stocked in many places, each counted on its own.
+- **The item search's Add** is never greyed out. Pressed on an empty box it
+  says "Type an item name, or search the catalog, to add it." If creating a new
+  catalog item is refused, the name you typed stays in the box with the reason
+  under it _(2026-11-20)_.
 - After pasting a list into a saved location, the builder offers **Match to
   catalog**.
 - **Crew view** shows the checklist as a crew will see it on a phone, and
@@ -3315,9 +3352,18 @@ Supplies categories page.
   is checked out or assigned is reported and left ticked; the rest are retired.
 - **Lots.** The **Lots** button on a supply row opens its dated lots. Everyone
   who can view medical supplies can read them; managers can add, edit and delete.
+  _(2026-11-15)_ A lot that cannot be saved says why under the box at fault (a
+  new lot needs a quantity of 1 or more). When you edit a lot and one value is
+  refused, the rest save and that box keeps its stored value. Closing the
+  dialog, or cancelling a row edit, with changes not yet saved asks first.
 - **A category's supplies.** Open a category on the categories page to list its
   supplies and their stock. Cards say how many active supplies they hold.
 - **Import / export** is the button that was labelled for import alone.
+  _(2026-11-15)_ **Import** is no longer greyed out before a file is chosen.
+  Pressing it without one says _"Choose a CSV file to import."_ under **CSV
+  file to import**; a file that is not a CSV is named there too, and so is a
+  refused import. Closing the dialog with a file chosen but not imported asks
+  first.
 
 ![Medical Supplies on the All supplies tab: the summary tiles, each supply with its size beside the name, its Where path, next expiry and reorder point, and two supplies ticked with the Retire selected bar above the table](./images/05-88-medical-supplies-list.png)
 

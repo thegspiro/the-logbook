@@ -192,6 +192,8 @@ export interface EvaluationTemplateCreate {
   member_status?: string | undefined;
   /** A starter's key: the first draft is filled from it instead of left empty. */
   starter?: string | undefined;
+  /** Rank codes that receive the starter's officer sections; only for a starter that needs them. */
+  officer_ranks?: string[] | undefined;
 }
 
 /** A ready-made form a new template can start from. */
@@ -203,6 +205,8 @@ export interface EvaluationStarter {
   member_class: string | null;
   member_status: string | null;
   section_titles: string[];
+  /** Creating from it needs the department's officer ranks. */
+  needs_officer_ranks?: boolean | undefined;
 }
 
 /** Partial update: omit to leave alone, null to clear. */
@@ -340,6 +344,9 @@ export interface EvaluationStep {
   status: 'pending' | 'open' | 'completed' | 'skipped';
   due_date: string | null;
   completed_at: string | null;
+  /** The person a manager named to act on an approval or calibration step,
+   * in place of the workflow's actor. Null when the workflow decides. */
+  assignee?: PersonRef | null | undefined;
 }
 
 export interface EvaluationPart {
@@ -387,6 +394,8 @@ export interface EvaluationSummary {
   current_step: string | null;
   current_step_due: string | null;
   created_at: string | null;
+  /** A finalized review's overall grade, sent only to holders of `evaluations.view_all`. */
+  overall_grade?: string | null | undefined;
 }
 
 export type SignatureDisposition = 'signed' | 'acknowledged' | 'refused';
@@ -412,6 +421,9 @@ export interface EvaluationViewer {
   can_amend?: boolean | undefined;
   /** The member, inside the response window, before submitting a response. */
   can_respond?: boolean | undefined;
+  /** A holder of evaluations.manage, on an evaluation in progress not their
+   * own: may name who acts on an approval or calibration step not yet done. */
+  can_assign_steps?: boolean | undefined;
 }
 
 /** A finalized evaluation reopened as a new revision, and why. */
@@ -470,7 +482,20 @@ export interface EvaluationDetail extends EvaluationSummary {
   response_document_available?: boolean | undefined;
   /** Keys of the evaluator's items the calibrator flagged to revisit. */
   calibration_flags?: string[] | undefined;
+  /** The member's last finalized review on the same form, when the caller may read it. */
+  previous_review?: PreviousReview | null | undefined;
   viewer: EvaluationViewer;
+}
+
+export interface PreviousReview {
+  evaluation_id: string;
+  period_name: string | null;
+  period_start: string;
+  period_end: string;
+  /** The grade that stood: the evaluator's where they changed the calculated one. */
+  overall: string | null;
+  sections: { key: string; title: string; label: string }[];
+  goals: { key: string; label: string; text: string }[];
 }
 
 export interface SubmitResult {

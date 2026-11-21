@@ -39,8 +39,10 @@ import type {
   CourseClassCreate,
   CourseClassUpdate,
   CourseCohort,
+  CourseLinkHistory,
   CourseLinkResult,
   CourseLinksView,
+  CourseUnlinkResult,
   CourseCohortClass,
   CourseCohortCreate,
   CourseCohortDetail,
@@ -258,6 +260,18 @@ export const trainingService = {
   /** Link every unlinked record carrying a name to a library course. */
   async linkCourseName(key: string, courseId: string): Promise<CourseLinkResult> {
     const response = await api.post<CourseLinkResult>('/training/course-links', { key, course_id: courseId });
+    return response.data;
+  },
+
+  /** The department's course links, newest first. */
+  async getCourseLinkHistory(params: { offset: number; limit: number }): Promise<CourseLinkHistory> {
+    const response = await api.get<CourseLinkHistory>('/training/course-links/history', { params });
+    return response.data;
+  },
+
+  /** Put a link's records back as they were before it. */
+  async undoCourseLink(linkId: string): Promise<CourseUnlinkResult> {
+    const response = await api.post<CourseUnlinkResult>(`/training/course-links/${linkId}/undo`);
     return response.data;
   },
 
@@ -1437,6 +1451,22 @@ import type {
 } from '../types/training';
 import { asArray } from '../utils/asArray';
 
+/** What a route needs to name one attachment entry. */
+export interface AttachmentEntryRef {
+  index: number;
+  id?: string | null | undefined;
+}
+
+/**
+ * The path segment naming an attachment entry: its id when it has one, which
+ * stays put when an earlier entry is removed, so a repeated removal or a list
+ * held across one still names the same file. The index is the fallback for an
+ * entry stored before ids existed.
+ */
+function attachmentSegment(attachment: AttachmentEntryRef): string {
+  return attachment.id ? encodeURIComponent(attachment.id) : String(attachment.index);
+}
+
 export const trainingSubmissionService = {
   // Config
   async getConfig(): Promise<SelfReportConfig> {
@@ -1544,12 +1574,12 @@ export const trainingSubmissionService = {
     return asArray(response.data?.attachments);
   },
 
-  async deleteAttachment(submissionId: string, index: number): Promise<void> {
-    await api.delete(`/training/submissions/${submissionId}/attachments/${index}`);
+  async deleteAttachment(submissionId: string, attachment: AttachmentEntryRef): Promise<void> {
+    await api.delete(`/training/submissions/${submissionId}/attachments/${attachmentSegment(attachment)}`);
   },
 
-  getAttachmentDownloadUrl(submissionId: string, index: number): string {
-    return `/api/v1/training/submissions/${submissionId}/attachments/${index}/download`;
+  getAttachmentDownloadUrl(submissionId: string, attachment: AttachmentEntryRef): string {
+    return `/api/v1/training/submissions/${submissionId}/attachments/${attachmentSegment(attachment)}/download`;
   },
 
   // Officer review
@@ -2332,6 +2362,8 @@ export const reportExportService = {
 
 export interface TrainingAttachment {
   index: number;
+  /** The entry's stable id. Null only on an entry stored before ids existed. */
+  id?: string | null;
   file_name: string | null;
   file_type: string | null;
   file_size: number | null;
@@ -2362,8 +2394,8 @@ export const documentService = {
     return response.data;
   },
 
-  getAttachmentDownloadUrl(recordId: string, index: number): string {
-    return `/api/v1/training/records/${recordId}/attachments/${index}/download`;
+  getAttachmentDownloadUrl(recordId: string, attachment: AttachmentEntryRef): string {
+    return `/api/v1/training/records/${recordId}/attachments/${attachmentSegment(attachment)}/download`;
   },
 };
 

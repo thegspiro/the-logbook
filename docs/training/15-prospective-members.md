@@ -778,6 +778,13 @@ When an applicant has completed the pipeline, convert them to a member.
    - when you chose **Set it later**, or the email failed: the member "has no
      password they know yet. Set one with Reset Password in Member Management
      before they can sign in."
+   - _(2026-10-17)_ when the department provisions Google Workspace or
+     Microsoft 365 accounts, what happened to the new member's account: for
+     example _"Microsoft account (address) was created; its temporary password
+     went to the member's personal email."_ If it was not created, or its
+     password has not reached the member, the screen says so: retry
+     from the member's profile. See
+     [Integrations](./16-integrations.md).
 
 **One applicant, one account.** Two coordinators converting the same applicant
 at the same moment — or one person double-clicking — create exactly one member.
@@ -1309,6 +1316,19 @@ their follow-up submissions, and cuts each election package's copy of the
 applicant down to the anonymized name, the membership type and the stage list.
 The package's coordinator notes and supporting statement are cleared. The
 ballot item is an election record and is kept.
+
+Since 2026-11-20 anonymizing also empties the coordinators' notes on each
+pipeline step and strips the values out of the applicant's activity log (old
+and new contact details, uploaded file names, notes). Each log entry still
+says what happened and at which step. See
+[Anonymizing a Departed Member](./17-privacy-data-rights.md#anonymizing-a-departed-member-admin).
+
+**When the member is permanently deleted** _(2026-11-21)_. Deleting a
+converted member now deletes their application too: the applicant record, its
+interviews and notes, its form answers and its uploaded documents. Before, the
+delete only cut the link, and the application stayed with nobody able to
+remove it (Purge takes only inactive applications). A guest check-in at an
+event that first created the applicant stays with the event's history.
 
 ---
 

@@ -480,8 +480,12 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
                 m.hoursDraft !== null && m.hoursDraft.trim() !== '' && parseHoursEntry(m.hoursDraft) === null;
               // Only offered while it would produce a real span: a member who
               // checked in after the scheduled end has nothing to fill to.
+              // The officer's own row, when they run the shift without
+              // scheduling.manage: the server refuses a change to it (ADV2-8),
+              // so it is shown, sent back as it is, and not editable here.
+              const ownLocked = state?.own_hours_locked_user_id === m.userId;
               const canFillToEnd =
-                flag !== null && shiftEndLocal !== '' && (m.inLocal || shiftStartLocal) < shiftEndLocal;
+                !ownLocked && flag !== null && shiftEndLocal !== '' && (m.inLocal || shiftStartLocal) < shiftEndLocal;
               const fillLabel = m.inLocal ? 'Until shift end' : 'Full shift';
               return (
                 <div key={m.userId} className="space-y-2 py-3">
@@ -503,6 +507,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
                         type="datetime-local"
                         className={`${inputClass} w-full`}
                         value={m.inLocal}
+                        disabled={ownLocked}
                         aria-label={`Start time for ${m.name}`}
                         onChange={(e) => setMemberField(m.userId, 'inLocal', e.target.value)}
                       />
@@ -513,6 +518,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
                         type="datetime-local"
                         className={`${inputClass} w-full`}
                         value={m.outLocal}
+                        disabled={ownLocked}
                         aria-label={`End time for ${m.name}`}
                         onChange={(e) => setMemberField(m.userId, 'outLocal', e.target.value)}
                       />
@@ -528,6 +534,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
                         placeholder="—"
                         className={`${inputClass} w-full text-right tabular-nums`}
                         value={m.hoursDraft ?? derivedHoursText(m)}
+                        disabled={ownLocked}
                         aria-label={`Hours for ${m.name}`}
                         aria-invalid={hoursInvalid || undefined}
                         onChange={(e) => setMemberHours(m.userId, e.target.value)}
@@ -543,6 +550,11 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
                       />
                     </label>
                   </div>
+                  {ownLocked && (
+                    <p className="text-theme-text-secondary text-xs">
+                      Your own times come from your check-in and check-out. A scheduling admin can correct them.
+                    </p>
+                  )}
                   {hoursInvalid && (
                     <p className="text-xs text-red-700 dark:text-red-300" role="alert">
                       Enter between 0.25 and {MAX_ATTENDANCE_HOURS} hours.

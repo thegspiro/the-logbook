@@ -20,6 +20,7 @@ import type {
   Grades,
   LiveData,
   PartContent,
+  PersonRef,
   SignatureWrite,
   SignResult,
   SubmitResult,
@@ -148,6 +149,15 @@ export const evaluationsService = {
     return asArray(response.data);
   },
 
+  /** A review period's evaluations as CSV, with each finalized one's grade. */
+  async exportPeriod(periodId: string): Promise<Blob> {
+    const response = await api.get<Blob>('/evaluations/export', {
+      responseType: 'blob',
+      params: { period_id: periodId },
+    });
+    return response.data;
+  },
+
   async draftOptions(): Promise<DraftOptions> {
     const response = await api.get<Partial<DraftOptions>>('/evaluations/draft-options');
     const body = response.data;
@@ -257,6 +267,24 @@ export const evaluationsService = {
     const response = await api.post<EvaluationDetail>(`/evaluations/${id}/calibration/complete`, {
       flagged_items: flaggedItems,
     });
+    return response.data;
+  },
+
+  /** The current members who may be named on an approval or calibration step. */
+  async listStepAssigneeCandidates(id: string, stepKey: string): Promise<PersonRef[]> {
+    const response = await api.get<{ candidates?: PersonRef[] }>(
+      `/evaluations/${id}/steps/${encodeURIComponent(stepKey)}/assignee-candidates`
+    );
+    return asArray(response.data.candidates ?? []);
+  },
+
+  /** Name who acts on an approval or calibration step, or pass null to hand it
+   * back to the workflow's actor. */
+  async assignStep(id: string, stepKey: string, assigneeId: string | null): Promise<EvaluationDetail> {
+    const response = await api.put<EvaluationDetail>(
+      `/evaluations/${id}/steps/${encodeURIComponent(stepKey)}/assignee`,
+      { assignee_id: assigneeId }
+    );
     return response.data;
   },
 

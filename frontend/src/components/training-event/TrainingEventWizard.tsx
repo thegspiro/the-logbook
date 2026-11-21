@@ -49,6 +49,7 @@ import { linkedAttendanceLabel, useRetiredAttendanceRequirements } from '../../h
 import { getErrorDetail } from '../../utils/errorHandling';
 import { mapServerFieldErrors } from '../../utils/serverFieldErrors';
 import { displayNameOf } from '../../utils/memberName';
+import { isActiveAccount } from '../../constants/enums';
 import { getEventTypeBadgeColor } from '../../utils/eventHelpers';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import type { EventFormModel } from '../event-form/useEventFormModel';
@@ -74,6 +75,7 @@ import {
   toUpdatePayload,
   validateTrainingDetails,
   withCourseChoice,
+  reconcileTemplateTraining,
   withLoadedCourseHours,
   withoutSessionSettingCopies,
   type InstructorOption,
@@ -249,6 +251,13 @@ interface TrainingEventWizardProps {
    * changes. Without it the reading goes through `setTraining`.
    */
   onReadStoredTraining?: ((read: (value: TrainingDetailsForm) => TrainingDetailsForm) => void) | undefined;
+  /**
+   * On a create from a template with training details: what the template
+   * filled Training Info with. Once the Course Library and the member list
+   * have answered, it is checked against them (`reconcileTemplateTraining`)
+   * through `onReadStoredTraining`, and any fallback is noted on Training Info.
+   */
+  templateTraining?: TrainingDetailsForm | undefined;
 }
 
 export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
@@ -279,6 +288,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   seriesOccurrence,
   onDetailsStepChange,
   onReadStoredTraining,
+  templateTraining,
 }) => {
   // Every rank, not only the active ladder: a member can still hold a rank the
   // department has since retired, and it should read as its name, not its code.
@@ -310,12 +320,16 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   const [trainingErrors, setTrainingErrors] = useState<TrainingErrors>({});
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
   const [coursesLoaded, setCoursesLoaded] = useState(false);
+  // Answered either way: a template's details wait for both lists to settle.
+  const [coursesSettled, setCoursesSettled] = useState(false);
   // The event's length as the form opened on it: the stored length, which a
   // library course without hours credited (withLoadedCourseHours).
   const [lengthAtOpen] = useState(() =>
     scheduledHours(model.formData.start_datetime, model.formData.end_datetime, model.tz)
   );
   const [users, setUsers] = useState<User[]>([]);
+  const [usersLoaded, setUsersLoaded] = useState(false);
+  const [usersSettled, setUsersSettled] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Focus is moved after the step it targets has rendered: to the first
   // refused field, or to the step's heading when the step changes. Only then
@@ -409,21 +423,31 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
       })
       .catch(() => {
         /* non-critical: the library choice offers nothing */
-      });
+      })
+      .finally(() => setCoursesSettled(true));
   }, []);
   useEffect(() => {
     userService
       .getUsers()
-      .then(setUsers)
+      .then((list) => {
+        setUsers(list);
+        setUsersLoaded(true);
+      })
       .catch(() => {
         /* non-critical: the lead instructor list is empty */
-      });
+      })
+      .finally(() => setUsersSettled(true));
   }, []);
   const members = useMemo<InstructorOption[]>(
     () =>
       users.map((user) => {
         const name = displayNameOf(user) || user.username;
-        return { id: user.id, name, label: user.rank ? `${name} (${formatRank(user.rank)})` : name };
+        return {
+          id: user.id,
+          name,
+          label: user.rank ? `${name} (${formatRank(user.rank)})` : name,
+          former: !isActiveAccount(user.status),
+        };
       }),
     [users, formatRank]
   );
@@ -446,6 +470,34 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
         : prev
     );
   }, [coursesLoaded, courses, originalTraining, trainingAccess, lengthAtOpen, onReadStoredTraining, setTraining]);
+  // A template's training details, checked once against the lists they name:
+  // a course the library no longer lists, or an instructor who is no longer a
+  // current member, falls back with a note. Applied as a reading, not an
+  // edit, so Cancel does not take it for one. A list that failed to load is
+  // skipped rather than taken as empty.
+  const [templateNotes, setTemplateNotes] = useState<string[]>([]);
+  const templateRead = useRef(false);
+  useEffect(() => {
+    if (!templateTraining || templateRead.current || !coursesSettled || !usersSettled) return;
+    templateRead.current = true;
+    const listedCourses = coursesLoaded ? courses : undefined;
+    const listedMembers = usersLoaded ? members : undefined;
+    setTemplateNotes(reconcileTemplateTraining(training, templateTraining, listedCourses, listedMembers).notes);
+    (onReadStoredTraining ?? setTraining)(
+      (prev) => reconcileTemplateTraining(prev, templateTraining, listedCourses, listedMembers).value
+    );
+  }, [
+    templateTraining,
+    coursesSettled,
+    usersSettled,
+    coursesLoaded,
+    usersLoaded,
+    courses,
+    members,
+    training,
+    onReadStoredTraining,
+    setTraining,
+  ]);
   // The stored details read the same way, so Review does not call the
   // reading a change the officer made.
   const original = useMemo(
@@ -514,7 +566,8 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     const picked = applyLibraryCourse(
       training,
       course,
-      members,
+      // A course's named instructor is matched to a current member only.
+      members.filter((m) => !m.former),
       linkageData.programs.map((p) => p.id),
       training.course_mode === 'library' ? courses.find((c) => c.id === training.course_id) : undefined
     );
@@ -978,6 +1031,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
               storedCourseName={storedCourseName}
               coursesLoaded={coursesLoaded}
               retiredAttendanceNames={retiredAttendanceNames}
+              templateNotes={templateNotes}
             />
           )}
 

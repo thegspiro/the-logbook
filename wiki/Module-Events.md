@@ -96,7 +96,8 @@ single-page `EventForm` for every type but **Training**, and the step-by-step
 Changing the type swaps the form in place and carries every value across, both
 ways. Training Admin's **Create Session** renders the same composer with the
 type fixed. `?template=<id>` on Create Event applies a template; a Training
-template opens the wizard.
+template opens the wizard and, when it saved training details, fills Training
+Info too _(2026-11-20)_.
 
 - **Compact layout** — a two-column grid pairing related sections, with
   **Check-In Settings** and **Notifications** side by side.
@@ -177,13 +178,13 @@ The detail page of a recurring occurrence shows its position in the series
 All** link listing the series, and the series actions. The events list shows a
 recurrence badge.
 
-| Action                         | Endpoint                                    | Behavior                                                                                                                                                                                   |
-| ------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **This and all future events** | `PATCH /events/{id}/update-future`          | Updates the anchor occurrence and every later one (`start_datetime >= anchor`). Earlier occurrences are unchanged — the boundary is the anchor, not today                                  |
-| Delete series                  | `DELETE /events/{id}/series`                | Confirmation shows the count of events to be removed. Deletes every occurrence, past and future, unless `delete_future_only` is set                                                        |
-| Cancel series                  | `POST /events/{id}/cancel-series`           | Cancels the series, or only future occurrences with `cancel_future_only`. The dialog's keep button reads **Keep Series**                                                                   |
-| RSVP to series                 | `POST /events/{id}/rsvp-series`             | "Apply to all future events" — goes through the same guarded write path as a single RSVP, so capacity, guests and deadlines are enforced on every occurrence. Works on optional series too |
-| Transfer                       | `POST /events/{id}/transfer` scope `future` | See [Organizer, Alternate and Transfer](#organizer-alternate-and-transfer)                                                                                                                 |
+| Action                         | Endpoint                                    | Behavior                                                                                                                                                                                                            |
+| ------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **This and all future events** | `PATCH /events/{id}/update-future`          | Updates the anchor occurrence and every later one (`start_datetime >= anchor`). Earlier occurrences are unchanged — the boundary is the anchor, not today                                                           |
+| Delete series                  | `DELETE /events/{id}/series`                | Confirmation shows the count of events to be removed. Deletes every occurrence, past and future, unless `delete_future_only` is set                                                                                 |
+| Cancel series                  | `POST /events/{id}/cancel-series`           | Cancels the series, or only future occurrences with `cancel_future_only`, which also ends the series at its last kept occurrence and turns rolling off (2026-11-21). The dialog's keep button reads **Keep Series** |
+| RSVP to series                 | `POST /events/{id}/rsvp-series`             | "Apply to all future events" — goes through the same guarded write path as a single RSVP, so capacity, guests and deadlines are enforced on every occurrence. Works on optional series too                          |
+| Transfer                       | `POST /events/{id}/transfer` scope `future` | See [Organizer, Alternate and Transfer](#organizer-alternate-and-transfer)                                                                                                                                          |
 
 **How "This and all future events" applies times.** Times are applied as a
 change, not copied: each occurrence moves by the anchor's own wall-clock shift
@@ -191,7 +192,11 @@ and takes the new length, an RSVP deadline keeps its lead ahead of each
 occurrence's start, and unchanged times leave every occurrence alone. Each
 occurrence keeps its own lifecycle markers in `custom_fields`. Finalized
 occurrences are protected as described in
-[Editing a finalized event](#editing-a-finalized-event).
+[Editing a finalized event](#editing-a-finalized-event). _(2026-11-21, #4478)_
+A time change that would leave existing check-ins outside an open
+occurrence's new check-in window is refused before anything is written,
+naming the members and occurrences affected — the same rule a single event's
+edit applies (`_count_stranded_check_ins`).
 
 ### Series end reminders
 
@@ -203,14 +208,14 @@ days), so they can extend or close it. Each series is reminded once
 
 ### Edge cases
 
-| Scenario                            | Behavior                                                                               |
-| ----------------------------------- | -------------------------------------------------------------------------------------- |
-| Monthly-by-weekday with "5th" week  | Months with no 5th occurrence of the weekday are skipped; use "last" for the final one |
-| Annual events on Feb 29             | Fall on Feb 28 in non-leap years and return to the 29th in leap years                  |
-| Delete single occurrence            | Does not affect other occurrences in the series                                        |
-| Skip dates                          | Tracked per occurrence; removing a skip date restores the occurrence                   |
-| Rolling recurrence with no end date | Generates 12 months ahead, extended daily                                              |
-| Series spanning a DST change        | Occurrences keep their local wall-clock time                                           |
+| Scenario                            | Behavior                                                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Monthly-by-weekday with "5th" week  | Months with no 5th occurrence of the weekday are skipped; use "last" for the final one                                   |
+| Annual events on Feb 29             | Fall on Feb 28 in non-leap years and return to the 29th in leap years                                                    |
+| Delete single occurrence            | Does not affect other occurrences in the series                                                                          |
+| Skip dates                          | Tracked per occurrence; removing a skip date restores the occurrence                                                     |
+| Rolling recurrence with no end date | Generates 12 months ahead, extended daily; never recreates a date the series holds, cancelled ones included (2026-11-21) |
+| Series spanning a DST change        | Occurrences keep their local wall-clock time                                                                             |
 
 ---
 
@@ -220,12 +225,20 @@ days), so they can extend or close it. Each series is reminded once
 **Needs You** band ("Events needing your response") at the top. The band's
 overflow link narrows the grid to what needs a response.
 
-- **Mandatory events awaiting a response** — an unanswered mandatory event is
-  in the band only once it starts within the department's response window
-  (**Events settings → Attendance → Mandatory event responses**, 1–365 days,
-  default 60), so a recurring mandatory series does not ask about every
-  future occurrence at once. One whose RSVP deadline is under 48 hours away is
-  in the band regardless.
+Until an unanswered **mandatory** event enters the response window described
+below _(2026-11-16)_, it renders as routine and its RSVP buttons still work.
+The band, the card's "Response needed" strip and the needs-response filter
+all read `getEventUrgency`, so they agree.
+
+- **Mandatory events awaiting a response** _(2026-11-16, #4338)_ — an
+  unanswered mandatory event is urgent (`action`) and in the band only once it
+  starts within the department's response window (**Events settings →
+  Attendance → Mandatory event responses**, 1–365 days, default 60), so a
+  recurring mandatory series does not ask about every future occurrence at
+  once. One whose RSVP deadline is under 48 hours away is in the band
+  regardless. An unparseable start is treated as inside the window.
+  `getEventUrgency` in `utils/eventHelpers.ts` is the one rule for the band and
+  the cards.
 - **Missed mandatory events** — `GET /events/missed-mandatory` supplies the
   mandatory events the caller did not attend, for the band's "missed" rows. A
   member who joined after an event ran, or who was not in its audience, is not
@@ -394,7 +407,12 @@ credit. The other manager controls — Edit, Finalize, Record Times, the More
 menu — stay with `events.manage`. See
 [Module-Events-Developer](Module-Events-Developer) for the access table.
 
-- **Export CSV** of the attendee list and **Print roster**.
+- **Export CSV** of the attendee list and **Print roster**. The attendee CSV
+  and both event-list exports end with a **Source** column, **Imported** (the
+  Historical Data Import wrote it, per the `imported_source_records` ledger)
+  or **The Logbook** _(2026-11-19, #4355; `services/import_provenance.py`;
+  `source` / `source_label` on `EventListItem` and the roster's
+  `RSVPResponse`)_.
 - **Non-respondent reminders** (`POST /events/{id}/send-reminders`) — exclude
   members who already responded (going, not going or maybe).
 - **Get Directions** — a map link for events with a location.
@@ -593,10 +611,12 @@ The real application form is what the follow-up email links to.
 
 At an event **with** the pipeline switch the page is email-first
 _(2026-10-25)_. The guest enters an email; an **active** applicant is shown their
-first name and last initial ("Is this you, Jane S.?") and confirms; a member
-account (active or probationary) is told to scan the member QR code; anyone else
-— including a withdrawn, rejected or on-hold applicant — is asked to see a member
-of staff. **The kiosk opens no new applicants at these events**, and the typed
+first name and last initial ("Is this you, Jane S.?") and confirms; anyone else
+— a member account, a withdrawn, rejected or on-hold applicant, or an unknown
+address — is asked to see a member of staff. _(2026-11-08)_ A member account
+used to be told to scan the member QR code, which let anyone holding the public
+link test which addresses belong to members; the audit row still records the
+true outcome. **The kiosk opens no new applicants at these events**, and the typed
 `guest-check-in` endpoint refuses them with `LB-EVT-006`, so hiding the form is
 not the only thing stopping it. The confirm call carries a ten-minute signed
 token bound to the applicant, event, room and department; the browser never
@@ -871,7 +891,8 @@ client API cache (`/attendance-petitions` in `UNCACHEABLE_PREFIXES`).
   needs attendance reopened first, and that declining works either way, instead
   of the plain "Review the request" line.
 - **Across events:** `/events/attendance-requests` lists every pending request
-  on events the viewer organizes or is alternate for, oldest first, with
+  routed to the viewer — on events they organize or are alternate for, and any
+  a fallback step sent them — oldest first, with
   **Approve** / **Decline** in place (the same dialogs as the event card,
   `AttendancePetitionDecisionDialogs.tsx`). `events.manage` holders get **All
   events**. The Events page shows "N attendance requests are waiting for you"
@@ -990,6 +1011,15 @@ large messages.
   `/events/:id/edit?step=training`. A duplicate copies the session and its
   links, not its finalized state. Course cohorts generate events in the other
   direction — see [Module-Training](Module-Training#multi-class-courses--cohorts).
+  _(2026-11-21, #4478)_ Hours that follow the event's length (no course, no
+  typed hours) are re-set whenever the event's time moves — `update_event`,
+  `update_future_events` and `postpone_event` call
+  `TrainingSessionService.follow_event_length` unless the same save sets the
+  hours. A session awaiting sign-off approval is not counted as held by the
+  attendance graders until the approval is decided (`load_held_sessions`). A
+  linked requirement no longer active counts the session against no one; the
+  card says so and the waiver card shows the `not_counted` / `exempt` refusal
+  rather than nothing (#4366).
 - **Admin hours** — `event_hour_mappings` map an event type or custom category
   to an admin hours category with a percentage split (e.g. 70% Training, 30%
   Professional Development). Configured in **Event settings → Hour Tracking**.
@@ -1011,6 +1041,67 @@ modal (`EventTemplateForm`), active toggle and delete confirmation.
 - Templates carry the event defaults: type, title, description, location,
   duration, RSVP, capacity, guests, attendee visibility, check-in rules
   (including **Minutes After End**), reminders and custom fields.
+- **A Training template also carries the session's training details**
+  _(owner decision 2026-11-20)_ in `event_templates.training_details`: the
+  course (library, one-off name and code, or none), training type, credit
+  hours and their source, lead instructor, and certification settings. Not
+  the requirement/program links, Counts toward attendance or the completion
+  settings. The editor's **Training Details** section (TrainingInfoStep's
+  `template` variant) edits them; **Save as Template** on a Training event
+  saves its session's. Applying one checks the course and instructor against
+  the Course Library and member list (`reconcileTemplateTraining`): a course
+  no longer listed falls back to No course yet, an instructor no longer a
+  member is cleared, each with a note on Training Info.
+
+---
+
+## Apparatus Events
+
+Outreach that puts an apparatus on the road with a named crew — a Santamobile
+run, a parade, a touch-a-truck — but is **not a shift**. Under **Events
+Administration → Community Outreach → Apparatus Events**
+(`ApparatusEventsTab`, `apparatus_events.manage`).
+
+- **Templates** name the apparatus, free-text seats (Driver, Navigator, Santa,
+  Elf × 4), the Driver seat's **EVOC rule** (Enforce / Warn only / Don't
+  check), whether members may self sign-up, and the **Admin Hours category**
+  the crew's time goes to. **Duplicate** copies a template with per-seat
+  counts, for a smaller or larger version.
+- **Schedule nights** turns a template into one or many ordinary events, each
+  with its own crew (`event_apparatus_plans` / `_units` / `_seats`). A night
+  whose apparatus is on another apparatus night, or out of service, is
+  flagged; the coordinator can schedule over it.
+- **Crew card** on the event page: members take or leave an open seat
+  (`apparatus_events.signup`), which also sets their RSVP; coordinators
+  assign, clear, **Edit this night** (this night only) and **Remove crew**
+  (while no seat is filled). The Driver seat uses the same EVOC rule and
+  driver exceptions as shift driver assignment.
+- **Hours**: check in as usual, then **Finalize Attendance**. A night's
+  category **replaces** the event type's Admin Hours mapping — never both.
+- **Email members** on the crew card emails chosen members about the run's
+  open seats: one email listing every upcoming night a member can still take
+  a seat on (`POST /apparatus-events/events/{id}/seat-call`). Each send is
+  recorded in `apparatus_event_seat_calls` and the card shows the last one.
+- **Shift Scheduling** shows nights as read-only `Outreach · not a shift`
+  chips; they never count toward shift staffing.
+- **Public requests**: a scheduled request's page has **Apparatus Crew →
+  Add apparatus crew**, below Volunteer Staffing (`POST /event-requests/{id}/apparatus-crew`, needs
+  `events.manage` and `apparatus_events.manage`). The crew goes on the
+  request's own calendar event, so a new date moves it and a cancellation
+  stands it down. Volunteer signups stay available alongside it.
+
+API under `/api/v1/apparatus-events/` (uncacheable — crew boards name
+members).
+
+**Choosing who an email goes to** (`member_audience`, shared by the open-seat
+email and the request volunteer call): member classes, membership statuses
+(with the department's own tiers) and positions. Any match within a group,
+every group across them, an empty group does not narrow. Only current members
+(`ACTIVE_ACCOUNT_STATUSES`) with an address, and the **Volunteer calls**
+opt-out applies. `GET /member-audience/options` and `POST
+/member-audience/preview` (a count) need `events.manage` or
+`apparatus_events.manage`. Choices the first release made without a ruling are in
+`docs/KNOWN_LIMITATIONS.md` → "Apparatus Events".
 
 ---
 
@@ -1023,10 +1114,30 @@ modal (`EventTemplateForm`), active toggle and delete confirmation.
 - **`/events/:id/analytics`** — per-event analytics dashboard.
 - **QR Code Analytics** and **Community Engagement** tabs in the Events admin
   hub. Community Engagement (`GET /dashboard/community-engagement?period=`,
-  `events.manage`) reports events held, people reached — signed-in guests, or
-  the request's audience size where nobody signed in, reported separately —
-  member hours, requests received and completed, a monthly and by-type
-  breakdown and recent events, against the same span of the previous period.
+  `events.manage`) reports events held, people reached — a guest headcount
+  recorded on the event, else guest sign-ins, else the request's audience
+  size, reported separately — member hours, requests completed in the period
+  (dated by the request's activity log) and received in it, a monthly
+  breakdown, a by-type breakdown in two groups (public request types and
+  department event types) and recent events, against the same span of the
+  previous period. `GET /dashboard/community-engagement/events?period=` returns
+  every event in the period, for the export and for the printable summary at
+  `/events/admin/community/print?period=` (`events.manage`), which the tab's
+  **Print summary** opens. An outreach event's **Guest
+  headcount** card (`PUT /events/{id}/guest-headcount`, `events.manage`) sets or
+  clears `events.guest_headcount`. The daily `guest_headcount_reminders` task
+  emails and notifies, once, the organizer and alternate (else the creator) who
+  hold `events.manage` of an outreach event that ended before today, within the
+  last 14 days, with no headcount. The email is the switchable **Guest Headcount
+  Reminder** template, under the member's **Event officer duties** preference;
+  the event's `custom_fields.guest_headcount_reminder_sent` records that it was
+  sent, and postponing clears it. _(2026-11-21)_ Beside it, a **How it went**
+  card (`PUT /events/{id}/outreach-closeout`, same rule) records the outcome
+  and follow-ups, the apparatus that attended, the materials handed out and
+  whether photos were taken with the host's consent. The tab totals
+  **Materials handed out** for the period, and the CSV export gains
+  **Materials handed out**, **Photos** and **Outcome** columns; the printed
+  summary does not show them.
 
 ---
 
@@ -1050,25 +1161,57 @@ tab of the Events admin hub.
 
 ### Pipeline features
 
+- **Requests taken by phone** _(2026-11-21)_ — **New request** on the
+  Requests tab files a request a coordinator took by phone, email or in person
+  (`POST /event-requests`, `events.manage`). It records **How it came in**,
+  needs a phone or an email (not both), works while public intake is off, has
+  no CAPTCHA or daily limit, and flags a date inside the minimum lead time
+  rather than refusing it. The coordinator can decline the acknowledgement;
+  a request with no email never emails the requester.
 - **Public submission form** — a Forms-module form (`/f/:slug`) feeds the
   pipeline; no authentication required. **Generate form** in settings creates
   it and redirects to the Forms page with the new form selected; request forms
   show publish status badges in Event settings.
 - **Configurable outreach types** — each department defines its own outreach
   categories (e.g. `fire_safety_demo`, `station_tour`, `school_visit`); the ID
-  is generated from the label.
+  is generated from the label. _(2026-11-21)_ Each type can keep a **role
+  preset** (**Set roles** under Types & roles): the volunteers it usually
+  needs, which a new signup sheet starts from. Only configured roles, at most
+  50 seats.
+- **A page per request** _(2026-11-21)_ — a request opens at
+  `/events/admin/requests/:requestId` rather than a side panel, so it can be
+  linked, bookmarked, refreshed and left with the back button. On a phone the
+  next action stays in a bar at the bottom.
 - **Default coordinator assignment** — new requests auto-assign to a configured
-  coordinator, who receives an email.
+  coordinator, who receives an email. Since 2026-11-19 (#4380, #4432) the
+  default-coordinator and per-request coordinator pickers list current members
+  only (active or probationary), and `PATCH /events/settings` and
+  `PATCH /event-requests/{id}/assign` refuse a newly chosen former member with
+  a 400 "Only current members can be chosen as … coordinator". A coordinator
+  already saved who has since left is kept (shown "(former member)").
 - **Flexible date preferences** — exact dates, a general timeframe, or full
-  flexibility.
+  flexibility. Since 2026-11-21 the dates are stored as calendar dates, so the
+  day picked is the day shown on every screen, whatever the viewer's time
+  zone; the status page shows the scheduled date in the department's zone.
 - **Configurable pipeline tasks** — custom, reorderable checklist steps (e.g.
   "Chief Approval", "Volunteer Signup Email", "Equipment Prep").
 - **Scheduling with room booking** — coordinators set a confirmed date, create
   a calendar event and book a room, with double-booking prevention.
 - **Volunteer staffing** — for a scheduled request, open a volunteer signup
   sheet (an open-to-all shift on the confirmed date, filled through the
-  ordinary Open Shifts flow) and email the membership asking who can help
-  (email only — not an SMS alert).
+  ordinary Open Shifts flow, which lists outreach sheets 60 days ahead rather
+  than 30) and email the membership asking who can help
+  (email only — not an SMS alert), narrowed by member class, membership
+  status and positions. Bringing an apparatus? **Add apparatus
+  crew** puts a template's crew on the request's calendar event — see
+  [Apparatus Events](#apparatus-events). _(2026-11-21)_ A member who claims a
+  role is given a **Going** RSVP on the event (and goes back to not going when
+  their last seat there is cancelled or declined), so the attendance list
+  shows the crew and **Check In** lists them first. An outreach event created
+  directly, with no request, opens the same sheet from its **Volunteer
+  staffing** card; an event scheduled from a request is staffed from the
+  request. Moving the event moves its sheet; cancelling or deleting it stands
+  the sheet down and tells the crew (a series cancel does not yet).
 - **Comment thread** — internal discussion visible to coordinators.
 - **Cancel / postpone** — both the requester (from the status page) and the
   department can cancel or postpone; a postponed request can have a new date or
@@ -1077,7 +1220,13 @@ tab of the Events admin hub.
   email and store reusable templates (e.g. "How to Find Our Building").
 - **Public status page** — token-based page (`/event-request/status/:token`)
   showing status, progress (if the department enables it) and a cancel
-  button. Coordinators copy the status link from the request detail.
+  button. Coordinators copy the status link from the request detail; neither
+  the form's confirmation nor the default emails carry it (reaffirmed
+  2026-11-21).
+- **Completion** _(2026-11-21)_ — finalizing the event's attendance completes
+  a still-scheduled request and sends the completion email. **Mark
+  completed** is offered, and accepted, only once the event's date has
+  passed.
 
 ### Status flow
 
@@ -1097,17 +1246,14 @@ Any active status → declined / cancelled
 `SettingsLayout`: a section sidebar with descriptions on desktop and a
 scrollable tab strip on phones. A deep-linked Settings tab scrolls into view.
 
-| Section          | Holds                                                                     |
-| ---------------- | ------------------------------------------------------------------------- |
-| Visibility       | Event type visibility (primary filter categories)                         |
-| Categories       | Custom event categories (`{id, label, color}`)                            |
-| Attendance       | Attendee visibility default; attendance-request fallback positions        |
-| Outreach Types   | Public outreach event types                                               |
-| Hour Tracking    | Event → admin hours category mappings                                     |
-| Pipeline         | Request pipeline: Accept Public Requests, daily limit, coordinator, tasks |
-| Email            | Email triggers and templates                                              |
-| Public Form      | The public event request form                                             |
-| Headline Metrics | The four cards at the top of the admin hub                                |
+| Section          | Holds                                                                                                                                                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Visibility       | Event type visibility (primary filter categories)                                                                                                                                                                |
+| Categories       | Custom event categories (`{id, label, color}`)                                                                                                                                                                   |
+| Attendance       | Attendee visibility default; attendance-request fallback positions; mandatory event responses                                                                                                                    |
+| Hour Tracking    | Event → admin hours category mappings                                                                                                                                                                            |
+| Public Requests  | Five pages: **Overview** (Accept Public Requests, lead time), **Request form**, **Types & roles** (types, role presets, outreach roles), **Handling** (coordinator, checklist), **Emails** (triggers, templates) |
+| Headline Metrics | The four cards at the top of the admin hub                                                                                                                                                                       |
 
 Settings are stored in `organization.settings.events`; nested JSON writes use
 `copy.deepcopy()` so changes persist.
@@ -1122,6 +1268,8 @@ Settings are stored in `organization.settings.events`; nested JSON writes use
 | `events.view`                              | Attendee list (subject to attendee visibility), attachments, event folder                                                        |
 | `events.manage`                            | Create, edit, delete, cancel, templates, rosters, check-in, finalize, settings, outreach pipeline, decide any attendance request |
 | `events.reopen_attendance`                 | Reopen finalized attendance (deliberately not part of `events.manage`)                                                           |
+| `apparatus_events.signup`                  | Take or leave a crew seat on an apparatus night (seeded wherever `events.view` is)                                               |
+| `apparatus_events.manage`                  | Apparatus event templates, scheduling nights, assigning seats (seeded wherever `events.manage` is)                               |
 | `analytics.view`                           | Event analytics pages                                                                                                            |
 | `locations.manage_nfc_tags`                | Write room NFC tags; switch kiosk badge check-in                                                                                 |
 | `apparatus.manage_nfc_tags`                | Write apparatus NFC tags                                                                                                         |
@@ -1141,6 +1289,10 @@ Settings are stored in `organization.settings.events`; nested JSON writes use
   department has no default pipeline.
 - **Outreach requesters** are not sent their status link automatically; a
   coordinator copies it from the request.
+- **An outreach event's own signup sheet** is not stood down when its
+  recurring series is cancelled, has no **Email the membership** call, and a
+  volunteer's Going RSVP counts toward the event's capacity — see
+  `docs/KNOWN_LIMITATIONS.md`.
 - **Kiosk badge check-in** accepts a copied card unattended — see
   `docs/KNOWN_LIMITATIONS.md`.
 

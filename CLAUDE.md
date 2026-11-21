@@ -156,6 +156,7 @@ Before committing any changes, mentally verify these items (the most frequent so
 - [ ] **Migration handles existing rows** — a tightened column, new unique or foreign key, or required column settles the rows already there, and a test proves it with rows present (see Pitfall #35)
 - [ ] **Safe to run twice** — a new webhook handler, scheduled task or retried write names the id that makes a second run a no-op, constrains it, and tests a double delivery (see Pitfall #36)
 - [ ] **The test was seen to fail** — a bug fix's test went red against the unfixed code; a test and the code it checks are not changed in one commit without a stated reason (see Pitfall #37)
+- [ ] **No clock read at import in a test** — `NOW`/`TODAY` come from a `_clock()` registered with `tests/clock_support.py`, read as each test starts (see Pitfall #40)
 - [ ] **E2E passes on the first attempt** — a new or changed spec was run with `--repeat-each` on every project CI runs it on, Mobile Safari included; a pass on retry fails CI (see Pitfall #38)
 
 ## Project Overview
@@ -381,14 +382,18 @@ waiting on the work.
 **Documentation-only changes need no local suite at all.** `README.md`,
 `docs/**`, `wiki/**` and `CHANGELOG.md` are prose: nothing imports them, no test
 asserts on them, and no migration reads them. Resolve, commit and push — CI
-still runs everything, so the safety net is intact either way. The changelog
+still runs the lint jobs, the docs link check and both unit suites on a
+prose-only pull request, and those hold the few tests that do read a prose
+file (see "What CI runs" below). The changelog
 conflict this used to describe — both branches appending under
 `## [Unreleased]` — now only arises on branches opened before the 2026-09-08
 freeze; while any remain open, resolve it the same way: keep both sets and move
 on.
 
-The exceptions are the two docs a job does parse, and they are cheap to check
-on their own rather than by running everything:
+The exceptions are the prose a CI job does parse: links in any Markdown file,
+and the permission claims in endpoint docstrings, which are documentation even
+though they sit in `.py` files. Each is cheap to check on its own rather than
+by running everything:
 
 | Changed                                        | Run                                                                          |
 | ---------------------------------------------- | ---------------------------------------------------------------------------- |
@@ -400,6 +405,34 @@ For code, scale it the same way: the tests covering the changed module first,
 then the wider suite when the change is broad, a schema or a shared utility.
 A merge that only brings in commits already tested on `main` is not itself a
 reason to run everything — CI re-tests the combination, which is its job.
+
+### What CI Runs, by What Changed _(2026-11-19)_
+
+A pull request no longer starts every job. `scripts/ci_changed_areas.py`
+classifies the changed paths and the `changes` job hands the result to the
+rest of `ci.yml`:
+
+| Runs                                                              | When                                                 |
+| ----------------------------------------------------------------- | ---------------------------------------------------- |
+| Migration Chain, Backend Lint, Docs Link Check                    | always                                               |
+| Backend Unit Tests, Frontend Tests (Vitest)                       | always                                               |
+| Backend Type Check, Security Scan, Integration and Contract Tests | `backend/**` changed                                 |
+| Frontend Lint/Build, both Playwright suites, PWA Smoke Test       | `frontend/**` or the root `package*.json` changed    |
+| Docker Image Build                                                | either of the two above                              |
+| Everything                                                        | any path the script does not recognize               |
+| Everything, and the MariaDB legs                                  | a push to `main`, a merge queue commit, a manual run |
+
+The two unit suites are never skipped because they read across the tree:
+backend unit tests parse frontend sources, and Vitest reads `backend/`, `wiki/`
+and root Markdown. **Do not add an `if:` or a `paths` filter to a job in
+`ci.yml`** — `ci-success` fails any skip that `changes` did not sanction, and
+`scripts/check_ci_gate.py` rejects any other condition. A new top-level
+directory runs everything until it is classified in `ci_changed_areas.py`.
+
+A pull request therefore does not test MariaDB, and a backend-only one does not
+run the browser suites. To run them on a branch before merging, start the CI
+workflow by hand on that branch (Actions → CI → Run workflow). See "CI — What a
+Pull Request No Longer Runs" in `docs/KNOWN_LIMITATIONS.md`.
 
 The test setup (`src/test/setup.ts`) automatically mocks `window.matchMedia`, `IntersectionObserver`, `ResizeObserver`, and `window.print`. Test utilities (`src/test/utils.tsx`) provide:
 
@@ -1967,6 +2000,64 @@ cell, and a table-fit spec at 390px and up that went red first.
 `rwdTableTiers.test.ts` keeps the tier blocks identical, the label test catches
 an unlabelled cell, and the specs catch a tier that is too narrow; choosing from
 a measurement is review discipline.
+
+### 40. A Test Reads the Clock When It Runs, Not When Its File Is Imported _(2026-11-14)_
+
+A module-level `NOW = datetime.now(timezone.utc)` or `TODAY = date.today()` in
+a test file is read once, while pytest collects. The tests that use it run
+minutes later — the integration job takes more than twenty — so `NOW` is stale
+by then, and a run that crosses midnight gives every later test yesterday's
+date while the code under test reads today's. Thirty-two modules did this; a
+run with the clock moved to 23:30Z failed 25 of their tests.
+
+Both failures appear only at some times of day, which is why they are easy to
+miss: the suite passes in the afternoon and turns `main` red overnight. The
+shift-evaluation tests of 2026-11-14 were the same class from the other side —
+an enrollment made "now" against a shift that started 14 hours earlier fell on
+a different day once the department's midnight passed.
+
+```python
+# WRONG — read at import
+NOW = datetime.now(timezone.utc)
+
+# CORRECT — read as each test starts, fixed for the length of the test
+from tests.clock_support import reread_each_test
+
+def _clock() -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    return {"NOW": now, "RECENTLY": now - timedelta(minutes=30)}
+
+NOW, RECENTLY = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
+```
+
+Derive the values that depend on `NOW` inside the same `_clock()`, so they move
+with it, and never use one as a parameter default (`def _alert(expires=SOON)`):
+a default is evaluated once, when the function is defined at import. Default to
+`None` and read the name in the body. And build test data relative to the moment a test needs, not to "now"
+plus an offset that can cross a date boundary: a record "made now" for a shift
+"14 hours ago" is a different day for part of every day.
+
+**Rule:** no test module reads the clock at module level.
+`tests/test_import_time_clock_sweep.py` fails on a new module-level
+`date.today()`, `datetime.now()` or `datetime.utcnow()` under `backend/tests/`,
+and on a parameter default that names one of a module's `_clock()` values.
+
+**The nightly Clock Shift workflow** (`.github/workflows/clock-shift.yml`) runs
+the clock-sensitive tests with the clock moved to the hours this class fails at:
+around UTC midnight and US Eastern midnight for the backend
+(`backend/tests/clock_shift.py`), and the US evening in New York and UTC for the
+frontend (`frontend/src/test/clockShift.ts`). A red leg names a test that will
+fail on a real run at that hour. To reproduce one locally:
+
+```bash
+cd backend && CLOCK_SHIFT_AT=00:30 python -m pytest -p tests.clock_shift tests/<file>.py
+cd frontend && TZ=America/New_York CLOCK_SHIFT_AT=19:30 npx vitest run --config vitest.clock-shift.config.ts <file>
+```
+
+The backend plugin swaps the `datetime`/`date` classes the way freezegun does,
+so a test that compares a type by identity (`python_type is datetime`) cannot
+see through it; write `issubclass(python_type, datetime)`.
 
 ## Environment Variables
 

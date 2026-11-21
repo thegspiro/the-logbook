@@ -1192,6 +1192,19 @@ export const Standing = {
 } as const;
 export type Standing = (typeof Standing)[keyof typeof Standing];
 
+/**
+ * The text colour of a figure that carries a member's standing. One map for
+ * every screen that colours by the server's classification (the compliance
+ * matrix, both forecast tables), so the same member reads the same on each
+ * (CLAUDE.md pitfall #29). AA contrast in both themes.
+ */
+export const STANDING_TEXT_COLORS: Record<Standing, string> = {
+  [Standing.NON_COMPLIANT]: 'text-red-700 dark:text-red-300',
+  [Standing.AT_RISK]: 'text-orange-700 dark:text-orange-300',
+  [Standing.COMPLIANT]: 'text-green-700 dark:text-green-300',
+  [Standing.NOT_APPLICABLE]: 'text-theme-text-muted',
+};
+
 // ============================================
 // Email Service
 // ============================================
@@ -1410,12 +1423,12 @@ export const ATTENDANCE_WAIVER_STATUS_LABELS: Record<string, string> = {
 };
 
 export const ATTENDANCE_WAIVER_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30',
-  approved: 'bg-green-500/10 text-green-800 dark:text-green-300 border-green-500/30',
-  denied: 'bg-red-500/10 text-red-800 dark:text-red-300 border-red-500/30',
-  withdrawn: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
-  voided: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
-  expired: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
+  pending: 'bg-amber-500/10 text-amber-900 dark:text-amber-300 border-amber-500/30',
+  approved: 'bg-green-500/10 text-green-900 dark:text-green-300 border-green-500/30',
+  denied: 'bg-red-500/10 text-red-900 dark:text-red-300 border-red-500/30',
+  withdrawn: 'bg-gray-500/10 text-gray-900 dark:text-gray-300 border-gray-500/30',
+  voided: 'bg-gray-500/10 text-gray-900 dark:text-gray-300 border-gray-500/30',
+  expired: 'bg-gray-500/10 text-gray-900 dark:text-gray-300 border-gray-500/30',
 };
 
 /** When a request must arrive by (`AttendanceWaiverPolicy.deadline`). */
@@ -1444,3 +1457,33 @@ export const AttendanceWaiverReasonText = {
   REQUIRED: 'required',
 } as const;
 export type AttendanceWaiverReasonText = (typeof AttendanceWaiverReasonText)[keyof typeof AttendanceWaiverReasonText];
+
+/**
+ * How an outreach request reached the department (EventRequestSource in
+ * backend/app/models/event_request.py). `web` is the public form; the others
+ * are entered by a coordinator, who cannot pick `web` for one.
+ */
+export const EventRequestSource = {
+  WEB: 'web',
+  PHONE: 'phone',
+  EMAIL: 'email',
+  IN_PERSON: 'in_person',
+  OTHER: 'other',
+} as const;
+export type EventRequestSource = (typeof EventRequestSource)[keyof typeof EventRequestSource];
+
+export const EVENT_REQUEST_SOURCE_LABELS: Record<EventRequestSource, string> = {
+  web: 'Public request form',
+  phone: 'Phone call',
+  email: 'Email',
+  in_person: 'In person',
+  other: 'Other',
+};
+
+/** The channels a coordinator can choose when entering a request, in the order offered. */
+export const STAFF_ENTERED_SOURCES: readonly EventRequestSource[] = [
+  EventRequestSource.PHONE,
+  EventRequestSource.EMAIL,
+  EventRequestSource.IN_PERSON,
+  EventRequestSource.OTHER,
+];

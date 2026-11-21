@@ -7,7 +7,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { eventService, meetingsService } from '../services/api';
+import { eventService, meetingsService, trainingSessionService } from '../services/api';
 import type { TrainingSessionResponse } from '../services/api';
 import { electionService } from '../services/electionService';
 import type { ElectionListItem } from '../types/election';
@@ -60,6 +60,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { fromSession, toTemplateTrainingDetails } from '../components/training-event/trainingDetailsModel';
 import { Breadcrumbs, PromptDialog } from '../components/ux';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { SimpleMarkdown } from '../utils/simpleMarkdown';
@@ -84,6 +85,10 @@ import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplate
 import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
 import EventGuestsCard from '../components/event-detail/EventGuestsCard';
+import EventApparatusCrewCard from '../components/event-detail/EventApparatusCrewCard';
+import EventGuestHeadcountCard from '../components/event-detail/EventGuestHeadcountCard';
+import EventStaffingCard from '../components/event-detail/EventStaffingCard';
+import EventOutreachCloseoutCard from '../components/event-detail/EventOutreachCloseoutCard';
 import { GuestCheckInQRCard } from '../components/events/GuestCheckInQRCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
@@ -124,6 +129,7 @@ const HIDDEN_CUSTOM_FIELD_KEYS = new Set([
   'reminders_sent',
   'validation_notification_sent',
   'series_end_reminder_sent',
+  'guest_headcount_reminder_sent',
   // Legacy twin of attendance_finalized_at, kept for the reminder task. The
   // lock is shown as a banner, not as a details row reading "true".
   'attendance_finalized',
@@ -753,7 +759,7 @@ export const EventDetailPage: React.FC = () => {
     try {
       setSubmitting(true);
       const newEvent = await eventService.duplicateEvent(eventId);
-      toast.success('Event duplicated');
+      toast.success('Event duplicated as a draft');
       void navigate(`/events/${newEvent.id}/edit`);
     } catch (err) {
       toast.error(getErrorDetail(err) || 'Failed to duplicate event');
@@ -1002,9 +1008,11 @@ export const EventDetailPage: React.FC = () => {
   // The card has found a session, so it — not custom_fields — describes it.
   const trainingSessionReported = isTrainingEvent && trainingSession !== null;
   // The session the card loaded is current after an officer changes its links
-  // there; the event's own flag answers until the card has loaded.
+  // there; the event's own flag answers until the card has loaded. Both are
+  // the server's answer: a link to a deactivated requirement is in the ids but
+  // counts for no one, so their length is not the answer.
   const countsTowardAttendance = trainingSession
-    ? (trainingSession.attendance_requirement_ids?.length ?? 0) > 0
+    ? Boolean(trainingSession.counts_toward_attendance)
     : Boolean(event.counts_toward_attendance);
   // Seats taken, which is what max_attendees caps. Falls back to the member
   // count for payloads predating the aggregate.
@@ -1141,7 +1149,7 @@ export const EventDetailPage: React.FC = () => {
 
   const exportAttendanceCSV = () => {
     if (!rsvps || !event) return;
-    const headers = ['Name', 'Email', 'RSVP Status', 'Guest Count', 'Checked In', 'Check-In Time', 'Notes'];
+    const headers = ['Name', 'Email', 'RSVP Status', 'Guest Count', 'Checked In', 'Check-In Time', 'Notes', 'Source'];
     const rows = rsvps.map((r) => [
       r.user_name || '',
       r.user_email || '',
@@ -1150,6 +1158,7 @@ export const EventDetailPage: React.FC = () => {
       r.checked_in ? 'Yes' : 'No',
       r.checked_in_at ? formatDateTime(r.checked_in_at, tz) : '',
       r.notes || '',
+      r.source_label || '',
     ]);
     downloadCsv(buildCsv([headers, ...rows]), `${event.title.replace(/[^a-zA-Z0-9]/g, '_')}_attendance.csv`);
   };
@@ -1813,6 +1822,49 @@ export const EventDetailPage: React.FC = () => {
                 business events, so this is intentionally not type-gated. */}
             <EventProspectsCard eventId={event.id} createsProspects={event.guest_check_in_creates_prospect ?? false} />
 
+            {/* The seats on an apparatus night (Santamobile, a parade). Renders
+                nothing on an ordinary event; asked only of someone who could
+                take or assign a seat. */}
+            {(checkPermission('apparatus_events.signup') || checkPermission('apparatus_events.manage')) && (
+              <EventApparatusCrewCard eventId={event.id} timezone={tz} />
+            )}
+            {/* Volunteers for an outreach event: its own signup sheet, or the
+                request's when it was scheduled from one. */}
+            {event.can_staff_event && <EventStaffingCard eventId={event.id} />}
+
+            {/* The headcount for an outreach event nobody signed in at.
+                Merged rather than replaced: the save answers with a plain
+                event, which lacks the detail-only fields this page shows. */}
+            {event.can_record_guest_headcount && (
+              <EventGuestHeadcountCard
+                event={event}
+                onSaved={(updated) =>
+                  setEvent((prev) => (prev ? { ...prev, guest_headcount: updated.guest_headcount ?? null } : prev))
+                }
+              />
+            )}
+
+            {/* What happened, on the same rule as the headcount: an outreach
+                event that has started, for someone with events.manage. */}
+            {event.can_record_guest_headcount && (
+              <EventOutreachCloseoutCard
+                event={event}
+                onSaved={(updated) =>
+                  setEvent((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          outreach_outcome_note: updated.outreach_outcome_note ?? null,
+                          outreach_apparatus_ids: updated.outreach_apparatus_ids ?? null,
+                          outreach_materials: updated.outreach_materials ?? null,
+                          outreach_photos: updated.outreach_photos ?? null,
+                        }
+                      : prev
+                  )
+                }
+              />
+            )}
+
             {/* Guests are listed apart from member attendance and never
                 counted in it (W23-2). */}
             <EventGuestsCard
@@ -2343,6 +2395,28 @@ export const EventDetailPage: React.FC = () => {
                     templateData.check_in_minutes_before = event.check_in_minutes_before;
                   if (event.check_in_minutes_after != null)
                     templateData.check_in_minutes_after = event.check_in_minutes_after;
+                  // A Training template carries the session's training
+                  // details (owner decision 2026-11-20). The linkage card
+                  // reports no session while it loads or after a failed
+                  // load, so the session is fetched here rather than the
+                  // template saved without them; a failed fetch refuses the
+                  // save rather than dropping them behind "Template saved".
+                  // fromSession reads a library session's hours as typed, so
+                  // the template keeps the exact figure.
+                  if (event.event_type === EventTypeEnum.TRAINING) {
+                    let session = trainingSession;
+                    if (!session) {
+                      try {
+                        session = await trainingSessionService.getSessionByEvent(event.id);
+                      } catch {
+                        toast.error(
+                          "Could not read this event's training details, so the template was not saved. Try again."
+                        );
+                        return;
+                      }
+                    }
+                    if (session) templateData.training_details = toTemplateTrainingDetails(fromSession(session, event));
+                  }
                   await eventService.createTemplate(templateData);
                   setShowTemplateModal(false);
                   toast.success('Template saved');

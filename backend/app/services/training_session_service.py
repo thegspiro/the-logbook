@@ -69,7 +69,7 @@ from app.services.training_compliance import (
 )
 from app.utils.json_ids import json_array_contains
 from app.utils.model_updates import apply_updates
-from app.utils.org_scoping import is_in_org
+from app.utils.org_scoping import assert_current_members, is_in_org
 from app.utils.org_timezone import local_and_utc_dates, resolve_scheduling_timezone
 
 # What a copied session takes from its source: the course, filing and credit
@@ -155,6 +155,13 @@ def _course_fills_blanks(
     if not sent_type and course is not None and course.training_type is not None:
         training_type = getattr(course.training_type, "value", course.training_type)
     return float(credit_hours), str(training_type)
+
+
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Naive values from the database are UTC; a sent value is aware."""
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=timezone.utc)
 
 
 def scheduled_hours(start: Optional[datetime], end: Optional[datetime]) -> float:
@@ -411,10 +418,15 @@ class TrainingSessionService:
     async def events_counting_toward_attendance(
         self, event_ids: Sequence[UUID | str], organization_id: UUID | str
     ) -> Set[str]:
-        """Which of ``event_ids`` have a session linked to an attendance requirement.
+        """Which of ``event_ids`` have a session linked to an active attendance requirement.
 
         For the "Counts toward attendance" flag on event lists and pages: one
         query for a whole page of events rather than one per card.
+
+        A link to a deactivated requirement does not count. Compliance grading
+        and the waiver eligibility check read active requirements only, so such
+        a session is charged to no one, and flagging it told members it counts
+        while the same page refused to excuse them from it (pitfall #29).
         """
         ids = {str(e) for e in event_ids}
         if not ids:
@@ -425,9 +437,15 @@ class TrainingSessionService:
                 TrainingSessionRequirement,
                 TrainingSessionRequirement.session_id == TrainingSession.id,
             )
+            .join(
+                TrainingRequirement,
+                TrainingRequirement.id == TrainingSessionRequirement.requirement_id,
+            )
             .where(
                 TrainingSession.event_id.in_(ids),
                 TrainingSession.organization_id == str(organization_id),
+                TrainingRequirement.organization_id == str(organization_id),
+                TrainingRequirement.active.is_(True),
             )
             .distinct()
         )
@@ -590,6 +608,19 @@ class TrainingSessionService:
         linkage_error = await self._validate_linkage_ids(details, organization_id)
         if linkage_error:
             return None, linkage_error
+        # A new session's lead instructor is picked from current members only.
+        # Checked here, not in create_training_session, because cohort
+        # generation creates sessions from class templates that may name an
+        # instructor who has since left.
+        try:
+            await assert_current_members(
+                self.db,
+                [details.instructor_id],
+                organization_id,
+                label="the lead instructor",
+            )
+        except ValueError as e:
+            return None, str(e)
         if details.course_id is None:
             return None, None
         course = await self._course_in_org(details.course_id, organization_id)
@@ -757,6 +788,17 @@ class TrainingSessionService:
             )
         )
         sessions = {str(s.event_id): s for s in result.scalars().all()}
+        # A lead instructor is picked from current members only. One these
+        # sessions already name may stay after leaving, so an edit that leaves
+        # the instructor alone still saves.
+        if payload.get("instructor_id"):
+            await assert_current_members(
+                self.db,
+                [payload["instructor_id"]],
+                organization_id,
+                keep=[s.instructor_id for s in sessions.values()],
+                label="the lead instructor",
+            )
         stored_links = await self.attendance_requirement_ids(
             [str(s.id) for s in sessions.values()]
         )
@@ -926,6 +968,50 @@ class TrainingSessionService:
         return SessionDetailsPlan(
             event=event, session=None, attach=attach, course=course
         )
+
+    async def follow_event_length(
+        self,
+        event: Event,
+        old_start: Optional[datetime],
+        old_end: Optional[datetime],
+        organization_id: UUID | str,
+    ) -> None:
+        """Keep a session's credit hours on the event's length when it moves.
+
+        A session with no course and hours equal to the event's old scheduled
+        length is following the length (the form's own test, ``fromSession``,
+        rounding the same way), so its hours become the new length. Hours an
+        officer typed, or a course's, stay as they are. The training form
+        recomputes them only when it sends ``credit_hours: null``, so every
+        door that moves an event without the form — a training manager's
+        edit, a series time change without details, a postponement — calls
+        this; left alone, the stale figure was credited at finalize and then
+        read by the form as typed, so it never followed again. A finalized
+        session is skipped: its event's times cannot change.
+        """
+        old_length = scheduled_hours(_as_utc(old_start), _as_utc(old_end))
+        new_length = scheduled_hours(
+            _as_utc(event.start_datetime), _as_utc(event.end_datetime)
+        )
+        if old_length == new_length:
+            return
+        result = await self.db.execute(
+            select(TrainingSession).where(
+                TrainingSession.event_id == str(event.id),
+                TrainingSession.organization_id == str(organization_id),
+            )
+        )
+        session = result.scalar_one_or_none()
+        if (
+            session is None
+            or session.is_finalized
+            or session.course_id
+            or session.credit_hours is None
+            or round(float(session.credit_hours), 2) != old_length
+        ):
+            return
+        session.credit_hours = new_length
+        session.updated_at = datetime.now(timezone.utc)
 
     async def apply_session_details(
         self,

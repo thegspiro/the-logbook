@@ -159,9 +159,40 @@ export const ALL_ROUTES: RouteCheck[] = [
   // without it this route's header renders none, and a lopsided row or a
   // stretched icon button in it would never be seen.
   { path: '/events', maxSmallTargets: 0, maxTinyText: 0, permissions: ['events.manage'] },
+  // The rest of the Events section strip. Each `expectText` is drawn only by
+  // its populated fixture (helpers.ts), never by an empty state.
+  {
+    path: '/events/templates',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+    expectText: 'Pancake Breakfast',
+  },
+  {
+    path: '/events/attendance-requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+    expectText: 'My phone died before I could scan the QR code; I was there the whole time.',
+  },
+  {
+    path: '/events/analytics',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['analytics.view'],
+    expectText: 'Annual Awards Banquet and Installation of Officers',
+  },
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
   // Every member reaches it; the fixture puts a request to decide on screen.
   { path: '/members/leave-requests', maxSmallTargets: 0, maxTinyText: 0 },
+  // `crew` serves the caller's crew opt-in (helpers.ts says why).
+  {
+    path: '/members/my-crew',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    fixture: { crew: true },
+    expectText: 'Maria Rodriguez-Castellanos',
+  },
   { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
   // The hub's other three tabs. Add and Import stand on `users.create` as well,
   // so without it the hub falls back to the roster and measures that instead.
@@ -259,6 +290,21 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/admin/audit-log', maxSmallTargets: 0, maxTinyText: 0, permissions: ['audit.view'] },
   { path: '/admin/security-alerts', maxSmallTargets: 0, maxTinyText: 0, permissions: ['audit.view'] },
+  // Each `expectText` is drawn only by its populated fixture (helpers.ts).
+  {
+    path: '/admin/errors',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage'],
+    expectText: 'Error Code Reference (2 codes)',
+  },
+  {
+    path: '/admin/platform-analytics',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage'],
+    expectText: 'Top Error Types',
+  },
   // The rest of Training Administration's tabs. Every one of these brought its
   // own padded page container into the hub's column and was indented twice on
   // a phone; `expectText` names something only that tab's body renders, since
@@ -701,7 +747,10 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
-    expectText: 'Suggestion box',
+    // The box picker's label, which carries the required marker ("Suggestion
+    // box *"): with several boxes none is preselected, so it is the one text
+    // only the submit form shows.
+    expectText: 'Suggestion box *',
   },
   {
     path: '/communications/messages',
@@ -984,11 +1033,58 @@ export const ALL_ROUTES: RouteCheck[] = [
   },
   { path: '/facilities', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/facilities/settings', maxSmallTargets: 0, maxTinyText: 0 },
+  // Each `expectText` is drawn only by its populated fixture (helpers.ts).
+  {
+    path: '/facilities/maintenance',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: 'Annual overhead bay door service — springs, rollers and safety reversing sensors',
+  },
+  {
+    path: '/facilities/inspections',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: 'Electrical panel and emergency lighting inspection',
+  },
   { path: '/governance/org-chart', maxSmallTargets: 0, maxTinyText: 0 },
   // manage: so its header buttons render — see the note on /events.
   { path: '/elections', maxSmallTargets: 0, maxTinyText: 0, permissions: ['elections.manage'] },
   // manage: so its header buttons render — see the note on /events.
   { path: '/minutes', maxSmallTargets: 0, maxTinyText: 0, permissions: ['minutes.manage'] },
+  // The secretary's attendance and waiver screens (`meetings.manage`) and the
+  // minutes outlines and settings (`minutes.manage`). Each `expectText` is
+  // drawn only by its populated fixture (helpers.ts) or its own form.
+  {
+    path: '/minutes/attendance',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['meetings.manage'],
+    expectText: 'Attended 37.5% of business meetings in the last 12 months; 50% is required to vote.',
+  },
+  {
+    path: '/minutes/attendance/waiver-settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['meetings.manage'],
+    expectText: 'Positions copied on waiver decisions',
+  },
+  // No permission of its own: the queue lists only requests routed to the
+  // viewer, and the fixture marks the pending one as theirs to decide.
+  { path: '/meetings/waiver-requests', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Waiting for a decision (1)' },
+  {
+    path: '/minutes/outlines',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['minutes.manage'],
+    expectText: 'Make default',
+  },
+  {
+    path: '/minutes/settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['minutes.manage'],
+    expectText: 'How attendance is listed',
+  },
   { path: '/action-items', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/forms', maxSmallTargets: 0, maxTinyText: 0, permissions: ['forms.manage'] },
   { path: '/store', maxSmallTargets: 0, maxTinyText: 0, permissions: ['storefront.view'] },
@@ -1016,6 +1112,31 @@ export const ALL_ROUTES: RouteCheck[] = [
     expectText: 'Inbound payments',
   },
   { path: '/prospective-members', maxSmallTargets: 0, maxTinyText: 0, permissions: ['prospective_members.manage'] },
+  // The coordinator's pipeline settings and the assigned member's two lists.
+  // `prospectiveMembers` serves their data opt-in (helpers.ts says why), and
+  // each `expectText` is drawn only from it, never by an empty state.
+  {
+    path: '/prospective-members/settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['prospective_members.manage'],
+    fixture: { prospectiveMembers: true },
+    expectText: 'Volunteer Firefighter Recruitment',
+  },
+  {
+    path: '/prospective-members/my-applicants',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    fixture: { prospectiveMembers: true },
+    expectText: 'Anastasia Vandenberg-Okonkwo',
+  },
+  {
+    path: '/prospective-members/sign-offs',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    fixture: { prospectiveMembers: true },
+    expectText: 'Panel interview with two officers; both sign once the interview is complete.',
+  },
   // /analytics and /profile were listed here from the day this file was written
   // and match no <Route>: both fell through the catch-all to the dashboard,
   // which is why the three of them reported an identical 24 targets and 1249
@@ -1401,6 +1522,52 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/history', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/history/media', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/history/documents', maxSmallTargets: 0, maxTinyText: 0 },
+  // The rest of the archive's list and form screens. `history.manage` is what
+  // the forms, the importer and the settings screen are gated on; each
+  // `expectText` is drawn only by its populated fixture (helpers.ts) or its form.
+  { path: '/history/people', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Robert Doyle' },
+  {
+    path: '/history/people/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'Add to the archive',
+  },
+  {
+    path: '/history/import',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'roster-1976-2000.csv',
+  },
+  {
+    path: '/history/media/upload',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'People in every file',
+  },
+  {
+    path: '/history/documents/upload',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'Transcription',
+  },
+  { path: '/history/albums', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Centennial Parade, 1923' },
+  {
+    path: '/history/honor-roll',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: 'Lost when the roof of the Grange Hall collapsed during an interior attack.',
+  },
+  {
+    path: '/history/settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: '3 records · retired',
+  },
   { path: '/medical-supplies', maxSmallTargets: 0, maxTinyText: 0, permissions: ['inventory.view_medical'] },
   { path: '/ip-security', maxSmallTargets: 0, maxTinyText: 0, permissions: ['security.manage'] },
   // Both are settings.manage-gated, so they cost no extra sign-in between them.
@@ -1428,6 +1595,21 @@ export const ALL_ROUTES: RouteCheck[] = [
 // passes read this one, so a local filter narrows them together.
 const routeFilter = process.env.MOBILE_ROUTE_FILTER;
 export const ROUTES = routeFilter ? ALL_ROUTES.filter(({ path }) => path.includes(routeFilter)) : ALL_ROUTES;
+
+/**
+ * One of `parts` contiguous slices of ROUTES, which between them hold every
+ * route exactly once.
+ *
+ * The three route-walking sweeps (accessibility, dialogs, presentation) each
+ * declare one test per slice. A sweep written as a single test cannot be
+ * divided by a shard or a worker count, and by 2026-11-19 the accessibility
+ * one had become a 55-72 minute CI job. The part counts are chosen so every
+ * sweep test takes about the same time, roughly ten minutes: `--shard`
+ * balances on the number of tests, so equal tests are what make its split an
+ * even one. See the `frontend-e2e` matrix in ci.yml.
+ */
+export const routesInPart = (part: number, parts: number): RouteCheck[] =>
+  ROUTES.filter((_, index) => Math.floor((index * parts) / ROUTES.length) === part);
 
 /** iPhone 14/15 class — the narrow end of what members actually carry. */
 export const PHONE = { width: 390, height: 844 };

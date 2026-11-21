@@ -283,7 +283,10 @@ member who attended anyway is still credited with attending.
 
 **Privacy.** The reason and the deciders' notes are encrypted at rest, shown
 only to the member and to those who may decide, and kept out of notifications
-and the audit log. The member's data export carries their requests, reasons
+and the audit log. Whoever decided a request can still open it once they no
+longer may decide (moved out of the approver position, say), but they then
+see its outcome only: no reason, no documents, and no notes but their own. The
+member's data export carries their requests, reasons
 included, and the decision log of each, notes included; it does not carry
 notes the member wrote as a decider on anyone else's request. Anonymizing a
 departed member clears the reason and the notes; the request itself is kept.
@@ -306,7 +309,10 @@ using templates the department edits under Communications → Email Templates:
   and decides only when the approver confirms.
 - An approver may switch these off under _Training officer duties_. The
   member's decision email is always sent: it changes how their attendance is
-  graded.
+  graded. So are the member's other notices that change it — the expiry, a
+  moved start, and a decider's question — which go under _Changes to your
+  training record_ rather than _Training and certification reminders_. A
+  void, whose session is not held, follows the reminders choice.
 - A template's **default CC**, **CC positions** (say, the Secretary) and
   **BCC** each get their own copy, which has no buttons, no category and no
   decider's note, and says it is a copy for the department's records.
@@ -316,7 +322,10 @@ using templates the department edits under Communications → Email Templates:
 
 The meeting templates (_Meeting Waiver Requested / Decided / Withdrawn_) are
 sent the same way for business-meeting requests, under the event-duty and
-event-change email preferences rather than the training ones.
+event-change email preferences rather than the training ones. Their buttons
+and the member's link open the meeting request page,
+`/meetings/waiver-requests/{id}`: the training page reads only training
+requests, so a meeting request opened there is not found.
 
 **Supporting documents.** When the policy's `attachment` is `optional` or
 `required`, a member may file up to three documents with a request: PDF,
@@ -360,7 +369,10 @@ only) sends it back to the deciders, unless the member has since checked in or,
 for a meeting, a leave or the Secretary now excuses them, in which case it is
 refused and the member withdraws instead. A denied request is never touched. A
 change that leaves the start alone does nothing, and a second run for one move
-writes nothing. A member who never answers is closed by the seven-day expiry.
+writes nothing. A member who never answers is closed by the seven-day expiry,
+which for a request waiting on its member runs at least seven days from the
+notice: a start corrected weeks after the session still gives the member a
+week to answer before the session counts as missed.
 
 **Where it is in the app.**
 
@@ -441,8 +453,10 @@ question**; the training notice links to My Training, where the answer form is.
 Only the member answers, while the question is open. Answering writes a
 `member_responded` entry whose note is the answer, clears
 `info_requested_at`, and prompts the deciders again (in-app and email, worded
-"answered your question", never the answer). Any number of rounds may follow,
-one open question at a time.
+"answered your question", never the answer). The person who asked is told as
+well, even when they are a Chief or President outside the request's route, as
+long as they still may decide. Any number of rounds may follow, one open
+question at a time.
 
 Deciders may approve or deny without waiting for the answer; deciding,
 withdrawing and voiding all clear `info_requested_at`. Questions and answers
@@ -581,6 +595,10 @@ a denial. What differs:
   decided ones are kept. The member is told in the app and, once the
   cancellation or deletion commits, by email (`void_pending_for_events`
   returns the notices; `EventService` sends them with `send_member_notices`).
+  Undoing a historical import's drills or staffing, which deletes the events
+  it made, does the same: the undo endpoint sends them after its commit. Each
+  email is claimed against the `voided` (or `rescheduled`) log entry and the
+  member, so a retried send is not sent twice.
 
 The routes mirror the training ones under `/api/v1/meetings/waiver-requests`
 (`policy`, `eligibility`, submit, `mine`, the decider queue, one request,
@@ -655,7 +673,9 @@ waivers in the **Training Admin > Dashboard > Training Waivers** tab.
 
 **Q: What is the compliance summary card on member profiles?**
 
-The profile card shows a green/yellow/red compliance indicator based on
-requirements met, certification expirations, and training hours. Red means
-non-compliant (expired certs or <50% requirements met), yellow means at risk
-(expiring certs or incomplete requirements), and green means fully compliant.
+The profile card shows the member's Compliance Matrix standing as a
+green/yellow/red indicator: green compliant, yellow at risk, red
+non-compliant, against the member's compliance profile thresholds or else the
+department's (2026-11-20). Waivers adjust it the same way they adjust the
+matrix. Certificate expiry counts are shown for information and lower the
+standing only through a requirement that grades the certificate.

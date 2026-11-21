@@ -83,6 +83,14 @@ screen, without the Safari toolbar.
 The Logbook icon appears on your home screen and in your app drawer. It opens
 full screen.
 
+**The strip under the bottom bar is white** _(2026-11-18)_. Android paints its
+gesture bar (the thin strip with the swipe handle below the app) in one colour
+chosen when the app is installed, and it cannot follow the theme. It now
+matches the light-mode bottom bar. In **Dark** or **High Contrast** you will
+see a white strip under the dark bar; that is expected, because no single
+colour matches all three themes. An app installed before the change keeps the
+old navy strip until it is removed and installed again.
+
 > **Hint:** Some Android phones can also install from Firefox or Samsung
 > Internet. Look for "Install" or "Add to Home screen" in that browser's menu.
 
@@ -106,7 +114,14 @@ You can also use the browser menu: **three-dot menu > Install The Logbook**
 Once installed, The Logbook runs on its own, outside the browser:
 
 - **No browser toolbar.** The app uses the whole screen. The phone's status bar
-  takes the app's dark red colour.
+  takes the colour of the app's navigation bar for the theme you picked in the
+  app: white in Light, dark navy in Dark, black in High Contrast. It no longer
+  follows the phone's own light or dark setting, so a member who chose Light on
+  a dark phone no longer gets a navy band above a white header _(2026-11-15;
+  it was dark red)_. The gesture strip along the bottom of an installed
+  Android app is different: Android fixes its colour when the app is
+  installed. See "The strip under the bottom bar is white" under Installing on
+  Android, above.
 - **Its own window.** It shows as a separate app in your app switcher, not as a
   browser tab.
 - **You stay signed in** between launches, within your department's sign-in
@@ -339,6 +354,22 @@ screens adapt:
   and integrity audit log, expense report line items (totals row included),
   the inventory import preview, the equipment-check CSV import preview and the
   Impact Planner's member list (which now shows Rank / Station on a phone).
+  _(2026-11-18)_ **Scheduling Reports'** **Coverage**, **Call Volume** and
+  **Availability** tabs now reflow too: each date, period or member leads its
+  own card, and a long email address under a member's name wraps instead of
+  pushing the table off the screen. Coverage and Availability also become cards
+  on a tablet with the side navigation open.
+  _(2026-11-20)_ Seven training tables followed: **My Training**'s recent
+  training, self-reported training and **History** tab, **Expiring
+  Certifications**, a member's **Training Status** page, the annual report's
+  requirement analysis and the **Historical Import** preview (where a long
+  email address now wraps). The three My Training tables and the import preview
+  also become cards on a tablet with the side navigation open.
+- **The competency heat-map stays a grid** _(2026-11-20)_: on a phone it
+  scrolls both ways inside its own box, with the member column pinned on the
+  left and the skill names pinned along the top, and a fading edge with a
+  chevron where there is more. Long member names wrap instead of being cut
+  off.
 - **The inventory stock matrix stays a grid** _(2026-11-17)_: its **Size**
   column stays pinned while the colours scroll, and a fading edge with a
   chevron shows there are more colours to the side.
@@ -1061,6 +1092,7 @@ had open.
 | A page looks wrong on a phone                                    | Use **My Account → App → Force refresh** to load the latest version. For wide tables, turn the phone sideways. If it still scrolls sideways, report the page.                                                                   |
 | Sign-in page says "Too many failed attempts"                     | Wait for the countdown to finish before trying again.                                                                                                                                                                            |
 | A page shows "could not load" or "Something went wrong"          | Often station Wi-Fi with a sign-in page, or a carrier page, answering instead of The Logbook. Get a proper connection and select retry. If it keeps happening, note the page and report it; your IT manager can see these failures on the **Error Monitor** page. |
+| Error message after a load, save or delete fails                 | An error now says why _(2026-11-18)_. **"Check your connection"** means no answer came back: often station Wi-Fi with a sign-in page; get a proper connection and retry. **"You do not have permission"** is a refusal; ask an administrator. **"The server hit a problem on its end"** is a fault on the server, not your phone; try again in a moment and, if it repeats, give IT the **Error code** shown. Before, most screens blamed the connection for every failure. |
 | A button is hard to hit, or text is too small, on a phone        | Every control should be at least 44 pixels on a phone or tablet, and ordinary text at least 12 pixels. If you find one that is not, report it — it is a fault, not a known gap.                                                 |
 | The camera preview froze after switching apps                    | The scanner releases the camera when you leave and resumes when you return. If it stays frozen, close and reopen the scanner, and report it.                                                                                    |
 

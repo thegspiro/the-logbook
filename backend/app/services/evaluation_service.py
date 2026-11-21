@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import io
 import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -83,6 +84,7 @@ from app.services.evaluation_grading import (
 )
 from app.services.evaluation_notice_service import EvaluationNoticeService
 from app.services.member_supervisor_service import MemberSupervisorService
+from app.utils.csv_export import SafeCsvWriter
 from app.utils.membership import canonical_member_status, effective_member_class
 from app.utils.org_timezone import resolve_scheduling_timezone, today_in
 
@@ -341,6 +343,90 @@ def _name(user: Optional[User]) -> Optional[Dict[str, str]]:
     return {"id": user.id, "name": user.full_name}
 
 
+def standing_overall(
+    definition: TemplateDefinition, content: PartContent
+) -> Optional[str]:
+    """The overall grade that stands on the evaluator's part, in words, or
+    None when the form has none.
+
+    A sectioned form gives its overall grade (the evaluator's override where
+    they changed the calculated one), a weighted form its percentage, and an
+    evaluator-rated form the overall rating chosen. One definition for every
+    place a review's result is summarised: the last-review panel, the conduct
+    list's grade column and the period export.
+    """
+    grades = grade_content(definition, content)
+    if grades is not None:
+        label = grades["overall"].get("label")
+        return str(label) if label else None
+    if definition.overall_mode == "weighted":
+        pct = weighted_overall(
+            content, form_items(definition, EvaluationPartKind.EVALUATOR.value)
+        )
+        return f"{pct:g}% (weighted)" if pct is not None else None
+    if definition.overall_mode == "evaluator" and content.overall_rating:
+        return next(
+            (lv.label for lv in OVERALL_LEVELS if lv.value == content.overall_rating),
+            None,
+        )
+    return None
+
+
+def previous_review_summary(view: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """What a later evaluation shows of an earlier one, from the earlier one's
+    detail as the viewer may see it: the overall grade, each section's grade,
+    and the goals the evaluator set. None when the viewer may see none of
+    those, so a summary never says less than nothing.
+
+    Each grade is the one that stands, the evaluator's override where they
+    changed the calculated one, as the evaluation's own screens show it.
+    """
+    definition: TemplateDefinition = view["definition"]
+    grades = view.get("grades")
+    evaluator = next(
+        (
+            p["content"]
+            for p in view.get("parts") or []
+            if p["kind"] == EvaluationPartKind.EVALUATOR.value
+        ),
+        None,
+    )
+
+    overall = standing_overall(definition, evaluator) if evaluator else None
+    sections: List[Dict[str, str]] = (
+        [
+            {"key": g["key"], "title": g["title"], "label": g["label"]}
+            for g in grades["sections"]
+            if g.get("label")
+        ]
+        if grades
+        else []
+    )
+
+    goals: List[Dict[str, str]] = []
+    if evaluator is not None:
+        for section in definition.sections:
+            for item in section.items:
+                if item.tool != EvaluationTool.GOALS:
+                    continue
+                answer = evaluator.answers.get(item.key)
+                text = (answer.text or "").strip() if answer else ""
+                if text:
+                    goals.append({"key": item.key, "label": item.label, "text": text})
+
+    if overall is None and not sections and not goals:
+        return None
+    return {
+        "evaluation_id": view["id"],
+        "period_name": view.get("period_name"),
+        "period_start": view["period_start"],
+        "period_end": view["period_end"],
+        "overall": overall,
+        "sections": sections,
+        "goals": goals,
+    }
+
+
 class EvaluationService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -462,12 +548,25 @@ class EvaluationService:
         workflow = self._workflow(evaluation)
         position_ids = {p.id for p in viewer.positions}
         live = {
-            s.step_key for s in steps if s.status != EvaluationStepStatus.PENDING.value
+            s.step_key: s
+            for s in steps
+            if s.status != EvaluationStepStatus.PENDING.value
         }
+        # An approver reads the record from the moment their step is live. A
+        # person a manager named on a calibration step reads it the same way:
+        # they may hold no view_all, and calibrating needs the evaluator's part.
         approver = any(
-            ws.type == EvaluationStepType.APPROVAL
-            and ws.key in live
-            and ws.actor.position_id in position_ids
+            ws.key in live
+            and (
+                (
+                    ws.type == EvaluationStepType.APPROVAL
+                    and self._acts_on(ws, live[ws.key], viewer.id, position_ids)
+                )
+                or (
+                    ws.type == EvaluationStepType.CALIBRATION
+                    and str(live[ws.key].assignee_id or "") == str(viewer.id)
+                )
+            )
             for ws in workflow.steps
         )
         is_member = evaluation.member_id == viewer.id
@@ -489,11 +588,21 @@ class EvaluationService:
     # --------------------------------------------------------------- reads
 
     async def detail(
-        self, organization_id: str, evaluation_id: str, viewer: User
+        self,
+        organization_id: str,
+        evaluation_id: str,
+        viewer: User,
+        *,
+        include_previous: bool = True,
     ) -> Optional[Dict[str, Any]]:
         """The evaluation as ``viewer`` may see it, or None when they may not
         see it at all (answered as not found, so its existence is not
-        disclosed)."""
+        disclosed).
+
+        ``include_previous`` adds the member's last review on the same form
+        (:meth:`_previous_review`); that read passes False so it does not
+        walk back through every year.
+        """
         evaluation = await self._evaluation(organization_id, evaluation_id)
         if evaluation is None:
             return None
@@ -510,7 +619,9 @@ class EvaluationService:
             return None
         parts = await self._parts(evaluation)
         people = await self._people(
-            organization_id, [evaluation.member_id, evaluation.evaluator_id]
+            organization_id,
+            [evaluation.member_id, evaluation.evaluator_id]
+            + [s.assignee_id for s in steps],
         )
         signatures = (
             (
@@ -534,13 +645,14 @@ class EvaluationService:
                 EvaluationDocument.revision == evaluation.revision,
             )
         )
-        return self._detail_view(
+        view = self._detail_view(
             evaluation,
             steps,
             parts,
             roles,
             people,
             today_in(await resolve_scheduling_timezone(self.db, organization_id)),
+            viewer_id=viewer.id,
             viewer_positions={p.id for p in viewer.positions},
             signatures=signatures,
             # A finalized evaluation always has its PDF: it is made on
@@ -551,6 +663,52 @@ class EvaluationService:
             and user_has_permission(viewer, "evaluations.delete"),
             amendments=await self._amendments(evaluation),
         )
+        view["previous_review"] = (
+            await self._previous_review(organization_id, evaluation, viewer)
+            if include_previous
+            else None
+        )
+        return view
+
+    async def _previous_review(
+        self, organization_id: str, evaluation: Evaluation, viewer: User
+    ) -> Optional[Dict[str, Any]]:
+        """The member's most recent finalized evaluation on the same form,
+        summarised for this one: its grades and the goals it set.
+
+        Read through :meth:`detail` as ``viewer``, so it shows exactly what
+        ``viewer`` could see by opening that evaluation and nothing more: an
+        evaluator who could not open last year's review sees no summary of
+        it. "Same form" is the template, whatever its version, and "previous"
+        a period that ended before this one began, so a re-done review of the
+        same period is never compared with itself.
+        """
+        previous_id = await self.db.scalar(
+            select(Evaluation.id)
+            .join(
+                EvaluationTemplateVersion,
+                EvaluationTemplateVersion.id == Evaluation.template_version_id,
+            )
+            .where(
+                Evaluation.organization_id == organization_id,
+                Evaluation.member_id == evaluation.member_id,
+                Evaluation.status == EvaluationStatus.FINALIZED.value,
+                Evaluation.id != evaluation.id,
+                EvaluationTemplateVersion.template_id
+                == evaluation.template_version.template_id,
+                Evaluation.period_end < evaluation.period_start,
+            )
+            .order_by(Evaluation.period_end.desc(), Evaluation.id.desc())
+            .limit(1)
+        )
+        if previous_id is None:
+            return None
+        previous = await self.detail(
+            organization_id, previous_id, viewer, include_previous=False
+        )
+        if previous is None:
+            return None
+        return previous_review_summary(previous)
 
     def _released_to_member(
         self, evaluation: Evaluation, steps: Sequence[EvaluationStep]
@@ -571,18 +729,86 @@ class EvaluationService:
         ]
         return bool(before) and all(s.status in _DONE for s in before)
 
+    @staticmethod
+    def _acts_on(
+        workflow_step: Any,
+        step: Optional[EvaluationStep],
+        viewer_id: str,
+        viewer_positions: set,
+        *,
+        view_all: bool = False,
+    ) -> bool:
+        """Whether ``viewer`` is who the approval or calibration step waits on.
+
+        A person a manager named on the step replaces everyone else; without
+        one, an approval is its position's holders and calibration is the
+        ``view_all`` holders. Who is barred regardless -- the subject, the
+        evaluator, a second approval by one person -- is decided by the
+        callers, which know the roles.
+        """
+        if step is not None and step.assignee_id:
+            return str(step.assignee_id) == str(viewer_id)
+        if workflow_step.type == EvaluationStepType.APPROVAL:
+            return workflow_step.actor.position_id in viewer_positions
+        if workflow_step.type == EvaluationStepType.CALIBRATION:
+            return view_all
+        return False
+
+    @staticmethod
+    def _approved_another(
+        steps: Sequence[EvaluationStep], step: EvaluationStep, viewer_id: str
+    ) -> bool:
+        """Whether ``viewer`` already signed a different approval on this
+        revision. Each approval is a separate pair of eyes (owner decision
+        2026-11-16, ADV2-4), so one person never signs two."""
+        return any(
+            s.step_type == EvaluationStepType.APPROVAL.value
+            and s.step_key != step.step_key
+            and s.status == EvaluationStepStatus.COMPLETED.value
+            and str(s.completed_by or "") == str(viewer_id)
+            for s in steps
+        )
+
+    def _may_calibrate(
+        self,
+        evaluation: Evaluation,
+        steps: Sequence[EvaluationStep],
+        viewer_id: str,
+        roles: Roles,
+    ) -> bool:
+        """Whether ``viewer`` may complete the open calibration step: the
+        person named on it, or else a ``view_all`` holder -- never the member
+        and never the evaluator, whose work calibration checks."""
+        if roles.is_member or roles.is_evaluator:
+            return False
+        step = next((s for s in steps if s.step_type == _CALIBRATION), None)
+        if step is None or step.status != EvaluationStepStatus.OPEN.value:
+            return False
+        workflow_step = next(
+            (ws for ws in self._workflow(evaluation).steps if ws.key == step.step_key),
+            None,
+        )
+        if workflow_step is None:
+            return False
+        return self._acts_on(
+            workflow_step, step, viewer_id, set(), view_all=roles.view_all
+        )
+
     def _signable(
         self,
         evaluation: Evaluation,
         steps: Sequence[EvaluationStep],
+        viewer_id: str,
         viewer_positions: set,
         roles: Roles,
     ) -> Optional[Dict[str, Any]]:
         """The signature ``viewer`` may give now, if any.
 
-        An approval is signed by a holder of the step's position, never the
-        member; the acknowledgement is the member's own, given as an
-        acknowledgement of receipt or a refusal with a reason.
+        An approval is signed by the person named on the step, or else by a
+        holder of its position -- never the member, never the evaluator, and
+        never someone who signed another approval on this revision (owner
+        decision 2026-11-16, ADV2-4). The acknowledgement is the member's own,
+        given as an acknowledgement of receipt or a refusal with a reason.
         """
         if evaluation.status != EvaluationStatus.IN_PROGRESS.value:
             return None
@@ -596,7 +822,9 @@ class EvaluationService:
             if (
                 ws.type == EvaluationStepType.APPROVAL
                 and not roles.is_member
-                and ws.actor.position_id in viewer_positions
+                and not roles.is_evaluator
+                and self._acts_on(ws, step, viewer_id, viewer_positions)
+                and not self._approved_another(steps, step, viewer_id)
             ):
                 return {
                     "step_key": ws.key,
@@ -620,13 +848,16 @@ class EvaluationService:
         people: Dict[str, User],
         today: date,
         *,
+        viewer_id: Optional[str] = None,
         viewer_positions: Optional[set] = None,
         signatures: Sequence[EvaluationSignature] = (),
         document_available: bool = False,
         can_delete: bool = False,
         amendments: Sequence[Dict[str, Any]] = (),
     ) -> Dict[str, Any]:
-        signable = self._signable(evaluation, steps, viewer_positions or set(), roles)
+        signable = self._signable(
+            evaluation, steps, viewer_id or "", viewer_positions or set(), roles
+        )
         definition = self._definition(evaluation)
         response_due = self._response_due(evaluation)
         response_part = parts.get(EvaluationPartKind.MEMBER_RESPONSE.value)
@@ -636,6 +867,16 @@ class EvaluationService:
         )
         released = self._released_to_member(evaluation, steps)
         by_key = {s.step_key: s for s in steps}
+        calibration_step = by_key.get(_CALIBRATION)
+        # The person a manager named on calibration reads the evaluator's part
+        # as a view_all holder does: it is still a draft while calibration is
+        # open, and calibrating is reading it.
+        named_calibrator = (
+            not roles.is_member
+            and calibration_step is not None
+            and bool(viewer_id)
+            and str(calibration_step.assignee_id or "") == str(viewer_id)
+        )
 
         visible_parts: List[Dict[str, Any]] = []
         for kind, part in parts.items():
@@ -648,6 +889,7 @@ class EvaluationService:
                 show = (
                     roles.is_evaluator
                     or roles.view_all
+                    or named_calibrator
                     or roles.supervisor_reads
                     or (
                         roles.approver
@@ -684,7 +926,6 @@ class EvaluationService:
 
         self_step = by_key.get(_SELF)
         evaluator_step = by_key.get(_EVALUATOR)
-        calibration_step = by_key.get(_CALIBRATION)
         evaluator_locked = evaluator_step is None or evaluator_step.status in _DONE
 
         labels_by_key = {ws.key: ws.label for ws in self._workflow(evaluation).steps}
@@ -698,7 +939,7 @@ class EvaluationService:
                 "definition": definition,
                 "overall_levels": OVERALL_LEVELS,
                 "steps": [
-                    self._step_view(s, evaluation)
+                    self._step_view(s, evaluation, people)
                     for s in steps
                     # Calibration is never shown to the member.
                     if not (roles.is_member and s.step_type == _CALIBRATION)
@@ -786,9 +1027,11 @@ class EvaluationService:
                     and evaluator_step.status == EvaluationStepStatus.OPEN.value,
                     "can_refresh_data": (roles.is_evaluator or roles.manage)
                     and not evaluator_locked,
-                    "can_calibrate": roles.view_all
-                    and calibration_step is not None
-                    and calibration_step.status == EvaluationStepStatus.OPEN.value,
+                    "can_calibrate": self._may_calibrate(
+                        evaluation, steps, viewer_id or "", roles
+                    ),
+                    "can_assign_steps": roles.manage
+                    and evaluation.status == EvaluationStatus.IN_PROGRESS.value,
                     "can_sign": signable,
                     "can_delete": can_delete,
                     "can_amend": roles.manage
@@ -803,7 +1046,10 @@ class EvaluationService:
         return view
 
     def _step_view(
-        self, step: EvaluationStep, evaluation: Evaluation
+        self,
+        step: EvaluationStep,
+        evaluation: Evaluation,
+        people: Optional[Dict[str, User]] = None,
     ) -> Dict[str, Any]:
         labels = {s.key: s.label for s in self._workflow(evaluation).steps}
         return {
@@ -814,6 +1060,7 @@ class EvaluationService:
             "status": step.status,
             "due_date": step.due_date,
             "completed_at": step.completed_at,
+            "assignee": _name((people or {}).get(step.assignee_id or "")),
         }
 
     def _summary_view(
@@ -901,7 +1148,89 @@ class EvaluationService:
         if status:
             query = query.where(Evaluation.status == status)
         evaluations = list((await self.db.execute(query)).scalars().all())
-        return await self._summaries(organization_id, evaluations, None)
+        summaries = await self._summaries(organization_id, evaluations, None)
+        grades = (
+            await self._finalized_grades(organization_id, evaluations)
+            if user_has_permission(viewer, "evaluations.view_all")
+            else {}
+        )
+        for summary in summaries:
+            summary["overall_grade"] = grades.get(summary["id"])
+        return summaries
+
+    async def period_results_csv(
+        self, organization_id: str, viewer: User, period_id: str
+    ) -> Optional[str]:
+        """Every evaluation in a review period as CSV, with the overall grade
+        of each finalized one, or None when the period is not this
+        department's.
+
+        For a holder of ``evaluations.view_all`` only (the endpoint's gate):
+        the same rows and grades the conduct list shows them. Written with
+        ``SafeCsvWriter`` (CLAUDE.md pitfall #15) since names and form titles
+        are typed by people and the file is opened in a spreadsheet. The
+        caller's own evaluation is left out, as the list leaves it out.
+        """
+        period = await self.db.scalar(
+            select(EvaluationPeriod.id).where(
+                EvaluationPeriod.id == str(period_id),
+                EvaluationPeriod.organization_id == organization_id,
+            )
+        )
+        if period is None:
+            return None
+        rows = await self.list_evaluations(organization_id, viewer, period_id=period)
+        out = io.StringIO()
+        writer = SafeCsvWriter(out)
+        writer.writerow(
+            ["Member", "Form", "Evaluator", "Status", "Waiting on", "Overall grade"]
+        )
+        for row in sorted(rows, key=lambda r: r["member"]["name"].lower()):
+            writer.writerow(
+                [
+                    row["member"]["name"],
+                    row["template_name"],
+                    (row["evaluator"] or {}).get("name", ""),
+                    "Finalized" if row["status"] == "finalized" else "In progress",
+                    row["current_step"] or "",
+                    row["overall_grade"] or "",
+                ]
+            )
+        return out.getvalue()
+
+    async def _finalized_grades(
+        self, organization_id: str, evaluations: Sequence[Evaluation]
+    ) -> Dict[str, str]:
+        """``{evaluation_id: overall grade}`` for the finalized ones.
+
+        Only for a caller holding ``evaluations.view_all``, who may open each
+        evaluator's part anyway: a manager runs the process without reading
+        personnel content, and a conductor sees only their own reviews' grades
+        by opening them. A draft's grade is not settled, so it is left out.
+        """
+        finalized = {
+            e.id: e for e in evaluations if e.status == EvaluationStatus.FINALIZED.value
+        }
+        if not finalized:
+            return {}
+        rows = await self.db.execute(
+            select(EvaluationPart).where(
+                EvaluationPart.organization_id == organization_id,
+                EvaluationPart.evaluation_id.in_(list(finalized)),
+                EvaluationPart.kind == EvaluationPartKind.EVALUATOR.value,
+            )
+        )
+        grades: Dict[str, str] = {}
+        for part in rows.scalars().all():
+            evaluation = finalized[part.evaluation_id]
+            if part.revision != evaluation.revision:
+                continue
+            grade = standing_overall(
+                self._definition(evaluation), PartContent.model_validate(part.content)
+            )
+            if grade:
+                grades[evaluation.id] = grade
+        return grades
 
     async def list_mine(
         self, organization_id: str, member: User
@@ -1939,7 +2268,7 @@ class EvaluationService:
         if not roles.any:
             return None
         signable = self._signable(
-            evaluation, steps, {p.id for p in actor.positions}, roles
+            evaluation, steps, actor.id, {p.id for p in actor.positions}, roles
         )
         if signable is None:
             raise PermissionError(
@@ -2008,13 +2337,15 @@ class EvaluationService:
         roles = self._roles(evaluation, actor, steps)
         if not roles.any:
             return None
-        if not roles.view_all:
-            raise PermissionError(
-                "Calibration is completed by a holder of evaluations.view_all."
-            )
         step = next((s for s in steps if s.step_type == _CALIBRATION), None)
         if step is None or step.status != EvaluationStepStatus.OPEN.value:
             raise ValueError("This evaluation is not waiting for calibration.")
+        if not self._may_calibrate(evaluation, steps, actor.id, roles):
+            raise PermissionError(
+                "Calibration is completed by the person named on the step, or "
+                "else a holder of evaluations.view_all, and never by the "
+                "evaluation's own evaluator."
+            )
         items = form_items(
             self._definition(evaluation), EvaluationPartKind.EVALUATOR.value
         )
@@ -2031,6 +2362,152 @@ class EvaluationService:
             organization_id, evaluation.id, flagged=bool(flagged)
         )
         return True
+
+    # ---------------------------------------------------- step assignment
+
+    _ASSIGNABLE = (
+        EvaluationStepType.APPROVAL.value,
+        EvaluationStepType.CALIBRATION.value,
+    )
+
+    async def _assignable_step(
+        self,
+        organization_id: str,
+        evaluation_id: str,
+        actor: User,
+        step_key: str,
+        *,
+        for_update: bool,
+    ) -> Optional[Tuple[Evaluation, List[EvaluationStep], EvaluationStep]]:
+        """The evaluation, its steps and the named step, once ``actor`` is
+        shown to manage it and the step can still be assigned. None when the
+        caller may not see the evaluation at all."""
+        evaluation = await self._evaluation(
+            organization_id, evaluation_id, for_update=for_update
+        )
+        if evaluation is None:
+            return None
+        steps = await self._steps(evaluation, for_update=for_update)
+        roles = self._roles(evaluation, actor, steps)
+        if not roles.any:
+            return None
+        if not roles.manage:
+            raise PermissionError(
+                "Steps are assigned by a holder of evaluations.manage."
+            )
+        if evaluation.status != EvaluationStatus.IN_PROGRESS.value:
+            raise ValueError("Only an evaluation in progress has steps to assign.")
+        step = next((s for s in steps if s.step_key == step_key), None)
+        if step is None:
+            raise ValueError("This evaluation has no such step.")
+        if step.step_type not in self._ASSIGNABLE:
+            raise ValueError("Only an approval or calibration step is assigned.")
+        if step.status not in (
+            EvaluationStepStatus.PENDING.value,
+            EvaluationStepStatus.OPEN.value,
+        ):
+            raise ValueError("This step is already done.")
+        return evaluation, steps, step
+
+    def _excluded_from(
+        self,
+        evaluation: Evaluation,
+        steps: Sequence[EvaluationStep],
+        step: EvaluationStep,
+    ) -> set:
+        """Who may not be named on ``step``: the member and the evaluator,
+        and, on an approval, anyone who signed another approval on this
+        revision. The same people ``_signable`` and ``_may_calibrate`` refuse,
+        so a name offered here is one that can act."""
+        excluded = {evaluation.member_id, evaluation.evaluator_id}
+        if step.step_type == EvaluationStepType.APPROVAL.value:
+            excluded |= {
+                s.completed_by
+                for s in steps
+                if s.step_type == EvaluationStepType.APPROVAL.value
+                and s.step_key != step.step_key
+                and s.status == EvaluationStepStatus.COMPLETED.value
+            }
+        return {str(i) for i in excluded if i}
+
+    async def assignee_candidates(
+        self, organization_id: str, evaluation_id: str, actor: User, step_key: str
+    ) -> Optional[List[Dict[str, str]]]:
+        """The current members who may be named on the step, by name."""
+        found = await self._assignable_step(
+            organization_id, evaluation_id, actor, step_key, for_update=False
+        )
+        if found is None:
+            return None
+        evaluation, steps, step = found
+        excluded = self._excluded_from(evaluation, steps, step)
+        members = (
+            (
+                await self.db.execute(
+                    select(User).where(
+                        User.organization_id == organization_id,
+                        User.deleted_at.is_(None),
+                        User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return sorted(
+            (
+                {"id": m.id, "name": m.full_name}
+                for m in members
+                if str(m.id) not in excluded
+            ),
+            key=lambda m: m["name"].lower(),
+        )
+
+    async def assign_step(
+        self,
+        organization_id: str,
+        evaluation_id: str,
+        actor: User,
+        step_key: str,
+        assignee_id: Optional[str],
+    ) -> Optional[Dict[str, Optional[str]]]:
+        """Name the one person who acts on an approval or calibration step,
+        or, with None, hand it back to the workflow's actor (owner decision
+        2026-11-16, ADV2-4).
+
+        For the case where the only holder of the step's position is barred
+        from it -- the evaluator, or someone who signed the previous approval
+        -- and the evaluation could not otherwise finish. Returns the previous
+        and the new assignee for the audit trail.
+        """
+        found = await self._assignable_step(
+            organization_id, evaluation_id, actor, step_key, for_update=True
+        )
+        if found is None:
+            return None
+        evaluation, steps, step = found
+        previous = step.assignee_id
+        if assignee_id:
+            assignee = await self._member(organization_id, assignee_id)
+            if assignee is None or assignee.status not in ACTIVE_ACCOUNT_STATUSES:
+                raise ValueError("Name a current member of the department.")
+            if str(assignee.id) in self._excluded_from(evaluation, steps, step):
+                raise ValueError(
+                    "The member, the evaluator, and anyone who signed another "
+                    "approval on this evaluation cannot act on this step."
+                )
+            step.assignee_id = assignee.id
+        else:
+            step.assignee_id = None
+        changed = str(previous or "") != str(step.assignee_id or "")
+        is_open = step.status == EvaluationStepStatus.OPEN.value
+        await self.db.commit()
+        # The step is already open: whoever now acts on it has not been told.
+        if changed and is_open:
+            await EvaluationNoticeService(self.db).steps_opened(
+                organization_id, evaluation.id, [step.step_key]
+            )
+        return {"previous": previous, "assignee": step.assignee_id}
 
     # ------------------------------------------------------- bulk drafting
 

@@ -355,11 +355,16 @@ def section(
     return KeepTogether([heading_band(heading, [], styles), *body, Spacer(1, 14)])
 
 
-def page_footer(label: str) -> Callable[[Any, Any], None]:
-    """A page callback printing "*label* · Page N" at the foot of each page.
+def page_footer(
+    label: str, total_pages: Optional[int] = None
+) -> Callable[[Any, Any], None]:
+    """A page callback printing "*label* · Page N of Y" at the foot of each page.
 
     These documents are filed and handed round as loose pages, so each page
-    names what it belongs to and where it falls in the set.
+    names what it belongs to and where it falls in the set: "Page 2" cannot
+    say whether a page 3 exists or has gone missing. The caller lays the
+    document out once with no *total_pages* (printing "Page N") to learn the
+    count, then again with it.
     """
 
     def draw(canvas: Any, document: Any) -> None:
@@ -369,7 +374,8 @@ def page_footer(label: str) -> Callable[[Any, Any], None]:
         canvas.drawCentredString(
             letter[0] / 2,
             FOOTER_BASELINE,
-            f"{label} · Page {document.page}",
+            f"{label} · Page {document.page}"
+            + (f" of {total_pages}" if total_pages else ""),
         )
         canvas.restoreState()
 
@@ -377,14 +383,14 @@ def page_footer(label: str) -> Callable[[Any, Any], None]:
 
 
 def page_of_footer(
-    label: str, total_pages: int, continued_note: str
+    label: str, total_pages: int, continued_note: Optional[str] = None
 ) -> Callable[[Any, Any], None]:
     """A page callback printing "*label* · Page X of Y".
 
     The caller lays the document out once to learn *total_pages*, then again
-    with this footer. On every page but the last it also prints
-    *continued_note*: a voter handed a two-page ballot must not fold it after
-    the first page and leave the second unmarked.
+    with this footer. Given a *continued_note*, it also prints that on every
+    page but the last: a voter handed a two-page ballot must not fold it
+    after the first page and leave the second unmarked.
     """
 
     def draw(canvas: Any, document: Any) -> None:
@@ -396,7 +402,7 @@ def page_of_footer(
             FOOTER_BASELINE,
             f"{label} · Page {document.page} of {total_pages}",
         )
-        if document.page < total_pages:
+        if continued_note and document.page < total_pages:
             canvas.setFont(BOLD_FONT, 9)
             canvas.setFillColor(INK)
             canvas.drawCentredString(letter[0] / 2, _CONTINUED_BASELINE, continued_note)

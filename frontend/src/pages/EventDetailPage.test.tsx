@@ -22,6 +22,12 @@ function makeApiError(message: string, status = 400) {
 }
 
 // Mock the API module
+const downloadCsv = vi.fn();
+vi.mock('../utils/csv', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../utils/csv')>();
+  return { ...actual, downloadCsv: (...args: unknown[]) => downloadCsv(...args) as unknown };
+});
+
 vi.mock('../services/api', () => ({
   // Behind the transfer dialog's organizer pickers.
   userService: {
@@ -50,6 +56,11 @@ vi.mock('../services/api', () => ({
     getAttendancePetitions: vi.fn(),
     approveAttendancePetition: vi.fn(),
     rejectAttendancePetition: vi.fn(),
+    createTemplate: vi.fn(),
+  },
+  // Behind Save as Template on a Training event.
+  trainingSessionService: {
+    getSessionByEvent: vi.fn(),
   },
 }));
 
@@ -81,6 +92,8 @@ vi.mock('../modules/prospective-members/services/api', () => ({
 }));
 // Tested on its own (EventGuestsCard.test.tsx); its request is not under test here.
 vi.mock('../components/event-detail/EventGuestsCard', () => ({ default: () => null }));
+// Tested on its own (EventApparatusCrewCard.test.tsx); its request is not under test here.
+vi.mock('../components/event-detail/EventApparatusCrewCard', () => ({ default: () => null }));
 // The card-taps section has its own tests (EventCardCheckinsTab.test.tsx);
 // here it would only add a request the services/api mock above does not serve.
 vi.mock('../components/event-detail/EventCardTapsCard', () => ({ EventCardTapsCard: () => null }));
@@ -470,6 +483,25 @@ describe('EventDetailPage', () => {
         expect(screen.getByRole('button', { name: /cancel event/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /delete event/i })).toBeInTheDocument();
       });
+    });
+
+    it('exports where each check-in came from', async () => {
+      downloadCsv.mockReset();
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([
+        { ...mockRSVPs[0], source: 'imported', source_label: 'Imported' } as RSVP,
+      ]);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Export CSV' }));
+
+      expect(downloadCsv).toHaveBeenCalledTimes(1);
+      const [csv] = downloadCsv.mock.calls[0] as [string];
+      const [header, row] = csv.trim().split(/\r?\n/);
+      expect(header).toBe('Name,Email,RSVP Status,Guest Count,Checked In,Check-In Time,Notes,Source');
+      expect(row?.endsWith(',Imported')).toBe(true);
     });
 
     it('defaults official event times to the scheduled times', async () => {
@@ -1239,6 +1271,124 @@ describe('EventDetailPage', () => {
     });
   });
 
+  // Owner decision 2026-11-20: a Training template carries the session's
+  // training details, so Save as Template on a Training event saves them.
+  describe('Save as Template on a Training event', () => {
+    const { trainingSessionService } = apiModule;
+    const training: Event = { ...mockEvent, title: 'Pump Drill', event_type: 'training' };
+    const session = {
+      id: 'sess-1',
+      organization_id: 'org-1',
+      event_id: 'evt-1',
+      course_id: 'course-pump',
+      course_name: 'Pump Operations',
+      training_type: 'skills_practice',
+      credit_hours: 3,
+      instructor: 'Owen Kittredge',
+      instructor_id: 'm-owen',
+      issues_certification: true,
+      certification_number_prefix: 'PUMP-',
+      issuing_agency: 'State Academy',
+      expiration_months: 24,
+      // Not carried by a template.
+      category_id: 'cat-1',
+      program_id: 'prog-1',
+      requirement_id: 'req-1',
+      attendance_requirement_ids: ['att-1'],
+      counts_toward_certification: true,
+      auto_create_records: true,
+      require_completion_confirmation: true,
+      approval_deadline_days: 7,
+      is_finalized: false,
+      created_at: '',
+      updated_at: '',
+    };
+    const expected = {
+      course_mode: 'library',
+      course_id: 'course-pump',
+      course_name: null,
+      course_code: null,
+      training_type: 'skills_practice',
+      credit_hours: 3,
+      credit_hours_source: 'manual',
+      instructor_id: 'm-owen',
+      instructor: 'Owen Kittredge',
+      issues_certification: true,
+      certification_number_prefix: 'PUMP-',
+      issuing_agency: 'State Academy',
+      expiration_months: 24,
+    };
+
+    beforeEach(() => {
+      mockCheckPermission.mockReset();
+      mockCheckPermission.mockReturnValue(true);
+      mockAuthState.checkPermission = mockCheckPermission;
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEvent).mockResolvedValue(training);
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockReset();
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+      vi.mocked(eventService.createTemplate).mockReset();
+      vi.mocked(eventService.createTemplate).mockResolvedValue({ id: 'tpl-new' } as never);
+      vi.mocked(trainingSessionService.getSessionByEvent).mockReset();
+      vi.mocked(trainingSessionService.getSessionByEvent).mockResolvedValue(null);
+    });
+
+    const saveAsTemplate = async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+      await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Pump Drill'));
+      await user.click(screen.getByRole('button', { name: /more/i }));
+      await user.click(screen.getByRole('button', { name: 'Save as Template' }));
+      await user.click(await screen.findByRole('button', { name: 'Save Template' }));
+    };
+
+    it("saves the training details the card reported, and nothing outside the owner's list", async () => {
+      mockReportedSession = session;
+      await saveAsTemplate();
+
+      await waitFor(() => expect(eventService.createTemplate).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(eventService.createTemplate).mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({ event_type: 'training', training_details: expected })
+      );
+      expect(trainingSessionService.getSessionByEvent).not.toHaveBeenCalled();
+    });
+
+    it('reads the session itself when the card has not reported one', async () => {
+      vi.mocked(trainingSessionService.getSessionByEvent).mockResolvedValue(session);
+      await saveAsTemplate();
+
+      await waitFor(() => expect(eventService.createTemplate).toHaveBeenCalledTimes(1));
+      expect(trainingSessionService.getSessionByEvent).toHaveBeenCalledWith('evt-1');
+      expect(vi.mocked(eventService.createTemplate).mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({ training_details: expected })
+      );
+    });
+
+    it('saves no training details for a Training event without a session', async () => {
+      await saveAsTemplate();
+
+      await waitFor(() => expect(eventService.createTemplate).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(eventService.createTemplate).mock.calls[0]?.[0]).not.toHaveProperty('training_details');
+    });
+
+    it('says so, and saves nothing, when the session cannot be read', async () => {
+      const toastModule = await import('react-hot-toast');
+      vi.mocked(trainingSessionService.getSessionByEvent).mockRejectedValue(new Error('offline'));
+      await saveAsTemplate();
+
+      await waitFor(() =>
+        expect(toastModule.default.error).toHaveBeenCalledWith(
+          "Could not read this event's training details, so the template was not saved. Try again."
+        )
+      );
+      expect(eventService.createTemplate).not.toHaveBeenCalled();
+      expect(toastModule.default.success).not.toHaveBeenCalledWith('Template saved');
+    });
+  });
+
   describe('Event Information Sidebar', () => {
     it('should show RSVP required info', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
@@ -1395,6 +1545,43 @@ describe('EventDetailPage', () => {
     describe('once the card reports a training session', () => {
       const trainingEvent = (custom: Record<string, unknown>) =>
         ({ ...withCustomFields(custom), event_type: 'training' }) as unknown as Event;
+
+      // The ids still list a link to a deactivated requirement (the editor
+      // removes it), so the badge follows the server's answer, not their count.
+      it('drops the attendance badge when every link is to an inactive requirement', async () => {
+        mockReportedSession = {
+          id: 'sess-1',
+          require_completion_confirmation: false,
+          attendance_requirement_ids: ['retired'],
+          counts_toward_attendance: false,
+        };
+        vi.mocked(eventService.getEvent).mockResolvedValue({
+          ...trainingEvent({ dress_code: 'Class B uniform' }),
+          counts_toward_attendance: true,
+        });
+
+        renderWithRouter(<EventDetailPage />);
+
+        expect(await screen.findByText('Class B uniform')).toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByText('Counts toward attendance')).not.toBeInTheDocument());
+      });
+
+      it('shows the attendance badge once the session reports it counts', async () => {
+        mockReportedSession = {
+          id: 'sess-1',
+          require_completion_confirmation: false,
+          attendance_requirement_ids: ['active'],
+          counts_toward_attendance: true,
+        };
+        vi.mocked(eventService.getEvent).mockResolvedValue({
+          ...trainingEvent({ dress_code: 'Class B uniform' }),
+          counts_toward_attendance: false,
+        });
+
+        renderWithRouter(<EventDetailPage />);
+
+        expect(await screen.findByText('Counts toward attendance')).toBeInTheDocument();
+      });
 
       // The card now reports the instructor, certification and record
       // settings from the session as well, and the training form edits them

@@ -325,7 +325,14 @@ INCLUDE_SPECS: tuple[TableSpec, ...] = (
     TableSpec(FacilityMaintenanceType, "facilities", system_seed=True),
     # ---- Meetings / events ----
     TableSpec(MinutesTemplate, "minutes"),
-    TableSpec(EventTemplate, "events"),
+    TableSpec(
+        EventTemplate,
+        "events",
+        # A Training template's details name a member (instructor_id and
+        # name, which _scrub_json's keys do not catch) and an org-local
+        # course id, so none of it leaves the installation.
+        null_columns=("training_details",),
+    ),
     TableSpec(EventRequestEmailTemplate, "events"),
     # ---- Membership ----
     TableSpec(MembershipPipeline, "membership"),

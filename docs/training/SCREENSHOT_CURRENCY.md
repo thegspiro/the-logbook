@@ -1,5 +1,105 @@
 # Screenshot currency
 
+## Queued by the November 20 – 21 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-20--21-2026).
+Nothing was captured by this pass. Numbers continue each guide's sequence as
+of this pass; check them against `images/` before saving.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 04 | An outreach request on its own page: header, **All requests**, sections, the bottom action bar on a phone | **Replace** `04-99-event-request-drawer` (the drawer is gone) with `04-102-event-request-page`, and update the reference |
+| 04 | **New request** dialog: **Phone call**, no email, the confirmation box unticked and greyed | Create `04-103-new-request-dialog` |
+| 04 | Event Settings → Public Requests → **Types & roles**, one preset shown and one open for editing | Create `04-104-type-role-preset` |
+| 04 | **Volunteer staffing** card on an outreach event created directly, "3 of 5 signed up" with names | Create `04-105-event-volunteer-staffing` |
+| 04 | **How it went** card filled in; Community Engagement **Materials handed out** card | Create `04-106-outreach-closeout`, `04-107-materials-handed-out` |
+| 04 | `04-20-event-requests` (now has **New request**), `04-100-community-engagement` (materials card), `04-101-guest-headcount` (How it went card beside it), `04-09-event-templates` (inactive card dashed, new badge colours) | Check |
+| 02 | My Training hours card "6.9/6 hrs/mo avg" with "69/72 hrs total" | Create `02-148-requirement-card-hours-average` |
+| 02 | Three certification cards: **On file** (Expires …), **Expired** (date), **Not recorded** | Create `02-149-requirement-card-certification-states` |
+| 02 | My Training **Optional** heading, badge and "Not required for compliance" | Create `02-150-optional-requirements-group` |
+| 02 | Event template editor's **Training Details** section on a Training template | Optional `02-151-template-training-details` |
+| 02 | `02-108-monthly-hours-leave` (headline is now the average), `02-66-compliance-matrix` (an hours cell now leads with "3.7/2 hrs/mo avg"), `02-41-training-admin-reports` (Compliance Report card text) | **Replace** |
+| 02 | `02-01-my-training`, `02-125-compliance-matrix-not-applicable` (replace if an hours cell shows), `02-75-compliance-forecast` (Current coloured by standing), `02-133-compliance-profile-positions` (now "Optional Requirements") | Check |
+| 02 | Evaluation step list with **Assign** and the **Who takes "…"** dialog | Create `02-144-evaluation-step-assign` |
+| 02 | **Last review** card on an evaluation | Create `02-145-evaluation-last-review` |
+| 02 | Conduct list with a period chosen: **Period results**, grade tiles, **Export CSV** (as a `view_all` holder) | Create `02-146-evaluation-period-results` |
+| 02 | **New template** dialog with "Annual Evaluation with Officer Sections" and its **Officer ranks** boxes | Create `02-147-evaluation-officer-starter` |
+| 08 | Compliance profile form with the amber "… also has priority N" warning and the Required / Optional lists | Create `08-124-profile-priority-tie-warning`. **Check** `08-70-compliance-profiles` ("Optional:" chips) |
+| 03 | Close-out wizard step 1 as a shift officer without `scheduling.manage`: own Start/End/Hours disabled with the hint line | Create `03-138-closeout-own-row-locked`. **Check** `03-75-closeout-step1-attendance`, `03-45-finalize-checklist` |
+| 03 | History import Shifts tab: "You chose to add these members to that shift." with **Undo** | Create `03-139-history-import-existing-undo`. **Check** `wiki/images/history-import-shifts.png` |
+| 01 | Leave request: **Ask a question**; the member's view with changed dates and **Accept these dates**; **Your leave** with **Your first day back** and **End my leave**; the escalation setting | Create `01-59-leave-request-ask-question`, `01-60-leave-request-changed-dates`, `01-61-leave-back-early`, `01-62-leave-escalation-setting` |
+| 01 | `01-49-anonymize-member` (the Removed list has two more lines), `01-08-member-audit-history` (plain-word field names, new position wording) | **Replace** |
+| 01 | `01-29-status-change-modal` (only allowed statuses), `01-46-add-member-password-no-email` (icons replace ✓/○), `01-24-delete-member-modal` (applicant record and file lines) | Check |
+| 06 | `06-03` to `06-06` apparatus detail (buttons hidden for view-only users), `06-13-facility-maintenance` (cost in cents, scrolling filters), `06-14-facility-inspections` | Check |
+| any | Empty-state cards on the 25 screens #4382 padded (e.g. `01-11`, `01-19` if they show one); dark-mode captures with scroll-row chevrons (#4448) | Check |
+| 14 | Certified results and pre-meeting package captures footed "Page N" | Optional: now "Page X of Y" |
+
+**Made wrong by this range:** `04-99`, `01-49`, `01-08`, `02-108`, `02-66`,
+`02-41`.
+
+## Queued by the November 19 – 20 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-19--20-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 03 | My Shifts → **Hours**, new layout: cards with the two-colour split bar, year arrows, the "<year> at a glance" chart and its summary tiles | **Replace** `03-104-my-shifts-hours` (shows the always-visible table and no chart) |
+| 03 | **All shifts** list: a department shift labelled with the short name, outside shifts with a blue edge, one **Not counted** with its reason, the filter chips, **Log outside shift** | **Replace** `03-108-member-outside-shifts` (the card it shows was removed) |
+| 03 | Hours with outside hours: a card reading "N FCVFD" / "+24 with other departments", **All shifts** below | **Replace** `03-113-member-hours-with-outside` |
+| 03 | A month bar selected on the chart, its shifts highlighted in the list | Optional |
+| 01 | Profile **Shift & Call History** in the new layout, officer view without **Log outside shift** | Optional |
+| 08 | Settings → Profile with **Short Name** and its hint | Create |
+| 03 | Shift template dialog reading "Template saved, except name" with the field flagged; the **Discard changes** confirmation | Create |
+| 03 | Settings → General, Overtime advisory card with a cleared Hours limit flagged "Enter a whole number from 0 to 336." | Create |
+| 16 | Historical import: a committed step's **Undo this step**, the **Undo the training records?** confirmation with counts, the greyed-out "first undo the company drills step" line, the kept-records notice | Create |
+| 02 | Curriculum → Course Links with **Recent links**, one row reading "undone … by …", and the Undo confirmation (**Undo link** / **Keep it**) | Create |
+| 02 | Training Admin attention row "N training names can be linked to a course" with **Review links**, and the Course Links badge | Create |
+| 02 | Competency heat-map at 390px: pinned names, wrapping, scroll cue | Create. **Check** `02-67-competency-matrix`: the name column is now capped at 7rem and long names wrap |
+| 10 | My Training History tab and Expiring Certifications as cards at 390px | Create. `10-18-training-table-phone` stays valid |
+| 02 | `02-107-my-training-history-tab`, `02-01-my-training` | Check only: at 1440px these should still be tables |
+| 02, 04, 07, 12 | A picker showing a saved "Name (former member)" | Optional |
+| 05 | My Issued Gear row reading **Quartermaster notified** _date_ in place of the button | Create. `05-66-my-equipment`, `05-98-my-equipment-empty` stay valid |
+| 05 | Checklist Settings with the note under an hours box ("24 is the most allowed. 24 was saved.") | Create. `05-153-checklist-settings-phone` stays valid |
+| 06 | Apparatus edit with **These were not saved** and "Apparatus saved, except …" | Create. Check `06-29-add-apparatus-form` (layout unchanged, likely valid) |
+| 06 | A facility extended section (e.g. Insurance) with a field error and a character counter; the "Discard your changes?" dialog | Create |
+| 07 | Suggestion submit step with "Answer “…”." under a question; Step 2 with "Give your suggestion a title." | Create. **Check** `07-15-suggestion-submit-anonymous` and `07-36-compliance-details-step`; replace if Submit appears greyed out |
+| 07 | Suggestion box dialog with a flagged question ("Write the question members will be asked.") | Create. `07-14-suggestion-box-dialog` stays valid |
+| 18 | Store Settings with **Fix these before saving the settings** and a flagged tax rate | Create. `18-02-store-admin` stays valid |
+| 08 | Template editor with a flagged CC field and **Save** enabled | Optional. `08-56-template-discard` stays valid |
+| 04 | `04-68-minutes-outlines`: the Default badge is a darker green | Check (colour only) |
+| wiki | Shift history import edit dialog, "Other lines in these issues" with **Include line N** | Optional |
+
+**Made wrong by this range:** `03-104`, `03-108`, `03-113` (My Hours
+redesign). `03-111` and `03-122` (Member Hours report) stay valid.
+
+## Queued by the November 18 – 19 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-18--19-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 18 | Order dialog **Refund** section: **Amount to refund**, **Refund reason (shown to the member)**, **Record refund**; and the "Refund $… to <member>?" confirmation | Create |
+| 18 | Order dialog on an overpaid order: the "more than the order total has been recorded" line and **Refund the $… excess** | Create |
+| 18 | My Orders card with **Owed to you** | Create |
+| 18 | A shipped order's progress steps reading **Ready to ship** / **Shipped** | Create |
+| 18 | A cancelled order with the **Refund** section still shown (no Payment section) | Create; supersedes the November 14 – 15 row "only **Refund** left" |
+| 18 | **Record payment** refusing an amount above the balance | Optional |
+| 03 | Settings → **Notifications**, Equipment Check Alerts group with **Chief** and **Captain** ticked in a department that never saved it | Create. `03-38` and `03-39` stay valid (they show assignment and reminder groups) |
+| 03 | Scheduling Reports at 390px: **Coverage** and **Availability** as labelled cards (long email wrapping under the name) | Create. `03-14-scheduling-reports` shows Shift Compliance and stays valid |
+| 04 | **Attendance Requests** page with the **Sent to me** / **All events** toggle (was **My events**) and its new empty-state text | Create. `04-53-attendance-requests-card` is the event card and stays valid |
+| 02 | Event card or page for a session linked only to a deactivated attendance requirement, with no **Counts toward attendance** badge | Optional |
+| 02 | Training Admin → Integrations → **Sync History** with a run labelled **Manual pull** beside a **Scheduled pull** | Create. `02-42-external-integrations` stays valid |
+| 02 | **My Training** for a member on a compliance profile with its own required list: "X of Y requirements met" counting only the profile's requirements | Optional; `02-01-my-training` is a member with no profile and stays valid |
+| 05 | Add Item with a **Consumable** category chosen and **Tracking Type** switched to **Pool** | Create. `05-05-item-form-modal` (Structural PPE, Individual) stays valid |
+| 05 | Impact Planner PDF page footer "Inventory Impact Plan · Page 1 of N" | Optional (a PDF, not a screen) |
+| 14 | Election page **Link a meeting** panel listing a business meeting several weeks out among upcoming events | Optional |
+| 10 | An installed Android app in dark mode, showing the white gesture strip under the bottom bar | Optional; `10-12-mobile-bottom-nav` is a browser capture and stays valid |
+
+**No existing image is made wrong by this range.** The Source column is in
+CSV and PDF downloads only, so no on-screen report image changes.
+
 ## Queued by the November 17 – 18 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-17--18-2026).
@@ -15,9 +115,91 @@ Nothing was captured by this pass.
 | 02 | Requirement **Member Categories** in a department with a Senior tier: **Operational members** selected, Senior ticked, the hint "Active, Probationary, Life and Senior Member" | Create (`02-135` stays valid for a department with no Senior tier) |
 | 02 | Cohort wizard Course step listing only courses with a syllabus | Check `02-104` series; create only if a course-step image is wanted |
 | 08 | A report's on-screen results as labelled cards (Certification Expiration or Member Roster); Training Summary as a table at desktop width | Create; also replace any report-results image showing a sideways-scrolling table |
-| 17 | **Anonymize Member** dialog, Removed list with **Certificates uploaded with their training reports** | Create |
+| 17 | **Anonymize Member** dialog, Removed list with **Certificates uploaded with their training reports** and **Documents attached to their training records** | Create |
 | 10 | Phone (390px): expense report line items as cards with the totals row; the inventory stock matrix with pinned Size column and scroll cue; message history as cards | Create |
 | 11, 12, 05, 01, 14 | Phone captures of expense line items, grant applications, inventory import preview, member import preview / Assigned Inventory, election integrity audit log | Optional; check any existing phone image of these tables (e.g. `10-05-mobile-inventory` is a different list and stays valid) |
+
+## Queued by the November 15 – 17 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-15--17-2026).
+Nothing was captured by this pass. The screenshot manifest's election shots
+were fixed to open sections by path (#4297 removed the `#tab-…` buttons they
+clicked), so the guide 14 rows here and in the November 15 – 16 queue below
+can be captured by `capture.mjs` again. This pass overlapped the November
+15 – 16 pass; rows that queue already holds (the Elections pages row, the
+desktop header, Integrity & Audit, Course Links, Evaluated Calls, the grant
+deadlines) are not repeated here.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 14 | Election Settings under the Elections pages row | Replace `14-16-election-settings` (`14-31` is in the month review's queue) |
+| 14 | Section pages that showed the old tab bar, stepper or controls, beyond those the November 15 – 16 queue names | Replace `14-04-ballot-configuration`, `14-20-runoff-chain`, `14-21-save-ballot-template`, `14-22-ballot-template-picker` |
+| 14 | Vote receipt; paper batches panel, now on the Overview | Check `14-27-vote-receipt`, `14-18-paper-batches` |
+| 14 | Phone (390px) officer Overview: "48 / 62 members have voted", time left, **Close Election**, the Live rows; and with **More** open, showing **Details and all controls** | Create (two images) |
+| 19 | Ballot items and the details card in one frame — no longer possible; the ballot is its own section and the winner row is in the header | Replace `19-25`, `19-26` or retire them |
+| 08 | A generated report with its **CSV** and **PDF** buttons | Create |
+| 02 | Training section navigation with **Waiver Requests** and its waiting count | Create (optional) |
+| 02 | Images showing the Records, Curriculum or Settings & Data tab strip (now with Waiver Requests, Course Links and the shortened labels) | Check `02-04-course-library`, `02-126-shift-evaluation-settings` |
+| 11 | Create Fiscal Year with the end-date error under **End Date** | Create (optional) |
+| 18 | Order dialog **Send an update** with "Write the update to send." | Create (optional) |
+| 05 | Medical supplies Import / export with "Choose a CSV file to import." | Create (optional) |
+
+The #4347 training-event form rows (`02-80`, `02-83`, `02-91`, `04-02`,
+`04-61`) are in "Made stale by the one training-event form" below; this pass
+rewrote the `04-02` and `04-61` alt texts to describe the new screens, so the
+images and their alts now disagree until they are re-shot.
+
+## Queued by the month review (October 16 – November 16)
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-month-review-october-16--november-16-2026).
+Nothing was captured.
+
+| Guide | Screen                                                                                                                                         | Action                                              |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| 01    | Leave Requests page (Ask for leave, To decide, Your requests); Leave of Absence settings with requests on; profile Leave card with Ask for leave | Create                                              |
+| 01    | `01-11-create-waiver` (Waivers page now carries a Leave Requests / Members Settings line)                                                         | Check                                               |
+| 02    | Session Waivers settings; event-page "Request to be excused" card and **Ask to be excused**; waiver request queue and decision page; My Waiver Requests | Create                                              |
+| 02    | Evaluation form builder sources grouped with "(turned off)" and the scoring-gap note; a figure with its counts; requirement modal with a custom tier; monthly shifts on My Training | Create                                              |
+| 02    | Any capture of the Settings & Data tab row (now Manual Entry, Compliance, Import History)                                                      | Check                                               |
+| 03    | Preceptor link dialog with QR code; outside shift row with **Preceptor link**; close-out "A shift evaluation is still needed for:"              | Create                                              |
+| 03    | `03-108`, `03-113` (outside-shift card has a button now)                                                                                         | Check                                               |
+| 04    | Documents History folder with **Managed in History**; draft request-form warning with its button; Email Templates **Meetings & Minutes** group | Create                                              |
+| 04    | `04-14-meeting-minutes` and Meeting Attendance: Voting column, Waiver requests / Waiver settings                                               | Check                                               |
+| 06    | Facility form inline error and discard dialog; Maintenance list with **Due soon**; Card Readers                                                | Create / Check                                      |
+| 08    | History: overview with all cards, Import a Roster, Review _file_, merge, Photos and Media, media item with Photo-use consent, document with Open the PDF, album with Show to members, Titles and clearance | Create; supersedes the History overview capture queued earlier |
+| 11    | Next year's budget card reading _Not entered yet_; a draft reopened from Submit; Deny request asking Keep editing / Discard changes             | Create                                              |
+| 12    | Add Task with **Assigned To (optional)**; `12-10-donors` (a view-only capture would show Managers only)                                         | Create / Check                                      |
+| 13    | Notification Rules tab with **Medical Screening Expiry**                                                                                       | Create                                              |
+| 14    | Create dialog **Who may vote** customized; Voter Eligibility per-type rows; ballot item **Voter rules for this item**; Meeting Attendance page; ballot link **You've already voted**; Results Report with **Send Me a Copy**; template **CC positions** | Create                                              |
+| 14    | `14-31-voter-eligibility-annual`, `14-07-eligibility-roster`                                                                                   | Replace                                             |
+| 18    | `18-04-my-orders-unpaid`                                                                                                                       | Replace                                             |
+| 18    | Admin order dialog Delivery and Cancel order; **Cancel ORD-…?** confirmation; cancelled order with Refund; checkout with Shipping address flagged | Create                                              |
+
+## Queued by the November 15 – 16 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-15--16-2026).
+Nothing was captured by this pass. The training-event form's own queue, written
+by #4347, is "Made stale by the one training-event form" below and is
+unchanged.
+
+| Guide | Screen                                                                                                                                                                | Action                                                                                       |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 14    | Elections list as an election manager: the **Elections pages** row (All Elections, Meeting Attendance, Settings) and no gear button in the header                      | Replace `14-01-elections-list`                                                               |
+| 14    | An open election's header at a desktop width: stages, Voting closes with time left, Turnout, Winner, **Close Election** beside the status badge, and the section links | Create                                                                                       |
+| 14    | The same header's section links on a closed election, **Integrity & Audit** current                                                                                   | Create                                                                                       |
+| 14    | **Integrity & Audit** section with its report loaded (no toggle)                                                                                                      | Replace `14-19-forensics-report`; rewrite its alt, which names the Forensics & Integrity panel |
+| 14    | Elections pages row at 390px with the short labels Elections / Attendance / Settings                                                                                  | Create                                                                                       |
+| 14    | `14-05-nominations-tab`, `14-07-eligibility-roster`, `14-17-election-results`, `14-25`, `14-26`, `14-27`: the tab strip is now a row of links under the header          | Check; replace any that shows the old tab strip or the controls panel's Open/Close buttons |
+| 02    | **Training Admin → Curriculum → Course Links** with two or more names, one showing **Also spelled …** and **Suggested:**, and **Link all suggested (N)**               | Create                                                                                       |
+| 02    | The Course Links confirmation: "Link "…" to …?" with **Link records** / **Not yet**                                                                                    | Create                                                                                       |
+| 02    | Requirement form with **Requirement Type** set to **Evaluated Calls** and the **Required evaluated calls** box                                                         | Create                                                                                       |
+| 02    | A program's requirement row reading "x / N calls on evaluations"                                                                                                      | Create                                                                                       |
+| 02    | Shift evaluation form editor refusing **Active** off: "'…' is still in use by …"                                                                                       | Create                                                                                       |
+| 02    | Training History record imported by the CSV wizard showing **Imported**                                                                                               | Fold into the November 8 – 10 "source line" capture                                          |
+| 04    | Events list with a weekly mandatory series: only the occurrences within two months in **Needs You**                                                                  | Check `04-01-events-list`; replace if its band shows mandatory events further out          |
+| 06    | Add Operator member list (only current members)                                                                                                                        | Check `06-23-add-operator-member-picker`; replace if a former member is in the list         |
+| 12    | Deadline text in its last two weeks (now red-800, red-400 in dark mode)                                                                                                | Check `12-02`, `12-03`, `12-05`; replace only where such a deadline is in frame              |
+| 10    | Phone status bar matching the navigation bar in Light and Dark                                                                                                        | Device photo only: Playwright does not draw the status bar. Optional                         |
 
 ## Queued by the November 14 – 15 documentation pass
 
@@ -326,6 +508,30 @@ store does not accept PayPal, so the choice is not in its frame.
 `18-08-store-paypal-fallback` pictures the fallback warning: the same choice,
 with the settings read answered as "connected account" and no connected
 PayPal integration.
+
+**`16-27-calcom-settings` added 2026-11-16**, with Cal.com's own **Settings**
+button. It uses the same mock (`showIntegrationConnected` in the manifest),
+with an example self-hosted base URL, `https://cal.oakvillefd.org/api/v1`,
+prefilled; it is not a real Cal.com server. The dialog is opened and never
+saved.
+
+**`16-28-documenso-settings` added 2026-11-16**, with Documenso's own
+**Settings** button, from the same mock with an example self-hosted base URL,
+`https://sign.oakvillefd.org/api/v1`; it is not a real Documenso server. The
+dialog is opened and never saved.
+
+**`16-29-salesforce-settings` added 2026-11-16**, with Salesforce's own
+**Settings** button, from the same mock with an example org,
+`https://oakvillefd.my.salesforce.com`, and its sync settings filled in; it is
+not a real Salesforce org. The frame is 1900px tall so the whole dialog fits.
+The dialog is opened and never saved.
+
+**`16-30-google-workspace-settings` and `16-31-microsoft-365-settings` added
+2026-11-16**, documenting the **Settings** button the two directory
+integrations already had. Same mock, with example values on
+`oakvillefd.example.org` and made-up tenant, client and SKU IDs; neither is a
+real tenant. Each captures the dialog alone. The dialogs are opened and never
+saved.
 
 ## The October 16 – November 1 queues, captured 2026-11-02
 

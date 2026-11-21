@@ -647,9 +647,11 @@ class TrainingService:
             fallback_record_matches,
             hours_record_counts,
             is_evaluation_credited,
+            lapsed_biannual_certificate,
             latest_evaluation_credit,
             monthly_counts,
             monthly_hours,
+            monthly_pace,
             next_window_opens,
             recency_cutoff,
             rolling_hours_has_no_deadline,
@@ -709,6 +711,10 @@ class TrainingService:
         active_months: float = 0
         cert_expired = False
         blocks_activity = False
+        # CERTIFICATION only: the expiration date of the certificate graded,
+        # so the card can say "On file (Expires ...)" or "Expired ..."
+        # instead of 1/1 or 0/1. None when nothing matched or it never expires.
+        certificate_expiry: Optional[date] = None
         month_breakdown: Optional[List[Dict]] = None
         count_breakdown: Optional[List[Dict]] = None
         # Dates of the shifts or calls counted, for their monthly breakdown.
@@ -747,21 +753,10 @@ class TrainingService:
                     period_months=get_rolling_period_months(req),
                 )
 
-            # Biannual: expired cert overrides hours
-            if freq == RequirementFrequency.BIANNUAL.value:
-                with_exp = [r for r in completed if r.expiration_date]
-                if req.training_type:
-                    with_exp = [
-                        r for r in with_exp if r.training_type == req.training_type
-                    ]
-                if with_exp:
-                    newest = max(with_exp, key=lambda r: r.expiration_date)
-                    if newest.expiration_date < today:
-                        cert_expired = True
-                        blocks_activity = True
-                elif req.name:
-                    # No cert records at all with expiration — check by name
-                    pass
+            # Biannual: a lapsed certificate overrides the hours.
+            if lapsed_biannual_certificate(req, type_matched, today) is not None:
+                cert_expired = True
+                blocks_activity = True
 
         # ---- COURSES ----
         elif req_type == RequirementType.COURSES.value:
@@ -775,6 +770,10 @@ class TrainingService:
                 course_checklist = course_checklist_entries(
                     course_ids, windowed, course_catalog
                 )
+            # Biannual: a lapsed certificate overrides the count.
+            if lapsed_biannual_certificate(req, windowed, today) is not None:
+                cert_expired = True
+                blocks_activity = True
 
         # ---- CERTIFICATION ----
         elif req_type == RequirementType.CERTIFICATION.value:
@@ -783,6 +782,7 @@ class TrainingService:
             adjusted_required = 1
             if matching:
                 latest = max(matching, key=lambda r: r.completion_date or date.min)
+                certificate_expiry = latest.expiration_date
                 if latest.expiration_date and latest.expiration_date < today:
                     cert_expired = True
                     blocks_activity = True
@@ -1062,6 +1062,12 @@ class TrainingService:
         else:
             deadline = None
 
+        pace = (
+            monthly_pace(month_breakdown, base_required, start_date, end_date)
+            if month_breakdown is not None
+            else None
+        )
+
         return {
             "id": str(req.id),
             "name": req.name,
@@ -1091,6 +1097,7 @@ class TrainingService:
             ),
             "active_months": active_months,
             "cert_expired": cert_expired,
+            "expiry_date": str(certificate_expiry) if certificate_expiry else None,
             "blocks_activity": blocks_activity,
             "catch_up_deadline": str(deadline) if deadline else None,
             "next_window_opens": (
@@ -1104,6 +1111,10 @@ class TrainingService:
                 else None
             ),
             "monthly_hours": month_breakdown,
+            # The same MonthlyPace the compliance matrix reports, from the
+            # rows above, so the two screens print one average.
+            "monthly_average": pace.average if pace else None,
+            "monthly_needed": pace.needed if pace else None,
             "monthly_counts": count_breakdown,
             "course_checklist": course_checklist,
         }
@@ -1163,6 +1174,7 @@ class TrainingService:
             hours_record_counts,
             is_evaluation_credited,
             is_session_attendance,
+            lapsed_biannual_certificate,
             latest_evaluation_credit,
             load_credited_shift_dates,
             load_evaluation_credits,
@@ -1378,33 +1390,47 @@ class TrainingService:
             if completed_records is None:
                 # No preload: the sum stays in SQL, so a standalone check
                 # never materializes the member's records.
-                hours_q = (
-                    select(func.sum(TrainingRecord.hours_completed))
-                    .where(TrainingRecord.user_id == str(user_id))
-                    .where(TrainingRecord.organization_id == str(organization_id))
-                    .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-                )
+                counted_where = [
+                    TrainingRecord.user_id == str(user_id),
+                    TrainingRecord.organization_id == str(organization_id),
+                    TrainingRecord.status == TrainingStatus.COMPLETED,
+                ]
                 if start_date and end_date:
-                    hours_q = hours_q.where(
+                    counted_where += [
                         TrainingRecord.completion_date >= start_date,
                         TrainingRecord.completion_date <= end_date,
-                    )
+                    ]
                 if requirement.training_type:
-                    hours_q = hours_q.where(
+                    counted_where.append(
                         TrainingRecord.training_type == requirement.training_type
                     )
                 # The filters of hours_record_counts, applied in SQL.
                 if requirement.category_ids:
-                    hours_q = hours_q.where(
+                    counted_where.append(
                         TrainingRecord.category_id.in_(
                             [str(c) for c in requirement.category_ids]
                         )
                     )
                 if requirement.required_courses:
-                    hours_q = hours_q.where(
+                    counted_where.append(
                         TrainingRecord.course_id.in_(requirement.required_courses)
                     )
+                hours_q = select(func.sum(TrainingRecord.hours_completed)).where(
+                    *counted_where
+                )
                 completed_value = float((await self.db.execute(hours_q)).scalar() or 0)
+                # Only the expiration dates, for the biannual check below:
+                # lapsed_biannual_certificate reads nothing else.
+                hours_records: Sequence[Any] = []
+                if freq == RequirementFrequency.BIANNUAL.value:
+                    hours_records = (
+                        await self.db.execute(
+                            select(TrainingRecord.expiration_date).where(
+                                *counted_where,
+                                TrainingRecord.expiration_date.isnot(None),
+                            )
+                        )
+                    ).all()
             else:
                 hours_records = [
                     r
@@ -1427,39 +1453,13 @@ class TrainingService:
                     period_months=get_rolling_period_months(requirement),
                 )
 
-            # Biannual: expired cert overrides hours
+            # Biannual: a lapsed certificate among the records the sum above
+            # counts overrides the hours.
             if freq == RequirementFrequency.BIANNUAL.value:
-                if completed_records is None:
-                    cert_q = (
-                        select(TrainingRecord.expiration_date)
-                        .where(
-                            TrainingRecord.user_id == str(user_id),
-                            TrainingRecord.organization_id == str(organization_id),
-                            TrainingRecord.status == TrainingStatus.COMPLETED,
-                            TrainingRecord.expiration_date.isnot(None),
-                        )
-                        .order_by(TrainingRecord.expiration_date.desc())
-                        .limit(1)
-                    )
-                    if requirement.training_type:
-                        cert_q = cert_q.where(
-                            TrainingRecord.training_type == requirement.training_type
-                        )
-                    latest_exp = (await self.db.execute(cert_q)).scalar_one_or_none()
-                else:
-                    dated = [
-                        r
-                        for r in completed_records
-                        if r.expiration_date is not None
-                        and (
-                            not requirement.training_type
-                            or r.training_type == requirement.training_type
-                        )
-                    ]
-                    latest_exp = (
-                        max(r.expiration_date for r in dated) if dated else None
-                    )
-                if latest_exp and latest_exp < today:
+                if (
+                    lapsed_biannual_certificate(requirement, hours_records, today)
+                    is not None
+                ):
                     # Expired cert — requirement is not met
                     is_complete = False
                     completed_value = 0
@@ -1510,7 +1510,11 @@ class TrainingService:
 
             required_value = float(len(course_ids))
             completed_value = float(matched)
-            is_complete = matched >= len(course_ids)
+            # Biannual: a lapsed certificate overrides the count.
+            is_complete = (
+                matched >= len(course_ids)
+                and lapsed_biannual_certificate(requirement, records, today) is None
+            )
 
         # ---- CERTIFICATION requirements ----
         elif req_type == RequirementType.CERTIFICATION.value:
@@ -2063,7 +2067,7 @@ class TrainingService:
     async def get_applicable_requirements(
         self, user_id: UUID, organization_id: UUID | str, year: Optional[int] = None
     ) -> List[TrainingRequirement]:
-        """The active requirements that apply to a user, in a stable order."""
+        """The active requirements that grade a user, in a stable order."""
         # NOTE: `year` defaults to None → the year filter below is skipped (all
         # years). A prior no-op `year or <current year>` here was dead code;
         # whether this should default to the current year is a compliance-
@@ -2102,12 +2106,26 @@ class TrainingService:
         result = await self.db.execute(query)
         requirements = result.scalars().all()
 
-        # The shared definition, so /my-training, the matrix and the
-        # dashboard agree on who a requirement grades — including its
-        # grandfathering dates.
-        from app.services.training_compliance import requirement_applies_to_user
+        # ComplianceGrading.for_member is the one definition of which
+        # requirements grade a member: the matching compliance profile
+        # narrows the set, then applicability by type, rank, position and
+        # grandfathering dates. /my-training, the profile card, the matrix and
+        # the dashboard resolve through it too, so every one of them answers
+        # the same (D10). Filtering by a keep-set preserves the (name, id)
+        # order a paged caller relies on; for_member returns the profile's
+        # own id order instead.
+        from app.services.training_compliance import (
+            ComplianceGrading,
+            _load_compliance_config,
+        )
 
-        return [req for req in requirements if requirement_applies_to_user(req, user)]
+        grading = ComplianceGrading.from_config(
+            await _load_compliance_config(self.db, str(organization_id))
+        )
+        keep = {
+            str(r.id) for r in grading.for_member(user, list(requirements)).requirements
+        }
+        return [req for req in requirements if str(req.id) in keep]
 
     async def get_expiring_certifications(
         self,

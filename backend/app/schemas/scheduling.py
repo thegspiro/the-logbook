@@ -26,6 +26,7 @@ from app.models.call_tracking import (
 )
 from app.schemas.base import RefusesNull, UTCDateTime, UTCResponseBase
 from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
+from app.schemas.external_shift_hours import ExternalShiftHoursResponse
 from app.utils.positions import SEAT_NAME_MAX_LENGTH, canonical_position
 
 _response_config = ConfigDict(from_attributes=True)
@@ -591,6 +592,10 @@ class CloseoutStateResponse(UTCResponseBase):
     reported_call_count: int = 0
     reported_call_types: dict[str, int] = Field(default_factory=dict)
     attachable_calls: List[CloseoutAttachableCall] = Field(default_factory=list)
+    # The member whose times the caller may not change: their own, when they
+    # are admitted as the shift's officer without scheduling.manage (owner
+    # decision 2026-11-16, ADV2-8). None when the caller may record everyone.
+    own_hours_locked_user_id: Optional[UUID] = None
 
 
 class ShiftCancelRequest(BaseModel):
@@ -880,6 +885,14 @@ class MemberHoursTotals(BaseModel):
     on_call_hours: float = 0.0
 
 
+class MemberHoursYear(BaseModel):
+    """One year of :class:`MemberHoursMonth`, with its totals."""
+
+    year: int
+    totals: MemberHoursTotals
+    months: List[MemberHoursMonth]
+
+
 class MemberHoursHistoryResponse(BaseModel):
     """A member's own year of shift hours and calls, month by month.
 
@@ -903,11 +916,59 @@ class MemberHoursHistoryResponse(BaseModel):
     # rendering it when the summary cards moved to this month / this year /
     # all time; dropping the field would break any other caller for nothing.
     previous_month: MemberHoursMonth
+    #: Every year on record, newest first, each with its twelve months — the
+    #: year headings of the member's shift list, which show every year at
+    #: once rather than only the selected one. Slices of the same per-month
+    #: aggregate as ``months`` and ``all_time``, so a heading cannot disagree
+    #: with the chart for its year.
+    years: List[MemberHoursYear] = Field(default_factory=list)
+    #: What the department calls itself beside its own shifts: its short name,
+    #: or its full name when none is set.
+    department_label: Optional[str] = None
     #: Every month with any attendance, credited, pending or external, oldest
     #: first. The same buckets ``months`` and ``all_time`` are cut from, so the
     #: Past view of My Shifts can show any year, or all time, in the figures the
     #: Hours tab shows, from one request.
     history: List[MemberHoursMonth] = Field(default_factory=list)
+
+
+class MemberDepartmentShift(UTCResponseBase):
+    """One of a member's shifts on this department's own schedule.
+
+    ``hours`` is the member's attendance plus any approved pre-shift work on
+    the shift — what the shift contributes to the month totals beside it once
+    it is credited. ``credited`` is false until an officer finalizes the
+    shift; until then the hours are not in any total, and ``calls`` is None
+    because call credit is only recorded at finalization.
+    """
+
+    shift_id: str
+    shift_date: date
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    hours: float
+    calls: Optional[int] = None
+    credited: bool
+    on_call: bool = False
+    unit: Optional[str] = None
+    template_name: Optional[str] = None
+    position: Optional[str] = None
+
+
+class MemberShiftHistoryResponse(BaseModel):
+    """A member's shifts in one year: the department's own and those logged
+    with other departments, as two lists the screen interleaves by date.
+
+    External entries are every status, not only counted ones — the member
+    sees a pending entry awaiting approval and a rejected one with its reason.
+    ``external_total`` exceeds ``len(external_shifts)`` only when the year
+    holds more entries than the endpoint returns at once.
+    """
+
+    year: int
+    department_shifts: List[MemberDepartmentShift]
+    external_shifts: List[ExternalShiftHoursResponse]
+    external_total: int
 
 
 class SchedulingWidgetFilters(BaseModel):

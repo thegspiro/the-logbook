@@ -16,6 +16,964 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4504](https://github.com/thegspiro/the-logbook/pull/4504)**
+(branch `claude/security-review-medical-supplies-p21` —
+`claude/security-review-medical-supplies-p20` already carries a merged PR,
+#4228 pass 20, so this pass uses a `-p21` suffix per CLAUDE.md Pitfall
+#24): Feature 23 (Medical supplies), pass 21 — watchdog pickup (the
+dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). PR #4503
+(Feature 22, Grants & fundraising, pass 15) merged (`fd8cc24c`) since the
+last iteration; row 22 marked ✅ below. Real delta since pass 20 (baseline
+`c0baae03`): backend's own files are byte-identical to pass 20; the actual
+delta is an unrelated plan-metadata field, an equipment-check-failure-alert
+recipients fix belonging to a different, already-✅ feature, and a
+forms-rollout rewrite of five frontend components onto the already-reviewed
+`FormField`/`useFieldErrors`/`useDiscardGuard`/`saveExceptRefused` pattern.
+**0 fixed, 0 newly flagged.** Full write-up:
+`docs/security-review/MSUP-23-medical-supplies.md`'s **Pass 21** section.
+
+Row 23 → ✅ (pending this PR's merge); next is Feature 24 (Meetings &
+minutes) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 15, PR #4503, merged), preserved for history</summary>
+
+**PR [#4503](https://github.com/thegspiro/the-logbook/pull/4503)**
+(branch `claude/security-review-grants-fundraising-p15` —
+`claude/security-review-grants-fundraising` already carries several merged
+PRs, most recently pass 14's PR #4226, so this pass uses a `-p15` suffix
+per CLAUDE.md Pitfall #24): Feature 22 (Grants & fundraising), pass 15 —
+watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). PR #4500
+(Feature 21, Admin hours, pass 15) merged (`fd8ba8c5`) since the last
+iteration; row 21 marked ✅ below. Real delta since pass 14 (baseline
+`c0baae03`, PR #4226): a single non-rotation commit
+(`d7637cde`, a repo-wide former-member-assignee sweep) touched
+`grant_service.py`'s `_validate_application_fks`, correctly hardening
+`GrantApplication.assigned_to` against a newly-chosen former member — but
+left the sibling `GrantComplianceTask.assigned_to` (create and update) on
+the old `assert_in_org`-only check, and left `GrantDetailPage.tsx`'s
+compliance-task assignee picker unfiltered. **1 fixed (GF15-1, LOW): both
+gaps closed** — backend now calls the same shared `assert_current_members`
+helper on create/update (with `keep` on update, matching
+`update_application`'s shape), and the picker now filters to
+`isActiveAccount` members, matching `GrantApplicationFormPage.tsx`'s own
+picker. Both halves backed by new guard tests, seen red against the
+unfixed code first. **0 newly flagged.** Full write-up:
+`docs/security-review/GF-22-grants-fundraising.md`'s **Pass 15** section.
+
+Row 22 → ✅ (merged as `fd8cc24c`); next was Feature 23 (Medical supplies).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 15, PR #4500, merged), preserved for history</summary>
+
+**PR [#4500](https://github.com/thegspiro/the-logbook/pull/4500)**
+(branch `claude/security-review-admin-hours-p15` — `claude/security-review-admin-hours`
+already carries a merged PR, #3336 pass 8, so this pass uses a `-p15`
+suffix per CLAUDE.md Pitfall #24): Feature 21 (Admin hours), pass 15 —
+watchdog pickup (the dedicated `/loop 30m /security-review` session
+remains unreachable). Real delta since pass 14 (baseline `9eac8df98`, PR
+#4224): an apparatus-night category override for hour credit (org-scoped
+on both sides of its join; the category id validated in-org at every
+write), a CSV export Source column from a non-user-controlled lookup, and
+a shared profile tie-break (`ordered_profiles()`) replacing a local sort.
+A new, previously-unclaimed module (Apparatus Events, 20 gated routes) was
+found touching this feature's table; its touching slice was traced safe
+and the module recorded as unclaimed (natural home: Feature 13). **0
+fixed, 0 newly flagged, 0 findings closed.** Full write-up:
+`docs/security-review/AH-21-admin-hours.md`'s **Pass 15** section.
+
+Row 21 → ✅ (merged as `fd8ba8c5`); next was Feature 22 (Grants &
+fundraising).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 15, PR #4497, merged), preserved for history</summary>
+
+**PR [#4497](https://github.com/thegspiro/the-logbook/pull/4497)**
+(branch `claude/security-review-compliance`): Feature 20 (Compliance), pass
+15 — watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable per `ListAgents`).
+Real delta across all ten declared files since pass 14 (baseline
+`2775b491a`, PR #4213): a new evaluation-credited requirement type, a
+held-session sign-off fix, a session-excusal waiver source, optional
+compliance-profile requirements, a shared `grade_members` grading loop, and
+a monthly-pace display. All traced end to end; the one new query is
+org-scoped on every table it touches, and the new optional-requirements
+field is never read by any grading loop. **0 fixed, 0 newly flagged, 0
+findings closed.** Standing findings CS-8 and `grace_period_days`
+re-verified unchanged, both owner-accepted, by design. Full write-up:
+`docs/security-review/CMP-20-compliance.md`'s **Pass 15** section.
+
+Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 15, PR #4496, merged), preserved for history</summary>
+
+**PR [#4496](https://github.com/thegspiro/the-logbook/pull/4496)**
+(branch `claude/security-review-skills-testing-p15`): Feature 19 (Skills
+testing), pass 15 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable per `ListAgents`). True zero delta since pass 14 (`c0baae039`):
+all four declared backend files byte-identical, no frontend file changed,
+no new migration. Every standing fix re-verified present by direct code
+read; route surface unchanged at 29/29. **0 fixed, 0 newly flagged, 0
+findings closed.** No open findings remain in this feature. Full write-up:
+`docs/security-review/SKT-19-skills-testing.md`'s **Pass 15** section.
+
+Row 19 → ✅ (pending this PR's merge); next is Feature 20 (Compliance) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (interim "None" note between PR #4494 merging and PR #4496 opening), preserved for history</summary>
+
+**None.** PR #4494 (Feature 18, Training extended, pass 15) merged
+(`b07b25cab`) since the last iteration. Row 18 marked ✅ below; next is
+Feature 19 (Skills testing) — re-checked `list_pull_requests` (state `open`)
+fresh and found no `claude/security-review-*` head.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 15, PR #4494, merged), preserved for history</summary>
+
+**PR [#4494](https://github.com/thegspiro/the-logbook/pull/4494)**
+(branch `claude/security-review-training-extended-p15`):
+Feature 18 (Training extended), pass 15 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable per `ListAgents`). PR #4491 (Feature 17, Training core,
+pass 15) had already merged (`abcf2fc2`) before this iteration started. A
+fresh `list_pull_requests` (state `open`) found no `claude/security-review-*`
+head, and row 18 was confirmed the next `⬜` row directly against the table
+on a freshly fetched `main`.
+
+**0 fixed, 0 new findings — real delta across eleven files (1,080
+insertions), all of it already fixed and tested before this pass read it;
+one new-scope item deferred.** Baseline `fde02bac` (pass 14's merge, PR
+#4180). The window's real work: a fourth waiver source
+(`SOURCE_SESSION_EXCUSAL`, an approved attendance-waiver-request excusing one
+named session, org-scoped) threaded into training grading; row locking added
+to the requirement-progress credit/reversal paths (Pitfall #27); the
+compliance-profile-grading integration (Pitfall #29, owner decision
+2026-11-20/21) threaded through every export plus a PDF-rendering rewrite;
+centralized attachment-path confinement and orphan cleanup on training
+submissions; a body-level refusal of a client-supplied `attachments` field;
+audit logging added to waiver writes and report exports (ids/parameters
+only, confirmed free-text reasons never logged); a former-member refusal on
+cohort enrollment and instructor qualifications; and a provider-connection
+reset that now keys off the stored values rather than which keys a save
+merely included. All 108 routes across the seven declared endpoint files
+re-enumerated by AST, unchanged from pass 14. No new org-scoping gap found in
+a full read of every changed file.
+
+**New scope found, deferred rather than reviewed:** `attendance_waiver_requests.py`
+(31 routes) was folded into this feature's declared scope by SEC-00's own
+pass-14→15 lap note without itself receiving a seven-dimension review.
+PR #4481, an independent, owner-approved review of exactly this surface, is
+open and unmerged against `main` as of this pass — reviewing it now would
+duplicate that PR's findings and risk flagging lines it is already rewriting.
+Deferred to the pass after #4481 merges. Full write-up:
+`docs/security-review/TRX-18-training-extended.md`'s **Pass 15** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 794
+revisions, single head `d5946cb2bd41`; `check_route_permissions.py
+--strict` — 328 routes, 0 errors/warnings; `generate_schema_docs.py --check`
+— up to date; scoped backend pytest — 3550 passed, 1 pre-existing
+environment-only skip (`py_vapid`); `npm run typecheck` — 0 errors; `npm run
+lint` — 0 errors (within `--max-warnings 10`).
+
+Row 18 → ✅ (merged as `b07b25cab`); next is Feature 19 (Skills testing).
+
+</details>
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 15, PR #4491, merged), preserved for history</summary>
+
+**PR [#4491](https://github.com/thegspiro/the-logbook/pull/4491)**
+(branch `claude/security-review-training-core-p15`): Feature 17 (Training
+core), pass 15 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session remains unreachable). PR #4473 (Feature 16,
+Events & requests, pass 15) had already merged before this iteration
+started. A fresh `list_pull_requests` (state `open`, 20 PRs) found none
+with a `claude/security-review-*` head, and row 17 was confirmed the next
+`⬜` row.
+
+**0 fixed, 0 new findings — large real delta (48 commits, three new
+surfaces), all of it already fixed and tested before this pass read it.**
+Baseline `51e6e1b5` (pass 14's merge, PR #4151) — a genuine ancestor of
+current `main`. 4,043 insertions/599 deletions across twelve declared
+files plus three scope additions (`api/public/shift_evaluations.py`,
+`services/shift_evaluation_link_service.py`,
+`services/training_course_links.py`, all new). All 141 routes (up from
+129 at pass 14) re-enumerated by AST; every one auth-gated. The largest
+new thing is a public, unauthenticated no-login preceptor-evaluation link
+— read in full as the highest-risk new surface in the window: SHA-256
+hashed single-use tokens, every unusable state answering an identical
+404, the body unable to name whose record it writes, a row lock making
+the submission race-safe (Pitfall #36), no answers ever forwarded to the
+public "blank form", and no-store/no-referrer/noindex headers throughout.
+No finding. Everything else of security interest in the window (Course
+Links undo, a Chief self-override refusal, a former-member refusal on the
+lead-instructor field, an attachments-field write refusal, a
+credit-crediting lock fix, the `evaluated_calls` requirement type, frozen
+shift-evaluation requirements at shift-end) was already fixed and tested
+by the commits that introduced it; each was re-verified against the
+current code rather than re-flagged. TR14-2 re-confirmed unchanged
+(ACCEPTED); the `enroll_member` concurrency/completeness gap this
+document's history once carried is confirmed resolved in the current
+code. Full write-up: `docs/security-review/TR-17-training-core.md`'s
+**Pass 15** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 793
+revisions, single head `56377b666eb3`; `check_route_permissions.py
+--strict` — 328 routes, 0 errors/warnings; `generate_schema_docs.py
+--check` — up to date; scoped backend pytest — 3224 passed, 1
+pre-existing environment-only skip (`py_vapid`); standing guard suites —
+184 passed; `npm run typecheck` — 0 errors; `npm run lint` — 0 errors, 0
+warnings; `npx vitest run` (this feature's pages/components/modules, 88
+files) — 959 passed.
+
+Row 17 → ✅ (merged as `abcf2fc2`); next was Feature 18 (Training extended).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 15, PR #4473, merged), preserved for history</summary>
+
+**PR [#4473](https://github.com/thegspiro/the-logbook/pull/4473)**
+(branch `claude/security-review-events-requests`): Feature 16 (Events &
+requests), pass 15 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session remains unreachable). PR #4465 (Feature 15,
+Scheduling, pass 15) had already merged (`3734622d`) before this
+iteration started. A fresh `list_pull_requests` (state `open`) found no
+`claude/security-review-*` head, and row 16 was confirmed the next `⬜`
+row.
+
+**1 fixed (EV-31, a rank-only organizer silently skipped the guest-
+headcount reminder), 0 new findings — real delta across the two new
+routes (postpone, guest-headcount) and the widened attendance-request
+review.** Baseline `51e6e1b5` (PR #4119's merge, pass 14) — a genuine
+ancestor of current `main`. Real changes in ten declared files plus two
+scope-correction additions (`services/community_engagement_service.py`,
+`services/guest_headcount_reminder_service.py`, both new):
+`postpone_event` (org-scoped, row-locked, idempotent per CLAUDE.md
+pitfall #36), `set_guest_headcount` (org-scoped, row-locked), an
+attendance-request review widened to fallback recipients with the
+self-decision refusal re-verified intact, and an inactive-member
+coordinator refusal using the correct `User.is_active` hybrid (pitfall
+#32). Two already-landed security-positive fixes re-confirmed, not
+claimed as this rotation's own: a member-email-enumeration oracle closed
+in the public guest check-in lookup, and an MCP draft-event visibility
+gap closed in `mcp/tools/events.py`. Full write-up:
+`docs/security-review/EV-16-events-requests.md`'s **Pass 15** section.
+
+**Known, already-tracked condition, not duplicated here:** `main`
+currently carries three Alembic heads (`0c22a95b94b8`, `73f64017f9e2`,
+`a6c3e8d17f42`), one of which is this feature's own `790a86084359`-
+descended migration. Three open PRs (#4467, #4468, #4469) already carry a
+no-op merge revision resolving this; this PR does not add a fourth. This
+pass's local test database was built with `alembic upgrade heads`
+followed by `scripts/repair_schema.py`.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 3
+heads (known condition above, tracked externally); `check_route_permissions.py
+--strict` — 327 routes, 0 errors/warnings; scoped backend pytest (`-k
+"event or guest or rsvp or attendance"`) — 2894 passed, 1 pre-existing
+environment-only skip; standing guard suites — 215 passed, 2 failed (the
+same pre-existing three-head fork, not newly broken); `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings; `npx
+vitest run` (this feature's modules/pages/components) — 663 passed (42
+files).
+
+Row 16 → ✅ (merged as `b31b8deae8`); next was Feature 17 (Training core).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 15, PR #4465, merged), preserved for history</summary>
+
+**PR [#4465](https://github.com/thegspiro/the-logbook/pull/4465)** (branch
+`claude/security-review-scheduling-p15` — the bare name and the
+`-p12`/`-p14` branches all have merged PRs against them per this
+feature's own findings-file header, so `-p15` was used directly):
+Feature 15 (Scheduling), pass 15 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable). PR #4464
+(Feature 14, Equipment check & shifts, pass 16) had already merged
+(`2a5ca8e31`) before this iteration started. A fresh `list_pull_requests`
+(state `open`) found no `claude/security-review-*` head, and row 15 was
+confirmed the next `⬜` row.
+
+**0 fixed in Scheduling itself, 0 new findings — real delta, mostly
+already-landed defense-in-depth and one cross-feature fix.** Baseline
+`df47203db` (PR #4115's merge, pass 14) — a genuine ancestor of current
+`main`. Real changes in five declared files: two new self/permission-
+scoped member-shift-history routes (same shape pass 14's hours-history
+route already established), evaluation-credit resync on assignment
+change/delete/finalize/reopen, a notify-role sender moved to the shared
+current-member-aware helper (the same fix already reviewed under
+`EC-14-equipment-check-shifts.md`'s pass 16), an assignment-status
+tightening closing a call/training-credit correctness gap, and —
+opportunistically reviewed, outside prior declared scope — a
+self-supervisor-assignment refusal in `member_supervisor_service.py` that
+closes ADV-2, already tracked as Fixed in
+`ADV-01-adversarial-exfiltration.md`. SCH-20 unaffected. Full write-up:
+`docs/security-review/SCH-15-scheduling.md`'s **Pass 15** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 788
+revisions, single head `790a86084359`; `check_route_permissions.py
+--strict` — 327 routes, 0 errors/warnings; scoped backend pytest (`-k
+"scheduling or time_off or supervisor or seat_override or widget or
+eligibility or member_hours or on_call or shift_history or standing_shift
+or call_tracking"`) — 722 passed, 1 pre-existing environment-only skip
+(`py_vapid`); standing guard suites (capacity locking, org-scoping
+ratchet, LIKE escaping, CSV sweep, migration chain, `create_all`-table
+tolerance, account-status gates, log-call shape, baseline member grants)
+— 203 passed; `npm run typecheck` — 0 errors; `npm run lint` — 0 errors,
+0 warnings; `npx vitest run src/modules/scheduling src/pages/scheduling`
+— 1263 passed (78 files).
+
+Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 16, PR #4464, merged), preserved for history</summary>
+
+**PR [#4464](https://github.com/thegspiro/the-logbook/pull/4464)** (branch
+`claude/security-review-equipment-check-shifts-p16` — the bare name and
+the `-p13`/`-p14`/`-p15` suffixes all have merged PRs against them going
+back to pass 9, per this feature's own findings-file header, so `-p16`
+was used directly rather than re-deriving it from `ls-remote`, which only
+shows live refs):
+Feature 14 (Equipment check & shifts), pass 16 — watchdog pickup (the
+dedicated `/loop 30m /security-review` session remains unreachable). PR
+#4452 (Feature 13, Apparatus & NFC, pass 23) had already merged
+(`f0547e6ae`) before this iteration started. A fresh `list_pull_requests`
+(state `open`) found no `claude/security-review-*` head, and row 14 was
+confirmed the next `⬜` row.
+
+**0 fixed, 0 new findings — real delta, all already-landed defense-in-depth
+from other feature commits, none from this rotation.** Baseline `b26eb8b4f`
+(PR #4111's merge, pass 15) — a genuine ancestor of current `main`. Real
+changes in four of six declared backend files: an XC-3 fix (org-filtered a
+previously-unscoped `checked_by` lookup in `export_pdf`), new audit logging
+on CSV/PDF exports (ids/params only, Pitfall #33), a separation-of-duties
+tightening (a role reviewer may no longer review a report they filed, or
+one not awaiting review), alert-recipient resolution moved to a
+current-member-aware helper (closing a Pitfall #32-class gap where a
+departed member kept receiving equipment-check-failure notices), and
+current-member validation on a manual batch's crew (XC-1/Pitfall #32,
+matched by a frontend picker filter). Frontend also adopts a new
+`useSessionDraft`/`sessionDrafts.ts` hook (sessionStorage, user-scoped,
+no-PHI-by-design) for the first time, in `ManualShiftReportPage.tsx` —
+reviewed in full. EC-17 re-confirmed OPEN/FLAGGED, unaffected. Full
+write-up: `docs/security-review/EC-14-equipment-check-shifts.md`'s
+**Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 788
+revisions, single head `790a86084359`; `check_route_permissions.py
+--strict` — 327 routes, 0 errors/warnings; scoped backend pytest (`-k
+"equipment or shift_completion or shift_report"`) — 587 passed, 1
+pre-existing environment-only skip (`py_vapid`); standing guard suites
+(capacity locking, org-scoping ratchet, LIKE escaping, CSV sweep,
+migration chain, `create_all`-table tolerance, account-status gates,
+log-call shape, baseline member grants) — 203 passed; `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings; scoped
+`npx vitest run` (inventory module + this feature's own page/hook tests)
+— 2058 passed (132 files).
+
+Row 14 → ✅ (merged as `2a5ca8e31`); next was Feature 15 (Scheduling).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 23, PR #4452, merged), preserved for history</summary>
+
+**PR [#4452](https://github.com/thegspiro/the-logbook/pull/4452)** (branch
+`claude/security-review-apparatus-nfc-p23` — the bare
+`claude/security-review-apparatus-nfc` was tried first and opened as #4450,
+but `git ls-remote --heads origin 'refs/heads/claude/security-review-apparatus*'`
+only shows _live_ refs, and that name had actually been reused by several
+already-merged passes (15/17/18/19) whose remote heads GitHub had since
+deleted — exactly the branch-reuse CLAUDE.md Pitfall #24 warns against, and
+exactly why passes 21/22 had already moved to the `-pN` suffix. #4450 was
+closed and replaced by this PR, same commits, correct branch name — check a
+feature's own findings-file header for its actual prior branch names before
+trusting `ls-remote` alone next time):
+Feature 13 (Apparatus & NFC), pass 23 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable). PR #4446
+(Feature 12, Facilities, pass 16) had already merged (`c5a93595d`) before
+this iteration started. A fresh `list_pull_requests` (state `open`) found no
+`claude/security-review-*` head, and row 13 was confirmed as the next `⬜`
+row directly against the table (not the narrative note above, per this
+skill's own caution that the tracker can lag).
+
+**0 fixed, 0 new findings.** Baseline `0d2a8d2fa` (PR #4109's merge, pass 22) — a genuine ancestor of current `main` (`git merge-base
+--is-ancestor` succeeds). Real delta across the declared scope: exactly 2
+changed backend files (`apparatus_service.py` +18/−10,
+`external_apparatus_service.py` +204/−10; every other declared file
+byte-identical to pass 22). Both read in full: `apparatus_service.py`
+carries a response-completeness fix in `archive_apparatus` (same shape as
+Facilities pass 16's `update_facility`/`restore_facility`) and a new
+server-side refusal of former members as apparatus operators
+(`User.is_active`, the correct `ACTIVE_ACCOUNT_STATUSES` hybrid property —
+CLAUDE.md Pitfall #32 — not a literal `== ACTIVE`), paired with a matching
+frontend picker filter. `external_apparatus_service.py` adds a new
+"merge two outside-agency records" feature (`merge_agency`): both agency
+rows are locked before any mutation, every unit move and shift relabel is
+`organization_id`-filtered, an unresolvable source/target id 404s rather
+than leaking cross-tenant, and the one concurrency finding the feature
+needed (a shift logged mid-merge reading a stale agency name) was already
+fixed and tested — with a dedicated real-connection race test — on a prior,
+non-rotation PR (#4404), re-verified here as still correctly locked rather
+than re-discovered. Frontend: 22 files in `modules/apparatus` changed, all
+from the repo-wide forms-rollout pattern (`FormField`/`useFieldErrors`/
+`useDiscardGuard`) plus the paired `OperatorModal.tsx` picker filter; a full
+grep sweep of the diff found no blocking-dialog/XSS/bare-`toHaveBeenCalledWith()`
+pattern. 94+11=105 routes re-enumerated by AST, unchanged from pass 22; no
+migration in the window touches an `apparatus`/`nfc` table. Both
+`docs/module-audit/apparatus.md` and `docs/app-review/apparatus.md`
+re-grepped — zero open items in either. Full write-up:
+`docs/security-review/AP-13-apparatus-nfc.md`'s **Pass 23** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 787
+revisions, single head `a541e82fef9f`; `check_route_permissions.py --strict`
+— 327 routes, 0 errors/warnings; scoped backend pytest (`-k "apparatus or
+nfc or evoc or driver_exception or external_agency"`) — 1417 passed, 1
+pre-existing environment-only skip (`py_vapid`); standing guard suites
+(capacity locking, org-scoping ratchet, LIKE escaping, CSV sweep, migration
+chain, `create_all`-table tolerance, account-status gates, log-call shape,
+baseline member grants) — 205 passed; `npm run typecheck` — 0 errors;
+`npm run lint` — 0 errors, 0 warnings; `npx vitest run
+src/modules/apparatus` — 150 passed (17 files, up from 123/15 at pass 22).
+
+Row 13 → ✅ (merged as `f0547e6ae`); next was Feature 14 (Equipment check
+& shifts).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 16, PR #4446, merged), preserved for history</summary>
+
+**PR [#4446](https://github.com/thegspiro/the-logbook/pull/4446)** (branch `claude/security-review-facilities-p16` — the
+plain `claude/security-review-facilities` has multiple merged PRs against it
+going back to pass 1 and must not be reused per CLAUDE.md Pitfall #24; no
+`-pN`-suffixed branch for this feature survives on the remote (GitHub
+deletes a head on merge), so `-p16` — the next pass number per
+`FAC-12-facilities.md`'s most recent `## Pass 15` section — was confirmed
+free with `git ls-remote --heads origin 'refs/heads/claude/security-review-facilities-p*'`):
+Feature 12 (Facilities), pass 16 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable via `ListAgents`).
+PR #4445 (Feature 11, Inventory, pass 16) had already merged (`ff815adf9`)
+before this iteration started. A fresh `list_pull_requests` (state `open`)
+found no `claude/security-review-*` head, and row 12 was the next `⬜` row.
+
+**0 fixed, 0 new findings.** Baseline `2ff2abf75` (PR #4108's merge, pass 15) — unlike the last several passes, a genuine ancestor of current `main`
+(`git merge-base --is-ancestor` succeeds), so no tree-diff workaround was
+needed. Real delta across the declared scope (33 files, +3205/−1981): a
+`facilities_service.py` response-completeness fix (`update_facility`/
+`restore_facility` now return the fully-loaded record via the existing,
+already-org-scoped `get_facility` rather than a bare refreshed object with
+unloaded relationships — correctness, not an authz change); two changes in
+the shared `documents_service.py` (new History-document delete protection,
+a check-request receipt lock-order addition), both already reviewed for
+Documents & legal's own invariants by PR #4440 and confirmed here to read,
+write or refuse on no `facility_*` table or `FacilityDocument`/
+`FacilityPhoto` row; and a 29-file frontend forms-UX rollout (the
+established `FormField`/`useFieldErrors`/`saveExceptRefused`/
+`useDiscardGuard` pattern already seen on other features) whose actual
+wire-payload builders (`formToPayload`, `OverviewSection.tsx`'s inline
+update builder) are unchanged or already use `blankToNull`/`numberOrNull`
+correctly under Pitfall #1. 49 unrelated migrations landed in this window;
+none names a `facility_*` table. No new route (102, AST-confirmed
+unchanged from pass 15); `check_route_permissions.py --strict` — 327 routes
+repo-wide, 0 errors/warnings. No permission/role prop changed on any
+Facilities route; a full grep sweep of the frontend diff found no risky
+pattern (XSS, blocking dialogs, storage, raw fetch, banned locale methods).
+FAC-30 (P2, owner-accepted "leave as is") re-confirmed the only standing
+item. Full write-up: `docs/security-review/FAC-12-facilities.md`'s **Pass
+16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 786
+revisions, single head `0d54dd90d6ba`; `check_route_permissions.py --strict`
+— 327 routes, 0 errors/warnings; `pytest tests/ -k "facilit"` (run under
+`python3.13`) — 321 passed, 1 pre-existing environment-only skip
+(`py_vapid`); `pytest tests/test_capacity_locking.py
+tests/test_org_scoping_ratchet.py tests/test_like_escaping.py
+tests/test_csv_writer_sweep.py tests/test_alembic_migrations.py
+tests/test_migration_create_all_tables.py` — 175 passed; `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings; `npx vitest
+run src/modules/facilities` — 204 passed (23 files, up from 170/22 at pass
+15).
+
+Row 12 → ✅ (pending this PR's merge); next is Feature 13 (Apparatus &
+NFC) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 16, PR #4445, merged), preserved for history</summary>
+
+**PR [#4445](https://github.com/thegspiro/the-logbook/pull/4445)** (branch `claude/security-review-inventory-p16` —
+the plain `claude/security-review-inventory` has multiple merged **and**
+closed-unmerged PRs against it going back to pass 3, so it must not be
+reused per CLAUDE.md Pitfall #24; `-p16` is the next pass number per
+`INV-11-inventory.md`'s most recent `## Pass 15` section):
+Feature 11 (Inventory), pass 16 — watchdog pickup. PR #4440 (Feature 10,
+Documents & legal, pass 16) had merged before this iteration started. A
+fresh `list_pull_requests` (state `open`, perPage 100) found no
+`claude/security-review-*` head, and row 11 was the next `⬜` row.
+
+**0 fixed, 0 new findings — but a real, substantial delta: three already-
+shipped backend changes, all verified correct, plus a route-count
+correction.** Baseline resolution hit this repo's usual squash/orphan-merge
+artifact again: neither PR #4106's recorded merge commit (`3ed12fcb5`) nor
+its own branch head (`9e1b5cf41a`) is an ancestor of current `main` by
+`git merge-base --is-ancestor`, though both exist as reachable objects. The
+real delta was found with a direct tree diff between that branch head and
+`origin/main` (works regardless of ancestry), scoped to every declared file.
+
+AST-enumerating all six endpoint files gives **199** routes, not the 198
+pass 15 recorded — re-running the identical count against the actual
+pass-15 snapshot returns 199 there too, so this is pass 15's own miscount,
+not a route added since (same class as pass 17's 63→64 correction for Users
+& organizations). The tree diff adds zero new route decorators; the set is
+unchanged, and all 199 still carry a recognized auth dependency.
+
+Three backend changes, all in `inventory.py` plus one unrelated line in
+`inventory_service.py`, read in full and verified against the running code
+rather than assumed correct from the diff: (1) the inventory WebSocket's
+`?token=` query-param fallback was removed (a URL-borne bearer token reaches
+access logs) and a **new `inventory.manage` gate** was added before
+`ws_manager.connect()` — previously any authenticated org member could watch
+who holds/checks out which item, an INV-9-class over-exposure now closed;
+the frontend's `4003` handling already treated it as terminal, so no
+frontend change was needed. (2) the impact-plan PDF export is now
+audit-logged (it discloses member contact details) and its
+`Content-Disposition` filename is now quoted. (3)
+`GET /members/{user_id}/size-preferences` and `GET /my/size-preferences`
+return `null` instead of 404 for "no sizes saved" — the existing
+`_require_self_or_quartermaster` gate still runs first and unchanged, so
+this closes a logged-404-on-every-first-visit annoyance, not an authz gap.
+
+Frontend delta: 62 files, +6296/-2355, overwhelmingly the "Forms batch
+16–20" rollout and the inventory AAA contrast pass — swept in full for
+every injection/credential/storage pattern this checklist covers
+(`dangerouslySetInnerHTML`, `window.confirm`/`alert`/`prompt`,
+`localStorage.`, a hand-rolled `Authorization:` header, a new
+`axios.create`/bare `fetch(`, the banned locale-method/`date-fns` set,
+`eval(`, raw `innerHTML`): zero matches across all 6296 added lines.
+
+INV-16 and INV-17 (both MED, FLAGGED, owner decisions pending) and INV-22
+(owner-accepted) all re-confirmed OPEN and unaffected — none of their
+underlying functions appear in this window's backend diff. Full write-up:
+`docs/security-review/INV-11-inventory.md`'s **Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 786
+revisions, single head `0d54dd90d6ba`; `check_route_permissions.py --strict`
+(repo root) — 327 routes, 0 errors/warnings; scoped backend suite (`-k
+"inventory or nfc or kiosk or label"`, run under `python3.13`) — **2136
+passed**, 1 pre-existing environment-only skip (`py_vapid`), 0 failed; `npm
+run typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings; `npx
+vitest run src/modules/inventory` — 1983 passed (127 files).
+
+Row 11 → ✅ (merged as `ff815adf9`); next was Feature 12 (Facilities).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 16, PR #4440, merged), preserved for history</summary>
+
+**PR [#4440](https://github.com/thegspiro/the-logbook/pull/4440)** (branch `claude/security-review-documents-legal-p16` —
+`claude/security-review-documents-legal` has multiple merged PRs against it
+(#3734, #3160, #2962, #2187) and must not be reused per CLAUDE.md Pitfall
+#24; `-p15` is also taken, so `-p16`, the next pass number per
+`DOC-10-documents-legal.md`'s most recent `## Pass 15` section):
+Feature 10 (Documents & legal), pass 16 — watchdog pickup. PR #4439
+(Feature 09, Medical screening, pass 16) had merged (`b7f84513dd`) before
+this iteration started. A fresh `list_pull_requests` (state `open`) found no
+`claude/security-review-*` head, and row 10 was the next `⬜` row. Re-checked
+immediately before pushing, per this run's own collision warning: still no
+`claude/security-review-documents-legal-p16` branch and no matching open PR.
+
+**1 fixed (DOC-32, LOW), 0 flagged — plus DOC-31, the one standing item
+pass 15 left OPEN, re-verified as now resolved.** Baseline `fb288610f0` (PR
+#4103's merge, pass 15) — pass 15's own recorded baseline commit
+(`2b1884237`) is not an ancestor of current `main` (the same squash/orphan-
+merge artifact this file keeps recording), so the real PR #4103 merge
+commit was used instead. Real delta across the declared scope: seven
+backend files and two frontend files, read in full —
+`documents_service.py`/`documents.py` gain a new, owner-approved boundary
+with the "History" feature (a catalogued document is a `documents` row in a
+protected system folder, refused for rename/move/delete from the Documents
+screens, and unreachable to upload/move into from there either);
+`legal_service.py`/`legal_documents.py`/`models/legal.py`/`schemas/legal.py`
+gain revert-history recording and editor attribution (owner decisions
+W54-3/W54-4); `document_service.py` gets a one-word label change. Two
+migrations reviewed in full, both table-existence-guarded and correct
+(Pitfall #26/#35). Routes re-enumerated by AST: still 26, no route gained or
+lost, every permission string unchanged from pass 15.
+
+DOC-31 (lock-order fix for Finance's receipt references) was pass 15's one
+standing OPEN item, re-confirmed against _its_ baseline — accurately, since
+the actual fix landed in commits outside that baseline despite carrying an
+earlier author-date (the same history-reordering class as the baseline-
+commit mismatch, just affecting a fix's landing time). Re-verified this pass
+directly against the running code, not merely `KNOWN_LIMITATIONS.md`'s
+say-so: the locking reads, the check-request extension and the indexed
+minutes clear are all present and both race-test files still pass.
+
+DOC-32 (new, LOW, FIXED): `delete_folder`'s cascade bulk-`DELETE`s documents
+with no per-row History check, unlike `delete_document`'s explicit refusal —
+not reachable today (a catalogued document only ever lives in the
+`is_system`-protected History root, which `delete_folder` already refuses
+on two independent checks), but the bulk delete itself had no check of its
+own. Fixed with the same refusal `delete_document` uses, re-checked right
+before any write; regression test constructs the otherwise-unreachable case
+directly and was seen failing (`DID NOT RAISE ValueError`) before the fix.
+Legal markup (`legalMarkup.ts`/`LegalMarkup.tsx`, public-reachable, outside
+this file's previously declared scope) reviewed directly: XSS-safe by
+construction (plain React text nodes, no `dangerouslySetInnerHTML`), not by
+sanitizing. Full write-up: `docs/security-review/DOC-10-documents-legal.md`'s
+**Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 786
+revisions, single head `0d54dd90d6ba`; `check_route_permissions.py --strict`
+(repo root) — 327 routes, 0 errors/warnings; scoped backend suite (`-k
+"document or legal or station_document or facility_folder or folder or
+admin_only or minutes_attachment or published_minutes"`, run under
+`python3.13`) — **826 passed**, 1 pre-existing environment-only skip
+(`py_vapid`), 0 failed; `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors, 0 warnings; `npx vitest run src/pages/DocumentsPage.test.tsx
+src/components/documents src/pages/LegalPage.test.tsx
+src/utils/fileTypeLabel.test.ts` — 74 passed (5 files).
+
+Row 10 → ✅ (pending this PR's merge); next is Feature 11 (Inventory) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 16, PR #4439, merged), preserved for history</summary>
+
+**PR [#4439](https://github.com/thegspiro/the-logbook/pull/4439)** (branch
+`claude/security-review-medical-screening` — the plain, no-suffix name:
+`git ls-remote --heads origin 'refs/heads/claude/security-review-medical*'`
+returned nothing before this branch was pushed, so no pass suffix was
+needed per CLAUDE.md Pitfall #24):
+Feature 09 (Medical screening, PHI), pass 16 — watchdog pickup. PR #4438
+(Feature 08, Membership pipeline, pass 17) had merged (`81ed96b021`) before
+this iteration started. A fresh `list_pull_requests` (state `open`) found no
+`claude/security-review-*` head, and row 09 was the next `⬜` row. Re-checked
+immediately before pushing, per this run's own collision warning: still no
+`claude/security-review-medical*` branch and no matching open PR.
+
+**0 fixed, 0 new findings — but a real, substantial delta, found despite a
+git-history trap that made it look like there was none.** PR #4098 (pass
+15)'s own recorded head and base commits are not ancestors of current `main`
+(the same squash/orphan-merge artifact this file has recorded before, this
+time affecting the PR's own commits), and a plain `git log -- <path>` over
+every declared backend file plus the frontend module returned only 2 commits
+total, ever — both unrelated CSS/form-field sweeps. Trusting that would have
+been a false negative. The actual delta was found by listing
+`backend/alembic/versions/` in date order and by grepping for the encryption
+primitives directly: migration `ac1687769b62` (2026-11-08, two days after
+pass 15) extends MS-18's encryption from `status` alone to `screening_type`
+and `requirement_id` as well (owner decision 2026-11-06, "type + link +
+audit") — read in full, its FK/index drop is introspected rather than
+hardcoded (works against both a `create_all` build and a migration-built one),
+it fails closed without `ENCRYPTION_KEY` when there are rows, and it is
+tested against real rows including upgrade/downgrade round-trips and an
+orphaned-link-on-downgrade case
+(`tests/test_encrypt_screening_type_migration.py`, Pitfall #35 done right). A
+repo-wide grep confirmed no SQL comparison anywhere touches either now-
+ciphertext column (only `.isnot(None)` NULL checks), and every Python-side
+reader of the decrypted value is already org-scoped. A new file,
+`app/services/screening_reminder_service.py` (W71b-4, screening expiry
+reminders, not one of this feature's previously-declared files), was also
+reviewed for the first time: reuses the Compliance tab's own due-date rule
+(Pitfall #29), is wired through `NotificationRuleResolver` with
+`MEDICAL_SCREENING_EXPIRY` confirmed in `ENFORCED_TRIGGERS` (Pitfall #19,
+not a switch wired to nothing), sends email only — never a bell/log entry,
+since that would put the screening type back at rest in plaintext (Pitfall
+#18) — is idempotent via a unique `(screening_record_id, tier_days,
+due_date)` claim (Pitfall #36), and logs only ids/counts, never PHI (Pitfall
+#33). `KNOWN_LIMITATIONS.md` already correctly documented all of this; only
+this file's own MS-18 status (still reading "FLAGGED" from pass 15, which
+predates the type+link half) needed updating to RESOLVED. MS-15 (roster,
+unbounded, long-open, owner-accepted) re-confirmed OPEN, unchanged. All 16
+routes re-enumerated by AST, unchanged from pass 13–15. Full write-up:
+`docs/security-review/MS-09-medical-screening.md`'s **Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 785
+revisions, single head `bbeb4867d393`; `check_route_permissions.py --strict`
+(repo root) — 327 routes, 0 errors/warnings; scoped backend suite (`-k
+"medical_screening or medical_screen or screening"`, run under
+`python3.13`) — **265 passed**, 1 pre-existing environment-only skip
+(`py_vapid`), 0 failed; `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors, 0 warnings; `npx vitest run src/modules/medical-screening` — 85
+passed (15 files).
+
+Row 09 → ✅ (merged); next was Feature 10 (Documents & legal).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 17, PR #4438, merged), preserved for history</summary>
+
+**PR [#4438](https://github.com/thegspiro/the-logbook/pull/4438)** (branch
+`claude/security-review-membership-pipeline-p17` — a plain
+`claude/security-review-membership-pipeline` with no pass suffix already
+exists as a stale, never-merged branch from an earlier naming convention; not
+reused, per CLAUDE.md Pitfall #24):
+Feature 08 (Membership pipeline), pass 17 — watchdog pickup. PR #4436
+(Feature 07, Users & organizations, pass 16) had merged (`c552cd3cd`)
+before this iteration started. A fresh `list_pull_requests` (state `open`)
+found no `claude/security-review-*` head, and row 08 was the next `⬜` row.
+
+**0 fixed, 0 new findings.** Baseline `4f05d3457` (pass 16's merge, PR
+#4087). Real delta: 9 non-merge commits touching the feature's declared
+files, every one read in full — and none of them backend-security-relevant.
+Eight are UI/accessibility/bundle-size changes (a lazy import, a test-only
+fix, stat-tile and button-style conformance, inline validation display on
+`TargetRolePicker`, a forms-rollout pass, and a phone/tablet table reflow).
+The ninth (`3e478316d`) is the one line this pass's delta touches in the
+feature's own service code: the `MEDICAL_SCREENING` step-completion check's
+`screening_type` filter moved from SQL into Python, forced by an unrelated
+feature's own encryption change (medical-screening's MS-18, which made that
+column ciphertext) — traced directly as a correct like-for-like port, not a
+regression here. Route count corrected: `membership_pipeline.py` has 64
+routes, not the 63 pass 16 recorded — the discrepancy is pass 16's own
+undercount (confirmed by re-running the same AST walk against pass 16's own
+merge commit, which also returns 64; zero route-decorator lines differ
+between the two commits), not a route added since. The one route pass 16's
+count missed (`get_interview_follow_up_form_answers`) was traced end to end
+this pass: its sensitive-answer grant to an assigned interviewer is looked
+up per `(prospect_id, user_id, organization_id)`, never globally. MP-10
+(listing half) and MP-22 (both long-open, owner-accepted) re-verified
+unchanged. Full write-up:
+`docs/security-review/MP-08-membership-pipeline.md`'s **Pass 17** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+single head `bbeb4867d393`, 785 revisions; `check_route_permissions.py
+--strict` (repo root) — 327 routes, 0 errors/warnings; scoped backend
+suite (`-k "membership or prospect or pipeline or follow_up or
+assignment"`, run under `python3.13`) — **1,747 passed**, 1 pre-existing
+environment-only skip (`py_vapid`), 0 failed; `npm run typecheck` — 0
+errors; `npx eslint src/modules/prospective-members` — 0 errors, 0
+warnings; `npx vitest run src/modules/prospective-members` — 410 passed
+(45 files).
+
+Row 08 → ✅ (merged); next was Feature 09 (Medical screening, PHI).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 16, PR #4436, merged), preserved for history</summary>
+
+**PR [#4436](https://github.com/thegspiro/the-logbook/pull/4436)** (branch
+`claude/security-review-users-organizations-p16` — a stale, never-merged
+`claude/security-review-users-organizations-p14` already exists from an
+earlier pass; not reused, per CLAUDE.md Pitfall #24):
+Feature 07 (Users & organizations), pass 16 — watchdog pickup. PR #4435
+(Feature 06, Elections & ballots, pass 16) had merged (`762f1c93a`) before
+this iteration started. A fresh `list_pull_requests` (state `open`) found
+no `claude/security-review-*` head, and row 07 was the next `⬜` row.
+
+**0 fixed, 0 new findings.** Baseline `1ebcc5e7f` (pass 15's head). Real
+delta: 19 non-merge commits touching the feature's declared files
+directly, every one read in full — most significantly: step-up now
+required on a member's **own** email change as well as a colleague's
+(forgot-password resolves an account by email, so a stolen session could
+otherwise chain an own-email repoint into a password reset the owner never
+sees); a new `leave_requests.py` (7 routes, 9 with two settings routes
+moved under it) letting a member ask for leave, decided by the
+department's chosen approver positions under a locked vote (pitfall #27),
+with the requester excluded from their own approver pool by construction;
+a dated history of position/office terms (`member_position_terms`),
+reconciled against `user_positions` by a session-flush hook so it is
+idempotent rather than event-replayed; and a hard-delete/anonymize file-
+cleanup fix (collects the member's file-naming rows before the commit,
+deletes only after it succeeds, confined to the organization's own storage
+areas). The rest of the delta is settings-schema additions from Finance/
+Documents/Minutes/Training owner-decision batches landing in
+`organizations.py` only incidentally, and two data-exposure _fixes_
+(`d5db81200`/`226930a20`) correctly gating the sections and defaults they
+touch. All 97 routes across the five principal files (34/30/17/7/9) re-
+enumerated by AST; every `get_current_user`-only route cross-checked
+against `tests/permissionless_route_baseline.txt`. **Correction:** pass
+15 recorded 35 routes for `users.py`; re-counted at pass 15's own baseline
+commit, it already had 34 — pass 15's figure was off by one, no route was
+removed since. USR-5 and USR-8 (both long-open, owner-accepted) re-
+verified unchanged. Full write-up:
+`docs/security-review/USR-07-users-organizations.md`'s **Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+single head `bbeb4867d393`, 785 revisions; `check_route_permissions.py
+--strict` (repo root) — 327 routes, 0 errors/warnings; scoped backend
+suite (`-k "user or organization or member_status or member_leave or
+leave_request"`, run under `/usr/bin/python3.13`) — **962 passed**, 2
+pre-existing environment-only skips, 0 failed; `npm run typecheck` — 0
+errors; `npm run lint` — 0 errors, 0 warnings (`eslint --max-warnings 10`).
+
+Row 07 → ✅ (merged); next was Feature 08 (Membership pipeline).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 16, PR #4435, merged), preserved for history</summary>
+
+**PR (this commit)** (branch `claude/security-review-elections-ballots-p16`
+— a plain `claude/security-review-elections-ballots` with no pass suffix
+already exists as a stale, never-merged branch from an earlier naming
+convention; reused per CLAUDE.md Pitfall #24, never pushed to):
+Feature 06 (Elections & ballots), pass 16 — watchdog pickup. PR #4430
+(Feature 05, Finance & approvals, pass 16) was found open, fully green
+(all 26 check runs `success`, `mergeable_state: clean`) and unmerged for
+roughly 14 hours — its only comments were Codex and Copilot both reporting
+they lacked review quota, not a real finding — so the watchdog merged it
+(`2f46fb26f`) before continuing. A fresh `list_pull_requests` (state
+`open`) then found no `claude/security-review-*` head, and row 06 was the
+next `⬜` row.
+
+**0 fixed, 0 new findings.** Baseline `683d044936` (pass 15's merge, PR
+#4043). Real delta: 66 files, +7136/-2403, from 8 non-merge commits — most
+significantly a new per-member-type voter eligibility engine (version 2
+rules, `app/services/voter_rules.py`: one explicit `may_vote`/wait/
+attendance row per member status, department tier or class, replacing
+version-1 election-wide rules plus each tier's own voting benefits; a
+member is judged by their status row **and**, when administrative or
+social, their class row — both must pass, owner decision 2026-11-13);
+per-election and per-ballot-item rule overrides requiring and auditing a
+secretary's stated reason when they differ from the department's defaults;
+a new Meeting Attendance page and service
+(`app/services/election_attendance_service.py`) with one genuinely new
+route, `GET /{election_id}/attendance/{user_id}/meetings`; and a handful of
+smaller refinements (off-roll reason sharing, attendance-counting
+look-back, ten election/minutes notices moving to editable templates).
+`elections.py` re-enumerated fresh by AST: **76 routes**, up from pass 15's
+75 (+1, the new attendance-by-member route — `elections.manage`-gated, org-
+scoped member resolution, correctly excluded from the self-service
+baseline). The voter-eligibility engine — the highest-risk change, since it
+decides who may vote — was traced end to end: Pydantic schema bounds
+(`extra="forbid"`, capped integers, regex-validated row keys), the
+override-reason requirement's enforcement at the API layer, and the "both
+rows must pass" AND semantics in `type_rules_reason`/`row_waits`, confirmed
+by tracing the loop rather than taking the docstring's claim on faith.
+Nomination accept-on-behalf (`update_candidate`) stays `elections.manage`-
+gated and org-scoped, independent of the nominee's own `elections.view`-
+gated accept/decline path. **ELEC-49** (a stale addendum left in circulated
+minutes after a rollback) is closed: this delta's own commits added a real
+dated-correction path plus a backfill migration, matching
+`docs/KNOWN_LIMITATIONS.md`'s existing "Resolved" note, verified by
+re-reading the code. Full write-up:
+`docs/security-review/ELEC-06-elections-ballots.md`'s **Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+single head `bbeb4867d393`, 785 revisions; `check_route_permissions.py
+--strict` (repo root) — 327 routes, 0 errors/warnings; scoped backend
+suite (`-k "election or ballot or vote or candidate or attendance"`,
+run under `/usr/bin/python3.13`) — **2486 passed**, 1 pre-existing
+environment-only skip (`pywebpush`), 0 failed; `npm run typecheck` — 0
+errors; `npm run lint` — 0 errors, 0 warnings (`eslint --max-warnings 10`).
+
+Row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
+organizations) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 16, PR #4430, merged), preserved for history</summary>
+
+**PR [#4430](https://github.com/thegspiro/the-logbook/pull/4430)** (branch
+`claude/security-review-finance-approvals`): Feature 05 (Finance &
+approvals), pass 16 — watchdog pickup. PR #4359 (Feature 04, Storefront &
+payments, pass 16) had merged before this iteration started. A fresh
+`list_pull_requests` (state `open`) found no `claude/security-review-*`
+head, and row 05 was the next `⬜` row, confirmed on a freshly fetched,
+fast-forwarded `main` (`b25ea82cff`).
+
+**Scope correction (this commit):** the feature table named this feature's
+QuickBooks file `services/quickbooks_online.py`; no such file exists. The
+real QBO surface is three files, corrected in the row below:
+`api/v1/endpoints/quickbooks_online.py` (8 routes), `services/
+quickbooks_online_client.py` and `services/quickbooks_sync_service.py`.
+
+**0 fixed, 0 new findings.** Baseline `683d044936` (pass 15's merge, PR
+#4043). Real delta: a brand-new, ~2,200-line live QuickBooks Online
+connection (OAuth connect/sync/postings, owner decision 2026-11-01) across
+the three files above plus a new migration; `approve_step`/`deny_step`
+moved from `require_permission("finance.approve")` to a bare
+`Depends(get_current_user)`, with "may this caller act on this step"
+relocated into the service layer (a named step approver may act without
+holding `finance.approve` at all, per the same 2026-11-01 decision); budget-
+request drafts (nullable `requested_amount`/`justification`, paired with a
+migration, gated at submission instead); a dual-approval second-approver
+notice module (`finance_second_approval.py`, new) and an approval-
+notification module (`finance_approval_notifications.py`, new); and a cash-
+advance statements table. `finance.py` re-enumerated fresh by AST: **150
+routes**, up from pass 15's own 137 (+13 added, 0 removed, diffed by
+`(method, path)` rather than trusted). The approve/deny permission-model
+change — the one most likely to have moved an authorization boundary — was
+traced end to end: org-scoping via the `ApprovalChain` join, the named-
+approver matcher's own org check, the unassigned-step-still-needs-
+`finance.approve` branch, and the self-approval guards
+(`assert_different_person`/`assert_not_raiser`) all independent of and
+unaffected by the permission move. QuickBooks OAuth tokens are
+`EncryptedText` (AES-256-GCM, the app's existing column type, not new or
+weaker); the OAuth dance is CSRF/replay-guarded by a signed state + double-
+submitted nonce + single-use encrypted pending-attempt, with a re-check of
+`finance.manage` at completion time; the integration has no inbound webhook
+(push-only), so idempotency is a unique constraint plus a sync lease rather
+than signature verification. Full write-up:
+`docs/security-review/FIN-05-finance-approvals.md`'s **Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean (CI's pinned versions, reached via explicit
+paths after a sandbox version mismatch on all three tools —
+`/usr/bin/python3.13`/`/usr/local/bin/black`/`/root/.local/bin/flake8`/
+`/usr/local/bin/isort`); `validate_migrations.py --strict` — single head
+`053d3e96b4fa`, 784 revisions; `check_route_permissions.py --strict`
+(repo root) — 327 routes, 0 errors/warnings; scoped backend suite
+(`-k "finance or approval or quickbooks"`, run under `/usr/bin/python3.13`)
+— **1973 passed**, 2 pre-existing environment-only skips (`pywebpush`, no
+time-zone tables), 0 failed; `npm run typecheck` — 0 errors; `npm run
+lint` — 0 errors, 0 warnings (`eslint --max-warnings 10`). The local test
+database was already migrated to head with every new finance/QBO table
+present — the briefing's warning about a dirty local DB from a prior
+session did not apply this pass.
+
+Row 05 → ✅ (pending this PR's merge); next is Feature 06 (Elections &
+ballots) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 16, PR #4359, merged), preserved for history</summary>
+
 **PR [#4359](https://github.com/thegspiro/the-logbook/pull/4359)** (branch
 `claude/security-review-storefront-payments`):
 Feature 04 (Storefront & payments), pass 16 — watchdog-delegated iteration.
@@ -63,6 +1021,8 @@ rewrite.
 Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
 approvals) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 16, PR #4349, merged), preserved for history</summary>
@@ -26339,43 +27299,43 @@ Row 00's own pass-17 review (`SEC-00-cross-cutting-baseline.md`'s **Pass 17**
 section) rides along in this same reset, per the "folded into this
 iteration's commit" rule.
 
-| #   | Feature                   | Prefix | Principal code                                                                                                                                                                                                                                           | Status |
-| --- | ------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                                                                                                                            | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                                                                                             | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                                                                                              | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (51 unauth routes, added pass 16), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                                                    | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                       | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `quickbooks_online.py` (8 routes, added pass 17)                                                                                                                            | ⬜     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                                                                                                                           | ⬜     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (9 routes, added pass 17)                                                                                                                                    | ⬜     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                                                                                               | ⬜     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                                                                                                                                   | ⬜     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                             | ⬜     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                | ⬜     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                              | ⬜     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                                                                                                            | ⬜     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                              | ⬜     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                         | ⬜     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                | ⬜     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13)                                                                              | ⬜     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (31 routes, added pass 17) | ⬜     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                   | ⬜     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                | ⬜     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                         | ⬜     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                         | ⬜     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                    | ⬜     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 17)                                                                                                                                                                                | ⬜     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                            | ⬜     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                  | ⬜     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (31 routes, added pass 13), `historical_staffing_*.py`                                                                                                                                   | ⬜     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                    | ⬜     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                       | ⬜     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                      | ⬜     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                            | ⬜     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                           | ⬜     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                      | ⬜     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                                                                             | ⬜     |
+| #   | Feature                   | Prefix | Principal code                                                                                                                                                                                                                                                                        | Status |
+| --- | ------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                                                                                                                                                         | ✅     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                                                                                                                          | ✅     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                                                                                                                           | ✅     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (51 unauth routes, added pass 16), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                                                                                 | ✅     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ✅     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ✅     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ✅     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (9 routes, added pass 17)                                                                                                                                                                 | ✅     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                                                                                                                            | ✅     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ✅     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ✅     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ✅     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ✅     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                                                                                                                                         | ✅     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ✅     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ✅     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ✅     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13), `api/public/shift_evaluations.py` (added pass 15)                                                        | ✅     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (31 routes, added pass 17)                              | ✅     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ✅     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ✅     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ✅     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ✅     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ✅     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 17)                                                                                                                                                                                                             | ⬜     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (31 routes, added pass 13), `historical_staffing_*.py`                                                                                                                                                                | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                                                   | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                                                                                                          | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
@@ -26416,9 +27376,706 @@ than being re-discovered piecemeal by SEC-00 or another feature's table-write
 slice again. Folded into Feature 27's declared scope above (row 27) so a
 future pass's accumulated-scope diff covers it by default.
 
+**Apparatus Events, flagged unclaimed by Feature 21's pass 15, no rotation
+row yet:** a new module (`endpoints/apparatus_events.py`, 20 routes, all
+gated `apparatus_events.manage`/`.signup`; `services/apparatus_event_service.py`,
+1,578 L; `models/apparatus_event.py`; `schemas/apparatus_event.py`) landed
+(commit `a80760942`, "Add apparatus events backend") with no feature row
+covering it — outreach that rolls an apparatus with a named crew, scheduling
+them onto `Event` nights, with its own `EventApparatusPlan`/
+`ApparatusEventTemplate` tables. Admin Hours' pass 15
+(`docs/security-review/AH-21-admin-hours.md`'s **Pass 15** section) found and
+traced only the slice touching its own `AdminHoursCategory` table (both
+org-scoped, no finding) — the module as a whole has not had a
+seven-dimension pass. Its permission prefix (`apparatus_events`) and its
+dependency on the `Apparatus`/EVOC model both point to Feature 13 (Apparatus
+& NFC) as the natural home, the same way Historical Data Import's
+`integrations` prefix pointed it to Feature 27; a future pass should fold it
+into row 13's declared scope rather than leaving it to be rediscovered.
+
 ---
 
 ## Log
+
+### 2026-11-21 — Feature 22 (Grants & fundraising, pass 15) merged; Feature 23 (Medical supplies, pass 21): watchdog pickup, 0 fixed, 0 new findings (true re-verification pass)
+
+PR #4503 merged as `fd8cc24c`. A fresh `list_pull_requests` (state=open)
+found no `claude/security-review-*` head, and row 23 was the next `⬜` row,
+confirmed directly against the table on a freshly pulled `main`.
+
+Baseline `c0baae03` (pass 20's own baseline, PR #4228). Backend's own files
+(`medical_supplies.py`, `app/mcp/tools/medical_supplies.py`,
+`models/inventory.py`, `schemas/inventory.py`) are byte-identical to pass
+20 — confirmed by `git diff --stat`, not assumed. The real delta in the
+window is an unrelated one-line plan-metadata field in
+`inventory_service.py`, an equipment-check-failure-alert recipients fix in
+the shared `equipment_check_service.py` (CLAUDE.md Pitfall #19/#29, correct,
+but belongs to Feature 14, already ✅ — it notifies on a failed check, not
+the medical-domain truck-stock methods this router calls), and a
+forms-rollout rewrite of five frontend components
+(`MedicalImportExportModal.tsx`, `MedicalItemLotsModal.tsx`,
+`MedicalSupplyItemPicker.tsx`, `ReceiveDeliveryModal.tsx`,
+`MedicalCategoriesPage.tsx`) adopting the shared `FormField`/
+`useFieldErrors`/`useDiscardGuard`/`saveExceptRefused` pattern already
+reviewed on four other modules. All read in full; create/update payload
+semantics (CLAUDE.md Pitfall #1) and the new partial-save retry's
+delete-the-refused-key behavior re-confirmed correct, no `window.confirm`
+introduced, no new request path. 29 routes re-enumerated by AST, unchanged.
+
+**0 fixed, 0 new findings.** MSUP-4 and MSUP-11 remain the only open items,
+both owner-accepted (2026-10-05, `docs/KNOWN_LIMITATIONS.md`). Full
+write-up: `docs/security-review/MSUP-23-medical-supplies.md`'s **Pass 21**
+section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean. `validate_migrations.py --strict` — 804
+revisions, single head `3daf47506e9e` (unchanged). `check_route_permissions.py
+--strict` — 329 routes, 0 errors/warnings (unchanged). Scoped backend pytest
+(`-k "medical_supplies or medical_supply or lot_recall"`) — 216 passed, 1
+pre-existing environment-only skip (`py_vapid`). `npm run typecheck` — 0
+errors. `npm run lint` — 0 errors, 0 warnings. `npx vitest run
+src/modules/medical-supplies` — 210 passed (10 files, up from pass 20's 196).
+
+Row 23 → ✅ (pending this PR's merge). Next is Feature 24 (Meetings &
+minutes) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+### 2026-11-21 — Feature 21 (Admin hours, pass 15) merged; Feature 22 (Grants & fundraising, pass 15): watchdog pickup, 1 fixed (GF15-1, LOW) — compliance-task assignee gained the same current-member guard the application assignee already had
+
+Watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remained unreachable per `ListAgents`).
+PR [#4500](https://github.com/thegspiro/the-logbook/pull/4500) (Feature 21,
+Admin hours, pass 15) had already merged (`fd8ba8c5`) — confirmed via a
+fresh `list_pull_requests` (state=open) finding no `claude/security-review-*`
+head. Row 21 marked ✅; the stale **Open PR** row (still naming #4500) was
+cleared. Row 22 (Grants & fundraising) was confirmed the next `⬜` by
+reading the rotation table directly on a freshly fetched `main`.
+
+Baseline `c0baae03` (PR #4226's merge, pass 14). `git diff c0baae03..HEAD
+--stat` against the declared backend scope found exactly one changed file:
+`grant_service.py` (+18/−3), from a non-rotation, repo-wide sweep
+(`d7637cde`, "Refuse former members on the member-picker write paths" —
+CLAUDE.md Pitfall #32). That commit correctly hardened
+`GrantApplication.assigned_to` (via `_validate_application_fks`) against a
+newly-chosen former member, with a matching `GrantApplicationFormPage.tsx`
+picker filter and its own test file — but missed the sibling
+`GrantComplianceTask.assigned_to` on both `create_compliance_task` and
+`update_compliance_task` (still `assert_in_org`-only), and
+`GrantDetailPage.tsx`'s compliance-task assignee picker offered every
+directory entry with no filter at all. No models/schemas/migrations
+changed; the Zeffy files remain byte-identical. 23 frontend files changed
+in the window, all from already-reviewed repo-wide patterns (forms-rollout
+batch 18, mobile reflow, a heading-level pass) plus the one picker gap
+above.
+
+**Fixed: GF15-1 (LOW).** `grant_service.py`'s `create_compliance_task` and
+`update_compliance_task` now call the same shared `assert_current_members`
+helper the application path uses (`update_compliance_task` with
+`keep=[task.assigned_to]`, mirroring `update_application`'s shape exactly).
+`GrantDetailPage.tsx`'s picker now renders from `members` filtered by
+`isActiveAccount`, matching `GrantApplicationFormPage.tsx`'s own treatment;
+unlike that sibling form, no "stored assignee" preservation was needed,
+since this form has no edit path for an existing task's assignee. Both
+halves are backed by new guard tests
+(`backend/tests/test_current_member_guards.py::TestTheGrantComplianceTaskAssignee`,
+`frontend/.../GrantDetailPage.complianceAssignee.test.tsx`) seen red
+against the unfixed code first (Pitfall #37), confirmed by temporarily
+reverting each fix and re-running. A pre-existing mocked-task fixture in
+`test_grant_service.py` was missing an `assigned_to` attribute entirely
+(an `AttributeError`, not a behavioral failure) and was given one to match
+the real ORM model's shape. **0 newly flagged.** Full write-up:
+`docs/security-review/GF-22-grants-fundraising.md`'s **Pass 15** section.
+
+**Completion gate:** `flake8`, `black --check` (one file reformatted by
+this pass, then clean) and `isort --check-only` on `app/ tests/ alembic/`
+all clean. `validate_migrations.py --strict` — 804 revisions, single head
+`3daf47506e9e` (unchanged — no migration in scope this window).
+`check_route_permissions.py --strict` — 329 routes, 0 errors/warnings.
+Scoped backend pytest (`-k "grant or fundraising or donor or pledge or
+zeffy or federal_program or current_member_guards"`) — 1626 passed, 1
+pre-existing environment-only skip (`py_vapid`). `npm run typecheck` — 0
+errors. `npm run lint` — 0 errors, 0 warnings. `npx vitest run
+src/modules/grants-fundraising` — 192 passed (35 files, up from 158/29 at
+pass 14). `npx vitest run src/modules/testing/testingRegistry.test.ts` —
+12 passed (unchanged, no new route). `npx playwright test
+src/e2e/mobile-route-integrity.spec.ts --project=chromium` — 1 passed.
+
+Row 22 → ✅ (pending this PR's merge). Next is Feature 23 (Medical
+supplies) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+### 2026-11-21 — Feature 20 (Compliance, pass 15) merged; Feature 21 (Admin hours, pass 15): watchdog pickup, real delta (apparatus-night category override, CSV Source column, shared profile tie-break), 0 fixed, 0 new findings; a new unclaimed module (Apparatus Events) found and recorded
+
+Watchdog pickup (the dedicated `/loop 30m /security-review` session
+remained unreachable). PR [#4497](https://github.com/thegspiro/the-logbook/pull/4497)
+(Feature 20, Compliance, pass 15) had already merged
+(`38b98147014b7a06b85ec456e47c55db90bf080c`) — confirmed via a fresh
+`list_pull_requests` (state=open) finding no `claude/security-review-*`
+head. Row 20 marked ✅; the stale **Open PR** row (still naming #4497) was
+cleared. Row 21 (Admin hours) was confirmed the next `⬜` by reading the
+rotation table directly on a freshly fetched `main`.
+
+Real delta since pass 14 (baseline `9eac8df98`, PR #4224): three
+independent additions to `admin_hours_service.py` — an apparatus night's
+own category now overrides its event-type mapping for hour credit (reads
+`EventApparatusPlan`, org-filtered on both sides of its join, with the
+category id itself validated in-org at every write via `assert_in_org`);
+CSV exports gain an "Imported"/"The Logbook" Source column from a shared,
+non-user-controlled lookup; and the profile priority tie-break now calls
+the shared `ordered_profiles()` instead of a local sort, matching
+Compliance's own already-reviewed rule (Pitfall #29). Eleven frontend
+files adopt the shared `FormField`/`mapServerFieldErrors` 422-mapping
+pattern on three forms, plus two files' AA/AAA contrast correction. All
+traced end to end; no new tenancy, authorization, injection, or
+data-exposure gap. Route re-enumeration: **30/30** (17 + 13), byte-identical
+to pass 14 — no backend endpoint/schema/model file changed.
+
+A new, previously-unclaimed module (**Apparatus Events** — 20 routes, all
+gated) was found writing into this feature's `AdminHoursCategory` table the
+same way Historical Data Import was at pass 14; the touching slice was
+traced and found org-scoped and permission-gated (no finding), and the
+module was recorded as unclaimed (natural home: Feature 13, Apparatus &
+NFC) rather than rediscovered piecemeal.
+
+**0 fixed, 0 newly flagged, 0 findings closed.** No open findings remain in
+this feature. Full write-up: `docs/security-review/AH-21-admin-hours.md`'s
+**Pass 15** section.
+
+Completion gate: flake8/black/isort (CI's pins) clean; `validate_migrations.py
+--strict` — 804 revisions, single head; `generate_schema_docs.py --check` up
+to date; `pytest -k admin_hours` — 176 passed, 1 pre-existing environment
+skip; `check_route_permissions.py --strict` — 329 routes, 0 errors/warnings;
+frontend `typecheck`/`lint` clean; `vitest run src/modules/admin-hours` —
+131/131 (15 files).
+
+Next: Feature 22 (Grants & fundraising).
+
+---
+
+### 2026-11-21 — Feature 19 (Skills testing, pass 15) merged; Feature 20 (Compliance, pass 15): watchdog pickup, real delta (evaluated-shift credit, optional requirements, monthly pace), 0 new findings
+
+Watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable per `ListAgents`).
+PR #4496 (Feature 19, Skills testing, pass 15) was merged by this same
+watchdog session (CI clean, `mergeable_state: clean`); a fresh
+`list_pull_requests` (state `open`) afterward found no
+`claude/security-review-` head, and row 20 (Compliance) was confirmed the
+next `⬜` row directly against the rotation table on a freshly fetched
+`origin/main`.
+
+Baseline `2775b491a` (pass 14's merge, PR #4213). Real delta across all ten
+declared files (1,124 insertions, 68 deletions) — the largest since pass 11:
+a new evaluation-credited requirement type (evaluated shifts, transports,
+refusals, evaluated calls) graded from submitted shift evaluations rather
+than training records; a held-session fix so a session whose completion
+sign-off is still pending is not counted as attended; a new
+session-excusal waiver source; optional (never-graded) compliance-profile
+requirements, with required winning on an id in both lists; profile-order
+and grading-loop refactors (`ordered_profiles`, `grade_members`) continuing
+this feature's own "one definition" work; a monthly-pace figure shown beside
+(never substituted for) the hours total; audit logging on every
+compliance-config/profile save with email addresses redacted; and a fix
+stopping the daily repeat of deadline reminders and non-compliance notices
+for rolling requirements. All traced end to end: the one new query
+(`load_evaluation_credits`) is org-scoped on every table it touches with
+`org_id` always a caller-supplied, already-scoped parameter; the new
+optional-requirements field is populated but never read by any grading
+loop, so it cannot move a member's compliance percentage or standing; every
+other change operates on already-scoped, already-loaded inputs with no
+query of its own. Standing findings CS-8 (attestation dual control) and
+`grace_period_days` (unwired) re-verified unchanged, both owner-accepted,
+by design. Route re-enumeration: 21/21 (13 + 8), unchanged from pass 14;
+`check_route_permissions.py --strict` reports 329 total application routes
+(up from 305 on other features' new pages), 0 errors/warnings.
+
+**0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/CMP-20-compliance.md`'s **Pass 15** section.
+
+**Completion gate:** `flake8`, `black --check` (26.10.1) and
+`isort --check-only` on `app/ tests/ alembic/` all clean.
+`validate_migrations.py --strict` reports 803 revisions and a single head,
+`7b4e2d9c1a63`. `check_route_permissions.py --strict` checked 329 routes
+with 0 errors and 0 warnings. The schema docs are up to date. The scoped
+backend suite had 886 passed and 1 environment-only skip. `npm run
+typecheck` reports 0 errors, and `npm run lint` reports 0 errors and 0
+warnings. 13 compliance-scoped frontend test files: 180 passed.
+
+Row 20 → ✅ (pending this PR's merge). Next is Feature 21 (Admin hours).
+
+### 2026-11-21 — Feature 18 (Training extended, pass 15) merged; Feature 19 (Skills testing, pass 15) — watchdog pickup, true zero delta, 0 new findings
+
+Watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable per `ListAgents`).
+PR #4494 (Feature 18, Training extended, pass 15) had already merged
+(`b07b25cab`) before this iteration started. A fresh `list_pull_requests`
+(state `open`) found no `claude/security-review-` head; row 19 (Skills
+testing) was confirmed the next `⬜` row directly against the rotation table
+on a freshly fetched `main`.
+
+Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, and this
+feature's own `SKT-19-skills-testing.md` (14 prior passes) before reading
+any code. Diffed `c0baae039` (the last commit to touch any of this
+feature's four declared backend files, part of an unrelated PR's merge) to
+current `main` across all four files: empty — byte-identical. No frontend
+file under `frontend/src/modules/training/` matching the skills-testing
+service/store changed either, and no new migration touches a
+skills-testing table. **True zero delta.**
+
+Re-verified every standing fix by direct grep/read against current code
+rather than trusting the prior write-up's citations: SKT-1
+(`apply_updates`), SKT-2/SKT-3/pass-14's two added sites (4
+`assert_different_person` calls), SKT-4 (both `.with_for_update()` sites),
+SKT2-1 (0 literal `is_practice ==`), SKT3-1 (examiner-viewer rejection),
+SKT3-2/SKT4-1/SKT4-2 (pagination + `max_length` caps), SKT4-7 (`update_test`
+still refuses `result`/`overall_score`/non-`in_progress` `status` by reading
+its body, not just its schema), SKT5-1 (`waive_reason` redaction), Pitfall
+#32 (`ACTIVE_ACCOUNT_STATUSES`), and pass 14's milestone hook
+(`process_milestones_for_user`, org-scoped, fails closed). All present at
+their current line citations. Route surface re-enumerated by a fresh AST
+walk: 29/29, unchanged. **0 fixed, 0 new findings.**
+
+One process note recorded in the findings file, not a security finding:
+this feature's pass 14 content (and the code it reviewed) landed on `main`
+via `c0baae039`, the merge for an unrelated PR (#4179, "Postpone an event to
+a new time") — pass 14's own review branch never produced an independently
+visible merge commit. The code pass 14 described was verified to genuinely
+match current `main`, so there is no reason to doubt its findings; noted
+only so a future reader does not go looking for a missing
+`claude/security-review-skills-testing-p14` PR.
+
+`docs/security-review/SKT-19-skills-testing.md`'s **Pass 15** section has
+the full review.
+
+**Completion gate:** `flake8==7.4.1`/`black==26.10.1`/`isort==9.0.2` (CI's
+pins) on `app/ tests/ alembic/` all clean; `validate_migrations.py --strict`
+— 803 revisions, single head `7b4e2d9c1a63`; `check_route_permissions.py
+--strict` — 329 routes, 0 errors/warnings; scoped backend pytest
+(`-k "skill or skt"`) — 642 passed, 1 pre-existing environment-only skip
+(`py_vapid`); `npm run typecheck` — 0 errors; `npm run lint` — 0 errors
+(exit 0).
+
+Row 19 → ✅ (pending this PR's merge); next is Feature 20 (Compliance) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-21 — Feature 17 (Training core, pass 15) merged; Feature 18 (Training extended, pass 15) — watchdog pickup, 0 fixed/0 new findings, real delta already fixed and tested before this pass read it; new scope deferred
+
+Watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable per `ListAgents`).
+PR #4491 (Feature 17, Training core, pass 15) had already merged (`abcf2fc2`)
+before this iteration started. A fresh `list_pull_requests` (state `open`)
+found no `claude/security-review-*` head; row 18 (Training extended) was
+confirmed the next `⬜` row directly against the rotation table on a freshly
+fetched `main`.
+
+The baseline was `fde02bac` (pass 14's merge, PR #4180). Eleven declared
+files carried a real diff (1,080 insertions/373 deletions): a fourth waiver
+source (`SOURCE_SESSION_EXCUSAL`, org-scoped) threaded into training
+grading; row locking added to the requirement-progress credit/reversal
+paths (Pitfall #27); the compliance-profile-grading integration (Pitfall
+#29) threaded through every export plus a PDF-rendering rewrite; centralized
+attachment-path confinement and orphan cleanup on training submissions; a
+body-level refusal of a client-supplied `attachments` field; audit logging
+added to waiver writes and report exports; a former-member refusal on cohort
+enrollment and instructor qualifications; and a provider-connection-reset
+fix keyed off stored values rather than which keys a save merely included.
+All of it was already fixed and tested by the commits that introduced it;
+this pass's job was re-verifying the claims against the current code. 108
+routes across the seven declared endpoint files re-enumerated by AST,
+unchanged from pass 14. **0 fixed, 0 new findings.**
+
+**New scope deferred, not reviewed:** `attendance_waiver_requests.py` (31
+routes) was folded into this feature's scope by `SEC-00-cross-cutting-baseline.md`'s
+own pass-14→15 lap note without itself receiving a seven-dimension review.
+PR #4481, an independent, owner-approved review of that exact surface, is
+open and unmerged — reviewing it now would duplicate that PR's own findings
+and risk flagging code it is already rewriting. Deferred to the pass after
+#4481 merges.
+
+`docs/security-review/TRX-18-training-extended.md`'s **Pass 15** section has
+the full review.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 794
+revisions, single head `d5946cb2bd41`; `check_route_permissions.py --strict`
+— 328 routes, 0 errors/warnings; `generate_schema_docs.py --check` — up to
+date; scoped backend pytest — 3550 passed, 1 pre-existing environment-only
+skip (`py_vapid`); `npm run typecheck` — 0 errors; `npm run lint` — 0 errors
+(exit 0, within `--max-warnings 10`).
+
+Row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills testing) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-21 — Feature 16 (Events & requests, pass 15) merged; Feature 17 (Training core, pass 15) — watchdog pickup, 0 fixed/0 new findings, large real delta already fixed and tested before this pass read it
+
+Watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). PR #4473
+(Feature 16, Events & requests, pass 15) had already merged before this
+iteration started. A fresh `list_pull_requests` (state `open`, 20 PRs)
+found none with a head branch starting `claude/security-review-`; row 17
+(Training core) was confirmed the next `⬜` row directly against the
+feature table.
+
+Baseline `51e6e1b5` (pass 14's merge, PR #4151) — confirmed a genuine
+ancestor of current `main` (`git merge-base --is-ancestor` succeeds) — to
+`b31b8dea` (current `main`). 48 commits touch this feature's declared
+files or its three scope additions (`api/public/shift_evaluations.py`,
+`services/shift_evaluation_link_service.py`,
+`services/training_course_links.py`) with a real diff: 4,043
+insertions/599 deletions across twelve files, plus five migrations
+touching this feature's tables. All 141 routes across the six endpoint
+files (up from 129 at pass 14) were re-enumerated by AST; every one
+carries a recognized auth dependency.
+
+The largest new thing is a public, unauthenticated no-login
+preceptor-evaluation link (`GET`/`POST /api/public/v1/shift-evaluations/
+{token}...`) for an outside agency's preceptor to fill out a shift
+evaluation with no account here. Read in full as the highest-risk new
+surface in the window: SHA-256-hashed single-use tokens, every unusable
+state answering an identical 404, the request body unable to name whose
+record it writes (the token alone resolves member/org/scope), a row lock
+making the submission race-safe (Pitfall #36), no answers forwarded to the
+public "blank form" even when a draft already exists, and
+no-store/no-referrer/noindex headers on every response including error
+paths. No finding.
+
+Several other already-landed, already-tested changes in the window were
+verified against the current code rather than re-flagged: a Course Links
+undo feature (org-scoped, row-locked, no double-undo), a Chief
+self-override refusal (separation of duties), a former-member refusal on
+the training-session lead-instructor field (the `User.is_active` hybrid,
+Pitfall #32), a request-body refusal of the training-record `attachments`
+field (closing an orphaned-file/fake-evidence gap, with a companion
+migration settling existing bare-string rows per Pitfall #20), a
+read-then-write credit-crediting race now closed with row locks (Pitfall
+#27), a new `evaluated_calls` requirement type kept distinct from `CALLS`
+to avoid double-crediting, and a shift's evaluation requirements frozen at
+shift-end via a correctly-reassigned JSON value (Pitfall #12). TR14-2
+re-confirmed unchanged (still ACCEPTED, owner decision 2026-11-10); the
+`enroll_member` concurrency/completeness gap this document's history once
+carried is confirmed resolved in the current code, matching
+`docs/KNOWN_LIMITATIONS.md`'s own "✅ Resolved" banner.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean (flake8 7.5.0, black 26.10.1, isort
+9.0.2 — the latter two are CI's exact pins); `validate_migrations.py
+--strict` — 793 revisions, single head `56377b666eb3`;
+`check_route_permissions.py --strict` — 328 routes, 0 errors/warnings;
+`generate_schema_docs.py --check` — up to date; scoped backend pytest
+(`-k "training or compliance or knowledge_test or shift_evaluation or
+requirement_override or session_attendance or course_link or
+program_milestone or evaluated_calls"`) — 3224 passed, 1 pre-existing
+environment-only skip (`py_vapid`); standing guard suites — 184 passed;
+`npm run typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings;
+`npx vitest run` (this feature's pages/components/modules, 88 files) — 959
+passed.
+
+Row 17 → ✅ (pending this PR's merge); next is Feature 18 (Training
+extended) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+### 2026-11-19 — Feature 10 (Documents & legal, pass 16) merged; Feature 11 (Inventory, pass 16) — watchdog pickup, 3 already-shipped backend changes verified correct, route-count correction, 0 fixed/0 new findings
+
+Watchdog pickup, running on its own 30-minute schedule rather than inside the
+dedicated `/loop 30m /security-review` session (unreachable). PR #4440
+(Feature 10, Documents & legal, pass 16) had merged before this iteration
+started. A fresh `list_pull_requests` (state `open`, perPage 100) found no
+head branch starting `claude/security-review-`; row 11 (Inventory) was the
+next `⬜` row.
+
+Baseline resolution hit the same squash/orphan-merge artifact this log keeps
+recording: neither PR #4106's recorded merge commit (`3ed12fcb5`) nor its
+own branch head (`9e1b5cf41a`) is an ancestor of current `main`. Rather than
+trust a path-scoped `git log` (broken for this exact reason on the last two
+passes), the delta was found with a direct tree diff between that branch
+head and `origin/main`, which works between any two commits regardless of
+shared ancestry.
+
+AST-enumerating all six endpoint files gives 199 routes. Re-running the same
+count against the pass-15 snapshot itself also returns 199 — pass 15's own
+"198" was a miscount, not a route added since; the tree diff confirms zero
+new route decorators and an identical set. All 199 still carry a recognized
+auth dependency.
+
+Three real backend changes, all already shipped and all verified correct
+against the running code: the inventory WebSocket dropped its `?token=`
+query-param fallback and gained a new `inventory.manage` gate before
+`ws_manager.connect()` (previously any authenticated org member could watch
+who holds/checks out which item — an INV-9-class over-exposure, now closed,
+with the frontend's existing `4003`-is-terminal handling needing no change);
+the impact-plan PDF export is now audit-logged and its filename is quoted;
+the two size-preferences GET routes return `null` instead of 404 for "none
+saved" (the `_require_self_or_quartermaster` gate is unchanged and still
+runs first — this closes a logged-404-on-every-visit annoyance, not an
+authz gap). The frontend's 62-file, +6296/-2355 delta (the "Forms batch
+16–20" rollout and the inventory AAA contrast pass) was swept in full for
+every injection/credential/storage pattern this checklist covers: zero
+matches. INV-16, INV-17 (both FLAGGED) and INV-22 (owner-accepted)
+re-confirmed OPEN, unaffected — none of their underlying functions appear in
+this window's diff. See `docs/security-review/INV-11-inventory.md`'s **Pass
+16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 786
+revisions, single head `0d54dd90d6ba`; `check_route_permissions.py --strict`
+— 327 routes, 0 errors/warnings; scoped backend suite (`-k "inventory or nfc
+or kiosk or label"`) — 2136 passed, 1 pre-existing environment-only skip
+(`py_vapid`); `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run src/modules/inventory` — 1983 passed (127
+files).
+
+Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-19 — Feature 09 (Medical screening, PHI, pass 16) merged; Feature 10 (Documents & legal, pass 16) — watchdog pickup, DOC-31 confirmed resolved, 1 new finding fixed (DOC-32, LOW)
+
+Watchdog pickup, running on its own 30-minute schedule rather than inside the
+dedicated `/loop 30m /security-review` session (unreachable). PR #4439
+(Feature 09, Medical screening, pass 16) had merged (`b7f84513dd`) before
+this iteration started. A fresh `list_pull_requests` (state `open`) found no
+head branch starting `claude/security-review-`; row 10 (Documents & legal)
+was the next `⬜` row. Re-checked immediately before pushing: still no
+`claude/security-review-documents-legal-p16` branch or open PR.
+
+Pass 15's own recorded baseline (`2b1884237`) was again not an ancestor of
+current `main` (the same squash/orphan-merge artifact this log keeps
+recording); the real PR #4103 merge commit (`fb288610f0`) was used instead
+and is an ancestor. Real delta: seven backend files, two frontend files.
+Two owner-approved surfaces reviewed in full: a new boundary with the
+"History" feature (a catalogued document lives in a protected system
+folder and is refused for rename/move/delete from the Documents screens,
+with no path found to file one anywhere else) and legal-document revert/
+edit attribution (W54-3/W54-4), plus the new legal-markup renderer
+(`legalMarkup.ts`/`LegalMarkup.tsx`, public-reachable) confirmed XSS-safe
+by construction (plain React text nodes, no `dangerouslySetInnerHTML`).
+
+DOC-31 (Finance receipt lock-ordering), pass 15's one standing OPEN item,
+is now resolved — the fix landed in commits outside pass 15's baseline
+despite an earlier author-date (the same history-reordering class as the
+baseline mismatch, just affecting when a fix actually merged rather than
+when a review did). Re-verified directly against the running code: the
+NOWAIT locking reads, the check-request extension and the indexed minutes
+clear are all present and both race-test files still pass.
+
+New finding DOC-32 (LOW, FIXED): `delete_folder`'s cascade bulk-deletes
+documents with no per-row History check, unlike `delete_document`'s
+explicit refusal — not reachable today (the only writer of catalogued
+documents always files into the `is_system`-protected History root, which
+`delete_folder` already refuses on two independent checks), but the bulk
+delete had no check of its own, so a future change to either of those
+layers would have silently destroyed catalogued records. Fixed with the
+same refusal, re-checked before any write; regression test constructs the
+otherwise-unreachable case directly and was seen failing before the fix.
+Routes re-enumerated by AST: still 26, unchanged. Full write-up:
+`docs/security-review/DOC-10-documents-legal.md`'s **Pass 16** section.
+
+### 2026-11-19 — Feature 08 (Membership pipeline, pass 17) merged; Feature 09 (Medical screening, PHI, pass 16) — watchdog pickup, found a real delta a git-history artifact had hidden (MS-18 now fully resolved, new reminder service reviewed), 0 fixed, 0 new findings
+
+Watchdog pickup, running on its own 30-minute schedule rather than inside the
+dedicated `/loop 30m /security-review` session (confirmed unreachable via
+`ListAgents`, no reachable agents). PR #4438 (Feature 08, Membership
+pipeline, pass 17) had merged (`81ed96b021`) before this iteration started.
+A fresh `list_pull_requests` (state `open`) found no head branch starting
+`claude/security-review-`; row 09 (Medical screening, PHI) was the next `⬜`
+row. Re-checked immediately before pushing (per this run's own
+concurrent-session warning): still no `claude/security-review-medical*`
+branch or open PR.
+
+PR #4098 (pass 15)'s own recorded head and base commits are not ancestors of
+current `main` (the squash/orphan-merge artifact this file has recorded
+before, this time hitting the PR's own commits), and a plain path-scoped
+`git log` over this feature's declared files returned only 2 unrelated
+commits, ever — which would have read as "no delta" and was not. The real
+delta was found instead by listing `backend/alembic/versions/` in date order
+and grepping for the encryption primitives directly: migration `ac1687769b62`
+(2026-11-08) extends MS-18's encryption from `status` alone (pass 15) to
+`screening_type` and `requirement_id` as well (owner decision 2026-11-06,
+"type + link + audit") — read in full and verified against its own
+real-rows migration test, a repo-wide sweep for any remaining SQL comparison
+on either now-ciphertext column (none), and org-scoping on every Python-side
+reader of the decrypted value. A new file, `screening_reminder_service.py`
+(W71b-4, screening expiry reminders), was reviewed for the first time:
+reuses the Compliance tab's own due-date rule, is wired through
+`NotificationRuleResolver` with its trigger confirmed in `ENFORCED_TRIGGERS`,
+sends email only (never a bell/log entry, which would put the screening type
+back at rest in plaintext), is idempotent via a unique per-tier claim, and
+logs only ids/counts, never PHI. `KNOWN_LIMITATIONS.md` already correctly
+documented both; only this file's own MS-18 status needed updating to
+RESOLVED. MS-15 (roster, unbounded, long-open, owner-accepted) re-confirmed
+OPEN, unchanged. All 16 routes re-enumerated by AST, unchanged. 0 fixed, 0
+new findings. Full write-up:
+`docs/security-review/MS-09-medical-screening.md`'s **Pass 16** section.
+
+### 2026-11-19 — Feature 07 (Users & organizations, pass 16) merged; Feature 08 (Membership pipeline, pass 17) — watchdog pickup, no real backend delta, a stale route-count corrected, 0 fixed, 0 new findings
+
+Watchdog pickup, running on its own 30-minute schedule rather than inside
+the dedicated `/loop 30m /security-review` session (confirmed unreachable
+via `ListAgents`, no reachable agents). PR #4436 (Feature 07, Users &
+organizations, pass 16) had merged (`c552cd3cd`) before this iteration
+started. A fresh `list_pull_requests` (state `open`) found no head branch
+starting `claude/security-review-`; row 08 (Membership pipeline) was the
+next `⬜` row. Nine non-merge commits touched the feature's declared files
+since pass 16's baseline (`4f05d3457`), none backend-security-relevant:
+eight UI/accessibility/bundle-size changes, plus one line in
+`membership_pipeline_service.py` that an unrelated feature's own encryption
+change forced to move a `screening_type` filter from SQL into Python
+(traced as a correct like-for-like port). Also corrected pass 16's own
+route count for `membership_pipeline.py` (64, not 63 — a pre-existing
+undercount, not a new route). 0 fixed, 0 new findings; MP-10 (listing half)
+and MP-22 (both long-open, owner-accepted) re-verified unchanged. Full
+write-up: `docs/security-review/MP-08-membership-pipeline.md`'s **Pass 17**
+section.
+
+### 2026-11-19 — Feature 06 (Elections & ballots, pass 16) merged; Feature 07 (Users & organizations, pass 16) — watchdog pickup, own-email step-up gap closed, new leave-requests surface traced end to end, 0 fixed, 0 new findings
+
+Watchdog pickup, running on its own 30-minute schedule rather than inside
+the dedicated `/loop 30m /security-review` session (confirmed unreachable
+via `ListAgents`, no reachable agents). PR #4435 (Feature 06, Elections &
+ballots, pass 16) had merged (`762f1c93a`) before this iteration started.
+A fresh `list_pull_requests` (state `open`) found no head branch starting
+`claude/security-review-`; row 07 (Users & organizations) was the next
+`⬜` row. 19 non-merge commits touched the feature's declared files since
+pass 15's baseline, most significantly `3eb2d7a40`/`f20928e79` (step-up now
+required on a member's own email change, not just a colleague's — closes a
+forgot-password-chaining gap) and `b30cd2ac3` (a brand-new `leave_requests.py`
+surface, traced end to end for org scoping, separation of duties, and the
+locked-vote pattern from pitfall #27). 0 fixed, 0 new findings; USR-5 and
+USR-8 (both long-open, owner-accepted) re-verified unchanged. Full write-up:
+`docs/security-review/USR-07-users-organizations.md`'s **Pass 16** section.
+
+### 2026-11-19 — Feature 05 (Finance & approvals, pass 16) merged after a 14-hour idle PR; Feature 06 (Elections & ballots, pass 16) — watchdog pickup, voter-eligibility engine traced end to end, 0 fixed, 0 new findings
+
+Watchdog pickup, running on its own 30-minute schedule rather than inside
+the dedicated `/loop 30m /security-review` session (confirmed unreachable
+via `ListAgents`, no reachable agents). PR #4430 (Feature 05, Finance &
+approvals, pass 16) was found still open: every one of its 26 check runs
+had completed `success`, `mergeable_state` was `clean`, and its only
+comments were Codex and Copilot both reporting they had run out of review
+quota — not a real finding — yet it had sat unmerged for roughly 14 hours.
+The watchdog merged it (`2f46fb26f`) rather than treating a quota-exhausted
+bot comment as a blocking review. A fresh `list_pull_requests` (state
+`open`) then found no head branch starting `claude/security-review-`; row
+06 (Elections & ballots) was the next `⬜` row.
+
+Baseline `683d044936` (pass 15's merge, PR #4043). This window's real delta
+is substantial: 66 files, +7136/-2403, across 8 non-merge commits. The
+headline change is a new per-member-type voter eligibility engine (version
+2 rules, `app/services/voter_rules.py`) that replaces version-1
+election-wide rules plus each membership tier's own voting benefits with
+one explicit `may_vote`/wait/attendance row per member status, department
+tier, or administrative/social class — a member must pass their status row
+**and**, when administrative or social, their class row (owner decision
+2026-11-13). Alongside it: per-election and per-ballot-item rule overrides
+that require and audit a secretary's stated reason whenever they differ
+from the department's copied defaults; a new Meeting Attendance page and
+service with one genuinely new route (`GET /{election_id}/attendance/
+{user_id}/meetings`, `elections.manage`-gated, org-scoped member
+resolution); and several smaller refinements (shared off-roll reasoning,
+an attendance look-back fix, ten election/minutes notices moving onto the
+existing editable-template mechanism).
+
+The voter-eligibility engine was traced end to end rather than taken on its
+own docstrings: the Pydantic schema is tightly bounded (`extra="forbid"`,
+`MAX_TYPE_RULES=60`, `MAX_WAITING_PERIOD_MONTHS=600`, regex-validated row
+keys), the override-reason requirement is enforced server-side
+(`_settle_override_reason` raises 400 when rules differ with no reason
+given, on both the election and per-item paths), the "both rows must pass"
+AND semantics hold by tracing `type_rules_reason`'s loop directly, and
+malformed stored rules degrade to "no rule" rather than raising (consistent
+with the pre-existing `_stored_eligibility` pattern). Nomination
+accept-on-behalf stays `elections.manage`-gated and org-scoped
+independently of the nominee's own `elections.view`-gated accept/decline
+path. `elections.py` re-enumerated fresh by AST: 76 routes, up from pass
+15's 75 (+1, the new attendance route, correctly excluded from the
+self-service permissionless baseline).
+
+**0 fixed, 0 new findings.** All standing findings (ELEC-12, ELEC-14,
+ELEC-16, ELEC-28/W50-10, ELEC-40, ELEC-48, ELEC-50, ELEC-51) re-confirmed
+unchanged by direct re-read of their files. **ELEC-49 closed** (a stale
+addendum left in circulated minutes after a rollback): this window's own
+commits added `supersede_filed_results`, a real dated-correction path for
+the rollback case, plus a backfill migration for rows left stale by an
+earlier rollback — matching `docs/KNOWN_LIMITATIONS.md`'s existing
+"Resolved" note for this item, verified by re-reading the code rather than
+taken on that note's word.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+single head `bbeb4867d393`, 785 revisions; `check_route_permissions.py
+--strict` — 327 routes, 0 errors/warnings; scoped backend suite
+(`-k "election or ballot or vote or candidate or attendance"`) — 2486
+passed, 1 pre-existing environment-only skip (`pywebpush`); `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings.
+
+Row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
+organizations) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+### 2026-11-18 — Feature 04 (Storefront & payments, pass 16) merged; Feature 05 (Finance & approvals, pass 16) — watchdog pickup, real delta traced end to end, 0 fixed, 0 new findings; tracker file-path correction
+
+Watchdog pickup. PR #4359 (Feature 04, Storefront & payments, pass 16) had
+merged before this iteration started. `list_pull_requests` (state `open`)
+found no head branch starting `claude/security-review-`; row 05 (Finance &
+approvals) was the next `⬜` row, confirmed on a freshly fetched,
+fast-forwarded `main` (`b25ea82cff`).
+
+**Tracker correction.** The feature table's principal-code column named this
+feature's QuickBooks file `services/quickbooks_online.py`; no such file
+exists. The real surface is `api/v1/endpoints/quickbooks_online.py` (8
+routes), `services/quickbooks_online_client.py` and `services/
+quickbooks_sync_service.py`, corrected in row 05.
+
+Baseline `683d044936` (pass 15's merge, PR #4043). This window's real delta
+is substantial and new: a ~2,200-line live QuickBooks Online connection
+(owner decision 2026-11-01) across the three files above plus a migration;
+`approve_step`/`deny_step` moved from `require_permission("finance.approve")`
+to a bare `Depends(get_current_user)`, with step-level authorization
+relocated into the service layer (a named approver may act without holding
+`finance.approve`, per the same 2026-11-01 decision); nullable budget-request
+drafts (amount/justification gated at submission instead of at the column);
+two new approval-notification modules (`finance_second_approval.py`,
+`finance_approval_notifications.py`); and a cash-advance statements table.
+`finance.py` re-enumerated fresh by AST: 150 routes, +13/−0 against pass 15's
+own 137, diffed by `(method, path)` rather than trusted.
+
+The approve/deny permission change was traced end to end rather than taken
+on its commit message, since it is exactly the shape of change (an
+authorization boundary moving from the endpoint to the service) this pass's
+instructions called out: the step lookup is still org-scoped via the
+`ApprovalChain` join and row-locked before anything else runs; the
+named-approver matcher reconstructs the org check per approver type that
+`require_permission` used to imply; an unassigned step still requires
+`finance.approve` (the permission-model change does not widen "nobody named"
+to "anyone signed in"); and the self-approval guards
+(`assert_different_person`/`assert_not_raiser`) are unaffected, since being
+named on a step and being that step's own request's requester are orthogonal
+checks that both still run before any mutation. The QuickBooks OAuth tokens
+are `EncryptedText` (the app's existing AES-256-GCM column type); the OAuth
+dance is CSRF/replay-guarded by a signed state, a double-submitted nonce and
+a single-use encrypted pending-attempt, with a `finance.manage` re-check at
+completion; the integration is outbound-only (no inbound webhook), so
+idempotency is a unique constraint on `(org, payment_type, payment_id)` plus
+a sync lease rather than signature verification. The dual-approval
+second-approver logic resolves an emailed approval's address to a member by
+comparing encrypted-email fingerprints (never a plaintext SQL comparison), so
+one person cannot supply both approvals under one identity. 0 fixed, 0 new
+findings — every area flagged for scrutiny held up to a direct trace. Full
+write-up: `docs/security-review/FIN-05-finance-approvals.md`'s **Pass 16**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean (CI's pinned versions 7.4.1/26.10.1/9.0.2,
+reached via explicit interpreter/tool paths after this sandbox's bare
+`python3`/`black`/`flake8`/`isort` resolved to different, older installs);
+`validate_migrations.py --strict` — single head `053d3e96b4fa`, 784
+revisions; `check_route_permissions.py --strict` (repo root) — 327 routes, 0
+errors/warnings; scoped backend suite (`-k "finance or approval or
+quickbooks"`, run under `/usr/bin/python3.13`, the interpreter the backend's
+own dependencies are actually installed against) — 1973 passed, 2
+pre-existing environment-only skips (`pywebpush`, no time-zone tables), 0
+failed; `npm run typecheck` — 0 errors; `npm run lint` — 0 errors/warnings.
+
+Row 05 → ✅ (pending this PR's merge). Next is Feature 06 (Elections &
+ballots).
 
 ### 2026-11-16 — Feature 03 (Public surface & webhooks, pass 16) merged; Feature 04 (Storefront & payments, pass 16) — watchdog-delegated, real delta re-verified, 0 fixed, 0 new findings
 
@@ -50120,3 +51777,63 @@ passed. `npm run typecheck` reports 0 errors, and `npm run lint` reports 0
 errors and 0 warnings.
 
 Row 17 → ✅ (pending this PR's merge). Next is Feature 18 (Training extended).
+
+### 2026-11-20 — Feature 12 (Facilities, pass 16) merged; Feature 13 (Apparatus & NFC, pass 23): watchdog pickup, 0 fixed, 0 new findings
+
+PR #4446 merged as `c5a93595d`. A fresh `list_pull_requests` (state=open)
+found no `claude/security-review-*` head, and row 13 was the next `⬜` row,
+confirmed directly against the table rather than against #4446's own
+narrative "next in the rotation" note (which named this same feature,
+consistent for once).
+
+Baseline `0d2a8d2fa` (PR #4109's merge, pass 22) — a genuine ancestor of
+current `main`. Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/apparatus.md` and `docs/app-review/apparatus.md` (both
+re-grepped for `🚩`/`OPEN`/`FLAGGED` — zero open items in either) and this
+feature's own `AP-13-apparatus-nfc.md` pass history before reading any code;
+no open finding existed entering this pass.
+
+Real delta: exactly two changed backend files, both read in full.
+`apparatus_service.py` (+18/−10) carries a response-completeness fix in
+`archive_apparatus` (the same shape as Facilities pass 16's
+`update_facility`/`restore_facility`) and a new server-side refusal of
+former members as apparatus operators, using the correct
+`User.is_active`/`ACTIVE_ACCOUNT_STATUSES` mechanism (CLAUDE.md Pitfall
+#32), paired with a matching `OperatorModal.tsx` picker filter.
+`external_apparatus_service.py` (+204/−10) adds a new feature — merging two
+differently-spelled records for the same outside agency — that locks both
+agency rows before mutating anything, filters every unit move and shift
+relabel by `organization_id`, 404s on a cross-tenant source/target id rather
+than leaking, and already carries a dedicated real-connection race test for
+the one concurrency finding the feature needed (a shift logged mid-merge
+reading a stale name), fixed and tested on a prior, non-rotation PR (#4404)
+and re-verified here as still correctly locked. Every other declared file
+(`apparatus.py`, `nfc_tags.py`, `evoc_level_service.py`,
+`driver_exception_service.py`, `nfc_tag_service.py`,
+`nfc_card_admin_service.py`, `nfc_card_status_sync.py`,
+`mcp/tools/apparatus.py`, both models, both schemas) is byte-identical to
+pass 22. 94+11=105 routes re-enumerated by AST, unchanged. No migration in
+the window touches an `apparatus`/`nfc` table. Frontend: 22 files in
+`modules/apparatus` changed, all from the repo-wide forms-rollout pattern
+plus the paired picker filter and a table-reflow class swap; a full grep
+sweep found no blocking-dialog/XSS/bare-`toHaveBeenCalledWith()` pattern.
+
+**0 fixed, 0 new findings** — both reviewed backend changes were already
+correct, security-positive fixes landed by their own feature commits rather
+than by this rotation. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`'s
+**Pass 23** section.
+
+**Completion gate:** `flake8`, `black --check` and `isort --check-only` on
+`app/ tests/ alembic/` all clean. `validate_migrations.py --strict` — 787
+revisions, single head `a541e82fef9f`. `check_route_permissions.py --strict`
+— 327 routes, 0 errors/warnings. Scoped backend pytest (`-k "apparatus or
+nfc or evoc or driver_exception or external_agency"`) — 1417 passed, 1
+pre-existing environment-only skip (`py_vapid`). Standing guard suites
+(capacity locking, org-scoping ratchet, LIKE escaping, CSV sweep, migration
+chain, `create_all`-table tolerance, account-status gates, log-call shape,
+baseline member grants) — 205 passed. `npm run typecheck` — 0 errors.
+`npm run lint` — 0 errors, 0 warnings. `npx vitest run src/modules/apparatus`
+— 150 passed (17 files, up from 123/15 at pass 22).
+
+Row 13 → ✅ (pending this PR's merge). Next is Feature 14 (Equipment check &
+shifts) — re-check `list_pull_requests` fresh rather than trusting this note.

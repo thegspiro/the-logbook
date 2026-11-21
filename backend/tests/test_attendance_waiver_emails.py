@@ -54,11 +54,13 @@ from app.services.email_templates_attendance_waivers import DEFAULT_TEMPLATE_DEF
 from tests.waiver_request_support import (
     assign,
     load,
+    make_meeting_event,
     make_member,
     make_org,
     make_position,
     make_requirement,
     make_session,
+    set_meeting_policy,
     set_policy,
     uid,
     utc,
@@ -281,6 +283,63 @@ class TestDeciding:
         )
 
         assert [m.to for m in outbox.sent] == [dept.member.email]
+
+
+@pytest.mark.integration
+class TestAMeetingRequestLinksToTheMeetingPage:
+    """A meeting request's links open ``/meetings/waiver-requests/{id}``.
+
+    The training page reads only training requests, so a meeting request's
+    Approve, Deny and Open-the-request links pointed there led to a 404.
+    """
+
+    async def _meeting_request(self, db, dept):
+        await set_meeting_policy(
+            db, dept.org, approver_position_ids=[dept.secretary_pos]
+        )
+        meeting = await make_meeting_event(db, dept.org, DRILL)
+        return await AttendanceWaiverService(db, MEETING_WORKFLOW).submit(
+            dept.org, dept.member, meeting, None, REASON
+        )
+
+    async def test_the_deciders_buttons_and_links(self, db_session, dept, outbox):
+        request = await self._meeting_request(db_session, dept)
+
+        (message,) = outbox.sent
+        assert message.to == dept.secretary.email
+        assert message.type == EmailTemplateType.MEETING_WAIVER_REQUESTED
+        page = f"/meetings/waiver-requests/{request.id}"
+        assert f"{page}?action=approve" in message.context["review_buttons_html"]
+        assert f"{page}?action=deny" in message.context["review_buttons_html"]
+        assert f"{page}?action=approve" in message.context["review_links_text"]
+        assert "/attendance-waivers/" not in _values(message)
+
+    async def test_the_members_decision_link(self, db_session, dept, outbox):
+        request = await self._meeting_request(db_session, dept)
+        outbox.sent.clear()
+
+        await AttendanceWaiverService(db_session, MEETING_WORKFLOW).approve(
+            dept.org, dept.secretary, request.id
+        )
+
+        (message,) = outbox.to(dept.member.email)
+        assert message.type == EmailTemplateType.MEETING_WAIVER_DECIDED
+        assert message.context["request_url"].endswith(
+            f"/meetings/waiver-requests/{request.id}"
+        )
+
+    async def test_a_training_request_keeps_the_training_page(
+        self, db_session, dept, outbox
+    ):
+        request = await _submit(db_session, dept)
+        await AttendanceWaiverService(db_session).approve(
+            dept.org, dept.officer, request.id
+        )
+
+        (message,) = outbox.to(dept.member.email)
+        assert message.context["request_url"].endswith(
+            f"/attendance-waivers/{request.id}"
+        )
 
 
 @pytest.mark.integration
@@ -507,6 +566,7 @@ async def _render(template_type: EmailTemplateType, context: Dict[str, str]):
 def _request(**fields) -> SimpleNamespace:
     values = dict(
         id="req-1",
+        workflow=AttendanceWaiverWorkflow.TRAINING_SESSION,
         event_title_snapshot="Hose & Ladder Drill",
         session_date=date(2026, 11, 20),
         reason=REASON,
@@ -621,7 +681,9 @@ class TestTheRenderedEmail:
         assert "?action=" not in html
 
     def test_the_buttons_escape_their_urls(self):
-        markup = review_buttons_html('a"><script>x</script>')
+        markup = review_buttons_html(
+            AttendanceWaiverWorkflow.TRAINING_SESSION, 'a"><script>x</script>'
+        )
 
         assert "<script>" not in markup
         assert "&quot;" in markup

@@ -37,6 +37,7 @@ from app.models.call_tracking import (
     CallTrackingMode,
     OrgCallResponse,
 )
+from app.models.event import Event
 from app.models.event_request import EventRequest
 from app.models.training import (
     AssignmentStatus,
@@ -68,6 +69,7 @@ from app.schemas.scheduling import (
     GenerateShiftsRequest,
     LateSignupOpenRequest,
     MemberHoursHistoryResponse,
+    MemberShiftHistoryResponse,
     OpenSwapPickupResponse,
     PlatoonBulkAssign,
     PlatoonBulkAssignResult,
@@ -169,7 +171,7 @@ from app.services.standing_shift_service import MAX_SERIES_DAYS, StandingShiftSe
 from app.utils.delete_outcome import set_delete_outcome
 from app.utils.hours import hours_from_minutes
 from app.utils.model_updates import apply_updates
-from app.utils.org_timezone import resolve_org_today
+from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.outreach_roles import normalize_staffing_roles
 from app.utils.positions import UnknownSeatError, normalize_stored_positions
 
@@ -178,6 +180,12 @@ router = APIRouter()
 # Maximum span for the open-shifts lookup window (about a year), so a caller
 # cannot request an arbitrarily wide date range.
 MAX_OPEN_SHIFTS_DAYS = 366
+
+# How far ahead the default open-shifts window lists outreach signup sheets,
+# against 30 days for duty shifts (owner decision, 2026-11-20). An outreach
+# event is booked weeks ahead behind its own lead time, so a 30-day window hid
+# most of them from the members asked to staff them.
+OUTREACH_LOOKAHEAD_DAYS = 60
 
 # The day panel asks about one day's shifts; a very busy station might run a
 # dozen. The cap is what stops a caller asking about a whole year in one go.
@@ -212,6 +220,33 @@ def _safe_detail(prefix: str, error: str | None) -> str:
 def _is_shift_officer(shift, user: User) -> bool:
     """True if ``user`` is the named on-duty officer of ``shift``."""
     return bool(shift.shift_officer_id and str(shift.shift_officer_id) == str(user.id))
+
+
+def _own_hours_locked(user: User) -> str | None:
+    """The member whose hours ``user`` may not record on a shift they manage:
+    themselves, when they are admitted as the shift's officer without
+    ``scheduling.manage``; None when they hold it.
+
+    Owner decision 2026-11-16 (ADV2-8). Pre-shift work refuses a shift
+    officer approving their own time and events refuse an organizer recording
+    their own attendance; close-out is held to the same line. The officer
+    checks in and out like any member, or a scheduling admin records them.
+    Only meaningful after ``_authorize_shift_management`` has admitted them.
+    """
+    if user_has_permission(user, "scheduling.manage"):
+        return None
+    return str(user.id)
+
+
+_OWN_HOURS_REFUSED = (
+    "You cannot record your own hours on a shift you run. "
+    "Check in and out yourself, or ask a scheduling admin."
+)
+
+
+def _with_lock(state: dict, user: User) -> dict:
+    """The close-out state, with the row the caller may not change named."""
+    return {**state, "own_hours_locked_user_id": _own_hours_locked(user)}
 
 
 def _can_view_platoon_roster(shift, user: User) -> bool:
@@ -479,6 +514,16 @@ async def _enrich_shifts(
             outreach_needs[str(req.staffing_shift_id)] = normalize_staffing_roles(
                 req.staffing_roles
             )
+        # A sheet an outreach event opened directly keeps its roles on the
+        # event (owner decision, 2026-11-20).
+        event_rows = await service.db.execute(
+            select(Event.staffing_shift_id, Event.staffing_roles).where(
+                Event.staffing_shift_id.in_(outreach_ids),
+                Event.organization_id == str(organization_id),
+            )
+        )
+        for sheet_id, roles in event_rows.all():
+            outreach_needs.setdefault(str(sheet_id), normalize_staffing_roles(roles))
 
     # Resolve shift officer names
     officer_ids = list({s.shift_officer_id for s in shifts if s.shift_officer_id})
@@ -754,6 +799,11 @@ async def get_open_shifts(
             else await resolve_org_today(db, current_user.organization_id)
         )
         end = date.fromisoformat(end_date) if end_date else start + timedelta(days=30)
+        # Only the default window reaches further for outreach sheets; a caller
+        # who named an end date gets exactly that range.
+        outreach_end = (
+            None if end_date else start + timedelta(days=OUTREACH_LOOKAHEAD_DAYS)
+        )
     except ValueError:
         raise HTTPException(
             status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
@@ -789,6 +839,7 @@ async def get_open_shifts(
             end,
             apparatus_id=apparatus_id,
             exclude_user_id=str(current_user.id),
+            outreach_end_date=outreach_end,
         )
     else:
         shifts_list = await service.get_claimable_shifts(
@@ -797,6 +848,7 @@ async def get_open_shifts(
             start,
             end,
             apparatus_id=apparatus_id,
+            outreach_end_date=outreach_end,
         )
 
     return await _enrich_shifts(service, current_user.organization_id, shifts_list)
@@ -1000,6 +1052,9 @@ async def finalize_shift(
 
     Once finalized the shift is considered closed and attendance is locked.
 
+    An officer admitted on the shift alone may not credit themselves through
+    ``manual_hours`` (ADV2-8, 403).
+
     **Permissions required:** scheduling.manage, or being the shift's officer.
     """
     service = SchedulingService(db)
@@ -1015,6 +1070,9 @@ async def finalize_shift(
             status_code=403,
             detail="Only a scheduling admin can close out without the trainee reports",
         )
+    locked = _own_hours_locked(current_user)
+    if locked and any(str(e.user_id) == locked for e in body.manual_hours or []):
+        raise HTTPException(status_code=403, detail=_OWN_HOURS_REFUSED)
     manual = None
     if body.manual_hours:
         manual = [
@@ -1148,7 +1206,7 @@ async def get_shift_closeout_state(
         raise HTTPException(
             status_code=404, detail=_safe_detail("Shift not found.", error)
         )
-    return state
+    return _with_lock(state, current_user)
 
 
 @router.patch(
@@ -1165,30 +1223,38 @@ async def save_shift_closeout_attendance(
     Saves immediately rather than holding the answer until the last screen, so
     an interrupted close-out keeps the hours already confirmed.
 
+    An officer admitted on the shift alone may send their own row back but
+    not change it (ADV2-8): that is 403, and nothing in the save is applied.
+
     **Permissions required:** scheduling.manage, or being the shift's officer.
     """
     service = SchedulingService(db)
     await _authorize_shift_management(
         service, current_user, shift_id, "scheduling.manage"
     )
-    state, error = await service.save_closeout_attendance(
-        shift_id,
-        current_user.organization_id,
-        [
-            {
-                "user_id": str(e.user_id),
-                "checked_in_at": e.checked_in_at,
-                "checked_out_at": e.checked_out_at,
-            }
-            for e in body.entries
-        ],
-    )
+    try:
+        state, error = await service.save_closeout_attendance(
+            shift_id,
+            current_user.organization_id,
+            [
+                {
+                    "user_id": str(e.user_id),
+                    "checked_in_at": e.checked_in_at,
+                    "checked_out_at": e.checked_out_at,
+                }
+                for e in body.entries
+            ],
+            locked_user_id=_own_hours_locked(current_user),
+        )
+    except PermissionError:
+        await db.rollback()
+        raise HTTPException(status_code=403, detail=_OWN_HOURS_REFUSED)
     if state is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to save attendance.", error),
         )
-    return state
+    return _with_lock(state, current_user)
 
 
 @router.patch("/shifts/{shift_id}/closeout/calls", response_model=CloseoutStateResponse)
@@ -1231,7 +1297,7 @@ async def save_shift_closeout_calls(
             status_code=400,
             detail=_safe_detail("Unable to save call count.", error),
         )
-    return state
+    return _with_lock(state, current_user)
 
 
 @router.post("/shifts/{shift_id}/reopen", response_model=ShiftResponse)
@@ -1435,12 +1501,17 @@ async def add_attendance(
 ):
     """Add an attendance record to a shift.
 
+    An officer admitted on the shift alone may not add their own record
+    (ADV2-8): they check in like any member, or a scheduling admin adds it.
+
     **Permissions required:** scheduling.manage, or being the shift's officer.
     """
     service = SchedulingService(db)
     await _authorize_shift_management(
         service, current_user, shift_id, "scheduling.manage"
     )
+    if _own_hours_locked(current_user) == str(attendance.user_id):
+        raise HTTPException(status_code=403, detail=_OWN_HOURS_REFUSED)
     result, error = await service.add_attendance(
         shift_id, current_user.organization_id, attendance.model_dump(exclude_none=True)
     )
@@ -3550,6 +3621,70 @@ async def get_member_hours_history(
     service = SchedulingService(db)
     return await service.get_my_hours_history(
         str(user_id), current_user.organization_id, year
+    )
+
+
+async def _resolve_shift_history_year(db: AsyncSession, organization_id, year):
+    if year is not None:
+        return year
+    tz = await resolve_scheduling_timezone(db, organization_id)
+    return datetime.now(tz).date().year
+
+
+@router.get("/my-shift-history", response_model=MemberShiftHistoryResponse)
+async def get_my_shift_history(
+    year: int | None = Query(None, ge=2000, le=2100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The caller's own shifts in one year: the department's own and those
+    logged with other departments, one row per shift.
+
+    The rows behind ``/my-hours-history``, on the same basis — the caller's
+    own record, so authentication is the only gate. Defaults to the current
+    year in the department's timezone.
+    """
+    service = SchedulingService(db)
+    return await service.get_member_shift_history(
+        current_user.id,
+        current_user.organization_id,
+        await _resolve_shift_history_year(db, current_user.organization_id, year),
+    )
+
+
+@router.get(
+    "/members/{user_id}/shift-history", response_model=MemberShiftHistoryResponse
+)
+async def get_member_shift_history(
+    user_id: UUID,
+    year: int | None = Query(None, ge=2000, le=2100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """One member's shifts in one year, for their profile — the rows behind
+    ``/members/{user_id}/hours-history``, under the same rule: the member may
+    read their own, anyone else needs ``scheduling.report``, and a member of
+    another organization reads as not found (pitfall #14).
+    """
+    if str(user_id) != str(current_user.id) and not user_has_permission(
+        current_user, "scheduling.report"
+    ):
+        raise HTTPException(status_code=403, detail="Not permitted")
+    member = (
+        await db.execute(
+            select(User.id).where(
+                User.id == str(user_id),
+                User.organization_id == str(current_user.organization_id),
+            )
+        )
+    ).scalar_one_or_none()
+    if member is None:
+        raise HTTPException(status_code=404, detail="Member not found")
+    service = SchedulingService(db)
+    return await service.get_member_shift_history(
+        str(user_id),
+        current_user.organization_id,
+        await _resolve_shift_history_year(db, current_user.organization_id, year),
     )
 
 

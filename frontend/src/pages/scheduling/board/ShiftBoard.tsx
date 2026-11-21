@@ -34,10 +34,11 @@ import {
   useSchedulingClock,
   useSignupWindow,
 } from '../../../modules/scheduling/hooks/useSignupWindow';
-import { memberStatusService } from '../../../services/api';
+import { apparatusEventService, memberStatusService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { formatCalendarDate, toLocalDateString } from '../../../utils/dateFormatting';
+import { formatCalendarDate, localToUTC, toLocalDateString } from '../../../utils/dateFormatting';
+import type { CalendarOutreachItem } from '../../../types/apparatusEvent';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { displayNameOf } from '../../../utils/memberName';
 import DayDetailPanel from './DayDetailPanel';
@@ -46,7 +47,7 @@ import MonthGrid from './MonthGrid';
 import PhoneDaySheet from './PhoneDaySheet';
 import PhoneMonth from './PhoneMonth';
 import StandingShiftModal from './StandingShiftModal';
-import { STATUS_STYLES, legendFor } from './statusStyles';
+import { OUTREACH_STYLE, STATUS_STYLES, legendFor } from './statusStyles';
 import { useTablist } from '../../../hooks/useTablist';
 import { BACKGROUND_REQUEST_CONFIG } from '../../../utils/backgroundRequest';
 
@@ -112,9 +113,11 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
 }) => {
   const tablist = useTablist();
   const signupWindow = useSignupWindow();
-  const { user } = useAuthStore();
+  const { user, checkPermission } = useAuthStore();
   const timezone = useTimezone();
   const currentUserId = user?.id ?? null;
+  // Apparatus outreach is an event, so it is shown to whoever can see events.
+  const seesOutreach = checkPermission('events.view');
 
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,6 +135,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   const [myTimeOff, setMyTimeOff] = useState<TimeOffSpan[]>([]);
   const [myLeaves, setMyLeaves] = useState<LeaveSpan[]>([]);
   const [nextScheduled, setNextScheduled] = useState<ShiftRecord | null>(null);
+  const [outreach, setOutreach] = useState<CalendarOutreachItem[]>([]);
 
   // "Today" is the department's calendar day, re-read on every clock tick.
   // Frozen at first render, a board left open overnight on a station tablet
@@ -161,6 +165,21 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   }, [shifts]);
 
   const selectedShifts = useMemo(() => shiftsByDate.get(toDateKey(selectedDate)) ?? [], [shiftsByDate, selectedDate]);
+
+  // Keyed by the department's calendar day of each night's start, the same
+  // day the shift chips are keyed by.
+  const outreachByDate = useMemo(() => {
+    const map = new Map<string, CalendarOutreachItem[]>();
+    for (const item of outreach) {
+      const key = toLocalDateString(new Date(item.start_datetime), timezone);
+      map.set(key, [...(map.get(key) ?? []), item]);
+    }
+    return map;
+  }, [outreach, timezone]);
+  const selectedOutreach = useMemo(
+    () => outreachByDate.get(toDateKey(selectedDate)) ?? [],
+    [outreachByDate, selectedDate]
+  );
 
   // Only explain the "crew size not set" colour when something on screen is
   // in that state; a correctly configured department never sees the entry.
@@ -281,13 +300,33 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
           : Promise.resolve([] as TimeOffSpan[]),
         memberStatusService.getMyLeaves(config).catch(() => [] as LeaveSpan[]),
       ]);
+      // Outreach is read after the roster and apart from it: it is not a
+      // shift, nothing on the board is computed from it, and a failure here
+      // must never blank the calendar it sits on.
+      const firstKey = toDateKey(days[0] ?? visibleDate);
+      const lastDay = days[days.length - 1] ?? visibleDate;
+      const dayAfterLast = toDateKey(new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate() + 1, 12));
+      // Wrapped in a .then so a throw before the request is made is caught
+      // exactly like a failed request: the roster above is already in hand.
+      const outreachItems = seesOutreach
+        ? await Promise.resolve()
+            .then(() =>
+              apparatusEventService.getCalendar(
+                localToUTC(`${firstKey}T00:00`, timezone),
+                localToUTC(`${dayAfterLast}T00:00`, timezone),
+                config
+              )
+            )
+            .catch(() => [] as CalendarOutreachItem[])
+        : [];
       setShifts(data);
+      setOutreach(outreachItems);
       setMyOffers(offers);
       setMyTimeOff(timeOff);
       setMyLeaves(leaves);
       return data;
     },
-    [view, visibleDate, currentUserId]
+    [view, visibleDate, currentUserId, days, seesOutreach, timezone]
   );
 
   const fetchShifts = useCallback(async () => {
@@ -571,6 +610,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
     filter,
     today,
     hasUnsizedShift,
+    outreachByDate,
     onSelect: handleSelect,
   };
 
@@ -737,6 +777,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
                 <PhoneDaySheet
                   selectedDate={selectedDate}
                   shifts={selectedShifts}
+                  outreach={selectedOutreach}
                   currentUserId={currentUserId}
                   timezone={timezone}
                   eligibleByShift={eligibleByShift}
@@ -776,6 +817,12 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
                     <span className="text-theme-text-secondary text-xs">{STATUS_STYLES[status].label}</span>
                   </span>
                 ))}
+                {outreach.length > 0 && (
+                  <span className="flex items-center gap-1.5">
+                    <span className={`h-3 w-3 rounded-sm border ${OUTREACH_STYLE.swatch}`} aria-hidden="true" />
+                    <span className="text-theme-text-secondary text-xs">{OUTREACH_STYLE.label}</span>
+                  </span>
+                )}
                 <span className="text-theme-text-secondary ml-auto text-xs" data-testid="month-open-seats">
                   <span className="font-mono font-bold text-red-700 dark:text-red-400">{openSeatsThisMonth}</span> open
                   seat{openSeatsThisMonth === 1 ? '' : 's'} {view === 'week' ? 'this week' : 'this month'}
@@ -787,6 +834,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
             <DayDetailPanel
               selectedDate={selectedDate}
               shifts={selectedShifts}
+              outreach={selectedOutreach}
               nextShift={nextShift}
               currentUserId={currentUserId}
               timezone={timezone}

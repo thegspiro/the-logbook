@@ -99,6 +99,7 @@ export function getAdminHoursExportData(data: AdminHoursReport) {
     { key: 'hours', header: 'Hours' },
     { key: 'entry_method', header: 'Method' },
     { key: 'status', header: 'Status' },
+    { key: 'source', header: 'Source' },
   ];
   return { rows: data.entries as unknown as Array<Record<string, unknown>>, columns };
 }

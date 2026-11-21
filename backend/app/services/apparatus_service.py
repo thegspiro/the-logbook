@@ -979,7 +979,10 @@ class ApparatusService:
         await self.db.commit()
         await self.db.refresh(apparatus)
 
-        return apparatus
+        # The row was loaded without its relationships and the refresh leaves
+        # them unloaded; the response nests type and status, and reading them
+        # lazily on the async session raises MissingGreenlet.
+        return await self.get_apparatus(apparatus_id, organization_id)
 
     async def delete_apparatus(self, apparatus_id: str, organization_id: str) -> bool:
         """Delete apparatus (hard delete - use archive for soft delete)"""
@@ -1101,8 +1104,7 @@ class ApparatusService:
                 )
 
         update_data = field_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(custom_field, field, value)
+        apply_updates(custom_field, update_data, skip={"id", "organization_id"})
 
         await self.db.commit()
         await self.db.refresh(custom_field)
@@ -1780,8 +1782,11 @@ class ApparatusService:
         )
 
         update_data = operator_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(operator, field, value)
+        apply_updates(
+            operator,
+            update_data,
+            skip={"id", "organization_id", "apparatus_id", "user_id"},
+        )
 
         await self.db.commit()
 
@@ -1904,8 +1909,9 @@ class ApparatusService:
                 allow_none=True,
                 label="inventory item",
             )
-        for field, value in update_data.items():
-            setattr(equipment, field, value)
+        apply_updates(
+            equipment, update_data, skip={"id", "organization_id", "apparatus_id"}
+        )
 
         await self.db.commit()
         await self.db.refresh(equipment)

@@ -199,6 +199,8 @@ copies are re-rendered to show the correction.
   before, on the due date and the day after now comes with an email too. It
   follows the member's "Action items from meetings and minutes" email setting,
   and running the task twice in a day sends one email.
+- **Wording** _(2026-11-14)_: the minutes and action-item emails are editable
+  templates under **Communications → Email Templates → Meetings & Minutes**.
 
 ## Publishing
 
@@ -242,10 +244,43 @@ default**:
 - **Rich text** — sections can use bold, italic, underline, headings, lists,
   quotes and links; nothing else is kept.
 - **Download PDF** — the printable minutes, with signature lines and, once
-  adopted, the version and its hash, followed by the attachments.
+  adopted, the version and its hash, followed by the attachments. Each page's
+  footer reads "Page N of M" _(2026-11-21, #4451)_, counting the minutes' own
+  pages; appended PDF attachments carry no minutes footer. The PDF is laid out
+  twice (once to count the pages), with attachments decoded once beforehand.
 - **Search** — the Minutes page's search box also finds words inside the minutes
   (sections, motions, action items), across the newest 500 sets the viewer may
   see; a quoted phrase must match as typed.
+
+## Meeting attendance and waivers
+
+**Minutes → Attendance** (`/minutes/attendance`, `meetings.manage`) is the
+**Meeting Attendance** dashboard: each current member's attendance over a chosen
+period, waived meetings and meetings during leave, and a **Voting** column.
+
+- **Voting** _(2026-11-13)_ reports whether the member could vote under the
+  **Regular business meeting** rules on Election Settings, the same check a
+  ballot applies; those rules keep their own look-back.
+- **Check-in wins** _(2026-11-11)_: a member marked present counts as attending
+  even when they also hold a waiver for that meeting.
+- **One row per member per meeting** _(2026-11-11)_: a second entry for the same
+  member is refused, and the upgrade removed existing duplicates (see
+  `docs/UPGRADING.md`).
+- **Member waiver requests** _(2026-11-13)_: members can ask to be excused from
+  a business meeting once **Waiver settings** has **Members may ask to be
+  excused** ticked. Requests are decided at **Waiver requests**
+  (`/meetings/waiver-requests`); an approval is written onto the minutes roll
+  call as an excused absence. _(2026-11-21)_ The emails' **Approve**/**Deny**
+  buttons and **Open the request** link go to
+  `/meetings/waiver-requests/{id}` (#4475; they pointed at the training page,
+  which 404s for a meeting request), from `REQUEST_PATHS` in
+  `attendance_waiver_email_service.py`, which the in-app prompts' `decider_path`
+  also reads. The absent, excused roll-call row an approval wrote
+  (`waiver_request_id` set) cannot be removed — `remove_attendee` refuses it
+  with a 400 (#4481). The meeting policy takes no documents: a direct
+  `PUT /meetings/waiver-requests/policy` with `attachment` other than `off` is
+  refused, and a stored one reads as off. The member guide is
+  [Events & Meetings](https://github.com/thegspiro/the-logbook/blob/main/docs/training/04-events-meetings.md#business-meeting-waiver-requests-the-screens-2026-11-13).
 
 ## Minutes settings
 

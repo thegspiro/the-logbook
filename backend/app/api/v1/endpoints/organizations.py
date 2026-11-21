@@ -122,6 +122,39 @@ def _administers_settings(user_permissions: set) -> bool:
     )
 
 
+# Sections OrganizationSettingsResponse does not declare, which its conversion
+# from OrganizationSettings would otherwise drop: the model copies only declared
+# fields, so the returned dict carried none of these and the screens that read
+# them showed built-in defaults (a save from them then wrote those defaults
+# over the stored values). Named rather than passed through wholesale, because
+# org.settings also holds sections such as the officer directory that this
+# endpoint, open to every member, must not hand out.
+_PUBLIC_SECTIONS = ("station_mode",)
+# Read by the scheduling notifications panel. They carry CC addresses and
+# position keys, so only those who may manage settings or scheduling get them.
+_NOTIFICATION_SECTIONS = (
+    "scheduling",
+    "scheduling_assignment",
+    "shift_reminders",
+    "equipment_check_alerts",
+)
+
+
+def _with_stored_sections(
+    body: dict[str, Any], settings: Any, user_permissions: set
+) -> dict[str, Any]:
+    stored = settings.model_dump()
+    keys = list(_PUBLIC_SECTIONS)
+    if _administers_settings(user_permissions) or _has_permission(
+        "scheduling.manage", user_permissions
+    ):
+        keys.extend(_NOTIFICATION_SECTIONS)
+    for key in keys:
+        if key in stored:
+            body[key] = stored[key]
+    return body
+
+
 @router.get("/settings", response_model=OrganizationSettingsResponse)
 async def get_organization_settings(
     db: AsyncSession = Depends(get_db),
@@ -150,13 +183,14 @@ async def get_organization_settings(
     # also strip the infrastructure identifiers those secrets authenticate to
     # (mail host, S3 bucket/endpoint, SSO issuer, OAuth tenant/client IDs)
     # unless the caller actually administers settings.
-    if not _administers_settings(_collect_user_permissions(current_user)):
+    user_permissions = _collect_user_permissions(current_user)
+    if not _administers_settings(user_permissions):
         redacted = redacted.without_infrastructure()
 
-    # Return as dict so FastAPI's response_model validation preserves
-    # extra fields (e.g. station_mode).  Pydantic V2 drops __pydantic_extra__
-    # when converting between model instances via model_validate(from_attributes=True).
-    return redacted.model_dump()
+    # Returned as a dict, which FastAPI's response_model validation keeps the
+    # extra keys of; the conversion above has already dropped them, so the
+    # sections the screens read are put back from the service's model.
+    return _with_stored_sections(redacted.model_dump(), settings, user_permissions)
 
 
 @router.patch("/settings", response_model=OrganizationSettingsResponse)
@@ -233,11 +267,15 @@ async def update_organization_settings(
         )
 
         # Convert internal model to response schema and redact secrets.
-        # Return as dict to preserve extra fields (see GET /settings comment).
+        # Returned as a dict with the stored sections put back (see GET /settings).
         response = OrganizationSettingsResponse.model_validate(
             updated_settings, from_attributes=True
         )
-        return response.redacted().model_dump()
+        return _with_stored_sections(
+            response.redacted().model_dump(),
+            updated_settings,
+            _collect_user_permissions(current_user),
+        )
 
 
 @router.patch("/settings/contact-info", response_model=ContactInfoSettings)
@@ -1817,6 +1855,7 @@ async def get_organization_profile(
 
     return {
         "name": org.name,
+        "short_name": org.short_name or "",
         "timezone": org.timezone or "America/New_York",
         "phone": org.phone or "",
         "email": org.email or "",
@@ -1944,6 +1983,7 @@ async def update_organization_profile(
 
     return {
         "name": org.name,
+        "short_name": org.short_name or "",
         "timezone": org.timezone or "America/New_York",
         "phone": org.phone or "",
         "email": org.email or "",

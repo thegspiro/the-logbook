@@ -619,6 +619,9 @@ class CommunityReachTotals(BaseModel):
 
     events_held: int
     people_reached: int
+    # Guests counted: a recorded headcount, else sign-ins.
+    counted: int
+    # Guest sign-ins alone, whether or not a headcount replaced them.
     signed_in: int
     estimated: int
     member_hours: float
@@ -628,9 +631,10 @@ class CommunityReachTotals(BaseModel):
 
 
 class CommunityTurnout(BaseModel):
-    """Events with both a requester's expected audience and sign-ins."""
+    """Events with both a requester's expected audience and a count of guests."""
 
     events: int
+    counted: int
     signed_in: int
     expected: int
 
@@ -638,14 +642,24 @@ class CommunityTurnout(BaseModel):
 class CommunityReachBucket(BaseModel):
     period: str
     events: int
+    counted: int
     signed_in: int
     estimated: int
 
 
 class CommunityTypeBucket(BaseModel):
+    # "request": a public request's outreach type; "department": an event type.
+    group: Literal["request", "department"]
     label: str
     events: int
     people_reached: int
+
+
+class CommunityMaterial(BaseModel):
+    """Something handed out at outreach events, and how many."""
+
+    item: str
+    quantity: int
 
 
 class CommunityEventReach(BaseModel):
@@ -656,11 +670,17 @@ class CommunityEventReach(BaseModel):
     organization_name: str | None = None
     request_id: str | None = None
     signed_in: int
+    headcount: int | None = None
+    counted: int | None = None
     expected: int | None = None
     people_reached: int
     reach_is_estimate: bool
     crew: int
     member_hours: float
+    # What happened, recorded when the event closed (owner decision, 2026-11-20).
+    outcome_note: str | None = None
+    materials: list[CommunityMaterial] = []
+    photos: str | None = None
 
 
 class CommunityEngagement(BaseModel):
@@ -684,6 +704,8 @@ class CommunityEngagement(BaseModel):
     granularity: Literal["month", "year"]
     by_period: list[CommunityReachBucket]
     by_type: list[CommunityTypeBucket]
+    # Everything handed out across the period, one line per item, most first.
+    materials: list[CommunityMaterial] = []
     recent_events: list[CommunityEventReach]
 
 
@@ -1923,6 +1945,23 @@ async def _meeting_item_labels(
         )
         titles = {mid: title for mid, title in meeting_rows.all()}
     return names, titles
+
+
+@router.get("/community-engagement/events", response_model=list[CommunityEventReach])
+async def get_community_engagement_events(
+    period: Literal["month", "quarter", "year", "rolling_12", "all"] = Query("all"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+) -> list[CommunityEventReach]:
+    """Every outreach event held in the period, for the report's export.
+
+    The report itself lists only the most recent; this is the full set its
+    totals are computed over.
+    """
+    rows = await CommunityEngagementService(db).events(
+        str(current_user.organization_id), period
+    )
+    return [CommunityEventReach(**row) for row in rows]
 
 
 @router.get("/community-engagement", response_model=CommunityEngagement)

@@ -159,7 +159,7 @@ const ShiftHistoryImportReviewPage: React.FC = () => {
     void onRowUpdate(rowId, { match_decision: decision });
   const onDecideAll = (decision: MatchDecision) =>
     void apply(() => historyImportService.decideProbableMatches(importId, decision));
-  const onExistingDecision = (shiftKey: string, decision: MatchDecision) =>
+  const onExistingDecision = (shiftKey: string, decision: MatchDecision | null) =>
     onMappings({ existing_shifts: { [shiftKey]: decision } });
   const onResolve = (issue: HistoryImportIssue) => {
     const target = issueTab(issue.code);

@@ -9,6 +9,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import toast from 'react-hot-toast';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -18,6 +19,7 @@ import {
   Globe,
   Inbox,
   Loader2,
+  Printer,
   Users,
 } from 'lucide-react';
 import { dashboardService } from '../services/api';
@@ -36,7 +38,7 @@ import {
   expectedText,
   parseCommunityPeriod,
   reachText,
-  topTypes,
+  typeGroups,
   turnoutPercent,
   type Change,
 } from './community-engagement/communityEngagement';
@@ -90,6 +92,7 @@ const CommunityEngagementTab: React.FC = () => {
   const [data, setData] = useState<CommunityEngagement | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async (which: CommunityPeriod) => {
     setLoading(true);
@@ -178,12 +181,23 @@ const CommunityEngagementTab: React.FC = () => {
   }
 
   const { current, previous, turnout } = data;
-  const turnoutPct = turnoutPercent(turnout.signed_in, turnout.expected);
-  const slices = topTypes(data.by_type);
+  const turnoutPct = turnoutPercent(turnout.counted, turnout.expected);
+  const groups = typeGroups(data.by_type);
   const rows = data.recent_events;
+  const truncated = current.events_held > rows.length;
 
-  const exportCsv = () => {
-    downloadCsv(buildCsv(csvRows(rows, tz)), `community-engagement-${period}-${getTodayLocalDate(tz)}.csv`);
+  // The table holds the latest events only; the export fetches every event in
+  // the period, so a spreadsheet totals to the figures above it.
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const all = await dashboardService.getCommunityEngagementEvents(period);
+      downloadCsv(buildCsv(csvRows(all, tz)), `community-engagement-${period}-${getTodayLocalDate(tz)}.csv`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not export the outreach events'));
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -203,7 +217,7 @@ const CommunityEngagementTab: React.FC = () => {
           icon={Users}
           label="People reached"
           value={formatNumber(current.people_reached)}
-          sub={`${formatNumber(current.signed_in)} signed in · ${formatNumber(current.estimated)} estimated`}
+          sub={`${formatNumber(current.counted)} counted · ${formatNumber(current.estimated)} estimated`}
           change={changeFor(current, previous, 'people_reached')}
           against={against}
         />
@@ -217,17 +231,17 @@ const CommunityEngagementTab: React.FC = () => {
         />
         <Kpi
           icon={Inbox}
-          label="Requests"
-          value={`${formatNumber(current.requests_completed)} / ${formatNumber(current.requests_received)}`}
-          sub="completed of received"
-          change={changeFor(current, previous, 'requests_received')}
+          label="Requests completed"
+          value={formatNumber(current.requests_completed)}
+          sub={`${formatNumber(current.requests_received)} received`}
+          change={changeFor(current, previous, 'requests_completed')}
           against={against}
         />
       </div>
       <p className="text-theme-text-muted mb-5 text-xs">
         {against ? `Changes compare with ${against}. ` : ''}
-        People reached counts guests who signed in; where nobody signed in, it uses the audience the requester expected.
-        Members on duty are not counted.
+        People reached is the guests counted — a headcount recorded on the event, or else guest sign-ins — and, where
+        nothing was counted, the audience the requester expected. Members on duty are not counted.
       </p>
 
       <div className="mb-5 grid gap-4 lg:grid-cols-[1.6fr_1fr]">
@@ -239,7 +253,7 @@ const CommunityEngagementTab: React.FC = () => {
               </h3>
               {turnoutPct != null && (
                 <p className="text-theme-text-secondary mt-0.5 text-xs">
-                  Where both were recorded, {formatNumber(turnout.signed_in)} signed in against ~
+                  Where both were recorded, {formatNumber(turnout.counted)} counted against ~
                   {formatNumber(turnout.expected)} expected ({turnoutPct}%) across {turnout.events}{' '}
                   {turnout.events === 1 ? 'event' : 'events'}.
                 </p>
@@ -254,28 +268,74 @@ const CommunityEngagementTab: React.FC = () => {
             By type of outreach
           </h3>
           <p className="text-theme-text-muted mb-3 text-xs">People reached, {option?.label.toLowerCase()}</p>
-          {slices.length ? (
-            <ReachByTypeBars slices={slices} />
+          {groups.length ? (
+            <div className="space-y-5">
+              {groups.map((g) => (
+                <div key={g.key}>
+                  <h4 className="text-theme-text-secondary mb-2 text-xs font-semibold tracking-wider uppercase">
+                    {g.title}
+                  </h4>
+                  <ReachByTypeBars slices={g.slices} />
+                </div>
+              ))}
+            </div>
           ) : (
             <p className="text-theme-text-muted text-sm">No outreach events held in this period.</p>
           )}
         </section>
       </div>
 
-      <section className="card rwd-table-container overflow-hidden p-0" aria-labelledby="ce-events-heading">
-        <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <h3 id="ce-events-heading" className="text-theme-text-primary text-sm font-semibold">
-            Recent outreach events
+      {(data.materials?.length ?? 0) > 0 && (
+        <section className="card mb-5 p-4" aria-labelledby="ce-materials-heading">
+          <h3 id="ce-materials-heading" className="text-theme-text-primary text-sm font-semibold">
+            Materials handed out
           </h3>
-          <button
-            type="button"
-            className="btn-secondary btn-sm flex items-center gap-1"
-            onClick={exportCsv}
-            disabled={!rows.length}
-          >
-            <Download className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Export CSV</span>
-          </button>
+          <p className="text-theme-text-muted mb-3 text-xs">
+            Recorded when each event closed, {option?.label.toLowerCase()}
+          </p>
+          <ul className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            {data.materials?.map((m) => (
+              <li key={m.item} className="flex justify-between gap-3">
+                <span className="text-theme-text-primary">{m.item}</span>
+                <span className="text-theme-text-secondary tabular-nums">{formatNumber(m.quantity)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <section className="card rwd-table-container overflow-hidden p-0" aria-labelledby="ce-events-heading">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div>
+            <h3 id="ce-events-heading" className="text-theme-text-primary text-sm font-semibold">
+              Recent outreach events
+            </h3>
+            {truncated && (
+              <p className="text-theme-text-muted text-xs">
+                The latest {formatNumber(rows.length)} of {formatNumber(current.events_held)}; the export has them all.
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={`/events/admin/community/print?period=${period}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-secondary btn-sm flex items-center gap-1"
+            >
+              <Printer className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Print summary</span>
+            </a>
+            <button
+              type="button"
+              className="btn-secondary btn-sm flex items-center gap-1"
+              onClick={() => void exportCsv()}
+              disabled={!rows.length || exporting}
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{exporting ? 'Exporting…' : 'Export CSV'}</span>
+            </button>
+          </div>
         </div>
         {!rows.length ? (
           <p className="text-theme-text-muted px-4 pb-4 text-sm">No outreach events held in this period.</p>

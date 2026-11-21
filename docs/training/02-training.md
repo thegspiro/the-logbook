@@ -133,11 +133,13 @@ The **My Training** tab shows:
   for each one you have finished and **Not yet completed** for the rest. The
   ticks use the same test as the count, so they always add up to the figure on
   the card. A course an administrator has since deleted reads **Course no
-  longer in the library**. Certification and other done-or-not requirements show
-  no unit ("0/1"), so CPR/BLS no longer reads "0/1 hrs". The control appears
+  longer in the library**. Skills evaluations and other done-or-not
+  requirements show no unit ("0/1"). The control appears
   only when your department shows the requirement breakdown. Officers see the
   same checklist on a member's requirement card, and the **Upcoming
   Expirations & Due Dates** line uses the same unit ("1/4 courses complete").
+  See [How a requirement card reads](#how-a-requirement-card-reads-2026-11-21)
+  for hours, certification and optional requirements.
 - **Recent Training** — your five newest records, with a **View full
   history** link to the History tab.
 - **Certifications** — collapsed, because its expiring entries already appear
@@ -182,6 +184,51 @@ training walkthrough.
 
 > **Hint:** Your department's training settings control which sections of this
 > page members see. Your officers may show or hide some of them.
+
+### How a requirement card reads _(2026-11-21)_
+
+Each card in **Training Requirements** shows one requirement and where you
+stand on it. Officers see the same cards when they open a member's training.
+
+**An hours requirement leads with your monthly average** _(2026-11-20)_. The
+big figure reads, for example, **6.9/6 hrs/mo avg**: you have averaged 6.9
+hours a month, and the requirement needs 6 a month (its yearly hours divided
+by the months in its window). Your total sits on the line beneath it, for
+example "62/72 hrs total".
+
+- **The total still decides whether the requirement is met.** A member ahead
+  of pace can still be short of the total, and the card goes green only when
+  the total is reached. The average is there to show whether you are keeping
+  up.
+- Months that leave or a waiver excused are left out of the average, and the
+  hours you trained in those months are left out with them. The pace needed
+  is always the department's full rate. See
+  [Checking an Hours Requirement Month by Month](#checking-an-hours-requirement-month-by-month).
+- A requirement with no monthly rate shows the average alone ("6.9 hrs/mo
+  avg"). If every month so far was excused, the card shows the total as
+  before.
+- The Compliance Matrix prints the same average for the same member. Both
+  screens get it from the server, so they cannot disagree.
+
+**A certification reads as a state, not a count** _(2026-11-21)_. Instead of
+"1/1" or "0/1", a certification requirement reads:
+
+| The card reads               | Meaning                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------- |
+| **On file** (Expires _date_) | A valid certificate is on your record. A certificate with no expiry date reads **On file** alone. |
+| **Expired** (_date_)         | Your latest matching certificate expired on that date. The footer reads **Expired — Renew ASAP**. |
+| **Not recorded**             | No matching certificate is on your record. The warning reads "No certification on file".          |
+
+Before, a missing certificate was described as "expired" too.
+
+**Optional requirements** _(2026-11-21)_. If your compliance profile lists
+optional requirements, they appear under an **Optional** heading after the
+others: "Your department lists these for you. They do not count toward your
+compliance." Each carries an **Optional** badge and reads **Not required for
+compliance** until it is complete. It is never shown as overdue or due soon,
+it does not change your percentage or your "X of Y requirements met", and no
+reminder email is sent for it. An officer sees the same group on your
+training, worded "Listed for this member by their compliance profile."
 
 ### Upcoming Expirations & Due Dates
 
@@ -230,16 +277,24 @@ record for you.
    for the rest.
 3. **Search courses** filters by course name. **Type** filters by training
    type. Both narrow the years and the lists together.
+4. A record **with no completion date** is grouped under **No completion date**,
+   above the years, whatever you filter by. This includes a record still waiting
+   for approval and a completed record imported without a date; each row shows
+   its own status. (The group was headed "Awaiting approval" before 2026-10-21.)
 
 _Added 2026-11-10._ **Where a record came from.** Training lists, the print page
 and the individual CSV and PDF exports say whether a record was **synced from a
-training provider** (for example "Target Solutions"), written by the **Historical
-Data Import** ("Imported"), or entered in The Logbook. The CSV adds a **Source**
-column at the end; the PDF prints it under the course name. Records added by the
-older CSV importers leave no mark and read "The Logbook". 4. A record **with no completion date** is grouped under **No completion date**,
-above the years, whatever you filter by. This includes a record still waiting
-for approval and a completed record imported without a date; each row shows
-its own status. (The group was headed "Awaiting approval" before 2026-10-21.)
+training provider** (for example "Target Solutions"), written by an import
+("Imported"), or entered in The Logbook. The CSV adds a **Source** column at the
+end; the PDF prints it under the course name.
+
+_Updated 2026-11-16._ The Historical Data Import has always read "Imported".
+Since 2026-11-15, records written by the two Training CSV importers — the
+**CSV import wizard** and **Import CSV** on training records — read "Imported"
+too. Records those importers wrote before that date were not marked at the time
+and still read "The Logbook"; nothing can tell them apart afterwards. Since 2026-11-19
+the department-wide exports carry the same column; see
+[Bulk and Reporting Exports](#bulk-and-reporting-exports-reports-tab).
 
 The top of the tab shows your **all-time** courses and hours and how many years
 are on record. The History tab reads your whole record, however long it is.
@@ -266,6 +321,8 @@ On an hours requirement, select **Show monthly hours**. You see:
 - every month of the requirement's window, including empty months, with the
   hours counted in each;
 - your total, your average per month, and the pace the requirement needs.
+  Since 2026-11-20 the average and the pace are the same figures the card
+  leads with ("6.9/6 hrs/mo avg"), worked out once by the server.
 
 Each bar is scaled to that pace. The pace is the requirement's yearly hours
 divided by the months in its window: 72 hours over 12 months is 6 a month. A
@@ -378,7 +435,11 @@ time shows the start time as blank.
   minimum is 90 days. A daily task then deletes older files from the
   submission and the member's training record. The record itself, its hours and
   its dates stay. Leave the box empty to keep files forever. Every change to
-  the period, and every file the task deletes, is in the audit log.
+  the period, and every file the task deletes, is in the audit log. A
+  submission approved straight away — because approval is not required, or its
+  hours are under **Auto-approve under (hours)** — counts from the day it was
+  submitted _(2026-11-20)_. Before, its files were never deleted, because no
+  officer decision ever dated it.
 - **Files can be scanned for viruses.** Every file is checked to be the type it
   claims, and is stored under a name The Logbook chooses. If your
   administrator has turned on ClamAV scanning, each certificate is also scanned
@@ -392,7 +453,23 @@ time shows the start time as blank.
     the member uploaded.
 - **Voiding a record keeps its file.** Deleting a record marks it cancelled
   instead of removing it. The correction stays traceable, and its evidence
-  stays with it.
+  stays with it. A voided record cannot take a new file: an upload to it is
+  refused with "A voided training record can't take new attachments"
+  _(2026-11-20)_.
+- **A certificate another record still uses is kept** _(2026-11-20)_. After an
+  officer reverses an approval, the submission can be changed again while the
+  voided record still names the same certificate. If the member then removes
+  that certificate from the submission, or deletes the submission, the file
+  stays for the voided record; only the submission's link to it goes. Such a
+  file is no longer reached by the retention period above. It leaves when the
+  member's personal data is anonymised or the member is permanently deleted.
+- **Removing a certificate is safe to repeat** _(2026-11-21)_. Each file on a
+  submission or record now has its own id, and removing or downloading names
+  that file rather than its place in the list. A removal repeated after a
+  dropped connection does nothing, instead of removing the next file. A
+  member's change and an officer's approval of the same submission now wait
+  for each other, so an approval can no longer carry onto the record a file
+  the member removed at the same moment.
 
 ---
 
@@ -442,6 +519,93 @@ the course.
 Courses made up of several classes — a recruit school, a five-night EMT
 refresher — show a class count and a **Manage classes** action. See
 [Multi-Class Courses & Cohorts](#multi-class-courses--cohorts).
+
+### Course Links — Records That Name No Course _(2026-11-16)_
+
+**Who can do this:** roles with `training.manage`.
+
+A course or certification requirement counts a training record only when the
+record is linked to a library course. Records typed with a free-text course
+name, and imported records whose name matched no library course, are linked to
+nothing, so they count toward no course or certification requirement (and,
+since they carry no category, toward no category-based hours either).
+
+Open **Training Admin → Curriculum → Course Links**. The page lists each course
+name that unlinked records carry, most records first:
+
+- Spellings that differ only in capitals, punctuation, a trailing provider id
+  or a "CAPCE" prefix are one row — "CPR Refresher", "C.P.R. refresher" and
+  "CAPCE CPR Refresher (3088740)" are one name. The row says **Also spelled …**
+  for the others.
+- Each row shows how many records and members carry it, and their date range.
+- Where a library course looks like a match, the row says **Suggested:** and
+  the course. Nothing is linked until you say so.
+
+To link one name, choose the library course in its list and select **Link**,
+then confirm (**Link records** / **Not yet**). **Link all suggested (N)** at
+the top links every name that has a suggestion, after one confirmation — check
+the suggestions first. **Search names** finds a name by any of its spellings.
+
+**What linking does.** Every record under that name, in every spelling, gets
+the course, the course's category and its training type, so course,
+certification, category and training-type requirements count it from then on.
+The record keeps its own name, date and hours. A record an officer already
+linked to a course by hand keeps its course. A course that grants a
+qualification updates the members' qualifications. Each link is audited.
+
+Linking changes members' compliance; that is its purpose. Because it can be
+wrong — a suggestion that looked right, a course chosen from the wrong row —
+each link can now be undone _(2026-11-19)_.
+
+#### Undoing a link
+
+Below the names, **Recent links** lists the department's links, newest first,
+ten to a page: the name and the course it went to ("CPR Refresher → CPR for
+Healthcare Providers"), how many records it changed, and who linked it and
+when. Select **Undo** on a link and confirm (**Undo link** / **Keep it**).
+
+- Each record goes back to **no course**, with the category and training type
+  it had before the link, so it stops counting toward the requirements that
+  name that course.
+- **A record edited since the link keeps its course.** If an officer changed
+  the record after linking it (more than two minutes after, so the link's own
+  write does not count), the edit is theirs and is left alone. The message
+  after undoing counts both: "12 records unlinked; 2 records changed since
+  kept CPR for Healthcare Providers."
+- Members' qualifications are re-checked. A qualification that only the link
+  supported is removed, exactly as voiding the record would.
+- A link can be undone once. The row then reads "undone <date> by <name>" and
+  has no **Undo** button; link the name again to restore it.
+- **Links made before 2026-11-19 are not listed and cannot be undone** — they
+  were not recorded. Edit those records one at a time.
+
+**Two officers at once** _(2026-11-20)_. A link records, and an undo reverts,
+only the records it actually changed:
+
+- If two officers link the same name at the same moment (or one selects
+  **Link all suggested** while another links a single name), the second waits
+  for the first and then finds those records already linked. A link that
+  changed nothing is not added to **Recent links**, so undoing one link can
+  never unlink records another link made.
+- If the two collide outright, nothing is linked and the message reads
+  "Another course link was changing these records at the same time. Nothing
+  was linked; try again." Select **Link** again.
+- An undo leaves alone any record that was re-linked or edited while the undo
+  ran, and counts it among the records kept.
+
+#### The Training Admin badge
+
+When the course library has a suggested match for any unlinked name, Training
+Admin's attention list shows "N training names can be linked to a course,
+across N records" with **Review links**, and **Curriculum → Course Links**
+carries the count as a badge. Only names with a suggestion count: **Link all
+suggested** clears every one of them, whereas a name the library cannot match
+would hold the badge up for good with nothing to click. The count is read
+whenever the hub loads, so a provider sync or CSV import that brings in a new
+name shows next time, and it drops as soon as you link, link all or undo.
+
+When every record names a library course, the page says "Every training record
+names a library course."
 
 ---
 
@@ -543,7 +707,10 @@ later"** — the way most officers describe a schedule out loud.
    - tick **Skip this class** to leave one out of this intake;
    - tick any suggested holidays to skip them, then select **Recalculate**.
 6. **Roster** — select the members taking the course. They are enrolled in
-   the pipeline and added to every class on their calendar.
+   the pipeline and added to every class on their calendar. Only current
+   members (active or probationary) are listed; a former member sent anyway
+   by an out-of-date screen is skipped with the warning "A selected member is
+   no longer a current member." _(2026-11-19)_
 7. **Generate** — review the summary. If the course has no pipeline yet,
    **Build a matching pipeline** is ticked for you (untick it if you do not want
    one); if it already has one, members are enrolled in that pipeline instead.
@@ -1294,10 +1461,20 @@ dialog checks what uses the requirement first.
 | **Skills Evaluation**                 | Pass a hands-on skills evaluation                                 | —                                                                           |
 | **Checklist**                         | Complete a set of check-off items                                 | Checklist items                                                             |
 | **Knowledge Test**                    | Pass a written test                                               | Passing score (%), optional max attempts                                    |
+| **Evaluated Shifts**                  | Complete a number of shifts with a submitted shift evaluation     | Required evaluated shifts                                                   |
+| **Transports**                        | Record a number of transports on submitted shift evaluations      | Required transports                                                         |
+| **Refusals**                          | Record a number of refusals on submitted shift evaluations        | Required refusals                                                           |
+| **Evaluated Calls** _(2026-11-15)_    | Record a number of calls on submitted shift evaluations           | Required evaluated calls                                                    |
 | **Session Attendance** _(2026-11-04)_ | Attend a share of the training sessions linked to the requirement | **Sessions to Attend (%)**                                                  |
 
 The form shows the right value box for the type you choose, and checks it
 before saving.
+
+The four shift-evaluation types — **Evaluated Shifts**, **Transports**,
+**Refusals** and **Evaluated Calls** — count what submitted shift evaluations
+record. **Calls** counts calls from shift reports; **Evaluated Calls** counts
+calls on evaluations; neither counts the other's. See
+[What a submitted evaluation credits](#what-a-submitted-evaluation-credits-and-when-it-changes).
 
 ### Session Attendance — Attend a Share of the Linked Drills _(2026-11-04)_
 
@@ -1347,7 +1524,10 @@ drills graded at 60% for active members and 30% for senior members, say.
 **Who sees which sessions count.** A session linked to an attendance
 requirement carries a **Counts toward attendance** badge on its event card in
 the events list, on the calendar and on its event page, so members know which
-drills they are expected at.
+drills they are expected at. _(2026-11-18)_ The badge shows only while at least
+one linked requirement is **active**. A session linked only to deactivated
+requirements counts against nobody, so it no longer carries the badge. The
+session editor still lists those old links so you can remove them.
 
 **How compliance counts it.** For each member, in the requirement's current
 period:
@@ -1424,6 +1604,11 @@ however short their attendance, with a reason on record.
 3. The cell then reads **Met by the Chief's override**. The real attendance
    count is still shown, and a member who met the requirement on their own is
    never labelled overridden. An override excuses no month and no other drill.
+
+The Chief cannot override their own requirement _(2026-11-15)_: the grant is
+refused with "You cannot grant an override on your own requirement". The
+Chief's own absence goes through a [training waiver](#waivers) instead, which
+someone else decides.
 
 Overrides are revoked, never deleted; grant and revoke are audited with ids and
 dates only, and the reason is stored encrypted.
@@ -1831,21 +2016,27 @@ opens **Records → Sessions**.
 
 The areas are:
 
-| Area                     | What is in it                                                                                                                      |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **Overview**             | Dashboard, Compliance Matrix, Expiring Certs, Training Waivers                                                                     |
-| **Records**              | Submissions to Review, Sessions, Course Cohorts, Shift Reports, Monthly Status                                                     |
-| **Curriculum**           | Requirements, Course Library, Programs                                                                                             |
-| **Evaluations**          | Practical-skills tools, Knowledge Tests                                                                                            |
-| **Program Management**   | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                                     |
-| **Compliance Reporting** | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast, and **Configure**                                            |
-| **Settings & Data**      | Manual Entry Rules, Practical Skills, Shift Evaluations, Compliance Settings, Integrations, Import Past Training, Headline Metrics |
+| Area                     | What is in it                                                                                                                                |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Overview**             | Dashboard, Compliance Matrix, Expiring Certs, Training Waivers                                                                               |
+| **Records**              | Submissions to Review, Waiver Requests, Sessions, Course Cohorts, Shift Reports, Monthly Status                                              |
+| **Curriculum**           | Requirements, Course Library, Course Links, Programs                                                                                         |
+| **Evaluations**          | Practical-skills tools, Knowledge Tests                                                                                                      |
+| **Program Management**   | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                                               |
+| **Compliance Reporting** | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast, and **Configure**                                                      |
+| **Settings & Data**      | Manual Entry, Practical Skills, Session Waivers, Shift Evaluations, Requirements, Compliance, Integrations, Import History, Headline Metrics |
 
 **Evaluations** shows **Skill Evaluations** or **Skills Test Templates** and
 **Skills Test Records**, depending on which practical-skills system your
 department runs (see [Skills Testing](#skills-testing)).
 
-**Compliance Settings** _(2026-11-04)_ is listed under **Settings & Data** only
+_(2026-11-08)_ Three **Settings & Data** tabs carry shorter names so the row
+fits a 1280px screen: **Manual Entry** (was Manual Entry Rules),
+**Compliance** (was Compliance Settings) and **Import History** (was Import
+Past Training). The command palette still finds each by its old name.
+**Requirements** there opens **Curriculum → Requirements**.
+
+**Compliance** _(2026-11-04)_ is listed under **Settings & Data** only
 for an officer who can also change the department's settings or holds
 "Manage compliance records", because only they can save it. It lists what the
 compliance settings hold — the department-wide threshold, compliance profiles
@@ -2060,6 +2251,12 @@ type is **Training**. **Edit** on the event page changes it later.
   approved minutes (0 gives that member no credit) before selecting **Approve
   and record**.
 
+  While that approval is waiting, the session does not count as held for the
+  attendance requirement _(2026-11-21)_. Before, every attendee was charged
+  with the session from the moment it was finalized and credited only once
+  an officer approved, so members could read as short until someone acted.
+  Approving or rejecting decides it as before.
+
 ![Approve training credit for the Ventilation Drill: course, event date and approve-by date, the roster with credited and approved minutes (one member set to 0 with a note), the approval notes and Approve and record](./images/02-117-approve-training-credit.png)
 
 ![Step 3 of the Create Session form — the settings, with Require instructor confirmation among them](./images/02-91-session-confirmation-toggle.png)
@@ -2208,7 +2405,12 @@ _"Lapsed 41 days ago"_, _"Expires in 26 days"_.
   [Existing Members](#existing-members--exempting-or-giving-a-catch-up-deadline)).
 - Opening a member shows each requirement's figure — _"44 of 24 hours"_,
   _"Nothing on file"_, _"1 of 1 shifts"_ — with its status and the date or
-  window it was judged against.
+  window it was judged against. Since 2026-11-20 an hours requirement leads
+  with the member's monthly average against the monthly pace — _"3.7/2 hrs/mo
+  avg"_ — with the total on the line beneath (_"44 of 24 hours total"_). The
+  colour and the progress bar still follow the total. My Training shows the
+  same average (see
+  [How a requirement card reads](#how-a-requirement-card-reads-2026-11-21)).
 - A cell met by an override reads **Met by the Chief's override**; a Chief sees
   the **Chief override** control on a requirement that allows it (see
   [Session attendance requirements](#the-chiefs-override-of-a-session-attendance-requirement)).
@@ -2261,6 +2463,12 @@ the same rules, so their figures agree:
   matrix. Reports and CSVs show **N/A**. They are left out of the percentage
   altogether: "X of Y members current" counts only members who are graded.
   When nobody is graded, the percentage reads N/A rather than 100%.
+- **The Compliance Report export shows today's standing** _(2026-11-21)_. Each
+  requirement column in the CSV and PDF reads exactly what the matrix shows for
+  that member today — a certification earned last year reads **Met**. The
+  report's period (1 January to today unless the API is given another) sets
+  only the hours and completed-record columns, whose CSV headers carry the
+  dates, e.g. **Total Hours (2026-01-01 to 2026-11-21)**.
 - **A session-attendance requirement with no session held is not graded**
   _(2026-11-10)_. It reads **No sessions held yet** and is left out of the
   percentage until a linked session is held in the member's window, instead of
@@ -2279,6 +2487,45 @@ the same rules, so their figures agree:
   with the same thresholds. The figure you file for the year matches the
   dashboard. A report already generated keeps the figures it was generated
   with.
+- **My Training uses compliance profiles too** _(2026-11-18)_. When a member
+  matches a compliance profile that lists its own required requirements, their
+  **My Training** page, the officer's view of that member's requirements, the
+  member profile's compliance card and the per-member training report list
+  only that profile's requirements (those that also apply by type, rank,
+  position and join date). Before, those pages listed every requirement, so a
+  Life member on a non-riding profile saw shift and call requirements the
+  department never grades them on, and their "X of Y requirements met" and
+  average progress disagreed with the Compliance Matrix. Nothing changes for a
+  department without profiles, for a profile that sets only thresholds, or for
+  a member who matches no active profile. Since 2026-11-20 the profile card's
+  green, yellow or red colour is the member's standing on the Compliance
+  Matrix as well (see [Compliance Summary](#compliance-summary)).
+- **The remaining officer views use compliance profiles too** _(2026-11-20)_.
+  The monthly member status roster, the competency matrix, the Compliance
+  Report CSV and PDF, the compliance forecast and the **Shift Compliance**
+  report in Scheduling now read each member's profile, as the matrix does.
+  The roster colours a member with the profile's own thresholds when it sets
+  them. Elsewhere a requirement outside the member's profile reads **N/A** or
+  **Not applicable**, or the member is not listed against it. The exports and
+  the forecast also follow your department's **Evaluation Period** setting;
+  before, they always counted the current month. In a department with
+  profiles, expect these figures to move to match the matrix.
+- **Optional requirements are listed, never graded** _(2026-11-21)_. A
+  profile's **Optional Requirements** appear on the member's My Training page
+  and on the officer's view of the member, marked **Optional** (see
+  [How a requirement card reads](#how-a-requirement-card-reads-2026-11-21)).
+  They count toward no standing, percentage or report, and no reminder is
+  sent for them. A requirement ticked both Required and Optional is required.
+- **An "every two years" hours or courses requirement is failed by a lapsed
+  certificate the same way on every screen** _(2026-11-21)_. Such a
+  requirement is often a recertification, so if the certificate expiring last
+  among the records it counts has lapsed, it reads **Expired** however many
+  hours or courses are on file. Only the records inside the requirement's
+  two-year window are looked at. Before, My Training also looked at older
+  records outside the window, so an old lapsed certificate could fail a
+  member the matrix showed as met; and for a courses requirement only the
+  matrix checked, so My Training could read met where the matrix read
+  expired.
 - **A requirement limited to certain ranks applies to those ranks.** The
   **Required roles** on a requirement are **ranks**. Members of those ranks
   are graded on it on My Training, the matrix, the dashboard, the member
@@ -2329,7 +2576,7 @@ position, not only to membership types. Use it when two groups share a class
 and status but owe different training — for example, life members who still
 ride and life members who have stopped.
 
-1. Open **Training Admin → Settings & Data → Compliance Settings** and select
+1. Open **Training Admin → Settings & Data → Compliance** and select
    **Open compliance settings** _(2026-11-04)_. (**Configure** under
    **Compliance Reporting** opens the same page.)
 2. Open the **Profiles** tab and select **Add Profile** (or **Edit** on an
@@ -2361,9 +2608,23 @@ member whose status is Junior _(2026-11-01; it matched nobody before)_.
 
 **When a member matches more than one profile**, only the one with the highest
 **Priority** grades them; the others are ignored, not combined. Give each
-overlapping profile a different priority. A member who matches no active
-profile is graded against every requirement that applies to them, at the
-department's thresholds.
+overlapping profile a different priority. **At equal priority the profile
+created first wins** _(2026-11-21)_, so adding a new profile never re-grades
+members an older one already covers. Before, a tie went to whichever profile
+the database happened to return. The form warns under **Priority** when the
+number you type matches another active profile — "'Line Officers' (created
+_date_) also has priority 10. A member who matches both is graded by the
+profile created first; give one a higher number to choose." — and a tied
+profile's card says "Same priority as …". The save is still allowed. A member
+who matches no active profile is graded against every requirement that
+applies to them, at the department's thresholds.
+
+**Required and optional requirements.** Under **Required Training
+Requirements** tick what the profile grades; under **Optional Requirements**
+tick what its members should see but are not graded on. A requirement can be
+in only one of the two lists: ticking it in one takes it out of the other.
+Optional requirements are shown on the member's training page, marked
+Optional, and never graded or reminded _(2026-11-21)_.
 
 **Example: life members who no longer ride.** Their member class stays
 Operational and their status stays Life, so nothing else about them changes
@@ -2421,6 +2682,12 @@ like any other training, and the monthly hours show it under the month's
   waiver was the reason), with the original and adjusted targets. **Show
   monthly hours** labels each excused month (see
   [Checking an Hours Requirement Month by Month](#checking-an-hours-requirement-month-by-month)).
+  _(2026-11-14)_ Shift and call requirements have the same breakdown, under
+  **Show monthly shifts** or **Show monthly calls**. A target that leave brings
+  down to zero reads **Nothing owed (on leave)**. My Training also lists the
+  member's own leaves and the department's rule for a partly covered month; a
+  leave that does not waive training is marked "(training requirements stay
+  in force)".
 - **The member's Training History page** (from their profile), for officers
   with `training.manage` — a **Requirements** section above the records lists
   the member's requirements with the same cards the member sees on My
@@ -2454,7 +2721,7 @@ like any other training, and the monthly hours show it under the month's
 **Who can do this:** compliance officers (`compliance.manage`) or
 administrators (`settings.manage`).
 
-1. Open **Training Admin → Settings & Data → Compliance Settings** and select
+1. Open **Training Admin → Settings & Data → Compliance** and select
    **Open compliance settings** _(2026-11-04)_. (**Configure** under
    **Compliance Reporting** opens the same page.)
 2. On the **Thresholds** tab, find **Months on leave**.
@@ -2505,7 +2772,7 @@ month or stops at the end of last month.
 
 ### Setting the Department Default
 
-1. Open **Training Admin → Settings & Data → Compliance Settings** and select
+1. Open **Training Admin → Settings & Data → Compliance** and select
    **Open compliance settings** _(2026-11-04)_. This opens **Compliance
    Requirements Configuration**. (**Configure** under **Compliance Reporting**
    opens the same page.)
@@ -2543,6 +2810,17 @@ Training dashboard and the Compliance Matrix judge them — profiles, thresholds
 waivers and catch-up deadlines included. A member who turned off **Training and
 certification reminders** in their own email settings is not sent these,
 unless the department has made that email required.
+
+**Rolling requirements** _(2026-11-21)_. A requirement counted over a rolling
+window ("72 hours in any 12 months") has no deadline: it is met or short on
+any given day. It therefore gets no deadline reminder, unless a catch-up
+deadline protects the member. The non-compliance notice lists it once and
+does not list it again while it stays short. Before this fix, a member short
+of a rolling requirement was sent both emails every day, with the requirement
+"due today". One thing to know: a member who meets a rolling requirement and
+later falls short of it again is not sent a new notice for it alone. It
+appears again only in a notice that some other requirement triggers.
+Optional requirements are never in either email.
 
 > **Important.** If your department saved its compliance configuration with
 > `30, 14, 7` in the reminder box, reminders go out daily from then on. Clear
@@ -2653,16 +2931,82 @@ This one page covers:
 - **Meeting and shift waivers** — leave meetings out of attendance figures,
   and keep members off the schedule, during leave.
 
-> **Coming next: members asking to be excused** _(2026-11-10)_. The Logbook
-> can now take a member's request to be excused from one training session that
-> counts toward a session-attendance requirement, and route it to the positions
-> your department chooses (falling back to the Chief). An approved request
-> takes that one session out of the member's held and attended counts. **There
-> is no screen for it yet**, and it is off until a training officer saves a
-> request policy (deadline, yearly cap, categories, whether a reason is
-> required, who decides). Until the screens ship, nothing changes for members.
-> The rules are in `backend/app/docs/TRAINING_WAIVERS.md`, under "Session
-> Waiver Requests".
+### Asking to be excused from a training session _(2026-11-11)_
+
+A member can ask to be excused from one training session that counts toward
+their session-attendance requirement. An approved request takes that session
+out of both what they attended and what was held, so missing it does not
+count against them. It is off until a training officer turns it on. The full
+rules are in `backend/app/docs/TRAINING_WAIVERS.md`, under "Session Waiver
+Requests".
+
+**Turning it on** (training officers with `training.manage`):
+
+1. Open **Training Admin > Settings & Data > Session Waivers**.
+2. Tick **Members may ask to be excused**. Off, members see no button and
+   nothing else changes.
+3. Under **Deadline to ask**, choose **Before the session starts**, **Up to 24
+   hours after it ends** or **Up to 7 days after it ends**.
+4. Under **Limit**, tick **Limit how many waivers a member can have** to set
+   **Most waivers per member** (1 to 365) and whether it is **Counted over**
+   **Each calendar year** or **Any 12 months in a row**. Only approved
+   requests count, including a denial the Chief overrode.
+5. Under **What a request asks for**, add **Reason categories** (such as
+   Work, Illness or Family) with **Add a category**, tick **A member must
+   choose a category** if one is needed, and set **Written explanation** to
+   **Not asked**, **Optional** or **Required**.
+6. Set **Supporting documents** to **Not taken**, **Optional** or
+   **Required**, and how long to **Keep documents for** (365 days unless you
+   change it).
+7. Under **Who decides**, tick the positions whose holders decide. With none
+   chosen, or nobody holding them, requests go to the Chief, and failing a
+   Chief the training managers.
+8. Select **Save**.
+
+**Asking** (any member):
+
+1. Open the training session's event page. When the session counts toward
+   your attendance requirement, a card reads "This session counts toward …
+   Can't make it? Ask to be excused.", with the deadline and, when your
+   department sets a limit, how many waivers you have left.
+2. Select **Request to be excused**. The **Ask to be excused** dialog shows
+   only the fields your department asks for: **Reason category**,
+   **Explanation** and **Supporting document**. Only you and the officers who
+   decide can see them.
+3. Select **Send request**.
+
+The card then shows the request as waiting, approved or not approved, with
+who decided and their note. While it is waiting you can **Withdraw request**
+and ask again before the deadline. A member who has checked in cannot ask,
+and the card says why when the deadline has passed or no waivers are left.
+When there is nothing to excuse, the card says that too, instead of showing
+no button and no reason _(2026-11-20)_: "This session does not count toward
+an attendance requirement that applies to you." or "You are exempt from
+training requirements, so this session does not count against you."
+Every request you have made is listed under **My Waiver Requests** on **My
+Training**.
+
+**Supporting documents.** A request can carry up to three documents (PDF,
+JPEG, PNG or HEIC, 10 MB each), filed with the request or added while it is
+waiting. Only the member and the people who decide it can open them, and the
+file name is not kept. They are deleted when the **Keep documents for**
+period ends after the decision; the request itself is kept.
+
+**Deciding** (the holders of the positions under **Who decides**, and the
+Chief and the President):
+
+1. Each new request is emailed to you with **Approve** and **Deny** buttons.
+   They open the request's page and only pre-select a choice: nothing is
+   decided until you confirm. The email never contains the member's reason.
+   Training officers can also open **Training Admin > Records > Waiver
+   Requests**, which shows how many are waiting on you.
+2. On the request's page, under **Decide**, choose **Approve** or **Deny**.
+   A denial needs a **Note to the member**.
+3. Select **Record decision** and confirm.
+
+The first decision stands. The Chief alone can approve a request that was
+denied, with a **Reason for the override**, under **Chief override**. Nobody
+decides their own request. The member is emailed the decision.
 
 ### Requests nobody decides close after seven days _(2026-11-13)_
 
@@ -2693,7 +3037,8 @@ or a training manager when the chain reaches them.
 **Training → Waiver Requests** lists the requests waiting on you and the ones
 you have decided. It appears only for members who decide requests; at the top
 of every Training page it carries the number waiting on you. The email about
-each new request links to it too.
+each new request links to it too. Training officers also reach the same list
+from **Training Admin → Records → Waiver Requests**.
 
 ### Asking a member for more information _(2026-11-13)_
 
@@ -2713,6 +3058,9 @@ for more information**, type your question and select **Ask the member**.
   section opens itself while a question is waiting). Everyone who decides the
   request is then told, again without the answer itself, and the request is
   back in their queue.
+- _(2026-11-21)_ If the Chief or the President asked the question, the answer
+  is sent to them too, even though they decide outside the chosen positions,
+  as long as they may still decide it.
 - You may ask again after each answer, one question at a time. Every question
   and answer stays on the request's page under **Questions and answers**, and
   on the member's list.
@@ -2733,13 +3081,36 @@ to _new date_. Do you still need to be excused?**
   over.
 - **Withdraw** if you can make the new date.
 - If you do neither, the request closes on its own seven days after the new
-  date, and the session counts as missed.
+  date, and the session counts as missed. _(2026-11-21)_ You always get at
+  least seven days from the notice: when an officer corrects the start of a
+  session held weeks ago, the request no longer closes within the hour.
 
 Officers cannot approve or deny the request until you confirm; their page says
 it is waiting for you. A request that was **denied** is not reopened. Confirm
 is refused if you have already checked in to the session: withdraw it instead.
 See [Moving an event that members asked to be excused from](./04-events-meetings.md#moving-an-event-that-members-asked-to-be-excused-from-2026-11-13)
 for the officers' side.
+
+**When the session is cancelled** _(2026-11-16)_. Cancelling or deleting the
+session closes every request still pending for it; there is nothing left to be
+excused from. The member is told in the app and, from 2026-11-16, by email. A
+request already decided is kept as it was. _(2026-11-21)_ Undoing a historical
+import that created the session closes its requests the same way, and now
+emails the member too.
+
+**Emails a member cannot switch off** _(2026-11-21)_. Three of these notices
+change how the member's attendance is graded, so they are sent under the
+required **Changes to your training record** email kind, like the decision
+itself: the request closing undecided (the session now counts as missed), a
+moved session waiting on the member to confirm, and an officer's question
+waiting on an answer. A member who turned off **Training and certification
+reminders** still receives them. A cancelled session's notice stays optional:
+nothing is graded.
+
+**An officer who no longer decides** _(2026-11-21)_. Someone who decided a
+request and has since left the deciding position can still open it and see
+its status, the outcome, who decided and when, and their own note — but no
+longer the member's reason, documents or anyone else's notes.
 
 ### Requests from the Chief or the President _(2026-11-13)_
 
@@ -2845,15 +3216,30 @@ settings**.
 ## Compliance Summary
 
 Each member's profile page has a **compliance summary card** showing their
-training status at a glance:
+training status at a glance. Its colour is the member's standing on the
+**Compliance Matrix**, so the two always agree _(2026-11-20)_. The thresholds
+are those of the member's compliance profile when it sets its own, otherwise
+the department's compliance settings (100% compliant and 75% at risk when
+nothing is configured):
 
-| Indicator               | Meaning                                                           |
-| ----------------------- | ----------------------------------------------------------------- |
-| **Green (Compliant)**   | All requirements met, no certification problems                   |
-| **Yellow (At Risk)**    | Some requirements not met, or certifications expiring soon        |
-| **Red (Non-Compliant)** | An expired certification, or fewer than half the requirements met |
-| **Not Applicable**      | No requirement applies to the member, and nothing is expiring     |
-| **Exempt**              | The member is marked exempt from compliance tracking              |
+| Indicator               | Meaning                                                                   |
+| ----------------------- | ------------------------------------------------------------------------- |
+| **Green (Compliant)**   | Compliant on the matrix: meets the compliant threshold                    |
+| **Yellow (At Risk)**    | At risk on the matrix: below the compliant threshold, at or above at-risk |
+| **Red (Non-Compliant)** | Non-compliant on the matrix: below the at-risk threshold                  |
+| **Not Applicable**      | No requirement grades the member                                          |
+| **Exempt**              | The member is marked exempt from compliance tracking                      |
+
+The same colour shows on **My Crew** and on the member's printed training
+record.
+
+The expiring-certificate figure is shown for information and does not set the
+colour. An expired certificate lowers the standing when a requirement grades
+it, because that requirement then reads **Expired**. A certificate that a
+renewal has replaced, or that no requirement grades, does not. When the
+department leaves the current month out of compliance, a certificate that
+lapsed this month still counts as met until the month ends, while the
+figure already shows it as expired.
 
 The card also shows:
 
@@ -3322,7 +3708,7 @@ many sign-offs have been recorded.
 
 A shift evaluation is the department's own form, filled out for a member after
 a shift. It is not the same as a skills evaluation or a member's yearly
-performance evaluation (that is still being built; only its storage exists).
+performance evaluation (see [Member Performance Evaluations](#member-performance-evaluations)).
 
 **Building the forms.** **Training Admin → Settings & Data → Shift
 Evaluations** lists the department's forms (needs `training.configure` or
@@ -3349,13 +3735,25 @@ evaluation has a status line (not started, in progress, submitted, optional)
 linking to their evaluation page. A member enrolled in a program with a form is
 evaluated on it, once per program (or once for all, if combined). A member in
 no such program, in a seat the general form covers, gets the general form.
+_(2026-11-13)_ A shift counts only toward the programs the member had joined
+by the shift's date. _(2026-11-14)_ Opening an evaluation from the report and
+coming back keeps everything you had typed on the report, each trainee's
+ratings, notes and calls included.
+
+_(2026-11-14)_ Only crew who worked the shift (**Assigned** or **Confirmed**)
+are asked for a trainee report or an evaluation. A trainee marked **No-show**,
+or still **Pending**, no longer holds up close-out, and close-out writes them
+no draft report. They are still listed on the report, so you can file for a
+pending member who did work.
 
 ![The Shift Completion Report's crew list with an EMT Field Internship Evaluation status line under each of three interns: Submitted with its average, In progress with how many items are rated, and Not started, required before close-out](./images/02-130-shift-evaluation-status-lines.png)
 
 - The shift officer or a `training.manage` holder fills it out; **never your own**.
 - Rating buttons are full-size touch targets; required comments open by themselves.
-- Drafts autosave. **Submit evaluation** files it and fixes which form it is
-  on. A submitted evaluation can still be corrected: the button then reads
+- Drafts autosave while you work, and also when you move to another crew
+  member, follow a back link or leave the page _(2026-11-13)_. Switching to
+  another form with unsaved answers asks first. **Submit evaluation** files it
+  and fixes which form it is on. A submitted evaluation can still be corrected: the button then reads
   **Save changes**, and the credit follows the correction.
 - A **print** view gives the paper layout.
 - Ratings and comments are encrypted at rest.
@@ -3364,20 +3762,88 @@ no such program, in a seat the general form covers, gets the general form.
 
 ![The printable shift evaluation: the shift details and statistics, the rating key, Clinical Performance and Professionalism & Affect as tables of ratings and comments, and the closing comments](./images/02-132-shift-evaluation-print.png)
 
-**What a submitted evaluation credits.** It counts toward the member's program
-requirements of three types: an **Evaluated shifts** requirement counts it as
-one shift (or none, where the requirement leaves out an evaluation with any
-item at the form's lowest rating), and **Transports** and **Refusals**
-requirements take the counts on the form's statistics.
+#### What a submitted evaluation credits, and when it changes
 
-**Linked department requirements count too** _(2026-11-14)_. A department
-requirement of one of those three types, added to a program with **Link
-existing**, is now credited by the member's shift evaluations in the same way
-as the program's own. Before, evaluations never moved a linked row, and a
-training record of a matching type could mark it complete. The compliance
-matrix, dashboards, reports and My Training all count it this way, within the
-requirement's own window and with leave taken off in whole units. A flagged
-evaluation's credit is taken back from the linked row at once.
+A submitted evaluation counts toward the member's program requirements of four
+types:
+
+- **Evaluated shifts** counts it as one shift (or none, where the requirement
+  leaves out an evaluation with any item at the form's lowest rating).
+- **Transports** and **Refusals** take the counts on the form's statistics.
+- **Evaluated Calls** _(2026-11-15)_ takes the calls recorded on the form's
+  statistics. Enter the target as a number of calls; the program shows
+  progress as "x / N calls on evaluations". A draft counts nothing. The
+  existing **Calls** type still counts calls from shift reports, and never
+  from evaluations, so no call is counted twice: pick **Calls** for calls run,
+  **Evaluated Calls** for calls an evaluator watched.
+
+**Department requirements linked into a program** _(2026-11-14)_. An
+**Evaluated shifts**, **Transports** or **Refusals** requirement of the
+department's own, added to a program with **Link existing**, is credited by
+shift evaluations the same way as the program's own. A training record no
+longer satisfies one. An evaluation that counts for several programs counts
+once toward a department requirement, and general-form evaluations count too. The
+compliance matrix, dashboards, reports and My Training all count it this way,
+within the requirement's own window, and a flagged evaluation's credit is taken
+back from the linked row at once.
+
+**A requirement reopens when its credit falls** _(2026-11-13)_. When credit is
+taken back and a completed requirement drops below its target, it returns to
+**In progress**. A requirement an officer marked complete by hand stays
+complete. A leave or waiver reduces an evaluation target to a whole number.
+
+**When the member sees it** _(2026-11-13)_. Where your department reviews
+trainee reports before they count, a member with a report on file sees the
+evaluation, and gets its credit, once that report is approved. A member with
+no report sees it once the shift is closed out. Being the shift officer or a
+training manager does not let you read an evaluation about yourself sooner:
+your own opens read-only with no answers, and its line on the report shows
+the status without the scores.
+
+**Credit follows later changes** _(2026-11-16)_:
+
+- Change a requirement's type, or switch its "leave out the lowest rating"
+  setting, and every evaluation's credit toward it is worked out again. If the
+  new type does not take evaluation credit, the credit is removed.
+- Take a member off an ended shift, or mark them **No-show**, and that shift's
+  evaluation stops crediting them. The evaluation itself stays readable. Only
+  a seat the member worked (Assigned or Confirmed) earns credit.
+
+- _(2026-11-16)_ Drop a program out of a **combined** evaluation (clear its
+  form while the member stays enrolled), and the next time that evaluation is
+  saved, the credit it gave the dropped program is taken back. A requirement
+  that credit had completed reopens. The programs it still counts for keep
+  theirs. A shift's evaluations are fixed once it ends, so in practice this
+  happens on a shift still under way, or on an outside shift.
+
+One case keeps its credit on purpose (owner decision, 2026-11-16): an outside
+shift moved to an agency that does not evaluate shifts keeps the evaluation
+credit it already earned. Tying credit to the agency's switch would take back
+every past credit the day an agency is switched off.
+
+**The evaluations a department shift asks for are fixed when it ends**
+_(2026-11-15)_. Before the shift ends, the list follows the current settings.
+After it ends, each crew member's list is stored on the first look, so turning
+on **combine evaluations**, a member joining another program, or a form
+attached later no longer changes what that shift asks for — submitted
+evaluations are not orphaned and a close-out that passed stays passed. The
+crew is still read live: a member taken off the crew is not asked for, and a
+member added afterwards is worked out by the settings of the day. A deleted
+form drops out. A shift that ended before the upgrade is fixed from the
+settings in force the first time it is read afterwards. Outside shifts are always
+worked out live.
+
+**A form in use cannot be deactivated** _(2026-11-15)_. Deactivating an
+evaluation form that a training program, or the department's general-form
+setting, still uses is refused, naming what uses it — for example "'EMT Shift
+Evaluation' is still in use by Driver Candidate. Choose another form there
+before deactivating this one." An inactive form cannot be newly chosen as the
+general form or for a program. A program that already held one keeps it, so its
+other fields still save.
+
+**Switching forms on an evaluation** _(2026-11-16)_ closes any comment boxes
+you had opened on the old form, so the new form starts with only the comments
+it requires open.
 
 ### Shifts on an outside agency's unit _(2026-11-02)_
 
@@ -3385,8 +3851,8 @@ A member in a training program can ride another department's unit — an
 internship on a neighbouring agency's ambulance, say — and log it under
 **Shifts with other departments** (see
 [Shifts & Scheduling](./03-scheduling.md#shifts-with-other-departments)). That
-agency's preceptor evaluates them on paper, and a training officer types the
-form in.
+agency's preceptor evaluates them, either on paper for a training officer to
+type in, or _(2026-11-13)_ through a no-login preceptor link (below).
 
 **Turning it on, per agency.** A scheduling officer (`scheduling.manage`) opens
 **Scheduling Admin → Settings → Outside Apparatus** and ticks **Evaluate shifts
@@ -3398,7 +3864,10 @@ agency's units needs an evaluation if:
 
 - the member is enrolled in a program with a **Shift evaluation form**, and was
   already enrolled on the shift's date; and
-- the shift still counts — a rejected one drops off the list.
+- the shift still counts — a rejected one drops off the list. _(2026-11-13)_
+  A shift still awaiting approval is listed too, so it can be evaluated
+  straight away; its credit, and the member's view of it, wait for the
+  approval.
 
 The department's general form is never used for an outside shift, because the
 general form is chosen by seat and an outside shift has none. Nothing is
@@ -3426,6 +3895,29 @@ other departments** list and in the officers' review on Member Hours:
 
 Nobody enters an evaluation of their own shift: on your own, the form is
 read-only.
+
+**A preceptor link** _(2026-11-13)_. Instead of typing in a paper form, the
+agency's preceptor can fill the evaluation out themselves, with no account.
+
+1. The member selects **Preceptor link** on the shift in **Shifts with other
+   departments** (see
+   [Shifts & Scheduling](./03-scheduling.md#shifts-with-other-departments)),
+   or a training officer selects it on the shift in **Outside shifts awaiting
+   an evaluation**.
+2. In the **Preceptor link** dialog, select **Make link**, or type the
+   **Preceptor's email (optional)** and select **Make and email link**. Show
+   the preceptor the QR code, or **Copy** the link.
+3. The preceptor opens it, enters **Your name** and fills out the form. It can
+   be submitted once.
+
+A link stays open for the number of days after the shift set in **Training
+Admin → Settings & Data → Shift Evaluations**, **Preceptor links stay open for
+(days after the shift)**: 7 unless you change it, 1 to 60. Each shift has one
+open link: **Make a new link** stops the old one, and **Turn off link** closes
+it. Rejecting the shift, or the member leaving the department, closes it too.
+A member can email a link at most 10 times an hour. A submitted evaluation
+credits the program and reads as entered by the named preceptor through a
+preceptor link, and says so when the member made the link.
 
 **Credit and visibility.** A submitted outside-shift evaluation credits the
 member's program exactly as a department shift's does (above). The member sees
@@ -3460,7 +3952,11 @@ instead of picking a scheduled shift.
 6. Add an **overall shift narrative**.
 7. **Search for each crew member and select them to add them.** A member you
    add arrives ticked. The tick box decides who gets a report, and the **✕**
-   removes the member from the list.
+   removes the member from the list. The search finds current members only
+   (active or probationary) _(2026-11-19)_; a report not tied to a scheduled
+   shift is refused if it names a former member ("Only current members can be
+   chosen as crew members"). A report filed against a scheduled shift is not
+   checked, since someone who worked that shift may have left since.
 8. For each crew member who needs one, select **Evaluate** to open their
    section:
    - performance rating (1–5 stars);
@@ -3483,7 +3979,7 @@ instead of picking a scheduled shift.
 ### Admin Configuration
 
 Administrators set up manual shift entry under **Training Admin → Settings &
-Data → Manual Entry Rules**:
+Data → Manual Entry**:
 
 | Setting                 | What it does                                                                             |
 | ----------------------- | ---------------------------------------------------------------------------------------- |
@@ -3559,8 +4055,18 @@ exports:
    training type. It suits state and yearly reporting.
 3. **Certification Report** — a CSV of all certifications marked valid,
    expiring soon or expired, for tracking renewals.
-4. **Compliance Report** — department-wide compliance for all members and
-   requirements.
+4. **Compliance Report** — each member's current standing on every
+   requirement, as the Compliance Matrix shows it, with their training hours
+   and completed records since 1 January. The period sets only those two
+   columns; the status columns are today's standing.
+
+**A Source column on the record exports** _(2026-11-19)_. The **Member
+Records** CSV and the **Certification Report** CSV end with a **Source**
+column: the training provider's name for a synced record, **Imported** for one
+the Historical Data Import wrote, and **The Logbook** for everything else. It
+is the last column, so a spreadsheet that reads the columns by position keeps
+working. The Hours Summary and Compliance Report add up records rather than
+listing them, so they have no Source column.
 
 ![Training admin reports tab with the compliance, hours, and certification cards](./images/02-41-training-admin-reports.png)
 
@@ -3647,6 +4153,21 @@ sign-in details have been proved to work. A newly saved provider has an amber
 triangle reading _Connection not verified_. It is active; it has just never
 been tested. Select **Test** to turn it green.
 
+**Which edits need a new Test** _(2026-11-18)_. Only a change to the connection
+itself returns a provider to _Connection not verified_: a different API URL,
+client ID or authentication type, a new secret, or clearing a saved secret.
+Changing the sync interval, the daily review time or the provider's name keeps
+it verified. **Automatic syncs run only for a verified provider**, and before
+this change any save un-verified it, so a provider whose schedule was edited
+silently stopped syncing on its own while **Sync Now** still worked. If a
+provider's last scheduled pull is older than its interval, open it and select
+**Test**.
+
+**Manual pulls are labelled** _(2026-11-18)_. In **Sync History**, a pull an
+officer started with **Sync Now** reads **Manual pull**. Before, it read
+**Scheduled pull**, so a provider that had dropped off the schedule looked as
+if it was still syncing by itself.
+
 ![The Integrations tab with a saved provider — its platform, last sync, auto-sync interval and sync actions](./images/02-42-external-integrations.png)
 
 ### Vector Solutions
@@ -3678,7 +4199,10 @@ is still unmatched — "Categories (7 unmapped)".
   than the provider's sync window, which a later sync would never bring back.
   Setting it back to **Not mapped** removes the match and takes their waiting
   completions off the member again. Completions already imported keep the
-  member they were imported to. A deleted member cannot be chosen.
+  member they were imported to. A deleted member cannot be chosen, and the
+  list offers current members only (active or probationary) _(2026-11-19)_; a
+  user already matched to someone who has since left stays matched and still
+  shows that member's name.
 
 Users are also matched automatically by email on each sync. Putting the email
 the provider uses on the member's profile still works. Once you set or clear a
@@ -3767,7 +4291,7 @@ deleting the program afterwards leaves them in your requirement list.
 
 **Who can do this:** training officers.
 
-Open **Training Admin → Settings & Data → Import Past Training** to bring in past
+Open **Training Admin → Settings & Data → Import History** to bring in past
 training records from a CSV file.
 Training hours that sit in a previous records system's all-hours export,
 alongside shifts and administrative time, come in through **Integrations →
@@ -3806,7 +4330,9 @@ keeps the file's own spelling on the record, but the member's **My Training**
 pages and their own training records show the library course's name instead,
 and their history search finds it by either name. Officers still see the
 record's stored name, which is what the record editor saves. A row left
-unmatched shows the name from the file.
+unmatched shows the name from the file, and counts toward no course or
+certification requirement until you link it under **Course Links** (see
+[Course Links](#course-links--records-that-name-no-course-2026-11-16)).
 
 ![The historical-import wizard on its Preview step: parsed rows, matched members, and the confirm button](./images/02-02-historical-import-preview.png)
 
@@ -3838,7 +4364,8 @@ for uploading it and marking its columns). Once a column is marked as
    **Import as written**. A mapped subject takes the course's name, code,
    training type and category, so its records count toward requirements that
    name the course. An unmapped subject is imported under its own name, as
-   continuing education. Where a subject's name closely matches a course,
+   continuing education; you can link it to a course later under **Course
+   Links**. Where a subject's name closely matches a course,
    **Use** _course_ offers it; **Accept all suggestions** maps every such
    subject at once. **Find a subject** searches the list.
 4. **Decide the training provider rows.** A row whose instructor names Target
@@ -3903,6 +4430,12 @@ department is not on the map.
 
 - The heat-map is read when the tab opens. Switch away and back to see an
   evaluation recorded since.
+- **On a phone or narrow window** _(2026-11-20)_ the map stays a grid and
+  scrolls both ways inside its own box. The member column is pinned on the
+  left and the skill names along the top, so you always know whose row and
+  which skill a cell is; a fade and chevron on an edge mean there is more that
+  way. Long member names wrap within the pinned column rather than being cut
+  off. On a keyboard, tab into the map and use the arrow keys to scroll it.
 - An active member with no evaluations appears as a row of dashes, not left
   off, so a gap in the roster is visible.
 
@@ -3993,8 +4526,16 @@ covers when one is linked; the Add form has no field for it. **Status** reads:
 ### Assigning Instructors to Sessions
 
 When creating a training session, choose a **Lead Instructor**. The list shows
-every member; it does not check instructor qualifications. Check the
-Instructors list yourself before you assign someone.
+every current member (active or probationary); it does not check instructor
+qualifications. Check the Instructors list yourself before you assign someone.
+
+Former members — the archived, retired, dropped and inactive accounts a roster
+import brings in — are not offered, here or when adding an instructor
+qualification _(2026-11-19)_. A session that already names an instructor who
+has since left keeps them, shown as "(former member)", and saves unchanged; the
+server refuses only a newly chosen former member ("Only current members can be
+chosen as the lead instructor"). A course's named instructor fills the field
+only when it matches a current member.
 
 ### Edge Cases
 
@@ -4112,7 +4653,7 @@ views: **Annual Report**, **ISO Readiness**, **Record Quality**,
 opens **Compliance Settings** — thresholds, compliance
 profiles, automatic reports and report history (see
 [Setting the Department Default](#setting-the-department-default)). Its usual
-home is now **Settings & Data → Compliance Settings → Open compliance
+home is now **Settings & Data → Compliance → Open compliance
 settings** _(2026-11-04)_; both open the same page.
 
 ### ISO Readiness
@@ -4187,6 +4728,16 @@ It looks **30, 60 and 90 days** ahead: summary cards across the top, then one
 row per member showing each period alongside the certifications expiring in
 it.
 
+Each member is graded on what their compliance profile requires, as on the
+Compliance Matrix _(2026-11-20)_. The **Current** figure is coloured by the
+member's standing there — the profile's thresholds when it sets its own,
+otherwise the department's — so the same member reads the same here, on the
+Training Enhancements forecast and on the matrix. The 30, 60 and 90-day
+figures are estimates and keep fixed colour bands. They subtract every
+certificate expiring in the window, including one no requirement grades, so
+for a member whose profile lists few requirements one expiring certificate
+moves the projection further.
+
 ![Compliance forecast projecting each member's compliance over 90 days](./images/02-75-compliance-forecast.png)
 
 ### Edge Cases
@@ -4225,6 +4776,11 @@ later.
 - A file over 25 MB is refused with "File too large. Maximum size is 25MB."
 - The file's type is checked from its contents, not its name. A file of a
   type that is not allowed is refused even if it is renamed.
+- A voided (cancelled) record cannot take a new file: "A voided training
+  record can't take new attachments" _(2026-11-20)_.
+- A record's file cannot be removed from this panel. It leaves only through
+  the department's retention period (for a file that came with a
+  self-report), the member's anonymisation or permanent deletion.
 
 ---
 
@@ -4257,7 +4813,7 @@ Configuration**).
 | A **Certification** requirement                                                         | Credited through a course linked on the requirement, the training type, or the registry code at the start of the certification number. Older requirements also match by course name, but only for records completed before they were upgraded, and _(2026-11-04)_ only when the name is the same once capitals, spaces and punctuation are ignored. If nothing matches, the member shows non-compliant. |
 | A **Skills Evaluation**, **Checklist** or **Knowledge Test** requirement _(2026-11-04)_ | Credited through the requirement's training type. A requirement that existed when the 2026-11-04 upgrade was installed also matches a record completed by that day whose course name is the same as the requirement's (capitals, spaces and punctuation ignored); a newer record, or a newer requirement, never matches by name.                                                                        |
 | A **Session Attendance** requirement _(2026-11-04)_                                     | Counts finalized, linked sessions the member attended, against the percentage of those held in the period since they joined. See [Session Attendance](#session-attendance--attend-a-share-of-the-linked-drills-2026-11-04).                                                                                                                                                                             |
-| An **Every 2 Years** requirement with an expired certification                          | Even with enough hours, the expired certification sets progress back to 0 until it is renewed.                                                                                                                                                                                                                                                                                                          |
+| An **Every 2 Years** hours or courses requirement with an expired certification         | If the certificate expiring last among the records the requirement counts in its two-year window has lapsed, it reads **Expired** and progress goes back to 0, even with enough hours or courses, until it is renewed. A lapsed certificate on a record outside the window does not count against the member. My Training and the Compliance Matrix apply this the same way _(2026-11-21)_.             |
 | The member joined before an **Exempt existing members** cutoff                          | The requirement does not grade that member anywhere. Join date is the hire date, else the date the account was created.                                                                                                                                                                                                                                                                                 |
 | The same, with a catch-up deadline not yet passed                                       | Shown as catching up, due on the deadline. It counts neither for nor against the member until the deadline passes; then it counts normally.                                                                                                                                                                                                                                                             |
 | The department has no requirements                                                      | Department compliance reads **Not set up** / "no requirements set up yet", not 100%.                                                                                                                                                                                                                                                                                                                    |
@@ -4273,30 +4829,39 @@ Configuration**).
 | A permanent waiver (no end date)              | Shows as **Permanent** and never ends.                                                                                                  |
 | A leave of absence is turned off by an edit   | Its linked training waiver is turned off in the same save. Turning the leave back on restores it. Deleting the leave also removes it.   |
 | A leave with an unusual leave type            | Its linked training waiver is typed **Other**. It still works.                                                                          |
+| A leave with its linked training waiver       | Counted once, as the leave. It no longer reads as both months on leave and waived months. _(2026-11-13)_                                |
+| A leave that does not waive training          | Excuses no training: the member owes the full target for those months. Before 2026-11-13 it still excused them.                         |
 
 ---
 
 ## Troubleshooting
 
-| Problem                                                | What to do                                                                                                                                                                                                                                                                       |
-| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "My training submission was rejected"                  | Read the reason in your notification. Fix the problem and submit again.                                                                                                                                                                                                          |
-| Hours are not counting toward a requirement            | Check the record's course is linked to the right requirement, and that the record is approved.                                                                                                                                                                                   |
-| A yearly class is not counted (HIPAA, yearly training) | Work through [When a Yearly Class Isn't Counted](#when-a-yearly-class-isnt-counted): the requirement's window, the course link and the provider's course matching, the freshness window, and the imported-credit setting.                                                        |
-| An hours requirement shows no due date                 | This is intended for an hours requirement that rolls. It is a running count, so the card shows the months it counts and the upcoming list shows the hours still to go.                                                                                                           |
-| Program progress does not update after a shift         | A shift completion report must be filed. Automatic credit only works for enrolled members with matching requirement types.                                                                                                                                                       |
-| The Compliance Matrix looks wrong                      | Check the requirement's frequency and due-date type. Rolling periods count whole months ending with this one.                                                                                                                                                                    |
-| A member on leave still shows non-compliant            | Check the leave of absence is active under **Members > Admin > Waivers**. Check the department's **Months on leave** setting: under a 15-day rule, a month with only a few days of leave is still mostly or wholly owed. Only hours, shifts and calls requirements are adjusted. |
-| A leave was created but training was not adjusted      | The leave may have been created with **Meeting Attendance & Shift Requirements** only. Its training waiver should appear on the Training Waivers tab. If it is missing, create a training waiver on the Waivers page.                                                            |
-| A duplicate training record warning                    | The Logbook spots records with the same member, the same course name (ignoring capitals) and a completion date within a day. Check the warning, then go ahead or skip the duplicate.                                                                                             |
-| The compliance card shows the wrong color              | Red = an expired certification or fewer than half the requirements met. Yellow = a certification expiring soon, or some requirements not met. Green = all met. Check each requirement's progress.                                                                                |
-| A certification alert was not received                 | Each alert stage (90, 60, 30, 7 days) is sent only once. If all stages have been sent, no more alerts come.                                                                                                                                                                      |
-| A rank shows as unrecognized                           | Open Members Admin to see the rank check. Change the member's rank to one of the ranks set up in Settings.                                                                                                                                                                       |
-| You cannot see the Training module                     | Training is an optional module. Your administrator must turn it on in Settings > Modules.                                                                                                                                                                                        |
-| An outside integration is not syncing                  | Check the provider's settings and sync history, select **Test**, and check the user matching.                                                                                                                                                                                    |
-| Recertification reminders are not sending              | Check: (1) the certification has an expiry date; (2) a pathway's renewal window is set; (3) email is set up for your department. If all three are right, ask your system administrator to check the reminder schedule.                                                           |
-| The competency heat-map is out of date                 | It is read when the Competency tab opens. Switch away and back to see an evaluation recorded since.                                                                                                                                                                              |
-| Effectiveness scores are not showing                   | Scores appear only once at least one evaluation has been submitted.                                                                                                                                                                                                              |
+| Problem                                                 | What to do                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "My training submission was rejected"                   | Read the reason in your notification. Fix the problem and submit again.                                                                                                                                                                                                          |
+| Hours are not counting toward a requirement             | Check the record's course is linked to the right requirement, and that the record is approved.                                                                                                                                                                                   |
+| A yearly class is not counted (HIPAA, yearly training)  | Work through [When a Yearly Class Isn't Counted](#when-a-yearly-class-isnt-counted): the requirement's window, the course link and the provider's course matching, the freshness window, and the imported-credit setting.                                                        |
+| An hours requirement shows no due date                  | This is intended for an hours requirement that rolls. It is a running count, so the card shows the months it counts and the upcoming list shows the hours still to go.                                                                                                           |
+| Program progress does not update after a shift          | A shift completion report must be filed. Automatic credit only works for enrolled members with matching requirement types.                                                                                                                                                       |
+| The Compliance Matrix looks wrong                       | Check the requirement's frequency and due-date type. Rolling periods count whole months ending with this one.                                                                                                                                                                    |
+| A member on leave still shows non-compliant             | Check the leave of absence is active under **Members > Admin > Waivers**. Check the department's **Months on leave** setting: under a 15-day rule, a month with only a few days of leave is still mostly or wholly owed. Only hours, shifts and calls requirements are adjusted. |
+| A leave was created but training was not adjusted       | The leave may have been created with **Meeting Attendance & Shift Requirements** only. Its training waiver should appear on the Training Waivers tab. If it is missing, create a training waiver on the Waivers page.                                                            |
+| A duplicate training record warning                     | The Logbook spots records with the same member, the same course name (ignoring capitals) and a completion date within a day. Check the warning, then go ahead or skip the duplicate.                                                                                             |
+| The compliance card shows the wrong color               | Red = an expired certification or fewer than half the requirements met. Yellow = a certification expiring soon, or some requirements not met. Green = all met. Check each requirement's progress.                                                                                |
+| A certification alert was not received                  | Each alert stage (90, 60, 30, 7 days) is sent only once. If all stages have been sent, no more alerts come.                                                                                                                                                                      |
+| A rank shows as unrecognized                            | Open Members Admin to see the rank check. Change the member's rank to one of the ranks set up in Settings.                                                                                                                                                                       |
+| You cannot see the Training module                      | Training is an optional module. Your administrator must turn it on in Settings > Modules.                                                                                                                                                                                        |
+| An outside integration is not syncing                   | Check the provider's settings and sync history, select **Test**, and check the user matching.                                                                                                                                                                                    |
+| Recertification reminders are not sending               | Check: (1) the certification has an expiry date; (2) a pathway's renewal window is set; (3) email is set up for your department. If all three are right, ask your system administrator to check the reminder schedule.                                                           |
+| The competency heat-map is out of date                  | It is read when the Competency tab opens. Switch away and back to see an evaluation recorded since.                                                                                                                                                                              |
+| Reordering said **Failed to reorder requirements**      | Moving a pipeline requirement up or down showed this, yet the order had changed. Fixed 2026-11-19: the new order was always saved; the error came from building the reply. Reload the pipeline to confirm the order, then carry on.                                              |
+| A linked course name was wrong                          | Open **Curriculum → Course Links**, find it under **Recent links** and select **Undo**. Links made before 2026-11-19 are not listed; edit those records individually.                                                                                                            |
+| A member who has left is missing from a member list     | Pickers offer current members only (active or probationary). A record that already names a former member still shows them, usually marked "(former member)", and saves unchanged.                                                                                                |
+| An hours requirement shows a smaller figure than before | Since 2026-11-20 the card leads with the monthly average ("6.9/6 hrs/mo avg"). The total is on the line beneath and still decides whether the requirement is met.                                                                                                                |
+| Members got the same compliance email every day         | That happened with rolling requirements before 2026-11-21. A rolling requirement now gets no deadline reminder and is listed in the non-compliance notice once.                                                                                                                  |
+| The Compliance Report CSV changed its headers           | Since 2026-11-21 the status columns are today's standing, as on the matrix; the hours and record columns carry the report period in their headers, e.g. **Total Hours (2026-01-01 to 2026-11-21)**. "Completed Courses" is now **Completed Records**.                            |
+| Course Links said "try again"                           | Another officer was linking the same records at that moment. Nothing was linked; select **Link** again.                                                                                                                                                                          |
+| Effectiveness scores are not showing                    | Scores appear only once at least one evaluation has been submitted.                                                                                                                                                                                                              |
 
 ---
 
@@ -4321,6 +4886,21 @@ form**, in four steps — **Event Details**, **Training Info**, **Settings**,
 **Review** — with its steps shown across the top. **Next** checks the step
 and moves forward; **Previous** goes back. Steps 1 to 5 below are on **Event
 Details**; the course is on **Training Info**.
+
+> **Starting from a template** _(2026-11-20)_. While **Event Details** is
+> open, **Start from a Template** above the form offers the department's
+> active Training templates. Picking one fills the event's details and, when
+> the template saved them, **Training Info**: the course, training type,
+> credit hours, lead instructor and certification settings. It replaces what
+> was already typed. Requirement and program links, **Counts toward
+> attendance** and the completion settings are not saved on a template and
+> start on their defaults. If the template's course is no longer in the
+> Course Library, **Training Info** starts on **No course yet**; if its lead
+> instructor is no longer a current member, **Lead instructor** starts empty.
+> A note on **Training Info** says which. Templates are made and edited under
+> **Events → ⋯ → Event Templates**, or with **More → Save as Template** on a
+> Training event's page (see
+> [Templates](./04-events-meetings.md#templates)).
 
 1. Give the session a **Title** and, if you like, a description. With no
    course chosen, the title is also what members' records are filed under.
@@ -5091,13 +5671,26 @@ beside the title, not in the Templates and Review periods sections below.
 
 **First-time setup.** A chief opening an empty evaluations area gets a **Getting
 started** checklist, a **preview** of how the form will look to the member, the
-evaluator and the officer, and two starter templates, an **Annual Member
+evaluator and the officer, and three starter templates: an **Annual Member
 Evaluation** (graded by section _(2026-11-04)_: each section's ratings give a
 score out of 5 and a grade, and the sections' weights, adding to 100, give the
 overall; with suggested ratings from training hours, required training and
-meeting attendance) and a **Probationary Check-in**.
-Choosing a starter fills the first draft; both publish as they stand, and
-neither includes an officer-only section, since that needs your own ranks.
+meeting attendance), an **Annual Evaluation with Officer Sections**
+_(2026-11-20)_ and a **Probationary Check-in**.
+Choosing a starter fills the first draft, and each publishes as it stands.
+
+**The officer starter** _(2026-11-20)_ is the annual form with a fourth,
+officer-only section, **Leadership and supervision**: crew leadership,
+developing members, and administrative duties (crew leadership shows the
+member's positions held, and administrative duties their administrative
+hours). Because the Logbook cannot know which of your ranks are officers,
+choosing it adds an **Officer ranks** list of tick boxes to the **New
+template** dialog, and **Create and open builder** stays greyed out until you
+tick at least one. Members holding a ticked rank get the
+leadership section; everyone else is graded on the other three sections alone,
+which keep nearly the plain annual form's weights. If your department has no
+ranks set up yet, the dialog says so; set ranks up first. You can change the
+ranks later in the builder.
 
 ### How an evaluation moves
 
@@ -5118,8 +5711,9 @@ neither includes an officer-only section, since that needs your own ranks.
    percentage for the review period, no longer a met / not met verdict, and
    reads "unavailable" when no single requirement applies to the member. Evaluations opened before the change keep
    the old figure until someone selects **Update figures**.
-   At calibration the reviewer may **tick the evaluator's items to
-   revisit** (ticks only, no notes). The evaluator is told items are flagged;
+   At calibration the reviewer (a holder of `evaluations.view_all`, or the
+   person a manager named on the step, never the evaluator) may **tick the
+   evaluator's items to revisit** (ticks only, no notes). The evaluator is told items are flagged;
    the member sees the ticks once the evaluation is released to them.
    _(2026-11-14)_ Three more figures can be added to a template's items:
    **events attended by type** ("Training: 12 events"; a count, since not
@@ -5138,7 +5732,13 @@ neither includes an officer-only section, since that needs your own ranks.
 3. **Approvals and signing.** The approving position signs; the member
    acknowledges receipt or refuses with a reason. Signing asks you to re-verify
    your session and type your own name. The last signature finalizes the
-   evaluation and freezes a **PDF** on the department letterhead.
+   evaluation and freezes a **PDF** on the department letterhead, numbered
+   "Page X of Y" in its footer _(2026-11-20)_.
+   _(2026-11-16)_ **The evaluator never calibrates or approves their own
+   evaluation, and nobody signs two approvals on one evaluation**, even when
+   they hold the approving position. See
+   [Naming who takes a step](#naming-who-takes-a-step-2026-11-16) for a
+   department where that leaves nobody to sign.
 4. **Member's response.** For 30 days (the form's setting) after finalization the
    member may write a response: **Save draft** (only they see it), then
    **Submit response** (final). A second PDF carries the response; **Signed PDF,
@@ -5152,6 +5752,97 @@ neither includes an officer-only section, since that needs your own ranks.
 6. **Deleting.** Only the Chief (`evaluations.delete`) can delete, with a reason
    and a re-verified session. A record of who, when and why is kept and shown
    under **Removed evaluations**; the member is emailed without the reason.
+
+A PDF frozen before 2026-11-20 keeps its old "Page N" footer; only PDFs made
+from then on read "Page X of Y".
+
+### Naming who takes a step _(2026-11-16)_
+
+Because the evaluator can no longer calibrate or approve their own evaluation,
+a small department can end up with nobody eligible for a step: the only Captain
+wrote the evaluation, and the approval step is the Captain's. An evaluations
+manager (`evaluations.manage`) fixes that on the evaluation itself:
+
+1. Open the evaluation. In its list of steps, an approval or calibration step
+   that is not yet done shows **Assign** (or **Change**, if someone is already
+   named).
+2. In **Who takes "…"**, choose a member under **Completed by**. The list
+   leaves out the member, the evaluator and, on an approval, anyone who signed
+   another approval on this evaluation.
+3. Select **Assign** and confirm your identity.
+
+The step then reads **Assigned to** _name_. That person is the only one who can
+complete the step on this evaluation, in place of the position's holders (or,
+for calibration, the `evaluations.view_all` holders). They can read the
+evaluation as an approver does, and are emailed straight away if the step is
+already open. To hand the step back, choose **No one named** and select **Hand
+back**. Each change is recorded in the audit log. An amendment starts its new
+revision with no one named. A position holder replaced by a name no longer sees
+the evaluation unless they have another part in it.
+
+> **After the upgrade:** an evaluation already waiting on an approval whose
+> only position holder is its own evaluator stays open until a manager names
+> someone.
+
+### The last review _(2026-11-20)_
+
+When a member has an earlier finalized evaluation on the same form (any
+version) for a period that ended before this one began, the evaluation page
+shows a **Last review** card beside the steps: that review's period, its
+overall grade and each section's grade as they stood (the evaluator's where
+they changed the calculated one), and the text of its goals under **Goals set
+then**, so this year's review can say whether they were met. **Open the last
+review** opens it.
+
+You see the card only if you could open that earlier review yourself. An
+evaluator who is not allowed to read last year's review (because someone else
+wrote it and they do not hold `evaluations.view_all`) does not get it. The card
+is not printed on the PDF, which records this review alone.
+
+### Period results and export _(2026-11-20)_
+
+On **Evaluations I conduct** / **All evaluations**, a **Period** list beside
+**Show** filters the list to one review period. A holder of
+`evaluations.view_all` also sees:
+
+- an **Overall grade** column, filled in for finalized evaluations (blank, —,
+  while a review is still in progress, since its grade is not settled);
+- with a period chosen, a **Period results** card: how many of its reviews are
+  complete ("12 of 15 complete") and how many stand at each grade; and
+- **Export CSV** on that card, which downloads the period as
+  `evaluation-results.csv`, one row per evaluation with its grade. Each export
+  is recorded in the audit log.
+
+`evaluations.manage` alone does not show grades: a manager runs the process
+without reading what is in the evaluations. Your own evaluation is left out of
+both the list and the export.
+
+### Figures on the form _(2026-11-14)_
+
+When you build a template, an item's **Data shown with this item** list is
+grouped by area: Training, Business meetings, Events, Shifts, Calls,
+Administrative hours and Membership. It now also offers **field shift
+evaluation scores** (an average per form, shown but never scored),
+**certifications expiring soon** (within 90 days after the period ends),
+**event attendance by type**, and the member's **waiver requests** for
+training sessions and business meetings (never scored, and never with the
+member's reason or a decider's note).
+
+- A source whose module or call tracking is off reads "(turned off)" in the
+  list, and the editor says the figure may have nothing to measure.
+- When the score bands leave values uncovered, the editor warns: "No rating
+  is suggested for values …". A member whose figure falls there is rated
+  without a suggestion.
+- On the evaluation and in the PDF, a figure shows the counts behind it, for
+  example "6 of 8 meetings attended".
+- The **call response rate** leaves out calls during a member's leave or a
+  gap in membership, on both sides. Evaluations already taken keep the figure
+  they hold.
+- _(2026-11-20)_ A **waiver request**'s line ends "attachment on file" when at
+  least one document was on file for it, and says nothing else about the file:
+  not its name, type or how many. Waiver attachments are deleted a set time after a request closes
+  (a year by default), so this reports what was on file when the figures were
+  taken. An evaluation drafted after the attachment was deleted reads no.
 
 ### Grading by section _(2026-11-04)_
 
@@ -5195,15 +5886,23 @@ a rating or comment. A daily task sends reminders and overdue notices once each.
 
 ### Edge cases
 
-- Nobody evaluates, amends or deletes their own evaluation.
-- An evaluation is visible only to its member, evaluator, approvers at an open
-  step and holders of view-all or manage; anyone else sees "not found".
+- Nobody evaluates, amends or deletes their own evaluation, and the evaluator
+  never calibrates or approves it _(2026-11-16)_.
+- An evaluation is listed for its member, evaluator, approvers at an open step,
+  anyone named on a step, the member's current supervisor (under **My Crew**)
+  and holders of view-all or manage; anyone else sees "not found". A manager
+  without view-all runs the process but does not read what is written, and a
+  supervisor reads only what the member can read, once it is released to them.
 - Shift-evaluation credit (**Evaluated shifts**, **Transports**, **Refusals**
   requirement types) is described under Shift Evaluations, not here.
 
 > **Screenshots needed:** see `SCREENSHOT_CURRENCY.md` (the grading-by-section builder and evaluation page, evaluations list, draft
 > dialog, evaluation page, sign dialog, calibration flags, response card, amend
-> and delete dialogs).
+> and delete dialogs). Also needed _(2026-11-20)_: the step list with **Assign**
+> and the **Who takes "…"** dialog; the **Last review** card; the conduct list
+> with a period chosen, showing **Period results** and **Export CSV**; and the
+> **New template** dialog with the officer starter and its **Officer ranks**
+> boxes.
 
 ---
 
@@ -5218,13 +5917,14 @@ have moved, been renamed or work differently.
   Curriculum, Evaluations, Program Management, Compliance Reporting, and
   Settings & Data. There is no **Setup** or **Advanced** area. Requirements,
   the Course Library and Programs are under **Curriculum**; Knowledge Tests and
-  Skill Evaluations under **Evaluations**; Integrations, Import Past Training, Manual
-  Entry Rules, Practical Skills, Shift Evaluations and Compliance Settings under
+  Skill Evaluations under **Evaluations**; Integrations, Import History, Manual
+  Entry, Practical Skills, Session Waivers, Shift Evaluations and Compliance under
   **Settings & Data**; Recertification,
   Competency, Instructors, Effectiveness, Multi-Agency and Reports under
   **Program Management**. Old links still open the right page.
 - **Compliance settings** are reached from **Settings & Data → Compliance
-  Settings → Open compliance settings** _(2026-11-04)_, or from **Compliance
+  → Open compliance settings** _(2026-11-04; the tab read Compliance Settings
+  until 2026-11-08)_, or from **Compliance
   Reporting → Configure**, not a "Compliance Requirements" tab.
 - **Import from Registry** sits **below** the requirements list on **Curriculum
   → Requirements**, not above it _(2026-11-04)_.
@@ -5274,6 +5974,19 @@ have moved, been renamed or work differently.
 - **Course and Certification requirements pick courses from the library.** A
   Courses requirement made long ago with typed course names showed everyone as
   incomplete. Reopen it and pick the courses.
+- **Records with a typed course name are linked from Course Links**
+  _(2026-11-15)_. Rather than editing such records one at a time, link each
+  name to a library course under **Curriculum → Course Links**; see
+  [Course Links](#course-links--records-that-name-no-course-2026-11-16).
+- **Records from Import History now read "Imported"** _(2026-11-15)_, not "The
+  Logbook". Older ones are unchanged.
+- **A shift's evaluations are fixed when it ends** _(2026-11-16)_, and a
+  requirement or crew change re-counts evaluation credit without the
+  evaluation being saved again. A form a program uses cannot be deactivated.
+- **A performance evaluation's evaluator cannot calibrate or approve it**
+  _(2026-11-16)_, even when they hold the approving position, and nobody signs
+  two approvals on one evaluation. A manager names someone else on the step;
+  see [Naming who takes a step](#naming-who-takes-a-step-2026-11-16).
 - **A Certification requirement no longer credits a course just because its
   name contains the requirement's name** — not even for older records, since
   2026-11-04. An older record on an older requirement counts by name only when
@@ -5295,7 +6008,16 @@ have moved, been renamed or work differently.
   when this changed.
 - **Requirements limited by rank** apply to members of those ranks.
 - **Dashboards and the annual report use compliance profiles and your
-  thresholds**, so their figures agree with the Compliance Matrix.
+  thresholds**, so their figures agree with the Compliance Matrix. Since
+  2026-11-20 so do the profile compliance card, the member status roster, the
+  competency matrix, the forecast, the Shift Compliance report and the
+  Compliance Report export, which now shows today's standing.
+- **An hours requirement leads with the monthly average** _(2026-11-20)_, and
+  **a certification reads On file, Expired or Not recorded** _(2026-11-21)_
+  instead of 1/1 or 0/1. See
+  [How a requirement card reads](#how-a-requirement-card-reads-2026-11-21).
+- **A profile's Optional Requirements are shown to its members** _(2026-11-21)_,
+  marked Optional and never graded. Before, members never saw them.
 - **Compliance is judged on your department's date**, not a date that rolled
   over in the evening.
 - **Expired enrollments:** an enrollment past its target date becomes

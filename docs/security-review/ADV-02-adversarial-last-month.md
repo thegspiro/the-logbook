@@ -24,12 +24,12 @@ rotation's own open pull request.
 | ADV2-1  | Session thief | High     | A passkey-only member's session could enroll an authenticator app with no step-up, replace the recovery codes, then pass step-up with TOTP in place of the passkey | Fixed  |
 | ADV2-2  | Session thief | Medium   | A member's own login email changed with no step-up, so a stolen session plus forgot-password set a new password                                                    | Fixed  |
 | ADV2-3  | Officer       | Medium   | A shift-report role reviewer could approve a report they filed, and review drafts or already-released reports by id                                                | Fixed  |
-| ADV2-4  | Officer       | Medium   | One officer could conduct, calibrate and approve the same personnel evaluation                                                                                     | Owner  |
+| ADV2-4  | Officer       | Medium   | One officer could conduct, calibrate and approve the same personnel evaluation                                                                                     | Fixed  |
 | ADV2-5  | Officer       | Low–Med  | The Chief could grant a training-requirement override to themselves                                                                                                | Fixed  |
 | ADV2-6  | Officer       | Low      | `members.manage` could repoint the personal email of a member above its ceiling and collect a retried directory-account password                                   | Fixed  |
 | ADV2-7  | Member        | Low      | Draft events were still reachable through the QR payload, self-check-in, the event folder and the training-session lookup                                          | Fixed  |
-| ADV2-8  | Officer       | Low      | A shift officer without `scheduling.manage` can write their own close-out hours (predates the window)                                                              | Owner  |
-| ADV2-9  | Officer       | Low      | An officer with `members.manage` + `scheduling.assign` can grant themselves a leave, which creates their own training waiver (predates the window)                 | Owner  |
+| ADV2-8  | Officer       | Low      | A shift officer without `scheduling.manage` can write their own close-out hours (predates the window)                                                              | Fixed  |
+| ADV2-9  | Officer       | Low      | An officer with `members.manage` + `scheduling.assign` can grant themselves a leave, which creates their own training waiver (predates the window)                 | Fixed  |
 | ADV2-10 | Applicant     | Low      | An applicant can set their own follow-up-form email (or name and birth date) to a coordinator's, so the coordinator's self-access guard hides the file from them   | Owner  |
 | ADV2-11 | Outsider      | Info     | A Zeffy dues payment credits whichever member's email the payer typed, and overpayment becomes a donation in that member's name                                    | Owner  |
 
@@ -67,24 +67,73 @@ Separately, `main` had two Alembic heads (`4d8e2b6f1c93` on the History branch,
 `c4e81b7a2d95`), so `alembic upgrade head` refused to run. Merge revision
 `e2b7d94c1a63` joins them.
 
+## ADV2-4 fix (2026-11-16)
+
+Owner decisions: refuse the evaluator; a manager may name who takes a step,
+and the named person is the only one who may; any current member may be
+named; one person never signs two approvals on a revision.
+
+- `_signable` refuses the evaluator and anyone who signed another approval on
+  the revision. `complete_calibration` refuses the evaluator. Both honour
+  `evaluation_steps.assignee_id` (migration `a6c3e8d17f42`) in place of the
+  position or `view_all` holders.
+- `PUT /evaluations/{id}/steps/{key}/assignee` takes `evaluations.manage`
+  and step-up. It is audited at `warning` with both names, and emails the new
+  assignee when the step is open. `GET .../assignee-candidates` lists who may
+  be named, by the same rules.
+- The calibration route moved from a `view_all` gate to sign-in, because a
+  named calibrator may hold no `view_all`. The service makes the decision, and
+  the route is in `tests/permissionless_route_baseline.txt` with that reason.
+- Step notices never ask the evaluator to approve or calibrate their own
+  evaluation.
+- Tests: `TestSeparationOfDuties` in `tests/test_evaluation_workflow.py`
+  (three of its tests failed before the fix) and
+  `tests/test_evaluation_step_assignee_migration.py`. For the frontend, the
+  step-assignment cases in `EvaluationDetailPage.test.tsx`.
+
+## ADV2-8 fix (2026-11-20)
+
+Owner decision: block a shift officer from recording their own close-out
+hours. A holder of `scheduling.manage` is not affected.
+
+- `PATCH /scheduling/shifts/{id}/closeout/attendance` refuses (403) a change
+  to the caller's own check-in, check-out or hours. The row is compared to the
+  minute, so the wizard sending back the stored values unchanged is not a
+  change and is not refused. Nothing is written when it refuses.
+- `POST /scheduling/shifts/{id}/finalize` refuses `manual_hours` for the
+  caller, and `POST /scheduling/shifts/{id}/attendance` refuses adding the
+  caller.
+- The close-out state carries `own_hours_locked_user_id`. The wizard disables
+  that member's time and hours fields and explains that a scheduling admin can
+  correct them.
+- Tests: `tests/test_shift_closeout_own_hours.py` (seven tests, each of which
+  failed before the fix), and the "officer's own row" cases in
+  `ShiftCloseoutWizard.test.tsx`.
+
+## ADV2-9 fix (2026-11-21)
+
+Owner decision: block it. Nobody grants or extends their own leave of absence.
+
+- `MemberLeaveService.create_leave` refuses `user_id == granted_by`, so the
+  rule holds for every caller, not only the route.
+  `POST /users/leaves-of-absence` answers 400.
+- `PATCH /users/leaves-of-absence/{id}` answers 403 on the caller's own leave:
+  extending it, or turning its training waiver back on, excuses requirements
+  as granting one does.
+- The caller's own leave goes through `POST /users/leave-requests`, which they
+  cannot decide. An approval creates the leave with the voter as
+  `granted_by`, so it never meets the refusal.
+- `DELETE /users/leaves-of-absence/{id}` is unchanged: ending one's own leave early
+  excuses nothing.
+- Tests: `tests/test_member_leave_self_grant.py` (five tests; the three
+  refusals failed before the fix).
+
 ## Awaiting an owner decision
 
-- **ADV2-4**: `_signable` excludes only the subject from an approval step, and
-  `complete_calibration` excludes only the subject. A Captain who conducts an
-  evaluation on a template whose approval step is "Captain" can sign it. If
-  they also hold `evaluations.view_all`, they can complete its calibration too.
-  Refusing the evaluator is the obvious fix, but nothing can reassign or skip an
-  approval step. A department with one Captain, or a Chief who is both
-  evaluator and the only `view_all` holder, would then have evaluations that
-  cannot finish. The options:
-  1. Refuse, and accept that those evaluations stall.
-  2. Refuse, and add a manager's reassign-step action.
-  3. Accept the current behaviour.
-- **ADV2-8**: `PATCH /shifts/{id}/closeout/attendance` lets the shift officer set
-  any member's times, their own included. Pre-shift work and event attendance
-  both refuse the self case. A one-person shift has no one else to record it.
-- **ADV2-9**: `MemberLeaveService.create_leave` has no self check, and a leave
-  auto-creates a training waiver.
+- **ADV2-4**: resolved 2026-11-16, owner's option 2 (refuse, and add a
+  manager's reassign-step action). See "ADV2-4 fix" above.
+- **ADV2-8**: resolved 2026-11-20. See "ADV2-8 fix" above.
+- **ADV2-9**: resolved 2026-11-21. See "ADV2-9 fix" above.
 - **ADV2-10**: Checking that the new email is not a current member's would cover
   the email half. The name-and-birth-date half would remain, so the fix needs a
   decision on whether self-detection should trust applicant-editable fields at

@@ -47,31 +47,38 @@ describe('requestInbox', () => {
 
   describe('requestDate', () => {
     it('uses the confirmed date once there is one', () => {
-      expect(
-        requestDate(req({ event_date: '2026-11-11T23:00:00Z', preferred_date_start: '2026-11-20T18:00:00Z' }))
-      ).toBe('2026-11-11T23:00:00Z');
+      expect(requestDate(req({ event_date: '2026-11-11T23:00:00Z', preferred_date_start: '2026-11-20' }))).toBe(
+        '2026-11-11T23:00:00Z'
+      );
     });
 
     it('uses the requested date only when the requester named one', () => {
-      expect(requestDate(req({ preferred_date_start: '2026-11-20T18:00:00Z' }))).toBe('2026-11-20T18:00:00Z');
+      expect(requestDate(req({ preferred_date_start: '2026-11-20' }))).toBe('2026-11-20');
       expect(
-        requestDate(req({ date_flexibility: 'general_timeframe', preferred_date_start: '2026-11-20T18:00:00Z' }))
+        requestDate(req({ date_flexibility: 'general_timeframe', preferred_date_start: '2026-11-20' }))
       ).toBeNull();
     });
   });
 
   describe('dateUrgency', () => {
-    it('counts calendar days in the department timezone', () => {
+    it('counts calendar days to a confirmed date in the department timezone', () => {
       // 22:00 UTC on the 13th is 17:00 on the 13th in New York: five days out.
-      expect(dateUrgency(req({ preferred_date_start: '2026-11-13T22:00:00Z' }), TZ)).toEqual({
+      expect(dateUrgency(req({ event_date: '2026-11-13T22:00:00Z' }), TZ)).toEqual({
         days: 5,
         label: 'in 5 days',
         urgent: true,
       });
     });
 
+    it('counts a requested date as the calendar day it names, not as UTC midnight', () => {
+      // At noon in New York on the 8th, UTC midnight on the 9th is still the
+      // 8th there; read as an instant, the requester's "9th" was "today".
+      expect(dateUrgency(req({ preferred_date_start: '2026-11-09' }), TZ)?.label).toBe('tomorrow');
+      expect(dateUrgency(req({ preferred_date_start: '2026-11-13' }), TZ)?.days).toBe(5);
+    });
+
     it('is not urgent beyond a week', () => {
-      expect(dateUrgency(req({ preferred_date_start: '2026-11-17T18:00:00Z' }), TZ)).toEqual({
+      expect(dateUrgency(req({ preferred_date_start: '2026-11-17' }), TZ)).toEqual({
         days: 9,
         label: 'in 9 days',
         urgent: false,
@@ -79,9 +86,9 @@ describe('requestInbox', () => {
     });
 
     it('says today, tomorrow and a past date plainly', () => {
-      expect(dateUrgency(req({ preferred_date_start: '2026-11-08T23:00:00Z' }), TZ)?.label).toBe('today');
-      expect(dateUrgency(req({ preferred_date_start: '2026-11-09T18:00:00Z' }), TZ)?.label).toBe('tomorrow');
-      expect(dateUrgency(req({ preferred_date_start: '2026-11-05T18:00:00Z' }), TZ)?.label).toBe('3 days ago');
+      expect(dateUrgency(req({ preferred_date_start: '2026-11-08' }), TZ)?.label).toBe('today');
+      expect(dateUrgency(req({ preferred_date_start: '2026-11-09' }), TZ)?.label).toBe('tomorrow');
+      expect(dateUrgency(req({ preferred_date_start: '2026-11-05' }), TZ)?.label).toBe('3 days ago');
     });
 
     it('has nothing to say about a closed request or one with no date', () => {
@@ -180,8 +187,8 @@ describe('requestInbox', () => {
       const grouped = groupRequests([
         req({ id: 'new-recent', status: 'submitted', created_at: '2026-11-08T12:00:00Z' }),
         req({ id: 'new-old', status: 'submitted', created_at: '2026-11-05T12:00:00Z' }),
-        req({ id: 'work-later', preferred_date_start: '2026-11-20T18:00:00Z' }),
-        req({ id: 'work-soon', preferred_date_start: '2026-11-13T18:00:00Z' }),
+        req({ id: 'work-later', preferred_date_start: '2026-11-20' }),
+        req({ id: 'work-soon', preferred_date_start: '2026-11-13' }),
         req({ id: 'work-undated', date_flexibility: 'flexible' }),
         req({ id: 'done', status: 'completed' }),
         req({ id: 'off', status: 'cancelled' }),

@@ -383,6 +383,9 @@ const isActivation = (integrationType: string): boolean => ACTIVATION_TYPES.has(
 
 const inputClass = 'form-input';
 const labelClass = 'form-label';
+// A field Settings shows but will not change (Salesforce's org), so it does not
+// read as one that is waiting to be edited.
+const lockedFieldClass = 'bg-theme-surface-secondary text-theme-text-secondary cursor-not-allowed';
 
 // Public inbound-webhook URL a department pastes into the provider's dashboard
 // so its events reach us: Documenso/Cal.com advance a prospect's pipeline stage,
@@ -659,19 +662,21 @@ const IntegrationsPage: React.FC = () => {
         : []
     );
     setImportFormat('csv');
-    setSfInstanceUrl('');
+    // Seeded from what is stored, so a save from Settings or a reconnection
+    // does not put the sync direction, matching or auto-sync back to defaults.
+    setSfInstanceUrl(typeof stored['instance_url'] === 'string' ? stored['instance_url'] : '');
     setSfClientId('');
     setSfClientSecret('');
     setSfRefreshToken('');
-    setSfEnvironment('production');
-    setSfSyncDirection('push');
-    setSfMatchStrategy('email');
-    setSfGracefulFields(true);
-    setSfAutoSync(false);
-    setDocumensoBaseUrl('');
+    setSfEnvironment(stored['environment'] === 'sandbox' ? 'sandbox' : 'production');
+    setSfSyncDirection(typeof stored['sync_direction'] === 'string' ? stored['sync_direction'] : 'push');
+    setSfMatchStrategy(typeof stored['match_strategy'] === 'string' ? stored['match_strategy'] : 'email');
+    setSfGracefulFields(stored['graceful_fields'] !== false);
+    setSfAutoSync(stored['auto_sync_enabled'] === true);
+    setDocumensoBaseUrl(typeof stored['api_base_url'] === 'string' ? stored['api_base_url'] : '');
     setDocumensoApiToken('');
     setDocumensoWebhookSecret('');
-    setCalcomBaseUrl('');
+    setCalcomBaseUrl(typeof stored['api_base_url'] === 'string' ? stored['api_base_url'] : '');
     setCalcomApiKey('');
     setCalcomWebhookSecret('');
     setPaypalEnvironment(typeof stored['environment'] === 'string' ? stored['environment'] : 'sandbox');
@@ -824,11 +829,15 @@ const IntegrationsPage: React.FC = () => {
         };
       case 'salesforce':
         return {
-          instance_url: sfInstanceUrl,
+          // Settings cannot move the integration to another org (owner
+          // decision, 2026-11-16): a stored refresh token belongs to one org,
+          // and Salesforce's token reply would put the old instance URL back
+          // at the next sync. So Settings leaves both out of the save.
+          instance_url: editingSettings ? undefined : sfInstanceUrl,
+          environment: editingSettings ? undefined : sfEnvironment,
           client_id: sfClientId || undefined,
           client_secret: sfClientSecret || undefined,
           refresh_token: sfRefreshToken || undefined,
-          environment: sfEnvironment,
           sync_direction: sfSyncDirection,
           match_strategy: sfMatchStrategy,
           graceful_fields: sfGracefulFields,
@@ -867,9 +876,44 @@ const IntegrationsPage: React.FC = () => {
     }
   };
 
+  // A Client ID and Client Secret belong to one Connected App, and the stored
+  // pair is never sent back. A new ID with a blank secret box would keep the
+  // old secret beside it, and Salesforce rejects that pair at the next sign-in
+  // or token refresh, so Settings asks for both. A secret alone stays allowed:
+  // that is rotating the same app's secret.
+  const salesforceCredentialsMismatched = (integrationType: string): boolean => {
+    if (!editingSettings || integrationType !== 'salesforce') return false;
+    if (sfClientId.trim() && !sfClientSecret.trim()) {
+      toast.error('Enter the Client Secret of the new Connected App. The saved secret belongs to the current one.');
+      return true;
+    }
+    return false;
+  };
+
   const handleSaveSettings = async (integrationId: string) => {
     const integration = integrations.find((i) => i.id === integrationId);
     if (!integration) return;
+
+    // A stored credential belongs to the host it was made on, and the API
+    // refuses to move it to a new one, so a changed base URL needs its
+    // credential in the same save. Said here in words, rather than as the
+    // API's 422.
+    const baseUrlCredential =
+      integration.integration_type === 'calcom'
+        ? { baseUrl: calcomBaseUrl, credential: calcomApiKey, noun: 'key' }
+        : integration.integration_type === 'documenso'
+          ? { baseUrl: documensoBaseUrl, credential: documensoApiToken, noun: 'token' }
+          : null;
+    if (salesforceCredentialsMismatched(integration.integration_type)) return;
+    if (baseUrlCredential) {
+      const storedBaseUrl = integration.config?.['api_base_url'];
+      const newBaseUrl = baseUrlCredential.baseUrl.trim();
+      if (newBaseUrl && newBaseUrl !== storedBaseUrl && !baseUrlCredential.credential.trim()) {
+        const { noun } = baseUrlCredential;
+        toast.error(`Enter the API ${noun} for the new base URL. The saved ${noun} belongs to the current one.`);
+        return;
+      }
+    }
 
     setConnecting(true);
     try {
@@ -1096,6 +1140,7 @@ const IntegrationsPage: React.FC = () => {
       toast.error('Enter your Salesforce instance URL before connecting');
       return;
     }
+    if (salesforceCredentialsMismatched('salesforce')) return;
     setConnecting(true);
     try {
       // Persist the entered config (instance URL, environment, match strategy,
@@ -1450,10 +1495,14 @@ const IntegrationsPage: React.FC = () => {
                 value={sfInstanceUrl}
                 onChange={(e) => setSfInstanceUrl(e.target.value.trim())}
                 placeholder="https://yourorg.my.salesforce.com"
-                className={inputClass}
+                className={editingSettings ? `${inputClass} ${lockedFieldClass}` : inputClass}
+                readOnly={editingSettings}
+                aria-describedby="sf-instance-url-help"
               />
-              <p className="text-theme-text-muted mt-1 text-xs">
-                Your Salesforce org URL (e.g., https://yourorg.my.salesforce.com).
+              <p id="sf-instance-url-help" className="text-theme-text-muted mt-1 text-xs">
+                {editingSettings
+                  ? 'The org this integration is connected to. To move to another Salesforce org, disconnect and connect again.'
+                  : 'Your Salesforce org URL (e.g., https://yourorg.my.salesforce.com).'}
               </p>
             </div>
             <div>
@@ -1464,13 +1513,17 @@ const IntegrationsPage: React.FC = () => {
                 id="sf-environment"
                 value={sfEnvironment}
                 onChange={(e) => setSfEnvironment(e.target.value)}
-                className={inputClass}
+                className={editingSettings ? `${inputClass} ${lockedFieldClass}` : inputClass}
+                disabled={editingSettings}
+                aria-describedby="sf-environment-help"
               >
                 <option value="production">Production</option>
                 <option value="sandbox">Sandbox</option>
               </select>
-              <p className="text-theme-text-muted mt-1 text-xs">
-                Select Sandbox if connecting to a Salesforce sandbox org for testing.
+              <p id="sf-environment-help" className="text-theme-text-muted mt-1 text-xs">
+                {editingSettings
+                  ? 'Fixed for this connection, like the instance URL.'
+                  : 'Select Sandbox if connecting to a Salesforce sandbox org for testing.'}
               </p>
             </div>
             <div>
@@ -1504,18 +1557,35 @@ const IntegrationsPage: React.FC = () => {
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-2.5 text-sm text-white transition-colors hover:bg-red-900 disabled:opacity-50"
               >
                 <ExternalLink className="h-4 w-4" />
-                <span>{connecting ? 'Redirecting…' : 'Connect with Salesforce'}</span>
+                <span>
+                  {connecting
+                    ? 'Redirecting…'
+                    : editingSettings
+                      ? 'Re-authorize with Salesforce'
+                      : 'Connect with Salesforce'}
+                </span>
               </button>
               <p className="text-theme-text-muted mt-1 text-xs">
-                Recommended. Redirects you to Salesforce to grant access &mdash; no refresh token to copy. Uses your
-                department&apos;s Connected App if configured below, otherwise the platform&apos;s.
+                {editingSettings ? (
+                  <>
+                    Saves these settings, then signs in to Salesforce again and replaces the stored token. Use it if the
+                    token was revoked or has expired. Sign in to the same org.
+                  </>
+                ) : (
+                  <>
+                    Recommended. Redirects you to Salesforce to grant access &mdash; no refresh token to copy. Uses your
+                    department&apos;s Connected App if configured below, otherwise the platform&apos;s.
+                  </>
+                )}
               </p>
             </div>
 
             {/* Divider */}
             <div className="flex items-center gap-3 py-1">
               <div className="bg-theme-surface-border h-px flex-1" />
-              <span className="text-theme-text-muted text-xs uppercase">or connect manually</span>
+              <span className="text-theme-text-muted text-xs uppercase">
+                {editingSettings ? 'or replace credentials manually' : 'or connect manually'}
+              </span>
               <div className="bg-theme-surface-border h-px flex-1" />
             </div>
 
@@ -1528,8 +1598,13 @@ const IntegrationsPage: React.FC = () => {
                 type="text"
                 value={sfClientId}
                 onChange={(e) => setSfClientId(e.target.value)}
-                placeholder="3MVG9... (optional if using the platform app)"
+                placeholder={
+                  editingSettings
+                    ? 'Leave blank to keep the saved ID, if any'
+                    : '3MVG9... (optional if using the platform app)'
+                }
                 className={inputClass}
+                autoComplete="off"
               />
             </div>
             <div>
@@ -1541,8 +1616,11 @@ const IntegrationsPage: React.FC = () => {
                 type="password"
                 value={sfClientSecret}
                 onChange={(e) => setSfClientSecret(e.target.value)}
-                placeholder="Connected App client secret"
+                placeholder={
+                  editingSettings ? 'Leave blank to keep the saved secret, if any' : 'Connected App client secret'
+                }
                 className={inputClass}
+                autoComplete="off"
               />
             </div>
             <div>
@@ -1554,12 +1632,14 @@ const IntegrationsPage: React.FC = () => {
                 type="password"
                 value={sfRefreshToken}
                 onChange={(e) => setSfRefreshToken(e.target.value)}
-                placeholder="OAuth refresh token"
+                placeholder={editingSettings ? 'Leave blank to keep the current token' : 'OAuth refresh token'}
                 className={inputClass}
+                autoComplete="off"
               />
               <p className="text-theme-text-muted mt-1 text-xs">
-                Only for a manual connection: paste the token, then click Connect below. Leave blank if you use
-                &quot;Connect with Salesforce&quot; above.
+                {editingSettings
+                  ? 'Paste a token only to replace the stored one, or use "Re-authorize with Salesforce" above.'
+                  : 'Only for a manual connection: paste the token, then click Connect below. Leave blank if you use "Connect with Salesforce" above.'}
               </p>
             </div>
             <div>
@@ -1900,11 +1980,15 @@ const IntegrationsPage: React.FC = () => {
                 type="password"
                 value={documensoApiToken}
                 onChange={(e) => setDocumensoApiToken(e.target.value)}
-                placeholder="api_..."
+                placeholder={editingSettings ? 'Leave blank to keep the current token' : 'api_...'}
                 className={inputClass}
+                autoComplete="off"
               />
+              {/* Documenso cannot connect without a token, so on a connected
+                  card one is certainly stored. It is never sent back. */}
               <p className="text-theme-text-muted mt-1 text-xs">
                 Create an API token in Documenso under Settings &rarr; API.
+                {editingSettings && ' Enter a new one only to replace the token.'}
               </p>
             </div>
             <div>
@@ -1920,7 +2004,9 @@ const IntegrationsPage: React.FC = () => {
                 className={inputClass}
               />
               <p className="text-theme-text-muted mt-1 text-xs">
-                Leave blank for Documenso Cloud. Self-hosted instances use https://your-host/api/v1.
+                {editingSettings
+                  ? 'Changing it needs the API token for the new address in the same save. To return to Documenso Cloud, enter https://app.documenso.com/api/v1.'
+                  : 'Leave blank for Documenso Cloud. Self-hosted instances use https://your-host/api/v1.'}
               </p>
             </div>
             <div>
@@ -1934,9 +2020,11 @@ const IntegrationsPage: React.FC = () => {
                 onChange={(e) => setDocumensoWebhookSecret(e.target.value)}
                 placeholder="Shared secret for inbound webhooks"
                 className={inputClass}
+                autoComplete="off"
               />
               <p className="text-theme-text-muted mt-1 text-xs">
-                Set a secret to auto-advance a prospect&apos;s signing stage when they finish signing. Add this Webhook
+                Set a secret to auto-advance a prospect&apos;s signing stage when they finish signing.
+                {editingSettings && ' Leave it blank to keep the saved secret, if one was entered.'} Add this Webhook
                 URL in Documenso (send it as the <code>X-Documenso-Secret</code> header):
               </p>
               <code className="bg-theme-surface-secondary text-theme-text-secondary mt-1 block rounded px-2 py-1 text-xs break-all">
@@ -1958,11 +2046,15 @@ const IntegrationsPage: React.FC = () => {
                 type="password"
                 value={calcomApiKey}
                 onChange={(e) => setCalcomApiKey(e.target.value)}
-                placeholder="cal_..."
+                placeholder={editingSettings ? 'Leave blank to keep the current key' : 'cal_...'}
                 className={inputClass}
+                autoComplete="off"
               />
+              {/* Cal.com cannot connect without a key, so on a connected card
+                  one is certainly stored. It is never sent back. */}
               <p className="text-theme-text-muted mt-1 text-xs">
                 Create an API key in Cal.com under Settings &rarr; Developer &rarr; API keys.
+                {editingSettings && ' Enter a new one only to replace the key.'}
               </p>
             </div>
             <div>
@@ -1978,7 +2070,9 @@ const IntegrationsPage: React.FC = () => {
                 className={inputClass}
               />
               <p className="text-theme-text-muted mt-1 text-xs">
-                Leave blank for Cal.com Cloud. Self-hosted instances use https://your-host/api/v1.
+                {editingSettings
+                  ? 'Changing it needs the API key for the new address in the same save. To return to Cal.com Cloud, enter https://api.cal.com/v1.'
+                  : 'Leave blank for Cal.com Cloud. Self-hosted instances use https://your-host/api/v1.'}
               </p>
             </div>
             <div>
@@ -1992,10 +2086,12 @@ const IntegrationsPage: React.FC = () => {
                 onChange={(e) => setCalcomWebhookSecret(e.target.value)}
                 placeholder="Signing secret for inbound webhooks"
                 className={inputClass}
+                autoComplete="off"
               />
               <p className="text-theme-text-muted mt-1 text-xs">
-                Set a secret to auto-advance a prospect&apos;s interview stage once their meeting has finished. Add this
-                URL as a Cal.com webhook (MEETING_ENDED) using the same secret:
+                Set a secret to auto-advance a prospect&apos;s interview stage once their meeting has finished.
+                {editingSettings && ' Leave it blank to keep the saved secret, if one was entered.'} Add this URL as a
+                Cal.com webhook (MEETING_ENDED) using the same secret:
               </p>
               <code className="bg-theme-surface-secondary text-theme-text-secondary mt-1 block rounded px-2 py-1 text-xs break-all">
                 {webhookCallbackUrl('calcom', integration.id)}
@@ -2528,6 +2624,9 @@ const IntegrationsPage: React.FC = () => {
                         integration.integration_type === 'ical' ||
                         integration.integration_type === 'zeffy' ||
                         integration.integration_type === 'paypal' ||
+                        integration.integration_type === 'calcom' ||
+                        integration.integration_type === 'documenso' ||
+                        integration.integration_type === 'salesforce' ||
                         (isDirectory(integration.integration_type) && canChange(integration.integration_type))) && (
                         <button
                           onClick={() => {
@@ -3150,7 +3249,13 @@ const IntegrationsPage: React.FC = () => {
                                     ? 'Saved settings apply to the next payment PayPal reports. The webhook address does not change.'
                                     : selectedIntegration.integration_type === 'zeffy'
                                       ? 'A new key or signing secret is used from the next sync or webhook message. Linked campaigns and the webhook address do not change.'
-                                      : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
+                                      : selectedIntegration.integration_type === 'calcom'
+                                        ? 'A new key or base URL is used from the next booking lookup, and a new webhook secret from the next message Cal.com sends. The webhook address does not change.'
+                                        : selectedIntegration.integration_type === 'salesforce'
+                                          ? 'Saved settings apply from the next sync. The connected org does not change: to move to another org, disconnect and connect again.'
+                                          : selectedIntegration.integration_type === 'documenso'
+                                            ? 'A new token or base URL is used from the next request to Documenso, and a new webhook secret from the next message Documenso sends. The webhook address does not change.'
+                                            : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
                               : activation
                                 ? 'Activating turns this feature on for your organization. You can deactivate it at any time.'
                                 : 'Connecting turns this integration on for your organization. You can disconnect it at any time.'}

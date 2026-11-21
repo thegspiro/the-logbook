@@ -396,7 +396,7 @@ export const EventAnalyticsPage: React.FC = () => {
                       <td data-label="Event" className="py-2 pr-4">
                         <Link
                           to={`/events/${e.eventId}`}
-                          className="text-theme-text-primary font-medium hover:underline"
+                          className="text-theme-text-primary touch:min-h-11 inline-flex items-center font-medium hover:underline"
                         >
                           {e.title}
                         </Link>
@@ -417,10 +417,10 @@ export const EventAnalyticsPage: React.FC = () => {
                         <span
                           className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
                             e.attendanceRate >= 0.8
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                              ? 'bg-green-100 text-green-900 dark:bg-green-900/30 dark:text-green-300'
                               : e.attendanceRate >= 0.5
-                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                ? 'bg-yellow-100 text-yellow-900 dark:bg-yellow-900/30 dark:text-yellow-300'
+                                : 'bg-red-100 text-red-900 dark:bg-red-900/30 dark:text-red-300'
                           }`}
                         >
                           {pct(e.attendanceRate)}

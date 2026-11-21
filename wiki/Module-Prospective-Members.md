@@ -34,11 +34,12 @@ Turning it off hides the screens and refuses every
 
 ## Permissions
 
-| Permission                   | Grants                                                                                                                                            |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `prospective_members.manage` | The pipeline and Pipeline Settings screens; adding, editing, advancing, holding, rejecting, converting and purging applicants; building pipelines |
-| `prospective_members.view`   | Read access only: applicant lists and details through the API, the print-labels page, and the applicants list on an event's detail page           |
-| _(none — signed-in member)_  | The Sign-offs page, for a Multi-Signer Approval stage that names a position the member holds                                                      |
+| Permission                     | Grants                                                                                                                                                                                                |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prospective_members.manage`   | The pipeline and Pipeline Settings screens; adding, editing, advancing, holding, rejecting, converting and purging applicants; building pipelines                                                     |
+| `prospective_members.view`     | Read access only: applicant lists and details through the API, the print-labels page, and the applicants list on an event's detail page                                                               |
+| `prospective_members.view_all` | _(2026-10-31)_ Every applicant, assigned or not, plus pipeline statistics, reports, labels and bulk actions. Without it, a holder of `view` or `manage` sees only the applicants they are assigned to |
+| _(none — signed-in member)_    | The Sign-offs page, for a Multi-Signer Approval stage that names a position the member holds                                                                                                          |
 
 **`view` alone does not open the pipeline screens** — both require `manage`.
 At the API, most write actions also accept `members.manage`, and adding an
@@ -47,13 +48,21 @@ applicant accepts `members.create`; the screens themselves still gate on
 
 Seeded positions (from `backend/app/core/permissions.py`):
 
-| Position                                                 | Receives                  |
-| -------------------------------------------------------- | ------------------------- |
-| IT Manager                                               | Everything (`*` wildcard) |
-| Chief, Deputy Chief, Assistant Chief, Captain            | `view` and `manage`       |
-| Lieutenant                                               | `view`                    |
-| President, Vice President, Secretary                     | `manage`                  |
-| Membership Coordinator, Assistant Membership Coordinator | `manage`                  |
+| Position                                                 | Receives                        |
+| -------------------------------------------------------- | ------------------------------- |
+| IT Manager                                               | Everything (`*` wildcard)       |
+| Chief, Deputy Chief, Assistant Chief, Captain            | `view`, `manage` and `view_all` |
+| Lieutenant                                               | `view` and `view_all`           |
+| President, Vice President, Secretary                     | `manage` and `view_all`         |
+| Membership Coordinator, Assistant Membership Coordinator | `manage` and `view_all`         |
+
+**Case managers and interviewers** _(2026-10-31)_. A coordinator assigns any
+current member to an applicant, from its **Assigned** section, as case manager
+or interviewer. The assignment is itself the grant to that applicant. Migration
+`c588f525fdbb` gave `view_all` to every position that held view or manage, so
+nobody's view narrowed on upgrade. Full rules, including what interviewers do
+not see, in
+[PROSPECTIVE_MEMBERS_MODULE.md](https://github.com/thegspiro/the-logbook/blob/main/docs/PROSPECTIVE_MEMBERS_MODULE.md#case-managers-and-interviewers-2026-10-31).
 
 **Sign-offs need no module permission.** The officers a Multi-Signer Approval
 stage names rarely hold `prospective_members.*`. The Sign-offs page lists only
@@ -136,6 +145,16 @@ been inactive longer than the purge period (default 365 days, clamped to
 of applications due for deletion within 7 days before it purges, and an
 application with no recorded inactive date is never purged. Purging removes
 the applicant's uploaded documents as well and cannot be undone.
+
+**A converted applicant's record follows the member** _(2026-11-20/21)_.
+Purge never takes a transferred application. Instead, anonymising the member
+scrubs it (including the `prospect_activity_log` values and each step
+progress's `notes`; the log keeps an allowlist of structural keys such as
+`step_name` and `document_type`), and permanently deleting the member deletes
+it with its documents, interviews and form answers
+(`delete_transferred_applications`, documents queued on
+`pending_file_deletions`). An event guest check-in that created the prospect
+(`event_external_attendees.prospect_id`) is kept, as it is on Purge.
 
 ### Status page and conversion settings
 

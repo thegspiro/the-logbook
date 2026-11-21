@@ -23,6 +23,7 @@ vi.mock('./EventRequestsTab', () => ({ default: () => <p>requests body</p> }));
 vi.mock('./AnalyticsDashboardPage', () => ({ default: () => <p>qr analytics body</p> }));
 vi.mock('./CommunityEngagementTab', () => ({ default: () => <p>community body</p> }));
 vi.mock('./EventCardCheckinsTab', () => ({ default: () => <p>card check-ins body</p> }));
+vi.mock('./ApparatusEventsTab', () => ({ default: () => <p>apparatus events body</p> }));
 vi.mock('./EventsSettingsTab', () => ({ default: () => <p>settings body</p> }));
 
 import { EventsAdminHub } from './EventsAdminHub';

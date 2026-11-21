@@ -15,6 +15,28 @@ import type {
   TrainingSummaryReport,
 } from '../modules/reports/types';
 import type { KnowledgeTest } from '../types/knowledgeTest';
+import type { ErrorCodeEntry, ErrorLogRecord } from '../services/adminServices';
+import type { PlatformAnalytics } from '../types/platformAnalytics';
+import type { CrewMember } from '../types/user';
+import type { Facility, Inspection, MaintenanceRecord } from '../modules/facilities/types/facilities';
+import type {
+  AlbumSummary,
+  ClearanceStep,
+  HistoryDocumentType,
+  HistorySource,
+  HistoryTitle,
+  HonorRollEntry,
+  ImportSummary,
+} from '../modules/history/types';
+import type {
+  BackendPipelineListResponse,
+  BackendProspectListResponse,
+  PendingSignOff,
+} from '../modules/prospective-members/types';
+import type { EventTemplate, PendingAttendancePetition } from '../types/event';
+import type { TemplateListItem as MinutesOutline } from '../modules/minutes/types/minutes';
+import type { AttendanceDashboard, AttendanceDashboardMember } from '../services/meetingsServices';
+import type { AttendanceWaiverRequest } from '../types/attendanceWaiver';
 import type { SkillTemplateListItem, SkillTestListItem } from '../types/skillsTesting';
 import type { CourseCohort, CrewRecordingContext } from '../types/training';
 
@@ -234,7 +256,8 @@ const COMMUNITY_ENGAGEMENT = {
   current: {
     events_held: 19,
     people_reached: 2140,
-    signed_in: 412,
+    counted: 412,
+    signed_in: 272,
     estimated: 1728,
     member_hours: 312.5,
     members_involved: 41,
@@ -244,6 +267,7 @@ const COMMUNITY_ENGAGEMENT = {
   previous: {
     events_held: 15,
     people_reached: 1634,
+    counted: 300,
     signed_in: 300,
     estimated: 1334,
     member_hours: 332,
@@ -252,7 +276,7 @@ const COMMUNITY_ENGAGEMENT = {
     requests_completed: 12,
   },
   upcoming_events: 3,
-  turnout: { events: 6, signed_in: 412, expected: 480 },
+  turnout: { events: 6, counted: 412, signed_in: 272, expected: 480 },
   granularity: 'month',
   by_period: [
     '2025-12',
@@ -267,13 +291,20 @@ const COMMUNITY_ENGAGEMENT = {
     '2026-09',
     '2026-10',
     '2026-11',
-  ].map((period, i) => ({ period, events: (i % 4) + 1, signed_in: 20 + i * 9, estimated: (i * 37) % 260 })),
+  ].map((period, i) => ({
+    period,
+    events: (i % 4) + 1,
+    counted: 20 + i * 9,
+    signed_in: 20 + i * 9,
+    estimated: (i * 37) % 260,
+  })),
   by_type: [
-    { label: 'School Visit', events: 6, people_reached: 860 },
-    { label: 'Station Tour', events: 5, people_reached: 520 },
-    { label: 'Fire Safety Demonstration', events: 3, people_reached: 410 },
-    { label: 'CPR / First Aid', events: 2, people_reached: 200 },
-    { label: 'Fundraiser', events: 1, people_reached: 150 },
+    { group: 'request', label: 'School Visit', events: 6, people_reached: 860 },
+    { group: 'request', label: 'Station Tour', events: 5, people_reached: 520 },
+    { group: 'request', label: 'Fire Safety Demonstration', events: 3, people_reached: 410 },
+    { group: 'request', label: 'CPR / First Aid', events: 2, people_reached: 200 },
+    { group: 'department', label: 'Public Education', events: 3, people_reached: 285 },
+    { group: 'department', label: 'Fundraiser', events: 1, people_reached: 150 },
   ],
   recent_events: [
     {
@@ -284,6 +315,8 @@ const COMMUNITY_ENGAGEMENT = {
       organization_name: 'Oakville Elementary School Parent-Teacher Association',
       request_id: 'req-1',
       signed_in: 0,
+      headcount: null,
+      counted: null,
       expected: 120,
       people_reached: 120,
       reach_is_estimate: true,
@@ -298,6 +331,8 @@ const COMMUNITY_ENGAGEMENT = {
       organization_name: 'Holt Auto Group',
       request_id: 'req-2',
       signed_in: 25,
+      headcount: null,
+      counted: 25,
       expected: 30,
       people_reached: 25,
       reach_is_estimate: false,
@@ -311,7 +346,9 @@ const COMMUNITY_ENGAGEMENT = {
       type_label: 'Public Education',
       organization_name: null,
       request_id: null,
-      signed_in: 285,
+      signed_in: 12,
+      headcount: 285,
+      counted: 285,
       expected: null,
       people_reached: 285,
       reach_is_estimate: false,
@@ -319,6 +356,585 @@ const COMMUNITY_ENGAGEMENT = {
       member_hours: 70,
     },
   ],
+};
+
+const HISTORY_ALBUMS: AlbumSummary[] = [
+  {
+    id: 'album-1',
+    name: 'Centennial Parade, 1923',
+    description: "Photographs from the company's hundredth-anniversary parade down Main Street.",
+    level: 'members',
+    cover_media_id: null,
+    item_count: 42,
+  },
+  {
+    id: 'album-2',
+    name: 'Station 1 construction',
+    description: null,
+    level: 'draft',
+    cover_media_id: null,
+    item_count: 7,
+  },
+];
+
+const HISTORY_ROSTER_IMPORTS: ImportSummary[] = [
+  {
+    id: 'import-1',
+    status: 'committed',
+    source_filename: 'roster-1950-1975-transcribed-from-the-ledger.csv',
+    row_count: 118,
+    column_mapping: {},
+    summary: { created: 96, matched: 18, skipped: 4 },
+    expires_at: null,
+    created_at: '2026-10-02T14:00:00Z',
+    committed_at: '2026-10-02T14:20:00Z',
+  },
+  {
+    id: 'import-2',
+    status: 'draft',
+    source_filename: 'roster-1976-2000.csv',
+    row_count: 74,
+    column_mapping: {},
+    summary: null,
+    expires_at: '2026-12-01T00:00:00Z',
+    created_at: '2026-11-10T14:00:00Z',
+    committed_at: null,
+  },
+];
+
+const HISTORY_HONOR_ROLL: HonorRollEntry[] = [
+  {
+    id: 'e2e-history-2',
+    display_name: 'Robert Doyle',
+    titles: ['Assistant Engineer'],
+    service_years: 'c. 1923–1940',
+    death_date: '1940-02-01',
+    death_date_precision: 'month',
+    death_date_circa: false,
+    death_circumstances: 'Lost when the roof of the Grange Hall collapsed during an interior attack.',
+  },
+  {
+    id: 'honor-2',
+    display_name: 'William "Bill" Hargreaves-Montgomery',
+    titles: ['Firefighter'],
+    service_years: '1968–1979',
+    death_date: '1979-08-14',
+    death_date_precision: 'day',
+    death_date_circa: false,
+    death_circumstances: null,
+  },
+];
+
+const HISTORY_TITLES: HistoryTitle[] = [
+  { id: 'title-1', name: 'Chief', source: 'rank', sort_order: 1, is_retired: false, usage_count: 12 },
+  { id: 'title-2', name: 'Foreman', source: 'custom', sort_order: 2, is_retired: false, usage_count: 30 },
+  { id: 'title-3', name: 'Assistant Engineer', source: 'custom', sort_order: 3, is_retired: false, usage_count: 8 },
+  { id: 'title-4', name: 'Hose Company Steward', source: 'custom', sort_order: 4, is_retired: true, usage_count: 3 },
+];
+
+const HISTORY_SOURCES: HistorySource[] = [
+  { id: 'source-1', name: 'Smith family collection', sort_order: 1, is_retired: false, usage_count: 24 },
+  { id: 'source-2', name: 'County Historical Society', sort_order: 2, is_retired: false, usage_count: 9 },
+  { id: 'source-3', name: 'Old station scrapbook', sort_order: 3, is_retired: true, usage_count: 0 },
+];
+
+const HISTORY_DOCUMENT_TYPES: HistoryDocumentType[] = [
+  { id: 'doctype-1', name: 'Letter', sort_order: 1, is_retired: false, usage_count: 6 },
+  { id: 'doctype-2', name: 'Minutes', sort_order: 2, is_retired: false, usage_count: 14 },
+  { id: 'doctype-3', name: 'Newspaper clipping', sort_order: 3, is_retired: true, usage_count: 2 },
+];
+
+const HISTORY_CLEARANCE_STEPS: ClearanceStep[] = [
+  {
+    id: 'step-1',
+    step_order: 1,
+    name: 'Historian review',
+    position_id: 'pos-historian',
+    position_name: 'Department Historian',
+    blocked: false,
+  },
+  {
+    id: 'step-2',
+    step_order: 2,
+    name: 'Chief approval',
+    position_id: 'pos-chief',
+    position_name: 'Fire Chief',
+    blocked: false,
+  },
+];
+
+/** Answers a lookup list the way the API does: retired rows only on request. */
+const withRetired = <T extends { is_retired: boolean }>(rows: T[], request: Request): T[] =>
+  new URL(request.url()).searchParams.get('include_retired') === 'true' ? rows : rows.filter((row) => !row.is_retired);
+
+const attendanceRow = (
+  overrides: Partial<AttendanceDashboardMember> & Pick<AttendanceDashboardMember, 'user_id' | 'name'>
+): AttendanceDashboardMember => ({
+  membership_tier: 'active',
+  tier_name: 'Active',
+  hire_date: '2018-04-01',
+  attendance_pct: 83.3,
+  meetings_attended: 10,
+  meetings_waived: 1,
+  meetings_on_leave: 0,
+  meetings_absent: 1,
+  total_meetings: 12,
+  eligible_meetings: 12,
+  voting_eligible: true,
+  voting_blocked_reason: null,
+  ...overrides,
+});
+
+const MEETING_ATTENDANCE_DASHBOARD: AttendanceDashboard = {
+  generated_at: '2026-11-15T12:00:00Z',
+  period_months: 12,
+  meeting_type_filter: null,
+  total_meetings_in_period: 12,
+  members: [
+    attendanceRow({
+      user_id: 'e2e-user-id',
+      name: 'E2E User',
+      attendance_pct: 100,
+      meetings_attended: 12,
+      meetings_waived: 0,
+      meetings_absent: 0,
+    }),
+    attendanceRow({ user_id: 'crew-2', name: 'Alex Johnson' }),
+    attendanceRow({
+      user_id: 'crew-3',
+      name: 'Maria Rodriguez-Castellanos',
+      membership_tier: 'probationary',
+      tier_name: 'Probationary',
+      hire_date: '2026-03-01',
+      attendance_pct: 37.5,
+      meetings_attended: 3,
+      meetings_waived: 0,
+      meetings_absent: 5,
+      total_meetings: 8,
+      eligible_meetings: 8,
+      voting_eligible: false,
+      voting_blocked_reason: 'Attended 37.5% of business meetings in the last 12 months; 50% is required to vote.',
+    }),
+    attendanceRow({
+      user_id: 'crew-4',
+      name: 'Sam Lee',
+      attendance_pct: 66.7,
+      meetings_attended: 6,
+      meetings_on_leave: 3,
+      meetings_waived: 0,
+      meetings_absent: 3,
+      eligible_meetings: 9,
+    }),
+  ],
+  summary: { total_members: 4, avg_attendance_pct: 71.9, voting_eligible_count: 3, voting_blocked_by_attendance: 1 },
+};
+
+const meetingWaiver = (
+  overrides: Partial<AttendanceWaiverRequest> & Pick<AttendanceWaiverRequest, 'id' | 'status' | 'member_name'>
+): AttendanceWaiverRequest => ({
+  workflow: 'meeting',
+  user_id: 'crew-2',
+  event_id: 'evt-business-nov',
+  event_title: 'November Business Meeting',
+  event_start: '2026-11-20T00:30:00Z',
+  session_date: '2026-11-19',
+  category: 'Work',
+  reason: 'Working a double shift at the hospital that evening.',
+  submitted_at: '2026-11-12T15:00:00Z',
+  decided_at: null,
+  decided_by: null,
+  decided_by_name: null,
+  chief_override: false,
+  expires_at: '2026-11-26T00:30:00Z',
+  info_requested_at: null,
+  reconfirm_requested_at: null,
+  can_withdraw: false,
+  can_respond: false,
+  can_confirm: false,
+  can_request_info: false,
+  can_decide: false,
+  can_override: false,
+  attachments: [],
+  actions: [],
+  ...overrides,
+});
+
+const MEETING_WAIVER_REQUESTS: AttendanceWaiverRequest[] = [
+  meetingWaiver({
+    id: 'mwr-1',
+    status: 'pending',
+    member_name: 'Alex Johnson',
+    can_decide: true,
+    can_request_info: true,
+  }),
+  meetingWaiver({
+    id: 'mwr-2',
+    status: 'approved',
+    member_name: 'Maria Rodriguez-Castellanos',
+    user_id: 'crew-3',
+    category: 'Family',
+    reason: null,
+    event_title: 'October Business Meeting',
+    event_start: '2026-10-16T00:30:00Z',
+    session_date: '2026-10-15',
+    submitted_at: '2026-10-10T15:00:00Z',
+    decided_at: '2026-10-11T13:00:00Z',
+    decided_by: 'e2e-user-id',
+    decided_by_name: 'E2E User',
+    expires_at: null,
+  }),
+  meetingWaiver({
+    id: 'mwr-3',
+    status: 'denied',
+    member_name: 'Sam Lee',
+    user_id: 'crew-4',
+    category: null,
+    event_title: 'Special Meeting — Apparatus Purchase',
+    event_start: '2026-09-25T00:30:00Z',
+    session_date: '2026-09-24',
+    submitted_at: '2026-09-24T22:00:00Z',
+    decided_at: '2026-09-25T13:00:00Z',
+    decided_by: 'e2e-user-id',
+    decided_by_name: 'E2E User',
+    expires_at: null,
+  }),
+];
+
+/** The approver queue reads pending requests and the full history with separate calls. */
+const meetingWaiverPage = (request: Request) => {
+  const status = new URL(request.url()).searchParams.get('status');
+  const items = status ? MEETING_WAIVER_REQUESTS.filter((row) => row.status === status) : MEETING_WAIVER_REQUESTS;
+  return { items, total: items.length, skip: 0, limit: 50 };
+};
+
+const MINUTES_OUTLINES: MinutesOutline[] = [
+  {
+    id: 'outline-1',
+    name: 'Monthly Business Meeting',
+    meeting_type: 'business',
+    is_default: true,
+    section_count: 11,
+    created_at: '2026-01-05T12:00:00Z',
+  },
+  {
+    id: 'outline-2',
+    name: 'Special Meeting — Single Item of Business',
+    meeting_type: 'special',
+    is_default: true,
+    section_count: 5,
+    created_at: '2026-02-01T12:00:00Z',
+  },
+  {
+    id: 'outline-3',
+    name: 'Board of Directors',
+    meeting_type: 'board',
+    is_default: false,
+    section_count: 8,
+    created_at: '2026-03-01T12:00:00Z',
+  },
+];
+
+const eventTemplate = (
+  overrides: Partial<EventTemplate> & Pick<EventTemplate, 'id' | 'name' | 'event_type'>
+): EventTemplate => ({
+  organization_id: 'org-1',
+  requires_rsvp: true,
+  is_mandatory: false,
+  allow_guests: false,
+  require_checkout: false,
+  send_reminders: true,
+  reminder_target: 'going',
+  reminder_schedule: [24],
+  is_active: true,
+  created_at: '2026-06-01T12:00:00Z',
+  updated_at: '2026-06-01T12:00:00Z',
+  ...overrides,
+});
+
+const EVENT_TEMPLATES: EventTemplate[] = [
+  eventTemplate({
+    id: 'evt-tpl-1',
+    name: 'Monthly Business Meeting',
+    event_type: 'business_meeting',
+    description: 'Second Tuesday, members only, attendance counts toward voting eligibility.',
+    default_duration_minutes: 120,
+    default_location: 'Station 1 Meeting Hall',
+    is_mandatory: true,
+  }),
+  eventTemplate({
+    id: 'evt-tpl-2',
+    name: 'Public Education — Fire Prevention Week School Visit',
+    event_type: 'public_education',
+    default_duration_minutes: 90,
+    max_attendees: 6,
+    require_checkout: true,
+  }),
+  eventTemplate({
+    id: 'evt-tpl-3',
+    name: 'Pancake Breakfast',
+    event_type: 'fundraiser',
+    is_active: false,
+    requires_rsvp: false,
+  }),
+];
+
+const petition = (
+  overrides: Partial<PendingAttendancePetition> & Pick<PendingAttendancePetition, 'id' | 'user_name' | 'event_title'>
+): PendingAttendancePetition => ({
+  event_id: 'evt-1',
+  user_id: 'crew-2',
+  status: 'pending',
+  reason: 'My phone died before I could scan the QR code; I was there the whole time.',
+  requested_check_in_at: '2026-11-10T23:00:00Z',
+  requested_check_out_at: '2026-11-11T01:00:00Z',
+  created_at: '2026-11-11T02:00:00Z',
+  withdrawal_count: 0,
+  event_start_datetime: '2026-11-10T23:00:00Z',
+  event_end_datetime: '2026-11-11T01:00:00Z',
+  event_actual_start_time: null,
+  event_actual_end_time: null,
+  attendance_finalized: false,
+  ...overrides,
+});
+
+const EVENT_ATTENDANCE_PETITIONS: PendingAttendancePetition[] = [
+  petition({ id: 'pet-1', user_name: 'Alex Johnson', event_title: 'November Business Meeting' }),
+  petition({
+    id: 'pet-2',
+    user_id: 'crew-3',
+    user_name: 'Maria Rodriguez-Castellanos',
+    event_id: 'evt-2',
+    event_title: 'Vehicle Extrication Drill — Hydraulic Tools and Glass Management',
+    reason:
+      'Arrived from a mutual-aid call after the sign-in sheet had been collected, and stayed through the cleanup at the end.',
+    requested_check_in_at: '2026-11-08T14:30:00Z',
+    requested_check_out_at: '2026-11-08T18:00:00Z',
+    created_at: '2026-11-09T12:00:00Z',
+    event_start_datetime: '2026-11-08T14:00:00Z',
+    event_end_datetime: '2026-11-08T18:00:00Z',
+    withdrawal_count: 1,
+  }),
+];
+
+/** The backend's snake_case summary, rates as fractions (`EventService` rounds
+ *  `checked_in / going` to four places); the page maps and formats it itself. */
+const EVENT_ANALYTICS_SUMMARY = {
+  total_events: 38,
+  total_rsvps: 412,
+  total_checked_in: 351,
+  avg_attendance_rate: 0.784,
+  check_in_rate: 0.852,
+  avg_checkin_minutes_before: 6.5,
+  event_type_distribution: [
+    { event_type: 'training', count: 16 },
+    { event_type: 'business_meeting', count: 12 },
+    { event_type: 'public_education', count: 6 },
+    { event_type: 'fundraiser', count: 4 },
+  ],
+  monthly_event_counts: [
+    { month: '2026-08', count: 7 },
+    { month: '2026-09', count: 9 },
+    { month: '2026-10', count: 12 },
+    { month: '2026-11', count: 10 },
+  ],
+  top_events: [
+    {
+      event_id: 'evt-top-1',
+      title: 'Annual Awards Banquet and Installation of Officers',
+      event_type: 'ceremony',
+      start_datetime: '2026-10-17T23:00:00Z',
+      going_count: 64,
+      checked_in_count: 61,
+      attendance_rate: 0.9531,
+    },
+    {
+      event_id: 'evt-top-2',
+      title: 'October Business Meeting',
+      event_type: 'business_meeting',
+      start_datetime: '2026-10-14T23:30:00Z',
+      going_count: 41,
+      checked_in_count: 36,
+      attendance_rate: 0.878,
+    },
+  ],
+};
+
+const FACILITY_LIST: Facility[] = [
+  {
+    id: 'fac-1',
+    name: 'Station 1 — Headquarters',
+    facilityNumber: 'ST-1',
+    isArchived: false,
+    createdAt: '2020-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'fac-2',
+    name: 'Station 2 (Northfield Substation)',
+    facilityNumber: 'ST-2',
+    isArchived: false,
+    createdAt: '2020-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  },
+];
+
+const FACILITY_MAINTENANCE: MaintenanceRecord[] = [
+  {
+    id: 'fmr-1',
+    facilityId: 'fac-1',
+    description: 'Annual overhead bay door service — springs, rollers and safety reversing sensors',
+    dueDate: '2026-10-31',
+    isCompleted: false,
+    isOverdue: true,
+    vendor: 'Overhead Door Co.',
+    createdAt: '2026-09-01T12:00:00Z',
+    updatedAt: '2026-09-01T12:00:00Z',
+  },
+  {
+    id: 'fmr-2',
+    facilityId: 'fac-2',
+    description: 'Generator load-bank test',
+    dueDate: '2026-11-25',
+    isCompleted: false,
+    isOverdue: false,
+    createdAt: '2026-10-01T12:00:00Z',
+    updatedAt: '2026-10-01T12:00:00Z',
+  },
+  {
+    id: 'fmr-3',
+    facilityId: 'fac-1',
+    description: 'HVAC filter replacement',
+    completedDate: '2026-11-02',
+    isCompleted: true,
+    performedBy: 'Alex Johnson',
+    cost: 184.5,
+    createdAt: '2026-10-20T12:00:00Z',
+    updatedAt: '2026-11-02T12:00:00Z',
+  },
+];
+
+const FACILITY_INSPECTIONS: Inspection[] = [
+  {
+    id: 'fin-1',
+    facilityId: 'fac-1',
+    inspectionType: 'fire_safety',
+    title: 'Annual fire alarm and sprinkler inspection',
+    inspectionDate: '2026-09-15',
+    nextInspectionDate: '2027-09-15',
+    passed: true,
+    inspectorName: 'Dana Whitfield',
+    inspectorOrganization: 'County Fire Marshal',
+    createdAt: '2026-09-15T12:00:00Z',
+    updatedAt: '2026-09-15T12:00:00Z',
+  },
+  {
+    id: 'fin-2',
+    facilityId: 'fac-2',
+    inspectionType: 'electrical',
+    title: 'Electrical panel and emergency lighting inspection',
+    inspectionDate: '2026-10-20',
+    passed: false,
+    findings: 'Two emergency lights in the apparatus bay failed the 90-minute battery test.',
+    correctiveActions: 'Replace both battery packs and retest.',
+    correctiveActionDeadline: '2026-11-30',
+    correctiveActionCompleted: false,
+    createdAt: '2026-10-20T12:00:00Z',
+    updatedAt: '2026-10-20T12:00:00Z',
+  },
+  {
+    id: 'fin-3',
+    facilityId: 'fac-1',
+    inspectionType: 'elevator',
+    title: 'Elevator certificate renewal',
+    inspectionDate: '2026-12-05',
+    passed: null,
+    createdAt: '2026-11-01T12:00:00Z',
+    updatedAt: '2026-11-01T12:00:00Z',
+  },
+];
+
+const ERROR_LOG: ErrorLogRecord[] = [
+  {
+    id: 'err-1',
+    error_type: 'NETWORK_ERROR',
+    error_message:
+      'Request to /api/v1/scheduling/shifts timed out after 30000ms while the station Wi-Fi was reconnecting',
+    user_message: 'We could not reach the server.',
+    troubleshooting_steps: ['Check your connection', 'Try again in a minute'],
+    context: { path: '/scheduling' },
+    user_id: 'crew-2',
+    user_name: 'Alex Johnson',
+    user_username: 'ajohnson',
+    created_at: '2026-11-15T13:04:00Z',
+  },
+  {
+    id: 'err-2',
+    error_type: 'EVENT_NOT_FOUND',
+    error_message: 'Event evt-404 not found',
+    user_message: 'That event no longer exists.',
+    troubleshooting_steps: [],
+    context: {},
+    user_id: 'crew-9',
+    user_name: null,
+    user_username: null,
+    event_id: 'evt-404',
+    created_at: '2026-11-14T22:10:00Z',
+  },
+  {
+    id: 'err-3',
+    error_type: 'AUTHENTICATION_REQUIRED',
+    error_message: 'Session expired',
+    user_message: 'Please sign in again.',
+    troubleshooting_steps: ['Sign in again'],
+    context: {},
+    created_at: '2026-11-14T08:00:00Z',
+  },
+];
+
+const ERROR_CODES: ErrorCodeEntry[] = [
+  {
+    code: 'NETWORK_ERROR',
+    category: 'Connectivity',
+    title: 'Network error',
+    description: 'The browser could not reach the server.',
+    resolution: ['Check the network', 'Retry'],
+  },
+  {
+    code: 'EVENT_NOT_FOUND',
+    category: 'Events',
+    title: 'Event not found',
+    description: 'The event was deleted or the link is out of date.',
+    resolution: ['Open the event from the calendar'],
+  },
+];
+
+const dailyCounts = (counts: number[]) =>
+  counts.map((count, i) => ({ date: `2026-11-${String(i + 2).padStart(2, '0')}`, count }));
+
+const PLATFORM_ANALYTICS: PlatformAnalytics = {
+  totalUsers: 64,
+  activeUsers: 50,
+  inactiveUsers: 14,
+  newUsersLast30Days: 3,
+  adoptionRate: 78,
+  loginTrend: dailyCounts([31, 28, 35, 40, 22, 18, 37, 41, 39, 30, 26, 19, 42, 44]),
+  modules: [
+    { name: 'Training', enabled: true, recordCount: 1842, lastActivity: '2026-11-15T12:00:00Z' },
+    { name: 'Scheduling', enabled: true, recordCount: 960, lastActivity: '2026-11-15T09:30:00Z' },
+    { name: 'Inventory', enabled: true, recordCount: 412, lastActivity: '2026-11-12T16:00:00Z' },
+    { name: 'Elections', enabled: false, recordCount: 0, lastActivity: null },
+  ],
+  totalEvents: 38,
+  eventsLast30Days: 10,
+  totalCheckIns: 351,
+  trainingHoursLast30Days: 286.5,
+  formsSubmittedLast30Days: 47,
+  errorsLast7Days: 3,
+  errorTrend: dailyCounts([1, 0, 0, 0, 1, 0, 1]),
+  topErrorTypes: { NETWORK_ERROR: 2, EVENT_NOT_FOUND: 1 },
+  totalDocuments: 233,
+  documentsLast30Days: 12,
+  generatedAt: '2026-11-15T12:00:00Z',
 };
 
 const TRAINING_CREW_CONTEXT: CrewRecordingContext = {
@@ -543,7 +1159,8 @@ const EVENT_REQUESTS = [
     outreach_type: 'fire_safety_demo',
     status: 'submitted',
     date_flexibility: 'specific_dates',
-    preferred_date_start: requestDay(9),
+    // A calendar date, as the API serves it.
+    preferred_date_start: requestDay(9).slice(0, 10),
     audience_size: 120,
     short_notice: false,
     created_at: requestDay(-1),
@@ -556,7 +1173,8 @@ const EVENT_REQUESTS = [
     outreach_type: 'station_tour',
     status: 'in_progress',
     date_flexibility: 'specific_dates',
-    preferred_date_start: requestDay(5),
+    // A calendar date, as the API serves it.
+    preferred_date_start: requestDay(5).slice(0, 10),
     audience_size: 200,
     assigned_to: TEST_USER.id,
     assignee_name: 'Alex Tester',
@@ -801,6 +1419,25 @@ export interface MockOptions {
    * pass over those would otherwise measure the error panel under their names.
    */
   memberRecord?: boolean;
+  /**
+   * Serve prospective-member pipelines, the caller's assigned applicants and
+   * stages waiting on their signature.
+   *
+   * Opt-in because all three are read well beyond their own screens: assigned
+   * applicants put a "My Applicants" link in the navigation on every page,
+   * pending sign-offs add rows to the dashboard, and the pipeline list feeds
+   * the prospective-members home. Every other ratcheted route was measured
+   * without them.
+   */
+  prospectiveMembers?: boolean;
+  /**
+   * Serve the caller three members who report to them (`/users/me/crew`).
+   *
+   * Opt-in because every page reads that endpoint to decide whether the
+   * navigation shows crew links (useHasCrew); a crew on every route would
+   * change what each other ratcheted page measures.
+   */
+  crew?: boolean;
   /**
    * Lengthen every display string the fixtures serve: names, titles, labels,
    * descriptions, messages.
@@ -3523,6 +4160,33 @@ const departmentMessageList = (request: Request, empty: boolean) => {
   return { messages: matching.slice(skip, skip + limit), total: matching.length };
 };
 
+/** Whether `request` came from a page at `path` (a worker's has no page). */
+const requestedFrom = (request: Request, path: string): boolean => {
+  try {
+    return new URL(request.frame().url()).pathname === path;
+  } catch {
+    return false;
+  }
+};
+
+/** The member's leave in progress: began a month ago, ends in two. */
+const leaveInProgress = () => ({
+  id: 'leave-current',
+  organization_id: 'org-1',
+  user_id: 'user-1',
+  leave_type: 'leave_of_absence',
+  reason: null,
+  start_date: inDays(-30).slice(0, 10),
+  end_date: inDays(60).slice(0, 10),
+  granted_by: null,
+  granted_at: null,
+  active: true,
+  exempt_from_training_waiver: false,
+  linked_training_waiver_id: null,
+  created_at: null,
+  updated_at: null,
+});
+
 /**
  * Route glob → response body. Ordered least to most specific; `mockApi`
  * registers them in order and Playwright matches the last registration first,
@@ -3533,6 +4197,8 @@ const routes = ({
   permissions = [],
   platoonsEnabled = false,
   memberRecord = false,
+  prospectiveMembers = false,
+  crew = false,
 }: MockOptions): [string, (request: Request) => unknown][] => [
   // Catch-all. Anything not listed below answers with an empty object rather
   // than reaching the dev-server proxy, which has no backend behind it.
@@ -3586,7 +4252,21 @@ const routes = ({
 
   // History gallery: a recording and a photo with no thumbnail, so the page
   // is measured with its tiles and not with broken image requests.
-  ['**/api/v1/history/albums', () => []],
+  ['**/api/v1/history/albums', () => (empty ? [] : HISTORY_ALBUMS)],
+  ['**/api/v1/history/imports', () => (empty ? [] : HISTORY_ROSTER_IMPORTS)],
+  ['**/api/v1/history/honor-roll', () => (empty ? [] : HISTORY_HONOR_ROLL)],
+  // Titles, sources and document types are read with `?include_retired=…`;
+  // the settings screen asks for retired ones too, the pickers do not.
+  ['**/api/v1/history/titles?**', (request) => (empty ? [] : withRetired(HISTORY_TITLES, request))],
+  ['**/api/v1/history/sources?**', (request) => (empty ? [] : withRetired(HISTORY_SOURCES, request))],
+  ['**/api/v1/history/clearance/steps', () => (empty ? [] : HISTORY_CLEARANCE_STEPS)],
+  [
+    '**/api/v1/history/clearance/positions',
+    () => [
+      { id: 'pos-chief', name: 'Fire Chief' },
+      { id: 'pos-historian', name: 'Department Historian' },
+    ],
+  ],
   [
     '**/api/v1/history/media**',
     () => ({
@@ -3620,7 +4300,7 @@ const routes = ({
 
   // History documents: a letter and a scan with no preview, so the list is
   // measured with its tiles and not with broken image requests.
-  ['**/api/v1/history/document-types**', () => []],
+  ['**/api/v1/history/document-types**', (request) => (empty ? [] : withRetired(HISTORY_DOCUMENT_TYPES, request))],
   [
     '**/api/v1/history/documents**',
     () => ({
@@ -4372,6 +5052,7 @@ const routes = ({
       requests_enabled: true,
       request_approver_position_ids: ['pos-board'],
       request_decision_rule: 'majority',
+      request_escalation_days: 21,
       available_positions: [
         { id: 'pos-board', name: 'Board of Directors', holder_count: 0 },
         { id: 'pos-chief', name: 'Fire Chief', holder_count: 1 },
@@ -4380,11 +5061,86 @@ const routes = ({
   ],
   // A request waiting on the caller, so the vote controls render; the list
   // glob is registered first so the more specific `/me` and `/config` win.
-  ['**/api/v1/users/leave-requests?**', () => [leaveRequestFixture({ member_name: 'Alex Johnson', can_vote: true })]],
-  ['**/api/v1/users/leave-requests/me', () => [leaveRequestFixture({})]],
+  [
+    '**/api/v1/users/leave-requests?**',
+    () => [
+      leaveRequestFixture({
+        member_name: 'Alex Johnson',
+        can_vote: true,
+        can_ask: true,
+        extends_leave: { start_date: '2026-10-01', end_date: '2026-11-30' },
+      }),
+    ],
+  ],
+  // The member's own request waits on their answer, so the answer form and the
+  // conversation render.
+  [
+    '**/api/v1/users/leave-requests/me',
+    () => [
+      leaveRequestFixture({
+        awaiting: 'answer',
+        can_answer: true,
+        messages: [
+          { kind: 'question', author_name: 'Captain Lopez', body: 'Which shifts?', created_at: '2026-11-15T12:00:00Z' },
+        ],
+      }),
+    ],
+  ],
+  // On Leave Requests the member is on leave now, so "Your leave" and its
+  // early-end control render; every other page (the shift board reads this
+  // too) sees no leave, as it did before this fixture existed.
+  [
+    '**/api/v1/users/leaves-of-absence/me',
+    (request) => (requestedFrom(request, '/members/leave-requests') ? [leaveInProgress()] : []),
+  ],
+  // Nothing waiting and requests off, so the navigation every other route is
+  // measured with does not gain an entry; the page itself reads the lists.
+  ['**/api/v1/users/leave-requests/summary', () => ({ requests_enabled: false, to_decide: 0, waiting_on_me: 0 })],
   ['**/api/v1/users/leave-requests/config', () => ({ requests_enabled: true })],
 
   ['**/api/v1/admin-hours/summary**', () => ({ totalHours: 8 })],
+
+  [
+    '**/api/v1/meetings/attendance/dashboard**',
+    () =>
+      empty
+        ? { ...MEETING_ATTENDANCE_DASHBOARD, members: [], total_meetings_in_period: 0 }
+        : MEETING_ATTENDANCE_DASHBOARD,
+  ],
+  // List reads only (`?**`): the bare path is the member's submit, and
+  // `/policy`, `/mine` and a request's own id keep their own answers.
+  [
+    '**/api/v1/meetings/waiver-requests?**',
+    (request) => (empty ? { items: [], total: 0, skip: 0, limit: 50 } : meetingWaiverPage(request)),
+  ],
+  [
+    '**/api/v1/meetings/waiver-requests/policy/positions',
+    () => ({
+      positions: [
+        { id: 'pos-president', name: 'President' },
+        { id: 'pos-secretary', name: 'Recording Secretary' },
+      ],
+    }),
+  ],
+  ['**/api/v1/minutes-records/templates**', () => (empty ? [] : MINUTES_OUTLINES)],
+
+  // Error monitoring reads the list with `?limit=`; the bare path is the
+  // clear-all DELETE, and `/errors/log` (the client's own reports) keeps the
+  // catch-all.
+  ['**/api/v1/errors?**', () => (empty ? { errors: [], total: 0 } : { errors: ERROR_LOG, total: ERROR_LOG.length })],
+  [
+    '**/api/v1/errors/stats',
+    () =>
+      empty
+        ? { total: 0, by_type: {}, recent_errors: [] }
+        : {
+            total: 3,
+            by_type: { NETWORK_ERROR: 1, EVENT_NOT_FOUND: 1, AUTHENTICATION_REQUIRED: 1 },
+            recent_errors: ERROR_LOG,
+          },
+  ],
+  ['**/api/v1/errors/codes', () => ({ codes: ERROR_CODES })],
+  ['**/api/v1/platform-analytics', () => PLATFORM_ANALYTICS],
 
   ['**/api/v1/training/module-config/my-training**', () => ({ hours_summary: { total_hours: 12 } })],
 
@@ -4456,6 +5212,24 @@ const routes = ({
   ['**/api/v1/facilities/types**', () => []],
   ['**/api/v1/facilities/statuses**', () => []],
   ['**/api/v1/facilities/maintenance-types**', () => []],
+  // The list read with `?is_archived=…` (the maintenance and inspection
+  // screens name each record's facility from it); `/page` and the dashboard
+  // keep their own answers above.
+  ['**/api/v1/facilities?**', () => (empty ? [] : FACILITY_LIST)],
+  [
+    '**/api/v1/facilities/maintenance/page**',
+    () =>
+      empty
+        ? { items: [], total: 0, skip: 0, limit: 50 }
+        : { items: FACILITY_MAINTENANCE, total: 3, skip: 0, limit: 50 },
+  ],
+  [
+    '**/api/v1/facilities/inspections/page**',
+    () =>
+      empty
+        ? { items: [], total: 0, skip: 0, limit: 50 }
+        : { items: FACILITY_INSPECTIONS, total: 3, skip: 0, limit: 50 },
+  ],
 
   ['**/api/v1/forms**', () => ({ forms: [], total: 0 })],
   ['**/api/v1/prospective-members**', () => ({ applicants: [], total: 0 })],
@@ -4491,6 +5265,10 @@ const routes = ({
   ],
   // After `events**` for the same reason as check-in monitoring above.
   ['**/api/v1/events/settings', eventSettings],
+  // After the broad `events**` above, which answers `[]` for everything else.
+  ['**/api/v1/events/templates?**', () => (empty ? [] : EVENT_TEMPLATES)],
+  ['**/api/v1/events/attendance-petitions/pending**', () => (empty ? [] : EVENT_ATTENDANCE_PETITIONS)],
+  ['**/api/v1/events/analytics/summary**', () => (empty ? {} : EVENT_ANALYTICS_SUMMARY)],
   [
     '**/api/v1/event-requests/email-templates**',
     () => [
@@ -4567,6 +5345,148 @@ const routes = ({
   ['**/api/v1/messages?**', (request) => departmentMessageList(request, empty)],
   ['**/api/v1/messages/roles', () => MESSAGE_ROLES],
   ...(memberRecord ? memberRecordRoutes() : []),
+  ...(prospectiveMembers ? prospectiveMemberRoutes() : []),
+  ...(crew ? [['**/api/v1/users/me/crew', () => ({ members: MY_CREW })] as [string, () => unknown]] : []),
+];
+
+const PROSPECT_PIPELINES: BackendPipelineListResponse[] = [
+  {
+    id: 'pipe-1',
+    name: 'Volunteer Firefighter Recruitment',
+    description: 'Application, interview, background check, physical and a vote of the membership.',
+    is_template: false,
+    is_default: true,
+    is_active: true,
+    auto_transfer_on_approval: true,
+    step_count: 7,
+    prospect_count: 12,
+    created_at: '2026-01-10T12:00:00Z',
+  },
+  {
+    id: 'pipe-2',
+    name: 'Junior Firefighter Program (ages 14–17, guardian consent required)',
+    description: null,
+    is_template: false,
+    is_default: false,
+    is_active: true,
+    auto_transfer_on_approval: false,
+    step_count: 4,
+    prospect_count: 3,
+    created_at: '2026-03-02T12:00:00Z',
+  },
+];
+
+const assignedApplicant = (
+  overrides: Partial<BackendProspectListResponse> & Pick<BackendProspectListResponse, 'id' | 'first_name' | 'last_name'>
+): BackendProspectListResponse => ({
+  my_roles: ['case_manager'],
+  target_role_name: null,
+  deactivated_at: null,
+  withdrawn_at: null,
+  withdrawal_reason: null,
+  email: 'applicant@example.com',
+  phone: null,
+  status: 'active',
+  pipeline_id: 'pipe-1',
+  pipeline_name: 'Volunteer Firefighter Recruitment',
+  current_step_id: 'step-interview',
+  current_step_name: 'Interview',
+  desired_membership_type: 'active',
+  created_at: '2026-10-01T12:00:00Z',
+  updated_at: '2026-11-10T12:00:00Z',
+  stage_entered_at: '2026-11-01T12:00:00Z',
+  days_in_stage: 14,
+  days_in_pipeline: 45,
+  days_since_activity: 5,
+  inactivity_alert_level: 'normal',
+  inactivity_timeout_days: 30,
+  ...overrides,
+});
+
+const ASSIGNED_APPLICANTS: BackendProspectListResponse[] = [
+  assignedApplicant({ id: 'prospect-1', first_name: 'Jordan', last_name: 'Ellis', email: 'jordan.ellis@example.com' }),
+  assignedApplicant({
+    id: 'prospect-2',
+    first_name: 'Anastasia',
+    last_name: 'Vandenberg-Okonkwo',
+    email: 'anastasia.vandenberg-okonkwo@example.com',
+    my_roles: ['case_manager', 'interviewer'],
+    current_step_id: 'step-background',
+    current_step_name: 'Background Check and Driving Record Review',
+    days_in_stage: 26,
+    days_since_activity: 24,
+    inactivity_alert_level: 'warning',
+  }),
+  assignedApplicant({
+    id: 'prospect-3',
+    first_name: 'Sam',
+    last_name: 'Patel',
+    my_roles: ['interviewer'],
+    pipeline_id: 'pipe-2',
+    pipeline_name: 'Junior Firefighter Program (ages 14–17, guardian consent required)',
+    current_step_name: 'Guardian Consent',
+  }),
+];
+
+const PENDING_SIGN_OFFS: PendingSignOff[] = [
+  {
+    prospect_id: 'prospect-1',
+    first_name: 'Jordan',
+    last_name: 'Ellis',
+    pipeline_name: 'Volunteer Firefighter Recruitment',
+    step_id: 'step-interview',
+    step_name: 'Interview',
+    step_description: 'Panel interview with two officers; both sign once the interview is complete.',
+    roles_to_sign: [{ role: 'interviewer', label: 'Interviewer' }],
+    required_roles: [
+      { role: 'interviewer', label: 'Interviewer', signed: false },
+      { role: 'case_manager', label: 'Case manager', signed: true },
+    ],
+  },
+  {
+    prospect_id: 'prospect-2',
+    first_name: 'Anastasia',
+    last_name: 'Vandenberg-Okonkwo',
+    pipeline_name: 'Volunteer Firefighter Recruitment',
+    step_id: 'step-background',
+    step_name: 'Background Check and Driving Record Review',
+    step_description: null,
+    roles_to_sign: [{ role: 'case_manager', label: 'Case manager' }],
+    required_roles: [{ role: 'case_manager', label: 'Case manager', signed: false }],
+  },
+];
+
+const MY_CREW: CrewMember[] = [
+  {
+    id: 'crew-2',
+    name: 'Alex Johnson',
+    rank: 'Firefighter',
+    station: 'Station 1',
+    membership_number: '1042',
+    supervised_since: '2026-01-05T00:00:00Z',
+  },
+  {
+    id: 'crew-3',
+    name: 'Maria Rodriguez-Castellanos',
+    rank: 'Probationary Firefighter',
+    station: 'Station 2 (Northfield Substation)',
+    membership_number: '1107',
+    supervised_since: '2026-06-15T00:00:00Z',
+  },
+  {
+    id: 'crew-4',
+    name: 'Sam Lee',
+    rank: null,
+    station: null,
+    membership_number: null,
+    supervised_since: '2026-10-01T00:00:00Z',
+  },
+];
+
+const prospectiveMemberRoutes = (): [string, () => unknown][] => [
+  ['**/api/v1/prospective-members/pipelines**', () => PROSPECT_PIPELINES],
+  ['**/api/v1/prospective-members/my-applicants', () => ASSIGNED_APPLICANTS],
+  ['**/api/v1/prospective-members/my-sign-offs', () => PENDING_SIGN_OFFS],
 ];
 
 const memberRecordRoutes = (): [string, () => unknown][] => [

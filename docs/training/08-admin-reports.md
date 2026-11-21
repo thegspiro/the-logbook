@@ -294,6 +294,11 @@ Account, Email Templates and the others — works the same way:
 The **Profile**, **Contact** and **Addresses** sections hold:
 
 - **Department Name** and **Slug** (the short name used in links)
+- **Short Name** _(2026-11-20)_, up to 20 characters, for example "FCVFD".
+  It is used where the full name will not fit; today, that is the label
+  beside the department's own shifts in a member's **My Hours** list, where
+  they sit among shifts worked for other departments. Leave it blank to use
+  the full name. Emails still name the department in full.
 - **Department Type** and **Identifiers** (FDID, State ID)
 - **Timezone** — the department's clock. See
   [The department's timezone is the clock](#the-departments-timezone-is-the-clock).
@@ -927,6 +932,21 @@ report shows **Open Work Orders**.
      cover the report on screen even if you have since changed the dates;
    - **Compare** shows the previous period of the same length beside it.
 
+**The downloads** _(2026-11-15)_. The **CSV** has the same columns as before,
+so a spreadsheet built on it keeps working. The **PDF**:
+
+- turns sideways for a wide report, and prints call volume's call types in
+  bands, each labelled, for example "Call types 1–9 of 14";
+- repeats a short header on every page after the first, with the
+  department's logo and name, the report and its period _(2026-11-16)_;
+- shows times in the department's time zone, and who made it;
+- on a report that lists members, prints _"Confidential: contains member
+  records. Do not post or forward."_
+
+The download needs the same permissions as **Generate Report**. If the
+server refuses it, a message says why. A saved report downloads exactly what
+**Run** shows.
+
 **Report results show as cards** _(2026-11-17)_. The report window is never
 wider than about 970 pixels, and most reports have more columns than fit, so
 the results used to scroll sideways with no sign there was more — on a phone
@@ -937,6 +957,20 @@ enough to stay a table from tablet width up and become cards only on a phone.
 CSV and PDF downloads are unchanged. _Screenshot: replace any image of a
 report's on-screen results, such as the Certification Expiration or Member
 Roster report._
+
+**A Source column where rows can come from an import** _(2026-11-19)_. Two
+reports say where each row came from in their **CSV** and **PDF** downloads
+(the on-screen results are unchanged): **Certification Expiration** (the training provider's name for a
+synced record, **Imported** for one the Historical Data Import or, since
+2026-11-15, a training CSV import wrote, otherwise **The Logbook**) and **Admin Hours** (**Imported** or **The Logbook**). The
+same column is added at the end of the **Export CSV** on Admin Hours' **All
+Entries** tab, of the training record exports (see
+[Training, Bulk and Reporting Exports](./02-training.md#bulk-and-reporting-exports-reports-tab))
+and of the event exports (see
+[Events and Meetings](./04-events-meetings.md#selecting-several-events)).
+**Source** is not the same as Admin Hours' **Method** column, which says how
+an entry was logged (clock in, manual, QR). Reports whose rows cannot be told
+apart this way have no Source column, by the owner's decision of 2026-11-16.
 
 **"Today" in a report is the department's date.** The certification report's
 expiring and expired flags, apparatus inspection due dates and the call-volume
@@ -1291,11 +1325,14 @@ days.
   out.
 - **Category limits are set elsewhere.** **Auto-approve under (hours)** and
   **Max hours per session** are set on each category in the **Categories** tab.
+- **Export CSV** on the **All Entries** tab ends with a **Source** column
+  _(2026-11-19)_: **Imported** for an entry the Historical Data Import wrote,
+  **The Logbook** for the rest.
 
 > **What if a member forgets to clock out?** A session that runs past its
 > category's **Max hours per session** is closed for the member. Every 30
 > minutes, The Logbook caps a forgotten clock-in at the limit, sets it to
-> **Pending Review** and notes "Auto-closed: exceeded _N_h session limit" on the
+> **Pending Review** and notes "Auto-closed: exceeded \_N_h session limit" on the
 > entry. Each one is recorded in the audit log — the member, the entry, the
 > capped times, and whether the regular check or an officer's **Close Stale
 > Sessions** (Categories tab) closed it — so a disputed session can be looked
@@ -1392,7 +1429,7 @@ Messages can be escalated by email or text message according to priority, can
 require acknowledgement with a report of who has not acknowledged, can be
 scheduled, and can be edited after posting.
 
-1. Open **Messages** and select **New message**.
+1. Open **Department Messages** and select **New message**.
 2. Enter the title and body, and set the priority and audience. _(2026-10-18)_ An audience of **By status → Probationary** or **Retired** now matches a member on either their membership status or their account status, so a new member added as a probationary member is included without an admin changing the account status. Active, Leave and Inactive still match the account status only.
 3. Optionally tick **Keep in inbox after it is read** (persistent) or **Require
    acknowledgment**, or set a send time.
@@ -1814,6 +1851,12 @@ See [The email link address](#the-email-link-address) and
   Pressing it with no changes does nothing.
 - **Discard** appears when you have unsaved changes. It puts the editor back to
   the last saved version.
+- **A refused field does not block the rest** _(2026-11-20)_. **Save** is no
+  longer greyed out while a CC or BCC list holds a bad address. A refused
+  subject, body or copy list is named under its field and left unsaved, still
+  holding what you typed, so you can correct it; everything else saves. Before,
+  one bad address held back the whole template without saying which box was
+  wrong.
 
 ![The template editor with unsaved changes, showing Discard beside Save](./images/08-56-template-discard.png)
 
@@ -2664,7 +2707,9 @@ by it.
 
 Members are judged the way the Training dashboard judges them. A member who has
 turned off training reminders in their own email settings is not sent these.
-Details are in
+A rolling requirement ("72 hours in any 12 months") has no deadline, so it gets
+no reminder, and the notice lists it once rather than every day while it stays
+short _(2026-11-21; before, both emails repeated daily)_. Details are in
 [Training → Compliance Emails to Members](./02-training.md#compliance-emails-to-members).
 
 ![Compliance requirements configuration: the Thresholds tab, with its status preview and reminder schedule](./images/08-69-compliance-requirements-config.png)
@@ -2683,23 +2728,36 @@ Profiles let different groups be held to different standards.
 2. Fill in:
    - **Profile Name** — for example "Line Officers" or "Probationary Members";
    - **Priority** — when a member matches more than one profile, the highest
-     priority applies;
+     priority applies; at equal priority the profile created first applies.
+     The form warns when the number you type ties with another active
+     profile, and a tied profile's card says so, but the save is allowed;
    - **Description**;
    - **Applies to Membership Types**;
    - **Applies to Members Holding a Position** _(2026-10-29)_ — see
      [Scoping a Compliance Profile by Position](./02-training.md#scoping-a-compliance-profile-by-position-2026-10-29);
    - optional **threshold overrides** for this group;
    - **Required Training Requirements** — what must be met;
-   - **Optional/Tracked Requirements** — tracked, but not needed for
-     compliance;
+   - **Optional Requirements** — shown to these members, and to officers, on
+     the member's training page, marked Optional. They never count toward
+     standing or percentage, and no reminders are sent. Ticking a requirement
+     Required takes it out of this list;
    - **Required Admin Hours** — admin-hours categories and the hours required.
 3. Save.
 
 How a profile grades the members it matches:
 
 - **The required requirements you tick are the whole list.** A profile with
-  none ticked grades its members against nothing, so they count as compliant. It
-  does not fall back to every requirement.
+  none ticked grades its members against nothing, so they read **Not
+  applicable** and are left out of the department's percentage. It does not
+  fall back to every requirement.
+- **A profile with no required list at all grades everything but its optional
+  requirements.** Only a profile created through the API can be in this state;
+  its card reads **Required: all except optional**. Since 2026-11-21, saving
+  such a profile from this screen keeps it that way. Before, an unrelated
+  save switched it to grading nothing.
+- **Optional requirements never grade.** They appear on the member's training
+  page under **Optional** and nowhere in the standing, the percentage, the
+  reports or the compliance emails. A requirement in both lists is required.
 - **Threshold overrides work on their own.** A profile whose only change is a
   stricter or gentler threshold still applies it.
 
@@ -3135,6 +3193,9 @@ have moved, been renamed or work differently.
 
 ### Works differently now
 
+- **Print / PDF is now PDF** _(2026-11-15)_. It downloads a PDF built by the
+  server, with page numbers and a header on every page, instead of opening
+  the browser's print window. Both downloads are recorded in the audit log.
 - **Every email template uses the current design, including ones your
   department edited.** Earlier wording is in each template's **Previous version**
   panel. There is no **CSS Styles** box. If anyone pressed **Reset** expecting to

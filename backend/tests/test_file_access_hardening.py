@@ -402,7 +402,7 @@ class TestTrainingRecordDownload:
             ],
         )
         return await training_enhancements.download_record_attachment(
-            "rec-1", 0, _db_returning(record), owner
+            "rec-1", "0", _db_returning(record), owner
         )
 
     @pytest.mark.parametrize(
@@ -442,7 +442,7 @@ class TestTrainingRecordDownload:
         )
         member = SimpleNamespace(first_name="John", last_name="Smith")
         response = await training_enhancements.download_record_attachment(
-            "rec-1", 0, _db_returning(record, member), owner
+            "rec-1", "0", _db_returning(record, member), owner
         )
         assert (
             'filename="2026-10-08_Smith-John_EMT-Recertification.pdf"'

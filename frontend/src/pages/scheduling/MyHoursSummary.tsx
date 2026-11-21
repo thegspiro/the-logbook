@@ -13,9 +13,12 @@
  * because a member who watched their hours drop after a close-out corrected a
  * check-out time would have no way to tell what happened.
  *
- * Shifts logged with other departments are a third figure, shown beside the
- * credited hours rather than added into them: they count toward the member's
- * requirements, but they are not attendance on this department's shifts.
+ * **The headline is every shift hour the member is credited with** — the
+ * department's own credited hours plus the hours logged with other
+ * departments (owner decision, 2026-11-16) — and the split between the two is
+ * drawn and labelled under it on every card and every bar. The two sources
+ * stay separate fields in the payload; the screen adds them, and never adds
+ * the pending figure to either.
  *
  * The three cards read this month, the selected year, and all time. The middle
  * one follows the year picker rather than pinning to the current year, so it
@@ -29,14 +32,16 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Flame, History, Loader2, TrendingUp } from 'lucide-react';
+import { AlertCircle, ChevronLeft, ChevronRight, Flame, History, Loader2, TrendingUp } from 'lucide-react';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { MemberHoursHistory } from '../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 import { formatHours } from '../../utils/hoursFormatting';
 import { formatNumber } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { MyExternalShifts } from './MyExternalShifts';
+import { HoursByMonthChart } from './HoursByMonthChart';
+import { monthTotalHours } from './hoursMonths';
+import { MemberShiftHistory } from './MemberShiftHistory';
 
 const MONTH_NAMES = [
   'January',
@@ -65,16 +70,19 @@ const MAX_YEARS_LISTED = 20;
 interface StatCardProps {
   label: string;
   sublabel: string;
+  /** Credited hours on the department's own shifts. */
   hours: number;
   shifts: number;
   calls: number;
   showCalls: boolean;
   /** Hours logged with other departments in the same period. */
   externalHours: number;
+  externalShifts: number;
   /** Calls credited on other departments' units in the same period. */
   externalCalls: number;
   /** The part of `hours` worked on recall (on-call) shifts. */
   onCallHours: number;
+  departmentLabel: string;
   icon: React.ReactNode;
 }
 
@@ -86,43 +94,63 @@ const StatCard: React.FC<StatCardProps> = ({
   calls,
   showCalls,
   externalHours,
+  externalShifts,
   externalCalls,
   onCallHours,
+  departmentLabel,
   icon,
-}) => (
-  // Grouped and labelled so a screen reader announces which period a figure
-  // belongs to; three bare numbers in a row carry that only visually.
-  <div className="card p-4" role="group" aria-label={label}>
-    <div className="flex items-start justify-between gap-2">
-      <div className="min-w-0">
-        <p className="text-theme-text-secondary text-sm font-medium">{label}</p>
-        <p className="text-theme-text-muted text-xs">{sublabel}</p>
+}) => {
+  const total = hours + externalHours;
+  const shiftCount = shifts + externalShifts;
+  const callCount = calls + externalCalls;
+  return (
+    // Grouped and labelled so a screen reader announces which period a figure
+    // belongs to; three bare numbers in a row carry that only visually.
+    <div className="card p-4" role="group" aria-label={label}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-theme-text-secondary text-sm font-medium">{label}</p>
+          <p className="text-theme-text-muted text-xs">{sublabel}</p>
+        </div>
+        <span className="text-violet-600 dark:text-violet-400" aria-hidden="true">
+          {icon}
+        </span>
       </div>
-      <span className="text-violet-600 dark:text-violet-400" aria-hidden="true">
-        {icon}
-      </span>
-    </div>
-    <p className="text-theme-text-primary mt-3 text-3xl font-bold">
-      {formatHours(hours)}
-      <span className="text-theme-text-secondary ml-1 text-base font-medium">hrs</span>
-    </p>
-    <p className="text-theme-text-secondary mt-1 text-sm">
-      {formatNumber(shifts)} {shifts === 1 ? 'shift' : 'shifts'}
-      {showCalls ? ` · ${formatNumber(calls)} ${calls === 1 ? 'call' : 'calls'}` : ''}
-    </p>
-    {onCallHours > 0 && (
-      <p className="text-theme-text-secondary mt-1 text-sm">of which {formatHours(onCallHours)} hrs on call</p>
-    )}
-    {externalHours > 0 && (
-      <p className="text-theme-text-secondary mt-1 text-sm">
-        +{formatHours(externalHours)} hrs with other departments
-        {showCalls && externalCalls > 0
-          ? ` · ${formatNumber(externalCalls)} ${externalCalls === 1 ? 'call' : 'calls'}`
-          : ''}
+      <p className="text-theme-text-primary mt-3 text-3xl font-bold">
+        {formatHours(total)}
+        <span className="text-theme-text-secondary ml-1 text-base font-medium">hrs</span>
       </p>
-    )}
-  </div>
-);
+      {/* The split bar repeats the two figures written under it, so it is
+          hidden from assistive technology rather than read out twice. */}
+      <div className="bg-theme-input-bg mt-2 flex h-1.5 overflow-hidden rounded-full" aria-hidden="true">
+        {total > 0 && (
+          <>
+            <span className="h-full bg-violet-600 dark:bg-violet-400" style={{ width: `${(hours / total) * 100}%` }} />
+            <span
+              className="h-full bg-sky-600 dark:bg-sky-400"
+              style={{ width: `${(externalHours / total) * 100}%` }}
+            />
+          </>
+        )}
+      </div>
+      {externalHours > 0 && (
+        <p className="text-theme-text-secondary mt-1.5 flex flex-wrap justify-between gap-x-3 text-sm">
+          <span>
+            {formatHours(hours)} {departmentLabel}
+          </span>
+          <span className="text-sky-800 dark:text-sky-300">+{formatHours(externalHours)} with other departments</span>
+        </p>
+      )}
+      <p className="text-theme-text-secondary mt-1 text-sm">
+        {formatNumber(shiftCount)} {shiftCount === 1 ? 'shift' : 'shifts'}
+        {showCalls ? ` · ${formatNumber(callCount)} ${callCount === 1 ? 'call' : 'calls'}` : ''}
+      </p>
+      {onCallHours > 0 && (
+        <p className="text-theme-text-secondary mt-1 text-sm">of which {formatHours(onCallHours)} hrs on call</p>
+      )}
+    </div>
+  );
+};
 
 interface MyHoursSummaryProps {
   /** Show this member's history (their profile) instead of the caller's own. */
@@ -146,6 +174,9 @@ export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
   const [history, setHistory] = useState<MemberHoursHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** A month chosen on the chart, opened and marked in the shift list. */
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  const [showTable, setShowTable] = useState(false);
 
   useEffect(() => {
     void loadSettings();
@@ -160,7 +191,10 @@ export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
           ? await schedulingService.getMyHoursHistory(year ?? undefined)
           : await schedulingService.getMemberHoursHistory(memberId, year ?? undefined);
         setHistory(data);
-        setSelectedYear(data.year);
+        setSelectedYear((prev) => {
+          if (prev !== data.year) setSelectedMonth(null);
+          return data.year;
+        });
         setLatestYear((prev) => (prev === null ? data.current_month.year : prev));
       } catch (err) {
         setError(getErrorMessage(err, own ? 'Failed to load your hours' : 'Failed to load shift history'));
@@ -188,6 +222,21 @@ export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
   const peakHours = useMemo(() => {
     if (!history) return 0;
     return history.months.reduce((max, m) => Math.max(max, m.hours), 0);
+  }, [history]);
+
+  const insights = useMemo(() => {
+    if (!history) return null;
+    const active = history.months.filter((m) => monthTotalHours(m) > 0);
+    const busiest = active.reduce<(typeof active)[number] | null>(
+      (best, m) => (best === null || monthTotalHours(m) > monthTotalHours(best) ? m : best),
+      null
+    );
+    const activeHours = active.reduce((sum, m) => sum + monthTotalHours(m), 0);
+    return {
+      busiest,
+      activeMonths: active.length,
+      averagePerActiveMonth: active.length > 0 ? activeHours / active.length : 0,
+    };
   }, [history]);
 
   if (loading && !history) {
@@ -227,6 +276,7 @@ export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
   // about the figure beside it. Read off the payload rather than the browser
   // clock: the department's timezone decides which year is current.
   const isCurrentYear = history.year === current.year;
+  const departmentLabel = history.department_label || 'This department';
 
   return (
     <div className="space-y-4">
@@ -243,6 +293,15 @@ export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
           <label htmlFor={`${idPrefix}-year`} className="form-label mb-0">
             Year
           </label>
+          <button
+            type="button"
+            className="btn-icon"
+            aria-label="Previous year"
+            disabled={loading || !years.includes(history.year - 1)}
+            onClick={() => void load(history.year - 1)}
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          </button>
           <select
             id={`${idPrefix}-year`}
             value={selectedYear ?? history.year}
@@ -256,6 +315,15 @@ export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            className="btn-icon"
+            aria-label="Next year"
+            disabled={loading || !years.includes(history.year + 1)}
+            onClick={() => void load(history.year + 1)}
+          >
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </button>
           {loading && <Loader2 className="text-theme-text-muted h-4 w-4 animate-spin" aria-hidden="true" />}
         </div>
       </div>
@@ -269,7 +337,9 @@ export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
           calls={current.calls}
           showCalls={showCalls}
           externalHours={current.external_hours ?? 0}
+          externalShifts={current.external_shifts ?? 0}
           externalCalls={current.external_calls ?? 0}
+          departmentLabel={departmentLabel}
           onCallHours={current.on_call_hours ?? 0}
           icon={<Flame className="h-5 w-5" />}
         />
@@ -281,7 +351,9 @@ export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
           calls={totals.calls}
           showCalls={showCalls}
           externalHours={totals.external_hours ?? 0}
+          externalShifts={totals.external_shifts ?? 0}
           externalCalls={totals.external_calls ?? 0}
+          departmentLabel={departmentLabel}
           onCallHours={totals.on_call_hours ?? 0}
           icon={<TrendingUp className="h-5 w-5" />}
         />
@@ -293,7 +365,9 @@ export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
           calls={allTime.calls}
           showCalls={showCalls}
           externalHours={allTime.external_hours ?? 0}
+          externalShifts={allTime.external_shifts ?? 0}
           externalCalls={allTime.external_calls ?? 0}
+          departmentLabel={departmentLabel}
           onCallHours={allTime.on_call_hours ?? 0}
           icon={<History className="h-5 w-5" />}
         />
@@ -306,8 +380,67 @@ export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
         </p>
       )}
 
-      <div className="card overflow-hidden p-0">
-        {/* `table-fixed` with explicit column widths, so the figures sit under
+      <section className="card p-4" aria-labelledby={`${idPrefix}-chart-heading`}>
+        <h4 id={`${idPrefix}-chart-heading`} className="text-theme-text-primary font-semibold">
+          {history.year} at a glance
+        </h4>
+        <p className="text-theme-text-muted text-sm">Includes shifts with other departments.</p>
+        <div className="mt-8">
+          <HoursByMonthChart
+            year={history.year}
+            months={history.months}
+            departmentLabel={departmentLabel}
+            showCalls={showCalls}
+            selectedMonth={selectedMonth}
+            onSelectMonth={setSelectedMonth}
+          />
+        </div>
+
+        {insights && insights.busiest && (
+          <div role="group" aria-label={`${history.year} summary`}>
+            <dl className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+              <div className="bg-theme-surface-secondary rounded-lg px-3 py-2">
+                <dt className="text-theme-text-muted text-xs font-semibold uppercase">Busiest month</dt>
+                <dd className="text-theme-text-primary font-bold">
+                  {monthLabel(insights.busiest.month)} · {formatHours(monthTotalHours(insights.busiest))} hrs
+                </dd>
+              </div>
+              <div className="bg-theme-surface-secondary rounded-lg px-3 py-2">
+                <dt className="text-theme-text-muted text-xs font-semibold uppercase">Months with shifts</dt>
+                <dd className="text-theme-text-primary font-bold">{formatNumber(insights.activeMonths)} of 12</dd>
+              </div>
+              <div className="bg-theme-surface-secondary rounded-lg px-3 py-2">
+                <dt className="text-theme-text-muted text-xs font-semibold uppercase">Avg per active month</dt>
+                <dd className="text-theme-text-primary font-bold">{formatHours(insights.averagePerActiveMonth)} hrs</dd>
+              </div>
+              {showCalls && totals.shifts > 0 && (
+                <div className="bg-theme-surface-secondary rounded-lg px-3 py-2">
+                  <dt className="text-theme-text-muted text-xs font-semibold uppercase">
+                    Calls per {departmentLabel} shift
+                  </dt>
+                  <dd className="text-theme-text-primary font-bold">
+                    {formatNumber(totals.calls / totals.shifts, { maximumFractionDigits: 1 })}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          </div>
+        )}
+
+        <button
+          type="button"
+          className="mt-3 text-sm font-semibold text-violet-700 hover:underline dark:text-violet-300"
+          aria-expanded={showTable}
+          aria-controls={`${idPrefix}-table`}
+          onClick={() => setShowTable((v) => !v)}
+        >
+          {showTable ? 'Hide table' : 'Show as table'}
+        </button>
+      </section>
+
+      {showTable && (
+        <div id={`${idPrefix}-table`} className="card overflow-hidden p-0">
+          {/* `table-fixed` with explicit column widths, so the figures sit under
             their own headers. Under the default auto layout the bar column's
             width claim inflated every other column, spreading four numbers
             across the full width of the card. Below 768px `rwd-table` reflows
@@ -321,27 +454,27 @@ export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
             totalling 528px overflowed that, and the card is `overflow-hidden`,
             so the tail was clipped rather than scrollable. Percentages cannot
             exceed the table, whatever the sidebar takes. */}
-        <table className="rwd-table w-full table-fixed text-sm">
-          <caption className="sr-only">
-            {own ? 'Your shift hours' : 'Shift hours'} by month for {history.year}
-          </caption>
-          <thead>
-            <tr className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-secondary border-b text-left">
-              <th scope="col" className="w-[26%] px-4 py-3 font-medium">
-                Month
-              </th>
-              <th scope="col" className="w-[15%] px-4 py-3 text-right font-medium">
-                Shifts
-              </th>
-              <th scope="col" className="w-[22%] px-4 py-3 text-right font-medium">
-                Hours
-              </th>
-              {showCalls && (
-                <th scope="col" className="w-[15%] px-4 py-3 text-right font-medium">
-                  Calls
+          <table className="rwd-table w-full table-fixed text-sm">
+            <caption className="sr-only">
+              {own ? 'Your shift hours' : 'Shift hours'} by month for {history.year}
+            </caption>
+            <thead>
+              <tr className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-secondary border-b text-left">
+                <th scope="col" className="w-[26%] px-4 py-3 font-medium">
+                  Month
                 </th>
-              )}
-              {/* No data-label on the matching cells, so the bar is dropped
+                <th scope="col" className="w-[15%] px-4 py-3 text-right font-medium">
+                  Shifts
+                </th>
+                <th scope="col" className="w-[22%] px-4 py-3 text-right font-medium">
+                  Hours
+                </th>
+                {showCalls && (
+                  <th scope="col" className="w-[15%] px-4 py-3 text-right font-medium">
+                    Calls
+                  </th>
+                )}
+                {/* No data-label on the matching cells, so the bar is dropped
                   from the stacked mobile view rather than reflowed into a row
                   of its own. The header is visible rather than sr-only: an
                   unlabelled bar reads as decoration, and nothing else on the
@@ -353,100 +486,105 @@ export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
                   Hours column is the one to drop — keeping it there is what
                   squeezed the Hours cell into wrapping and pulled its figure out
                   from under its heading. */}
-              <th scope="col" className="table-col-tertiary px-4 py-3 font-medium">
-                vs. busiest month
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {history.months.map((m) => (
-              <tr
-                key={m.month}
-                className="border-theme-surface-border hover:bg-theme-surface-hover border-b last:border-b-0"
-              >
-                <td className="rwd-table-lead text-theme-text-primary px-4 py-3 font-medium" data-label="Month">
-                  {monthLabel(m.month)}
+                <th scope="col" className="table-col-tertiary px-4 py-3 font-medium">
+                  vs. busiest month
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.months.map((m) => (
+                <tr
+                  key={m.month}
+                  className="border-theme-surface-border hover:bg-theme-surface-hover border-b last:border-b-0"
+                >
+                  <td className="rwd-table-lead text-theme-text-primary px-4 py-3 font-medium" data-label="Month">
+                    {monthLabel(m.month)}
+                  </td>
+                  <td className="text-theme-text-secondary px-4 py-3 text-right" data-label="Shifts">
+                    {formatNumber(m.shifts)}
+                  </td>
+                  <td className="text-theme-text-primary px-4 py-3 text-right font-medium" data-label="Hours">
+                    {formatHours(m.hours)}
+                    {m.pending_hours > 0 && (
+                      <span className="text-theme-text-muted ml-1 text-xs font-normal">
+                        (+{formatHours(m.pending_hours)} pending)
+                      </span>
+                    )}
+                    {(m.on_call_hours ?? 0) > 0 && (
+                      <span className="text-theme-text-muted ml-1 text-xs font-normal">
+                        ({formatHours(m.on_call_hours ?? 0)} on call)
+                      </span>
+                    )}
+                    {(m.external_hours ?? 0) > 0 && (
+                      <span className="text-theme-text-muted ml-1 text-xs font-normal">
+                        (+{formatHours(m.external_hours ?? 0)} outside)
+                      </span>
+                    )}
+                  </td>
+                  {showCalls && (
+                    <td className="text-theme-text-secondary px-4 py-3 text-right" data-label="Calls">
+                      {formatNumber(m.calls)}
+                    </td>
+                  )}
+                  <td
+                    className="table-col-tertiary px-4 py-3"
+                    title={`${formatHours(m.hours)} of ${formatHours(peakHours)} hours in the busiest month of ${history.year}`}
+                  >
+                    {/* aria-hidden: the same hours are announced from the Hours
+                      cell of this row, so labelling the bar would read the
+                      month out twice. */}
+                    <div className="bg-theme-input-bg h-2 w-full rounded-full" aria-hidden="true">
+                      <div
+                        className="h-2 rounded-full bg-violet-600"
+                        style={{ width: peakHours > 0 ? `${(m.hours / peakHours) * 100}%` : '0%' }}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary border-t font-semibold">
+                <td className="rwd-table-lead px-4 py-3" data-label="Total">
+                  Total
                 </td>
-                <td className="text-theme-text-secondary px-4 py-3 text-right" data-label="Shifts">
-                  {formatNumber(m.shifts)}
+                <td className="px-4 py-3 text-right" data-label="Shifts">
+                  {formatNumber(totals.shifts)}
                 </td>
-                <td className="text-theme-text-primary px-4 py-3 text-right font-medium" data-label="Hours">
-                  {formatHours(m.hours)}
-                  {m.pending_hours > 0 && (
+                <td className="px-4 py-3 text-right" data-label="Hours">
+                  {formatHours(totals.hours)}
+                  {(totals.on_call_hours ?? 0) > 0 && (
                     <span className="text-theme-text-muted ml-1 text-xs font-normal">
-                      (+{formatHours(m.pending_hours)} pending)
+                      ({formatHours(totals.on_call_hours ?? 0)} on call)
                     </span>
                   )}
-                  {(m.on_call_hours ?? 0) > 0 && (
+                  {(totals.external_hours ?? 0) > 0 && (
                     <span className="text-theme-text-muted ml-1 text-xs font-normal">
-                      ({formatHours(m.on_call_hours ?? 0)} on call)
-                    </span>
-                  )}
-                  {(m.external_hours ?? 0) > 0 && (
-                    <span className="text-theme-text-muted ml-1 text-xs font-normal">
-                      (+{formatHours(m.external_hours ?? 0)} outside)
+                      (+{formatHours(totals.external_hours ?? 0)} outside)
                     </span>
                   )}
                 </td>
                 {showCalls && (
-                  <td className="text-theme-text-secondary px-4 py-3 text-right" data-label="Calls">
-                    {formatNumber(m.calls)}
+                  <td className="px-4 py-3 text-right" data-label="Calls">
+                    {formatNumber(totals.calls)}
                   </td>
                 )}
-                <td
-                  className="table-col-tertiary px-4 py-3"
-                  title={`${formatHours(m.hours)} of ${formatHours(peakHours)} hours in the busiest month of ${history.year}`}
-                >
-                  {/* aria-hidden: the same hours are announced from the Hours
-                      cell of this row, so labelling the bar would read the
-                      month out twice. */}
-                  <div className="bg-theme-input-bg h-2 w-full rounded-full" aria-hidden="true">
-                    <div
-                      className="h-2 rounded-full bg-violet-600"
-                      style={{ width: peakHours > 0 ? `${(m.hours / peakHours) * 100}%` : '0%' }}
-                    />
-                  </div>
-                </td>
+                <td className="table-col-tertiary px-4 py-3" />
               </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary border-t font-semibold">
-              <td className="rwd-table-lead px-4 py-3" data-label="Total">
-                Total
-              </td>
-              <td className="px-4 py-3 text-right" data-label="Shifts">
-                {formatNumber(totals.shifts)}
-              </td>
-              <td className="px-4 py-3 text-right" data-label="Hours">
-                {formatHours(totals.hours)}
-                {(totals.on_call_hours ?? 0) > 0 && (
-                  <span className="text-theme-text-muted ml-1 text-xs font-normal">
-                    ({formatHours(totals.on_call_hours ?? 0)} on call)
-                  </span>
-                )}
-                {(totals.external_hours ?? 0) > 0 && (
-                  <span className="text-theme-text-muted ml-1 text-xs font-normal">
-                    (+{formatHours(totals.external_hours ?? 0)} outside)
-                  </span>
-                )}
-              </td>
-              {showCalls && (
-                <td className="px-4 py-3 text-right" data-label="Calls">
-                  {formatNumber(totals.calls)}
-                </td>
-              )}
-              <td className="table-col-tertiary px-4 py-3" />
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+            </tfoot>
+          </table>
+        </div>
+      )}
 
-      {/* The member's own list of outside shifts, which they add to and
-          withdraw from. Not on someone else's profile: the outside hours are
-          already in the figures above, and the list's actions are the
-          member's. */}
-      {own && <MyExternalShifts onChanged={() => void load(selectedYear)} />}
+      <MemberShiftHistory
+        years={history.years ?? []}
+        selectedYear={history.year}
+        departmentLabel={departmentLabel}
+        showCalls={showCalls}
+        memberId={memberId}
+        highlightMonth={selectedMonth}
+        onChanged={() => void load(selectedYear)}
+      />
     </div>
   );
 };

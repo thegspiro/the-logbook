@@ -1,5 +1,119 @@
 # Script currency
 
+## 2026-11-21 pass
+
+**Edited:**
+
+- **03 IT Manager, Anonymizing chapter.** It said a file an officer attached
+  to a training record "stays". Since 2026-11-20 anonymising deletes those
+  files (#4462). It now says so, tells viewers to download evidence first,
+  and adds the refusal for a member with more privileges (#4476). Re-record
+  two beats, about 8 seconds.
+- **04 Fire Chief, evaluations beat.** Names the officer-section starter
+  (#4487) and adds about 20 seconds on **Assign** and separation of duties
+  (#4384) and **Period results** with its CSV export (#4377). Re-time the
+  chapter.
+- **05 Training Officer.** The retention presenter note said retained files
+  are "not scanned for malware". That is wrong: ClamAV scanning is on by
+  default. The note now also says auto-approved submissions count from
+  submission (#4476, #4483). Any take already filmed with the malware line
+  needs re-recording. A production note marks the matrix hours-cell footage
+  as dated (#4454).
+- **06 Member guide.** A new beat of about 20 seconds on the requirement
+  cards: monthly average, certification states, **Optional** (#4454, #4488,
+  #4480).
+- **07 Secretary, event requests beat.** Rewritten for the request page,
+  **Copy status link**, **Postpone** and **Decline** under **More**, **New
+  request** for phone requests, and finalizing completing the request
+  (#4474). Re-record the beat.
+- **16 Training Officer part 2.** A profile beat on equal priorities and
+  **Optional Requirements** (#4480); its "mandatory/optional toggles" shot
+  does not exist on screen. The compliance report narration now describes
+  today's standing plus hours and records since January 1 (#4477), with a
+  note on the new CSV headers.
+- **Apparatus events video script.** Scene 8 (recorded 2026-11-17) shows the
+  old request panel; re-record it on the request page.
+
+**Flagged, not edited:**
+
+- **12 Elections**, Certified Results scene and Short 12q: the footage shows
+  "Page N" footers; the narration is right (#4451). Low priority.
+- **06** has no Leave Requests beat (ask for leave, answer a question, I'm
+  back early, #4393). **04** does not mention that the Chief is told about
+  requests undecided after 21 days, or that a shift officer cannot record
+  their own close-out hours (#4468). **07**'s Waiver Management chapter
+  does not mention that nobody records their own leave (#4484). None of
+  these is wrong, only incomplete.
+- **05** (about line 431) says the add-completion form can "optionally
+  upload a copy of the certification document", and **06** that a
+  certification shows "attached documentation". Neither was checked against
+  the UI in this pass.
+
+See [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-20--21-2026).
+
+## 2026-11-20 pass
+
+**Edited:**
+
+- **06 Member guide, Chapter 5** — the outside-shift beat rewritten for the
+  one **All shifts** list on My Hours (#4394), with a note to re-record it
+  and the Chapter 7 profile beat.
+- **08 Short 8BN** — the opening screen is now **All shifts**; re-shoot the
+  first frame only.
+- **03 IT Manager, Chapter 7** — a new beat for **Undo this step** on the
+  Historical Data Import (#4353), about 20 seconds; re-time noted.
+- **11 Building a Pipeline** — the narration said "Drag to reorder" phases;
+  nothing in the pipeline builder drags. It now names the up and down arrows
+  on the pipeline page. This error predates the range.
+
+**Flagged, not edited:** 05, 09 and 16 could add a beat for undoing a Course
+Links link (**Recent links → Undo**, #4389); no wording in them is wrong.
+05 mentions historical-import training rows, still accurate. The 2026-11-05
+note below that a Shift History Import commit "cannot be undone" stays true
+for direct uploads; only the Historical Data Import's steps gained Undo. See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-19--20-2026).
+
+## 2026-11-19 pass
+
+**Produced (new):** Shorts **8A–8F** were rendered for the first time by the
+new `video-production/` pipeline (#4400, merged 2026-11-19): a phone-sized
+capture of the app on the E2E fixtures, a synthetic voice and burned-in
+captions, as a 9:16 Short and a 16:9 video. 8E is recorded on a portrait
+tablet. The narration actually recorded lives in each
+`video-production/shorts/<id>/shots.json`; renders are not committed, and
+uploading is manual.
+
+**Edited:** 08 Shorts — 8A to 8F rewritten to match the recorded narration,
+with a `PRODUCED` line and a `2026-11-19 PASS` production note on each. Two of
+the differences were errors in the script, not just wording:
+
+| Short | Script said                                                                              | Now                                                                                                        | Why                                                                 |
+| ----- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 8C    | Open Swap "doesn't post your shift anywhere — no member sees it. An officer finds cover" | Open Swap offers the seat to members cleared for it; it stays yours until one picks it up                  | **Wrong** since 2026-11-04/05 (guide 03, "Picking up an open swap") |
+| 8E    | "Open voting. Eligible members get notified"; results "review them and publish"          | Open the election, then send the ballot emails; closing the election releases the results                  | **Wrong**: ballot emails are a separate send (guide 14)             |
+| 8A    | "Click RSVP. Choose Yes, No, or Maybe"                                                   | "Tap RSVP Now. Choose Going, Not Going, or Maybe"                                                          | Labels                                                              |
+| 8B    | Click a certification to see its detail                                                  | Each card shows its date; the next six months are listed at the top; Training is under **More** on a phone | No detail screen exists                                             |
+| 8F    | **Membership Type**; "Click Add Member"                                                  | **Membership status**; "tap Add"                                                                           | Field renamed; phone button label                                   |
+| 8D    | —                                                                                        | Unchanged apart from "Tap"; decoy QR noted as a recording rule                                             | Already current                                                     |
+
+13 Department Store — Chapter 6 gains a beat for **Record refund** (amount,
+reason, confirmation), **Record payment** refusing more than the balance, and
+**Ready to ship / Shipped** on shipped orders (#4391), with a re-time note.
+
+**Flagged, not edited** (no script quotes these labels): 05, 09 and 16 (My
+Training lists only a profiled member's required requirements; **Counts
+toward attendance** only for active requirements; training providers stay
+verified when only the schedule is edited, and **Manual pull** in Sync
+History); 03 IT (re-check Scheduling → Notifications after upgrading; the
+Source column on exports); 04 Chief and 07 Secretary (Attendance Requests'
+**Sent to me** toggle; failed equipment checks alert Chief and Captain by
+default); 12 Elections (the election page's meeting picker lists 100 upcoming
+events); 10 mobile segments (Scheduling Reports tables as cards; the white
+gesture strip on Android). **04 Chief, Chapter 6** still carries the
+2026-10-05 note that its Open Swap approval beat is wrong; it has not been
+revised. See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-18--19-2026).
+
 ## 2026-11-18 pass
 
 **Edited:** 03 IT Manager (Chapter 10, anonymizing: the dialog's Removed list
@@ -19,6 +133,86 @@ evaluation-credited requirements show a due date); 12 Elections (Linked Meeting
 lists events when Minutes is off); 10 mobile segments (more tables reflow to
 cards; report results show as cards on desktop too). See
 [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-17--18-2026).
+
+## 2026-11-17 pass
+
+This pass overlapped the 2026-11-16 edits below and the month audit. Where
+both rewrote the same beat (04's event-creation beat, 05's **Require
+sign-off** beat, 12's **Publish Results** beats and Short 12c, 16's Training
+Events beats), the 2026-11-16 text and production note were kept. What this
+pass added beyond them, each with an `EDITOR` or `PRODUCTION NOTE — 2026-11-17`
+re-record note:
+
+- **04 Chief**: the drill-attendance beat said **Connect to Requirements &
+  Programs** (#4347; now **Counts toward attendance** on **Training Info**);
+  the reports beat said "Print it to PDF" (#4346, now **PDF**).
+- **05 Training Officer**: the import beat says **Import History**, with a
+  candidate line on **Course Links**.
+- **12 Elections**: members vote "right on the election's page"; the dispute
+  beat and its shot name **Integrity & Audit** (#4297), not Forensics.
+- **16 Training Officer Part 2**: **Compliance** for "Compliance Settings".
+
+**Flagged, not edited:** 12 still names "tabs" in many screen cues (Ballot,
+Candidates, Eligibility, Overrides, Proxies, Results); every shot of the old
+tab bar needs re-shooting. 07 Secretary says "Eligibility tab" once. 04 Chief
+and 06 Member could mention the phone meeting-night dashboard. See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-15--17-2026).
+
+## Audit of 2026-10-16 → 11-16 changes, edited 2026-11-16 (not re-recorded)
+
+A pass over a month of merges for script text that had become wrong. Labels
+were checked against `frontend/src`; each edit that needs new footage carries a
+2026-11-16 production note. Nothing was re-recorded or re-timed. The upgrade
+side of the same audit is in [UPGRADING](../UPGRADING.md).
+
+| Script  | What changed                                                                                                                                                                                                                                                                                 |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 02      | Membership ladder no longer sets voting or the attendance threshold (Election Settings does, since 2026-11-13); callout and the short's title "The Setting That Decides Who Votes" changed                                                                                                   |
+| 03 IT   | Voter Eligibility beat rewritten for rows per member type and four kinds of vote; sign-in rate limit is per account at an address; Approvals row button is **Approve as admin**; **Compliance** tab (was Compliance Settings)                                                                |
+| 04 / 07 | Voter rules by member type and **Kind of vote** (04); **Publish Results** is gone — closing releases results, **Send Me a Copy** (04, 07); 07's Dues note: the page now has Record payment, Waive, Reverse waiver                                                                            |
+| 05 / 16 | **Import History** (was Import Past Training) and **Compliance** (was Compliance Settings) under Settings & Data                                                                                                                                                                             |
+| 08      | Shorts 8M and 8N un-held (Dues page has the buttons); 8M no longer says the reversal reason goes to the audit log (neither reason is kept); 8N cues; Approvals short row button **Approve as admin**                                                                                         |
+| 11      | "Counts toward certification requirements" is a checkbox on the training-event form's Training Info step                                                                                                                                                                                     |
+| 12      | Voter Eligibility beat and the five layers (tiers apply only to elections created before 2026-11-13); early close releases results; Publish & Report uses **Send Me a Copy**; **Short 12c's premise is gone** — corrected and marked do-not-film-as-written; quorum lines say "may not vote" |
+
+The 2026-10-04 row for Short 12c further down ("**Publish Results** (then
+**Hide Results**)") is superseded: neither button exists.
+
+**Flagged, not edited:**
+
+- **13 Store:** no beat for the PayPal card's **Settings** button, the store's
+  **PayPal account members pay into** choice (the account entered below / the
+  connected PayPal account), the admin **Cancel order**, or the 2026-11-14
+  status rules (an order no longer moves back into Submitted, Awaiting payment
+  or Paid; picking Cancelled sends the cancellation email). Chapter 6's
+  "two statuses" beat is still true.
+- **06 Member:** "your membership tier" as a reason you can't vote is true only
+  for elections created before 2026-11-13.
+- **03 IT / 04 Chief:** no beat for weather alerts and generic webhooks now
+  working, applicant assignments and `prospective_members.view_all`, the
+  Historian's History permissions, or shift-evaluation preceptor links for
+  outside agencies.
+- **05 / 09 / 16:** linked Evaluated shifts / Transports / Refusals
+  requirements count evaluations, not records; no-show crew are excused from
+  trainee reports and evaluations.
+
+## Edited 2026-11-16 (not re-recorded)
+
+The November 15 – 16 changes made screens named in four scripts disappear, so
+the narration and SCREEN cues were rewritten and each carries a 2026-11-16
+production note. Nothing was re-recorded or re-timed. See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-15--16-2026).
+
+| Script   | What changed                                                                                                                                                              |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 04 Chief | Create Event → Training now switches to the training-event form; "Training details (optional)" and "Continuing Education" default gone; Counts toward attendance cue      |
+| 05       | **Require sign-off** (was Require instructor confirmation) on Training Info, step 2 (was step 3); Counts toward attendance and Edit training details; the screenshot note |
+| 16       | Training events beat rewritten for the one form and the **Training details** card                                                                                         |
+| 12       | Forensics tab → **Integrity & Audit** section; production note on the election header, section addresses and the Elections pages row                                      |
+
+**Flagged, not edited:** 05, 09 and 16 could add a beat on **Course Links** and
+the **Evaluated Calls** requirement type; 04 and 06 on Needs You's two-month
+window for mandatory events. No script quotes a label these change.
 
 ## 2026-11-15 pass
 
@@ -2792,7 +2986,8 @@ gap is fixed; the claim as scripted is now accurate in full. Take it as
 written.
 
 **Optional aside, `THE ELIGIBILITY ROSTER` (14:00 – 15:30):** the roster is
-now linkable — `/elections/<id>?tab=eligibility` — worth ten seconds when
+now linkable — `/elections/<id>/eligibility` since 2026-11-15 (it was
+`?tab=eligibility`, which still forwards) — worth ten seconds when
 the narration says "send this to your co-officer."
 
 ### 06 — The Member Experience

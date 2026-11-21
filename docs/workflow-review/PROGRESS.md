@@ -159,6 +159,49 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 ## Log
 
+### W11 second pass — Edit a member as an officer — 2026-11-16
+
+The owner asked to continue with W11. Driven as `admin` at 1280×900 and
+390×844 on Reese Varga, with `member2` refused.
+
+Held:
+
+- every edit stored, a cleared phone saved as `null`, and a contact without an email saved;
+- step-up on a rank or position change, with edits kept when it is cancelled;
+- Reset Password refuses a weak password at the field and confirms a valid one;
+- positions added and removed, and the base Member position protected on page and API;
+- `member2` refused on the page and every endpoint;
+- the phone layout is clean.
+
+Fixed:
+
+- W11-10 (LOW): cancelling "Confirm it's you" on the edit page said the administrator had no permission.
+- W11-11 (LOW): the history printed stored field names and statuses (`membership_number`, `probationary → leave`).
+- W11-12 (LOW): Reset Password and Add Member showed each rule's state only as ✓ / ○.
+- W11-13 (LOW): every position change in the history read "All roles replaced".
+- W11-14 (LOW): the status dialog offered changes the server refuses, such as Leave → Probationary.
+
+Gate: typecheck and lint clean, no warnings; flake8, black, isort and mypy clean; endpoint-permission and docs-link checks clean; 246 member-status, 102 position and 122 profile tests pass, and each new case failed before its fix. Next: W12 when the owner asks.
+
+### W10 second pass — Find a member and read their profile — 2026-11-16
+
+The owner asked to continue with W10. Driven as `member`, `member2` and
+`admin` at 1280×900, with the directory and both profiles at 390×844.
+
+Held:
+
+- search, filters and the stat tiles, with probationary members counted as current;
+- a colleague's profile and API record carry only what a member may see;
+- every new by-member endpoint (supervisor, service history, leave, consents) refuses a colleague's record to a member;
+- the contact-visibility ceiling and a member's own choice, in the page, the API and search;
+- no failed request or broken value on any profile.
+
+Fixed:
+
+- W10-4 (LOW): on a member's own profile, the three Edit buttons were 20px and all named "Edit", View Full History was 40px, and the photo button was 16px and misnamed when it read "Change".
+
+Gate: typecheck and lint clean, no warnings; 121 profile tests pass, and the changed cases failed before the fix; docs links clean. Next: W11 when the owner asks.
+
 ### W67b — The department store, follow-up — 2026-11-13
 
 The owner asked for a review of the department store. Driven as

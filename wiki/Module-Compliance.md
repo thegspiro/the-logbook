@@ -30,11 +30,18 @@ The Compliance module provides organization-wide compliance tracking, reporting,
 
 ### Requirement Statuses
 
-| Status                  | Meaning                                                                |
-| ----------------------- | ---------------------------------------------------------------------- |
-| **Green (Compliant)**   | All requirements met, no certification issues                          |
-| **Yellow (At Risk)**    | Some requirements incomplete or certifications expiring within 90 days |
-| **Red (Non-Compliant)** | Expired certifications or fewer than 50% of requirements met           |
+The profile card shows the member's Compliance Matrix standing _(2026-11-20)_,
+against their compliance profile's thresholds or else the department's:
+
+| Status                  | Meaning                                                          |
+| ----------------------- | ---------------------------------------------------------------- |
+| **Green (Compliant)**   | Meets the compliant threshold                                    |
+| **Yellow (At Risk)**    | Below the compliant threshold, at or above the at-risk threshold |
+| **Red (Non-Compliant)** | Below the at-risk threshold                                      |
+| **Not Applicable**      | No requirement grades the member                                 |
+
+Certificate expiry counts are shown for information; an expired certificate
+lowers the standing only through a requirement that grades it.
 
 ### Waiver Adjustment Formula
 
@@ -44,7 +51,11 @@ When a member has an active Leave of Absence:
 adjusted_required = base_required × (active_months / total_months)
 ```
 
-A calendar month is waived if the leave covers **15 or more days** of that month.
+How much of a partly covered month is waived is the department's **Months on
+leave** rule (`compliance_configs.leave_month_rule`, since 2026-11-02):
+`full_month` (the default — any covered day waives the whole month),
+`proportional` (covered days over days in the month) or `half` (15 or more
+covered days waive half; a fully covered month, all of it).
 
 ### Requirement Types Adjusted
 
@@ -100,6 +111,9 @@ instead of a red "0/0 — 0%" (W29-4, closing CMP4-4).
   overrides, the org's at-risk tier). Departments with profiles, or a compliant
   threshold under 100%, will see the card and the report move; stored reports
   keep their old figures.
+  Since 2026-11-16 (D10) profile narrowing also applies on a member's own **My
+  Training** page, the officer's view of that member, and the profile card, so a
+  profiled member no longer sees requirements the department does not grade them on.
 - **Not applicable members leave every percentage.** A member nothing grades
   (no requirement applies, a profile selects none, or all are in catch-up) shows
   **N/A**, not 100%. The dashboard percentage is blank when nobody is graded, and
@@ -130,6 +144,41 @@ instead of a red "0/0 — 0%" (W29-4, closing CMP4-4).
 - **Faster grading, same answers.** The graders load only the records inside each
   requirement's window; a test grades an eight-year department bounded and
   unbounded and requires identical output.
+
+### Profiles in every officer view, ties and optional requirements _(2026-11-20 – 21)_
+
+- **Every officer view now grades through the member's profile** (owner
+  decision 2026-11-20). The member status roster, competency matrix,
+  compliance CSV/PDF export cells, compliance forecast and Scheduling's Shift
+  Compliance report resolve each member through
+  `ComplianceGrading.for_member`, as the matrix does. The roster colours with
+  the profile's threshold overrides; the others narrow cells to the profile
+  (a requirement outside it reads N/A). The exports and forecast follow the
+  department's `include_current_month` instead of always counting the current
+  month. Expect these figures to move in a department with profiles.
+- **The compliance exports grade as of today** (owner decision 2026-11-21).
+  Each requirement cell in the Compliance Report CSV and PDF comes from
+  `training_compliance.grade_members`, the matrix's grader; the report period
+  scopes only the hours and completed-record columns. A certification earned
+  before 1 January used to print **Not Met** beside a matrix showing it met.
+- **Equal priorities go to the older profile** (owner decision 2026-11-21):
+  higher priority, then the earlier `created_at`, then the smaller id
+  (`app/utils/compliance_profiles.py`). A tie used to be decided by row order.
+  The editor warns on a tie but saves.
+- **Optional requirements are shown, never graded.** They appear on My
+  Training and the officer's member view under **Optional**, and count toward
+  no standing, percentage, report or email. A profile with no required list
+  (API only) grades every requirement except its optional ones.
+- **Hours requirements show a monthly average** beside the total on My
+  Training and in the matrix detail ("6.9/6 hrs/mo avg"); compliance is still
+  graded on the total.
+- **An every-2-years hours or courses requirement is failed by a lapsed
+  certificate the same way on every screen**: the certificate expiring last
+  among the records it counts in its window
+  (`lapsed_biannual_certificate`).
+- **Rolling requirements no longer trigger daily emails.** They get no
+  deadline reminder, and the non-compliance notice lists them once per member.
+  See [Compliance Configuration](Compliance-Configuration).
 
 ---
 

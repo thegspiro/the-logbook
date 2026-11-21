@@ -34,16 +34,16 @@ is the person who keeps the department running behind the scenes.]**
 > workflow."
 
 > **Treasurers — production note, not a spoken beat:** dues live in the Finance
-> module, which this guide doesn't cover, and the Dues page is read-only in the
-> current release — schedules, the collection summary and member records are
-> visible, but payments, waivers and waiver reversals are API-only until the
-> management UI ships. Two behaviors changed underneath and are worth covering
+> module, which this guide doesn't cover. **[PRODUCTION NOTE — 2026-11-16. The
+> Dues page is no longer read-only: each member's row has **Record payment**,
+> **Waive** and **Reverse waiver** buttons and a payment-history button.]** Two
+> behaviors changed underneath and are worth covering
 > once there is something to point a camera at: payments are now a full history
 > rather than one running total (a second installment no longer erases the first
 > one's method and notes, and a resubmitted check number can't charge a member
 > twice), and a waiver must be deliberately reversed before a payment will go
-> in. Shorts **8m** and **8n** are written and on hold for the same reason; the
-> written walkthrough is in the Finance training document.
+> in. Shorts **8m** and **8n** cover both and can now be filmed; the written
+> walkthrough is in the Finance training document.
 
 **[TRANSITION: Meeting minutes]**
 
@@ -195,18 +195,33 @@ members, and there is no approve/deny: a coordinator works the request's
 pipeline tasks, then schedules, postpones or declines it. The requester's
 status link is not in any email, so it has to be sent by hand.]**
 
-**[SCREEN: Navigate to Event Requests (EventRequestsTab). Expand a request:
-the pipeline task list, **Assign**, then **Schedule Event**, **Postpone** and
-**Decline**. Point to **Copy Link**.]**
+**[PRODUCTION NOTE — 2026-11-21. Re-record this beat: a request now opens on
+a page of its own (with **All requests** to go back) instead of expanding in
+place, the button is **Copy status link**, **Decline…** and **Postpone** sit
+under **More**, and **New request** enters one taken by phone. Finalizing the
+event's attendance now completes the request.]**
 
-> "Open a request and you'll see its tasks — the checklist your department set
-> up for these. Work through them, then **Schedule Event**, **Postpone** or
-> **Decline**. Scheduling puts it on the calendar."
+**[SCREEN: Community Outreach → Requests. Open a request: its page, the
+checklist, **Coordinator**, **Schedule event** and **More** (Postpone,
+Decline…). Point to **Copy status link** under Contact. Back on the list,
+press **New request** and show **How it came in**.]**
+
+> "Open a request and it gets a page of its own, with the checklist your
+> department set up for these. Work through it, then **Schedule event** — or,
+> under **More**, **Postpone** or **Decline**. Scheduling puts it on the
+> calendar."
+
+> "Not everyone uses the form. If a teacher phones the station, press **New
+> request**, choose **Phone call**, and type it in — a phone number is enough.
+> It goes on the board like any other."
 
 > "Whether the requester hears about each change depends on which request
 > emails your department switched on under Events settings. And one thing to
 > know: their status link isn't in any of those emails. If you want them to
-> follow along, press **Copy Link** and send it to them yourself."
+> follow along, press **Copy status link** and send it to them yourself."
+
+> "After the visit, finalizing the event's attendance marks the request
+> completed for you."
 
 > "For an open house or any event outside a room with a kiosk, the event has its
 > own guest code. Open the event's QR page and the **Guest Check-In** card shows
@@ -572,14 +587,15 @@ tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
 > first — test votes are marked as tests and never count toward the real
 > results."
 
-**[SCREEN: Show the Eligibility Roster and the Publish Results panel]**
+**[SCREEN: Show the Eligibility Roster and the Results & Publishing panel]**
+**[PRODUCTION NOTE — 2026-11-16. There is no Publish Results button any more:
+closing the election releases the results. Re-shoot this cue.]**
 
-> "After closing the election, use the Publish Results panel to make results
-> visible to members and email the results report — then formally record the
-> outcome in the meeting minutes. One thing to know: if you close voting early,
-> say at the end of the meeting, press **Publish Results** so members can see
-> the outcome right away — otherwise results stay hidden until the originally
-> scheduled end time."
+> "Closing the election is what shows the results to members — even if you
+> close voting early, say at the end of the meeting. The results report is
+> emailed to the election's creator and leadership, and **Send Me a Copy** on
+> the Results & Publishing panel sends you another. Then formally record the
+> outcome in the meeting minutes."
 
 > "And before the meeting: generate the **Pre-Meeting Package** — a printable
 > PDF with the agenda, the full ballot preview, and the eligible-voter list,

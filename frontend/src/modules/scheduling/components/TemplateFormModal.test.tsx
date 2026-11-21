@@ -597,3 +597,106 @@ describe('TemplateFormModal validation', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+describe('TemplateFormModal — an edit saves the rest, and closing asks first (batch 24)', () => {
+  const onSubmit = vi.fn<(data: Record<string, unknown>, options?: { keepOpen?: boolean }) => Promise<void>>();
+  const onClose = vi.fn();
+
+  beforeEach(() => {
+    onSubmit.mockReset();
+    onSubmit.mockResolvedValue(undefined);
+    onClose.mockReset();
+  });
+
+  const renderEdit = () =>
+    renderWithRouter(
+      <TemplateFormModal
+        isOpen
+        onClose={onClose}
+        onSubmit={onSubmit}
+        title="Edit Template"
+        apparatusOptions={[]}
+        apparatusSource="default"
+        initialData={{ ...emptyTemplateForm, name: 'Day Shift', description: 'Days' }}
+      />
+    );
+
+  it('saves the rest of an edit without a blanked name, and keeps the name flagged', async () => {
+    const user = userEvent.setup();
+    renderEdit();
+
+    await user.clear(screen.getByLabelText(/^Name/));
+    await user.clear(screen.getByLabelText('Description'));
+    await user.type(screen.getByLabelText('Description'), 'Twelve hours');
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const [body, options] = onSubmit.mock.calls[0] ?? [];
+    expect(body).not.toHaveProperty('name');
+    expect(body).toMatchObject({ description: 'Twelve hours' });
+    expect(options).toEqual({ keepOpen: true });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/^Name/)).toHaveAccessibleDescription('Enter a name for the template.');
+    expect(screen.getByRole('status')).toHaveTextContent('Template saved, except name.');
+  });
+
+  it('resends an edit without the start and its length when the server refuses the start', async () => {
+    onSubmit.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'start_time_of_day', message: 'Use a quarter hour.' }], code: 'LB-VAL-001' },
+      },
+    });
+    const user = userEvent.setup();
+    renderEdit();
+
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
+    const [retry, options] = onSubmit.mock.calls[1] ?? [];
+    expect(retry).not.toHaveProperty('start_time_of_day');
+    expect(retry).not.toHaveProperty('duration_hours');
+    expect(retry).toHaveProperty('name', 'Day Shift');
+    expect(options).toEqual({ keepOpen: true });
+    expect(screen.getByRole('combobox', { name: 'Starts at hour' })).toHaveAccessibleDescription('Use a quarter hour.');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes after an edit that saved every field', async () => {
+    const user = userEvent.setup();
+    renderEdit();
+
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[1]).toBeUndefined();
+  });
+
+  it('asks before Cancel throws away a typed change, and keeps editing on request', async () => {
+    const user = userEvent.setup();
+    renderEdit();
+
+    await user.type(screen.getByLabelText(/^Name/), ' B');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(await screen.findByText('Discard your changes?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/^Name/)).toHaveValue('Day Shift B');
+  });
+
+  it('closes at once when nothing was changed', async () => {
+    const user = userEvent.setup();
+    renderEdit();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Discard your changes?')).not.toBeInTheDocument();
+  });
+
+  it('counts the name toward its 200-character limit', () => {
+    renderEdit();
+    expect(screen.getByLabelText(/^Name/)).toHaveAttribute('maxLength', '200');
+  });
+});

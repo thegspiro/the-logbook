@@ -33,7 +33,7 @@ an open election, live turnout percentage climbing.]**
 
 **[SCREEN: Elections list page, then a quick montage: Ballot Builder,
 Eligibility Roster, the public ballot on a phone, the Results page, the
-Forensics tab.]**
+Integrity & Audit section.]**
 
 > "This is the complete guide. We'll create an election from scratch, build the
 > ballot, configure who's allowed to vote — down to individual ballot items —
@@ -64,22 +64,32 @@ Forensics tab.]**
 > department doesn't use them. Voting method, victory condition, quorum and
 > anonymity aren't set here — you choose them on each election's own form."
 
-**[SCREEN: Elections Settings → Voter Eligibility. Show the Regular business
-meeting / Annual meeting choice, then **Rules every voter must meet** with the
-attendance **Requirement** and a member type's waiting period.]**
+**[SCREEN: Elections Settings → Voter Eligibility. Show the four kinds of vote
+along the top — Regular business meeting, Annual meeting, Bylaws amendment,
+Special meeting — then **Rules by member type**: one member type's row with
+**May vote**, **Waiting period** and a meeting-attendance rule.]**
 
 > "Then **Voter Eligibility**. These are your department's default voter rules,
-> and every new election copies them. Under **Rules every voter must meet**, pick
-> a meeting-attendance **Requirement** — attended a number of recent meetings, or
-> a percentage of them — and, for each member type, a waiting period: none, a
-> number of months, or never eligible to vote. Flip to **Annual meeting** and
-> **Use different rules at the annual meeting** if your bylaws differ there. You
-> can also set who votes for each position. Changing the defaults never touches
-> an election that already exists."
+> and every new election copies them. There's one row per member type. For
+> each, say whether that type **may vote**, set a **waiting period** — none, or
+> a number of months counted from joining the department or from becoming that
+> type — and add meeting-attendance rules: attended a number of recent
+> meetings, or a percentage of them. A member has to pass every rule on their
+> row. Your bylaws may treat an annual meeting, a bylaws amendment or a special
+> meeting differently: pick that kind along the top and switch on its own
+> rules. Until you do, it uses the regular-meeting rules. You can also set who
+> votes for each position. Changing the defaults never touches an election
+> that already exists."
 
 **[PRODUCTION NOTE — 2026-11-05. New beat, about 40 seconds; re-time Chapter 2.
 Labels checked against Election Settings. Default is no rules, so a department
 that does nothing here sees no change.]**
+
+**[PRODUCTION NOTE — 2026-11-16. Rewritten for the per-member-type rows of
+2026-11-13: "Rules every voter must meet" and the two-kind choice are gone
+for new rules, and the voting and attendance settings left the membership tier
+screen for this one. Re-shoot the cue; a department's old tier settings seed
+the rows until the secretary first saves.]**
 
 > "One note for your IT manager: the settings page — like everything else in
 > this video — is gated behind the `elections.manage` permission. Members
@@ -143,8 +153,8 @@ sections of the form]**
 > valid at all. Percentage quorum — say, fifty-one percent turnout — or a
 > fixed count of voters. Here's the important part: the turnout denominator
 > only counts members who are actually allowed to vote. If your organization
-> has social or junior tiers marked not voting-eligible, they don't count
-> against your quorum. If quorum fails, results still display, but every
+> has social or junior members whose voter rules say they may not vote, they
+> don't count against your quorum. If quorum fails, results still display, but every
 > winner flag is cleared and the results are marked advisory."
 
 > "**Runoffs**: enable them and pick a style — top-two advance, or eliminate
@@ -311,26 +321,27 @@ the pending entry absent.]**
 **[SCREEN: Diagram callout — five stacked layers:
 
 1. Election voter list (optional explicit list)
-2. Election-wide rules every voter must meet (attendance, waiting period)
-3. Membership tier rules (org settings)
+2. The election's voter rules for the member's type (may vote, waiting
+   period, attendance)
+3. Membership tier rules — elections created before 2026-11-13 only
 4. Per-item voter types
 5. Per-item attendance requirement]**
 
 > "Layer one: an explicit voter list on the election, if you set one — only
-> those members, period. Layer two: the election's own **Rules every voter must
-> meet** — the meeting-attendance requirement and the waiting period for the
-> member's type, copied from Election Settings and adjustable on the
-> **Eligibility** tab until voting opens. The wait counts from when the member
-> became that type, and never from before their current period of membership.
-> Layer three: membership tier rules from your
-> organization settings. A tier can be marked not voting-eligible — think
-> social members — or can require a minimum meeting-attendance percentage
-> over a lookback window. That window starts on the day the member joined — or
-> came back, if they rejoined — when that's later, and it only counts meetings
-> that have actually happened. A new member isn't charged with meetings held
-> before they were here. The system computes each member's actual attendance
-> and denies members under the bar, with the percentage in the denial reason.
-> Layers four and five we covered: per-item voter types and per-item
+> those members, period. Layer two: the election's own voter rules — the row
+> for the member's type, copied from Election Settings by the election's
+> **Kind of vote** and adjustable on the **Eligibility** tab until voting
+> opens. May that type vote, has the member served the waiting period, and do
+> they meet every attendance rule on the row? Attendance counts only meetings
+> that have actually happened since the member's current period of membership
+> began, leaving out excused meetings and leave, so a new member isn't charged
+> with meetings held before they were here. Administrative and social members
+> are judged by two rows, their status and their class, and must pass both.
+> And because these rules apply everywhere, a member who falls short isn't
+> even sent a ballot. Layer three only matters for an election created before
+> November 13th: it still reads the old membership tier settings — voting
+> eligibility and a minimum attendance percentage — until it closes. New
+> elections don't use tiers for voting at all. Layers four and five we covered: per-item voter types and per-item
 > attendance."
 
 ### THE ELIGIBILITY ROSTER (14:00 – 15:30)
@@ -489,11 +500,21 @@ update the page in place.]**
 
 ### IN-APP VOTING (21:00 – 21:45)
 
-**[SCREEN: Logged-in member on the election detail page, Cast Vote tab]**
+**[SCREEN: Logged-in member on the election detail page, the ballot on its
+Overview]**
 
-> "Members can also vote logged-in, on the Cast Vote tab. Same eligibility
+> "Members can also vote logged-in, right on the election's page. Same eligibility
 > checks, same one-ballot rule — the system tracks that a member voted, by
 > either path, and blocks a second attempt."
+
+**[PRODUCTION NOTE — 2026-11-17. RE-RECORD this beat. Since 2026-11-15 a
+member's election page has no tab strip: their ballot shows on the page
+itself, and only officers see a **Cast Vote** section link. The old narration
+said "on the Cast Vote tab". Every "tab" cue in this script is now a
+**section** with its own address (`/elections/:id/<section>`), reached from
+the section links in the header card, which starts with **Overview**; re-shoot
+any cue that shows the old tab bar. On a phone, an officer's Overview is now
+the meeting-night dashboard (guide 14, "On a phone, at the meeting").]**
 
 > "The list of who may vote is fixed when you open the election. A member who
 > isn't on it is told why: if they still fail a rule — a waiting period,
@@ -572,14 +593,16 @@ climbing. Then the Non-Voters list.]**
 > downstream works: the tally runs, runoff conditions are evaluated, pipeline
 > results flow, and the anonymity salt is destroyed."
 
-> "One thing to know about early closes: the results _API_ stays gated until
-> the originally scheduled end time passes — a safeguard against premature
-> disclosure. If you want the room to see results now, press **Publish
-> Results** on the closed election. It's one button on the **Results &
-> Publishing** panel, and it's the single most common 'where are my results?'
-> question. Short 12c covers just this."
+> "And closing early doesn't hide anything: closing is what releases the
+> results, early or on schedule, so the room sees them the moment you close.
+> Short 12c covers just this."
 
-**[CALLOUT: "Closed early? Press Publish Results to show them now"]**
+**[CALLOUT: "Closed early? The results are out the moment you close"]**
+
+**[PRODUCTION NOTE — 2026-11-16. Rewritten: an early close releases the
+results (owner decision 2026-10-05, W50-10), and the Publish Results / Hide
+Results button is gone from the Results & Publishing panel. The 2026-10-04
+note below is superseded.]**
 
 **[PRODUCTION NOTE — 2026-10-04. The control is the **Publish Results** button
 (it becomes **Hide Results** once pressed) on a panel titled **Results &
@@ -604,13 +627,15 @@ turnout bar, quorum banner]**
 
 ### PUBLISH & REPORT (29:00 – 30:00)
 
-**[SCREEN: Results & Publishing panel — Publish Results, then Send Report
-under Email Results Report]**
+**[SCREEN: Results & Publishing panel — "Results are visible to members",
+then **Send Me a Copy** under Results Report]** **[PRODUCTION NOTE — 2026-11-16.
+There is no Publish Results switch any more: closing the election releases
+the results. The report button is **Send Me a Copy**. Re-shoot this cue.]**
 
-> "The **Results & Publishing** panel is your one-stop close-out: **Publish
-> Results** shows them to the membership, and under **Email Results Report**,
-> **Send Report** emails a formatted results report to the election's
-> secretary. Both appear once the election is closed. Then record the outcome
+> "The **Results & Publishing** panel is your close-out. There's nothing to
+> publish: closing the election is what shows the results to the membership.
+> The results report is emailed to the election's creator and leadership when
+> it closes, and **Send Me a Copy** sends you another. Then record the outcome
 > in your meeting minutes — if the election is linked to the meeting, it's
 > displayed right on the minutes page."
 
@@ -682,9 +707,24 @@ verified, status PASS"]**
 
 ### THE FORENSICS REPORT (34:30 – 36:00)
 
-**[SCREEN: The Forensics tab — walk each section]**
+**[SCREEN: The election's **Integrity & Audit** section (address ending
+`/integrity`) — walk each section]**
 
-> "For a dispute, pull Forensics — one report with everything: the integrity
+**[PRODUCTION NOTE — 2026-11-16. Elections pages were reorganised (#4297,
+merged 2026-11-15): each election has a header with the stages, voting window,
+turnout and winner rule, and the Open / Close Nominations / Close Election /
+Certified Results buttons beside the status badge. Sections are links with
+their own addresses (`/elections/<id>/results`), not tabs. The old Forensics &
+Integrity panel is now the **Integrity & Audit** section and loads on arrival.
+Election Settings is reached from the **Elections pages** row, not a gear.
+Re-shoot any footage of the tabs, the gear or the Forensics toggle.]**
+
+**[PRODUCTION NOTE — 2026-11-17. RE-RECORD the shot. The collapsible
+Forensics & Integrity block at the bottom of the page is now the **Integrity &
+Audit** section in the header's section links (open and closed elections),
+and the report loads on arrival. Narration changed from "pull Forensics".]**
+
+> "For a dispute, open Integrity & Audit — one report with everything: the integrity
 > results; every soft-deleted vote with who deleted it and why — votes are
 > never physically erased; rollback history; token issuance and usage — who
 > got ballots, which were used, access counts; anomaly detection flagging
@@ -1014,26 +1054,28 @@ typed as a user ID. Re-record this cue.]**
 **Length:** 75 seconds
 **Audience:** Election admins
 
-**[SCREEN: A closed election, Results tab showing "Results not available yet"]**
+**[PRODUCTION NOTE — 2026-11-16. Do not film as written. Its premise is gone:
+closing an election early now releases the results at once (owner decision
+2026-10-05, W50-10), and the Publish Results button no longer exists. Retitle
+before filming (for example "Closed Early? Your Results Are Already Out") and
+re-shoot every cue. The narration below has been corrected.]**
 
-> "You closed the vote at the meeting, the election says CLOSED — and results
-> are… hidden? Not a bug. A safeguard."
+**[SCREEN: Close an election at the meeting, hours before its scheduled end]**
 
-**[SCREEN: Highlight the election's scheduled end date, still hours away]**
+> "You closed the vote at the meeting, hours before the scheduled end. Do the
+> results wait for that time? No."
 
-> "Results stay gated until the election's _scheduled_ end time passes, so
-> nobody can peek by closing early. But when the room is waiting:"
+**[SCREEN: Results & Publishing panel — "Results are visible to members" and
+"Closing the election released them, early or at the scheduled end alike."]**
 
-**[SCREEN: Results & Publishing panel — press "Publish Results"]**
+> "Closing is what releases the results, early or on schedule. They're live for
+> the membership the moment you close, the report goes to the election's
+> creator and leadership, and **Send Me a Copy** sends you one too."
 
-> "Open the **Results & Publishing** panel and press **Publish Results**.
-> Done — results are live for the membership, and you can email the report
-> right from the same panel."
-
-> "Runoffs, by the way, don't wait for the gate — if one's needed, it was
+> "Runoffs, by the way, don't wait either — if one's needed, it was
 > already created the moment you closed."
 
-**[CALLOUT: "Early close + one button = instant results"]**
+**[CALLOUT: "Early close = instant results"]**
 
 ---
 
@@ -1139,7 +1181,7 @@ typed as a user ID. Re-record this cue.]**
 > the outcome advisory. No accidental certification of a hollow vote."
 
 > "And the denominator is fair: only members _allowed_ to vote count toward
-> it. Social members in a non-voting tier can't sink your quorum — and
+> it. Social members who may not vote can't sink your quorum — and
 > members you granted overrides count in."
 
 **[CALLOUT: "Quorum failed = numbers shown, no winners declared"]**
@@ -1192,7 +1234,10 @@ narrow help popover.]**
 **Length:** 120 seconds
 **Audience:** Leadership, election admins
 
-**[SCREEN: The Forensics tab]**
+**[SCREEN: The Integrity & Audit section]**
+
+**[PRODUCTION NOTE — 2026-11-17. RE-RECORD the shot: Forensics is now the
+**Integrity & Audit** section, see chapter 13.]**
 
 > "'The count is wrong.' 'Someone voted twice.' Don't argue — investigate.
 > One report answers it."

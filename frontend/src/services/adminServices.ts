@@ -12,6 +12,7 @@ import type {
   OperationsDashboard,
   ActionItemPage,
   CommunityEngagement,
+  CommunityEventReach,
   CommunityPeriod,
   DashboardPulseLayout,
   DashboardPulseResponse,
@@ -109,6 +110,12 @@ export interface TrainingSessionResponse {
    * backend that predates them; treat that as none.
    */
   attendance_requirement_ids?: string[];
+  /**
+   * Whether the session is linked to an active attendance requirement: the
+   * server's answer, matching the event's own flag. A link to a deactivated
+   * requirement stays in `attendance_requirement_ids` but counts for no one.
+   */
+  counts_toward_attendance?: boolean;
   course_name: string;
   course_code?: string;
   training_type: string;
@@ -456,6 +463,13 @@ export const dashboardService = {
       limit: page.limit ?? 0,
       offset: page.offset ?? 0,
     };
+  },
+  /** Every outreach event held in the period — the full set the report's totals cover, for its export. */
+  async getCommunityEngagementEvents(period: CommunityPeriod): Promise<CommunityEventReach[]> {
+    const response = await api.get<CommunityEventReach[]>('/dashboard/community-engagement/events', {
+      params: { period },
+    });
+    return response.data;
   },
   async getCommunityEngagement(period: CommunityPeriod = 'all'): Promise<CommunityEngagement> {
     const response = await api.get<CommunityEngagement>('/dashboard/community-engagement', { params: { period } });

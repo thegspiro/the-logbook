@@ -310,9 +310,9 @@ export const EventsPage: React.FC = () => {
     };
   }, [canManage]);
 
-  // Requests waiting on the viewer's own events. Most members organize
-  // nothing and get an empty list, so the link appears only for someone with
-  // something to decide; a failed load simply leaves it out.
+  // Requests sent to the viewer: their own events and any a fallback step
+  // routed to them. Most members get an empty list, so the link appears only
+  // for someone with something to decide; a failed load simply leaves it out.
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
   useEffect(() => {
     let cancelled = false;
@@ -620,7 +620,7 @@ export const EventsPage: React.FC = () => {
   /** One builder for both export paths, so a fix to either cannot miss the other. */
   const exportEventsToCsv = useCallback(
     (events: EventListItem[], filename: string) => {
-      const headers = ['Title', 'Type', 'Date', 'Location', 'Mandatory', 'Cancelled'];
+      const headers = ['Title', 'Type', 'Date', 'Location', 'Mandatory', 'Cancelled', 'Source'];
       const rows = events.map((e) => [
         e.title,
         getEventTypeLabel(e.event_type),
@@ -628,6 +628,7 @@ export const EventsPage: React.FC = () => {
         e.location || '',
         e.is_mandatory ? 'Yes' : 'No',
         e.is_cancelled ? 'Yes' : 'No',
+        e.source_label || '',
       ]);
       downloadCsv(buildCsv([headers, ...rows]), filename);
     },
@@ -666,7 +667,7 @@ export const EventsPage: React.FC = () => {
     async (eventId: string) => {
       try {
         const newEvent = await eventService.duplicateEvent(eventId);
-        toast.success('Event duplicated');
+        toast.success('Event duplicated as a draft');
         void navigate(`/events/${newEvent.id}`);
       } catch {
         toast.error('Failed to duplicate event');

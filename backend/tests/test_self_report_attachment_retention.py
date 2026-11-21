@@ -7,6 +7,7 @@ temporary upload directory standing in for the volume.
 import os
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -35,8 +36,17 @@ from app.services.scheduled_tasks import (
 from app.services.self_report_attachment_retention import (
     SelfReportAttachmentRetention,
 )
+from tests.clock_support import reread_each_test
 
-NOW = datetime.now(timezone.utc)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    return {"NOW": now}
+
+
+(NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 @pytest.fixture
@@ -194,6 +204,36 @@ class TestSweep:
         again = await SelfReportAttachmentRetention(db_session).sweep()
         assert again["files_deleted"] == 0
         assert len(await _audit_rows(db_session, org_id)) == 1
+
+    async def test_an_auto_approved_submission_expires_from_its_submission(
+        self, db_session, upload_root
+    ):
+        """An auto-approved submission is never reviewed, so reviewed_at stays
+        NULL; its decision is the moment it was submitted. A filter on
+        reviewed_at alone kept these certificates forever (2026-11-21
+        member-files review)."""
+        org_id, user_id = await _org_and_member(db_session)
+        await _set_retention(db_session, org_id, 365)
+        old_file = _stored_file(upload_root, org_id)
+        recent_file = _stored_file(upload_root, org_id)
+        old = _submission(org_id, user_id, [old_file], SubmissionStatus.APPROVED, None)
+        old.submitted_at = NOW - timedelta(days=400)
+        recent = _submission(
+            org_id, user_id, [recent_file], SubmissionStatus.APPROVED, None
+        )
+        recent.submitted_at = NOW - timedelta(days=30)
+        db_session.add_all([old, recent])
+        await db_session.flush()
+
+        result = await SelfReportAttachmentRetention(db_session).sweep()
+
+        assert not os.path.exists(old_file["file_path"])
+        assert os.path.exists(recent_file["file_path"])
+        assert result["files_deleted"] == 1
+        await db_session.refresh(old)
+        await db_session.refresh(recent)
+        assert old.attachments == []
+        assert recent.attachments == [recent_file]
 
     async def test_unset_retention_keeps_everything(self, db_session, upload_root):
         org_id, user_id = await _org_and_member(db_session)

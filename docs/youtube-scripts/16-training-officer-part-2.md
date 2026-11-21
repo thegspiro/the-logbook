@@ -255,7 +255,7 @@ film a pre-2026-11-04 form.]**
 
 ### COMPLIANCE REQUIREMENTS CONFIGURATION (6:15 – 7:15)
 
-**[SCREEN: Training Admin → Settings & Data → Compliance Settings, then the
+**[SCREEN: Training Admin → Settings & Data → Compliance, then the
 Configure page it opens (ComplianceRequirementsConfigPage)]**
 
 > "This is where you define what 'compliance' means for your department. Which
@@ -282,10 +282,13 @@ Configure page it opens (ComplianceRequirementsConfigPage)]**
 **[SCREENSHOT NEEDED]:** _The Compliance Requirements Thresholds tab with the "Evaluation Period" checkbox and its helper text._
 
 > "You'll find all of this in two places: **Compliance Reporting, Configure**, or
-> **Settings and Data, Compliance Settings**. The second is the same page —
+> **Settings and Data, Compliance**. The second is the same page —
 > it's there so you can find it with the rest of your settings. You need the
 > manage-settings or manage-compliance permission to save; manage-training alone
 > opens the hub but doesn't show Configure."
+
+**[EDITOR — 2026-11-17. Re-record this line: the Settings & Data tab reads
+**Compliance** since 2026-11-08 (it was "Compliance Settings").]**
 
 **[SCREEN: Thresholds tab, the Months on leave choice: Full month (default),
 15-day rule: proportional, 15-day rule: half.]**
@@ -309,6 +312,23 @@ Position" ticks.]**
 > who still ride and life members who've stopped. Tick the positions and leave
 > them all unticked to apply it regardless of position."
 
+**[SCREEN: The same profile form: the Priority field showing the amber "also
+has priority …" warning, then the Optional Requirements list.]**
+
+> "Two more things on that form. If two profiles share a **Priority**, the one
+> you created first wins, and the form warns you as you type — give one a
+> higher number if you want to choose. And **Optional Requirements** are ones
+> these members see on their training page, marked Optional, but are never
+> graded on and never reminded about. A requirement can be Required or
+> Optional, not both."
+
+**[PRODUCTION NOTE — 2026-11-21. New beat, about 20 seconds. Equal priorities
+used to resolve in no defined order, and optional requirements were stored but
+shown to nobody. The opening line of this section — "Which certifications are
+mandatory? Which are optional?" over "mandatory/optional toggles" — has no
+such toggle on screen: film the profile's Required and Optional lists for that
+shot instead.]**
+
 **[PRODUCTION NOTE — 2026-11-05. Three new beats, about 1:15 together; re-time
 Chapter 3 and the clip table. Compliance Settings under Settings & Data is
 2026-11-05; Months on leave is 2026-11-02 (before it, a month was excused only at
@@ -326,8 +346,19 @@ Say nothing about a specific percentage.]**
 
 **[SCREEN: Navigate to Reports → Training Compliance report]**
 
-> "The report lists every member with their certification status for every
-> requirement. Export it as PDF for inspectors or as CSV for your records."
+> "The report lists every member with their standing on every requirement as
+> of today — exactly what the Compliance Matrix shows — plus their training
+> hours and records since the first of January. Export it as PDF for
+> inspectors or as CSV for your records."
+
+**[PRODUCTION NOTE — 2026-11-21. Narration rewritten (#4477). The status
+columns are today's standing from the matrix's own grader; the period sets
+only the hours and record columns, whose CSV headers now carry the dates
+("Total Hours (2026-01-01 to …)", "Completed Records (…)"; it was "Completed
+Courses"). A certification earned before January used to print Not Met here.
+Re-film the CSV if its header row is on screen. The exports also follow each
+member's compliance profile and the department's Evaluation Period setting
+since 2026-11-20.]**
 
 **[PRODUCTION NOTE — 2026-10-06. The annual and monthly compliance reports now
 grade each member through their compliance profile, the same as the dashboard
@@ -385,12 +416,21 @@ the CSV and PDF buttons]**
 ### TRAINING EVENTS (8:15 – 9:15)
 
 > "Training and Events are connected. When you create an event with the type
-> 'Training,' fill in the **Training details** section that appears on the form:
-> the course, category and requirement it counts toward. Once the event exists,
-> you change those on its **Requirements & Programs** card."
+> 'Training,' the form switches to the training-event form — the same four
+> steps Training Administration uses. Its **Training Info** step holds the
+> course, category and requirement it counts toward. Once the event exists,
+> **Edit training details** on its **Training details** card opens the same
+> step."
 
-**[SCREEN: Events → Create Event, type "Training", the "Training details
-(optional)" section with a course and a requirement picked.]**
+**[SCREEN: Events → Create Event, type "Training", the switch to the
+training-event form, then its Training Info step with a course from the Course
+Library and a requirement picked.]**
+
+**[PRODUCTION NOTE — 2026-11-16. Rewritten for the one training-event form
+(#4347). The "Training details (optional)" section and the Requirements &
+Programs card are gone; the event page shows a read-only **Training details**
+card. Saving training details needs **Manage all events**. New footage
+needed.]**
 
 > "After the event, **Finalize Attendance** — or **End Event** — writes a
 > training record for every member who checked in, for the time they actually
@@ -399,10 +439,10 @@ the CSV and PDF buttons]**
 > reopened, set their times with **Edit Times**, and finalize again."
 
 **[SCREEN: The event page after Finalize Attendance on a Training event — the
-toast naming the records written, and the Requirements & Programs card.]**
+toast naming the records written, and the Training details card.]**
 
 > "If the session was set to need an officer's confirmation, the attendance comes
-> to you instead: **Review and approve** on the event's Requirements & Programs
+> to you instead: **Review and approve** on the event's Training details
 > card opens the approval page, where you can adjust anyone's minutes before you
 > record it. Until then members see the class as **In Progress**."
 
@@ -411,15 +451,15 @@ toast naming the records written, and the Requirements & Programs card.]**
 
 **[CALLOUT: "Event attendance → automatic training credit"]**
 
-**[SCREEN: Create Training Session → Connect to Requirements & Programs, a
-Session Attendance requirement ticked. Then the event card with the "Counts
+**[SCREEN: The training-event form's Training Info step → Counts toward
+attendance, a Session Attendance requirement ticked. Then the event card with the "Counts
 toward attendance" badge.]**
 
 > "If you run a Session Attendance requirement — 'attend sixty percent of the
 > drills' — a drill only counts if it's linked. So when you create the session,
-> tick the requirement under **Connect to Requirements and Programs**, for a single
-> session or a recurring series. Forgot? Change it from the **Counts toward
-> attendance** editor on the event page, even after attendance is finalized.
+> tick the requirement under **Counts toward attendance**, for a single
+> session or a recurring series. Forgot? Select **Edit training details** on
+> the event page and change the ticks, even after attendance is finalized.
 > Members see a **Counts toward attendance** badge on the event."
 
 **[PRODUCTION NOTE — 2026-11-05. New beat, about 25 seconds; re-time Chapter 4.

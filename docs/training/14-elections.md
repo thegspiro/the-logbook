@@ -13,7 +13,7 @@ vote can happen at a meeting, by email, or both.
 | **What you need**   | The Elections module turned on. Running elections needs a role that can manage elections          |
 | **Essential path**  | Members: about 10 minutes. Election officers: about 90 minutes                                    |
 | **Full guide**      | About 2 hours                                                                                     |
-| **Last verified**   | 2026-10-14                                                                                        |
+| **Last verified**   | 2026-11-17                                                                                        |
 | **Owner**           | Your department's secretary                                                                       |
 
 **Members:** read [Elections Overview](#elections-overview),
@@ -79,34 +79,94 @@ as **View elections** and **Manage elections**.
 | **Elections** list      | Every election in the department                                  | Roles that can view elections      |
 | An election's page      | Details, ballot, voting and results                               | Roles that can view elections      |
 | **Election Settings**   | Proxy voting, voter eligibility, features, defaults, test ballots | Roles that can manage elections    |
+| **Meeting Attendance**  | Meetings each member attended, read against one election's rules  | Roles that can manage elections    |
 | The emailed ballot page | Voting from the link in a ballot email                            | Anyone holding a valid ballot link |
 
-To reach **Election Settings**, select the gear button at the top of the
-Elections list.
+**The Elections pages row** _(2026-11-15)_. Roles that can manage elections
+see a row of links at the top of the Elections list, Meeting Attendance and
+Election Settings: **All Elections**, **Meeting Attendance** and **Settings**.
+On a phone they read **Elections**, **Attendance** and **Settings**, so all
+three fit. The gear button and the Meeting Attendance button that used to sit
+in the list's header are gone. Members do not see the row, because the other
+two pages are for managers only. To reach **Election Settings**, select
+**Settings** in that row.
 
 ![Elections list showing elections with status badges](./images/14-01-elections-list.png)
 
-### Tabs on an election's page
+### An election's page: the header, the Overview and the sections _(2026-11-15)_
 
-Each tab on an election's page has its own web address. You can send a fellow
-officer a link straight to a tab, and the browser's Back button steps back
-through tab changes.
+On a tablet or computer, every election's page opens with a **header** that
+shows:
 
-| Tab              | What it shows                                                               | Who sees it                                                                  |
-| ---------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| **Ballot**       | The ballot items, in order                                                  | Officers                                                                     |
-| **Nominations**  | The nomination form and nominations so far                                  | Everyone while nominations are open; officers on a draft                     |
-| **Candidates**   | Every candidate, including pending nominations                              | Officers                                                                     |
-| **Eligibility**  | The election's voter rules, and who will and will not get a ballot, and why | Officers                                                                     |
-| **Attendance**   | Who is checked in at the linked meeting                                     | Officers, until the election closes                                          |
-| **Overrides**    | Members let in to vote despite the normal rules                             | Officers                                                                     |
-| **Proxy Voting** | Proxy authorizations                                                        | Officers                                                                     |
-| **Cast Vote**    | Your ballot                                                                 | Everyone, while voting is open                                               |
-| **Results**      | The results                                                                 | Everyone, once the election closes (or during voting if live results are on) |
+- the **stages** — Draft, Nominations, Voting Open, Closed — with the current
+  one marked;
+- when voting opens or closes, and the time left;
+- **Turnout**, when it is available (members do not see it while voting is
+  open);
+- the **Winner** rule (it is no longer repeated in the details card);
+- the button that moves the election to its next stage, beside the status
+  badge: **Open Election**, **Close Nominations**, **Close Election**, or
+  **Certified Results (PDF)** once it is closed;
+- for managers, links to the page's **sections**.
 
-"Officers" here means roles that can manage elections.
+The election's own address opens the **Overview**: the details card with
+every other control, the runoff chain, publishing, live turnout and the
+paper-ballot batches. Each section has its own address, ending in its name —
+for example `/elections/<id>/results` — so you can send a fellow officer, or
+the membership after the vote, a link straight to it. The browser's Back
+button steps back through the sections you opened. Old links ending in
+`?tab=nominations` and the like, including the ones in emails already sent,
+still open the right section.
 
-You can move between the tabs with the arrow keys, Home and End.
+| Section               | Address ends in | What it shows                                                                                      | Who sees it                                                                  |
+| --------------------- | --------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Overview**          | _(nothing)_     | The details, controls, runoff chain, publishing and paper batches                                  | Everyone                                                                     |
+| **Ballot**            | `/ballot`       | The ballot items, in order                                                                         | Officers                                                                     |
+| **Nominations**       | `/nominations`  | The nomination form and nominations so far                                                         | Everyone while nominations are open; officers on a draft                     |
+| **Candidates**        | `/candidates`   | Every candidate, including pending nominations. The link shows the count                           | Officers                                                                     |
+| **Eligibility**       | `/eligibility`  | The election's voter rules, and who will and will not get a ballot, and why                        | Officers                                                                     |
+| **Attendance**        | `/attendance`   | Who is checked in at the linked meeting. Read-only after the election closes                       | Officers                                                                     |
+| **Overrides**         | `/overrides`    | Members let in to vote despite the normal rules                                                    | Officers                                                                     |
+| **Proxy Voting**      | `/proxies`      | Proxy authorizations                                                                               | Officers                                                                     |
+| **Cast Vote**         | `/voting`       | Your ballot                                                                                        | Everyone, while voting is open                                               |
+| **Results**           | `/results`      | The results                                                                                        | Everyone, once the election closes (or during voting if live results are on) |
+| **Integrity & Audit** | `/integrity`    | The integrity check, voided votes and unusual patterns. See [Integrity & Audit](#integrity--audit) | Officers, while voting is open and after it closes                           |
+
+"Officers" here means roles that can manage elections. Members get no section
+links: their Overview shows whichever of nominations, voting and results
+applies. A section you cannot open, or that does not exist, opens the
+Overview instead. A closed election no longer jumps straight to Results;
+managers land on the Overview, and members' Overview includes the results. A link to
+the **Results** section shows the results alone.
+
+### On a phone, at the meeting _(2026-11-16)_
+
+On a phone, the **Overview** for an officer who can manage elections is a
+dashboard for the meeting room. Setting an election up stays a tablet or
+computer task. The dashboard shows:
+
+- **The tally** while voting is open or after close, for example "48 / 62
+  members have voted", with a turnout bar. It updates every 15 seconds while
+  voting is open. It never shows how many votes each candidate has.
+- **The time**: the time left while voting is open, or when voting opens or
+  closed.
+- **One full-width button** for the next step: **Open Election**, **Close
+  Nominations**, **Close Election** or **Certified Results (PDF)**.
+- **Live**, **Results** and **More** across the screen (**Now** instead of
+  **Live** when voting is not open):
+  - **Live** lists what is done on the night, as large rows: **Send ballot
+    emails** (or **Resend ballot emails**), **Remind non-voters**, **Record
+    paper ballots**, **Check members in** and **Extend voting**. Each appears
+    only where the Overview would offer it. During nominations the list has
+    **Review nominations**; after close, **Who attended**.
+  - **Results** opens the **Results** section once there are results.
+  - **More** lists every section, and **Details and all controls** opens the
+    full Overview below the dashboard, so nothing on a larger screen is out of
+    reach.
+
+On a draft election the dashboard says _"Set up the ballot, candidates and
+voters on a tablet or computer."_ A section's own address, and every page a
+member sees, look the same on a phone as before.
 
 ---
 
@@ -122,7 +182,7 @@ You can move between the tabs with the arrow keys, Home and End.
 | **Title** (required)                 | For example, "2026 Annual Officer Election"                                                                                                                                                                                                                                                                                |
 | **Description**                      | What the election is for                                                                                                                                                                                                                                                                                                   |
 | **Linked Meeting**                   | The meeting or event the vote is held at, or **No linked meeting**. Choosing one sets the voting window to that meeting's start and end. Upcoming events are listed even when the Minutes module is off or you cannot view meeting records _(2026-11-17; before, the list showed only **No linked meeting** in that case)_ |
-| **Held at** _(2026-10-29)_           | **Regular business meeting** or **Annual meeting**. Decides which voter rules from Election Settings the election starts with. Linking an annual meeting record picks **Annual meeting**; you can still change it                                                                                                          |
+| **Who may vote** _(2026-11-13)_      | **Kind of vote**: **Regular business meeting**, **Annual meeting**, **Bylaws amendment** or **Special meeting**. Decides which voter rules from Election Settings the election starts with. See below                                                                                                                      |
 | **Start Date & Time** (required)     | When voting opens                                                                                                                                                                                                                                                                                                          |
 | **End Date & Time** (required)       | When voting closes. **Quick duration** buttons set it to 1, 2 or 4 hours after the start, or **End of Day**                                                                                                                                                                                                                |
 | **Positions**                        | The offices being filled. Pick from the list or type one, then select **Add**                                                                                                                                                                                                                                              |
@@ -148,9 +208,17 @@ You can move between the tabs with the arrow keys, Home and End.
   Ranked choice elects one per race, so choosing it sets this back to 1.
 - **Quorum:** the form has no quorum box. A new election takes the
   department's quorum from [Election Settings → Defaults](#defaults).
-- **Voter rules** _(2026-10-29)_: under **Held at**, the form lists the voter
-  rules the election will start with, or says there are none. See
-  [Rules Every Voter Must Meet](#rules-every-voter-must-meet-2026-10-29).
+- **Who may vote** _(2026-11-13)_. This section sits under **Linked
+  Meeting**. Linking an annual or special meeting record picks that **Kind of
+  vote**; you can still change it. The section lists the voter rules the
+  election will start with, or says there are none, and counts how many
+  active members would receive a ballot today.
+- **Customize the rules for this election** opens the rules table from
+  Election Settings for this election alone. When the rules differ from the
+  defaults for that kind of vote, **Why do these rules differ?** is required.
+  The reason is recorded in the audit log, shown on the election and printed
+  in the minutes with the result. See
+  [Voter Rules by Member Type](#voter-rules-by-member-type-2026-11-13).
 
 > **What if the hint says ballots are sent separately?** The hint under **Open
 > Automatically at Start Time** says ballot emails are still sent separately.
@@ -190,10 +258,10 @@ The election's details card shows what you chose:
 
 ## Configuring Ballot Items
 
-A ballot item is one question or race on the ballot. You build them on the
-**Ballot** tab of a draft election.
+A ballot item is one question or race on the ballot. You build them
+in the **Ballot** section of a draft election.
 
-1. Open the election and the **Ballot** tab.
+1. Open the election and the **Ballot** section.
 2. Choose how to add an item:
    - **Use Template** — pick a ready-made item, such as a probationary member's
      move to regular membership, or one of your saved ballots.
@@ -220,6 +288,22 @@ If that section names who votes for the **Position** you pick, **Who Can
 Vote** changes to match. You can still change both. The ready-made templates
 keep their own settings.
 
+**An item can follow other voter rules** _(2026-11-13)_. Each item on the
+ballot has **Voter rules for this item**, under **Voter Rules**:
+
+- **Same as the election** — the default.
+- **Follow the bylaws amendment rules** (or the regular, annual or special
+  meeting rules) — the item takes that kind of vote's rules from Election
+  Settings at once. Use it for a bylaws question on a regular ballot, so the
+  officer races keep the election's rules.
+- **Custom for this item** — set the item's own rules in the same table.
+  **Why does this item follow different rules?** is required, and **Save item
+  rules** stays greyed out until it is filled in. The reason is printed in the
+  minutes with the result.
+
+An item's own rules replace the election's rules for that item, on the
+roster, the ballot send and the vote check alike.
+
 You can drag items to change their order. Select **Preview Ballot** to see the
 ballot as a voter will.
 
@@ -240,7 +324,7 @@ ballot as a template and apply it next year.
 ### Saving a ballot
 
 1. Build the ballot as usual on a draft election.
-2. On the **Ballot** tab, select **Save as Template**. It shows once the ballot
+2. In the **Ballot** section, select **Save as Template**. It shows once the ballot
    has at least one item, and not on a closed election.
 3. Type a **Template name**, such as "Annual officer election", and select
    **Save Template**.
@@ -327,19 +411,19 @@ candidates during a **nomination phase**.
    - **Nominate another member**, with an optional supporting statement. The
      nominee is emailed and must **accept** before they reach the ballot. They
      also get a notice in the notification bell that opens the **Nominations**
-     tab directly. The bell notice does not depend on their email preferences,
+     section directly. The bell notice does not depend on their email preferences,
      so a member who muted election email still sees a request only they can
      answer. Declining removes the nomination (the audit log keeps a record).
 4. Select **Close Nominations**, or let the deadline do it. The election goes
    back to **Draft**, where you order the ballot and open voting as usual.
 
 **Closing freezes the slate.** A nomination still pending stays off the
-ballot. The **Candidates** tab marks it _"Not accepted before nominations
+ballot. The **Candidates** section marks it _"Not accepted before nominations
 closed"_. After closing, neither the nominee nor an officer can accept or
 decline. To change the slate, open nominations again.
 
 **Accepting for a nominee.** While nominations are open, an officer can select
-**Accept on their behalf** on the **Candidates** tab. Use it for a member who
+**Accept on their behalf** in the **Candidates** section. Use it for a member who
 agreed in person or by phone. The candidate is labelled **Accepted by
 manager**. The nominee is emailed that their nomination was accepted for them,
 with how to decline before nominations close. If the nominee later accepts
@@ -356,7 +440,7 @@ themselves, the label goes away.
   address hidden in the copy line, which a provider with a recipient cap could
   refuse whole). It goes out just after nominations open, so a failed email never
   stops nominations opening, and it is skipped if nominations were closed again
-  in the meantime. The **Nominations** tab shows election managers how it went:
+  in the meantime. The **Nominations** section shows election managers how it went:
   _"Emailing members that nominations are open…"_ while it sends, then how many
   members were emailed and how many could not be reached. If anyone was missed,
   the election managers are also emailed, so the missed members can be told
@@ -373,9 +457,9 @@ themselves, the label goes away.
 ![The same election as an ordinary member: the ballot offers only the candidate who accepted, the pending nomination withheld once nominations have closed](./images/14-26-candidates-as-member.png)
 
 **Above: an officer. Below: an ordinary member, on the same election.** The
-officer's **Candidates** tab lists Sofia Marchetti as **Pending**, with an
+officer's **Candidates** section lists Sofia Marchetti as **Pending**, with an
 accept button. The member's ballot offers Amara Osei alone. A member has no
-Candidates tab; the ballot _is_ their view of who is standing.
+Candidates section; the ballot _is_ their view of who is standing.
 
 ---
 
@@ -383,12 +467,12 @@ Candidates tab; the ballot _is_ their view of who is standing.
 
 **Who can do this:** roles that can manage elections.
 
-The **Candidates** tab shows a count beside its name _(2026-11-14)_, as the
-**Ballot** tab does, so an empty slate shows from the tab bar. It counts
+The **Candidates** link shows a count beside its name _(2026-11-14)_, as the
+**Ballot** link does, so an empty slate shows from the section links. It counts
 nominees only, not a ballot item's Approve/Deny options, and changes as you
 add or remove one.
 
-1. Open the election and the **Candidates** tab.
+1. Open the election and the **Candidates** section.
 2. Select **+ Add Candidate**.
 3. Fill in:
 
@@ -424,17 +508,20 @@ By default, every active member may vote. You can narrow that:
 - **By meeting attendance**, on each ballot item, with **Require meeting
   attendance to vote**.
 - **By a specific list of voters.** An empty list means everyone.
-- **By election-wide rules** _(2026-10-29)_. A meeting-attendance rule and a
-  waiting period for each member type. Every voter in the election must meet
-  them, whatever the item. See
-  [Rules Every Voter Must Meet](#rules-every-voter-must-meet-2026-10-29).
-- **By membership tier.** A tier can require a minimum share of meetings
-  attended over a number of months. The count starts at whichever is later:
-  that cut-off, or the start of the member's current service (their latest
-  service period, otherwise their hire date). It runs to today. So a recent
-  hire is not charged with meetings held before they joined. Excused meetings
-  and meetings during a leave of absence are left out. The secretary's
-  attendance figures use the same rule.
+- **By the election's voter rules** _(2026-11-13)_. One row for each member
+  type: whether that type may vote, a waiting period, and up to four
+  meeting-attendance rules. Every voter in the election must meet their row,
+  whatever the item, unless the item follows rules of its own. See
+  [Voter Rules by Member Type](#voter-rules-by-member-type-2026-11-13).
+- **By membership tier, on older elections only.** Until 2026-11-13 a tier
+  could bar its members from voting or require a share of meetings attended.
+  Those settings are no longer edited on the tier: each tier now has its own
+  row in the voter rules, which started from the tier's old settings. An
+  election created before 2026-11-13 still uses the tier settings until it
+  closes. The count starts at whichever is later: that cut-off, or the start
+  of the member's current service (their latest service period, otherwise
+  their hire date). It runs to today. Excused meetings and meetings during a
+  leave of absence are left out.
 
 ### Membership groups
 
@@ -476,31 +563,84 @@ upgrade, so a Senior member matches no status-restricted item until someone
 sets it. A member whose class was never recorded matches no class-restricted
 item either, until an officer sets their class.
 
-### Rules Every Voter Must Meet _(2026-10-29)_
+### Voter Rules by Member Type _(2026-11-13)_
 
 **Who can do this:** roles that can manage elections.
 
-Each election carries its own voter rules. They apply to every ballot item,
-on top of each membership tier's own voting rules. They decide who gets a
-ballot, who can vote in the app and who counts in turnout.
+Each election carries its own voter rules. They decide who gets a ballot, who
+can vote in the app and who counts in turnout. Who may vote is now set in one
+place: these rules replace the voting settings membership tiers used to
+carry.
 
-**Where they come from.** A new election copies the rules for where it is
-**Held at** from
+**One row per member type.** There is a row for each built-in status
+(Regular, Life, Probationary, Retired, Honorary, Junior and Prospective), one
+for each of your department's tiers, and one each for the **Administrative**
+and **Social** classes. Each row has:
+
+| Setting                | Choices                                                                                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **May vote**           | **Yes** or **No**                                                                                                                                                  |
+| **Waiting period**     | **No waiting period**, or **Wait a number of months**: **Months** (1 to 600, starting at 12) **Counted from** **Joining the department** or **Becoming** that type |
+| **Meeting attendance** | **Not required**, or up to four rules added with **Add attendance rule**. Every rule must be met                                                                   |
+
+Each attendance rule is **Attended a number of recent meetings** or
+**Attended a percentage of meetings**, with the same settings as in
+[Meeting attendance](#meeting-attendance) below, and can be limited to
+certain meeting types.
+
+- **A member is judged by the row for their status**, or for their tier when
+  it has a row of its own.
+- **Administrative and social members must meet two rows**: their status row
+  and their class row. Before 2026-11-13 their class decided alone.
+- **A tier row not set yet** reads _"Not set yet, so these members are judged
+  by the (status) row"_. It follows the status the tier's **Counts as** names.
+  Change anything on it to give the tier its own rules.
+
+**Where they come from.** A new election copies the rules for its **Kind of
+vote** from
 [Election Settings → Voter Eligibility](#voter-eligibility-2026-10-29).
 Changing the settings later never changes an election that already exists.
 
 **To change them for one election:**
 
-1. Open the election and the **Eligibility** tab.
-2. Under **Rules every voter must meet**, change the rules.
-3. Select **Save voter rules**. **Discard changes** puts back what is saved.
+1. Open the election's **Eligibility** section.
+2. Under **Voter rules by member type**, change the rules.
+3. If they now differ from the defaults for that kind of vote, fill in **Why
+   these rules differ from the defaults**. It is required, recorded in the
+   audit log and printed in the minutes with the result.
+4. Select **Save voter rules**. **Discard changes** puts back what is saved.
 
-Changing **Held at** on that tab replaces the election's rules, and who votes
-for each position, with that meeting's defaults. It asks first: select
-**Change and replace rules** or **Keep current rules**.
+Changing **Kind of vote** in that section replaces the election's rules, and
+who votes for each position, with that kind's defaults. It asks first:
+select **Change and replace rules** or **Keep current rules**.
 
 You can change the rules while the election is a draft or taking nominations.
-Once voting opens they are fixed, and the tab lists them instead.
+Once voting opens they are fixed, and the section lists them instead, with the
+reason if one was given. **Meeting attendance**, beside the heading, opens
+the [Meeting Attendance page](#the-meeting-attendance-page-2026-11-13) for
+this election.
+
+**What changed for existing departments** _(2026-11-13)_:
+
+- Nothing to migrate. The first time the rules are shown, each tier's old
+  voting settings appear as that tier's row. A department that never opens
+  the screen keeps the voters it had.
+- **A tier's attendance threshold now also decides who gets a ballot.**
+  Before, it was checked only when the member tried to vote, so a member who
+  fell short could be sent a link that then refused them.
+- **An administrative or social member is now held to their status row's
+  waiting period** as well as their class's.
+- Both changes can only take a vote away, never give one.
+
+### Rules Every Voter Must Meet _(2026-10-29)_
+
+This is how an election created **before 2026-11-13** shows its rules. Its
+**Eligibility** section reads **Rules every voter must meet**, the rules
+apply on top of each membership tier's own voting rules, and it keeps working
+this way until it closes.
+
+To change them, edit them under **Rules every voter must meet** and select
+**Save voter rules**, as above.
 
 #### Meeting attendance
 
@@ -529,7 +669,8 @@ Choose a **Requirement**:
 
 #### Waiting period before a member may vote
 
-Each member type has one setting: **No waiting period** (the default),
+On an election created before 2026-11-13, each member type has one setting:
+**No waiting period** (the default),
 **Wait a number of months** (1 to 600, starting at 12) or **Never eligible to
 vote**. The types are Regular, Life, Probationary, Junior, Retired, Honorary,
 Administrative and Social.
@@ -576,7 +717,7 @@ in the audit log.
 Use an override to let in a member the rules leave out. For example, a member
 whose tier was set wrongly, or one who arrived after voting opened.
 
-1. Open the election and the **Overrides** tab.
+1. Open the election and the **Overrides** section.
 2. Select **+ Add Override**.
 3. Choose the **Member** from the list of active and probationary members.
    Members who already have an override are not listed.
@@ -587,7 +728,7 @@ attendance or group.
 It also lifts the election-wide rules, including a waiting period.
 The override is listed by name.
 
-The **Eligibility** tab shows who needs one. Each member who will not get a
+The **Eligibility** section shows who needs one. Each member who will not get a
 ballot is explained row by row, and the panel points you to **Overrides**.
 
 **An override extends a specific voter list.** On an election limited to a
@@ -671,11 +812,12 @@ When the election is ready:
 
 1. Check every ballot item and candidate. **Preview Ballot** shows the ballot
    as voters will see it.
-2. Select **Open Election**. The status changes from Draft to Open, and the
+2. Select **Open Election**, at the top of the page beside the status badge.
+   The status changes from Draft to Open, and the
    voter roll is frozen (see below). Voting starts at once, even if the
    scheduled start has not arrived.
-3. **Opening by hand sends no ballots.** Members can vote on the **Cast Vote**
-   tab straight away. The page reminds you: "Ballots have not been emailed
+3. **Opening by hand sends no ballots.** Members can vote on the election's page
+   straight away. The page reminds you: "Ballots have not been emailed
    yet." Select **Send Ballot Emails** to tell members voting is open and
    give each a ballot link.
 4. **A scheduled opening does send them.** With **Open Automatically at Start
@@ -776,21 +918,21 @@ without changing it stops nothing.
 
 ### What if …?
 
-| What happened                                               | What it means                                                                                                                                       |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A member has no email address                               | Skipped, with the reason shown                                                                                                                      |
-| A member who already voted uses their link                  | The second vote is refused. Votes are never overwritten                                                                                             |
-| A member may vote on no items                               | Skipped, so nobody gets an empty ballot                                                                                                             |
-| The election has no ballot items and no accepted candidates | It cannot be opened                                                                                                                                 |
-| The election has neither ballot items nor positions         | Ballots cannot be emailed. The **Open election** dialog warns you before you confirm                                                                |
-| A member checks in at the meeting after voting opened       | They are recorded as present but **cannot vote**, because the roll froze at opening. The **Attendance** tab says so. Add an override to let them in |
+| What happened                                               | What it means                                                                                                                                           |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A member has no email address                               | Skipped, with the reason shown                                                                                                                          |
+| A member who already voted uses their link                  | The second vote is refused. Votes are never overwritten                                                                                                 |
+| A member may vote on no items                               | Skipped, so nobody gets an empty ballot                                                                                                                 |
+| The election has no ballot items and no accepted candidates | It cannot be opened                                                                                                                                     |
+| The election has neither ballot items nor positions         | Ballots cannot be emailed. The **Open election** dialog warns you before you confirm                                                                    |
+| A member checks in at the meeting after voting opened       | They are recorded as present but **cannot vote**, because the roll froze at opening. The **Attendance** section says so. Add an override to let them in |
 
 ### Voter-Roll Freeze
 
 Opening an election **fixes the list of eligible voters**, like a printed
 sign-in sheet. After that, changes to a member's status or tier do not change
 who may vote or the turnout figures. **Overrides still let members in** after
-opening — that is their purpose. The **Eligibility** tab reads the frozen
+opening — that is their purpose. The **Eligibility** section reads the frozen
 list, so a member added after opening is not shown as getting a ballot.
 
 _(2026-11-02)_ **A member left off the roll is told the rule they still fail.**
@@ -799,9 +941,10 @@ such as a waiting period, attendance or their tier, because it would keep them
 out even without the freeze. Only a member who now passes every rule, such as
 one waived after opening, reads _"You are not on the voter roll that was
 frozen when this election opened. Contact the election administrator if you
-believe this is an error."_ The emailed-ballot link and the **Eligibility** tab
-still give the roll as the reason. Either way they cannot vote without an
-override.
+believe this is an error."_ _(2026-11-13)_ The **Eligibility** section and the
+ballot send's list of skipped members now give the same reason, naming the
+frozen roll only for a member who passes every rule. Either way they cannot
+vote without an override.
 
 ### Printable Ballot PDF
 
@@ -874,18 +1017,20 @@ The page shows **Reminder sent** with the time.
 
 ### In the App
 
-The **Cast Vote** tab is the same ballot as the emailed link: every ballot
+The ballot in the app is the same ballot as the emailed link: every ballot
 item and race, answered the same way (Approve or Deny, one candidate, "Select
 up to N", or a ranking).
 
-1. Open **Governance → Elections**, open the election, then **Cast Vote**.
+1. Open **Governance → Elections** and open the election. Your ballot is on
+   its page. An officer who can manage elections selects **Cast Vote** in
+   the section links.
 2. Make a selection — or choose **Abstain** — on every open item. Nothing is
    chosen for you. **Cast Ballot** stays greyed out until each item has an
    answer, and a line names the items still waiting.
 3. Select **Cast Ballot**, check the summary and confirm. Everything you chose
    is saved together. If any choice is refused (for example, you may not vote
    on that item), nothing is saved and the message names the item.
-4. The tab shows a **receipt** for each vote: _"Save this receipt to verify
+4. The page shows a **receipt** for each vote: _"Save this receipt to verify
    your vote was counted. It cannot reveal how you voted."_ The check form
    under the ballot verifies a receipt later. See
    [Vote Receipt Verification](#vote-receipt-verification).
@@ -912,7 +1057,10 @@ An item you have already voted on is shown as done.
    votes later.
 
 **The emailed link works once.** After you submit, it cannot be used again,
-even for items you abstained on.
+even for items you abstained on. Opening it again shows **You've already
+voted**, not an error. To check a receipt you saved, sign in, open the election
+and use **Verify a vote receipt** _(2026-11-13)_. The form stays on the
+**Results** section after the election closes.
 
 > **Why there is no picture of the emailed ballot.** Reaching it needs a live
 > ballot link, and The Logbook keeps those out of everyone's reach — including
@@ -927,7 +1075,8 @@ even for items you abstained on.
 | You try to vote on an item you may not vote on        | Refused when you submit, not just hidden                                                                        |
 | Your link has expired                                 | Links expire at the election's end, or after 30 days, whichever is sooner. Ask the secretary to resend          |
 | An old link says it was replaced                      | A reminder sent you a newer link. Use the newest email                                                          |
-| An old link says voting has closed                    | The election is closed                                                                                          |
+| The link says **You've already voted**                | _(2026-11-13)_ The ballot was submitted and your vote is recorded. Each link works once                         |
+| An old link says **Voting has closed**                | The election is closed                                                                                          |
 | An old link says the election was closed and reopened | Ask the secretary for a new link                                                                                |
 | A write-in matches an existing candidate's name       | Saved as a separate write-in. The secretary can merge them                                                      |
 | You rank only some candidates                         | Only the ranked candidates count                                                                                |
@@ -1018,8 +1167,8 @@ Things to know:
 - Confirming and voiding work only while voting is open. A batch still pending
   at close stays out of the certified results, and the close records a
   warning in the audit log.
-- The panel sits on the election page above the tabs, and appears once one
-  batch exists.
+- The panel sits on the election's **Overview**, and appears once one batch
+  exists.
 
 ![The Paper-Ballot Batches panel — a recorded in-room tally, who recorded it, and the officer attestations that confirmed it](./images/14-18-paper-batches.png)
 
@@ -1049,7 +1198,7 @@ it on in **Election Settings → Proxy Voting** first.
 
 **Who can do this:** roles that can manage elections.
 
-1. Open the election and the **Proxy Voting** tab.
+1. Open the election and the **Proxy Voting** section.
 2. Select **+ Add Authorization**.
 3. Fill in the **New Proxy Authorization** form:
 
@@ -1074,9 +1223,10 @@ once, whichever of the two submits it.
 
 ### Casting a Proxy Vote
 
-A member who holds a proxy votes it from the **Cast Vote** tab:
+A member who holds a proxy votes it from the ballot on the election's page:
 
-1. Open the election's **Cast Vote** tab.
+1. Open the election. An officer who can manage elections selects **Cast
+   Vote**.
 2. In **Voting for**, choose _"(member) (as their proxy)"_ instead of
    **Myself**. The list shows only proxies you hold.
 3. The ballot reloads as that member's. A **"Voting as proxy for: (member)"**
@@ -1127,13 +1277,13 @@ an **anonymous** election it is allowed only if the absent member agrees:
 - **Everyone else** sees no vote count until the election closes — unless
   **Show Results Immediately** was set. Then the count and running tally
   show, but the list of who was sent a ballot still does not.
-- Ballots — the emailed link and the **Cast Vote** tab — show each candidate's
+- Ballots — the emailed link and the ballot in the app — show each candidate's
   name and statement only. They never show which member account a candidate
   is or who nominated them.
 
 ### Live Turnout Dashboard
 
-On meeting night, select **Live Turnout** on an open election. It is a display
+On meeting night, select **Live Turnout** on an open election's **Overview**. It is a display
 you can make full screen and project in the room:
 
 - Ballots received against eligible voters, with quorum progress when the
@@ -1146,7 +1296,7 @@ you can make full screen and project in the room:
 
 **Who can do this:** roles that can manage elections.
 
-1. Select **Close Election** and confirm. The buttons read **Close election**
+1. Select **Close Election**, at the top of the page, and confirm. The buttons read **Close election**
    and **Keep it open**. The dialog warns that voting ends at once, and says
    what undoing it would take:
    - **Anonymous election:** closing is final once any vote is recorded; a
@@ -1156,7 +1306,7 @@ you can make full screen and project in the room:
      minutes, the rollback does not edit them: it adds a dated **correction**
      that supersedes the filed result, and the re-run's result is filed beside
      it as the corrected result.
-2. The results are worked out and shown on the **Results** tab:
+2. The results are worked out and shown in the **Results** section:
    - each race's winner, or "No winner" if nobody met the winning rule;
    - the votes for each candidate;
    - write-in totals;
@@ -1185,19 +1335,19 @@ This panel appears once the election is open:
   set).
 - On a closed election it reads _"Results are visible to members"_. There is
   no publish or hide switch; closing is what releases the results.
-- **Email Results Report** (_"Email the results report to yourself"_), with
-  its **Send Report** button, appears only once the election is closed. It
-  emails the report to you, and the confirmation names the address it went to.
-  The report is also emailed automatically at close to the election's creator
-  and to the department's leadership (chief, president, vice president,
-  secretary), counting only current members who have not turned off
-  election-administration email.
+- **Results Report** appears only once the election is closed. It reads
+  _"Emailed to the election's creator and leadership when it closed. Send
+  yourself another copy."_ _(2026-11-13)_ The report goes out automatically at
+  close to the election's creator and to the department's leadership (chief,
+  president, vice president, secretary), counting only current members who
+  have not turned off election-administration email. **Send Me a Copy** emails
+  it to you, and the confirmation names the address it went to.
 
 ### What the results, the report and the certified PDF show
 
 - **Every ballot item's outcome**, with its own label and percentages,
   including each motion's or membership vote's Approve and Deny totals.
-- **One table per item.** On a ballot of several items, the **Results** tab
+- **One table per item.** On a ballot of several items, the **Results** section
   reads **Results by Ballot Item**. One motion's votes never compete with
   another's.
 - **Ties are named**: "Tie — co-winners per policy" or "Tie — runoff round
@@ -1212,7 +1362,7 @@ This panel appears once the election is open:
 
 **Corrections after close are marked.** **Merge Write-Ins**, **Void this
 vote** and voiding a paper batch still work after close — they are how a
-result is corrected. Each leaves a mark. The **Results** tab shows _"These
+result is corrected. Each leaves a mark. The **Results** section shows _"These
 results were revised after the election closed"_ with a line per correction,
 for example _"Revised (when) by (who): a vote was voided (reason)"_. The
 certified PDF prints the same lines. Rolling the election back to open clears
@@ -1220,7 +1370,7 @@ the marks, and the next close certifies afresh.
 
 ### Who voted
 
-The **Eligibility** tab marks each member who has voted with **Voted**. Its
+The **Eligibility** section marks each member who has voted with **Voted**. Its
 filters are **All Members**, **Eligible**, **Ineligible**, **Already Voted**
 and **Has Override**. **Remind Non-Voters** tells you how many eligible members
 have not voted yet. Use them to follow up while the election is open.
@@ -1323,12 +1473,14 @@ Each vote gets a **receipt**, shown when the voter submits. A receipt:
 If an officer voided the vote, the receipt reads "This vote was voided by an
 officer".
 
-### Forensics & Integrity
+### Integrity & Audit
 
 **Who can do this:** roles that can manage elections.
 
-At the bottom of the election's page, open the **Forensics & Integrity**
-section:
+Open the election's **Integrity & Audit** section _(2026-11-15; it was the
+**Forensics & Integrity** panel at the bottom of the page, opened by a
+toggle)_. The report loads when you arrive, and the integrity alert banner
+links to it:
 
 - **Run Check** checks every vote's tamper-evident seal and reports PASS or a
   problem. It runs only when you select it.
@@ -1346,7 +1498,7 @@ section:
 > with the anonymity key. Run any address-based investigation while voting is
 > open.
 
-![The Forensics & Integrity panel — the signature check verdict over the ballot box, with the deleted-vote and anomaly sections beneath](./images/14-19-forensics-report.png)
+![The Integrity & Audit section — the signature check verdict over the ballot box, with the deleted-vote and anomaly sections beneath](./images/14-19-forensics-report.png)
 
 ### What if …?
 
@@ -1362,7 +1514,8 @@ section:
 
 **Who can do this:** roles that can manage elections.
 
-Once an election is **closed**, select **Certified Results (PDF)**. It is a
+Once an election is **closed**, select **Certified Results (PDF)** at the top
+of the page. It is a
 formal document for the minutes book and for anyone who asks you to prove the
 result. It includes:
 
@@ -1374,6 +1527,15 @@ result. It includes:
 - any corrections made after close;
 - **signature lines** for officers to sign by hand.
 
+Every page after the first has a short header with the department's logo and
+name and the election's title _(2026-11-16)_, so a loose page still says which
+election it belongs to. The printable ballot and the pre-meeting package have
+the same header.
+
+_(2026-11-21)_ Every page's footer reads **Page 2 of 4**, not just **Page 2**,
+so a missing page shows. The pre-meeting package is numbered the same way, and
+the printable ballot already was.
+
 File the signed copy with the meeting minutes. Together with the forensics
 report, it is your full defence if the result is disputed.
 
@@ -1383,8 +1545,8 @@ report, it is your full defence if the result is disputed.
 
 **Who can do this:** roles that can manage elections.
 
-Open **Elections** and select the gear button. Election Settings has six
-sections.
+Open **Elections** and select **Settings** in the Elections pages row
+_(2026-11-15; it was a gear button)_. Election Settings has six sections.
 
 ### Proxy Voting
 
@@ -1402,48 +1564,52 @@ it.
 
 A secretary's voter override still lets in a member who fails these rules.
 
-**Two sets.** Choose **Regular business meeting** or **Annual meeting** at the
-top.
+**Four kinds of vote** _(2026-11-13)_. Choose **Regular business meeting**,
+**Annual meeting**, **Bylaws amendment** or **Special meeting** at the top.
 
 - **Regular business meeting** rules are used by every election held at a
-  regular business meeting. The annual meeting uses them too, until it has its
-  own.
-- On **Annual meeting**, turn on **Use different rules at the annual
-  meeting**. The annual set starts as a copy of the regular one, so change only
-  what differs. Turning it off asks first: **Discard annual rules** or **Keep
-  them**. Elections already created keep their rules.
+  regular business meeting, and by every other kind of vote until it is given
+  rules of its own.
+- On any other kind, turn on its switch: **Use different rules at the annual
+  meeting**, **Use different rules for bylaws amendments** or **Use different
+  rules at special meetings**. The new set starts as a copy of the regular
+  one, so change only what differs. Turning it off asks first: **Discard
+  annual rules** (or bylaws or special-meeting rules) or **Keep them**.
+  Elections already created keep their rules.
+- An election linked to a special meeting record now starts as a
+  **Special meeting** election.
 
 ![Election Settings on Voter Eligibility with Annual meeting chosen: the Use different rules at the annual meeting switch, off, and the line saying the annual meeting uses the regular business meeting rules, above the membership tier rules](./images/14-31-voter-eligibility-annual.png)
 
 Each set has these settings:
 
-| Setting                                        | Default                          | What it does                                                                                                                                                   |
-| ---------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Rules every voter must meet**                | No rules                         | The meeting-attendance **Requirement** and the waiting period for each member type. See [Rules Every Voter Must Meet](#rules-every-voter-must-meet-2026-10-29) |
-| **Require voters to be checked in as present** | On                               | Whether a new custom ballot item counts only votes from members checked in at the meeting                                                                      |
-| **Who can vote on a new item**                 | **All Members**                  | Where **Who Can Vote** starts on a new custom ballot item                                                                                                      |
-| **Who votes for each position**                | **No positions are restricted.** | Select **Add position**, type the **Position** and choose **Who can vote**. A position not listed is open to every eligible voter                              |
+| Setting                                        | Default                          | What it does                                                                                                                                     |
+| ---------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Rules by member type**                       | Your tiers' old voting settings  | May vote, a waiting period and meeting attendance for each member type. See [Voter Rules by Member Type](#voter-rules-by-member-type-2026-11-13) |
+| **Require voters to be checked in as present** | On                               | Whether a new custom ballot item counts only votes from members checked in at the meeting                                                        |
+| **Who can vote on a new item**                 | **All Members**                  | Where **Who Can Vote** starts on a new custom ballot item                                                                                        |
+| **Who votes for each position**                | **No positions are restricted.** | Select **Add position**, type the **Position** and choose **Who can vote**. A position not listed is open to every eligible voter                |
 
 **Who votes for each position** applies when a new election lists that
 position, or a custom ballot item picks it. Capitals do not matter, but each
 name may be listed once. A blank or repeated name shows an error, and the list
 is not saved until you fix it.
 
-**Membership tier rules** lists each tier, whether it **May vote** and its
-**Tier attendance rule**. These apply at every meeting alongside the rules
-above. You change them in the **membership tier settings**, which the section
-links to.
+**Membership tiers no longer carry voting settings** _(2026-11-13)_. The tier
+settings under **Members Admin → Settings → Membership Tiers** now say who may
+vote is set for each member type in **Election Settings**, and link here. The
+**Membership tier rules** table that used to sit below these settings is gone
+now that each tier has its own row.
 
 _(2026-11-04)_ A member's tier is their **Membership status**, whatever their
-class: an administrative or social member on a tier gets that tier's voting,
-office-holding and attendance rules, on the ballot check and in the turnout
-count alike. Before 2026-11-04 these checks went by the older membership type,
-which named such a member by their class, so they did not find their tier.
+class: an administrative or social member on a tier is judged by that tier's
+row as well as their class's.
 
-**After an upgrade, nothing changes.** Elections that already exist have no
-election-wide rules and count as held at a regular business meeting. The
-defaults start empty, or as before: new items require check-in and start at
-**All Members**. The annual meeting uses the regular rules.
+**After an upgrade.** Elections that already exist keep their rules. For new
+elections, see [what changed for existing departments](#voter-rules-by-member-type-2026-11-13). The defaults start from what was stored: the old
+election-wide rules plus each tier's voting settings. New items require
+check-in and start at **All Members**. The annual, bylaws and special kinds
+use the regular rules.
 
 ### Features
 
@@ -1505,7 +1671,7 @@ settings.
 3. Optionally tick the box to copy the accepted candidates. This is useful for
    a re-run; leave it off for next year's election, where nominations start
    again.
-4. The clone opens as a **Draft** on its **Ballot** tab. Check it, then run it
+4. The clone opens as a **Draft** in its **Ballot** section. Check it, then run it
    like any election.
 
 **Never copied:** votes, ballot links, attendance, voter overrides and the
@@ -1518,17 +1684,71 @@ original's voters. A clone starts with results **hidden**.
 
 You can link an election to a meeting or event. When it is linked:
 
-1. Check-ins at the meeting are recorded on the **Attendance** tab.
+1. Check-ins at the meeting are recorded in the **Attendance** section.
 2. On ballot items with **Require meeting attendance to vote**, only members
    who are checked in may vote, unless they have an override. Other items are
    not affected.
 3. **Import Attendees from Meeting** (or **from Event**) copies the check-ins
    from the linked meeting or event.
 
+_(2026-11-13)_ The **Attendance** section stays after the election closes,
+read-only, so the record of who was checked in can still be read.
+
+### The Meeting Attendance page _(2026-11-13)_
+
+**Who can do this:** roles that can manage elections.
+
+**Where to find it:** **Meeting Attendance** in the Elections pages row, or
+**Meeting attendance** beside an election's voter rules, which opens the page
+on that election.
+
+The page shows how many meetings each member attended, and whether they may
+vote in the election you choose. It reads the same records as **Minutes →
+Attendance**.
+
+1. Choose the **Election**. The page opens on the first election that is a
+   draft, taking nominations or open. Cancelled elections are not listed.
+2. Choose the **Period**: **Last 3 months**, **Last 6 months**, **Last 12
+   months** (the default), **Last 24 months**, or **Custom dates** with
+   **From** and **To**. A custom period with a date missing, or with the start
+   after the end, is held with a message and not loaded.
+3. Under **Meeting types**, tick the types to count. With none ticked, every
+   type counts.
+
+Tiles at the top give the **Meetings in period** and how many members **May
+vote in this election**. The **Voter rules** tile reminds you that the
+election's rules count their own meetings, whatever period the page shows,
+and links to them with **See this election's rules**.
+
+Each member's row shows **Attended** (for example "8 of 10", with the
+percentage), **Excused**, **On leave** and **May vote**: **Yes**, **No** with
+the rule they fail, or **Not on the roster**. **May vote** is the same answer
+the ballot send acts on. Select **Meetings** on a row to list the meetings
+behind the count, newest first: how each one counted (**Attended**,
+**Absent**, **Excused** or **On leave**), the check-in time, who recorded it,
+and where the record came from (**Entered on the meeting**, **Event
+check-in**, **Event RSVP**, **Waiver granted** or **Waiver request
+approved**). Records made before 2026-11-13 have no check-in time or
+recorder.
+
+Excused meetings and meetings during a leave of absence are not counted
+against a member, and meetings before a member joined are left out.
+
+_(2026-11-13)_ The **Voting** column on **Minutes → Attendance**, and its two
+voting tiles, now judge each member by the **Regular business meeting** rules
+in Election Settings, the same check the ballot send uses. Those rules count
+their own meetings, whatever period that page shows. Before, the column read
+the membership tier's attendance look-back and could disagree with the
+ballots once the voter rules were edited.
+
 ### How to Link an Election to a Meeting
 
 1. When creating the election, choose it under **Linked Meeting**.
 2. Or link one later from the election's page with **Link a meeting**.
+   _(2026-11-19)_ Its list offers the next 100 upcoming events, the same as
+   the create dialog. Before, it showed only the next ten of any type, which
+   were often all trainings, so a business meeting a few weeks out could not
+   be picked.
 
 > **Tip.** For an annual business meeting: create the meeting first, take
 > attendance with the QR check-in, then open the election. Checked-in members
@@ -1637,19 +1857,19 @@ Results & Publishing panel sends it again, to whoever presses it. She forwards i
 | A member did not get a ballot email                   | Check the banner for skipped members. Check their email address. Select **Resend Ballot Emails**                                                                                                                  |
 | The ballot link goes to the wrong site                | Ask your administrator to check the web address The Logbook uses for links, then resend the ballots                                                                                                               |
 | A voter's link has expired                            | Links expire at the election's end, or after 30 days. Resend the ballots                                                                                                                                          |
-| A voter is told they may not vote on an item          | Check the **Eligibility** tab. If they should vote, add an override and resend their ballot; the new link includes the change                                                                                     |
+| A voter is told they may not vote on an item          | Check the **Eligibility** section. If they should vote, add an override and resend their ballot; the new link includes the change                                                                                 |
 | The election was closed by mistake                    | Select **Roll Back** and give a reason (leadership is told). An anonymous election that already has votes cannot be reopened — create a new one                                                                   |
 | A candidate wants to withdraw                         | Remove them if nobody has voted for them. Once there are votes, they cannot be removed or renamed                                                                                                                 |
 | A proxy holder cannot vote for the other member       | Check the authorization exists on **Proxy Voting** and the election is open. Then use **Voting for** on **Cast Vote**                                                                                             |
 | Results do not show after closing                     | Reload the page. Another officer may have rolled the election back to open                                                                                                                                        |
 | The vote count does not match attendance              | Check for proxy votes and overrides (members not on the attendance list)                                                                                                                                          |
-| **Run Check** shows a problem                         | Open the full **Forensics & Integrity** section, and contact your system administrator                                                                                                                            |
+| **Run Check** shows a problem                         | Open the **Integrity & Audit** section, and contact your system administrator                                                                                                                                     |
 | No runoff was created                                 | Check **Enable Automatic Runoffs** was on and the winning rule was right                                                                                                                                          |
 | A paper batch does not change the results             | It is probably **Pending**. It needs the set number of other officers to select **Attest Count**                                                                                                                  |
 | **Attest Count** is missing or refused                | The recorder cannot confirm their own batch, each officer confirms once, and it works only while voting is open                                                                                                   |
 | A paper tally is refused as too high                  | Recount. If it is right (for example, overrides let in extra voters), tick **The tally is correct — override the eligible-voter count check**                                                                     |
 | There is no way to nominate                           | Check the **Nomination phase** feature is on, and that nominations are open                                                                                                                                       |
-| A nominated member is not on the ballot               | They must **accept** first. Check the **Candidates** tab for pending nominations                                                                                                                                  |
+| A nominated member is not on the ballot               | They must **accept** first. Check the **Candidates** section for pending nominations                                                                                                                              |
 | **Remind Non-Voters** is missing or refused           | It shows only after ballots are emailed, needs the **Non-voter reminders** feature, and works once an hour                                                                                                        |
 | The election did not open at its start time           | **Open Automatically at Start Time** must be ticked and **Scheduled opening** on. It can take up to 15 minutes. A draft with problems (for example, no accepted candidates) is skipped and tried again            |
 | A member became active during voting but cannot vote  | The voter list froze at opening. Add an override                                                                                                                                                                  |
@@ -1669,6 +1889,20 @@ differently.
 - **Elections is under Governance.** It is **Governance → Elections**, not
   under Events & Meetings.
 - **There is no Election Type field** on the create form.
+- **An election's tabs are sections with their own addresses**
+  (2026-11-15). The tab bar is now a row of section links in a header card,
+  starting with **Overview**. **Open Election**, **Close Nominations**,
+  **Close Election** and **Certified Results (PDF)** moved from the Overview's
+  controls to the top of the page, beside the status badge. **Forensics &
+  Integrity** is now the **Integrity & Audit** section, and a closed election
+  opens on its Overview rather than jumping to Results. The arrow keys no
+  longer move between sections.
+- **Election Settings and Meeting Attendance are links in a row** (2026-11-15)
+  under the Elections title, not a gear button and a button in the list's
+  header.
+- **On a phone, an officer's Overview is a meeting-night dashboard**
+  (2026-11-16). Select **More**, then **Details and all controls**, for the
+  full Overview.
 - **Election Settings has a Defaults section again** (2026-10-29). It sets
   where the create form starts; it was removed for a while because nothing
   read it.
@@ -1687,6 +1921,10 @@ differently.
   sets the default attendance rule, waiting periods, check-in and voter group
   for new items, and who votes for each position. Elections created before it
   carry no election-wide rules.
+- **Who may vote is set in one place** (2026-11-13). Voter rules are a row per
+  member type in Election Settings, for four kinds of vote. A tier's **Can
+  vote in elections** and attendance threshold are no longer edited on the
+  tier. **Held at** on the create form is now **Kind of vote**.
 - **A department's own tier can count as a built-in status** (2026-10-29).
   Until its **Counts as** is set, a Senior member still matches no item
   limited to regular or life members.

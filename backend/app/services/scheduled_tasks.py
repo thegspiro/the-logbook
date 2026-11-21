@@ -64,6 +64,9 @@ Recommended crontab (add to host or container cron):
 # Every 30 minutes — post-event validation notifications
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=post_event_validation
 
+# Daily at 7:40 AM — ask the officer running an outreach event that ended yesterday to record its guest headcount
+40 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=guest_headcount_reminders
+
 # Every 30 minutes — post-shift validation notifications
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=post_shift_validation
 
@@ -250,6 +253,17 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "07:20",
         "cron": "20 7 * * *",
+    },
+    "leave_request_upkeep": {
+        "description": (
+            "Settle leave requests whose decision rule is already met (an "
+            "approver who stepped down can leave one decided), then remind "
+            "approvers who have not decided a request three days after it was "
+            "made, and weekly after that"
+        ),
+        "frequency": "daily",
+        "recommended_time": "07:35",
+        "cron": "35 7 * * *",
     },
     "open_ended_leave_digest": {
         "description": (
@@ -494,6 +508,17 @@ SCHEDULE = {
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
     },
+    "guest_headcount_reminders": {
+        "description": (
+            "Email and notify the organizer, alternate or creator holding "
+            "events.manage of an outreach event that ended before today with "
+            "no guest headcount, once per event, for events ended in the last "
+            "14 days"
+        ),
+        "frequency": "daily",
+        "recommended_time": "07:40",
+        "cron": "40 7 * * *",
+    },
     "post_shift_validation": {
         "description": "Notify shift officers to validate attendance and timing after their shift ends",
         "frequency": "every 30 minutes",
@@ -559,6 +584,12 @@ SCHEDULE = {
         "frequency": "hourly",
         "recommended_time": "every hour",
         "cron": "20 * * * *",
+    },
+    "pending_file_deletions": {
+        "description": "Remove the stored files a permanent member delete queued and could not remove right after its commit (a crash, an unreachable remote store). Checks every file's references again first and keeps one another row names; a row that keeps failing stays queued and is retried every hour.",
+        "frequency": "hourly",
+        "recommended_time": "every hour",
+        "cron": "50 * * * *",
     },
     "scheduled_emails": {
         "description": "Process pending scheduled emails that are due to be sent",
@@ -1160,6 +1191,18 @@ async def run_leave_ending_reminders(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(
         db, "leave_ending_reminders", send_leave_ending_reminders
     )
+
+
+async def run_leave_request_upkeep(db: AsyncSession) -> Dict[str, Any]:
+    """Settle leave requests the rule already decides, then remind approvers.
+
+    Each reminder is claimed per request and reminder number, so a second
+    run in a day sends nothing; a settled request is locked while it is
+    decided, as a vote is.
+    """
+    from app.services.leave_workflow_notices import run_request_upkeep
+
+    return await _for_each_org(db, "leave_request_upkeep", run_request_upkeep)
 
 
 async def run_open_ended_leave_digest(db: AsyncSession) -> Dict[str, Any]:
@@ -1978,6 +2021,19 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
         "total_emails_sent": total_emails,
         "organizations": results,
     }
+
+
+async def run_guest_headcount_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Remind outreach organizers to record a guest headcount; see the service."""
+    from app.services.guest_headcount_reminder_service import (
+        GuestHeadcountReminderService,
+    )
+
+    async def _process(db_session, org):
+        counts = await GuestHeadcountReminderService(db_session).send_reminders(org)
+        return counts.emails
+
+    return await _for_each_org(db, "guest_headcount_reminders", _process)
 
 
 async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
@@ -4736,6 +4792,18 @@ async def run_stored_file_malware_scan(db: AsyncSession) -> Dict[str, Any]:
     return await StoredFileRescan(db).run()
 
 
+async def run_pending_file_deletions(db: AsyncSession) -> Dict[str, Any]:
+    """Finish the file removals a committed hard delete left queued.
+
+    See app/services/pending_file_deletions.py. Commits per organization
+    itself, the row resolutions with their audit record, so one department's
+    failure does not discard another's.
+    """
+    from app.services.pending_file_deletions import PendingFileDeletionSweep
+
+    return await PendingFileDeletionSweep(db).run()
+
+
 async def run_message_history_cleanup(db: AsyncSession) -> Dict[str, Any]:
     """
     Legacy alias for message-history retention (kept for existing crontabs).
@@ -7099,18 +7167,24 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
             # anywhere after the first night never reaches the parent, and
             # copying the parent reverted every new occurrence to the old
             # values. The latest occurrence is the one every such edit reached.
-            latest_result = await db.execute(
+            #
+            # Every occurrence is read, cancelled ones included, because a
+            # cancelled occurrence still holds its date: a job that re-runs
+            # nightly must be a no-op for a cancelled future (CLAUDE.md
+            # pitfall #36), and creating a live copy beside a cancelled row
+            # undoes the officer's cancel.
+            series_result = await db.execute(
                 select(Event)
                 .where(
-                    (Event.id == parent.id) | (Event.recurrence_parent_id == parent.id),
-                    Event.is_cancelled.is_(False),
+                    (Event.id == parent.id) | (Event.recurrence_parent_id == parent.id)
                 )
                 .order_by(Event.start_datetime.desc())
-                .limit(1)
             )
-            latest = latest_result.scalars().first()
+            series_rows = list(series_result.scalars().all())
+            latest = next((e for e in series_rows if not e.is_cancelled), None)
             if latest is None:
                 continue
+            taken_starts = {_as_naive_utc(e.start_datetime) for e in series_rows}
 
             # Naive UTC, as `now` is above. A column select used to hand
             # these back raw (naive); an ORM row already in the session
@@ -7152,9 +7226,13 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                 exceptions=parent.recurrence_exceptions,
             )
 
-            # Filter out the first one (it's the latest existing occurrence)
-            # and any that already exist
-            new_occurrences = [(s, e) for s, e in new_occurrences if s > latest_start]
+            # Only dates after the latest live occurrence, and none the series
+            # already holds — a cancelled occurrence included.
+            new_occurrences = [
+                (s, e)
+                for s, e in new_occurrences
+                if s > latest_start and s not in taken_starts
+            ]
 
             if not new_occurrences:
                 continue
@@ -8663,6 +8741,7 @@ async def run_election_lifecycle(db: AsyncSession) -> Dict[str, Any]:
 TASK_RUNNERS = {
     "leave_ending_reminders": run_leave_ending_reminders,
     "open_ended_leave_digest": run_open_ended_leave_digest,
+    "leave_request_upkeep": run_leave_request_upkeep,
     "cert_expiration_alerts": run_cert_expiration_alerts,
     "medical_screening_expiry_reminders": run_medical_screening_expiry_reminders,
     "election_lifecycle": run_election_lifecycle,
@@ -8681,6 +8760,7 @@ TASK_RUNNERS = {
     "inventory_notifications": run_inventory_notifications,
     "event_reminders": run_event_reminders,
     "post_event_validation": run_post_event_validation,
+    "guest_headcount_reminders": run_guest_headcount_reminders,
     "post_shift_validation": run_post_shift_validation,
     "shift_reminders": run_shift_reminders,
     "end_of_shift_checklist_reminders": run_end_of_shift_checklist_reminders,
@@ -8696,6 +8776,7 @@ TASK_RUNNERS = {
     ),
     "attendance_waiver_expiry": run_attendance_waiver_expiry,
     "stored_file_malware_scan": run_stored_file_malware_scan,
+    "pending_file_deletions": run_pending_file_deletions,
     "scheduled_emails": run_scheduled_emails,
     "storefront_window_lifecycle": run_storefront_window_lifecycle,
     "storefront_payment_reminders": run_storefront_payment_reminders,
@@ -8784,6 +8865,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Every 30 minutes
     "event_reminders": 1800,
     "post_event_validation": 1800,
+    # Daily; each event is reminded once (guest_headcount_reminder_service).
+    "guest_headcount_reminders": 86400,
     "post_shift_validation": 1800,
     "shift_reminders": 1800,
     "end_of_shift_checklist_reminders": 1800,
@@ -8795,6 +8878,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "leave_ending_reminders": 86400,
     # Daily, sending once a month: the digest is claimed per month.
     "open_ended_leave_digest": 86400,
+    "leave_request_upkeep": 86400,
     "cert_expiration_alerts": 86400,
     "medical_screening_expiry_reminders": 86400,
     "action_item_reminders": 86400,
@@ -8893,6 +8977,10 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Hourly, a bounded batch per run; once every stored object has a ledger
     # row a run only compares references (stored_file_rescan).
     "stored_file_malware_scan": 3600,
+    # Hourly. Idempotent: rows are claimed FOR UPDATE SKIP LOCKED, resolved
+    # by id with a checked affected count, and a missing file counts as
+    # deleted (pending_file_deletions).
+    "pending_file_deletions": 3600,
     # Monthly (approx — 30 days)
     "membership_tier_advance": 2592000,
 }

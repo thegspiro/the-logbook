@@ -19,7 +19,7 @@ request-side counterpart, for datetimes a request writes.
 """
 
 from datetime import datetime, timezone
-from typing import Annotated, Any, ClassVar, Optional, overload
+from typing import Annotated, Any, ClassVar, NoReturn, Optional, overload
 
 from pydantic import (
     AfterValidator,
@@ -112,3 +112,22 @@ class RefusesNull(BaseModel):
                 "its current value"
             )
         return value
+
+
+def refuse_attachment_writes(upload_route: str) -> NoReturn:
+    """Refuse a request body's ``attachments``, whatever it holds.
+
+    A training record's or submission's attachment entry is a dict the
+    server writes, carrying a ``file_path`` no client ever sees, so nothing a
+    client sends can stand in for one. Accepting the field let a body replace
+    the stored list with bare names: each file it named was orphaned, and a
+    fake name satisfied a department's required-evidence setting. Call it
+    from a ``mode="before"`` validator on the field, so the 422 is located at
+    ``body.attachments``; it runs only for a key that was sent, null and
+    ``[]`` included. Never put that validator on a schema a response
+    inherits, which has to carry the stored list.
+    """
+    raise ValueError(
+        f"attachments cannot be set here; add a file by uploading it to "
+        f"{upload_route}"
+    )

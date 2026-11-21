@@ -133,7 +133,8 @@ class TestAnnotateListItems:
         monkeypatch.setattr(
             "app.services.event_service.AdminHoursService",
             lambda db: AsyncMock(
-                get_active_mappings_by_source=AsyncMock(return_value={})
+                get_active_mappings_by_source=AsyncMock(return_value={}),
+                crew_hour_category_overrides=AsyncMock(return_value={}),
             ),
         )
         event = make_event()
@@ -156,7 +157,8 @@ class TestAnnotateListItems:
             lambda db: AsyncMock(
                 get_active_mappings_by_source=AsyncMock(
                     return_value={("event_type", "business_meeting"): [(100, "Drill")]}
-                )
+                ),
+                crew_hour_category_overrides=AsyncMock(return_value={}),
             ),
         )
         items = [{"event": make_event()}]

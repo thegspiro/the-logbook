@@ -33,7 +33,7 @@ from app.models.grant import (
 from app.models.user import User
 from app.utils.grant_spending import spending_warnings
 from app.utils.model_updates import apply_updates, reload_updated_at
-from app.utils.org_scoping import assert_in_org
+from app.utils.org_scoping import assert_current_members, assert_in_org
 from app.utils.org_timezone import (
     resolve_local_range_utc,
     resolve_org_today,
@@ -404,7 +404,10 @@ class GrantService:
         return result.scalar_one_or_none() is not None
 
     async def _validate_application_fks(
-        self, data: Dict[str, Any], organization_id: str
+        self,
+        data: Dict[str, Any],
+        organization_id: str,
+        stored_assignee: Optional[str] = None,
     ) -> None:
         """GF-6: client-supplied FK ids on an application must be in the org.
 
@@ -431,6 +434,16 @@ class GrantService:
             organization_id,
             allow_none=True,
             label="Assigned user",
+        )
+        # The assignee must also be a current member. One already stored on
+        # the application may stay after leaving, so an edit that does not
+        # change the assignee still saves.
+        await assert_current_members(
+            self.db,
+            [data.get("assigned_to")],
+            organization_id,
+            keep=[stored_assignee],
+            label="the assignee",
         )
 
     async def create_application(
@@ -488,7 +501,9 @@ class GrantService:
             data["opportunity_id"], organization_id
         ):
             raise ValueError("Grant opportunity not found")
-        await self._validate_application_fks(data, organization_id)
+        await self._validate_application_fks(
+            data, organization_id, stored_assignee=application.assigned_to
+        )
 
         old_status = application.application_status
         # GF-7: a status change must be a step the grant lifecycle allows
@@ -1078,6 +1093,14 @@ class GrantService:
             allow_none=True,
             label="Assigned user",
         )
+        # Mirrors GrantApplication.assigned_to (GF-6): a newly chosen
+        # assignee must be a current member, not merely in-org.
+        await assert_current_members(
+            self.db,
+            [data.get("assigned_to")],
+            organization_id,
+            label="the assignee",
+        )
         if data.get("assigned_to") is not None:
             data = {**data, "assigned_to": str(data["assigned_to"])}
         task = GrantComplianceTask(
@@ -1125,6 +1148,17 @@ class GrantService:
             organization_id,
             allow_none=True,
             label="Assigned user",
+        )
+        # Mirrors GrantApplication.assigned_to (GF-6): a newly chosen
+        # assignee must be a current member. One already on the task may
+        # stay after leaving, so an edit that does not touch the assignee
+        # still saves.
+        await assert_current_members(
+            self.db,
+            [data.get("assigned_to")],
+            organization_id,
+            keep=[task.assigned_to],
+            label="the assignee",
         )
 
         old_status = task.status

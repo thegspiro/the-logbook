@@ -147,15 +147,23 @@ event participation, member activity]**
 > set the start and end time. Remember, the system handles timezone conversion
 > automatically, so enter times in your local timezone."
 
-**[SCREEN: With Training chosen, expand **Training details (optional)** — course,
-category, requirement.]**
+**[SCREEN: With Training chosen, the form switches to the four-step
+training-event form; show its **Training Info** step — Course (No course yet /
+From the Course Library / One-off course name), category, requirement.]**
 
-> "Choosing Training opens an optional **Training details** section — the
-> course, category and requirement this drill counts toward. When the organizer
+> "Choosing Training switches you to the training-event form — the same one
+> Training Administration uses. Its **Training Info** step holds the course,
+> category and requirement this drill counts toward. When the organizer
 > finalizes attendance, every member who checked in is credited on their
-> training record. Leave the details blank and it's filed under the event name
-> as Continuing Education. And training events don't count toward admin hours
+> training record. Leave the course as **No course yet** and records are filed
+> under the event's title. And training events don't count toward admin hours
 > — they count toward training."
+
+**[PRODUCTION NOTE — 2026-11-16. Rewritten for the one training-event form
+(#4347, merged 2026-11-16): the "Training details (optional)" group on Create
+Event is gone, and the old "Continuing Education" default is now "No course
+yet (filed under the event title)" with a training type you pick. Saving
+training details needs **Manage all events**. New footage needed.]**
 
 **[SCREEN: Set date and time fields]**
 
@@ -317,17 +325,22 @@ open **Check-ins → Card Check-ins**.]**
 
 ### DRILL ATTENDANCE THAT COUNTS, AND THE CHIEF'S OVERRIDE (added 2026-11-05)
 
-**[SCREEN: A Training event's form, **Connect to Requirements & Programs** with a
-tick box for a session attendance requirement; then the event list card with
+**[SCREEN: The training-event form's **Training Info** step, **Counts toward
+attendance** with a tick box for a session attendance requirement; then the event list card with
 the **Counts toward attendance** badge beside **Mandatory**.]**
 
 > "Some drills are about turning up, not hours logged — 'attend sixty percent of
 > the company drills this year.' That's a **Session Attendance** requirement. You
-> tick it when you create the drill, under **Connect to Requirements &
-> Programs**, and a **Counts toward attendance** badge appears on the event so
-> members can see this one is graded. A drill linked to nothing is optional and
-> charges nobody. You can still change the links from the event page's
-> **Counts toward attendance** editor, even after attendance is finalized."
+> tick it when you create the drill, under **Counts toward attendance** on the
+> **Training Info** step, and a **Counts toward attendance** badge appears on
+> the event so members can see this one is graded. A drill linked to nothing is
+> optional and charges nobody. You can still change the links with **Edit
+> training details** on the event page, even after attendance is finalized."
+
+**[EDITOR — 2026-11-17. Re-record this beat. The "Connect to Requirements &
+Programs" section and the event page's attendance editor were replaced by the
+training-event form's **Training Info** step and the event's **Training
+details** card (#4347, merged 2026-11-16). Narration updated.]**
 
 **[SCREEN: Compliance Matrix → a member's cell reading "2 of 3 sessions"; the
 **Chief override** control with dates and a required reason; the cell now
@@ -438,8 +451,10 @@ dialog; the finalized PDF.]**
 
 > "One more thing you do each year, and used to do outside the Logbook: member
 > performance evaluations. Under **Evaluations** you build a form once — an
-> **Annual Member Evaluation** and a **Probationary Check-in** come as starters
-> — then **Draft a review period** to create one for every current member. The
+> **Annual Member Evaluation**, an annual form with an extra **officer
+> section** for the ranks you tick, and a **Probationary Check-in** come as
+> starters — then **Draft a review period** to create one for every current
+> member. The
 > member does a self-evaluation, the evaluator rates, and at calibration you can
 > tick items the evaluator should revisit. Each item shows the member's own
 > figures with a suggested rating, and a rating that departs from it needs a
@@ -450,6 +465,12 @@ dialog; the finalized PDF.]**
 > response. Nobody evaluates, amends or deletes their own — and only the Chief
 > can delete one, with a reason that's kept on record."
 
+> "And the officer who wrote an evaluation never calibrates or approves it. If
+> your only Captain wrote it and the approval is the Captain's, whoever manages
+> evaluations taps **Assign** on that step and names someone else. When the
+> period's done, **Period results** shows how many are complete and how many
+> landed at each grade, with a CSV export."
+
 > "Forms can be **Graded by section**: each rating is put on a one-to-five scale,
 > each section gets a score, and your grade ranges turn the score into a grade —
 > so a member rated Meets on every item reads as Meets, not as failing. The
@@ -459,6 +480,14 @@ dialog; the finalized PDF.]**
 read their own under **My evaluations** — Script 06. The evaluation emails are
 a template group, **Performance Evaluations**, under Communications → Email
 Templates. Film the grading-by-section builder and the PDF's section table.]**
+
+**[PRODUCTION NOTE — 2026-11-21. Added the starter with officer sections and a
+second beat (about 20 seconds) on separation of duties and period results.
+Film: the **New template** dialog with **Annual Evaluation with Officer
+Sections** chosen and its **Officer ranks** boxes; a step's **Assign** button
+and the **Who takes "…"** dialog; the conduct list with a period chosen,
+showing **Period results** and **Export CSV** (needs `evaluations.view_all`).
+Re-time this chapter.]**
 
 ### MEMBER ID CARDS (12:00 – 12:30)
 
@@ -690,14 +719,17 @@ Form and Application Contact Details Changed, which cannot be switched off.]**
 > rules."
 
 > "Who may vote now has department-wide rules too. In **Election Settings →
-> Voter Eligibility** you set a meeting-attendance rule — say, six of the last
-> twelve meetings — and a waiting period for each kind of member. A new election
-> copies the rules for the meeting it's held at, and you can adjust them on the
-> election's **Eligibility** tab until voting opens. After that they're fixed."
+> Voter Eligibility** there's a row for each kind of member: may they vote, a
+> waiting period, and meeting-attendance rules — say, six of the last twelve
+> meetings. A new election copies the rules for its **Kind of vote** — a
+> regular business meeting, the annual meeting, a bylaws amendment or a
+> special meeting — and you can adjust them on the election's **Eligibility**
+> tab until voting opens. After that they're fixed."
 
 **[PRODUCTION NOTE — 2026-11-05. New, about 25 seconds (2026-10-29). Detail in
-Script 12. Administrative and social members follow their class for the
-waiting period; everyone else follows their status.]**
+Script 12.]** **[PRODUCTION NOTE — 2026-11-16. Rows per member type and Kind of
+vote since 2026-11-13; administrative and social members must now pass both
+their status row and their class row.]**
 
 ### MANAGING CANDIDATES AND OFFICES (15:30 – 16:30)
 
@@ -741,12 +773,16 @@ waiting period; everyone else follows their status.]**
 > candidate meets the victory condition and runoffs are enabled, a runoff
 > election is created automatically."
 
-**[SCREEN: Show the closed election with the Publish Results panel]**
+**[SCREEN: Show the closed election with the Results & Publishing panel:
+"Results are visible to members" and **Send Me a Copy**]** **[PRODUCTION NOTE
+— 2026-11-16. There is no Publish Results button any more: closing the
+election, early or on schedule, releases the results. Re-shoot this cue.]**
 
-> "Review the results, then use the Publish Results panel to make them visible
-> to the membership and email the results report. One tip: if you closed voting
-> early, press **Publish Results** so members don't have to wait for the
-> originally scheduled end time."
+> "Review the results. Closing the election is what shows them to the
+> membership — whether you close it early at the meeting or it ends on
+> schedule — and the results report is emailed to the election's creator and
+> leadership. **Send Me a Copy** on the Results & Publishing panel sends you
+> another."
 
 > "Results are recorded permanently, every vote carries a cryptographic
 > signature, and a full forensic audit trail is available if an election is
@@ -1097,10 +1133,16 @@ table with its Days Left column.]**
 > expired and expiring ones. For whether members meet your training
 > requirements, the card beside it is **Compliance Status**."
 
-> "Print it to PDF for your officer meeting, or export it as a CSV for further
+> "Download it as a PDF for your officer meeting, or as a CSV for further
 > analysis in a spreadsheet."
 
 **[SCREEN: Show the export options]**
+
+**[PRODUCTION NOTE — 2026-11-17. RE-RECORD the export shot and the line above.
+Since 2026-11-15 the buttons read **CSV** and **PDF** (was **Print / PDF**),
+and **PDF** downloads a server-built file with page numbers and a header on
+every page instead of opening the print window. Narration changed from "Print
+it to PDF".]**
 
 ### SHIFT REPORTS (23:45 – 24:15)
 

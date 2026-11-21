@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { CommunityEventReach, CommunityReachTotals } from '../../services/api';
 import {
+  allTypesIn,
   bucketLabel,
   changeFor,
   csvRows,
@@ -8,14 +9,17 @@ import {
   expectedText,
   niceMax,
   parseCommunityPeriod,
+  periodRangeText,
   reachText,
   topTypes,
+  typeGroups,
   turnoutPercent,
 } from './communityEngagement';
 
 const totals = (overrides: Partial<CommunityReachTotals> = {}): CommunityReachTotals => ({
   events_held: 0,
   people_reached: 0,
+  counted: 0,
   signed_in: 0,
   estimated: 0,
   member_hours: 0,
@@ -33,6 +37,8 @@ const row = (overrides: Partial<CommunityEventReach> = {}): CommunityEventReach 
   organization_name: 'Oakville Elementary',
   request_id: 'r1',
   signed_in: 0,
+  headcount: null,
+  counted: null,
   expected: 120,
   people_reached: 120,
   reach_is_estimate: true,
@@ -75,11 +81,11 @@ describe('describeChange', () => {
 describe('topTypes', () => {
   it('keeps the three largest and folds the rest into Other', () => {
     const slices = topTypes([
-      { label: 'Station Tour', events: 5, people_reached: 520 },
-      { label: 'CPR', events: 2, people_reached: 40 },
-      { label: 'School Visit', events: 6, people_reached: 860 },
-      { label: 'Fundraiser', events: 1, people_reached: 300 },
-      { label: 'Open House', events: 1, people_reached: 410 },
+      { group: 'request', label: 'Station Tour', events: 5, people_reached: 520 },
+      { group: 'request', label: 'CPR', events: 2, people_reached: 40 },
+      { group: 'request', label: 'School Visit', events: 6, people_reached: 860 },
+      { group: 'request', label: 'Fundraiser', events: 1, people_reached: 300 },
+      { group: 'request', label: 'Open House', events: 1, people_reached: 410 },
     ]);
     expect(slices.map((s) => [s.label, s.people_reached, s.other])).toEqual([
       ['School Visit', 860, false],
@@ -92,12 +98,25 @@ describe('topTypes', () => {
 
   it('does not make an Other of a single leftover type', () => {
     const slices = topTypes([
-      { label: 'A', events: 1, people_reached: 4 },
-      { label: 'B', events: 1, people_reached: 3 },
-      { label: 'C', events: 1, people_reached: 2 },
-      { label: 'D', events: 1, people_reached: 1 },
+      { group: 'request', label: 'A', events: 1, people_reached: 4 },
+      { group: 'request', label: 'B', events: 1, people_reached: 3 },
+      { group: 'request', label: 'C', events: 1, people_reached: 2 },
+      { group: 'request', label: 'D', events: 1, people_reached: 1 },
     ]);
     expect(slices.map((s) => s.label)).toEqual(['A', 'B', 'C', 'D']);
+  });
+
+  it('keeps public requests and department events in their own groups', () => {
+    const groups = typeGroups([
+      { group: 'department', label: 'Public Education', events: 2, people_reached: 300 },
+      { group: 'request', label: 'School Visit', events: 3, people_reached: 240 },
+      { group: 'request', label: 'Station Tour', events: 1, people_reached: 14 },
+    ]);
+    expect(groups.map((g) => [g.title, g.slices.map((t) => t.label)])).toEqual([
+      ['Public requests', ['School Visit', 'Station Tour']],
+      ['Department events', ['Public Education']],
+    ]);
+    expect(typeGroups([{ group: 'department', label: 'Social', events: 1, people_reached: 5 }])).toHaveLength(1);
   });
 });
 
@@ -111,10 +130,19 @@ describe('labels', () => {
   it('says whether reach was signed in or estimated, and the expectation beside a count', () => {
     expect(reachText(row())).toBe('~120 est.');
     expect(expectedText(row())).toBeNull();
-    const counted = row({ signed_in: 25, expected: 30, people_reached: 25, reach_is_estimate: false });
-    expect(reachText(counted)).toBe('25 signed in');
-    expect(expectedText(counted)).toBe('of ~30 expected');
+    const signedIn = row({ signed_in: 25, counted: 25, expected: 30, people_reached: 25, reach_is_estimate: false });
+    expect(reachText(signedIn)).toBe('25 signed in');
+    expect(expectedText(signedIn)).toBe('of ~30 expected');
     expect(reachText(row({ expected: null, people_reached: 0, reach_is_estimate: false }))).toBe('—');
+  });
+
+  it('reads a headcount as counted, ahead of the sign-ins it replaced', () => {
+    const room = row({ headcount: 140, signed_in: 3, counted: 140, people_reached: 140, reach_is_estimate: false });
+    expect(reachText(room)).toBe('140 counted');
+    expect(expectedText(room)).toBe('of ~120 expected');
+    // A count of nobody is still a count: it says what happened, not "—".
+    const empty = row({ headcount: 0, counted: 0, people_reached: 0, reach_is_estimate: false });
+    expect(reachText(empty)).toBe('0 counted');
   });
 
   it('reports turnout only against an expectation', () => {
@@ -141,12 +169,76 @@ describe('csvRows', () => {
       'Fire prevention assembly',
       'Oakville Elementary',
       'School Visit',
+      '',
       0,
       120,
       120,
       'yes',
       4,
       10,
+      '',
+      '',
+      '',
     ]);
+  });
+
+  it('exports what was recorded when the event closed', () => {
+    const [header, first] = csvRows(
+      [
+        row({
+          materials: [
+            { item: 'Smoke alarms', quantity: 12 },
+            { item: 'Flyers', quantity: 100 },
+          ],
+          photos: 'not_consented',
+          outcome_note: 'Follow up with the principal',
+        }),
+      ],
+      'America/New_York'
+    );
+    expect(header?.slice(-3)).toEqual(['Materials handed out', 'Photos', 'Outcome']);
+    expect(first?.slice(-3)).toEqual([
+      '12 Smoke alarms; 100 Flyers',
+      'Without consent',
+      'Follow up with the principal',
+    ]);
+  });
+});
+
+describe('periodRangeText', () => {
+  it("names the span in the department's calendar", () => {
+    expect(periodRangeText('2026-01-01T05:00:00Z', '2026-11-20T17:00:00Z', 'America/New_York')).toBe(
+      'January 1, 2026 – November 20, 2026'
+    );
+  });
+
+  it('has no start for all time', () => {
+    expect(periodRangeText(null, '2026-11-20T17:00:00Z', 'America/New_York')).toBe('Through November 20, 2026');
+  });
+
+  it("reads a midnight-UTC boundary as the department's own day", () => {
+    // 04:30 UTC on Jan 1 is still December 31 in New York.
+    expect(periodRangeText('2026-01-01T04:30:00Z', '2026-01-02T12:00:00Z', 'America/New_York')).toBe(
+      'December 31, 2025 – January 2, 2026'
+    );
+  });
+});
+
+describe('allTypesIn', () => {
+  it('keeps every type of one group, largest reach first', () => {
+    const types = [
+      { group: 'request' as const, label: 'CPR', events: 2, people_reached: 40 },
+      { group: 'department' as const, label: 'Public Education', events: 4, people_reached: 670 },
+      { group: 'request' as const, label: 'School Visit', events: 6, people_reached: 860 },
+      { group: 'request' as const, label: 'Fundraiser', events: 1, people_reached: 40 },
+      { group: 'request' as const, label: 'Block Party', events: 3, people_reached: 40 },
+    ];
+    expect(allTypesIn(types, 'request').map((t) => t.label)).toEqual([
+      'School Visit',
+      'Block Party',
+      'CPR',
+      'Fundraiser',
+    ]);
+    expect(allTypesIn(types, 'department').map((t) => t.label)).toEqual(['Public Education']);
   });
 });

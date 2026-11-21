@@ -26,6 +26,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
@@ -58,7 +59,10 @@ from app.schemas.historical_import import (
     SuggestionsAccepted,
     TrainingPreview,
     TrainingSettingsUpdate,
+    UndoPreview,
+    UndoResult,
 )
+from app.services.attendance_waiver_service import send_member_notices
 from app.services.historical_import_service import (
     HistoricalImportLocked,
     HistoricalImportNotFound,
@@ -66,6 +70,10 @@ from app.services.historical_import_service import (
     HistoricalImportService,
     batch_view,
     summary_view,
+)
+from app.services.historical_import_undo import (
+    UNDOABLE_STEPS,
+    HistoricalImportUndoService,
 )
 from app.services.historical_staffing_commit import HistoricalStaffingCommitService
 from app.services.historical_staffing_service import (
@@ -411,7 +419,8 @@ async def commit_admin_hours(
     current_user: User = Depends(require_permission("integrations.historical_import")),
 ):
     """Write the administrative rows as approved Admin Hours entries. Rows
-    already imported are skipped; there is no batch undo."""
+    already imported are skipped. ``POST /{import_id}/undo/admin`` takes them
+    back."""
     org = str(current_user.organization_id)
     service = HistoricalImportService(db)
     try:
@@ -550,8 +559,8 @@ async def commit_training(
     current_user: User = Depends(require_permission("integrations.historical_import")),
 ):
     """Write the training rows as completed training records. Rows already
-    imported, and rows a provider sync already recorded, are skipped; there is
-    no batch undo."""
+    imported, and rows a provider sync already recorded, are skipped.
+    ``POST /{import_id}/undo/training`` takes them back."""
     org = str(current_user.organization_id)
     service = HistoricalImportService(db)
     try:
@@ -900,5 +909,74 @@ async def commit_staffing(
     )
     try:
         return await service.preview(org, str(import_id))
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.get("/{import_id}/undo", response_model=UndoPreview)
+async def undo_preview(
+    import_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """What undoing each committed step would remove, and which records it
+    keeps because an officer has changed them since the import wrote them."""
+    service = HistoricalImportService(db)
+    try:
+        record = await service.get(str(current_user.organization_id), str(import_id))
+        return await HistoricalImportUndoService(db).preview(record)
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.post("/{import_id}/undo/{step}", response_model=UndoResult)
+async def undo_step(
+    import_id: UUID,
+    step: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Remove what one committed step wrote, so it can be decided again and
+    recommitted. Records changed since the import are kept, and so are the
+    former members it created that something else still refers to. A step a
+    later one builds on is refused until that step is undone."""
+    if step not in UNDOABLE_STEPS:
+        raise HTTPException(status_code=404, detail="That step cannot be undone.")
+    org = str(current_user.organization_id)
+    service = HistoricalImportService(db)
+    undo = HistoricalImportUndoService(db)
+    try:
+        record = await service.get(org, str(import_id), for_update=True)
+        counts = await undo.undo(record, step, str(current_user.id))
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        raise _http_error(exc)
+    if undo.waiver_notices:
+        # After the commit, so no member is told of a void that rolled back;
+        # never failing the undo, which has already happened.
+        try:
+            await send_member_notices(db, org, undo.waiver_notices)
+        except Exception:
+            logger.exception(
+                "Failed to email the waiver requests import {} voided", import_id
+            )
+    await log_audit_event(
+        db=db,
+        event_type="historical_import_step_undone",
+        event_category="integrations",
+        severity="WARNING",
+        event_data={
+            "organization_id": org,
+            "import_id": str(import_id),
+            "step": step,
+            **counts,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    try:
+        record = await service.get(org, str(import_id))
+        return {"step": step, **counts, "preview": await undo.preview(record)}
     except Exception as exc:
         raise _http_error(exc)

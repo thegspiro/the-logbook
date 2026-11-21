@@ -54,6 +54,7 @@ from app.models.document import Document
 from app.models.inventory import CheckOutRecord, ItemAssignment, ItemIssuance
 from app.models.member_position_term import note_position_actor, sync_position_terms
 from app.models.passkey import UserPasskey
+from app.models.pending_file_deletion import PendingDeletionReason
 from app.models.training import TrainingRecord as TrainingRecordModel
 from app.models.user import Organization, Role, User, UserStatus, user_roles
 from app.schemas.auth import PasskeyResponse
@@ -103,10 +104,7 @@ from app.services.email_policy import (
     member_choice,
 )
 from app.services.email_service import welcome_email_can_send
-from app.services.member_files import (
-    collect_member_files,
-    remove_files_after_hard_delete,
-)
+from app.services.member_files import collect_member_files
 from app.services.member_position_term_service import past_positions_for
 from app.services.member_service_history_service import MemberServiceHistoryService
 from app.services.member_shift_release_service import (
@@ -117,10 +115,17 @@ from app.services.operational_rank_service import (
     rank_not_configured_message,
 )
 from app.services.organization_service import OrganizationService
+from app.services.pending_file_deletions import (
+    enqueue as enqueue_pending_file_deletions,
+)
+from app.services.pending_file_deletions import (
+    process as process_pending_file_deletions,
+)
 from app.services.security_monitoring import report_privilege_escalation_attempt
 from app.services.upload_scanning import reject_if_malicious
 from app.services.user_deletion_service import (
     count_records_removed_with_member,
+    delete_transferred_applications,
     find_hard_delete_blockers,
     release_user_references,
     return_member_inventory,
@@ -1525,6 +1530,11 @@ async def assign_user_roles(
     # first would both hide the retained positions from that diff (so their
     # rows would never be re-inserted) and leave the loaded collection stale,
     # making the delete of a dropped position raise StaleDataError.
+    # Named before the assignment replaces the loaded collection: the audit row
+    # says what changed, which the resulting id list alone cannot (W11-13).
+    roles_added = sorted(r.name for r in roles if str(r.id) not in held)
+    roles_removed = sorted(r.name for r in user.roles if str(r.id) not in kept_ids)
+
     note_position_actor(db, current_user.id)
     user.roles = roles
     await db.commit()
@@ -1555,6 +1565,8 @@ async def assign_user_roles(
             "target_user_id": str(user_id),
             "role_ids": [str(r) for r in role_assignment.role_ids],
             "action": "roles_replaced",
+            "roles_added": roles_added,
+            "roles_removed": roles_removed,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -2560,8 +2572,14 @@ async def delete_user(
     Pass `hard=true` to permanently delete the member and all associated records.
     A permanent delete also removes the stored files named by the rows it
     cascades away (self-report certificates, training-record uploads,
-    attendance waiver documents), after the commit, keeping any file another
-    row still references; a refused delete touches no file.
+    attendance waiver documents). They are queued in pending_file_deletions
+    inside the delete's own transaction and removed right after its commit,
+    keeping any file another row still references; an hourly sweep retries
+    whatever a crash or an unreachable store left. A refused delete queues
+    and touches nothing. The applicant record the member was converted from
+    (its details, interviews, activity log and form answers) is deleted in
+    the same transaction, and its uploaded documents are queued with the
+    member's other files.
 
     **Authentication required**
 
@@ -2651,10 +2669,23 @@ async def delete_user(
         await release_user_references(db, str(user_id))
 
         # Read before the delete: the rows naming these files CASCADE away
-        # with the member. Removed only after the commit below succeeds, so
-        # a refused delete touches no file.
+        # with the member. Queued in this transaction, so the commit below
+        # records them durably with the delete, and a refused delete (the
+        # rollback) queues nothing. Removed only after that commit.
         owned_files = await collect_member_files(
             db, str(user_id), str(current_user.organization_id)
+        )
+        # The application that became this member is linked by a SET NULL
+        # key, so the delete below would only detach it. It goes here, in
+        # this transaction, and its ID documents are queued with the rest.
+        applications = await delete_transferred_applications(
+            db, str(user_id), str(current_user.organization_id)
+        )
+        pending_ids = enqueue_pending_file_deletions(
+            db,
+            str(current_user.organization_id),
+            {**owned_files.paths_by_area(), **applications.document_paths},
+            PendingDeletionReason.MEMBER_HARD_DELETE,
         )
 
         # Deleting the User is also what removes its user_positions rows.
@@ -2681,9 +2712,11 @@ async def delete_user(
                 ),
             )
 
-        # Never raises, so the audit row below is always written.
-        removal = await remove_files_after_hard_delete(
-            db, str(user_id), str(current_user.organization_id), owned_files
+        # Never raises, so the audit row below is always written. Whatever it
+        # could not remove stays queued for the hourly sweep; its row
+        # resolutions commit with that audit row.
+        removal = await process_pending_file_deletions(
+            db, str(current_user.organization_id), pending_ids
         )
 
         await log_audit_event(
@@ -2704,6 +2737,7 @@ async def delete_user(
                 "files_deleted": removal.deleted,
                 "files_not_deleted": removal.not_deleted,
                 "files_shared_kept": removal.shared_kept,
+                "applicant_records_deleted": applications.applications,
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -3490,6 +3524,15 @@ async def delete_photo(
     return {"message": "Photo removed successfully"}
 
 
+def _stored_name_in_words(name: object) -> str:
+    """A stored field name or status as the officer reads it (W11-11).
+
+    The history is read by people: "membership_number" and "dropped_voluntary"
+    are how the rows store them, not what the screen should say.
+    """
+    return str(name).replace("_", " ")
+
+
 # Human-readable descriptions for audit event types
 _AUDIT_EVENT_DESCRIPTIONS = {
     "user_created": "Member account created",
@@ -3637,7 +3680,9 @@ async def get_member_audit_history(
         if log.event_type == "user_profile_updated":
             fields = data.get("fields_updated", [])
             if fields:
-                description += f": {', '.join(fields)}"
+                description += ": " + ", ".join(
+                    _stored_name_in_words(f) for f in fields
+                )
         elif log.event_type == "user_role_assigned":
             action = data.get("action", "")
             role_name = data.get("role_name", "")
@@ -3646,12 +3691,31 @@ async def get_member_audit_history(
             elif action == "role_removed" and role_name:
                 description = f"Role removed: {role_name}"
             elif action == "roles_replaced":
-                description = "All roles replaced"
+                added = data.get("roles_added")
+                removed = data.get("roles_removed")
+                if added is None and removed is None:
+                    # Written before W11-13: only the resulting ids were kept.
+                    description = "All roles replaced"
+                else:
+                    parts = []
+                    if added:
+                        parts.append(f"added {', '.join(added)}")
+                    if removed:
+                        parts.append(f"removed {', '.join(removed)}")
+                    description = (
+                        f"Positions changed: {'; '.join(parts)}"
+                        if parts
+                        else "Positions saved with no change"
+                    )
         elif log.event_type == "member_status_changed":
             prev = data.get("previous_status", "")
             new = data.get("new_status", "")
             if prev and new:
-                description = f"Status changed: {prev} → {new}"
+                description = (
+                    "Status changed: "
+                    f"{_stored_name_in_words(prev).capitalize()} → "
+                    f"{_stored_name_in_words(new).capitalize()}"
+                )
 
         entries.append(
             MemberAuditLogEntry(
@@ -3746,6 +3810,18 @@ async def anonymize_member(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
+    # The same ceiling delete, archive and status change apply. A departed
+    # member keeps their positions, and anonymisation cannot be undone, so a
+    # manager below a former chief's privileges must not be able to erase
+    # that account when they could not delete it.
+    await _enforce_account_reset_ceiling(
+        current_user,
+        user,
+        db,
+        action="member-anonymize",
+        detail="You cannot anonymize a member with privileges beyond your own.",
+    )
+
     try:
         summary = await service.anonymize_member(user)
     except ValueError as e:
@@ -3768,6 +3844,13 @@ async def anonymize_member(
             "self_report_files_deleted": summary["self_report_files_deleted"],
             "self_report_files_not_deleted": summary["self_report_files_not_deleted"],
             "self_report_files_shared_kept": summary["self_report_files_shared_kept"],
+            "training_record_files_deleted": summary["training_record_files_deleted"],
+            "training_record_files_not_deleted": summary[
+                "training_record_files_not_deleted"
+            ],
+            "training_record_files_shared_kept": summary[
+                "training_record_files_shared_kept"
+            ],
         },
         **_request_origin(request),
     )

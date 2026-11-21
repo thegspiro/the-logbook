@@ -111,7 +111,7 @@ Retiring one keeps it under **Show retired**; it is not added back.
 2. Filter by category: Equipment, Staffing, Training, Prevention, Facilities,
    Vehicles, Wellness, Community or Other.
 3. Search by name or agency.
-4. Check the deadline. Within 14 days it shows in red as "_n_d left"; within 30
+4. Check the deadline. Within 14 days it shows in red as days left, such as "9d left"; within 30
    days, in amber. A past deadline reads **Expired**, and a program with no date
    reads **Recurring deadline** (an application cycle that repeats, such as
    the four programs above) or **Rolling deadline**.
@@ -185,7 +185,11 @@ back.
    - **Priority** — Low, Medium, High or Critical
    - **Assigned To** — the member managing the application, chosen from the
      member list (the list needs permission to view members; without it the
-     field keeps whoever is already assigned)
+     field keeps whoever is already assigned). Only current members (active
+     or probationary) are listed _(2026-11-19)_. An application already
+     assigned to someone who has since left keeps them, shown as a former
+     member, and saves unchanged; newly choosing a former member is refused
+     ("Only current members can be chosen as the assignee").
    - once decided, **Amount Awarded**, **Submitted** and **Award Date**, and
      under **Reporting** the **Next Report Due** and **Final Report Due**
 3. Select **Create Application**. The application starts in **Researching**.
@@ -299,6 +303,16 @@ On the **Expenditures** tab, record spending against the budget:
    unlinked.
 4. Save with **Record Expenditure**.
 
+_(2026-11-16)_ **A dialog that cannot save says why inside it.** A missing
+description, amount or date is named on its box ("Enter the amount spent.")
+before anything is sent. A refusal from the server is shown on the field it is
+about, or at the top of the dialog, and the dialog stays open with what you
+typed. This applies to **Add Budget Item**, **Record Expenditure**, **Add
+Task** and **Add Note**. Editing a budget line or an expenditure saves all of
+it or none of it: if one field is refused, the stored line is left exactly as
+it was, so a grant's money is never half-changed. The overspend warning below
+still appears after a save.
+
 _(2026-11-06)_ A recorded expenditure has **Edit** and **Delete** buttons too.
 Deleting one asks you to confirm with **Delete expenditure**, and the totals
 fall by that amount.
@@ -391,9 +405,12 @@ the grant dates **before** you move the application to Awarded.
 2. To add a task, select **Add Task** and enter the **Task Type**, **Title**,
    **Description (optional)**, **Due Date**, **Priority** and **Report Template
    (optional)**.
-   _(2026-11-06)_ The form has an **Assign to** choice, so a task can name its
-   member when it is created, not only afterwards. Only members of your
-   department can be chosen.
+   _(2026-11-06)_ The form has an **Assigned To (optional)** choice, so a task
+   can name its member when it is created, not only afterwards. Only members of
+   your department can be chosen. The choice appears only if you can view the
+   member list; without it the task is created unassigned.
+   A missing **Title** or **Due Date** is named on its box when you select
+   **Add Task**.
 3. Change a task's status as the work moves along, and select **Mark Complete**
    when it is done.
 
@@ -412,8 +429,8 @@ Each reminder is sent once. If you change a task's due date, its reminders
 start again for the new date.
 
 The reminder goes to the member the task is assigned to, if they are active
-and can open Grants & Fundraising. The **Add Task** form does not assign a
-task, so most reminders go to every active member with **Manage
+and can open Grants & Fundraising. A task assigned to no one, or to someone who
+cannot receive it, sends its reminder to every active member with **Manage
 fundraising**. Reminders are email only. Each member can turn them off under
 their email preferences (_Grants and fundraising reminders_), unless your
 department has made them required.
@@ -513,7 +530,9 @@ business and organization that supports the department.
    **Organization Name**; a contact is optional. The list sorts an
    organization by its name among the surnames and leads with that name when
    there is no contact.
-4. Save.
+4. Select **Save Donor**. A missing or refused field is flagged on the field
+   itself, and **Cancel** asks before throwing away what you typed
+   _(2026-11-11)_.
 
 ![The New Donor form with Donor Type Business: Organization Name Oakville Lumber & Supply filled in, Contact First Name and Contact Last Name left empty because a contact is optional, and the email and address fields](./images/12-17-donor-business.png)
 
@@ -535,6 +554,9 @@ For each donor: their contact details, **total donated**, how many donations,
 and the date of their last donation. Search by name or a complete email address
 (part of an address no longer matches, since addresses are stored encrypted),
 or filter by type.
+Contact details (email, phone and address) are shown only to people with
+**Manage fundraising**. With view access alone the email column reads
+**Managers only**, and a search matches names only _(2026-10-22)_.
 A donor's first and last donation dates use the department's date, so an evening
 gift is dated the day it was given.
 

@@ -403,18 +403,24 @@ per-stage controls beside each.]**
 
 **[SCREEN: Expand one stage to show its controls]**
 
-> "Per stage you decide: can these members vote in elections, can they hold
-> elected office, do they have to meet a meeting-attendance threshold before
-> they can vote — and what that threshold is, over what period — and are they
-> exempt from training."
+> "Per stage you decide: can these members hold elected office, and are they
+> exempt from training. Who may vote, and how much meeting attendance it takes,
+> isn't set here any more — that's per member type in **Election Settings →
+> Voter Eligibility**, after setup. Script 12 walks through it."
 
-**[CALLOUT: "⚠️ Check this against your bylaws — it decides your ballot
-electorate"]**
+**[CALLOUT: "⚠️ Check this against your bylaws — it decides who may hold
+office and who is graded for training"]**
+
+**[PRODUCTION NOTE — 2026-11-16. Voting and the attendance threshold left the
+tier controls on 2026-11-13 for Election Settings' per-member-type rows. The
+ladder's own warning box still says it "decides who votes"; film the stage
+controls, not that box, until the screen's copy is corrected. Re-shoot this
+cue.]**
 
 > "This is the one to check against your bylaws, and I'd stop the video and go
-> and get them. It decides who's in the electorate for every election you ever
-> run. Departments that leave the shipped arrangement alone usually find that
-> out at their first election, which is a bad time to find it out."
+> and get them. Departments that leave the shipped arrangement alone usually
+> find that out the hard way, and when you get to Election Settings, check the
+> voter rules against the same bylaws."
 
 **[SCREEN: The automatic advancement switch]**
 
@@ -945,7 +951,7 @@ link.]**
 | Before You Start Setup  | 1:15–2:15   | "What The Logbook's Setup Wizard Will Ask You For"     |
 | Organization Setup      | 2:15–5:00   | "Setting Up Your Organization in The Logbook"          |
 | Module Selection        | 7:30–11:00  | "Which Modules Should Your Department Enable?"         |
-| Your Membership Ladder  | 11:00–12:15 | "Membership Tiers: The Setting That Decides Who Votes" |
+| Your Membership Ladder  | 11:00–12:15 | "Membership Tiers: Set Up Your Department's Ladder"     |
 | Your Rank Ladder        | 12:15–13:15 | "Building Your Department's Rank Ladder"               |
 | Understanding Positions | 13:15–15:30 | "Fire Department Positions & Permissions Explained"    |
 | Stations & Apparatus    | 15:30–17:30 | "Adding Your Stations and Apparatus During Setup"      |

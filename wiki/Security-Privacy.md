@@ -57,26 +57,33 @@ Guarantees:
 
 ## Anonymization (Right to Erasure)
 
-`POST /api/v1/users/{id}/anonymize` — requires `members.manage`, refused for
-active members and for your own account. **Irreversible by design.**
+`POST /api/v1/users/{id}/anonymize` — requires `members.manage` and a step-up,
+refused for active members and for your own account. **Irreversible by
+design.** Since 2026-11-20 it is also refused (403, "You cannot anonymize a
+member with privileges beyond your own") when the target's effective
+permissions exceed the caller's — the privilege ceiling that delete, status
+change and archive already applied. Departure does not strip positions, so
+without it a member manager could erase a departed chief's account that a
+hard delete would refuse them.
 
 Departments must keep operational history long after a member departs, but
 nothing requires keeping the _person_ attached to it. Anonymization separates
 the two.
 
-| Scrubbed                                                                                                                                                                                | Retained                                                                    |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Names, username, email (replaced with per-member tokens), phone, mobile, address, date of birth, photo                                                                                  | Training completions, certifications, instructor qualifications             |
-| Emergency contacts, notification preferences, referral/interest free text                                                                                                               | Attendance counts, service hours, shift assignments                         |
-| Credentials, MFA secret and backup codes, OAuth linkage, password-reset and calendar-feed tokens                                                                                        | Property custody, checkouts, departure clearance                            |
-| Sessions and password history (rows deleted)                                                                                                                                            | Dues and financial records                                                  |
-| Body measurements / size preferences (rows deleted)                                                                                                                                     | Screening status and dates, as compliance proof                             |
-| Medical screening content — results, notes, provider name                                                                                                                               | Leave types and date ranges (compliance denominators)                       |
-| Free-text reasons on leaves, training waivers, shift time-off, meeting waivers                                                                                                          | Meeting attendance (present/excused)                                        |
-| RSVP dietary restrictions, accessibility needs, notes                                                                                                                                   | RSVP attendance and check-in times                                          |
-| Duplicated identity copies in external-provider mappings; candidate photos                                                                                                              | Candidate names on ballots (official election records)                      |
-| The applicant-era prospect record: full PII block, notes, interview assessments, uploaded documents; its public status token is rotated                                                 | Pipeline stage history                                                      |
-| Certificate files uploaded with self-reported training, and their copies on the member's training records (the submission and record rows stay; a file another row still names is kept) | Files uploaded to a training record itself, as department training evidence |
+| Scrubbed                                                                                                                                                                                | Retained                                                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Names, username, email (replaced with per-member tokens), phone, mobile, address, date of birth, photo                                                                                  | Training completions, certifications, instructor qualifications |
+| Emergency contacts, notification preferences, referral/interest free text                                                                                                               | Attendance counts, service hours, shift assignments             |
+| Credentials, MFA secret and backup codes, OAuth linkage, password-reset and calendar-feed tokens                                                                                        | Property custody, checkouts, departure clearance                |
+| Sessions and password history (rows deleted)                                                                                                                                            | Dues and financial records                                      |
+| Body measurements / size preferences (rows deleted)                                                                                                                                     | Screening status and dates, as compliance proof                 |
+| Medical screening content — results, notes, provider name                                                                                                                               | Leave types and date ranges (compliance denominators)           |
+| Free-text reasons on leaves, training waivers, shift time-off, meeting waivers                                                                                                          | Meeting attendance (present/excused)                            |
+| RSVP dietary restrictions, accessibility needs, notes                                                                                                                                   | RSVP attendance and check-in times                              |
+| Duplicated identity copies in external-provider mappings; candidate photos                                                                                                              | Candidate names on ballots (official election records)          |
+| The applicant-era prospect record: PII block, notes, interviews, documents, activity-log values and step notes; its public status token is rotated                                      | Pipeline stage history                                          |
+| Certificate files uploaded with self-reported training, and their copies on the member's training records (the submission and record rows stay; a file another row still names is kept) |                                                                 |
+| Files uploaded to the member's training records themselves, by an officer or the member _(2026-11-20)_ (the record rows stay; a file another row still names is kept)                   |                                                                 |
 
 **Never touched:**
 
@@ -252,12 +259,26 @@ results share the table and are never deleted by retention.
   department sets a period in the self-report settings
   (`self_report_configs.attachment_retention_days`, 90-day floor), enforced
   daily by the `self_report_attachment_retention` task. It deletes the files
-  only; the submission and training record rows stay. They can also be
+  only; the submission and training record rows stay. The period runs from
+  the review, or (since 2026-11-20) from submission for an auto-approved
+  submission, which has no `reviewed_at`: before, those certificates were
+  never expired. A resent `POST /training/submissions/with-attachment` (same
+  `client_request_id`) deletes the copy it stored when the returned
+  submission does not name it, since a file no row names is beyond the reach
+  of retention, anonymisation and hard delete. They can also be
   **malware-scanned on upload** with ClamAV (`CLAMAV_ENABLED`, on by default,
   and failing closed: while clamd is unreachable the upload is refused) — an
   infected file is never stored, and the audit event carries the
   signature name and a hash, never the file or its name. See
   [Security Configuration → Malware scanning](Configuration-Security#malware-scanning-of-uploads).
+- **Files left by a permanent member delete** — training, attendance-waiver
+  and (since 2026-11-21) the member's applicant documents, the application
+  itself being deleted with them — are queued in
+  `pending_file_deletions` inside the delete's own transaction and removed
+  right after it. Whatever a crash or an unreachable remote store left is
+  retried every hour by the `pending_file_deletions` task, which checks each
+  file's references again first and keeps one another record still uses. A
+  row that keeps failing stays queued; nothing is dropped.
 - **Public-portal access logs** (each request to the public API, including
   refused authentications, with the requester's IP address) are kept **90
   days**, a fixed platform-wide period, and deleted daily by the

@@ -2,7 +2,93 @@
 
 **Prefix:** `MS2` · **Iteration:** B1 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-05 (pass 5)
+2026-10-05 (pass 5), 2026-11-16 (pass 6)
+
+---
+
+## Pass 6 (2026-11-16) — expiry reminders, two more columns encrypted, and the officer page's buttons
+
+Scope: the three commits after the security rotation's pass 15 (2026-11-06),
+which that pass has not seen — `3e478316d` (expiry reminders, recurring by
+default, `screening_type` and `requirement_id` encrypted), `d75f6bbda` (the
+requirement-link race), `a0823cfd3` (the shared form field) — plus the open
+list. The security rotation has read this module fifteen times; this pass
+took the other lenses over the delta and re-checked the authorization rather
+than re-deriving it. **3 fixes, 0 flagged; every earlier open item is
+resolved.**
+
+### MS2-11 — LOW — A view-only reader was offered Add, Edit and Delete — ✅ FIXED
+
+The page is routed on `medical_screening.view`, and all six write routes
+(requirement and record create, update, delete) require `.manage`.
+`MedicalScreeningPage` rendered Add Requirement, Add Record and each row's Edit
+and Delete for every reader, so a view-only holder could fill in a form and be
+refused at the end; the wiki recorded it as a gotcha. The six controls now
+render only with `.manage` (`MedicalScreeningPage.tsx:57`).
+`MedicalScreeningPage.manage.test.tsx` failed on both view-only cases before
+the change. `MedicalScreeningPage.delete.test.tsx` signed nobody in and relied
+on the controls being shown to anyone; it now signs in a manager, the role its
+scenario always assumed, and its assertions are unchanged.
+
+### MS2-10 — LOW — The wiki said no expiry email is sent — ✅ DOC FIXED
+
+`wiki/Module-Medical-Screening.md` said "There is no expiry email. Nothing in the
+scheduler sends screening reminders". Since `3e478316d` (2026-11-08) the daily
+`medical_screening_expiry_reminders` task emails the member at 90, 60, 30 and 7
+days. An officer relying on the wiki would tell members they will not be
+reminded, or arrange reminders of their own. It now says what is sent, to whom,
+what it names, and the rule that switches it off.
+
+### MS2-9 — LOW — A service comment said the officer screens were not built — ✅ DOC FIXED
+
+`services/medicalScreeningServices.ts` opened by saying managing requirements and
+records "is not wired into the frontend yet". It is: `modules/medical-screening`,
+with its own client. The comment now says this file holds only the dashboard's
+self-service read and points to the module.
+
+### Earlier open items — all resolved
+
+- **Exactly one subject per record (MS-13)** — `ScreeningRecordCreate` validates
+  it (`schemas/medical_screening.py:157`) and the form has a subject picker.
+- **Compliance-by-id for an unknown subject (MS-17)** — resolved 2026-10-25.
+- **Unbounded lists (MS-6)** — paged in SQL since 2026-10-05.
+- **`grace_period_days` (MS-16)** — enforced since 2026-11-04 (owner decision).
+
+### Verified good ✅
+
+- **All 16 routes are gated** (AST enumeration): reads on
+  `medical_screening.view`, writes and `/subjects` on `.manage`, and
+  `/compliance/me` self-scoped; the clinical narrative is further gated on
+  `.view_details` or `.manage` (MS-14).
+- **The expiry reminder is safe to run twice** (pitfall #36): a claim row unique
+  on (record, tier, due date) is inserted in a savepoint, committed only after
+  the send, and released when the send fails, so a duplicate is possible and a
+  miss is not, which is right for a reminder. A renewed screening has a new due
+  date and so new tiers.
+- **The reminder keeps the screening out of plaintext at rest:** no bell entry,
+  no message-history copy of the body, and a subject that names nothing. It is
+  sent only to current members (`ACTIVE_ACCOUNT_STATUSES`), honours the
+  training-reminder email choice and the notification rule, and reads its
+  screenings and due dates from the Compliance tab's own expiring list
+  (pitfall #29). Its link opens the dashboard, which is where a member's own
+  screening status is shown.
+- **The requirement-link race fix holds** (pitfall #27): deleting a requirement
+  and linking a record to it lock the same requirement row, and the unlink scan
+  is a locking read, so a link committed while the delete waited is seen and
+  cleared.
+
+### Pass 6 completion gate
+
+| Check                                  | Result                       |
+| -------------------------------------- | ---------------------------- |
+| `npm run typecheck`                    | ✅ exit 0                    |
+| `npm run lint`                         | ✅ exit 0                    |
+| `python -m flake8 app/ tests/`         | ✅ 0 violations              |
+| `black --check app/ tests/`            | ✅ 2470 files unchanged      |
+| `vitest src/modules/medical-screening` | ✅ 88 passed (16 files)      |
+| `check_docs_links.py`                  | ✅ 518 files, 0 broken links |
+
+No backend code changed.
 
 ---
 

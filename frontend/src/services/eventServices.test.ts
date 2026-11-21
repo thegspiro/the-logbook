@@ -255,6 +255,19 @@ describe('eventService', () => {
     });
   });
 
+  // --- setGuestHeadcount ---
+  describe('setGuestHeadcount', () => {
+    it('PUTs the count, and sends an explicit null to clear it', async () => {
+      mockPut.mockResolvedValueOnce({ data: { id: 'e1', guest_headcount: 140 } });
+      await eventService.setGuestHeadcount('e1', 140);
+      expect(mockPut).toHaveBeenCalledWith('/events/e1/guest-headcount', { guest_headcount: 140 });
+
+      mockPut.mockResolvedValueOnce({ data: { id: 'e1', guest_headcount: null } });
+      await eventService.setGuestHeadcount('e1', null);
+      expect(mockPut).toHaveBeenLastCalledWith('/events/e1/guest-headcount', { guest_headcount: null });
+    });
+  });
+
   // --- selfCheckIn ---
   describe('selfCheckIn', () => {
     it('should POST self-check-in with default isCheckout=false', async () => {

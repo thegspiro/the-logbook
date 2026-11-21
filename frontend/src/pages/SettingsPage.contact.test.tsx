@@ -28,6 +28,7 @@ const profile = (overrides: Partial<OrganizationProfile> = {}): OrganizationProf
   email: 'office@station12.org',
   website: 'https://station12.org',
   county: 'Fairfax',
+  short_name: '',
   founded_year: null,
   logo: null,
   mailing_address: { line1: '12 Firehouse Lane', line2: '', city: 'Vienna', state: 'VA', zip: '22180' },

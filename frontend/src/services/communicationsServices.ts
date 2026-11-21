@@ -244,6 +244,9 @@ export interface CommunityReachTotals {
   events_held: number;
   /** Signed-in guests, or the requester's expected audience where nobody signed in. */
   people_reached: number;
+  /** Guests counted: a coordinator's headcount where one was recorded, else sign-ins. */
+  counted: number;
+  /** Guest sign-ins alone, including at events a headcount superseded. */
   signed_in: number;
   estimated: number;
   member_hours: number;
@@ -255,6 +258,7 @@ export interface CommunityReachTotals {
 /** Events that recorded both an expected audience and sign-ins. */
 export interface CommunityTurnout {
   events: number;
+  counted: number;
   signed_in: number;
   expected: number;
 }
@@ -263,11 +267,14 @@ export interface CommunityReachBucket {
   /** "YYYY-MM", or "YYYY" when the report's granularity is year. */
   period: string;
   events: number;
+  counted: number;
   signed_in: number;
   estimated: number;
 }
 
 export interface CommunityTypeBucket {
+  /** "request": by a public request's outreach type; "department": by event type. */
+  group: 'request' | 'department';
   label: string;
   events: number;
   people_reached: number;
@@ -281,11 +288,24 @@ export interface CommunityEventReach {
   organization_name: string | null;
   request_id: string | null;
   signed_in: number;
+  headcount: number | null;
+  /** The actual audience — headcount, else sign-ins — or null when nothing was counted. */
+  counted: number | null;
   expected: number | null;
   people_reached: number;
   reach_is_estimate: boolean;
   crew: number;
   member_hours: number;
+  /** What happened, recorded when the event closed. */
+  outcome_note?: string | null;
+  materials?: CommunityMaterial[];
+  photos?: 'none' | 'consented' | 'not_consented' | null;
+}
+
+/** Something handed out at outreach events, and how many. */
+export interface CommunityMaterial {
+  item: string;
+  quantity: number;
 }
 
 export interface CommunityEngagement {
@@ -305,6 +325,8 @@ export interface CommunityEngagement {
   granularity: 'month' | 'year';
   by_period: CommunityReachBucket[];
   by_type: CommunityTypeBucket[];
+  /** Everything handed out across the period, one line per item, most first. */
+  materials?: CommunityMaterial[];
   recent_events: CommunityEventReach[];
 }
 
@@ -398,6 +420,13 @@ export interface ComplianceMatrixCell {
   catch_up_deadline?: string | null;
   /** Met by the Chief's override rather than by the count; absent from an older server. */
   overridden?: boolean;
+  /**
+   * Hours requirements only: the average hours a month in the months nothing
+   * excused, and the department's monthly pace. Displayed beside the total;
+   * `status` is still graded on the total. Absent from an older server.
+   */
+  monthly_average?: number | null;
+  monthly_needed?: number | null;
 }
 
 export interface ComplianceMatrixMember {

@@ -50,6 +50,7 @@ from app.models.training import (
     ShiftTemplateEquipmentCheck,
 )
 from app.models.user import Organization, User
+from app.schemas.organization import EquipmentCheckAlertSettings
 from app.services.auto_reorder_service import AutoReorderService
 from app.services.inventory_service import InventoryService
 from app.services.position_recipients import current_holder_ids
@@ -6251,8 +6252,12 @@ class EquipmentCheckService:
             if not org:
                 return
 
-            cfg = (org.settings or {}).get("equipment_check_alerts", {})
-            if not cfg.get("notify_on_failure", True):
+            # The model the settings screen reads, so an unsaved panel alerts
+            # whom it shows (CLAUDE.md #19).
+            cfg = EquipmentCheckAlertSettings.from_stored(
+                (org.settings or {}).get("equipment_check_alerts")
+            )
+            if not cfg.notify_on_failure:
                 return
 
             # Resolve names
@@ -6289,16 +6294,14 @@ class EquipmentCheckService:
             recipient_ids: set[str] = set()
 
             # Shift officer
-            if cfg.get("notify_shift_officer", True):
+            if cfg.notify_shift_officer:
                 if shift.shift_officer_id:
                     recipient_ids.add(str(shift.shift_officer_id))
 
             # Current members holding a configured position
-            notify_roles = cfg.get("notify_roles", [])
-            if isinstance(notify_roles, list):
-                recipient_ids |= await current_holder_ids(
-                    self.db, organization_id, notify_roles
-                )
+            recipient_ids |= await current_holder_ids(
+                self.db, organization_id, cfg.notify_roles
+            )
 
             # Don't notify the person who did the check
             recipient_ids.discard(str(checked_by))
@@ -6374,7 +6377,7 @@ class EquipmentCheckService:
             await self.db.flush()
 
             # Optional email
-            if cfg.get("send_email", False):
+            if cfg.send_email:
                 try:
                     from html import escape as _esc
 
@@ -6403,7 +6406,7 @@ class EquipmentCheckService:
                             department_required_kinds(org),
                         )
                     ]
-                    cc_emails = cfg.get("cc_emails", [])
+                    cc_emails = list(cfg.cc_emails)
                     if to_emails:
                         email_svc = EmailService(organization=org)
                         subject = (

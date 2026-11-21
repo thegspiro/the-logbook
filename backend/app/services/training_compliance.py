@@ -46,8 +46,11 @@ from app.services.training_waiver_service import (
     excused_month_reasons,
     fetch_org_waivers,
     get_rolling_period_months,
+    month_waivers,
     override_covers,
+    total_months_in_period,
 )
+from app.utils.compliance_profiles import ordered_profiles
 from app.utils.hours import meets_required_hours
 from app.utils.membership import MemberStatus, canonical_member_status
 from app.utils.org_timezone import (
@@ -194,6 +197,55 @@ def monthly_hours(
     return _month_rows(totals, start, end, excused, "hours")
 
 
+@dataclass(frozen=True)
+class MonthlyPace:
+    """A member's average hours a month against the department's monthly pace.
+
+    ``average`` is the hours earned in the months nothing excused, over the
+    number of those months, or None when every month so far was excused.
+    Hours earned on leave still count toward the requirement's total. They are
+    left out here because the figure is the member's pace while active:
+    dividing 26 hours, 23 of them earned on leave, by the active months alone
+    would read as 13 a month for a member who logged 3.
+
+    ``needed`` is the requirement's unadjusted level over the months in its
+    whole window (72 over 12 is 6). Leave lowers what a member owes, not the
+    pace the department set, so the waiver-prorated target is not used.
+
+    Shown beside the total, never instead of it as the grade: compliance is
+    still decided on the total (owner decision, 2026-11-20).
+    """
+
+    average: Optional[float]
+    needed: Optional[float]
+
+
+def monthly_pace(
+    rows: Sequence[Mapping[str, Any]],
+    base_required: float,
+    window_start: Optional[date],
+    window_end: Optional[date],
+) -> MonthlyPace:
+    """The :class:`MonthlyPace` for the rows ``monthly_hours`` produced.
+
+    The one definition: the compliance matrix and My Training both report it,
+    so the two screens cannot print different averages for the same member.
+    """
+    active = [r for r in rows if not r.get("waived")]
+    average = (
+        round(sum(float(r.get("hours") or 0) for r in active) / len(active), 2)
+        if active
+        else None
+    )
+    months = (
+        total_months_in_period(window_start, window_end)
+        if window_start and window_end
+        else 0
+    )
+    needed = round(base_required / months, 2) if base_required > 0 and months else None
+    return MonthlyPace(average=average, needed=needed)
+
+
 def monthly_counts(
     dates: Iterable[date],
     start: date,
@@ -242,6 +294,38 @@ def _month_rows(
         if month > 12:
             year, month = year + 1, 1
     return months
+
+
+def lapsed_biannual_certificate(req, counted, as_of: date):
+    """For a BIANNUAL hours or courses requirement, the lapsed certificate that
+    overrides its count, or None.
+
+    An "every 2 years" hours or courses requirement is often a recertification,
+    so a certificate that has lapsed fails it whatever the count says. The
+    certificate read is the one expiring last among ``counted``, the records
+    the requirement's own branch counts: the hours records
+    :func:`hours_record_counts` accepts in the window, or a courses
+    requirement's windowed completions. It is returned when its expiration
+    date is before ``as_of``.
+
+    This is the one definition. The compliance grader, My Training
+    (``TrainingService.evaluate_requirement_detail``) and
+    ``TrainingService.check_requirement_progress`` all call it. My Training
+    used to read every completed record of the training type, in or out of
+    the window, for hours, and had no check at all for courses, so a member
+    could read met on one screen and expired on the other (CLAUDE.md
+    pitfall 29). Only windowed records are loaded for the grader
+    (:func:`graded_records_clause`), so the counted records are the set every
+    caller can read.
+    """
+    freq = getattr(req.frequency, "value", req.frequency)
+    if freq != RequirementFrequency.BIANNUAL.value:
+        return None
+    dated = [r for r in counted if r.expiration_date]
+    if not dated:
+        return None
+    newest = max(dated, key=lambda r: r.expiration_date)
+    return newest if newest.expiration_date < as_of else None
 
 
 def biannual_window(req, today: date) -> tuple[date, date]:
@@ -908,12 +992,45 @@ async def load_held_sessions(
     until an officer closed it out (the same reason SHIFTS counts only
     finalized shifts). ``{}`` when none of ``requirements`` is of the type,
     and callers pass the mapping whole.
+
+    A session that requires completion confirmation is not held while its
+    newest approval is pending: finalizing it writes IN_PROGRESS records
+    only, and a member counts as attended only on a COMPLETED one, so
+    counting it from finalize charged every attendee with a session they
+    were not yet credited for, for as long as the sign-off waited. The
+    approval decides it either way — approved, the records complete and it
+    is attended; rejected, it is held and charged as any other. Only the
+    newest approval counts: a re-finalize leaves the earlier one PENDING with
+    its link killed ("newest" is by a one-second ``created_at``, so a reopen
+    and re-finalize inside the same second ties, and a tie with a pending
+    approval reads as pending). Every grader and the waiver checks read this
+    function, so the rule lives here once (pitfall #29).
     """
+    from sqlalchemy.orm import aliased
+
     from app.models.event import Event
+    from app.models.training import ApprovalStatus, TrainingApproval
 
     ids = [str(r.id) for r in requirements if is_session_attendance(r)]
     if not ids:
         return {}
+    pending = aliased(TrainingApproval)
+    newer = aliased(TrainingApproval)
+    awaiting_sign_off = (
+        select(pending.id)
+        .where(
+            pending.training_session_id == TrainingSession.id,
+            pending.organization_id == str(org_id),
+            pending.status == ApprovalStatus.PENDING,
+            ~select(newer.id)
+            .where(
+                newer.training_session_id == pending.training_session_id,
+                newer.created_at > pending.created_at,
+            )
+            .exists(),
+        )
+        .exists()
+    )
     rows = await db.execute(
         select(
             TrainingSessionRequirement.requirement_id,
@@ -931,6 +1048,7 @@ async def load_held_sessions(
             TrainingSession.organization_id == str(org_id),
             TrainingSession.is_finalized.is_(True),
             Event.is_cancelled.is_(False),
+            ~awaiting_sign_off,
         )
     )
     tz = await resolve_scheduling_timezone(db, org_id)
@@ -975,6 +1093,10 @@ class RequirementEvaluation:
     catch_up_deadline: Optional[str] = None
     # Met by a Chief's override rather than by the count (SESSION_ATTENDANCE).
     overridden: bool = False
+    # HOURS only: the member's average a month and the department's monthly
+    # pace (MonthlyPace). Displayed beside the total; never graded on.
+    monthly_average: Optional[float] = None
+    monthly_needed: Optional[float] = None
 
 
 def evaluate_member_requirement_detail(
@@ -1083,9 +1205,6 @@ def _grade_member_requirement(
         if hasattr(req.requirement_type, "value")
         else str(req.requirement_type)
     )
-    freq = (
-        req.frequency.value if hasattr(req.frequency, "value") else str(req.frequency)
-    )
     # Resolve the effective evaluation date for this requirement (per-requirement
     # override inherits the org default). Everything below — window, proration,
     # and expiry/overdue checks — keys off this date.
@@ -1103,6 +1222,7 @@ def _grade_member_requirement(
         unit=None,
         base=None,
         waived=0,
+        pace: Optional[MonthlyPace] = None,
     ) -> RequirementEvaluation:
         # The months adjust_required prorated by, split by reason.
         reasons = excused_month_reasons(
@@ -1122,6 +1242,8 @@ def _grade_member_requirement(
             window_start=start_date.isoformat() if start_date else None,
             window_end=end_date.isoformat() if end_date else None,
             as_of=today.isoformat(),
+            monthly_average=pace.average if pace else None,
+            monthly_needed=pace.needed if pace else None,
         )
 
     # Filter completed records within the date window. Which records each
@@ -1160,13 +1282,27 @@ def _grade_member_requirement(
                 period_months=get_rolling_period_months(req),
             )
 
-        progress = {
+        progress: Dict[str, Any] = {
             "current": total_hours,
             "required": required,
             "unit": "hours",
             "base": base_required,
             "waived": waived_months,
         }
+        if start_date and end_date:
+            # Measured on the same month rows My Training's breakdown lists,
+            # through the evaluation date rather than the window's far end.
+            progress["pace"] = monthly_pace(
+                monthly_hours(
+                    type_matched,
+                    start_date,
+                    min(end_date, today),
+                    month_waivers(_waivers, start_date, end_date, str(req.id)),
+                ),
+                base_required,
+                start_date,
+                end_date,
+            )
 
         latest = (
             max(type_matched, key=lambda r: r.completion_date or date.min)
@@ -1184,18 +1320,16 @@ def _grade_member_requirement(
             else None
         )
 
-        if freq == RequirementFrequency.BIANNUAL.value and type_matched:
-            with_exp = [r for r in type_matched if r.expiration_date]
-            if with_exp:
-                newest_cert = max(with_exp, key=lambda r: r.expiration_date)
-                if newest_cert.expiration_date < today:
-                    exp_comp = (
-                        newest_cert.completion_date.isoformat()
-                        if newest_cert.completion_date
-                        else latest_comp
-                    )
-                    exp_exp = newest_cert.expiration_date.isoformat()
-                    return _ev("expired", exp_comp, exp_exp, **progress)
+        lapsed = lapsed_biannual_certificate(req, type_matched, today)
+        if lapsed is not None:
+            exp_comp = (
+                lapsed.completion_date.isoformat()
+                if lapsed.completion_date
+                else latest_comp
+            )
+            return _ev(
+                "expired", exp_comp, lapsed.expiration_date.isoformat(), **progress
+            )
 
         if required > 0 and meets_required_hours(total_hours, required):
             return _ev("completed", latest_comp, latest_exp, **progress)
@@ -1236,18 +1370,16 @@ def _grade_member_requirement(
             else None
         )
 
-        if freq == RequirementFrequency.BIANNUAL.value and windowed:
-            with_exp = [r for r in windowed if r.expiration_date]
-            if with_exp:
-                newest_cert = max(with_exp, key=lambda r: r.expiration_date)
-                if newest_cert.expiration_date < today:
-                    exp_comp = (
-                        newest_cert.completion_date.isoformat()
-                        if newest_cert.completion_date
-                        else latest_comp
-                    )
-                    exp_exp = newest_cert.expiration_date.isoformat()
-                    return _ev("expired", exp_comp, exp_exp, **progress)
+        lapsed = lapsed_biannual_certificate(req, windowed, today)
+        if lapsed is not None:
+            exp_comp = (
+                lapsed.completion_date.isoformat()
+                if lapsed.completion_date
+                else latest_comp
+            )
+            return _ev(
+                "expired", exp_comp, lapsed.expiration_date.isoformat(), **progress
+            )
 
         if matched_count >= len(course_ids):
             return _ev("completed", latest_comp, latest_exp, **progress)
@@ -2038,9 +2170,12 @@ def _find_matching_profile(
     member: User,
     profiles: List[ComplianceProfile],
 ) -> Optional[ComplianceProfile]:
-    """Find the highest-priority active profile that matches a member.
+    """Find the first active profile, in resolution order, that matches a member.
 
-    Matches by membership_type and/or role_ids. A profile with no
+    The order is :func:`app.utils.compliance_profiles.ordered_profiles`:
+    higher priority first, then the older profile, then the smaller id, so a
+    caller may pass profiles in any order. Matches by membership_type and/or
+    role_ids. A profile with no
     membership_types and no role_ids matches all members. Returns None
     if no profile matches.
     """
@@ -2065,7 +2200,7 @@ def _find_matching_profile(
             if position_id:
                 member_role_ids.append(str(position_id))
 
-    for profile in profiles:
+    for profile in ordered_profiles(profiles):
         if not profile.is_active:
             continue
 
@@ -2198,8 +2333,8 @@ def requirement_applies_to_member(
 ) -> bool:
     """Whether a requirement applies to a member.
 
-    Matches ``TrainingService.get_applicable_requirements`` (the
-    member-facing ``/my-training`` path) precedence exactly:
+    The precedence every grader applies after a member's compliance profile
+    (``ComplianceGrading.for_member``) has narrowed the set:
     ``applies_to_all`` wins outright; otherwise ``required_membership_types``
     is checked; otherwise the member matches if their rank is named in
     ``required_roles`` or they hold a position named in
@@ -2572,6 +2707,12 @@ class MemberGrading:
     requirements: List[TrainingRequirement]
     compliant_threshold: float
     at_risk_threshold: float
+    # The matched profile's optional requirements that apply to the member:
+    # listed on the member's training page, never graded (owner decision
+    # 2026-11-21). Kept beside ``requirements`` rather than inside it so no
+    # tally, notice, export or matrix that reads ``requirements`` can count
+    # one by accident.
+    optional_requirements: List[TrainingRequirement] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -2591,7 +2732,8 @@ class ComplianceGrading:
     at_risk_threshold: float = 75.0
     threshold_type: str = "percentage"
     include_current_month: bool = True
-    # Highest priority first: _find_matching_profile takes the first match.
+    # In resolution order (ordered_profiles); _find_matching_profile takes
+    # the first match and re-applies the order for callers that do not.
     profiles: Tuple[ComplianceProfile, ...] = ()
 
     @classmethod
@@ -2604,9 +2746,7 @@ class ComplianceGrading:
             at_risk_threshold=config.at_risk_threshold,
             threshold_type=config.threshold_type or "percentage",
             include_current_month=bool(config.include_current_month),
-            profiles=tuple(
-                sorted(config.profiles or [], key=lambda p: p.priority, reverse=True)
-            ),
+            profiles=tuple(ordered_profiles(config.profiles or [])),
         )
 
     def for_member(
@@ -2616,10 +2756,14 @@ class ComplianceGrading:
 
         A matching profile narrows the requirement list and may override the
         thresholds; then every requirement that does not apply to the member
-        (``requirement_applies_to_user``) is dropped. ``member.positions``
+        (``requirement_applies_to_user``) is dropped. The profile's optional
+        requirements are resolved the same way into ``optional_requirements``
+        and never graded; with no required list set, they are also left out
+        of the graded set. ``member.positions``
         must be loaded when any profile exists.
         """
         member_reqs = list(requirements)
+        optional_reqs: List[TrainingRequirement] = []
         compliant_threshold = self.compliant_threshold
         at_risk_threshold = self.at_risk_threshold
         profile = (
@@ -2628,17 +2772,28 @@ class ComplianceGrading:
             else None
         )
         if profile:
+            by_id = {str(r.id): r for r in requirements}
+            required_ids = profile.required_requirement_ids
+            # Required wins when an id is in both lists; an id for a deleted
+            # or inactive requirement is not in by_id and drops out.
+            required_set = set(required_ids or [])
+            optional_ids = [
+                rid
+                for rid in (profile.optional_requirement_ids or [])
+                if rid in by_id and rid not in required_set
+            ]
+            optional_reqs = [by_id[rid] for rid in optional_ids]
             # `is not None`, not truthy: a profile that explicitly selects zero
             # required requirements (`[]`, "nothing is required for this
             # group") must not fall through to grading against every org-wide
             # requirement — `[]` and "never set" (`None`) differ. See CMP2-3.
-            if profile.required_requirement_ids is not None:
-                by_id = {str(r.id): r for r in requirements}
-                member_reqs = [
-                    by_id[rid]
-                    for rid in profile.required_requirement_ids
-                    if rid in by_id
-                ]
+            if required_ids is not None:
+                member_reqs = [by_id[rid] for rid in required_ids if rid in by_id]
+            elif optional_ids:
+                # Never set grades every requirement except the ones the
+                # profile calls optional, as the editor and guides promise.
+                optional_set = set(optional_ids)
+                member_reqs = [r for r in requirements if str(r.id) not in optional_set]
             # Threshold overrides apply whenever the profile matched,
             # independent of whether it also narrows the list (CMP2-3).
             if profile.compliant_threshold_override is not None:
@@ -2654,6 +2809,9 @@ class ComplianceGrading:
             ],
             compliant_threshold=compliant_threshold,
             at_risk_threshold=at_risk_threshold,
+            optional_requirements=[
+                req for req in optional_reqs if requirement_applies_to_user(req, member)
+            ],
         )
 
     def classify(
@@ -2919,7 +3077,43 @@ async def grade_org_members(
 
     if config is None:
         config = await _load_compliance_config(db, org_id)
-    grading = ComplianceGrading.from_config(config)
+    return await grade_members(
+        db,
+        org_id,
+        members,
+        requirements,
+        today,
+        ComplianceGrading.from_config(config),
+        waivers_by_user=await fetch_org_waivers(db, str(org_id)),
+        held_sessions=await load_held_sessions(db, str(org_id), requirements),
+    )
+
+
+async def grade_members(
+    db: AsyncSession,
+    org_id: str,
+    members: Sequence[User],
+    requirements: Sequence[TrainingRequirement],
+    today: date,
+    grading: ComplianceGrading,
+    *,
+    waivers_by_user: Mapping[str, Sequence[WaiverPeriod]],
+    held_sessions: Mapping[str, Sequence[HeldSession]],
+) -> List[MemberCompliance]:
+    """Grade ``members`` against ``requirements``, in the order given.
+
+    The one grading loop behind the compliance matrix
+    (``get_compliance_matrix``), :func:`grade_org_members`, and the compliance
+    CSV, PDF and forecast (``ReportExportService``), so none of them can read a
+    member differently from the others (CLAUDE.md pitfall 29). It loads the
+    records, credited shifts and evaluation credits for exactly these members;
+    the org-wide waivers and held sessions are passed in, so a caller grading
+    in batches loads them once. ``members`` need ``positions`` loaded: a
+    compliance profile can match on them.
+    """
+    if not members or not requirements:
+        return []
+    requirements = list(requirements)
     member_ids = [m.id for m in members]
     records_by_user: Dict[str, list] = {}
     for r in await load_graded_records(
@@ -2932,8 +3126,6 @@ async def grade_org_members(
     evaluations_by_user = await load_evaluation_credits(
         db, org_id, member_ids, requirements, today, grading.include_current_month
     )
-    held_sessions = await load_held_sessions(db, str(org_id), requirements)
-    waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
     graded: List[MemberCompliance] = []
     for member in members:

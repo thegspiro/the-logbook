@@ -615,7 +615,6 @@ export interface TrainingRecordCreate {
   instructor?: string;
   location?: string;
   notes?: string;
-  attachments?: string[];
   rank_at_completion?: string;
   station_at_completion?: string;
 }
@@ -640,7 +639,6 @@ export interface TrainingRecordUpdate {
   instructor?: string | null | undefined;
   location?: string | null | undefined;
   notes?: string;
-  attachments?: string[];
   rank_at_completion?: string | undefined;
   station_at_completion?: string | undefined;
 }
@@ -700,7 +698,12 @@ export interface ComplianceSummary {
   requirements_total: number;
   certs_expiring_soon: number;
   certs_expired: number;
-  /** `not_applicable`: no requirement grades the member and no certificate is lapsing. */
+  /**
+   * The member's compliance matrix standing: green compliant, yellow at risk,
+   * red non-compliant. `not_applicable`: no requirement grades the member,
+   * whatever their certificates say. The certificate counts above are
+   * informational and do not set it.
+   */
   compliance_status: 'green' | 'yellow' | 'red' | 'exempt' | 'not_applicable';
   compliance_label: string;
   hours_this_year: number;
@@ -1881,7 +1884,7 @@ export interface BulkImportResponse {
 // ==================== Self-Reported Training Types ====================
 
 // Import enum type from the canonical source and re-export
-import type { SubmissionStatus } from '../constants/enums';
+import type { Standing, SubmissionStatus } from '../constants/enums';
 export type { SubmissionStatus };
 
 export interface FieldConfig {
@@ -1928,6 +1931,8 @@ export interface SelfReportConfigUpdate {
  */
 export interface SubmissionAttachment {
   index: number;
+  /** The entry's stable id. Null only on an entry stored before ids existed. */
+  id?: string | null;
   file_name?: string | null;
   file_type?: string | null;
   file_size?: number | null;
@@ -2030,7 +2035,6 @@ export interface TrainingSubmissionCreate {
   issuing_agency?: string | undefined;
   expiration_date?: string | undefined;
   category_id?: string | undefined;
-  attachments?: string[] | undefined;
   /** Park the submission in the member's own list instead of sending it for review. */
   save_as_draft?: boolean | undefined;
   /**
@@ -2061,7 +2065,6 @@ export interface TrainingSubmissionUpdate {
   issuing_agency?: string | null | undefined;
   expiration_date?: string | null | undefined;
   category_id?: string | null | undefined;
-  attachments?: string[] | undefined;
 }
 
 export interface SubmissionReviewRequest {
@@ -2383,6 +2386,13 @@ export interface RequirementDetail {
   /** Fractional when a partial month was excused. */
   active_months?: number;
   cert_expired?: boolean;
+  /**
+   * For a `certification` requirement: the expiration date (YYYY-MM-DD) of
+   * the certificate graded, so the card reads "On file (Expires ...)" or
+   * "Expired ..." rather than 1/1 or 0/1. Null when nothing is on file or the
+   * certificate never expires, and for every other type.
+   */
+  expiry_date?: string | null;
   blocks_activity?: boolean;
   /**
    * Set while an existing member's catch-up period runs and the requirement is
@@ -2414,6 +2424,15 @@ export interface RequirementDetail {
    * target was prorated by. Null for every other requirement type.
    */
   monthly_hours?: RequirementMonth[] | null;
+  /**
+   * For an hours requirement: the average hours a month in the months nothing
+   * excused, and the department's monthly pace (its unadjusted level over
+   * `window_months`). Worked out on the server from `monthly_hours`. Shown
+   * beside the total; `is_met` is still decided on the total. Null for every
+   * other type, and absent from an older server.
+   */
+  monthly_average?: number | null;
+  monthly_needed?: number | null;
   /**
    * Shifts worked or calls run per calendar month, for a shift or call
    * requirement: `monthly_hours`' counterpart, with `count` in place of
@@ -2476,6 +2495,8 @@ export interface MemberRequirementsResponse {
     avg_compliance: number | null;
   };
   requirements_detail: RequirementDetail[];
+  /** The member's profile's optional requirements: listed, never graded. */
+  optional_requirements_detail?: RequirementDetail[];
   leaves_of_absence: MemberLeavePeriod[];
 }
 
@@ -2529,6 +2550,9 @@ export interface MyTrainingHistoryPage {
 export interface MyTrainingSummary {
   visibility: MemberVisibility;
   requirements_detail?: RequirementDetail[];
+  /** Sent with `requirements_detail`: the member's profile's optional
+   *  requirements, listed and never graded. */
+  optional_requirements_detail?: RequirementDetail[];
   /** Sent with `requirements_detail`: the leaves behind a reduced target. */
   leaves_of_absence?: MemberLeavePeriod[];
   leave_month_rule?: LeaveMonthRule;
@@ -3127,6 +3151,12 @@ export interface ComplianceForecast {
   user_name?: string;
   /** Each is null when no requirement grades the member (not applicable). */
   current_compliance_percentage: number | null;
+  /**
+   * The current figure's compliance matrix standing, by the member's profile
+   * thresholds or the department's. Colour the current figure by this, never
+   * by thresholds of a screen's own. The projections carry no standing.
+   */
+  current_standing: Standing;
   forecast_30_days: number | null;
   forecast_60_days: number | null;
   forecast_90_days: number | null;
@@ -3348,8 +3378,11 @@ export interface ComplianceProfile {
   roleIds?: string[];
   compliantThresholdOverride?: number;
   atRiskThresholdOverride?: number;
-  requiredRequirementIds?: string[];
-  optionalRequirementIds?: string[];
+  // null: no required list was ever set (only possible through the API), so
+  // the profile grades every applicable requirement except its optional ones.
+  // Distinct from [], which grades nothing.
+  requiredRequirementIds?: string[] | null;
+  optionalRequirementIds?: string[] | null;
   adminHoursRequirements?: AdminHoursRequirementItem[];
   isActive: boolean;
   priority: number;
@@ -3864,4 +3897,30 @@ export interface CourseLinksView {
 export interface CourseLinkResult {
   names: number;
   records: number;
+}
+
+/** One past Course Links link, for the screen's history. */
+export interface CourseLinkHistoryItem {
+  id: string;
+  course_id: string | null;
+  course_name: string;
+  label: string;
+  record_count: number;
+  linked_by_name: string | null;
+  linked_at: string;
+  undone_at: string | null;
+  undone_by_name: string | null;
+}
+
+export interface CourseLinkHistory {
+  items: CourseLinkHistoryItem[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface CourseUnlinkResult {
+  reverted: number;
+  /** Records changed since the link, or linked elsewhere by hand: they keep their course. */
+  kept: number;
 }
