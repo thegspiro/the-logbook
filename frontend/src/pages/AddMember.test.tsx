@@ -624,7 +624,11 @@ describe('AddMember', { timeout: 20_000 }, () => {
       await user.click(screen.getByRole('button', { name: /save member/i }));
 
       expect(await screen.findByText('Password does not meet every rule listed below')).toBeInTheDocument();
-      expect(screen.getByRole('list', { name: 'Password rules' })).toHaveTextContent('No runs like 123 or abc');
+      // W11-12: each rule says in text whether it is met; the icon is hidden.
+      const rules = within(screen.getByRole('list', { name: 'Password rules' })).getAllByRole('listitem');
+      const rule = (name: string) => rules.find((li) => li.textContent?.endsWith(name));
+      expect(rule('No runs like 123 or abc')).toHaveTextContent('Not met: No runs like 123 or abc');
+      expect(rule('At least 12 characters')).toHaveTextContent('Met: At least 12 characters');
       expect(mockCreateMember).not.toHaveBeenCalled();
     });
 
