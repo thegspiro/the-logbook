@@ -261,16 +261,17 @@ class TestALockConflictIsARetry:
             )
 
         monkeypatch.setattr(TrainingCourseLinkService, "_apply", deadlock)
+        if door == "link":
+            call = link_course_name(
+                payload=CourseLinkRequest(
+                    key=name_key("CPR Refresher"), course_id=cpr.id
+                ),
+                db=db_session,
+                current_user=officer,
+            )
+        else:
+            call = link_suggested_course_names(db=db_session, current_user=officer)
         with pytest.raises(HTTPException) as refused:
-            if door == "link":
-                await link_course_name(
-                    payload=CourseLinkRequest(
-                        key=name_key("CPR Refresher"), course_id=cpr.id
-                    ),
-                    db=db_session,
-                    current_user=officer,
-                )
-            else:
-                await link_suggested_course_names(db=db_session, current_user=officer)
+            await call
 
         assert refused.value.status_code == 409
