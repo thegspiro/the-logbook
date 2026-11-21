@@ -16,7 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](#)** (branch `claude/security-review-training-extended-p15`):
+**PR [#4496](https://github.com/thegspiro/the-logbook/pull/4496)**
+(branch `claude/security-review-skills-testing-p15`): Feature 19 (Skills
+testing), pass 15 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable per `ListAgents`). True zero delta since pass 14 (`c0baae039`):
+all four declared backend files byte-identical, no frontend file changed,
+no new migration. Every standing fix re-verified present by direct code
+read; route surface unchanged at 29/29. **0 fixed, 0 newly flagged, 0
+findings closed.** No open findings remain in this feature. Full write-up:
+`docs/security-review/SKT-19-skills-testing.md`'s **Pass 15** section.
+
+Row 19 → ✅ (pending this PR's merge); next is Feature 20 (Compliance) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (interim "None" note between PR #4494 merging and PR #4496 opening), preserved for history</summary>
+
+**None.** PR #4494 (Feature 18, Training extended, pass 15) merged
+(`b07b25cab`) since the last iteration. Row 18 marked ✅ below; next is
+Feature 19 (Skills testing) — re-checked `list_pull_requests` (state `open`)
+fresh and found no `claude/security-review-*` head.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 15, PR #4494, merged), preserved for history</summary>
+
+**PR [#4494](https://github.com/thegspiro/the-logbook/pull/4494)**
+(branch `claude/security-review-training-extended-p15`):
 Feature 18 (Training extended), pass 15 — watchdog pickup (the dedicated
 `/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
 remains unreachable per `ListAgents`). PR #4491 (Feature 17, Training core,
@@ -61,8 +87,11 @@ revisions, single head `d5946cb2bd41`; `check_route_permissions.py
 environment-only skip (`py_vapid`); `npm run typecheck` — 0 errors; `npm run
 lint` — 0 errors (within `--max-warnings 10`).
 
-Row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills testing) —
-re-check `list_pull_requests` fresh rather than trusting this note.
+Row 18 → ✅ (merged as `b07b25cab`); next is Feature 19 (Skills testing).
+
+</details>
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 15, PR #4491, merged), preserved for history</summary>
@@ -27188,8 +27217,8 @@ iteration's commit" rule.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13), `api/public/shift_evaluations.py` (added pass 15)                                                        | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (31 routes, added pass 17)                              | 🔄     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (31 routes, added pass 17)                              | ✅     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ⬜     |
@@ -27248,6 +27277,61 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-21 — Feature 18 (Training extended, pass 15) merged; Feature 19 (Skills testing, pass 15) — watchdog pickup, true zero delta, 0 new findings
+
+Watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable per `ListAgents`).
+PR #4494 (Feature 18, Training extended, pass 15) had already merged
+(`b07b25cab`) before this iteration started. A fresh `list_pull_requests`
+(state `open`) found no `claude/security-review-` head; row 19 (Skills
+testing) was confirmed the next `⬜` row directly against the rotation table
+on a freshly fetched `main`.
+
+Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, and this
+feature's own `SKT-19-skills-testing.md` (14 prior passes) before reading
+any code. Diffed `c0baae039` (the last commit to touch any of this
+feature's four declared backend files, part of an unrelated PR's merge) to
+current `main` across all four files: empty — byte-identical. No frontend
+file under `frontend/src/modules/training/` matching the skills-testing
+service/store changed either, and no new migration touches a
+skills-testing table. **True zero delta.**
+
+Re-verified every standing fix by direct grep/read against current code
+rather than trusting the prior write-up's citations: SKT-1
+(`apply_updates`), SKT-2/SKT-3/pass-14's two added sites (4
+`assert_different_person` calls), SKT-4 (both `.with_for_update()` sites),
+SKT2-1 (0 literal `is_practice ==`), SKT3-1 (examiner-viewer rejection),
+SKT3-2/SKT4-1/SKT4-2 (pagination + `max_length` caps), SKT4-7 (`update_test`
+still refuses `result`/`overall_score`/non-`in_progress` `status` by reading
+its body, not just its schema), SKT5-1 (`waive_reason` redaction), Pitfall
+#32 (`ACTIVE_ACCOUNT_STATUSES`), and pass 14's milestone hook
+(`process_milestones_for_user`, org-scoped, fails closed). All present at
+their current line citations. Route surface re-enumerated by a fresh AST
+walk: 29/29, unchanged. **0 fixed, 0 new findings.**
+
+One process note recorded in the findings file, not a security finding:
+this feature's pass 14 content (and the code it reviewed) landed on `main`
+via `c0baae039`, the merge for an unrelated PR (#4179, "Postpone an event to
+a new time") — pass 14's own review branch never produced an independently
+visible merge commit. The code pass 14 described was verified to genuinely
+match current `main`, so there is no reason to doubt its findings; noted
+only so a future reader does not go looking for a missing
+`claude/security-review-skills-testing-p14` PR.
+
+`docs/security-review/SKT-19-skills-testing.md`'s **Pass 15** section has
+the full review.
+
+**Completion gate:** `flake8==7.4.1`/`black==26.10.1`/`isort==9.0.2` (CI's
+pins) on `app/ tests/ alembic/` all clean; `validate_migrations.py --strict`
+— 803 revisions, single head `7b4e2d9c1a63`; `check_route_permissions.py
+--strict` — 329 routes, 0 errors/warnings; scoped backend pytest
+(`-k "skill or skt"`) — 642 passed, 1 pre-existing environment-only skip
+(`py_vapid`); `npm run typecheck` — 0 errors; `npm run lint` — 0 errors
+(exit 0).
+
+Row 19 → ✅ (pending this PR's merge); next is Feature 20 (Compliance) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-21 — Feature 17 (Training core, pass 15) merged; Feature 18 (Training extended, pass 15) — watchdog pickup, 0 fixed/0 new findings, real delta already fixed and tested before this pass read it; new scope deferred
 
