@@ -1025,6 +1025,8 @@ export interface EventPositionOption {
 export interface OutreachEventTypeConfig {
   value: string;
   label: string;
+  /** The roles an event of this type usually needs; prefills its signup sheet. */
+  default_roles?: StaffingRoleNeed[] | undefined;
 }
 
 export interface PipelineTaskConfig {

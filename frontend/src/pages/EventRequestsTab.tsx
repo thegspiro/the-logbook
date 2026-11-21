@@ -56,9 +56,11 @@ import type {
   DateFlexibility,
   EmailTemplate,
   EventRequestStaffing,
+  OutreachEventTypeConfig,
   OutreachRole,
   StaffingRoleNeed,
 } from '../types/event';
+import { initialRoleNeeds } from '../utils/outreachRoles';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
 import { formatCalendarDate, formatShortDateTime, localToUTC } from '../utils/dateFormatting';
@@ -223,6 +225,7 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
   const [staffing, setStaffing] = useState<EventRequestStaffing | null>(null);
   const [staffingLoading, setStaffingLoading] = useState(false);
   const [outreachRoles, setOutreachRoles] = useState<OutreachRole[]>([]);
+  const [outreachTypes, setOutreachTypes] = useState<OutreachEventTypeConfig[]>([]);
   const [roleNeeds, setRoleNeeds] = useState<StaffingRoleNeed[]>([]);
   const [showVolunteerCall, setShowVolunteerCall] = useState(false);
   const [volunteerCallMessage, setVolunteerCallMessage] = useState('');
@@ -275,10 +278,9 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
         setOutreachLabels(isRecord(labels) ? labels : {});
         const roleList = asArray(roles);
         setOutreachRoles(roleList);
-        // Seed the sheet with one of the first role the department configured,
-        // so a coordinator opening signups for a simple event can just press
-        // the button.
-        setRoleNeeds(roleList[0] ? [{ role: roleList[0].value, count: 1 }] : []);
+        // The sheet is seeded per request, from its type's role preset, once a
+        // request is open (below).
+        setOutreachTypes(asArray(settings?.outreach_event_types ?? []));
         setPipelineTasks(asArray(settings?.request_pipeline?.tasks ?? []));
         // The coordinator picker offers current members only.
         setMembers(memberList.filter((m) => isActiveAccount(m.status)));
@@ -359,6 +361,15 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
     }
     void fetchRequests();
   };
+
+  // A new signup sheet starts from the request type's role preset, or one of
+  // the first configured role, so a coordinator opening signups for a routine
+  // event can just press the button. Keyed on the request, not the object, so
+  // a refresh after an action does not undo the coordinator's edits.
+  const openTypeValue = expandedDetail?.outreach_type;
+  useEffect(() => {
+    setRoleNeeds(initialRoleNeeds(outreachTypes, openTypeValue, outreachRoles));
+  }, [expandedId, openTypeValue, outreachTypes, outreachRoles]);
 
   const addRoleNeed = () => {
     const unused = outreachRoles.find((r) => !roleNeeds.some((n) => n.role === r.value));

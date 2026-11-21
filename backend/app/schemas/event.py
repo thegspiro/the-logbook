@@ -173,11 +173,22 @@ class EventDefaultsUpdate(BaseModel):
     )
 
 
+class OutreachRoleNeed(BaseModel):
+    """How many people one outreach role needs."""
+
+    role: str = Field(..., min_length=1, max_length=100)
+    count: int = Field(..., ge=1, le=50)
+
+
 class OutreachEventType(BaseModel):
     """An outreach event type option."""
 
     value: str = Field(..., min_length=1, max_length=100)
     label: str = Field(..., min_length=1, max_length=200)
+    # The roles an event of this type usually needs (owner decision,
+    # 2026-11-20). Prefills a signup sheet, which the organizer can change for
+    # each event; omitted, the sheet starts from the first configured role.
+    default_roles: Optional[List[OutreachRoleNeed]] = None
 
 
 class OutreachRole(BaseModel):

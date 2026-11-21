@@ -161,6 +161,7 @@ from app.utils.contact_visibility import load_contact_policy
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_current_members, assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
+from app.utils.outreach_roles import settle_type_role_presets
 
 router = APIRouter()
 
@@ -1343,6 +1344,20 @@ async def update_event_settings(
                     )
                 ],
                 label="default coordinator",
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if updates_dict.get("outreach_event_types") is not None:
+        try:
+            updates_dict["outreach_event_types"] = settle_type_role_presets(
+                updates_dict["outreach_event_types"],
+                (
+                    updates_dict.get("outreach_roles")
+                    if updates_dict.get("outreach_roles") is not None
+                    else current_events.get(
+                        "outreach_roles", EVENT_SETTINGS_DEFAULTS["outreach_roles"]
+                    )
+                ),
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=safe_error_detail(e))
