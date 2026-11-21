@@ -36,11 +36,24 @@ from app.models.attendance_waiver import (
     AttendanceWaiverStatus,
     AttendanceWaiverWorkflow,
 )
+from app.models.forms import Form, FormSubmission
 from app.models.inventory import (
     InventoryItem,
     ItemCondition,
     ItemStatus,
     TrackingType,
+)
+from app.models.membership_pipeline import (
+    MembershipPipeline,
+    MembershipPipelineStep,
+    PipelineStepType,
+    ProspectActivityLog,
+    ProspectDocument,
+    ProspectFormRequest,
+    ProspectiveMember,
+    ProspectStatus,
+    ProspectStepProgress,
+    StepProgressStatus,
 )
 from app.models.skills_testing import SkillTemplate, SkillTest
 from app.models.training import (
@@ -820,6 +833,155 @@ class TestStoredFilesGoWithTheMember:
         assert await self._pending(db_session, department.org) == []
         assert certificate.exists()
         assert evidence.exists()
+
+
+class TestTheApplicantRecordGoesWithTheMember:
+    """A member converted from an applicant keeps a prospective_members row
+    linked by ``transferred_user_id``, which is SET NULL: deleting the member
+    only detached it. The applicant's details, ID documents and form answers
+    survived with nothing left linking them to anybody, and Purge takes only
+    inactive applications, so nothing could ever remove them (2026-11-21
+    member-files review, high)."""
+
+    @pytest.fixture
+    def root(self, tmp_path, monkeypatch):
+        uploads = tmp_path / "uploads"
+        uploads.mkdir()
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(uploads))
+        return uploads
+
+    @staticmethod
+    async def _application(db, dept, member: str, root, label: str):
+        form = Form(organization_id=dept.org, name=f"Application {label}")
+        db.add(form)
+        await db.flush()
+        answers = [
+            FormSubmission(
+                organization_id=dept.org,
+                form_id=form.id,
+                data={"full_name": f"Applicant {label}"},
+                submitter_name=f"Applicant {label}",
+            )
+            for _ in range(3)
+        ]
+        db.add_all(answers)
+        await db.flush()
+        original, duplicate, follow_up = answers
+        prospect = ProspectiveMember(
+            organization_id=dept.org,
+            first_name="Applicant",
+            last_name=label,
+            email=f"applicant-{label}-{uuid.uuid4().hex[:6]}@example.org",
+            status=ProspectStatus.TRANSFERRED,
+            transferred_user_id=member,
+            form_submission_id=original.id,
+        )
+        db.add(prospect)
+        pipeline = MembershipPipeline(organization_id=dept.org, name=f"P {label}")
+        db.add(pipeline)
+        await db.flush()
+        step = MembershipPipelineStep(
+            pipeline_id=pipeline.id,
+            name="Apply",
+            step_type=PipelineStepType.FORM_SUBMISSION,
+        )
+        db.add(step)
+        await db.flush()
+        path = root / dept.org / "applicants" / str(prospect.id) / "licence.pdf"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"%PDF-1.4 driver's licence")
+        db.add_all(
+            [
+                ProspectDocument(
+                    prospect_id=prospect.id,
+                    document_type="id",
+                    file_name="licence.pdf",
+                    file_path=str(path),
+                ),
+                ProspectStepProgress(
+                    prospect_id=prospect.id,
+                    step_id=step.id,
+                    status=StepProgressStatus.COMPLETED,
+                    action_result={"form_submission_id": str(duplicate.id)},
+                ),
+                ProspectFormRequest(
+                    organization_id=dept.org,
+                    prospect_id=prospect.id,
+                    form_id=form.id,
+                    token="follow-up-" + uuid.uuid4().hex,
+                    submission_id=follow_up.id,
+                ),
+                ProspectActivityLog(
+                    prospect_id=prospect.id,
+                    action="prospect_updated",
+                    details={"changes": {"phone": {"from": "1", "to": "2"}}},
+                ),
+            ]
+        )
+        await db.flush()
+        return SimpleNamespace(
+            prospect=str(prospect.id),
+            file=path,
+            submissions=[str(a.id) for a in answers],
+        )
+
+    async def test_the_application_its_answers_and_its_documents_go(
+        self, db_session, department, root
+    ):
+        theirs = await self._application(
+            db_session, department, department.trainee, root, "deleted"
+        )
+        kept = await self._application(
+            db_session, department, department.examiner, root, "kept"
+        )
+        # The preview names what the delete is about to remove.
+        impact = await users_endpoint.get_deletion_impact(
+            user_id=UUID(department.trainee),
+            db=db_session,
+            current_user=_admin(department),
+        )
+        by_table = {r.table: r for r in impact.removed_records}
+        assert by_table["prospective_members"].count == 1
+
+        await _hard_delete(db_session, department, department.trainee)
+
+        remaining = set(
+            (
+                await db_session.execute(
+                    select(ProspectiveMember.id).where(
+                        ProspectiveMember.organization_id == department.org
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert remaining == {kept.prospect}
+        answers = set(
+            (
+                await db_session.execute(
+                    select(FormSubmission.id).where(
+                        FormSubmission.id.in_(theirs.submissions + kept.submissions)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert answers == set(kept.submissions)
+        documents = (
+            await db_session.execute(
+                select(func.count())
+                .select_from(ProspectDocument)
+                .where(ProspectDocument.prospect_id == theirs.prospect)
+            )
+        ).scalar_one()
+        assert documents == 0
+        assert not theirs.file.exists()
+        assert kept.file.exists()
+        event = users_endpoint.log_audit_event.await_args.kwargs["event_data"]
+        assert event["files_deleted"] == 1
+        assert event["applicant_records_deleted"] == 1
 
 
 class _Killed(BaseException):

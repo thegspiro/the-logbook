@@ -20,6 +20,7 @@ from fastapi import HTTPException
 from app.api.v1.endpoints import users as users_endpoint
 from app.models.user import UserStatus
 from app.services.member_files import FileRemoval, MemberFiles
+from app.services.user_deletion_service import ApplicantRecordRemoval
 from tests.fake_request import fake_request
 
 
@@ -92,6 +93,13 @@ class TestDeleteUserHard:
             users_endpoint,
             "collect_member_files",
             AsyncMock(return_value=MemberFiles()),
+        )
+        monkeypatch.setattr(
+            users_endpoint,
+            "delete_transferred_applications",
+            AsyncMock(
+                return_value=ApplicantRecordRemoval(applications=0, document_paths={})
+            ),
         )
         monkeypatch.setattr(
             users_endpoint,
