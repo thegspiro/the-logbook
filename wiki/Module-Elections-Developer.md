@@ -49,7 +49,7 @@ The single visibility rule is `visibleElectionSections` in
 | `proxies`     | Proxy Voting      | Managers, unless cancelled                         |
 | `voting`      | Cast Vote         | Everyone, while open                               |
 | `results`     | Results           | Closed elections, or `results_visible_immediately` |
-| `integrity`   | Integrity & Audit | Managers, while open or closed                     |
+| `integrity`   | Integrity & Audit | Managers, while open or closed (was Forensics)     |
 
 `ElectionWorkflowTabs` is a `<nav>` of links with `aria-current="page"` (no
 longer the WAI-ARIA Tabs pattern), Overview first; members get no section
@@ -58,7 +58,9 @@ links. `ElectionHeaderCard` renders the lifecycle stepper (a named list with
 returns it, the winner rule, and the section links. Open Election, Close
 Nominations, Close Election and Certified Results (PDF) moved from the controls
 panel to the header beside the status badge. Integrity & Audit loads its report
-on arrival, and the integrity alert banner links to it.
+on arrival, and the integrity alert banner links to it. On a phone an officer's
+Overview is the meeting-night dashboard (`ElectionPhoneDashboard`, #4330);
+**Details and all controls** opens the full page.
 
 `ElectionsAreaNav` adds the **Elections pages** row (All Elections, Meeting
 Attendance, Settings; short labels on a phone) to `ElectionsPage`,

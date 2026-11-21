@@ -82,6 +82,36 @@ Nothing was captured by this pass.
 | 10 | Phone (390px): expense report line items as cards with the totals row; the inventory stock matrix with pinned Size column and scroll cue; message history as cards | Create |
 | 11, 12, 05, 01, 14 | Phone captures of expense line items, grant applications, inventory import preview, member import preview / Assigned Inventory, election integrity audit log | Optional; check any existing phone image of these tables (e.g. `10-05-mobile-inventory` is a different list and stays valid) |
 
+## Queued by the November 15 – 17 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-15--17-2026).
+Nothing was captured by this pass. The screenshot manifest's election shots
+were fixed to open sections by path (#4297 removed the `#tab-…` buttons they
+clicked), so the guide 14 rows here and in the November 15 – 16 queue below
+can be captured by `capture.mjs` again. This pass overlapped the November
+15 – 16 pass; rows that queue already holds (the Elections pages row, the
+desktop header, Integrity & Audit, Course Links, Evaluated Calls, the grant
+deadlines) are not repeated here.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 14 | Election Settings under the Elections pages row | Replace `14-16-election-settings` (`14-31` is in the month review's queue) |
+| 14 | Section pages that showed the old tab bar, stepper or controls, beyond those the November 15 – 16 queue names | Replace `14-04-ballot-configuration`, `14-20-runoff-chain`, `14-21-save-ballot-template`, `14-22-ballot-template-picker` |
+| 14 | Vote receipt; paper batches panel, now on the Overview | Check `14-27-vote-receipt`, `14-18-paper-batches` |
+| 14 | Phone (390px) officer Overview: "48 / 62 members have voted", time left, **Close Election**, the Live rows; and with **More** open, showing **Details and all controls** | Create (two images) |
+| 19 | Ballot items and the details card in one frame — no longer possible; the ballot is its own section and the winner row is in the header | Replace `19-25`, `19-26` or retire them |
+| 08 | A generated report with its **CSV** and **PDF** buttons | Create |
+| 02 | Training section navigation with **Waiver Requests** and its waiting count | Create (optional) |
+| 02 | Images showing the Records, Curriculum or Settings & Data tab strip (now with Waiver Requests, Course Links and the shortened labels) | Check `02-04-course-library`, `02-126-shift-evaluation-settings` |
+| 11 | Create Fiscal Year with the end-date error under **End Date** | Create (optional) |
+| 18 | Order dialog **Send an update** with "Write the update to send." | Create (optional) |
+| 05 | Medical supplies Import / export with "Choose a CSV file to import." | Create (optional) |
+
+The #4347 training-event form rows (`02-80`, `02-83`, `02-91`, `04-02`,
+`04-61`) are in "Made stale by the one training-event form" below; this pass
+rewrote the `04-02` and `04-61` alt texts to describe the new screens, so the
+images and their alts now disagree until they are re-shot.
+
 ## Queued by the month review (October 16 – November 16)
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-month-review-october-16--november-16-2026).
@@ -112,7 +142,8 @@ Nothing was captured.
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-15--16-2026).
 Nothing was captured by this pass. The training-event form's own queue, written
-by #4347, is the next section down and is unchanged.
+by #4347, is "Made stale by the one training-event form" below and is
+unchanged.
 
 | Guide | Screen                                                                                                                                                                | Action                                                                                       |
 | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
