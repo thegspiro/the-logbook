@@ -92,6 +92,14 @@ _CENTS = Decimal("0.01")
 # that a typical window is one query, small enough not to hold a whole
 # department's order history in memory at once.
 _EXPORT_PAGE_SIZE = 200
+
+# The orders a vendor order moves to ORDERED. Anything later is already past
+# that step, and a cancelled order was never on the sheet.
+_BEFORE_VENDOR_ORDER_STATUSES = (
+    StoreOrderStatus.SUBMITTED,
+    StoreOrderStatus.AWAITING_PAYMENT,
+    StoreOrderStatus.PAID,
+)
 _DASHBOARD_ACTIVITY_LIMIT = 100
 
 # Order numbers are allocated as ORD-YYYY-NNNN. Matching a payment reference
@@ -1076,54 +1084,79 @@ class StorefrontService:
             window.vendor_reference = vendor_reference.strip() or None
         if expected_delivery_date is not None:
             window.expected_delivery_date = expected_delivery_date
+        # Recording again corrects the vendor details or orders the late
+        # payers. Whether this is the first recording decides who is emailed
+        # below, so a re-run does not tell everyone a second time (W67b-13).
+        first_recording = window.vendor_ordered_at is None
         window.vendor_ordered_at = _utcnow()
         window.vendor_ordered_by = actor_id
         await self.db.commit()
         await self.db.refresh(window)
 
-        advanced = 0
         skipped: List[Dict[str, str]] = []
+        advanced_ids: List[str] = []
         if advance_orders:
-            orders, _ = await self.list_orders(
-                organization_id, window_id=window.id, page_size=_EXPORT_PAGE_SIZE
+            # Every order in the window, not one page of them, and only those
+            # not yet with the vendor: an order already Ready or Fulfilled is
+            # past this step, and moving it back would tell its member the
+            # goods they were told to collect are on order again (W67b-13).
+            pending = await self.db.execute(
+                select(StoreOrder.id)
+                .where(
+                    StoreOrder.window_id == str(window.id),
+                    StoreOrder.organization_id == str(organization_id),
+                    StoreOrder.status.in_(_BEFORE_VENDOR_ORDER_STATUSES),
+                )
+                .order_by(StoreOrder.created_at)
             )
+            candidate_ids = [str(order_id) for order_id in pending.scalars().all()]
             result = await self.bulk_update_status(
                 organization_id,
-                [
-                    o.id
-                    for o in orders
-                    if o.status
-                    not in (StoreOrderStatus.CANCELLED, StoreOrderStatus.FULFILLED)
-                ],
+                candidate_ids,
                 StoreOrderStatus.ORDERED,
                 actor_id,
                 notify_members=False,
             )
-            advanced = result["updated"]
             skipped = result["errors"]
+            refused = {error["order_id"] for error in skipped}
+            advanced_ids = [i for i in candidate_ids if i not in refused]
 
         notified = 0
         settings = await self.get_settings(organization_id)
         if notify_members and settings.send_vendor_order_updates:
-            # Under pay-before-vendor-order an unpaid order was held out of
-            # this purchase order, so telling its member "placed with the
-            # vendor" is the claim the rule exists to prevent (W67b-11). Only
-            # members whose orders went into the order hear about it.
-            recipients = await self._window_customer_emails(
-                window.id,
-                organization_id,
-                settled_only=(
-                    settings.payment_policy == StorePaymentPolicy.BEFORE_VENDOR_ORDER
-                ),
-            )
+            # The orders this call advanced are what decides a re-run: their
+            # members have not been told, everyone else in the window has. On
+            # the first recording, members whose orders were already marked
+            # Ordered by hand are told as well. Under pay-before-vendor-order
+            # an unpaid order was held out of the purchase order, so its member
+            # is not told it was placed (W67b-11).
+            recipients = set(await self._customer_emails(advanced_ids, organization_id))
+            if first_recording:
+                recipients.update(
+                    await self._window_customer_emails(
+                        window.id,
+                        organization_id,
+                        settled_only=(
+                            settings.payment_policy
+                            == StorePaymentPolicy.BEFORE_VENDOR_ORDER
+                        ),
+                    )
+                )
             if recipients:
                 notified = await self.notifications.send_vendor_order_placed(
-                    window, settings, recipients, message=message
+                    window, settings, sorted(recipients), message=message
                 )
 
+        # Advancing commits once per order, which expires the window. The
+        # response reads its offerings, and a lazy load there raises
+        # MissingGreenlet: the recording succeeded, and the officer was shown
+        # a 500 that invited recording it again.
+        window = (
+            await self.get_window(window.id, organization_id, reload=True) or window
+        )
         return {
             "window": window,
-            "advanced": advanced,
+            "advanced": len(advanced_ids),
             "skipped": skipped,
             "notified": notified,
         }
@@ -1286,6 +1319,21 @@ class StorefrontService:
             )
         await self.db.delete(window)
         await self.db.commit()
+
+    async def _customer_emails(
+        self, order_ids: Sequence[str], organization_id: str
+    ) -> List[str]:
+        """The addresses on these orders, one each."""
+        if not order_ids:
+            return []
+        result = await self.db.execute(
+            select(StoreOrder.customer_email).where(
+                StoreOrder.id.in_([str(order_id) for order_id in order_ids]),
+                StoreOrder.organization_id == str(organization_id),
+                StoreOrder.customer_email.isnot(None),
+            )
+        )
+        return sorted({email for email in result.scalars().all() if email})
 
     async def _window_customer_emails(
         self, window_id: str, organization_id: str, settled_only: bool = False
@@ -2710,6 +2758,72 @@ class StorefrontService:
             await self.notifications.send_admin_new_order(refreshed, settings)
         return refreshed or order
 
+    async def reject_payment_report(
+        self,
+        order_id: str,
+        organization_id: str,
+        actor_id: Optional[str],
+        reason: Optional[str] = None,
+        notify_member: bool = True,
+    ) -> StoreOrder:
+        """Turn down a member's "I've sent payment" that never arrived (W67b-14).
+
+        Only a report could be verified before, so an order whose money never
+        came stayed pending for good: reminders skip pending orders, and the
+        member could not change the payment method while a report waited.
+        This returns the order to what the ledger says is owed. ``amount_paid``
+        is untouched, because a report never moved it.
+        """
+        # Locked like the settlement paths: verifying the same report at the
+        # same moment would otherwise be overwritten with "unpaid".
+        order = await self.get_order(order_id, organization_id, for_update=True)
+        if not order:
+            raise ValueError("Order not found")
+        if order.payment_status != StorePaymentStatus.PENDING_VERIFICATION:
+            await self.db.rollback()
+            raise ValueError("This order has no payment report waiting to be verified")
+
+        order.payment_status = (
+            StorePaymentStatus.PARTIAL
+            if _money(order.amount_paid) > 0
+            else StorePaymentStatus.UNPAID
+        )
+        # Both described the payment the member reported; left in place they
+        # would read as a reference for money the department never received.
+        order.payment_reported_at = None
+        order.payment_reference = None
+
+        message = (
+            "The payment you reported could not be verified, so the balance is "
+            "still owed."
+        )
+        detail = (reason or "").strip()
+        if detail:
+            message = f"{message} {detail}"
+        self.db.add(
+            StoreOrderEvent(
+                id=generate_uuid(),
+                organization_id=str(organization_id),
+                order_id=order.id,
+                event_type=StoreOrderEventType.MESSAGE,
+                message=message,
+                is_member_visible=True,
+                created_by=actor_id,
+            )
+        )
+        await self.db.commit()
+
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
+        if refreshed and notify_member:
+            # Not behind a notification switch, like a typed message: an
+            # officer decided this about one member's money, and the member
+            # otherwise believes they have paid.
+            settings = await self.get_settings(organization_id)
+            await self.notifications.send_order_update(
+                refreshed, message, settings, status_label="Payment not verified"
+            )
+        return refreshed or order
+
     async def update_member_payment_method(
         self,
         order_id: str,
@@ -2733,8 +2847,8 @@ class StorefrontService:
         if order.payment_status == StorePaymentStatus.PENDING_VERIFICATION:
             raise ValueError(
                 "A reported payment is awaiting verification. Wait for it to "
-                "be verified, or ask staff to reject the report before "
-                "changing the payment method"
+                "be verified, or ask the store staff to mark it not received, "
+                "before changing the payment method"
             )
 
         settings = await self.get_settings(organization_id)

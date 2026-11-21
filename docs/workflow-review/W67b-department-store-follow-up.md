@@ -737,12 +737,80 @@ install sends no email.
   - It moves Ready for pickup orders back to Ordered.
   - Run again, it re-sends the vendor email to everyone, with no idempotency
     key (pitfall #36).
+
+  ✅ **FIXED (2026-11-21).**
+  - It now selects every order in the window still before Ordered
+    (submitted, awaiting payment, paid), with no page limit. Ready and
+    fulfilled orders are never selected, so they stay where they are.
+  - Who is emailed depends on what the call did. The members whose orders
+    this call advanced are told. On the first recording only, everyone
+    `_window_customer_emails` names is told as well, which covers orders
+    an officer had already moved to Ordered by hand. A later recording,
+    such as correcting the vendor reference, emails nobody. A member who
+    paid after the first recording is ordered and told on the next one.
+    The order status itself is the idempotency key: an order already
+    Ordered is not selected again.
+  - Two recordings submitted in the same instant can both pass the
+    status check before either commits. Each order is moved once, but its
+    member could be emailed twice. Closing that needs the window row held
+    across the per-order commits, which `update_order_status` does not
+    allow, so it is left as a residual.
+
+  - **Found while re-driving it: recording a vendor order that advanced
+    any order returned a 500.** The orders were advanced and the members
+    emailed, then serializing the response failed: each order's commit
+    expired the window, and its offerings lazy-loaded outside the session
+    (MissingGreenlet). The officer saw an error for a recording that had
+    worked, which invited recording it again and the duplicate emails
+    above. The window is now re-read before the response is built. The old
+    code fails the same way.
+
+  **Tests:** five in `TestVendorOrderRerun`
+  (`tests/test_storefront_service.py`), all seen to fail against the old
+  code: every order past the page size, an order on the shelf left there,
+  no second email with or without advancing, and the late payer ordered
+  and told. A sixth calls the endpoint and validates its response; it
+  failed with MissingGreenlet against both the old and the unfixed new
+  code.
+
+  **Re-driven:** two orders in a closed window, recorded twice. The first
+  returned 200 with 2 advanced, the second 200 with 0 advanced and the
+  corrected reference. Before the window re-read, the first returned 500.
+
 - **W67b-14 — MED — A member's "I've sent payment" cannot be rejected.**
   Nothing returns `pending_verification` to unpaid. If the money never
   arrives:
   - the order stays pending for good;
   - reminders stop;
   - the member cannot change the payment method.
+
+  ✅ **FIXED (2026-11-21).**
+  - New `POST /store/orders/{id}/reject-payment-report` (needs
+    `storefront.manage`) calls `reject_payment_report`. It locks the
+    order and returns it to Unpaid, or to Part paid if money was already
+    recorded. `amount_paid` is untouched, because a report never moved it.
+    It clears the reported reference and time, adds a timeline entry the
+    member sees, emails the member (unless `notifyMember` is false), and
+    writes an audit event. An order with no report waiting is refused.
+  - Reminders pick the order up again, and the member can change the
+    payment method.
+  - The order dialog shows **Not received** in the "member reported
+    paying" notice, behind a confirm that says what the member will be
+    told.
+  - The member's error when changing method on a pending order now says to
+    ask staff to mark the payment not received, which is now possible.
+
+  **Tests:** nine in `TestRejectPaymentReport`, including the endpoint and
+  another organization being refused, and three in `OrderDetailModal.test.tsx`.
+  The dialog tests failed against the old component.
+
+  **Re-driven:** a member reported paying ORD-2026-0014 in cash. In the
+  order dialog, **Not received** opened the confirm naming the member;
+  confirming showed "Payment marked as not received", and the button went
+  away. The order read Unpaid with no reference. The member's timeline
+  showed "The payment you reported could not be verified…", and the member
+  could then change the payment method (200).
+
 - **W67b-15 — LOW — Orders are accepted for up to 15 minutes after a window's
   closing time.** `create_order` checks the status, not `closes_at`. Only the
   15-minute lifecycle job closes a window.

@@ -355,6 +355,15 @@ export const storefrontService = {
     return response.data;
   },
 
+  /** A member's reported payment never arrived: the balance is owed again. */
+  async rejectPaymentReport(
+    orderId: string,
+    payload: { reason?: string | undefined; notifyMember: boolean }
+  ): Promise<StoreOrder> {
+    const response = await api.post<StoreOrder>(`/store/orders/${orderId}/reject-payment-report`, payload);
+    return response.data;
+  },
+
   async cancelOrder(
     orderId: string,
     payload: { reason?: string | undefined; notifyMember: boolean }

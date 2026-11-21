@@ -321,8 +321,16 @@ members chase. It does three things in one call so they cannot drift apart:
 
 1. Stamps `vendor_name`, `vendor_reference`, `vendor_ordered_at` and
    `vendor_ordered_by` on the window, plus `expected_delivery_date` if given.
-2. Advances every eligible order to `ORDERED`.
-3. Emails everyone who ordered, with the vendor and expected date.
+2. Advances every order still before `ORDERED` (submitted, awaiting payment,
+   paid) to `ORDERED`. There is no page limit, and an order already ready or
+   fulfilled is never moved back.
+3. Emails the members whose orders it advanced, with the vendor and expected
+   date. The first recording also emails everyone else who ordered, as
+   `_window_customer_emails` names them.
+
+Recording it again is safe. It corrects the vendor details and orders anyone
+who paid since, and only those members are emailed. Nobody is told twice,
+because an order already `ORDERED` is not selected again (W67b-13).
 
 Orders the payment policy holds back are skipped, not advanced, and come back
 in `skipped` with the balance in the message. They were not on the sheet the
@@ -338,6 +346,14 @@ discovers at pickup.
 | Waive          | `POST /store/orders/{id}/waive`     | Clears the balance without money changing hands. Locks the order; refuses (400) one already paid or waived — a paid order is refunded instead. A part-paid order can be waived |
 | Refund         | `POST /store/orders/{id}/refund`    | Records a refund                                                                                                                                                               |
 | Bulk mark paid | `POST /store/orders/bulk-payment`   | Several orders at once                                                                                                                                                         |
+
+**A reported payment that never arrived** is turned down with
+`POST /store/orders/{id}/reject-payment-report` ("Not received" in the order
+dialog). The order goes back to unpaid, or part paid if money was already
+recorded, and the reported reference is cleared. The member is told the
+payment could not be verified, reminders resume, and the member can change
+the payment method. A report never moves `amount_paid`, so neither does
+turning one down (W67b-14).
 
 Every one of these takes the **payment method actually used**, which need not
 be the one the member chose at checkout — they picked Venmo and then handed

@@ -55,6 +55,7 @@ from app.schemas.storefront import (
     StoreOrderPaymentMethodUpdate,
     StoreOrderPaymentRecord,
     StoreOrderPaymentReport,
+    StoreOrderPaymentReportRejection,
     StoreOrderRefund,
     StoreOrderResponse,
     StoreOrderStatusUpdate,
@@ -1488,6 +1489,41 @@ async def cancel_order(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    settings = await service.get_settings(str(current_user.organization_id))
+    return _order_payload(order, service, settings, include_internal=True)
+
+
+@router.post(
+    "/orders/{order_id}/reject-payment-report", response_model=StoreOrderResponse
+)
+async def reject_payment_report(
+    order_id: str,
+    payload: StoreOrderPaymentReportRejection,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Mark a member's reported payment as not received, so the balance is owed
+    again. Requires ``storefront.manage``."""
+    service = StorefrontService(db)
+    try:
+        order = await service.reject_payment_report(
+            order_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            reason=payload.reason,
+            notify_member=payload.notify_member,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    await log_audit_event(
+        db=db,
+        event_type="store_payment_report_rejected",
+        event_category="storefront",
+        severity="info",
+        event_data={"order_id": str(order_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     settings = await service.get_settings(str(current_user.organization_id))
     return _order_payload(order, service, settings, include_internal=True)
 
