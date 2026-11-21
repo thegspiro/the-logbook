@@ -3143,7 +3143,10 @@ tbody tr:last-child {
 .member-training-print__compliance--yellow {
   color: #92400e;
 }
-/* No requirement grades the member: neither a pass nor a warning. */
+/* No requirement grades the member: neither a pass nor a warning. An exempt
+   member is excused from grading, so the record prints it muted too, as the
+   profile card and My Crew show it. */
+.member-training-print__compliance--exempt,
 .member-training-print__compliance--not_applicable {
   color: #555;
 }
