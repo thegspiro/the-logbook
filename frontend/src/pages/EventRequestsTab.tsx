@@ -71,6 +71,8 @@ import { displayNameOf } from '../utils/memberName';
 import { isActiveAccount } from '../constants/enums';
 import { useAuthStore } from '../stores/authStore';
 import RequestApparatusCrewSection from './event-requests/RequestApparatusCrewSection';
+import MemberAudiencePicker from '../components/member-audience/MemberAudiencePicker';
+import { EMPTY_AUDIENCE, type MemberAudienceChoice } from '../types/memberAudience';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import RequestInboxRow, { ChecklistBar, CoordinatorChip, RequestDateLine } from './event-requests/RequestInboxRow';
@@ -230,6 +232,8 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
   const [roleNeeds, setRoleNeeds] = useState<StaffingRoleNeed[]>([]);
   const [showVolunteerCall, setShowVolunteerCall] = useState(false);
   const [volunteerCallMessage, setVolunteerCallMessage] = useState('');
+  const [volunteerCallAudience, setVolunteerCallAudience] = useState<MemberAudienceChoice>(EMPTY_AUDIENCE);
+  const [volunteerCallCount, setVolunteerCallCount] = useState<number | null>(null);
 
   const tz = useTimezone();
   const currentUserId = useAuthStore((state) => state.user?.id);
@@ -408,11 +412,13 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
     setActionLoading(true);
     try {
       const result = await eventRequestService.sendVolunteerCall(requestId, {
+        ...volunteerCallAudience,
         message: volunteerCallMessage.trim() || undefined,
       });
       toast.success(result.message);
       setShowVolunteerCall(false);
       setVolunteerCallMessage('');
+      setVolunteerCallAudience(EMPTY_AUDIENCE);
       await loadStaffing(requestId);
       await refreshDetail(requestId);
     } catch (err) {
@@ -1263,9 +1269,14 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
                     {showVolunteerCall && (
                       <div className="card space-y-3 p-4">
                         <p className="text-theme-text-muted text-xs">
-                          Emails every active member with the event details and a link to sign up. Members who have
-                          turned off email notifications are skipped.
+                          Emails the members you choose with the event details and a link to sign up. Members who have
+                          turned off volunteer call emails are skipped.
                         </p>
+                        <MemberAudiencePicker
+                          value={volunteerCallAudience}
+                          onChange={setVolunteerCallAudience}
+                          onCount={setVolunteerCallCount}
+                        />
                         <textarea
                           value={volunteerCallMessage}
                           onChange={(e) => setVolunteerCallMessage(e.target.value)}
@@ -1278,7 +1289,7 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
                           <button
                             type="button"
                             onClick={() => void handleVolunteerCall(detail.id)}
-                            disabled={actionLoading}
+                            disabled={actionLoading || !volunteerCallCount}
                             className="btn-primary flex items-center gap-1.5 text-sm font-medium"
                           >
                             <Send className="h-4 w-4" />

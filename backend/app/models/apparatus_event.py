@@ -16,9 +16,18 @@ read-only "outreach · not a shift" overlay.
 
 import enum
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -360,4 +369,47 @@ class EventApparatusSeat(Base):
         ),
         Index("ix_event_apparatus_seats_unit", "unit_id"),
         Index("ix_event_apparatus_seats_org_user", "organization_id", "user_id"),
+    )
+
+
+class ApparatusEventSeatCall(Base):
+    """One "email members about open seats" send for a run of nights.
+
+    Kept so the crew card can say when the membership was last asked and how
+    many it reached, and so an officer can see who sent what to whom. The
+    recipients' addresses are not stored: the count and the filter answer
+    those questions, and a copy of the address list would be member PII kept
+    for no reader.
+    """
+
+    __tablename__ = "apparatus_event_seat_calls"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    # The run, not one night: the email lists every upcoming night of it that
+    # still has an open seat. ``EventApparatusPlan.series_id`` is not a table
+    # of its own, so this is a plain column, not a foreign key.
+    series_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    sent_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    recipients: Mapped[int] = mapped_column(Integer, nullable=False)
+    skipped_opted_out: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    nights_listed: Mapped[int] = mapped_column(Integer, nullable=False)
+    audience: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+
+    __table_args__ = (
+        Index(
+            "ix_apparatus_event_seat_calls_series",
+            "organization_id",
+            "series_id",
+            "sent_at",
+        ),
     )

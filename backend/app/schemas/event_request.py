@@ -6,6 +6,7 @@ Supports flexible date preferences, configurable pipeline tasks, comments,
 assignment, scheduling with room booking, and postponement.
 """
 
+from dataclasses import replace
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
@@ -20,6 +21,8 @@ from pydantic import (
 
 from app.models.event_request import STAFF_ENTERED_SOURCES
 from app.schemas.base import UTCResponseBase, as_utc
+from app.schemas.member_audience import MemberAudiencePayload
+from app.services.member_audience import AudienceFilter
 
 
 def calendar_date(value: Any) -> Any:
@@ -312,8 +315,14 @@ class EventStaffingResponse(EventRequestStaffingResponse):
     request_id: Optional[str] = None
 
 
-class EventRequestVolunteerCall(BaseModel):
-    """Schema for emailing the membership asking for help on a request."""
+class EventRequestVolunteerCall(MemberAudiencePayload):
+    """Schema for emailing the membership asking for help on a request.
+
+    ``member_classes``, ``member_statuses`` and ``position_ids`` (inherited)
+    are the coordinator's choice of who to ask; ``membership_types`` is the
+    original filter on the legacy combined field, still honoured so existing
+    callers keep working.
+    """
 
     message: Optional[str] = Field(
         None,
@@ -322,11 +331,18 @@ class EventRequestVolunteerCall(BaseModel):
     )
     membership_types: Optional[List[str]] = Field(
         None,
+        max_length=20,
         description=(
-            "Restrict the call to these membership types. Omit to email every "
-            "active member."
+            "Legacy: restrict the call to these membership types. Prefer "
+            "member_classes and member_statuses."
         ),
     )
+
+    def to_filter(self) -> AudienceFilter:
+        return replace(
+            super().to_filter(),
+            legacy_membership_types=tuple(self.membership_types or ()),
+        )
 
 
 class EventRequestVolunteerCallResult(UTCResponseBase):

@@ -12,14 +12,16 @@ from datetime import datetime
 from typing import Any, Dict, List, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission, user_has_permission
 from app.core.audit import log_audit_event
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.apparatus_event import ApparatusEventTemplate
-from app.models.user import User
+from app.models.user import Organization, User
 from app.schemas.apparatus_event import (
     ApparatusEventTemplateCreate,
     ApparatusEventTemplateResponse,
@@ -33,11 +35,14 @@ from app.schemas.apparatus_event import (
     CrewUnitResponse,
     DriverCandidatesResponse,
     EditorOptionsResponse,
+    LastSeatCall,
     NightPlanUpdate,
     NightSummary,
     ScheduleNightsRequest,
     ScheduleNightsResponse,
     SeatAssignmentRequest,
+    SeatCallRequest,
+    SeatCallResult,
     SeriesNight,
     TemplateSeatResponse,
     TemplateUnitResponse,
@@ -46,6 +51,10 @@ from app.services.apparatus_event_service import (
     ApparatusEventService,
     ConflictsNotAcknowledged,
     SeatOutcome,
+)
+from app.services.apparatus_seat_call_service import (
+    ApparatusSeatCallService,
+    SeatCallNotSent,
 )
 from app.services.event_service import attendance_is_finalized
 
@@ -240,7 +249,19 @@ async def _board(
         can_manage=can_manage,
         can_sign_up=viewer.can_sign_up,
         warnings=warnings or [],
+        last_seat_call=await _last_seat_call(service, plan.series_id, viewer),
     )
+
+
+async def _last_seat_call(
+    service: ApparatusEventService, series_id: str, viewer: _Viewer
+) -> LastSeatCall | None:
+    if not viewer.can_manage:
+        return None
+    last = await ApparatusSeatCallService(service.db).last_call(
+        series_id, viewer.organization_id
+    )
+    return LastSeatCall(**last) if last else None
 
 
 # ---------------------------------------------------------------------------
@@ -800,3 +821,56 @@ async def remove_night_plan(
         user_id=viewer.id,
         username=viewer.username,
     )
+
+
+@router.post("/events/{event_id}/seat-call", response_model=SeatCallResult)
+async def email_open_seats(
+    event_id: str,
+    data: SeatCallRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus_events.manage")),
+):
+    """
+    Email the chosen members about the open seats on this night's run: one
+    email listing every upcoming night that still has a seat members can take.
+    Email only, and members who turned off volunteer call emails are skipped.
+
+    **Requires permission: apparatus_events.manage**
+    """
+    viewer = _viewer(current_user)
+    org = (
+        await db.execute(
+            select(Organization).where(Organization.id == viewer.organization_id)
+        )
+    ).scalar_one_or_none()
+    try:
+        result = await ApparatusSeatCallService(db).send(
+            event_id,
+            org,
+            viewer.organization_id,
+            viewer.id,
+            data.to_filter(),
+            data.message,
+            settings.FRONTEND_URL,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Apparatus event not found")
+    except ValueError as exc:
+        raise _bad_request(exc)
+    except SeatCallNotSent as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    await log_audit_event(
+        db=db,
+        event_type="apparatus_event_seat_call_sent",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": event_id,
+            "recipients": result["recipients"],
+            "nights_listed": result["nights_listed"],
+        },
+        user_id=viewer.id,
+        username=viewer.username,
+    )
+    await db.commit()
+    return SeatCallResult(**result)

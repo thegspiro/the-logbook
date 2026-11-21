@@ -19,6 +19,7 @@ from app.models.apparatus_event import (
 )
 from app.models.event import EventType
 from app.schemas.base import UTCResponseBase
+from app.schemas.member_audience import MemberAudiencePayload
 
 # A night is one evening out; a run longer than this is a data-entry slip.
 MAX_NIGHT_MINUTES = 24 * 60
@@ -291,6 +292,14 @@ class SeriesNight(UTCResponseBase):
     total: int
 
 
+class LastSeatCall(UTCResponseBase):
+    """When the membership was last emailed about this run's open seats."""
+
+    sent_at: datetime
+    recipients: int
+    sent_by_name: Optional[str] = None
+
+
 class CrewBoardResponse(UTCResponseBase):
     event_id: str
     title: str
@@ -315,6 +324,28 @@ class CrewBoardResponse(UTCResponseBase):
     can_manage: bool
     can_sign_up: bool
     warnings: List[DriverWarning] = Field(default_factory=list)
+    # Coordinators only: a member has no use for it.
+    last_seat_call: Optional[LastSeatCall] = None
+
+
+class SeatCallRequest(MemberAudiencePayload):
+    """Email the chosen members about the open seats on this night's run."""
+
+    message: Optional[str] = Field(None, max_length=2000)
+
+    @field_validator("message")
+    @classmethod
+    def _message(cls, value: Optional[str]) -> Optional[str]:
+        return _blank_to_none(value)
+
+
+class SeatCallResult(UTCResponseBase):
+    message: str
+    recipients: int
+    failed: int
+    skipped_opted_out: int
+    nights_listed: int
+    sent_at: datetime
 
 
 class SeatAssignmentRequest(BaseModel):

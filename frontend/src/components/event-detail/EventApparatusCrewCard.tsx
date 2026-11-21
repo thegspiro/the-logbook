@@ -12,15 +12,16 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { isAxiosError } from 'axios';
-import { CheckCircle2, Pencil, Truck, UserMinus, UserPlus } from 'lucide-react';
+import { CheckCircle2, Megaphone, Pencil, Truck, UserMinus, UserPlus } from 'lucide-react';
 import { apparatusEventService } from '../../services/api';
 import { ApparatusEventSeatType, type CrewBoard, type CrewSeat, type CrewUnit } from '../../types/apparatusEvent';
 import { useConfirm } from '../../contexts/ConfirmContext';
-import { formatCalendarDate, toLocalDateString } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatShortDateTime, toLocalDateString } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { EVOC_MODE_LABEL, EVOC_MODE_TONE, TONE } from '../../pages/apparatus-events/tones';
 import AssignSeatDialog from './apparatus-crew/AssignSeatDialog';
 import EditNightDialog from './apparatus-crew/EditNightDialog';
+import SeatCallDialog from './apparatus-crew/SeatCallDialog';
 import { seatLabels } from './apparatus-crew/seatLabels';
 
 interface EventApparatusCrewCardProps {
@@ -36,6 +37,7 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
   const [pendingSeat, setPendingSeat] = useState<string | null>(null);
   const [assigning, setAssigning] = useState<{ unit: CrewUnit; seat: CrewSeat; label: string } | null>(null);
   const [editing, setEditing] = useState(false);
+  const [emailing, setEmailing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -123,10 +125,18 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
           </p>
         </div>
         {board.can_manage && !closed && (
-          <button type="button" className="btn-secondary btn-sm" onClick={() => setEditing(true)}>
-            <Pencil className="h-4 w-4" aria-hidden="true" />
-            Edit this night
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {!ended && (
+              <button type="button" className="btn-secondary btn-sm" onClick={() => setEmailing(true)}>
+                <Megaphone className="h-4 w-4" aria-hidden="true" />
+                Email members
+              </button>
+            )}
+            <button type="button" className="btn-secondary btn-sm" onClick={() => setEditing(true)}>
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+              Edit this night
+            </button>
+          </div>
         )}
       </div>
 
@@ -135,6 +145,14 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
         <span className={`badge ${EVOC_MODE_TONE[board.evoc_mode]}`}>{EVOC_MODE_LABEL[board.evoc_mode]}</span>
         <span className={`badge ${TONE.slate}`}>Hours: {board.admin_hours_category_name ?? 'by event type'}</span>
       </div>
+
+      {board.last_seat_call && (
+        <p className="text-theme-text-muted mt-2 text-xs">
+          Members last emailed about open seats {formatShortDateTime(board.last_seat_call.sent_at, timezone)} ·{' '}
+          {board.last_seat_call.recipients} {board.last_seat_call.recipients === 1 ? 'member' : 'members'}
+          {board.last_seat_call.sent_by_name ? ` · by ${board.last_seat_call.sent_by_name}` : ''}
+        </p>
+      )}
 
       {board.series.length > 1 && (
         <nav className="mt-3 flex flex-wrap items-center gap-1.5 text-xs" aria-label="Other nights in this run">
@@ -292,6 +310,15 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
         onAssigned={(updated) => {
           setAssigning(null);
           setBoard(updated);
+        }}
+      />
+      <SeatCallDialog
+        eventId={emailing ? board.event_id : null}
+        runTitle={board.title}
+        onClose={() => setEmailing(false)}
+        onSent={() => {
+          setEmailing(false);
+          void load();
         }}
       />
       <EditNightDialog
