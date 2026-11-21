@@ -5665,6 +5665,7 @@ class SchedulingService:
                 )
                 await self.db.commit()
 
+            await self._sync_outreach_rsvps(shift_id, organization_id)
             return assignment, None
         except IntegrityError:
             await self.db.rollback()
@@ -5999,6 +6000,7 @@ class SchedulingService:
             # relying on a control that did not reach them.
             self.last_assignment_warnings = (driver_verdict or {}).get("warnings") or []
 
+            await self._sync_outreach_rsvps(assignment.shift_id, organization_id)
             return assignment, None
         except CodedValueError:
             # A curated business refusal (e.g. the driver qualification
@@ -6142,6 +6144,9 @@ class SchedulingService:
                 action="removed",
             )
 
+            await self._sync_outreach_rsvps(
+                shift_id, organization_id, removed_user_ids=[str(user_id)]
+            )
             return True, None
         except Exception as e:
             await self.db.rollback()
@@ -6292,10 +6297,46 @@ class SchedulingService:
                     action="declined",
                 )
 
+            await self._sync_outreach_rsvps(assignment.shift_id, organization_id)
             return assignment, None
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    async def _sync_outreach_rsvps(
+        self,
+        shift_id: UUID | str,
+        organization_id: UUID | str,
+        removed_user_ids: Sequence[str] = (),
+    ) -> None:
+        """Keep an outreach event's RSVPs in step with its signup sheet.
+
+        Owner decision, 2026-11-20: a member who takes a seat on an outreach
+        sheet is going to the event; one who gives it up is not. Called after
+        every seat change has committed, from the one place each kind of
+        change passes through, so no path is missed. Only outreach sheets are
+        looked at, and a failure here never undoes the seat change it follows.
+        """
+        try:
+            is_outreach = await self.db.scalar(
+                select(Shift.is_outreach).where(
+                    Shift.id == str(shift_id),
+                    Shift.organization_id == str(organization_id),
+                )
+            )
+            if not is_outreach:
+                return
+            from app.services.event_staffing_service import sync_volunteer_rsvps
+
+            await sync_volunteer_rsvps(
+                self.db, str(shift_id), str(organization_id), removed_user_ids
+            )
+            await self.db.commit()
+        except Exception as e:
+            await self.db.rollback()
+            logger.warning(
+                "Could not sync volunteer RSVPs for shift {}: {}", shift_id, e
+            )
 
     # ============================================
     # Shift Decline / Drop Notifications

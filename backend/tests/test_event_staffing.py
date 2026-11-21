@@ -259,3 +259,176 @@ class TestTheSheetFollowsTheEvent:
 
         shift = await db_session.scalar(select(Shift).where(Shift.id == sheet_id))
         assert shift.status == ShiftStatus.CANCELLED
+
+
+async def _rsvp(db, event, user):
+    from app.models.event import EventRSVP
+
+    return await db.scalar(
+        select(EventRSVP).where(
+            EventRSVP.event_id == event.id, EventRSVP.user_id == user.id
+        )
+    )
+
+
+async def _member(db, org, name):
+    user = User(
+        organization_id=org.id,
+        username=f"{name}-{uuid.uuid4().hex[:6]}",
+        email=f"{name}-{uuid.uuid4().hex[:6]}@example.test",
+        first_name=name.title(),
+        last_name="Member",
+        status=UserStatus.ACTIVE,
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+class TestVolunteersAreGoing:
+    """A member who claims a role is going to the event (owner decision,
+    2026-11-20), through the scheduling service every seat change passes."""
+
+    async def _seat(self, db, org, shift, user):
+        from app.services.scheduling_service import SchedulingService
+
+        assignment, error = await SchedulingService(db).create_assignment(
+            org.id,
+            shift.id,
+            {"user_id": user.id, "position": "volunteer", "outreach_role": "educator"},
+            user.id,
+        )
+        assert error is None, error
+        return assignment
+
+    async def test_claiming_a_seat_makes_the_member_going(self, db_session):
+        from app.models.event import RSVPStatus
+
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        await _open(db_session, officer, event, ("educator", 2))
+        shift = await _sheet(db_session, event)
+        member = await _member(db_session, org, "jordan")
+
+        await self._seat(db_session, org, shift, member)
+
+        rsvp = await _rsvp(db_session, event, member)
+        assert rsvp is not None
+        assert rsvp.status == RSVPStatus.GOING
+
+    async def test_giving_the_seat_up_makes_them_not_going(self, db_session):
+        from app.models.event import RSVPStatus
+        from app.services.scheduling_service import SchedulingService
+
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        await _open(db_session, officer, event, ("educator", 2))
+        shift = await _sheet(db_session, event)
+        member = await _member(db_session, org, "jordan")
+        assignment = await self._seat(db_session, org, shift, member)
+
+        ok, error = await SchedulingService(db_session).delete_assignment(
+            uuid.UUID(assignment.id), org.id
+        )
+        assert ok, error
+
+        rsvp = await _rsvp(db_session, event, member)
+        await db_session.refresh(rsvp)
+        assert rsvp.status == RSVPStatus.NOT_GOING
+
+    async def test_declining_makes_them_not_going(self, db_session):
+        from app.models.event import RSVPStatus
+        from app.services.scheduling_service import SchedulingService
+
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        await _open(db_session, officer, event, ("educator", 2))
+        shift = await _sheet(db_session, event)
+        member = await _member(db_session, org, "jordan")
+        assignment = await self._seat(db_session, org, shift, member)
+
+        result, error = await SchedulingService(db_session).decline_assignment(
+            uuid.UUID(assignment.id), member.id, org.id
+        )
+        assert error is None, error
+
+        rsvp = await _rsvp(db_session, event, member)
+        await db_session.refresh(rsvp)
+        assert rsvp.status == RSVPStatus.NOT_GOING
+
+    async def test_a_checked_in_member_is_left_alone(self, db_session):
+        from app.models.event import RSVPStatus
+        from app.services.event_staffing_service import sync_volunteer_rsvps
+
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        await _open(db_session, officer, event, ("educator", 2))
+        shift = await _sheet(db_session, event)
+        member = await _member(db_session, org, "jordan")
+        await self._seat(db_session, org, shift, member)
+        rsvp = await _rsvp(db_session, event, member)
+        rsvp.checked_in = True
+        await db_session.flush()
+
+        await sync_volunteer_rsvps(
+            db_session, shift.id, org.id, removed_user_ids=[member.id]
+        )
+
+        assert rsvp.status == RSVPStatus.GOING
+
+    async def test_running_it_twice_changes_nothing(self, db_session):
+        from sqlalchemy import func
+
+        from app.models.event import EventRSVP
+        from app.services.event_staffing_service import sync_volunteer_rsvps
+
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        await _open(db_session, officer, event, ("educator", 2))
+        shift = await _sheet(db_session, event)
+        member = await _member(db_session, org, "jordan")
+        await self._seat(db_session, org, shift, member)
+
+        await sync_volunteer_rsvps(db_session, shift.id, org.id)
+        await sync_volunteer_rsvps(db_session, shift.id, org.id)
+        await db_session.flush()
+
+        count = await db_session.scalar(
+            select(func.count())
+            .select_from(EventRSVP)
+            .where(EventRSVP.event_id == event.id)
+        )
+        assert count == 1
+
+    async def test_a_requests_sheet_makes_them_going_to_the_requests_event(
+        self, db_session
+    ):
+        from app.models.event import RSVPStatus
+        from app.services.event_request_service import open_staffing_shift
+
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        request = EventRequest(
+            organization_id=org.id,
+            contact_name="Pat Rivera",
+            contact_email="pat@example.test",
+            description="Fire safety night",
+            status=EventRequestStatus.SCHEDULED,
+            event_id=event.id,
+            event_date=START,
+            event_end_date=START + timedelta(hours=2),
+        )
+        db_session.add(request)
+        await db_session.flush()
+        shift, error = await open_staffing_shift(
+            db_session, request, org, [{"role": "educator", "count": 1}], officer.id
+        )
+        assert error is None, error
+        await db_session.flush()
+        member = await _member(db_session, org, "jordan")
+
+        await self._seat(db_session, org, shift, member)
+
+        rsvp = await _rsvp(db_session, event, member)
+        assert rsvp is not None
+        assert rsvp.status == RSVPStatus.GOING

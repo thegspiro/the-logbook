@@ -11,8 +11,8 @@ only an event with no request opens a sheet of its own. Both read the same
 state through ``get_staffing_state``.
 """
 
-from datetime import timezone
-from typing import Any, Optional
+from datetime import datetime, timezone
+from typing import Any, Iterable, Optional
 
 from loguru import logger
 from sqlalchemy import select
@@ -193,3 +193,106 @@ async def stand_down_event_staffing(
             logger.warning("Could not cancel staffing shift {}: {}", shift_id, error)
     except Exception as e:
         logger.warning("Could not cancel staffing shift {}: {}", shift_id, e)
+
+
+async def sheet_event(
+    db: AsyncSession, shift_id: str, organization_id: str
+) -> Optional[Event]:
+    """The event a signup sheet staffs: its request's event, or its own."""
+    event_id = await db.scalar(
+        select(EventRequest.event_id).where(
+            EventRequest.staffing_shift_id == str(shift_id),
+            EventRequest.organization_id == str(organization_id),
+        )
+    )
+    query = select(Event).where(Event.organization_id == str(organization_id))
+    if event_id:
+        query = query.where(Event.id == str(event_id))
+    else:
+        query = query.where(Event.staffing_shift_id == str(shift_id))
+    return await db.scalar(query)
+
+
+async def sync_volunteer_rsvps(
+    db: AsyncSession,
+    shift_id: str,
+    organization_id: str,
+    removed_user_ids: Iterable[str] = (),
+) -> None:
+    """Make the event's RSVPs agree with who holds a seat on its signup sheet.
+
+    Owner decision, 2026-11-20: a member who claims a role at an outreach event
+    is going to it, so they appear in its Attendance and at the head of its
+    check-in list rather than only on the schedule. Idempotent — it compares
+    and corrects, so running it twice, or after any seat change, settles the
+    same RSVPs (pitfall #36):
+
+    * a member holding a seat has a ``going`` RSVP, created if missing;
+    * a member whose seat was cancelled, declined or removed, and who holds no
+      other seat, goes from ``going`` to ``not_going``.
+
+    A checked-in RSVP is never touched (the member was there), and nothing
+    changes on a cancelled event or one whose attendance is finalized.
+    ``removed_user_ids`` names members whose assignment row was deleted, which
+    leaves no row to read. The caller commits.
+    """
+    from app.models.event import EventRSVP, RSVPStatus
+    from app.models.training import ShiftAssignment
+    from app.services.event_request_service import released_seat_statuses
+    from app.services.event_service import attendance_is_finalized
+
+    event = await sheet_event(db, shift_id, organization_id)
+    if event is None or event.is_cancelled or attendance_is_finalized(event):
+        return
+
+    rows = await db.execute(
+        select(ShiftAssignment.user_id, ShiftAssignment.assignment_status).where(
+            ShiftAssignment.shift_id == str(shift_id),
+            ShiftAssignment.organization_id == str(organization_id),
+        )
+    )
+    released = set(released_seat_statuses())
+    seated: set[str] = set()
+    let_go: set[str] = {str(user_id) for user_id in removed_user_ids}
+    for user_id, assignment_status in rows.all():
+        if assignment_status in released:
+            let_go.add(str(user_id))
+        else:
+            seated.add(str(user_id))
+    let_go -= seated
+    if not seated and not let_go:
+        return
+
+    existing = {
+        str(rsvp.user_id): rsvp
+        for rsvp in (
+            await db.execute(
+                select(EventRSVP).where(
+                    EventRSVP.event_id == str(event.id),
+                    EventRSVP.organization_id == str(organization_id),
+                    EventRSVP.user_id.in_(seated | let_go),
+                )
+            )
+        ).scalars()
+    }
+    now = datetime.now(timezone.utc)
+    for user_id in seated:
+        rsvp = existing.get(user_id)
+        if rsvp is None:
+            db.add(
+                EventRSVP(
+                    organization_id=str(organization_id),
+                    event_id=str(event.id),
+                    user_id=user_id,
+                    status=RSVPStatus.GOING,
+                    responded_at=now,
+                )
+            )
+        elif rsvp.status != RSVPStatus.GOING and not rsvp.checked_in:
+            rsvp.status = RSVPStatus.GOING
+            rsvp.responded_at = now
+    for user_id in let_go:
+        rsvp = existing.get(user_id)
+        if rsvp is not None and rsvp.status == RSVPStatus.GOING and not rsvp.checked_in:
+            rsvp.status = RSVPStatus.NOT_GOING
+            rsvp.responded_at = now

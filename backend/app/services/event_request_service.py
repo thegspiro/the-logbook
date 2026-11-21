@@ -1005,6 +1005,11 @@ def describe_roles(org: Optional[Organization], roles: Any) -> str:
     )
 
 
+def released_seat_statuses() -> list[Any]:
+    """Assignment statuses that no longer hold a seat on a signup sheet."""
+    return _released_seat_statuses()
+
+
 def _released_seat_statuses() -> list[Any]:
     """Assignment statuses that no longer hold a seat on a signup sheet.
 
