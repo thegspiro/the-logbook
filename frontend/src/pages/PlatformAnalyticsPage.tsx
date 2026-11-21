@@ -19,6 +19,7 @@ import { platformAnalyticsService } from '../services/api';
 import { formatTime, formatDate, formatCalendarDate, formatNumber, getTodayLocalDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { AdminPageHeader } from '../components/admin/AdminPageHeader';
+import { StatGrid } from '../components/ux/StatGrid';
 import type { PlatformAnalytics, DailyCount, ModuleUsage } from '../types/platformAnalytics';
 
 /**
@@ -134,7 +135,7 @@ const PlatformAnalyticsPage: React.FC = () => {
               onClick={() => {
                 void exportData();
               }}
-              className="btn-secondary flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400"
+              className="btn-secondary flex items-center gap-2 text-sm font-medium text-blue-900 dark:text-blue-300"
             >
               <Download className="h-4 w-4" />
               Export
@@ -145,7 +146,7 @@ const PlatformAnalyticsPage: React.FC = () => {
 
       {/* ── Section 1: User Adoption ── */}
       <SectionTitle>User Adoption</SectionTitle>
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <StatGrid columns={4} gap={4} className="mb-6">
         <StatCard icon={Users} label="Total Users" value={data.totalUsers} />
         <StatCard
           icon={UserCheck}
@@ -167,7 +168,7 @@ const PlatformAnalyticsPage: React.FC = () => {
           value={data.newUsersLast30Days}
           color="blue"
         />
-      </div>
+      </StatGrid>
 
       {/* Login Trend Chart */}
       {(data.loginTrend?.length ?? 0) > 0 && (
@@ -187,7 +188,7 @@ const PlatformAnalyticsPage: React.FC = () => {
 
       {/* ── Section 3: Operational Activity ── */}
       <SectionTitle>Operational Activity</SectionTitle>
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <StatGrid columns={5} gap={4} className="mb-6">
         <StatCard icon={Calendar} label="Total Events" value={data.totalEvents} />
         <StatCard icon={Calendar} label="Events" sublabel="Last 30 days" value={data.eventsLast30Days} color="blue" />
         <StatCard icon={CheckSquare} label="Total Check-Ins" value={data.totalCheckIns} color="green" />
@@ -204,7 +205,7 @@ const PlatformAnalyticsPage: React.FC = () => {
           sublabel="Last 30 days"
           value={data.formsSubmittedLast30Days}
         />
-      </div>
+      </StatGrid>
 
       {/* ── Section 4: System Health ── */}
       <SectionTitle>System Health</SectionTitle>
@@ -278,11 +279,13 @@ interface StatCardProps {
 }
 
 const colorMap: Record<string, string> = {
-  blue: 'text-blue-600',
-  green: 'text-green-700 dark:text-green-600',
-  red: 'text-red-600',
-  yellow: 'text-yellow-700 dark:text-yellow-600',
-  purple: 'text-purple-600',
+  // The figures are text-3xl bold, which AAA holds to 4.5:1; -700 clears it on
+  // white and -300 on the dark and high-contrast surfaces.
+  blue: 'text-blue-700 dark:text-blue-300',
+  green: 'text-green-700 dark:text-green-300',
+  red: 'text-red-700 dark:text-red-300',
+  yellow: 'text-yellow-700 dark:text-yellow-300',
+  purple: 'text-purple-700 dark:text-purple-300',
 };
 
 const StatCard: React.FC<StatCardProps> = ({ icon: Icon, label, sublabel, value, color }) => {
@@ -296,7 +299,7 @@ const StatCard: React.FC<StatCardProps> = ({ icon: Icon, label, sublabel, value,
       </div>
       {sublabel && <p className="text-theme-text-muted mb-1 text-xs">{sublabel}</p>}
       <div
-        className={`text-3xl font-bold ${color ? (colorMap[color] ?? 'text-theme-text-primary') : 'text-theme-text-primary'}`}
+        className={`text-2xl font-bold sm:text-3xl ${color ? (colorMap[color] ?? 'text-theme-text-primary') : 'text-theme-text-primary'}`}
       >
         {displayValue}
       </div>
@@ -321,7 +324,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({ module }) => {
         <span
           className={`rounded px-2 py-0.5 text-xs font-medium ${
             module.enabled
-              ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+              ? 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300'
               : 'bg-theme-surface-secondary text-theme-text-muted'
           }`}
         >

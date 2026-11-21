@@ -865,6 +865,104 @@ Nothing blocks a restart. Owner decision 2026-11-21.
   500 and rolls back: the member and their files stay. Every other audit event
   still never blocks the action it records.
 
+### Outreach requests by phone, apparatus events, step assignees and self-approval blocks (2026-11-21)
+
+Nothing blocks a restart. Seventeen migrations land in this range, two of
+them merge revisions; `main` at `b0187eae` has one head, `3daf47506e9e`
+(checked with `alembic heads`). The two leave-request entries below, dated
+2026-11-16 and 2026-11-17, describe changes that merged in this same range
+(#4393). Read them too.
+
+**Migrations**, each additive unless noted:
+
+| Revision                       | What it does to existing data                                                                                                                                                                                                                                                                                         | Downgrade                                                                                                                                                                        |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `a6c3e8d17f42`                 | Nullable `evaluation_steps.assignee_id`. Existing steps stay NULL: the workflow decides, as before                                                                                                                                                                                                                    | Drops every named step assignee                                                                                                                                                  |
+| `790a86084359`                 | Nullable `events.guest_headcount`                                                                                                                                                                                                                                                                                     | Drops counts entered                                                                                                                                                             |
+| `73f64017f9e2`                 | New `guest_headcount_reminder` email template type                                                                                                                                                                                                                                                                    | Deletes those template rows, a department's edits included                                                                                                                       |
+| `3f8a1c6e2b94`                 | Six apparatus-event tables. Grants `apparatus_events.manage` to seeded positions holding `events.manage` or `events.*`, and `apparatus_events.signup` to seeded positions holding `events.view`, `events.manage` or `events.*`. Positions your department created are not touched: grant them by hand if they need it | Drops the tables, crew assignments with them, and removes both grants from seeded positions, including any added by hand since                                                   |
+| `3daf47506e9e`                 | New `apparatus_event_seat_calls` table                                                                                                                                                                                                                                                                                | Drops that table only                                                                                                                                                            |
+| `56377b666eb3`                 | Nullable `event_templates.training_details`                                                                                                                                                                                                                                                                           | Drops saved template training details; events already created keep theirs                                                                                                        |
+| `0c22a95b94b8`                 | Rewrites bare-string entries in training records' attachment lists into the one stored object shape                                                                                                                                                                                                                   | See the training note below                                                                                                                                                      |
+| `7d6769fca85c`                 | Gives each training-record attachment entry a stable id                                                                                                                                                                                                                                                               | See the training note below                                                                                                                                                      |
+| `5a41041e328b`                 | `event_requests.contact_email` becomes nullable; a new `source` column reads `web` for every existing request                                                                                                                                                                                                         | Fills a NULL email with an empty string before restoring NOT NULL. The previous release then fails to email those requesters and logs it; upgrading again does not undo the fill |
+| `e016062a4127`                 | `preferred_date_start` / `preferred_date_end` change from DATETIME to DATE. A midnight value keeps its date; any other value is read as UTC and moved to the department's calendar day                                                                                                                                | Returns them to midnight DATETIME; no data lost                                                                                                                                  |
+| `9b73e3dcaec7`                 | Nullable `events.staffing_shift_id` (SET NULL) and `events.staffing_roles`                                                                                                                                                                                                                                            | Drops both; signup sheets already opened stay on the schedule but lose their link to the event                                                                                   |
+| `d1dfb6c68e9b`                 | Four nullable outreach close-out columns on events                                                                                                                                                                                                                                                                    | Drops what was recorded in them                                                                                                                                                  |
+| `e5a9c3d71b28`, `7b4e2d9c1a63` | Leave request conversation, escalation and early end                                                                                                                                                                                                                                                                  | See the 2026-11-16 and 2026-11-17 entries                                                                                                                                        |
+| `d5946cb2bd41`                 | `pending_file_deletions`                                                                                                                                                                                                                                                                                              | See "A permanent member delete queues its files" below                                                                                                                           |
+| `bc58d756a179`, `a2c4e7f91b36` | Merge revisions, no operations                                                                                                                                                                                                                                                                                        | None                                                                                                                                                                             |
+
+**Changes you will notice:**
+
+- **A one-time burst of guest headcount reminders.** The new daily
+  `guest_headcount_reminders` task (07:40) emails and notifies the organizer
+  of each outreach event that ended in the last 14 days with no headcount
+  recorded. The first run after upgrading covers the whole fortnight.
+- **Outreach requests can be entered by staff**, open on a page of their own
+  (`/events/requests/<id>`; bookmarks to the old list panel still land on
+  the list), and finalizing an outreach event's attendance completes the
+  request and sends the requester the **on completed** email if that trigger
+  is on. Open Shifts lists outreach signup sheets 60 days ahead instead of 30.
+- **Evaluations: the evaluator no longer calibrates or approves their own,
+  and nobody signs two approvals on one revision** (ADV2-4, #4384). An
+  evaluation already waiting on an approval whose only holder is its own
+  evaluator stops until an `evaluations.manage` holder names someone with the
+  new **Assign** action on the step, which asks for step-up and is audited at
+  warning severity. Check for stalled evaluations after upgrading.
+- **A shift officer without `scheduling.manage` cannot record their own
+  close-out hours** (ADV2-8, #4468): changing their own times or hours,
+  entering manual hours for themselves at finalize, or adding their own
+  attendance answers 403. On a one-person shift where the officer missed a
+  check-in or check-out, a scheduling administrator records the hours.
+- **Nobody records or edits their own leave of absence** (ADV2-9, #4484).
+  `POST /users/leaves-of-absence` for oneself answers 400 and
+  `PATCH /users/leaves-of-absence/{id}` on one's own leave answers 403. The
+  officer files a leave request like any member. Ending one's own leave
+  early is still allowed.
+- **Anonymising a member who holds permissions you lack is refused** (403,
+  #4476). A member manager now needs at least the departed member's
+  privileges, as editing that member already required.
+- **Auto-approved self-report certificates now expire under the retention
+  period** (#4476). In a department with a certificate retention period set,
+  certificates on self-reports that were approved automatically, which
+  previously never expired, count from when they were submitted. The first
+  daily run after upgrading deletes those older than the period. Download any
+  you must keep first.
+- **A permanent member delete also removes the member's applicant record**,
+  its documents and its form answers, and queues those files with the rest
+  (#4492). This cannot be undone.
+
+**Training note.** `0c22a95b94b8` rewrites each bare-string entry in
+`training_records.attachments` and `training_submissions.attachments` as
+`{"file_name": …}`, in batches of 500, keeping order; empty and object-only
+lists are untouched. `7d6769fca85c` then gives every entry an `id`. Both are
+safe to run twice, and both downgrades are exact (the second removes every
+`id`, including ones written after the upgrade). Training changes you will
+notice:
+
+- **API: a training record or submission body that sends `attachments`
+  answers 422**, even `null` or `[]`; files go through the upload routes. An
+  upload to a voided record answers 400. Attachment download and delete
+  routes take the entry id; an old index still works, and with
+  `?expected_id=` answers 409 if the list has changed. Course Links' link and
+  link-all can answer 409 "try again" when two officers link at once.
+- **Compliance Report CSV and PDF grade like the Compliance Matrix, as of
+  today** (#4477). Status cells are today's standing, the CSV headers read
+  "Total Hours (start to end)" and "Completed Records (…)" (was "Completed
+  Courses"), requirements are ordered by name and members by last then first
+  name. **A script that parses this CSV needs updating.**
+- **Figures move in departments with compliance profiles.** The roster,
+  competency matrix, exports, forecast and Shift Compliance now narrow to each
+  member's profile, and exports and the forecast follow the Evaluation Period
+  setting. Two profiles with the same priority now resolve to the older one
+  (#4480), so a member may change profile; the profile form warns about ties.
+  Every-two-years certifications are graded one way (#4488), so some
+  statuses change.
+- **Members short of a rolling requirement stop receiving the daily
+  compliance reminder and notice** (#4482). The first run after upgrading
+  does not notify them again.
+
 ### A permanent member delete queues its files; new hourly task (2026-11-20)
 
 Nothing blocks a restart. Migration `d5946cb2bd41` creates one new, empty

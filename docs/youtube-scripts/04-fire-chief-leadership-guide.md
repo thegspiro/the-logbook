@@ -451,8 +451,10 @@ dialog; the finalized PDF.]**
 
 > "One more thing you do each year, and used to do outside the Logbook: member
 > performance evaluations. Under **Evaluations** you build a form once — an
-> **Annual Member Evaluation** and a **Probationary Check-in** come as starters
-> — then **Draft a review period** to create one for every current member. The
+> **Annual Member Evaluation**, an annual form with an extra **officer
+> section** for the ranks you tick, and a **Probationary Check-in** come as
+> starters — then **Draft a review period** to create one for every current
+> member. The
 > member does a self-evaluation, the evaluator rates, and at calibration you can
 > tick items the evaluator should revisit. Each item shows the member's own
 > figures with a suggested rating, and a rating that departs from it needs a
@@ -463,6 +465,12 @@ dialog; the finalized PDF.]**
 > response. Nobody evaluates, amends or deletes their own — and only the Chief
 > can delete one, with a reason that's kept on record."
 
+> "And the officer who wrote an evaluation never calibrates or approves it. If
+> your only Captain wrote it and the approval is the Captain's, whoever manages
+> evaluations taps **Assign** on that step and names someone else. When the
+> period's done, **Period results** shows how many are complete and how many
+> landed at each grade, with a CSV export."
+
 > "Forms can be **Graded by section**: each rating is put on a one-to-five scale,
 > each section gets a score, and your grade ranges turn the score into a grade —
 > so a member rated Meets on every item reads as Meets, not as failing. The
@@ -472,6 +480,14 @@ dialog; the finalized PDF.]**
 read their own under **My evaluations** — Script 06. The evaluation emails are
 a template group, **Performance Evaluations**, under Communications → Email
 Templates. Film the grading-by-section builder and the PDF's section table.]**
+
+**[PRODUCTION NOTE — 2026-11-21. Added the starter with officer sections and a
+second beat (about 20 seconds) on separation of duties and period results.
+Film: the **New template** dialog with **Annual Evaluation with Officer
+Sections** chosen and its **Officer ranks** boxes; a step's **Assign** button
+and the **Who takes "…"** dialog; the conduct list with a period chosen,
+showing **Period results** and **Export CSV** (needs `evaluations.view_all`).
+Re-time this chapter.]**
 
 ### MEMBER ID CARDS (12:00 – 12:30)
 

@@ -169,9 +169,24 @@ its course name and certificate number with case, spacing and punctuation
 removed (`match_key`, `certification_key`), and the requirement's name or code
 is reduced the same way. "c.p.r." matches "CPR"; "CPR Refresher" does not.
 
-**Every-2-years hours and courses** have one more rule: if the newest matching
-record that carries an expiry date has expired, the requirement reads
-**expired** whatever the hours.
+**Every-2-years hours and courses** have one more rule: if, among the records
+the requirement counts in its window, the one with the latest expiry date has
+expired, the requirement reads **expired** whatever the hours or courses. A
+lapsed certificate on a record outside the window does not count. Since
+2026-11-21 My Training and the requirement-progress check apply this exact
+rule (`lapsed_biannual_certificate`); before, My Training read every record
+of the training type for hours and had no check for courses, so it could
+disagree with the matrix in either direction.
+
+**What an hours requirement shows** _(2026-11-20)_. My Training and the
+matrix detail lead with the member's monthly average against the monthly
+pace ("6.9/6 hrs/mo avg") and put the total underneath. The average is the
+hours in months nothing excused divided by those months; the pace is the
+unadjusted target over the window's months. It is display only: the table
+above, on the total, decides whether the requirement is met.
+
+**Optional requirements** on a member's profile are not in this table at all:
+they are listed, never graded _(2026-11-21)_.
 
 Each requirement ends up in one status:
 
@@ -309,7 +324,10 @@ Training alike.
   `get_requirement_date_window` / `rolling_window` / `biannual_window`,
   `certification_record_matches`, `requirement_applies_to_user`,
   `ComplianceGrading.for_member` (profiles), `tally_standing`,
-  `classify_standing`, `compute_org_compliance_tally`.
+  `classify_standing`, `compute_org_compliance_tally`, `grade_members` (the
+  loop the matrix, member notices, exports and forecast share),
+  `lapsed_biannual_certificate`, `monthly_pace`. Profile order (priority, then
+  oldest): `app/utils/compliance_profiles.py`.
 - **As-of date:** `app/services/training_period.py`
   (`resolve_as_of_date`, `effective_include_current_month`).
 - **Waivers:** `app/services/training_waiver_service.py` (`adjust_required`,
