@@ -3784,6 +3784,13 @@ async def anonymize_member(
             "self_report_files_deleted": summary["self_report_files_deleted"],
             "self_report_files_not_deleted": summary["self_report_files_not_deleted"],
             "self_report_files_shared_kept": summary["self_report_files_shared_kept"],
+            "training_record_files_deleted": summary["training_record_files_deleted"],
+            "training_record_files_not_deleted": summary[
+                "training_record_files_not_deleted"
+            ],
+            "training_record_files_shared_kept": summary[
+                "training_record_files_shared_kept"
+            ],
         },
         **_request_origin(request),
     )

@@ -78,7 +78,7 @@ Nothing was captured by this pass.
 | 02 | Requirement **Member Categories** in a department with a Senior tier: **Operational members** selected, Senior ticked, the hint "Active, Probationary, Life and Senior Member" | Create (`02-135` stays valid for a department with no Senior tier) |
 | 02 | Cohort wizard Course step listing only courses with a syllabus | Check `02-104` series; create only if a course-step image is wanted |
 | 08 | A report's on-screen results as labelled cards (Certification Expiration or Member Roster); Training Summary as a table at desktop width | Create; also replace any report-results image showing a sideways-scrolling table |
-| 17 | **Anonymize Member** dialog, Removed list with **Certificates uploaded with their training reports** | Create |
+| 17 | **Anonymize Member** dialog, Removed list with **Certificates uploaded with their training reports** and **Documents attached to their training records** | Create |
 | 10 | Phone (390px): expense report line items as cards with the totals row; the inventory stock matrix with pinned Size column and scroll cue; message history as cards | Create |
 | 11, 12, 05, 01, 14 | Phone captures of expense line items, grant applications, inventory import preview, member import preview / Assigned Inventory, election integrity audit log | Optional; check any existing phone image of these tables (e.g. `10-05-mobile-inventory` is a different list and stays valid) |
 

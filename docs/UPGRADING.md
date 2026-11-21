@@ -850,6 +850,25 @@ table, `pending_file_deletions`, and touches no existing row.
   (`SELECT COUNT(*) FROM pending_file_deletions`), or let the hourly task
   empty it first.
 
+### Anonymising a member also deletes the files on their training records (2026-11-20)
+
+Nothing blocks a restart, and no migration ships with this change.
+
+- **Download any officer-uploaded evidence you must keep before upgrading.**
+  Anonymising a member now permanently deletes the files attached to that
+  member's own training records — by an officer or by the member — as well as
+  the certificates they uploaded with self-reported training (owner decision
+  of 2026-11-20). The training records themselves stay, so completions and
+  hours still count, but the files cannot be recovered from the application
+  afterwards. A file another member's record also names is kept. If your
+  department relies on evidence attached to the records of members you may
+  anonymise (sign-in rosters, skills sheets, certification cards), download it
+  first, or keep it somewhere other than the member's training record.
+- The `user_anonymized` audit event and the anonymise response gain three
+  integer counts: `training_record_files_deleted`,
+  `training_record_files_not_deleted` and `training_record_files_shared_kept`.
+  A file that could not be deleted keeps its entry, renamed `attachment.<ext>`.
+
 ### My Hours counts outside hours; Course Links and historical imports can be undone (2026-11-20)
 
 Nothing blocks a restart. Two additive migrations ship in this range, and
