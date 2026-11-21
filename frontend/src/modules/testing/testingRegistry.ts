@@ -369,7 +369,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       {
         path: '/events/admin/community/print',
-        label: 'Community Engagement summary (print)',
+        label: 'Outreach Impact summary (print)',
         note: 'The outreach report as a printable summary — opens the print dialog',
         permission: 'events.manage',
       },

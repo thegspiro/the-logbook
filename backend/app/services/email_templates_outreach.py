@@ -6,7 +6,7 @@ Default Email Templates — Community Outreach
   creator holds ``events.manage``, asking them to record how many people
   attended. Sent once per event; see ``guest_headcount_reminder_service``.
 
-The Community Engagement report counts an event's audience from that
+The Outreach Impact report counts an event's audience from that
 headcount, so a count that never gets entered leaves the event on the
 requester's estimate, or on nothing at all.
 """
@@ -30,8 +30,8 @@ HEADCOUNT_REMINDER_HTML = build_shell(
         for it yet.</p>
 """
     + facts([[fact("Event", "{{event_title}}"), fact("Date", "{{event_date}}")]])
-    + """        <p>Enter how many people attended on the event page. The Community
-        Engagement report counts the event's audience from that number, rather
+    + """        <p>Enter how many people attended on the event page. The Outreach
+        Impact report counts the event's audience from that number, rather
         than from the requester's estimate.</p>
 """
     + action("{{event_url}}", "Record the Headcount"),
@@ -48,7 +48,7 @@ Hello {{recipient_name}},
 Event: {{event_title}}
 Date: {{event_date}}
 
-Enter how many people attended on the event page. The Community Engagement
+Enter how many people attended on the event page. The Outreach Impact
 report counts the event's audience from that number, rather than from the
 requester's estimate.
 

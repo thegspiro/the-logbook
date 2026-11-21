@@ -29,6 +29,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.endpoints import users as users_endpoint
+from app.core.audit import log_audit_event as real_log_audit_event
 from app.core.database import Base
 from app.models.attendance_waiver import (
     AttendanceWaiverAttachment,
@@ -36,6 +37,7 @@ from app.models.attendance_waiver import (
     AttendanceWaiverStatus,
     AttendanceWaiverWorkflow,
 )
+from app.models.audit import AuditLog
 from app.models.forms import Form, FormSubmission
 from app.models.inventory import (
     InventoryItem,
@@ -145,6 +147,14 @@ async def _hard_delete(db, dept, user_id: str) -> None:
         current_user=_admin(dept),
         request=fake_request(),
     )
+
+
+def _audit_events() -> dict[str, dict]:
+    """The event data of each audit event the patched helper received, by type."""
+    return {
+        call.kwargs["event_type"]: call.kwargs["event_data"]
+        for call in users_endpoint.log_audit_event.await_args_list
+    }
 
 
 async def _fresh(db, model, row_id: str):
@@ -534,13 +544,24 @@ class TestStoredFilesGoWithTheMember:
 
     @staticmethod
     def _audit_counts() -> dict:
-        event = users_endpoint.log_audit_event.await_args.kwargs
-        assert event["event_type"] == "user_hard_deleted"
-        data = event["event_data"]
-        return {
-            key: data[key]
-            for key in ("files_deleted", "files_not_deleted", "files_shared_kept")
+        """The file outcome of the delete just run.
+
+        Since owner decision 2026-11-21 (e), user_hard_deleted is written in
+        the delete's transaction and says how many files were queued; the
+        outcome follows in pending_file_deletions_completed, which names
+        the files left queued ``files_still_pending``. Read back here under
+        the names these tests have always asserted.
+        """
+        events = _audit_events()
+        queued = events["user_hard_deleted"]["files_queued"]
+        outcome = events["pending_file_deletions_completed"]
+        counts = {
+            "files_deleted": outcome["files_deleted"],
+            "files_not_deleted": outcome["files_still_pending"],
+            "files_shared_kept": outcome["files_shared_kept"],
         }
+        assert sum(counts.values()) == queued
+        return counts
 
     async def test_removes_the_files_of_every_cascaded_row(
         self, db_session, department, root
@@ -794,6 +815,71 @@ class TestStoredFilesGoWithTheMember:
         assert await self._pending(db_session, department.org) == []
         assert result["deleted"] == 3
 
+    async def test_a_crash_after_the_commit_keeps_the_audit_row(
+        self, db_session, department, root, monkeypatch
+    ):
+        """Owner decision 2026-11-21 (e): user_hard_deleted is written in the
+        delete's transaction, with the real audit helper here, so a process
+        killed right after the commit keeps it. Before, it was written after
+        the commit and lost with the process."""
+        monkeypatch.setattr(users_endpoint, "log_audit_event", real_log_audit_event)
+        certificate = self._file(root, department.org, "self-reports")
+        await self._submission(
+            db_session, department, department.trainee, [self._entry(certificate)]
+        )
+        await db_session.commit()
+        monkeypatch.setattr(
+            users_endpoint,
+            "process_pending_file_deletions",
+            AsyncMock(side_effect=_Killed()),
+        )
+
+        with pytest.raises(_Killed):
+            await _hard_delete(db_session, department, department.trainee)
+
+        rows = (
+            (
+                await db_session.execute(
+                    select(AuditLog).where(
+                        AuditLog.event_type == "user_hard_deleted",
+                        AuditLog.organization_id == department.org,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(rows) == 1
+        assert rows[0].event_data["deleted_user_id"] == department.trainee
+        assert rows[0].event_data["files_queued"] == 1
+
+    async def test_an_unwritable_audit_row_refuses_the_delete(
+        self, db_session, department, root, monkeypatch
+    ):
+        """Owner decision 2026-11-21 (e): the audit helper reports a failed
+        write by returning None; the delete then rolls back, the member and
+        their files stay, and nothing is queued."""
+        monkeypatch.setattr(
+            users_endpoint, "log_audit_event", AsyncMock(return_value=None)
+        )
+        certificate = self._file(root, department.org, "self-reports")
+        await self._submission(
+            db_session, department, department.trainee, [self._entry(certificate)]
+        )
+        await db_session.commit()
+
+        with pytest.raises(HTTPException) as exc:
+            await _hard_delete(db_session, department, department.trainee)
+
+        assert exc.value.status_code == 500
+        still_there = await db_session.scalar(
+            text("SELECT COUNT(*) FROM users WHERE id = :id"),
+            {"id": department.trainee},
+        )
+        assert still_there == 1
+        assert certificate.exists()
+        assert await self._pending(db_session, department.org) == []
+
     async def test_a_refused_delete_queues_nothing(
         self, db_session, department, root, monkeypatch
     ):
@@ -979,9 +1065,9 @@ class TestTheApplicantRecordGoesWithTheMember:
         assert documents == 0
         assert not theirs.file.exists()
         assert kept.file.exists()
-        event = users_endpoint.log_audit_event.await_args.kwargs["event_data"]
-        assert event["files_deleted"] == 1
-        assert event["applicant_records_deleted"] == 1
+        events = _audit_events()
+        assert events["pending_file_deletions_completed"]["files_deleted"] == 1
+        assert events["user_hard_deleted"]["applicant_records_deleted"] == 1
 
 
 class _Killed(BaseException):

@@ -1,4 +1,4 @@
-"""The Community Engagement report counts what outreach actually reached.
+"""The Outreach Impact report counts what outreach actually reached.
 
 The tab it feeds used to count scheduled events as held, add the department's
 own members to "people reached", score every school assembly that never

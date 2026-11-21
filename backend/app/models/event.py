@@ -180,7 +180,7 @@ class Event(Base):
         DateTime(timezone=True), nullable=True
     )  # Recorded by secretary when event actually ends
     # Guests a coordinator counted at an outreach event nobody signed in at —
-    # an assembly, a block party. Community Engagement reads it as the event's
+    # an assembly, a block party. Outreach Impact reads it as the event's
     # actual audience in place of guest sign-ins; NULL means nobody counted.
     guest_headcount: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
