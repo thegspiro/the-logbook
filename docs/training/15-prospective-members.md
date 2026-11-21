@@ -1317,6 +1317,19 @@ applicant down to the anonymized name, the membership type and the stage list.
 The package's coordinator notes and supporting statement are cleared. The
 ballot item is an election record and is kept.
 
+Since 2026-11-20 anonymizing also empties the coordinators' notes on each
+pipeline step and strips the values out of the applicant's activity log (old
+and new contact details, uploaded file names, notes). Each log entry still
+says what happened and at which step. See
+[Anonymizing a Departed Member](./17-privacy-data-rights.md#anonymizing-a-departed-member-admin).
+
+**When the member is permanently deleted** _(2026-11-21)_. Deleting a
+converted member now deletes their application too: the applicant record, its
+interviews and notes, its form answers and its uploaded documents. Before, the
+delete only cut the link, and the application stayed with nobody able to
+remove it (Purge takes only inactive applications). A guest check-in at an
+event that first created the applicant stays with the event's history.
+
 ---
 
 ## Case Managers and Interviewers _(2026-10-31)_

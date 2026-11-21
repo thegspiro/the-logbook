@@ -138,6 +138,29 @@ DELETE /api/v1/scheduling/apparatus/{id}     # Delete basic apparatus
   23). See `docs/FORMS_REVIEW_2026-11-05.md`.
 - **Apparatus document sub-folders** (Maintenance, Manuals, Inspections) are
   gated on apparatus and document permissions, not facilities permissions.
+- **Deleting a photo or document keeps a library document** _(2026-11-20,
+  app review AP2-7)_. A photo or document row that references a library
+  document (`document:<id>`) is unlinked and the document kept; deleting it is
+  the library's decision (`documents.manage` and a write on its folder). The
+  vehicle's own upload (`source_type` `apparatus_photo` / `apparatus_document`
+  for this vehicle) is deleted with its row unless another photo or document
+  row still links it. The delete's refusals answer 400/403 rather than 500.
+- **Sub-resource updates use `apply_updates`** _(AP2-8)_. A `null` for a
+  `NOT NULL` column on an equipment, custom-field or operator update is a 400,
+  not a 500.
+- **The edit page never saves one vehicle's form onto another** _(AP2-9)_. The
+  store drops a fetched record whose id is not the one in the URL, and the
+  detail and edit pages wait for a matching record, so a failed fetch no
+  longer leaves the previously opened vehicle in the form.
+- **Tabs offer only what the caller may do** _(AP2-10)_. Maintenance and fuel
+  add/edit need `apparatus.maintenance`, `.edit` or `.manage`; equipment
+  add/edit needs `.edit` or `.manage`; every delete (maintenance, equipment,
+  photo, document) needs `.manage`, matching the backend.
+- **Open decisions** _(AP2-13, AP2-15)_: a fuel log, status change or edit
+  can set `current_mileage` / `current_hours` lower than before, and
+  custom-field definitions are stored but nothing validates values against
+  them. See `docs/KNOWN_LIMITATIONS.md` → "Apparatus — Three Decisions From
+  App Review B2 Pass 6".
 
 ---
 
@@ -187,7 +210,9 @@ training program. They are managed through `/api/v1/apparatus/evoc-levels`.
   caller's org (`User.is_active`); otherwise a 400, "Only current members can be
   added as operators". The Add Operator picker lists only
   `isActiveAccount()` members. Existing operator rows for members who have
-  since left are untouched and stay editable.
+  since left are untouched and stay editable. Editing one back to active or
+  certified skips the current-member check (**AP2-14**, an open decision in
+  `docs/KNOWN_LIMITATIONS.md`).
 - `GET /apparatus/evoc-check/{apparatus_id}/{user_id}` answers whether a member
   meets a vehicle's requirement (`apparatus.view` or `scheduling.view`).
 - **Driver exceptions** — a member can request an exception to the EVOC

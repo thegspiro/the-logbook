@@ -449,10 +449,23 @@ the `TrainingRecord` verbatim, and the record download route accepts the
 self-reports area as well as its own. Only the submitter or a
 `training.manage` holder can read a submission's attachments (`403`
 otherwise); paths are confined to the submission's own organization.
-**Deleting a submission unlinks its files** — safe only because deletion is
-limited to `draft`, `pending_review` and `revision_requested`, never after
-approval, the one state where a record also references the file. If that
-guard is ever widened, the delete must stop unlinking.
+**Deleting a submission, or removing one attachment, unlinks a file only when
+no other row names it** _(2026-11-20)_: both commit, then call
+`member_files.remove_unreferenced_files`, because `reverse_approval` reopens a
+submission while its voided record keeps naming the same certificates.
+
+Since 2026-11-20 every request body (`TrainingRecordCreate` / `Update`,
+`TrainingSubmissionCreate` / `Update`) answers **422 at `body.attachments`**
+for any value, `null` and `[]` included; files reach a row only through the
+upload routes and the approval copy (`refuse_attachment_writes` in
+`app/schemas/base.py`). Each stored entry carries a stable `id` (a uuid4
+string, `app/utils/training_attachments.py`) beside its `index` in responses;
+`{entry}` in the routes above takes either, a repeat removal of an id is a 204
+no-op, and a legacy index takes `?expected_id=` and answers 409 if the list
+has moved. Review, submit, update, delete, reverse-approval and attachment
+removal lock the submission row (`get_submission(for_update=True)`), after a
+`FOR SHARE` lock on the member for review and submit. A voided record refuses
+an upload with 400.
 
 `attachment_retention_days` on the config is `null` (keep — the default) or
 90–36500; changing it is audited as
