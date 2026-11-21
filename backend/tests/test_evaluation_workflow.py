@@ -3316,6 +3316,106 @@ class TestPeriodResults:
         assert missing.status_code == 404
 
 
+class TestReviewHistory:
+    """GET /evaluations/{id}/history: the member's other finalized reviews,
+    newest first, with the grade that stood, for evaluations.view_all."""
+
+    async def test_view_all_sees_the_members_other_finished_reviews_newest_first(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        manager = await make_client(dept.manager)
+        reader = await make_client(dept.reader)
+        older_url = await _finalized(dept, make_client)
+        older = (await reader.get(older_url)).json()
+        # Not listed: another member's finished review.
+        await _finalized(dept, make_client, member=await _user(dept.db, dept.org, []))
+        # 2024's review on another form, finished.
+        other_form = await _template(dept.db, dept.org, name="Other Annual")
+        earliest = await _draft(
+            manager,
+            dept,
+            period_id=(await _next_period(dept, 2024)).id,
+            template_id=other_form.id,
+        )
+        await _lock_evaluator(dept, make_client, f"/evaluations/{earliest['id']}")
+        signed = await (await make_client(dept.member)).post(
+            f"/evaluations/{earliest['id']}/sign",
+            json={
+                "signed_name": dept.member.full_name,
+                "disposition": "acknowledged",
+                "intent_confirmed": True,
+            },
+        )
+        assert signed.json()["outcome"] == "finalized"
+        # Not listed: the review being read, and an unfinished one.
+        this = await _draft(
+            manager,
+            dept,
+            period_id=(await _next_period(dept)).id,
+            template_id=dept.template.id,
+        )
+        await _draft(
+            manager,
+            dept,
+            period_id=(await _next_period(dept, 2027)).id,
+            template_id=dept.template.id,
+        )
+
+        response = await reader.get(f"/evaluations/{this['id']}/history")
+
+        assert response.status_code == 200, response.text
+        assert response.json() == [
+            {
+                "evaluation_id": older["id"],
+                "template_name": dept.template.name,
+                "period_name": dept.period.name,
+                "period_start": "2025-01-01",
+                "period_end": "2025-12-31",
+                "overall": f"{older['weighted_overall']:g}% (weighted)",
+            },
+            {
+                "evaluation_id": earliest["id"],
+                "template_name": "Other Annual",
+                "period_name": earliest["period_name"],
+                "period_start": "2024-01-01",
+                "period_end": "2024-12-31",
+                "overall": f"{older['weighted_overall']:g}% (weighted)",
+            },
+        ]
+
+    async def test_it_needs_view_all_and_an_evaluation_of_this_department(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        this = await _draft(await make_client(dept.manager), dept)
+        url = f"/evaluations/{this['id']}/history"
+        assert (await (await make_client(dept.evaluator)).get(url)).status_code == 403
+        assert (await (await make_client(dept.member)).get(url)).status_code == 403
+
+        other_org = await _org(dept.db)
+        other_template = await _template(dept.db, other_org)
+        version_id = (
+            await dept.db.execute(
+                select(EvaluationTemplateVersion.id).where(
+                    EvaluationTemplateVersion.template_id == other_template.id
+                )
+            )
+        ).scalar_one()
+        elsewhere = Evaluation(
+            organization_id=other_org,
+            member_id=(await _user(dept.db, other_org, [])).id,
+            template_version_id=version_id,
+            period_start=PERIOD[0],
+            period_end=PERIOD[1],
+        )
+        dept.db.add(elsewhere)
+        await dept.db.flush()
+
+        missing = await (await make_client(dept.reader)).get(
+            f"/evaluations/{elsewhere.id}/history"
+        )
+        assert missing.status_code == 404
+
+
 def _approvals(*position_ids: str) -> dict:
     """A workflow with one approval step per position id, in order."""
     # WITH_APPROVAL_STEPS' own first two and last steps: ``_step`` is

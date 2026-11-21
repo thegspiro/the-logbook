@@ -1032,6 +1032,17 @@ class PreviousReview(BaseModel):
     goals: List[PreviousGoal] = Field(default_factory=list)
 
 
+class ReviewHistoryEntry(BaseModel):
+    """One of the member's finalized reviews, with the result that stood."""
+
+    evaluation_id: str
+    template_name: str
+    period_name: Optional[str] = None
+    period_start: date
+    period_end: date
+    overall: Optional[str] = None
+
+
 class EvaluationDetail(EvaluationSummary):
     coverage_start: Optional[date] = None
     coverage_end: Optional[date] = None

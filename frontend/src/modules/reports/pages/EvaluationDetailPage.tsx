@@ -25,6 +25,7 @@ import { DeleteEvaluationDialog } from '../components/evaluations/DeleteEvaluati
 import { EvaluationForm } from '../components/evaluations/EvaluationForm';
 import { FiguresPanel } from '../components/evaluations/FiguresPanel';
 import { PreviousReviewPanel } from '../components/evaluations/PreviousReviewPanel';
+import { ReviewHistoryPanel } from '../components/evaluations/ReviewHistoryPanel';
 import { ResponsePanel } from '../components/evaluations/ResponsePanel';
 import { SignDialog } from '../components/evaluations/SignDialog';
 import { StepList } from '../components/evaluations/StepList';
@@ -86,6 +87,9 @@ const EvaluationDetailPage: React.FC = () => {
   const [assigning, setAssigning] = useState<EvaluationStep | null>(null);
   const navigate = useNavigate();
   const signerName = useAuthStore((state) => state.user?.full_name ?? '');
+  // The member's review history is personnel content: the server serves it
+  // to evaluations.view_all alone, as it does the conduct list's grades.
+  const canViewAll = useAuthStore((state) => state.checkPermission('evaluations.view_all'));
   const sectionPermission = useSectionPermission();
   const conductLabel = conductListLabel(sectionPermission);
   // A crew supervisor reads an evaluation by relationship and may hold no
@@ -507,6 +511,7 @@ const EvaluationDetailPage: React.FC = () => {
             />
             <StepList steps={detail.steps} onAssign={detail.viewer.can_assign_steps ? setAssigning : undefined} />
             {detail.previous_review && <PreviousReviewPanel review={detail.previous_review} />}
+            {canViewAll && <ReviewHistoryPanel evaluationId={detail.id} />}
             {(detail.amendments ?? []).length > 0 && (
               <section aria-labelledby="amendments-heading" className="card p-4 sm:p-6">
                 <h2 id="amendments-heading" className="text-theme-text-primary text-lg font-semibold">

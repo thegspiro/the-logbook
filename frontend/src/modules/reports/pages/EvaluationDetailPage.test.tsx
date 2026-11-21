@@ -27,10 +27,13 @@ const submitResponse = vi.fn();
 const saveBlob = vi.fn();
 const listStepAssigneeCandidates = vi.fn();
 const assignStep = vi.fn();
+const history = vi.fn();
+// The caller's permissions; none unless a test grants one.
+let permissions: string[] = [];
 vi.mock('../../../utils/saveBlob', () => ({ saveBlob: (...a: unknown[]) => saveBlob(...a) as unknown }));
 vi.mock('../../../stores/authStore', () => ({
-  useAuthStore: (selector: (s: { user: { full_name: string } }) => unknown) =>
-    selector({ user: { full_name: 'Pat Member' } }),
+  useAuthStore: (selector: (s: { user: { full_name: string }; checkPermission: (p: string) => boolean }) => unknown) =>
+    selector({ user: { full_name: 'Pat Member' }, checkPermission: (p) => permissions.includes(p) }),
 }));
 vi.mock('../services/evaluationsApi', () => ({
   evaluationsService: {
@@ -47,6 +50,7 @@ vi.mock('../services/evaluationsApi', () => ({
     submitResponse: (...a: unknown[]) => submitResponse(...a) as unknown,
     listStepAssigneeCandidates: (...a: unknown[]) => listStepAssigneeCandidates(...a) as unknown,
     assignStep: (...a: unknown[]) => assignStep(...a) as unknown,
+    history: (...a: unknown[]) => history(...a) as unknown,
   },
 }));
 
@@ -212,6 +216,62 @@ describe('EvaluationDetailPage', () => {
       'href',
       '/reports/evaluations/ev0'
     );
+  });
+
+  describe('review history', () => {
+    beforeEach(() => {
+      history.mockReset();
+      history.mockResolvedValue([]);
+      permissions = [];
+    });
+
+    it("lists the member's other finalized reviews with their grades for view_all", async () => {
+      permissions = ['evaluations.view_all'];
+      history.mockResolvedValue([
+        {
+          evaluation_id: 'ev-2025',
+          template_name: 'Operational Annual',
+          period_name: '2025 Annual',
+          period_start: '2025-01-01',
+          period_end: '2025-12-31',
+          overall: 'Meets expectations',
+        },
+        {
+          evaluation_id: 'ev-2024',
+          template_name: 'Probationary Check-in',
+          period_name: null,
+          period_start: '2024-01-01',
+          period_end: '2024-06-30',
+          overall: null,
+        },
+      ]);
+      renderPage();
+
+      const panel = await screen.findByRole('region', { name: 'Review history' });
+      expect(history).toHaveBeenCalledWith('ev1');
+      expect(await within(panel).findByRole('link', { name: '2025 Annual' })).toHaveAttribute(
+        'href',
+        '/reports/evaluations/ev-2025'
+      );
+      expect(within(panel).getByText('Meets expectations')).toBeInTheDocument();
+      expect(within(panel).getByText('Probationary Check-in')).toBeInTheDocument();
+      expect(within(panel).getByText('No overall result')).toBeInTheDocument();
+    });
+
+    it('says when there is no other review', async () => {
+      permissions = ['evaluations.view_all'];
+      renderPage();
+
+      expect(await screen.findByText('No other finalized reviews of this member.')).toBeInTheDocument();
+    });
+
+    it('is neither shown nor asked for without view_all', async () => {
+      renderPage();
+      expect(await screen.findAllByText('11.5 h')).not.toHaveLength(0);
+
+      expect(screen.queryByRole('region', { name: 'Review history' })).not.toBeInTheDocument();
+      expect(history).not.toHaveBeenCalled();
+    });
   });
 
   it('shows no last review when the server sends none', async () => {

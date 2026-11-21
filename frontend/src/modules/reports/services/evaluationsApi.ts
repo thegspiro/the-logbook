@@ -38,6 +38,7 @@ import type {
   TemplateDefinition,
   TemplatePreview,
   TemplateWorkflow,
+  ReviewHistoryEntry,
 } from '../types/evaluations';
 
 const api = createApiClient();
@@ -217,6 +218,12 @@ export const evaluationsService = {
   async get(id: string): Promise<EvaluationDetail> {
     const response = await api.get<EvaluationDetail>(`/evaluations/${id}`);
     return response.data;
+  },
+
+  /** The member's other finalized reviews, newest first (evaluations.view_all). */
+  async history(id: string): Promise<ReviewHistoryEntry[]> {
+    const response = await api.get<ReviewHistoryEntry[]>(`/evaluations/${id}/history`);
+    return asArray(response.data);
   },
 
   async savePart(id: string, kind: EvaluationPartKind, content: PartContent): Promise<EvaluationDetail> {

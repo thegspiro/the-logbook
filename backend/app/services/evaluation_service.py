@@ -710,6 +710,76 @@ class EvaluationService:
             return None
         return previous_review_summary(previous)
 
+    async def review_history(
+        self, organization_id: str, evaluation_id: str, viewer: User
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Every other finalized review of this evaluation's member, newest
+        first, on any form, with the overall result that stood.
+
+        Each is read through :meth:`detail` as ``viewer``, so an entry shows
+        exactly what ``viewer`` could see by opening that review and one they
+        could not open is left out, as the last-review panel does. The grade
+        is :func:`standing_overall`, the one definition the conduct list, the
+        export and that panel share. None when ``viewer`` may not see this
+        evaluation.
+        """
+        evaluation = await self._evaluation(organization_id, evaluation_id)
+        if evaluation is None:
+            return None
+        if (
+            await self.detail(
+                organization_id, evaluation.id, viewer, include_previous=False
+            )
+            is None
+        ):
+            return None
+        ids = (
+            (
+                await self.db.execute(
+                    select(Evaluation.id)
+                    .where(
+                        Evaluation.organization_id == organization_id,
+                        Evaluation.member_id == evaluation.member_id,
+                        Evaluation.status == EvaluationStatus.FINALIZED.value,
+                        Evaluation.id != evaluation.id,
+                    )
+                    .order_by(Evaluation.period_end.desc(), Evaluation.id.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        entries: List[Dict[str, Any]] = []
+        for other_id in ids:
+            view = await self.detail(
+                organization_id, other_id, viewer, include_previous=False
+            )
+            if view is None:
+                continue
+            evaluator = next(
+                (
+                    p["content"]
+                    for p in view.get("parts") or []
+                    if p["kind"] == EvaluationPartKind.EVALUATOR.value
+                ),
+                None,
+            )
+            entries.append(
+                {
+                    "evaluation_id": view["id"],
+                    "template_name": view["template_name"],
+                    "period_name": view.get("period_name"),
+                    "period_start": view["period_start"],
+                    "period_end": view["period_end"],
+                    "overall": (
+                        standing_overall(view["definition"], evaluator)
+                        if evaluator is not None
+                        else None
+                    ),
+                }
+            )
+        return entries
+
     def _released_to_member(
         self, evaluation: Evaluation, steps: Sequence[EvaluationStep]
     ) -> bool:
