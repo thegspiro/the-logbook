@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4496](https://github.com/thegspiro/the-logbook/pull/4496)**
+(branch `claude/security-review-skills-testing-p15`): Feature 19 (Skills
+testing), pass 15 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable per `ListAgents`). True zero delta since pass 14 (`c0baae039`):
+all four declared backend files byte-identical, no frontend file changed,
+no new migration. Every standing fix re-verified present by direct code
+read; route surface unchanged at 29/29. **0 fixed, 0 newly flagged, 0
+findings closed.** No open findings remain in this feature. Full write-up:
+`docs/security-review/SKT-19-skills-testing.md`'s **Pass 15** section.
+
+Row 19 → ✅ (pending this PR's merge); next is Feature 20 (Compliance) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (interim "None" note between PR #4494 merging and PR #4496 opening), preserved for history</summary>
+
 **None.** PR #4494 (Feature 18, Training extended, pass 15) merged
 (`b07b25cab`) since the last iteration. Row 18 marked ✅ below; next is
 Feature 19 (Skills testing) — re-checked `list_pull_requests` (state `open`)
@@ -71,6 +88,8 @@ environment-only skip (`py_vapid`); `npm run typecheck` — 0 errors; `npm run
 lint` — 0 errors (within `--max-warnings 10`).
 
 Row 18 → ✅ (merged as `b07b25cab`); next is Feature 19 (Skills testing).
+
+</details>
 
 </details>
 
