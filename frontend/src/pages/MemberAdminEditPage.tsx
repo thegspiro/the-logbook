@@ -31,6 +31,7 @@ import { MemberClass, MemberStatus } from '../constants/enums';
 import { FormField } from '../components/ux/FormField';
 import { useDiscardGuard } from '../hooks/useDiscardGuard';
 import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
+import { isStepUpRequired } from '../utils/stepUp';
 
 interface FormData {
   first_name: string;
@@ -500,7 +501,14 @@ export const MemberAdminEditPage: React.FC = () => {
       }
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 403) {
+      if (isStepUpRequired(err)) {
+        // The API client already asked "Confirm it's you"; this 403 reaching
+        // the page means the officer cancelled it, not that they lack the
+        // permission. The form keeps every edit, so a second save re-asks.
+        setError(
+          "Not saved: the confirmation was cancelled. Your changes are still here; save again to confirm it's you."
+        );
+      } else if (status === 403) {
         setError('You do not have permission to update this member. Contact an administrator.');
       } else {
         // Through `getErrorMessage`, which flattens a 422's array-shaped
