@@ -2333,6 +2333,11 @@ class EventService:
             event.updated_at = now
             cancelled_count += 1
 
+        if cancel_future_only and events:
+            await self._end_series_at_kept(
+                parent_event_id, organization_id, list(events)
+            )
+
         if cancelled_count > 0:
             await self.db.commit()
             await self._reverse_pipeline_after_commit(
@@ -2341,6 +2346,45 @@ class EventService:
             await self._send_waiver_notices(waiver_notices, organization_id)
 
         return cancelled_count
+
+    async def _end_series_at_kept(
+        self,
+        parent_event_id: UUID | str,
+        organization_id: UUID | str,
+        cancelling: List[Event],
+    ) -> None:
+        """End a series at its last kept occurrence when its future is cancelled.
+
+        The same step delete_event_series takes for a "this and future"
+        delete: the rolling-extension job continues a series from its latest
+        live occurrence, so a parent left rolling would have the cancelled
+        dates (and every date after them) back the next night. Only when the
+        parent itself is kept — a cancelled parent drops out of the job's
+        query on its own.
+        """
+        cancelling_ids = {str(e.id) for e in cancelling}
+        if str(parent_event_id) in cancelling_ids:
+            return
+        result = await self.db.execute(
+            select(Event).where(
+                Event.organization_id == str(organization_id),
+                or_(
+                    Event.id == str(parent_event_id),
+                    Event.recurrence_parent_id == str(parent_event_id),
+                ),
+            )
+        )
+        series = list(result.scalars().all())
+        parent = next((e for e in series if str(e.id) == str(parent_event_id)), None)
+        if parent is None or not parent.is_recurring:
+            return
+        kept = [
+            e for e in series if str(e.id) not in cancelling_ids and not e.is_cancelled
+        ] or [parent]
+        parent.recurrence_end_date = max(
+            (e.start_datetime for e in kept), key=_utc_instant
+        )
+        parent.rolling_recurrence = False
 
     async def duplicate_event(
         self, event_id: UUID, organization_id: UUID | str, created_by: UUID | str

@@ -7126,18 +7126,24 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
             # anywhere after the first night never reaches the parent, and
             # copying the parent reverted every new occurrence to the old
             # values. The latest occurrence is the one every such edit reached.
-            latest_result = await db.execute(
+            #
+            # Every occurrence is read, cancelled ones included, because a
+            # cancelled occurrence still holds its date: a job that re-runs
+            # nightly must be a no-op for a cancelled future (CLAUDE.md
+            # pitfall #36), and creating a live copy beside a cancelled row
+            # undoes the officer's cancel.
+            series_result = await db.execute(
                 select(Event)
                 .where(
-                    (Event.id == parent.id) | (Event.recurrence_parent_id == parent.id),
-                    Event.is_cancelled.is_(False),
+                    (Event.id == parent.id) | (Event.recurrence_parent_id == parent.id)
                 )
                 .order_by(Event.start_datetime.desc())
-                .limit(1)
             )
-            latest = latest_result.scalars().first()
+            series_rows = list(series_result.scalars().all())
+            latest = next((e for e in series_rows if not e.is_cancelled), None)
             if latest is None:
                 continue
+            taken_starts = {_as_naive_utc(e.start_datetime) for e in series_rows}
 
             # Naive UTC, as `now` is above. A column select used to hand
             # these back raw (naive); an ORM row already in the session
@@ -7179,9 +7185,13 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                 exceptions=parent.recurrence_exceptions,
             )
 
-            # Filter out the first one (it's the latest existing occurrence)
-            # and any that already exist
-            new_occurrences = [(s, e) for s, e in new_occurrences if s > latest_start]
+            # Only dates after the latest live occurrence, and none the series
+            # already holds — a cancelled occurrence included.
+            new_occurrences = [
+                (s, e)
+                for s, e in new_occurrences
+                if s > latest_start and s not in taken_starts
+            ]
 
             if not new_occurrences:
                 continue
