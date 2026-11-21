@@ -592,6 +592,10 @@ a denial. What differs:
   decided ones are kept. The member is told in the app and, once the
   cancellation or deletion commits, by email (`void_pending_for_events`
   returns the notices; `EventService` sends them with `send_member_notices`).
+  Undoing a historical import's drills or staffing, which deletes the events
+  it made, does the same: the undo endpoint sends them after its commit. Each
+  email is claimed against the `voided` (or `rescheduled`) log entry and the
+  member, so a retried send is not sent twice.
 
 The routes mirror the training ones under `/api/v1/meetings/waiver-requests`
 (`policy`, `eligibility`, submit, `mine`, the decider queue, one request,

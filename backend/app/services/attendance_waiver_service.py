@@ -99,6 +99,7 @@ from app.core.utils import generate_uuid
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
     AttendanceWaiverAttachment,
+    AttendanceWaiverEmailSend,
     AttendanceWaiverRequest,
     AttendanceWaiverRequestAction,
     AttendanceWaiverStatus,
@@ -133,7 +134,10 @@ from app.schemas.attendance_waiver import (
     CapPeriod,
     policy_from_settings,
 )
-from app.services.attendance_waiver_email_service import AttendanceWaiverEmails
+from app.services.attendance_waiver_email_service import (
+    AttendanceWaiverEmails,
+    user_key,
+)
 from app.services.email_policy import (
     EmailKind,
     department_required_kinds,
@@ -2579,7 +2583,7 @@ class AttendanceWaiverService:
         sentences: Sequence[str],
         path: Optional[str],
         button: str,
-    ) -> None:
+    ) -> Optional[bool]:
         """Email a notice that an in-app row also carries.
 
         The one way this workflow sends email, for every notice (CLAUDE.md
@@ -2589,7 +2593,9 @@ class AttendanceWaiverService:
         sign-in. Each recipient's email preferences decide, under ``kind``.
         ``path`` None sends no button, for a notice with nowhere to lead.
         Called after the commit and never allowed to fail the action: a
-        failure is logged by request id and swallowed.
+        failure is logged by request id and swallowed. Returns True once
+        sent, False when the send failed, and None when nobody was owed it
+        (no address, or every recipient's preferences said no).
         """
         try:
             org = (
@@ -2609,7 +2615,7 @@ class AttendanceWaiverService:
                 }
             )
             if not to_emails:
-                return
+                return None
             from app.services.email_service import EmailService, wrap_email_body
 
             body = "".join(f"<p>{html.escape(line)}</p>" for line in sentences)
@@ -2623,14 +2629,17 @@ class AttendanceWaiverService:
                 )
                 text_body += f"\n\n{button}: {url}"
             html_body = wrap_email_body(org, "Waiver Request", body)
-            await EmailService(organization=org).send_email(
-                to_emails=to_emails,
-                subject=subject,
-                html_body=html_body,
-                text_body=text_body,
+            return bool(
+                await EmailService(organization=org).send_email(
+                    to_emails=to_emails,
+                    subject=subject,
+                    html_body=html_body,
+                    text_body=text_body,
+                )
             )
         except Exception:
             logger.exception("Failed to email about waiver request {}", request.id)
+            return False
 
     async def _email(
         self, org_id: str, request: AttendanceWaiverRequest, action_id: str
@@ -2874,6 +2883,10 @@ class MemberNotice:
     # A moved start changes grading and goes under the workflow's
     # ``member_record_email_kind``; a void does not (see ``WorkflowSpec``).
     changes_grading: bool = False
+    # The log row this notice reports (``RESCHEDULED`` or ``VOIDED``): each
+    # send is claimed against it and the member, so a retried send of the
+    # same notices emails once (CLAUDE.md pitfall #36).
+    action_id: Optional[str] = None
 
 
 def _same_instant(a: datetime, b: datetime) -> bool:
@@ -3030,14 +3043,13 @@ async def reconfirm_for_rescheduled_events(
         request.chief_override = False
         request.info_requested_at = None
         request.reconfirm_requested_at = now
-        db.add(
-            AttendanceWaiverService._action(
-                request,
-                AttendanceWaiverAction.RESCHEDULED,
-                None,
-                f"The {noun} moved from {old_when} to {new_when}.",
-            )
+        logged = AttendanceWaiverService._action(
+            request,
+            AttendanceWaiverAction.RESCHEDULED,
+            None,
+            f"The {noun} moved from {old_when} to {new_when}.",
         )
+        db.add(logged)
         title = request.event_title_snapshot
         sentences = [
             f'The {noun} "{title}" you asked to be excused from moved from '
@@ -3085,6 +3097,7 @@ async def reconfirm_for_rescheduled_events(
                 subject=subject,
                 sentences=tuple(sentences),
                 changes_grading=True,
+                action_id=str(logged.id),
             )
         )
     await db.flush()
@@ -3107,7 +3120,9 @@ async def send_member_notices(
     for (``reconfirm_for_rescheduled_events``, ``void_pending_for_events``).
 
     After the caller's commit, and never allowed to fail it: the change
-    stands whether or not a mail server answered.
+    stands whether or not a mail server answered. Safe to call again with
+    the same notices: each is claimed against its log row and the member,
+    and only a failed or unowed send is released for another try.
     """
     for notice in notices:
         service = AttendanceWaiverService(db, notice.workflow)
@@ -3133,7 +3148,10 @@ async def send_member_notices(
             continue
         if request is None or member is None:
             continue
-        await service._email_notice(
+        claim = await _claim_member_notice(db, str(org_id), notice, member)
+        if notice.action_id is not None and claim is None:
+            continue
+        sent = await service._email_notice(
             str(org_id),
             request,
             [member],
@@ -3147,6 +3165,61 @@ async def send_member_notices(
             member_action_url(request),
             "View Request",
         )
+        if claim is not None:
+            await _settle_member_notice(db, claim, sent)
+
+
+async def _claim_member_notice(
+    db: AsyncSession, org_id: str, notice: MemberNotice, member: User
+) -> Optional[AttendanceWaiverEmailSend]:
+    """Claim the email ``notice`` owes ``member``; None when it is already
+    claimed (sent, or in flight elsewhere) or names no log row.
+
+    The unique (action_id, recipient_key) the template emails use is what
+    stops a second send, so this is safe however often the caller retries.
+    """
+    if notice.action_id is None:
+        return None
+    claim = AttendanceWaiverEmailSend(
+        id=generate_uuid(),
+        organization_id=org_id,
+        request_id=notice.request_id,
+        action_id=notice.action_id,
+        recipient_key=user_key(str(member.id)),
+        is_copy=False,
+    )
+    try:
+        async with db.begin_nested():
+            db.add(claim)
+            await db.flush()
+        await db.commit()
+    except IntegrityError:
+        return None
+    except Exception:
+        logger.exception(
+            "Failed to claim the email for waiver request {}", notice.request_id
+        )
+        await db.rollback()
+        return None
+    return claim
+
+
+async def _settle_member_notice(
+    db: AsyncSession, claim: AttendanceWaiverEmailSend, sent: Optional[bool]
+) -> None:
+    """Stamp a sent claim; release one that sent nothing, so a retry (or a
+    member who later opts in, for an unsent one) is not refused by it."""
+    try:
+        if sent:
+            claim.sent_at = datetime.now(dt_timezone.utc)
+        else:
+            await db.delete(claim)
+        await db.commit()
+    except Exception:
+        logger.exception(
+            "Failed to record the email for waiver request {}", claim.request_id
+        )
+        await db.rollback()
 
 
 async def void_pending_for_events(
@@ -3194,25 +3267,25 @@ async def void_pending_for_events(
             f"{_day_label(request.session_date)} was closed: the "
             f"{spec.session_noun} was {cause}."
         )
+        logged = AttendanceWaiverService._action(
+            request,
+            AttendanceWaiverAction.VOIDED,
+            None,
+            f"The {spec.session_noun} was {cause}.",
+        )
         notices.append(
             MemberNotice(
                 request_id=str(request.id),
                 workflow=request.workflow,
                 subject=subject,
                 sentences=(sentence,),
+                action_id=str(logged.id),
             )
         )
         request.status = AttendanceWaiverStatus.VOIDED
         request.live_key = None
         request.info_requested_at = None
-        db.add(
-            AttendanceWaiverService._action(
-                request,
-                AttendanceWaiverAction.VOIDED,
-                None,
-                f"The {spec.session_noun} was {cause}.",
-            )
-        )
+        db.add(logged)
         db.add(
             NotificationLog(
                 id=generate_uuid(),
