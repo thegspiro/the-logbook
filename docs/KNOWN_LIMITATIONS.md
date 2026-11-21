@@ -10846,7 +10846,8 @@ Options:
 
 Anonymising a member now deletes the certificates they uploaded with
 self-reported training, and the entries naming them on their submissions and
-on the training records approval copied them to. Permanently deleting a member
+on the training records approval copied them to, and (since 2026-11-20) the
+files uploaded to the member's own training records. Permanently deleting a member
 now removes, after the delete commits, the files named by the training
 submissions, training records and attendance waiver documents the delete
 cascades away. Both keep any file another row still names. What this leaves:
@@ -10854,21 +10855,26 @@ cascades away. Both keep any file another row still names. What this leaves:
 **Choices made without a further owner ruling** (the conservative option in
 each case):
 
-- **Files uploaded to a training record itself survive anonymisation.** They
-  are department training evidence, and anonymisation keeps training
-  completions and certifications. A permanent delete removes them, because
-  their rows go. If the owner wants them erased on anonymisation too, it is a
-  one-line widening of the candidate set in
-  `MemberAnonymizationService._remove_self_report_certificates`.
-- **A certificate that cannot be deleted during anonymisation keeps its
-  entry**, with the uploader's filename replaced by a neutral label, and is
-  counted (`self_report_files_not_deleted` in the response and the
-  `user_anonymized` audit event). `remove_member_attachments` and the
-  applicant-document step drop the row whatever happens to the file; this
-  step does not, because anonymisation refuses to run twice and a dropped
-  reference would leave a file nothing could find again. Nothing retries
-  these: retention (`attachment_retention_days`) is opt-in, so a department
-  that has not set it keeps the file until someone removes it by hand.
+- ~~**Files uploaded to a training record itself survive anonymisation.**~~
+  **Resolved 2026-11-20** (owner decision "Anonymise officer docs too"):
+  anonymisation deletes them too, under the same shared-file check, counted
+  as `training_record_files_*` in the response and the `user_anonymized`
+  audit event. Irreversible; `docs/UPGRADING.md` tells departments to
+  download evidence they must keep first.
+- **A file that cannot be deleted during anonymisation keeps its entry**,
+  with the uploader's filename replaced by a neutral label (`certificate.<ext>`
+  for a self-report certificate, `attachment.<ext>` for a training-record
+  upload), and is counted (`self_report_files_not_deleted` /
+  `training_record_files_not_deleted` in the response and the
+  `user_anonymized` audit event). A later permanent delete of the anonymised
+  member collects these kept entries again, which is the one retry path.
+  `remove_member_attachments` and the applicant-document step drop the row
+  whatever happens to the file; this step does not, because anonymisation
+  refuses to run twice and a dropped reference would leave a file nothing
+  could find again. Nothing else retries these: retention
+  (`attachment_retention_days`) is opt-in and covers self-report certificates
+  only, so a department that has not set it keeps the file until someone
+  removes it by hand.
 
 **Accepted residuals:**
 
