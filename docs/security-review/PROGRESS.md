@@ -16,27 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#4507](https://github.com/thegspiro/the-logbook/pull/4507)**
-(branch `claude/security-review-meetings-minutes-p14` —
-`claude/security-review-meetings-minutes-p13` already carries a merged PR,
-#4232 pass 13, so this pass uses a `-p14` suffix per CLAUDE.md Pitfall
-#24): Feature 24 (Meetings & minutes), pass 14 — watchdog pickup (the
-dedicated `/loop 30m /security-review` session,
-`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). PR #4504
-(Feature 23, Medical supplies, pass 21) merged (`b739fcae`) since the last
-iteration; row 23 marked ✅ below. Real delta since pass 13 (baseline
-`47d68bce`): a whole new member-initiated business-meeting waiver-request
-workflow (a new endpoint file, `AttendanceWaiverService` generalized to a
-second workflow, three new shared frontend pages, three migrations), plus
-two correctness fixes already landed by other work (one closes this
-feature's own carried-forward unlocked-find-or-create item). Traced the
-shared engine's tenant- and workflow-isolation end to end for the meeting
-side. **0 fixed, 0 newly flagged.** Full write-up:
-`docs/security-review/MM-24-meetings-minutes.md`'s **Pass 14** section.
+**PR [#4520](https://github.com/thegspiro/the-logbook/pull/4520)**
+(branch `claude/security-review-messaging-notifications` — first use of
+this branch name, no suffix needed): Feature 25 (Messaging & notifications), pass
+14 — watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). PR #4507 (Feature
+24, Meetings & minutes, pass 14) merged (`f571296e`) since the last
+iteration; row 24 marked ✅ below. Real delta since pass 13 (baseline
+`47d68bce`): the per-send CC-copy fix (defect D1) extended from scheduled
+emails to every send, three new thin `EmailService` senders, and a 38-file
+frontend sweep of the communications module. Traced the new CC-copy
+mechanism end to end: the credential/self-copying exclusion is an allowlist
+(not a denylist that could miss a type), the new CC-position resolution is
+org-scoped on both the position and the member side and current-member-
+filtered, and the new client-settable `default_cc_position_ids` field is
+validated in-org before storage. **0 fixed, 0 newly flagged.** Full
+write-up: `docs/security-review/MSG-25-messaging-notifications.md`'s
+**Pass 14** section.
 
-Row 24 → ✅ (pending this PR's merge); next is Feature 25 (Messaging &
-notifications) — re-check `list_pull_requests` fresh rather than trusting
-this note.
+Row 25 → ✅ (pending this PR's merge); next is Feature 26 (Forms) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 21, PR #4504, merged), preserved for history</summary>
@@ -27352,7 +27351,7 @@ iteration's commit" rule.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 14)                                                                                                                                                                                                             | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ⬜     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (31 routes, added pass 13), `historical_staffing_*.py`                                                                                                                                                                | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ⬜     |
@@ -27422,6 +27421,58 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-21 — Feature 24 (Meetings & minutes, pass 14) merged; Feature 25 (Messaging & notifications, pass 14): watchdog pickup, real delta is the per-send CC-copy fix plus three new senders, 0 fixed, 0 new findings
+
+PR #4507 merged as `f571296e`. A fresh `list_pull_requests` (state=open)
+found no `claude/security-review-*` head, and row 25 was the next `⬜` row,
+confirmed directly against the table on a freshly pulled `main`.
+
+Baseline `47d68bce9` (pass 13). Backend delta restricted to this feature's
+declared files plus the shared send path: `email_templates.py` (+1 line,
+`default_cc_position_ids` added to the audit field list),
+`message_history.py` (+3 lines, `send_test_email` now passes
+`apply_template_copies=False` so a test send never reaches a template's CC
+list) and `email_service.py` (+255 lines: the new `_with_template_copies`
+mechanism and four thin new senders). Traced the CC-copy mechanism's
+dangerous direction — whether a credential template (welcome, password
+reset, ballot link, applicant status link) could be made to copy a third
+party — end to end: `NO_TEMPLATE_COPY_TYPES` is `ALWAYS_SENT_TYPES` unioned
+with the self-copying waiver types, confirmed by reading every credential
+sender's own call site rather than trusting the default. The new CC-position
+resolution org-scopes both the position and the member side and filters to
+current holders only (Pitfall #32); the new client-settable
+`default_cc_position_ids` field is validated in-org (`assert_all_in_org`,
+Pitfall #14c) through an explicit allowlist before storage. The new
+column migration adds it nullable with no backfill needed. Spot-checked the
+two new callers into this shared send path (`leave_of_absence_notices.py`,
+`leave_workflow_notices.py` — Users & organizations' and Scheduled tasks'
+own rotation rows, not this one's) and found no leave reason/type reaching
+any email context, and a correct unique-constraint idempotency guard
+(Pitfall #36) on the scheduled sends. A 38-file frontend sweep of the
+communications module introduced no `window.confirm`/`alert`/`prompt` and no
+bare `toHaveBeenCalledWith()`.
+
+**0 fixed, 0 new findings.** Standing findings MSG-12 and MSG-15 (both
+owner-accepted) re-confirmed unchanged. Full write-up:
+`docs/security-review/MSG-25-messaging-notifications.md`'s **Pass 14**
+section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean. `validate_migrations.py --strict` — 804
+revisions, single head `3daf47506e9e`. `check_route_permissions.py
+--strict` — 329 routes, 0 errors/warnings (unchanged). Scoped backend
+pytest (`-k "messag or notification or email_template or email_theme or
+push_service or push_dispatch or leave_of_absence_notice or
+leave_workflow or leave_notice"`) — 2,730 passed, 1 pre-existing
+environment-only skip (`py_vapid`). `npm run typecheck` — 0 errors.
+`npm run lint` — 0 errors, 0 warnings. `npx vitest run
+src/modules/communications src/modules/notifications
+src/pages/NotificationsPage.test.tsx src/hooks/usePushNotifications.test.ts
+src/utils/devicePushSubscription.test.ts` — 333 passed (44 files).
+
+Row 25 → ✅ (pending this PR's merge); next is Feature 26 (Forms) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-21 — Feature 23 (Medical supplies, pass 21) merged; Feature 24 (Meetings & minutes, pass 14): watchdog pickup, real delta is a whole new member-initiated meeting-waiver workflow, 0 fixed, 0 new findings
 
