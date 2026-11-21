@@ -4528,11 +4528,13 @@ class TestThirtiethRoundFindings:
         assert "waived" not in json.dumps(body)
 
     @pytest.mark.usefixtures("_use_test_session")
-    async def test_standalone_hours_check_stays_aggregated_in_sql(
+    async def test_standalone_check_reads_only_the_columns_it_grades(
         self, org_with_members, db_session, monkeypatch
     ):
-        """Without a preload, an hours check sums in SQL rather than loading
-        the member's records, as it did before the page preload existed."""
+        """Without a preload, a check loads the member's completed records
+        once, with the page preload's columns: never notes or attachments.
+        It used to sum hours in SQL, a separate copy of the grading rules
+        that disagreed with the compliance matrix (2026-11-21)."""
         from app.models.training import (
             RequirementFrequency,
             RequirementType,
@@ -4576,8 +4578,8 @@ class TestThirtiethRoundFindings:
         )
         assert progress.is_complete is True
         record_reads = [s for s in statements if "training_records" in s]
-        assert any("sum(training_records.hours_completed)" in s for s in record_reads)
-        assert all("training_records.notes" not in s for s in record_reads)
+        assert len(record_reads) == 1
+        assert "training_records.notes" not in record_reads[0]
 
     @pytest.mark.usefixtures("_use_test_session")
     async def test_scheduling_summary_uses_the_department_timezone(
@@ -4697,9 +4699,10 @@ class TestThirtiethRoundFindings:
         assert len(statements) == short_page
         # Waivers (with the Chief's overrides and approved session waiver
         # requests, read beside them), the preload, the org's timezone for
-        # "today", and the member's shifts worked (attendance and external)
-        # — still a fixed count, whatever the page size.
-        assert short_page <= 8
+        # "today", the department's include-current-month setting, and the
+        # member's shifts worked (attendance and external) — still a fixed
+        # count, whatever the page size.
+        assert short_page <= 9
         # The preload carries only the columns the checks read, and stops
         # at the earliest window on the page: these are annual
         # requirements, so records older than a year are not loaded.
