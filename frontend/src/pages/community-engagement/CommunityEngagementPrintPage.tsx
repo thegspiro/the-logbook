@@ -1,5 +1,5 @@
 /**
- * The Community Engagement report as a page a chief can hand to a board.
+ * The Outreach Impact report as a page a chief can hand to a board.
  *
  * A print view rather than a generated PDF, like the app's other reports: the
  * browser's own print-to-PDF turns it into a file without a second rendering
@@ -149,7 +149,7 @@ const CommunityEngagementPrintPage: React.FC = () => {
         <h1 style={{ fontSize: '18pt', fontWeight: 'bold', margin: '0 0 8pt 0' }}>The summary could not be loaded</h1>
         <p style={{ margin: '0 0 8pt 0' }}>{loadError}</p>
         <p style={{ margin: 0 }}>
-          Nothing has been printed. Reload the page, or go back to Community Engagement and try again.
+          Nothing has been printed. Reload the page, or go back to Outreach Impact and try again.
         </p>
       </div>
     );
@@ -229,9 +229,7 @@ const CommunityEngagementPrintPage: React.FC = () => {
               )}
               <div>
                 {department.name && <p style={{ fontSize: '11pt', margin: 0 }}>{department.name}</p>}
-                <h1 style={{ fontSize: '18pt', fontWeight: 'bold', margin: '0 0 2pt 0' }}>
-                  Community Engagement Summary
-                </h1>
+                <h1 style={{ fontSize: '18pt', fontWeight: 'bold', margin: '0 0 2pt 0' }}>Outreach Impact Summary</h1>
                 <p style={{ fontSize: '11pt', margin: 0 }}>
                   {option?.label} · {periodRangeText(report.period_start, report.period_end, tz)}
                 </p>

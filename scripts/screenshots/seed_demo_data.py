@@ -14389,7 +14389,7 @@ class Seeder:
                 {"reason": "The library is closed for renovation until spring."},
             )
 
-    # Outreach already delivered this year, for the Community Engagement tab.
+    # Outreach already delivered this year, for the Outreach Impact tab.
     # Each reaches its figure a different way, because each draws a different
     # cell: an estimate from the request, sign-ins against an expectation, a
     # coordinator's headcount, and department events no request asked for.
@@ -14467,7 +14467,7 @@ class Seeder:
     ]
 
     def seed_outreach_history(self) -> None:
-        """Past outreach events with real reach, for Community Engagement.
+        """Past outreach events with real reach, for Outreach Impact.
 
         Every other outreach event the demo holds is in the future, so the
         report read "0 events held" and guide 04's picture of it showed empty

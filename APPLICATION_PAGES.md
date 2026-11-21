@@ -351,26 +351,26 @@ Set per event on **Edit Event → Check-In Settings**. Both default to off.
 
 Requires `events.manage` permission. Drawn with the same two-level navigation as Training, Scheduling and Inventory Administration: area cards above a strip of the chosen area's pages (the shared AdminHubAreaNav, with the areas declared in eventsAdminTabs). The URL is `?tab=<page>`; the area is derived from the page, so a link never names it.
 
-| Area               | `?tab=`            | Label                |
-| ------------------ | ------------------ | -------------------- |
-| Events             | `create`           | Create Event         |
-| Events             | `past_events`      | Past Events          |
-| Community Outreach | `requests`         | Requests             |
-| Community Outreach | `community`        | Community Engagement |
-| Community Outreach | `apparatus_events` | Apparatus Events     |
-| Check-ins          | `analytics`        | QR Code Analytics    |
-| Check-ins          | `card_checkins`    | Card Check-ins       |
-| Settings           | `settings`         | Settings             |
+| Area               | `?tab=`            | Label             |
+| ------------------ | ------------------ | ----------------- |
+| Events             | `create`           | Create Event      |
+| Events             | `past_events`      | Past Events       |
+| Community Outreach | `requests`         | Outreach Requests |
+| Community Outreach | `community`        | Outreach Impact   |
+| Community Outreach | `apparatus_events` | Apparatus Events  |
+| Check-ins          | `analytics`        | QR Code Analytics |
+| Check-ins          | `card_checkins`    | Card Check-ins    |
+| Settings           | `settings`         | Settings          |
 
 A missing or unknown `?tab=` opens Create Event.
 
 > _(2026-11-16)_ **Apparatus Events** (`?tab=apparatus_events`) is outreach that rolls an apparatus with a named crew but is not a shift — a Santamobile run, a parade. Templates (apparatus, free-text seats, a Driver seat's EVOC rule, an Admin Hours category) are scheduled onto one or many nights; each night is an ordinary event whose crew card sits on its event page, and appears on Shift Scheduling as a read-only "Outreach · not a shift" chip. Managing it needs `apparatus_events.manage`; taking a seat needs `apparatus_events.signup`.
 
-| Route                           | Page                                 | Access          |
-| ------------------------------- | ------------------------------------ | --------------- |
-| `/events/admin/community/print` | Community Engagement summary (print) | `events.manage` |
+| Route                           | Page                            | Access          |
+| ------------------------------- | ------------------------------- | --------------- |
+| `/events/admin/community/print` | Outreach Impact summary (print) | `events.manage` |
 
-> The Community Engagement tab's **Print summary** opens this page for the period chosen on the tab (`?period=`), and it opens the print dialog once the report has loaded. Every figure comes from the same two endpoints the tab and its CSV export read.
+> The Outreach Impact tab's **Print summary** opens this page for the period chosen on the tab (`?period=`), and it opens the print dialog once the report has loaded. Every figure comes from the same two endpoints the tab and its CSV export read.
 
 ### Outreach Request (`/events/admin/requests/:requestId`)
 

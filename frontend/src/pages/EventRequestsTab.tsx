@@ -1561,7 +1561,7 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
           <div>
             <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-bold">
               <ClipboardList className="h-5 w-5 text-red-700" aria-hidden="true" />
-              Public Outreach Requests
+              Outreach Requests
             </h2>
             <p className="text-theme-text-muted mt-1 text-sm">
               Requests from the community, grouped by what needs doing next.

@@ -2,11 +2,9 @@
 Tests for the competency matrix service
 (app/services/competency_matrix_service.py).
 
-Focus on the two correctness-sensitive, DB-free helpers that drive the
-department heat map: _get_date_window (frequency -> evaluation window) and
-_evaluate_requirement_status (type-aware current/expiring_soon/expired/
-not_started determination for HOURS, COURSES, and CERTIFICATION
-requirements). No DB.
+Focus on _evaluate_requirement_status, which maps the shared grader's status
+to the heat map's current/expiring_soon/in_progress/expired/not_started for
+HOURS, COURSES and CERTIFICATION requirements. No DB.
 """
 
 from datetime import date, timedelta
@@ -73,40 +71,14 @@ def _evaluate(requirement, records):
     return _svc()._evaluate_requirement_status(requirement, records, TODAY, THRESHOLD)
 
 
-class TestGetDateWindow:
-    REF = date(2026, 5, 15)  # Q2, May
+class TestNoWindowOfItsOwn:
+    """The view used to compute its own windows, without rolling or custom
+    annual ones; it now grades through the shared grader, whose window is
+    ``get_requirement_date_window`` (tests/test_training_compliance.py).
+    tests/test_competency_matrix_agrees_with_grader.py holds the cases."""
 
-    def test_one_time_has_no_window(self):
-        req = _req(RequirementType.CERTIFICATION, RequirementFrequency.ONE_TIME)
-        assert CompetencyMatrixService._get_date_window(req, self.REF) == (None, None)
-
-    def test_annual_uses_requirement_year(self):
-        req = _req(RequirementType.HOURS, RequirementFrequency.ANNUAL, year=2026)
-        assert CompetencyMatrixService._get_date_window(req, self.REF) == (
-            date(2026, 1, 1),
-            date(2026, 12, 31),
-        )
-
-    def test_monthly_is_current_month(self):
-        req = _req(RequirementType.HOURS, RequirementFrequency.MONTHLY)
-        assert CompetencyMatrixService._get_date_window(req, self.REF) == (
-            date(2026, 5, 1),
-            date(2026, 5, 31),
-        )
-
-    def test_quarterly_is_current_quarter(self):
-        req = _req(RequirementType.HOURS, RequirementFrequency.QUARTERLY)
-        assert CompetencyMatrixService._get_date_window(req, self.REF) == (
-            date(2026, 4, 1),
-            date(2026, 6, 30),
-        )
-
-    def test_biannual_spans_two_years(self):
-        req = _req(RequirementType.HOURS, RequirementFrequency.BIANNUAL, year=2026)
-        assert CompetencyMatrixService._get_date_window(req, self.REF) == (
-            date(2025, 1, 1),
-            date(2026, 12, 31),
-        )
+    def test_the_private_window_is_gone(self):
+        assert not hasattr(CompetencyMatrixService, "_get_date_window")
 
 
 class TestNotStarted:
@@ -190,11 +162,12 @@ class TestHoursStatus:
         rec = _rec(self._in_window(), None, training_type="drill", hours_completed=12)
         out = _evaluate(self._req(), [rec])
         assert out["status"] == "current"
-        assert "12.0/10.0 hrs" in out["details"]
+        assert out["details"] == "12/10 hours"
 
-    def test_partial_progress_is_expiring_soon(self):
+    def test_partial_progress_is_in_progress(self):
+        # Not "expiring_soon", which readiness counts as ready.
         rec = _rec(self._in_window(), None, training_type="drill", hours_completed=4)
-        assert _evaluate(self._req(), [rec])["status"] == "expiring_soon"
+        assert _evaluate(self._req(), [rec])["status"] == "in_progress"
 
     def test_zero_hours_is_not_started(self):
         rec = _rec(self._in_window(), None, training_type="drill", hours_completed=0)
@@ -223,9 +196,9 @@ class TestCoursesStatus:
         assert out["status"] == "current"
         assert "2/2 courses" in out["details"]
 
-    def test_partial_courses_is_expiring_soon(self):
+    def test_partial_courses_is_in_progress(self):
         out = _evaluate(self._req(), [self._rec_for("c1")])
-        assert out["status"] == "expiring_soon"
+        assert out["status"] == "in_progress"
         assert "1/2 courses" in out["details"]
 
     def test_no_matching_courses_is_not_started(self):

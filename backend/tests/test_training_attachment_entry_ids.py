@@ -75,7 +75,13 @@ class TestHelpers:
         assert sanitize_attachments(["legacy.pdf"])[0]["id"] is None
         assert (
             training_enhancements._sanitize_attachments(
-                [{"id": "a", "file_name": "x.pdf"}]
+                SimpleNamespace(
+                    attachments=[{"id": "a", "file_name": "x.pdf"}],
+                    voided_at=None,
+                    organization_id="org-1",
+                    user_id="user-1",
+                ),
+                SimpleNamespace(id="user-1", rank=None, positions=[]),
             )[0]["id"]
             == "a"
         )

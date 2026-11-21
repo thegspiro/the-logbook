@@ -84,7 +84,7 @@ describe('EventsAdminHub', () => {
     expect(window.location.search).toBe('?tab=requests');
     expect(await screen.findByText('requests body')).toBeInTheDocument();
     const strip = screen.getByRole('tablist', { name: 'Community Outreach pages' });
-    await user.click(within(strip).getByRole('tab', { name: 'Community Engagement' }));
+    await user.click(within(strip).getByRole('tab', { name: 'Outreach Impact' }));
     expect(window.location.search).toBe('?tab=community');
     expect(await screen.findByText('community body')).toBeInTheDocument();
   });
