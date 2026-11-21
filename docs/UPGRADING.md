@@ -956,6 +956,22 @@ Nothing blocks a restart, and no migration ships in this range: `main` at
 - **Store payments typed by hand cannot exceed the balance** _(#4391)_, and
   **Refund** asks for an amount, a reason and a confirmation.
 
+### Leave requests: escalation, and members ending their own leave early (2026-11-17)
+
+Nothing blocks a restart. Migration `7b4e2d9c1a63` adds two email template
+types and changes no other table.
+
+- **The Chief starts hearing about stalled requests.** A request undecided 21
+  days after it was made is sent once to the Chief (or, when no Chief can
+  open requests, everyone who can record leave), by email and in the app. The
+  first daily run after the upgrade sends this for every waiting request
+  already 21 or more days old. Set **Members → Administration → Settings →
+  Leave of Absence → Tell the Chief about a request still undecided after
+  this many days** to **0** to turn it off.
+- **Members can shorten their own leave** where the department takes leave
+  requests. The officers who manage leave are emailed each time.
+- **Downgrading** deletes any customised copies of the two new templates.
+
 ### Anonymising a member deletes their uploaded certificates; officer check-ins count from the start (2026-11-17)
 
 Nothing blocks a restart. Migration `bbeb4867d393` adds one nullable column,
@@ -979,6 +995,27 @@ changes and the downgrade drops the column.
 - **My Shifts → Past shows credited hours** _(#4381)_, so a member with a
   shift awaiting close-out sees a lower figure than before, matching the Hours
   view.
+
+### Leave requests: extensions, questions, changed dates and reminders (2026-11-16)
+
+Nothing blocks a restart. Migration `e5a9c3d71b28` adds columns to
+`leave_requests` (all nullable, or defaulting to 1), a `round` column to
+`leave_request_votes` (default 1), the new `leave_request_messages` table, and
+three template types. Requests and votes already stored stay as they were, in
+round 1.
+
+- **Approvers start getting reminders.** An approver who has not decided a
+  waiting request is emailed, and notified in the app, three days after it
+  was made and weekly after that. The first daily run after the upgrade
+  reminds about every request already three or more days old.
+- **The daily recheck may settle requests at once.** Under "a majority" or
+  "every approver", a request whose approvals already meet the rule against
+  today's approvers (because one stepped down) is approved or denied on the
+  first run, and its member is emailed.
+- **Leave Requests appears in the menu** for every member of a department
+  that takes requests, and for anyone with one to decide.
+- **Downgrading** drops the conversation table and the new columns. A request
+  with votes from more than one round keeps only its latest round's votes.
 
 ### Training: one form for Training events, evaluated calls, and evaluation credit that follows the shift (2026-11-16)
 

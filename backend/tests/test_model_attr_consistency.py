@@ -67,21 +67,24 @@ def test_no_active_is_active_reference_mismatches():
     flag_by_model = _xor_flag_map()
     assert flag_by_model, "expected to discover model active flags"
 
-    # Build one regex per model matching the WRONG attribute with a word
-    # boundary so `.active` doesn't match inside `.is_active`.
-    wrong = {
-        model: re.compile(
-            rf"\b{model}\.{'is_active' if flag == 'active' else 'active'}\b"
+    # One alternation over every model's WRONG attribute, with a word boundary
+    # so `.active` doesn't match inside `.is_active`. A regex per model run
+    # against every line cost one search per model per line, which took this
+    # test past the 30s per-test timeout on a loaded CI runner.
+    wrong = re.compile(
+        r"\b(?:"
+        + "|".join(
+            rf"{re.escape(model)}\.{'is_active' if flag == 'active' else 'active'}"
+            for model, flag in flag_by_model.items()
         )
-        for model, flag in flag_by_model.items()
-    }
+        + r")\b"
+    )
 
     violations = []
     for path, lineno, line in _iter_source_lines():
-        for model, pattern in wrong.items():
-            if pattern.search(line):
-                rel = os.path.relpath(path, BACKEND_ROOT)
-                violations.append(f"{rel}:{lineno}: {line.strip()}")
+        if "active" in line and wrong.search(line):
+            rel = os.path.relpath(path, BACKEND_ROOT)
+            violations.append(f"{rel}:{lineno}: {line.strip()}")
 
     assert not violations, "Wrong active/is_active column references:\n" + "\n".join(
         violations

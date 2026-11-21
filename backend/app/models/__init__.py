@@ -368,8 +368,10 @@ from app.models.knowledge_test import (
 from app.models.label_printer import LabelPrinter
 from app.models.leave_request import (
     LeaveDecisionRule,
+    LeaveMessageKind,
     LeaveNoticeSend,
     LeaveRequest,
+    LeaveRequestMessage,
     LeaveRequestStatus,
     LeaveRequestVote,
     LeaveVote,
@@ -695,6 +697,8 @@ __all__ = [
     "AttendanceWaiverWorkflow",
     # Leave of absence requests and scheduled leave notices
     "LeaveDecisionRule",
+    "LeaveMessageKind",
+    "LeaveRequestMessage",
     "LeaveNoticeSend",
     "LeaveRequest",
     "LeaveRequestStatus",

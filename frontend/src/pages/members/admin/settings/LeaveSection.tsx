@@ -6,6 +6,10 @@
  * wants `members.manage` — the hub's own grant, so a members officer can change
  * everything here. Every save is audited server-side.
  *
+ * **A request left waiting reaches the Chief.** After the chosen number of days
+ * (0 for never) the Chief is told once, or everyone who can record leave when
+ * no Chief can open the request.
+ *
  * **Who decides falls back rather than stalls.** A request goes to the chosen
  * positions; when nobody else holds them it goes to the Chief, then to everyone
  * who can record leave. The screen says so beside the picker, and marks a
@@ -30,6 +34,7 @@ const DEFAULTS: LeaveSettings = {
   requests_enabled: false,
   request_approver_position_ids: [],
   request_decision_rule: LeaveDecisionRule.ANY,
+  request_escalation_days: 21,
 };
 
 const RULES: Array<{ value: LeaveDecisionRuleValue; label: string; help: string }> = [
@@ -50,7 +55,7 @@ const RULES: Array<{ value: LeaveDecisionRuleValue; label: string; help: string 
   },
 ];
 
-const dayCount = (value: string): number => Math.min(60, Math.max(0, parseInt(value, 10) || 0));
+const dayCount = (value: string, max = 60): number => Math.min(max, Math.max(0, parseInt(value, 10) || 0));
 
 interface Props {
   /** The page's autosave — see the note in `ContactVisibilitySection`. */
@@ -272,6 +277,30 @@ const LeaveSection: React.FC<Props> = ({ save, saveDebounced }) => {
                 being decided.
               </p>
             </fieldset>
+
+            <div>
+              <label className="form-label" htmlFor="leave-escalation-days">
+                Tell the Chief about a request still undecided after this many days
+              </label>
+              <input
+                id="leave-escalation-days"
+                type="number"
+                min={0}
+                max={180}
+                value={settings.request_escalation_days}
+                disabled={loading}
+                onChange={(e) =>
+                  update({ request_escalation_days: dayCount(e.target.value, 180) }, 'leave-escalation-days')
+                }
+                aria-describedby="leave-escalation-days-help"
+                className="form-input w-24"
+              />
+              <p id="leave-escalation-days-help" className="text-theme-text-muted mt-1 text-xs">
+                Sent once per request, by email and in the app. When the Chief cannot open requests, everyone who can
+                record leave is told instead. 0 tells no one. Approvers are reminded three days in and weekly whatever
+                this is set to.
+              </p>
+            </div>
           </div>
         )}
       </fieldset>
