@@ -30,8 +30,8 @@ cases. It is not the only apparatus document.
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [wiki/Module-Apparatus.md](../wiki/Module-Apparatus.md)   | Feature narrative and the dated change history (NFC on the fleet, NFPA per department, the officer-only fleet record, equipment-check item types) |
 | [docs/DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)           | Generated, authoritative column-level schema                                                                                                      |
-| [docs/app-review/apparatus.md](./app-review/apparatus.md) | Review findings and verified-good claims across five passes                                                                                       |
-| [docs/KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md)       | **AP2-4**, the open EVOC fail-open decision                                                                                                       |
+| [docs/app-review/apparatus.md](./app-review/apparatus.md) | Review findings and verified-good claims across six passes                                                                                        |
+| [docs/KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md)       | **AP2-4**, the EVOC missing-vehicle decision (resolved 2026-10-31: refuse the seat)                                                               |
 
 The equipment-check feature shares `models/apparatus.py` but is its own
 surface; the wiki page above covers it.
@@ -461,55 +461,56 @@ bare `date.today()` here.
 
 ## Edge Cases
 
-| Scenario                                                              | Behavior                                                                                                                                                                                                                 |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `DELETE /{apparatus_id}`                                              | **Hard delete.** Use `POST /{apparatus_id}/archive` for a retired vehicle. See the warning below — a hard delete has a live consequence.                                                                                 |
-| Apparatus with no `required_evoc_level_id`                            | Everyone is eligible to drive it; the EVOC check returns eligible with no required level                                                                                                                                 |
-| EVOC check on an apparatus that cannot be resolved                    | Returns **eligible** and logs a warning. This is the open **AP2-4** decision — see [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md)                                                                                        |
-| Member's EVOC certification expired                                   | Not eligible — `is_certified` and `certification_expiration >= as_of` are both required                                                                                                                                  |
-| Member holds a higher non-cumulative level only                       | Not eligible for a lower-level apparatus unless they also hold a cumulative level that covers it, or an exact match                                                                                                      |
-| Maintenance entered with a future due date                            | `is_overdue` is `False` at write time and re-stamped by the daily task once the date passes; the due list keys off `due_date` regardless                                                                                 |
-| Historic maintenance record                                           | `occurred_date` is required; a completed historic record is never flagged overdue                                                                                                                                        |
-| `GET /driver-exceptions/approvers` with no permission                 | Readable by **any** authenticated member, deliberately: a member refused the driver seat needs to know who to ask. Returns names and ranks only — no contact details                                                     |
-| Deleting an apparatus type or status still in use                     | Refused with a 400 naming the number of apparatus using it                                                                                                                                                               |
-| Component deleted                                                     | Archived (soft-delete), not removed — its note history survives                                                                                                                                                          |
-| Service provider archived                                             | Hidden from pickers but restorable; existing maintenance records keep pointing at it                                                                                                                                     |
-| A foreign-organization id in any FK                                   | Refused with a 400 (`Invalid EVOC level`, `Invalid component`, …) — every client-supplied FK is validated in-org before storage                                                                                          |
-| `MaintenanceType.default_interval_*` set                              | **Stored, not read.** Completing a maintenance record does not schedule the next one; recurrence is manual. See Known Gaps                                                                                               |
-| Emptying a field in the Operator, Equipment or Maintenance edit modal | Cleared: edits send every field the form owns, a blank as `null`. Equipment quantity (NOT NULL) refuses a blank instead; marking an open record completed with no Completed Date leaves the date for the server to stamp |
+| Scenario                                                                          | Behavior                                                                                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DELETE /{apparatus_id}`                                                          | **Hard delete**, refused with a 400 while a shift template, shift, pre-work session, equipment check or call response still names the vehicle (`apparatus_in_use`). Use `POST /{apparatus_id}/archive` for a retired vehicle.                              |
+| Apparatus with no `required_evoc_level_id`                                        | Everyone is eligible to drive it; the EVOC check returns eligible with no required level                                                                                                                                                                   |
+| EVOC check on an apparatus that cannot be resolved                                | A `basic_apparatus` id has no requirement and passes. An id in neither table returns **ineligible** with a warning to re-pick the shift's vehicle, and logs it (**AP2-4**, owner decision 2026-10-31 — see [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md)) |
+| Member's EVOC certification expired                                               | Not eligible — `is_certified` and `certification_expiration >= as_of` are both required                                                                                                                                                                    |
+| Member holds a higher non-cumulative level only                                   | Not eligible for a lower-level apparatus unless they also hold a cumulative level that covers it, or an exact match                                                                                                                                        |
+| Maintenance entered with a future due date                                        | `is_overdue` is `False` at write time and re-stamped by the daily task once the date passes; the due list keys off `due_date` regardless                                                                                                                   |
+| Historic maintenance record                                                       | `occurred_date` is required; a completed historic record is never flagged overdue                                                                                                                                                                          |
+| `GET /driver-exceptions/approvers` with no permission                             | Readable by **any** authenticated member, deliberately: a member refused the driver seat needs to know who to ask. Returns names and ranks only — no contact details                                                                                       |
+| Deleting an apparatus type or status still in use                                 | Refused with a 400 naming the number of apparatus using it                                                                                                                                                                                                 |
+| Component deleted                                                                 | Archived (soft-delete), not removed — its note history survives                                                                                                                                                                                            |
+| Service provider archived                                                         | Hidden from pickers but restorable; existing maintenance records keep pointing at it                                                                                                                                                                       |
+| A foreign-organization id in any FK                                               | Refused with a 400 (`Invalid EVOC level`, `Invalid component`, …) — every client-supplied FK is validated in-org before storage                                                                                                                            |
+| `MaintenanceType.default_interval_*` set                                          | **Stored, not read.** Completing a maintenance record does not schedule the next one; recurrence is manual. See Known Gaps                                                                                                                                 |
+| Emptying a field in the Operator, Equipment or Maintenance edit modal             | Cleared: edits send every field the form owns, a blank as `null`. Equipment quantity (NOT NULL) refuses a blank instead; marking an open record completed with no Completed Date leaves the date for the server to stamp                                   |
+| Deleting a photo or document that references a library document (`document:<id>`) | Only the link is removed; the library document is kept. A file uploaded to the vehicle is deleted with its record unless another record still links it (**AP2-7**)                                                                                         |
 
-> ⚠️ **A hard-deleted apparatus leaves dangling references.**
-> `shifts.apparatus_id` is an unconstrained `String(36)` with no foreign key, so
-> deleting an apparatus does not clear it from the shifts that referenced it.
-> Those shifts then reach the EVOC check with an id that resolves to nothing,
-> and the requirement stops being enforced — currently with a logged warning and
-> no user-visible signal. Prefer **archive** over delete. Tracked as **AP2-4** in
-> [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md).
+> ⚠️ **A vehicle deleted before the delete guard existed can still be named.**
+> `shifts.apparatus_id` is an unconstrained `String(36)` with no foreign key
+> (it names a row in either `apparatus` or `basic_apparatus`), so a vehicle
+> hard-deleted before both deletes began refusing an in-use vehicle left its
+> shifts pointing at nothing. The EVOC check now refuses the driver seat on such
+> a shift instead of passing everyone; re-pick the shift's vehicle to clear it.
+> **AP2-4** in [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md).
 
 ---
 
 ## Known Gaps
 
-| Gap                                                     | Detail                                                                                                                     |
-| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **AP2-4** — EVOC gate fails open on a missing apparatus | Owner decision pending: fail closed, or give `shifts.apparatus_id` a real `SET NULL` foreign key. See KNOWN_LIMITATIONS.md |
-| Maintenance intervals are not scheduled                 | `default_interval_value` / `_unit` / `_miles` / `_hours` exist on `apparatus_maintenance_types` and nothing reads them     |
-| Sub-resource business logic is unreviewed               | Fuel logs, equipment, photos/documents and custom fields have verified tenancy invariants but no depth review              |
+| Gap                                       | Detail                                                                                                                                                                          |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Maintenance intervals are not scheduled   | `default_interval_value` / `_unit` / `_miles` / `_hours` exist on `apparatus_maintenance_types` and nothing reads them                                                          |
+| Custom-field definitions are not enforced | No screen manages them, and nothing checks `custom_field_values` against `is_required`, `options`, bounds or `regex_pattern`; renaming a key orphans stored values (**AP2-15**) |
+| Odometer and hours can move backwards     | A fuel log, status change or edit overwrites `current_mileage` / `current_hours` with a lower reading (**AP2-13**)                                                              |
 
 ---
 
 ## Troubleshooting
 
-| Issue                                              | Cause                                                                       | Fix                                                                                                               |
-| -------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Module not visible in navigation                   | Module not enabled for the organization                                     | Enable Apparatus in Organization/Admin Settings → Modules (`enabled_modules`)                                     |
-| A member cannot be seated as a driver              | Apparatus requires an EVOC level the member does not hold or has let expire | Check `GET /evoc-check/{apparatus_id}/{user_id}`; add or renew the operator record, or request a driver exception |
-| EVOC requirement seems not to apply at all         | The shift points at a deleted apparatus (AP2-4)                             | Search the logs for `EVOC eligibility: apparatus … not found`; re-point or clear the shift's apparatus            |
-| Overdue maintenance count reads low                | `is_overdue` is stamped at write time                                       | `run_mark_overdue_maintenance` re-stamps daily; the due list itself keys off `due_date` and is correct meanwhile  |
-| NFPA tab missing                                   | Department NFPA tracking is off                                             | Toggle it with `NfpaDepartmentSwitch`, backed by `GET /nfpa-settings`                                             |
-| "Invalid EVOC level" / "Invalid component" on save | A client-supplied FK does not belong to the caller's organization           | Re-select the value from the in-app dropdown rather than passing an id directly                                   |
-| Cannot delete a type or status                     | Apparatus still reference it                                                | Reassign those apparatus first; the error names the count                                                         |
-| Frontend field reads `undefined`                   | This module serializes **camelCase**                                        | Match the alias (`unitNumber`, not `unit_number`) — see the casing note under Architecture                        |
+| Issue                                                        | Cause                                                                       | Fix                                                                                                               |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Module not visible in navigation                             | Module not enabled for the organization                                     | Enable Apparatus in Organization/Admin Settings → Modules (`enabled_modules`)                                     |
+| A member cannot be seated as a driver                        | Apparatus requires an EVOC level the member does not hold or has let expire | Check `GET /evoc-check/{apparatus_id}/{user_id}`; add or renew the operator record, or request a driver exception |
+| Driver seat refused: "This shift's vehicle no longer exists" | The shift names an apparatus deleted before the delete guard (AP2-4)        | Re-pick the shift's vehicle; the log line `EVOC eligibility: apparatus … not found` names the id                  |
+| Overdue maintenance count reads low                          | `is_overdue` is stamped at write time                                       | `run_mark_overdue_maintenance` re-stamps daily; the due list itself keys off `due_date` and is correct meanwhile  |
+| NFPA tab missing                                             | Department NFPA tracking is off                                             | Toggle it with `NfpaDepartmentSwitch`, backed by `GET /nfpa-settings`                                             |
+| "Invalid EVOC level" / "Invalid component" on save           | A client-supplied FK does not belong to the caller's organization           | Re-select the value from the in-app dropdown rather than passing an id directly                                   |
+| Cannot delete a type or status                               | Apparatus still reference it                                                | Reassign those apparatus first; the error names the count                                                         |
+| Frontend field reads `undefined`                             | This module serializes **camelCase**                                        | Match the alias (`unitNumber`, not `unit_number`) — see the casing note under Architecture                        |
 
 ---
 

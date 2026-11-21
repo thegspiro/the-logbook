@@ -39,7 +39,8 @@ const EmergencyContactsSection: React.FC<EmergencyContactsSectionProps> = ({
         {canEdit && !editingContacts && (
           <button
             onClick={onEditEmergencyContacts}
-            className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+            className="touch:min-h-11 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+            aria-label="Edit emergency contacts"
           >
             Edit
           </button>

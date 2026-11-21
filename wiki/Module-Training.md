@@ -182,8 +182,9 @@ custom tier such as `senior` can be ticked; a type the requirement already
 carries is always shown. Shift and call requirements return `monthly_counts`
 from `evaluate_requirement_detail` (null for other types), the counterpart of
 `monthly_hours`, with the same leave fields; a target that leave reduces to
-zero reads "Nothing owed (on leave)". Evaluated shifts, transports and
-refusals requirements linked into a program with **Link existing** are graded
+zero reads "Nothing owed (on leave)". Evaluated shifts, transports,
+refusals and _(2026-11-15)_ evaluated calls requirements linked into a program
+with **Link existing** are graded
 from shift evaluations (`load_evaluation_credits`, rules in
 `shift_evaluation_rules.py`), not from training records. `PUT
 /compliance/config` writes a `compliance_config_updated` audit entry naming
@@ -433,16 +434,24 @@ would not accept do not inflate a member's certificate.
 the recurring events via `EventService` and links a `TrainingSession` to each
 occurrence.
 
+**One form creates and edits a Training event** _(2026-11-16, #4347)_. Training
+Admin's **Create Session**, Events → **Create Event** with the type
+**Training**, and **Edit** on a Training event open the same four-step
+training-event form (`TrainingEventWizard`). The course is optional; with none,
+records are filed under the event's title. Developer detail is in
+[Module-Training-Developer](Module-Training-Developer).
+
 **Session form helpers:**
 
-- **Course auto-populate** — selecting a course fills training type, credit
-  hours, instructor, expiration months, and max participants, with a details
-  preview card.
+- **Course auto-populate** — choosing **From the Course Library** and a course
+  fills training type, credit hours, instructor, expiry, category, program and
+  maximum attendees, with a details card.
 - **Quarter-hour time picker** — the `DateTimeQuarterHour` UX component splits
   date/time into a native date picker and a select restricted to `:00`, `:15`,
   `:30`, `:45` (browser `datetime-local` inputs ignore `step="900"`).
 - **Quick duration buttons** — 1, 2, 4 and 8 hours, matching EventForm. They
-  appear once a start date is set and fill the end date/time.
+  fill the end date/time; with no start date a button reads "Set a start date
+  first".
 
 ---
 

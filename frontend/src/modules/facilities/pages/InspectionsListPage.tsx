@@ -114,13 +114,18 @@ export default function InspectionsListPage() {
             className="form-input placeholder-theme-text-muted py-2.5 pr-4 pl-10"
           />
         </div>
-        <div className="border-theme-surface-border flex items-center overflow-hidden rounded-lg border">
+        <div
+          className="border-theme-surface-border flex max-w-full items-center overflow-x-auto rounded-lg border"
+          data-mobile-scroll-region
+          role="group"
+          aria-label="Filter inspections by result"
+        >
           {(['all', 'passed', 'failed', 'pending'] as const).map((s) => (
             <button
               key={s}
               onClick={() => setResultFilter(s)}
               aria-pressed={resultFilter === s}
-              className={`px-3 py-2 text-xs font-medium transition-colors ${resultFilter === s ? 'bg-red-500/10 text-red-700 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+              className={`touch:min-h-11 touch:min-w-11 shrink-0 px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${resultFilter === s ? 'bg-red-500/10 text-red-900 dark:text-red-300' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               {s.charAt(0).toUpperCase() + s.slice(1)}
             </button>
@@ -193,7 +198,7 @@ export default function InspectionsListPage() {
               <div className="min-w-0 flex-1">
                 <div className="mb-0.5 flex items-center gap-2">
                   <p className="text-theme-text-primary truncate text-sm font-medium">{insp.title}</p>
-                  <span className="bg-theme-surface-hover text-theme-text-muted shrink-0 rounded-full px-2 py-0.5 text-xs">
+                  <span className="bg-theme-surface-hover text-theme-text-secondary shrink-0 rounded-full px-2 py-0.5 text-xs">
                     {enumLabel(insp.inspectionType)}
                   </span>
                 </div>
@@ -217,7 +222,7 @@ export default function InspectionsListPage() {
                   {!insp.inspectorName && insp.inspectorOrganization && <span>{insp.inspectorOrganization}</span>}
                   {insp.nextInspectionDate && <span>Next: {formatDate(insp.nextInspectionDate, tz)}</span>}
                   {insp.correctiveActions && !insp.correctiveActionCompleted && (
-                    <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                    <span className="flex items-center gap-1 text-amber-900 dark:text-amber-300">
                       <AlertTriangle className="h-3 w-3" /> Corrective action needed
                     </span>
                   )}
@@ -230,7 +235,7 @@ export default function InspectionsListPage() {
                       onClick={() => openEdit(insp)}
                       title="Edit"
                       aria-label="Edit inspection"
-                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
+                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-lg p-1.5 transition-colors"
                     >
                       <Pencil className="h-4 w-4" />
                     </button>
@@ -242,7 +247,7 @@ export default function InspectionsListPage() {
                       }}
                       title="Delete"
                       aria-label="Delete inspection"
-                      className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                      className="text-theme-text-muted touch-target-phone rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
                     >
                       <X className="h-4 w-4" />
                     </button>

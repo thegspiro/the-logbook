@@ -390,6 +390,8 @@ export interface EvaluationSummary {
   current_step: string | null;
   current_step_due: string | null;
   created_at: string | null;
+  /** A finalized review's overall grade, sent only to holders of `evaluations.view_all`. */
+  overall_grade?: string | null | undefined;
 }
 
 export type SignatureDisposition = 'signed' | 'acknowledged' | 'refused';
@@ -476,7 +478,20 @@ export interface EvaluationDetail extends EvaluationSummary {
   response_document_available?: boolean | undefined;
   /** Keys of the evaluator's items the calibrator flagged to revisit. */
   calibration_flags?: string[] | undefined;
+  /** The member's last finalized review on the same form, when the caller may read it. */
+  previous_review?: PreviousReview | null | undefined;
   viewer: EvaluationViewer;
+}
+
+export interface PreviousReview {
+  evaluation_id: string;
+  period_name: string | null;
+  period_start: string;
+  period_end: string;
+  /** The grade that stood: the evaluator's where they changed the calculated one. */
+  overall: string | null;
+  sections: { key: string; title: string; label: string }[];
+  goals: { key: string; label: string; text: string }[];
 }
 
 export interface SubmitResult {

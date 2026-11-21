@@ -281,6 +281,7 @@ export const ApparatusFormPage: React.FC = () => {
     types,
     statuses,
     isLoading: storeLoading,
+    error: storeError,
     fetchApparatus,
     fetchTypes,
     fetchStatuses,
@@ -375,9 +376,15 @@ export const ApparatusFormPage: React.FC = () => {
     }
   }, [navigate, isEditing, id, fetchApparatus, fetchTypes, fetchStatuses]);
 
+  // The store keeps the last apparatus opened, so it is this record only once
+  // the ids agree. Filling the form from another one and saving would write it
+  // onto the apparatus in the URL (AP2-9).
+  const editedApparatus = isEditing && currentApparatus?.id === id ? currentApparatus : null;
+
   // Populate form when editing
   useEffect(() => {
-    if (isEditing && currentApparatus) {
+    if (editedApparatus) {
+      const currentApparatus = editedApparatus;
       const loaded: ApparatusCreate = {
         unitNumber: currentApparatus.unitNumber,
         name: currentApparatus.name || '',
@@ -435,7 +442,7 @@ export const ApparatusFormPage: React.FC = () => {
       setFormData(loaded);
       setBaseline(loaded);
     }
-  }, [isEditing, currentApparatus]);
+  }, [editedApparatus]);
 
   const isDirty = JSON.stringify(formData) !== JSON.stringify(baseline);
   useUnsavedChanges({ hasChanges: isDirty && !isSubmitting });
@@ -714,7 +721,7 @@ export const ApparatusFormPage: React.FC = () => {
     </FormField>
   );
 
-  if (storeLoading && isEditing) {
+  if (isEditing && (storeLoading || (!editedApparatus && !storeError))) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="text-center">
@@ -725,10 +732,25 @@ export const ApparatusFormPage: React.FC = () => {
     );
   }
 
-  // The store keeps the last apparatus opened, so a unit name is only this
-  // record's once the ids agree; until then the trail stops at the section.
-  const editingUnit =
-    isEditing && currentApparatus && currentApparatus.id === id ? currentApparatus.unitNumber : undefined;
+  // An edit form with nothing loaded into it would save blanks as nulls.
+  if (isEditing && !editedApparatus) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <Truck className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
+          <h2 className="text-theme-text-primary mb-2 text-xl font-bold">Apparatus Not Found</h2>
+          <p className="text-theme-text-muted mb-6">
+            This apparatus couldn&#39;t be loaded. It may have been deleted, or the link may be wrong.
+          </p>
+          <button type="button" onClick={() => void navigate('/apparatus')} className="btn-primary px-6 py-3">
+            Back to Apparatus
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const editingUnit = editedApparatus?.unitNumber;
 
   return (
     <div>
