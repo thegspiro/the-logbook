@@ -1489,6 +1489,41 @@ event templates** permission (`apparatus_events.manage`). Taking a seat needs
 **Sign up for crew seats** (`apparatus_events.signup`), which every position
 that can see events has by default.
 
+### Before you start
+
+Apparatus events are usually run by your outreach coordinator, who often
+cannot change the things below. Most are set up **once**, by whoever
+administers your apparatus, positions, Admin Hours or email. Check them
+before building your first template, and ask for whatever is missing.
+
+**Ask an administrator, once:**
+
+- [ ] **Your permission.** The built-in **Public Outreach** position already
+      has **Manage apparatus event templates**. If you hold a position your
+      department created, ask for that permission to be added to it on the
+      positions screen. Members of the **Community Education / Outreach
+      Team** can take seats but cannot build templates.
+- [ ] **The apparatus.** At least one unit in the **Apparatus** module. With
+      none, Apparatus Events says _Add an apparatus first_.
+- [ ] **Who may drive.** If your department enforces EVOC, each driver's EVOC
+      level recorded on that apparatus, or an approved driver exception.
+      Otherwise nobody can take a Driver seat set to **Enforce**.
+- [ ] **Where the hours go.** An **Admin Hours** category for outreach, such
+      as _Community Outreach_. If neither your template nor the event type
+      points to a category, the crew's hours are **not credited** — and
+      nothing on screen warns you yet.
+- [ ] **Email.** Email set up for the department, so **Email members** can
+      send. If it is not, the email is refused and nothing is recorded.
+- [ ] **Member classes and statuses.** Kept up to date on member profiles if
+      you want to email, say, only operational or life members. A member
+      whose class and status were never set counts as Operational / Regular.
+
+**Then, yourself:**
+
+- [ ] Build a template, choosing the apparatus, seats, Driver EVOC rule and
+      Admin Hours category.
+- [ ] Schedule the nights and email members about the open seats.
+
 ### Building a template
 
 A template is the plan you reuse: which apparatus goes out, which seats it
