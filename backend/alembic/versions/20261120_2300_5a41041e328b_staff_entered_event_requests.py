@@ -1,7 +1,7 @@
 """Event requests: staff may enter one taken by phone, without an email
 
 Revision ID: 5a41041e328b
-Revises: bc58d756a179
+Revises: 56377b666eb3
 Create Date: 2026-11-20 23:00:00.000000
 
 Owner decision, 2026-11-20: a coordinator can enter an outreach request that
@@ -38,7 +38,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "5a41041e328b"
-down_revision: Union[str, None] = "bc58d756a179"
+down_revision: Union[str, None] = "56377b666eb3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
