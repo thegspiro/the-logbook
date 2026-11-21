@@ -167,7 +167,9 @@ export const RequestApparatusCrewSection: React.FC<RequestApparatusCrewSectionPr
             Bringing an apparatus? Add a crew from a template. It goes on this request’s calendar event, so it moves
             with a reschedule. Volunteer signups above stay as they are.
           </p>
-          {templates !== null && templates.length === 0 ? (
+          {templates === null ? (
+            <p className="text-theme-text-muted text-sm">Loading templates…</p>
+          ) : templates.length === 0 ? (
             <p className="text-theme-text-muted text-sm">
               No apparatus event templates yet. Create one under Community Outreach → Apparatus Events.
             </p>
@@ -183,7 +185,7 @@ export const RequestApparatusCrewSection: React.FC<RequestApparatusCrewSectionPr
                 onChange={(e) => setTemplateId(e.target.value)}
               >
                 <option value="">Choose a template…</option>
-                {(templates ?? []).map((t) => (
+                {templates.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name} — {t.units.map((u) => u.unit_number).join(' + ')} · {t.total_seats} seats
                   </option>

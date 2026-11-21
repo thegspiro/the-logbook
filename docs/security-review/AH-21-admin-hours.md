@@ -1,6 +1,206 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8), 2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11), 2026-10-30 (pass 12), 2026-11-02 (pass 13), 2026-11-10 (pass 14) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 7, merged), [#3336](https://github.com/thegspiro/the-logbook/pull/3336) (pass 8, merged), [#3451](https://github.com/thegspiro/the-logbook/pull/3451) (pass 9, merged), [#3632](https://github.com/thegspiro/the-logbook/pull/3632) (pass 10, merged), [#3764](https://github.com/thegspiro/the-logbook/pull/3764) (pass 11, merged), [#3846](https://github.com/thegspiro/the-logbook/pull/3846) (pass 12, merged), [#3955](https://github.com/thegspiro/the-logbook/pull/3955) (pass 13, merged), pass 14 (this PR)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8), 2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11), 2026-10-30 (pass 12), 2026-11-02 (pass 13), 2026-11-10 (pass 14), 2026-11-21 (pass 15) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 7, merged), [#3336](https://github.com/thegspiro/the-logbook/pull/3336) (pass 8, merged), [#3451](https://github.com/thegspiro/the-logbook/pull/3451) (pass 9, merged), [#3632](https://github.com/thegspiro/the-logbook/pull/3632) (pass 10, merged), [#3764](https://github.com/thegspiro/the-logbook/pull/3764) (pass 11, merged), [#3846](https://github.com/thegspiro/the-logbook/pull/3846) (pass 12, merged), [#3955](https://github.com/thegspiro/the-logbook/pull/3955) (pass 13, merged), [#4224](https://github.com/thegspiro/the-logbook/pull/4224) (pass 14, merged), pass 15 (this PR)
+
+## Pass 15 (2026-11-21) — 0 fixed, 0 new findings; real backend delta (an apparatus-night category override, a CSV Source column, a shared profile tie-break) traced safe; a new unclaimed cross-feature module (Apparatus Events) found and recorded
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+remained unreachable. PR [#4497](https://github.com/thegspiro/the-logbook/pull/4497)
+(Feature 20, Compliance, pass 15) had already merged
+(`38b98147014b7a06b85ec456e47c55db90bf080c`); a fresh `list_pull_requests`
+(state `open`) found no `claude/security-review-*` head. Row 21 (Admin
+hours) was confirmed the next `⬜` by reading `PROGRESS.md`'s rotation
+table directly on a freshly fetched `main`. The stale **Open PR** row
+(still naming #4497) was cleared in the same working tree, per Step 0.
+
+**Baseline `9eac8df98`** (PR #4224's merge, pass 14). `git diff --stat
+9eac8df98..origin/main` across every file this feature declares in scope
+(`endpoints/admin_hours.py`, `admin_hours_service.py`, `models/admin_hours.py`,
+`schemas/admin_hours.py`, `utils/admin_hours_settings.py`,
+`core/seed_admin_hours.py`, the `admin-hours` frontend module) finds real
+movement for the first time since pass 11: `admin_hours_service.py`
+(+99/-8) and eleven frontend files (601 insertions, 224 deletions). The
+endpoint, schema and model files are byte-identical to pass 14 — no new
+route, no new permission string, no column change.
+
+### The service delta, read in full
+
+Three independent additions, each read against all seven dimensions:
+
+1. **An apparatus night can credit its own category instead of its event
+   type's mapping.** New `AdminHoursService._active_mappings` (a shared
+   `Select` builder, extracted so `get_mappings_for_event` and the new
+   `mapped_event_types` cannot drift apart from each other — the comment
+   names this explicitly) and `crew_hour_category_overrides(organization_id,
+event_ids)` (`:2087-2111`), which joins `EventApparatusPlan` to
+   `AdminHoursCategory` filtering **both** `EventApparatusPlan.organization_id
+== str(organization_id)` **and** `AdminHoursCategory.organization_id ==
+str(organization_id)` — so even an `event_id` from another org (none is
+   ever passed one; every call site threads `current_user.organization_id`
+   or an already-org-scoped `organization_id` parameter) would simply match
+   no row rather than leak one, the filter being on the query itself and not
+   merely on trusting the caller. `credit_event_attendance` (`:2154-2163`)
+   now looks this up before falling back to `get_mappings_for_event`, and
+   uses it exclusively when present (an `if/else`, never both) — matching the
+   new model docstring's own invariant in `apparatus_event.py`
+   (`EventApparatusPlan.admin_hours_category_id`: "replaces the event-type
+   mapping... never credited _as well_, which would pay a crew twice"). The
+   category id itself is set only through `apparatus_event_service.py`'s
+   `_assert_category`, which calls the shared `assert_in_org` helper
+   (CLAUDE.md Pitfall #14c) before every template/plan write — read directly
+   at `apparatus_event_service.py:158-168`, `:269`, `:1319` — so a
+   client-supplied category id cannot be stored in another org's name
+   (XC-1). The two outside callers of the new method
+   (`event_service.py:1150-1225`, the events list annotation and the
+   single-event detail estimate) both pass `organization_id` from the
+   authenticated caller and a list of event ids already drawn from an
+   org-scoped query; and the query's own double org filter makes that a
+   defense-in-depth property rather than the only one. **No finding** —
+   verified good, not merely read.
+2. **CSV exports gain a "Source" column** (`"Imported"` vs. `"The Logbook"`),
+   appended last so a sheet reading columns by position keeps working.
+   `label_for(admin_hours_imported(entry.entry_method))`
+   (`app/services/import_provenance.py`) is a pure lookup against the
+   entry's own already-loaded `entry_method` enum value — no query, no user
+   text, nothing that touches `SafeCsvWriter`'s formula-injection escaping
+   (Pitfall #15; the two static labels can never start with `=`/`+`/`-`/`@`).
+   This is a cross-cutting owner decision (2026-11-16, per the module's own
+   docstring) applied here, not an admin-hours-specific design; both
+   `stream_entries_csv` (the streaming export, Pitfall #16/AH-16's fix) and
+   `export_entries_csv` (the string-returning wrapper, confirmed still a thin
+   `collect_csv(stream_entries_csv(...))` join) pick it up from one
+   definition. **No finding.**
+3. **The admin-hours profile grading's priority tie-break now calls the
+   shared `ordered_profiles()`** (`app/utils/compliance_profiles.py`) instead
+   of a local `applicable_profiles.sort(key=lambda p: p.priority or 0,
+reverse=True)`. This is Pitfall #29's "one definition" rule applied
+   retroactively: the old local sort broke priority ties by whatever order
+   the query returned them in, which could silently disagree with
+   Compliance's own profile-selection rule (`CMP-20`'s pass 15,
+   already-reviewed "equal priorities go to the older profile"). Not a
+   security finding — a correctness/consistency fix already proven correct
+   in the feature that owns the shared rule — recorded because it is this
+   feature's own file.
+
+### A new unclaimed cross-feature module, read only at its admin-hours-touching slice
+
+`apparatus_event_service.py` (1,578 L) and `apparatus_events.py` (876 L,
+**20 routes**, all gated `require_permission("apparatus_events.manage")` or
+the OR-gate `("apparatus_events.signup", "apparatus_events.manage")`; none
+of the two permission strings appears in any `DEFAULT_POSITIONS` seed —
+checked by grep, zero hits), plus `models/apparatus_event.py` and
+`schemas/apparatus_event.py`, are new since this feature's pass-14 baseline
+(`git log --diff-filter=A` dates the model to commit `a80760942`, "Add
+apparatus events backend", not a rotation commit) and have **no rotation
+row** — the same situation Historical Data Import was in at pass 14. A full
+seven-dimension pass over the whole module is out of scope here and not
+attempted; what was traced, because it is a second writer/reader of this
+feature's `AdminHoursCategory` table (beyond the `EventApparatusPlan`
+join covered above):
+
+- `GET /apparatus-events/options` (`apparatus_events.py:327-338`,
+  `apparatus_events.manage`) returns the org's active `AdminHoursCategory`
+  rows for the template editor's picker, filtered
+  `AdminHoursCategory.organization_id == str(organization_id)` with
+  `organization_id` taken from `current_user.organization_id` — never
+  client-supplied (`apparatus_event_service.py:1136-1164`). The same method
+  also calls `AdminHoursService(self.db).mapped_event_types(organization_id)`
+  (the new `_active_mappings`-backed query above), with the identical
+  org-scoped argument.
+- Template/plan creation and update (`_assert_category`, above) validate
+  the client-supplied `admin_hours_category_id` in-org before every write.
+
+No finding in this slice. The module as a whole (seat assignment, EVOC
+checks, signup, finalization, its own abuse-resistance and data-exposure
+posture) has not been given a seven-dimension pass and should not be read
+as cleared. A note recording it as unclaimed was added to `PROGRESS.md`'s
+"New modules with no rotation row yet" paragraph, suggesting Feature 13
+(Apparatus & NFC) as the natural home — its permission prefix
+(`apparatus_events`) and its dependency on the `Apparatus`/EVOC model are
+both that feature's own domain, the same way Historical Data Import's
+`integrations` permission prefix pointed it to Feature 27.
+
+### The frontend delta, read in full
+
+Eleven files, all adopting the shared `FormField` / `mapServerFieldErrors`
+pattern (CLAUDE.md's "Forms — Save With an Error" owner rule, already
+reviewed where the shared utility itself was introduced) on three forms —
+`CategoryForm.tsx`/`CategoriesTab.tsx` (new category, edit category),
+`MyEntryEditForm.tsx` (a member's own pending-entry edit) and
+`AdminHoursPage.tsx` (the manual-entry form) — plus two files
+(`AdminHoursPage.tsx`, `SummaryTab.tsx`) swapping `green-700`/`amber-700`
+text for `green-900`/`amber-900` (an AA/AAA contrast correction in the same
+family as CLAUDE.md's 2026-09-07 sweep, not introduced by this pass's own
+diff but confirmed present).
+
+- **No new request path, no new client-trusted field.** Each 422-mapping
+  addition reads `err.response.data.detail` (already the shape
+  `safe_error_detail`/FastAPI's validation handler produces) and places the
+  message next to its field; nothing constructs a request from
+  error-response content, and nothing bypasses the existing
+  `createApiClient()`/CSRF-interceptor axios instance.
+- **The category tab's "save the rest, flag the refused field" path**
+  (`CategoriesTab.tsx`'s `handleUpdate`) removes only the server-refused
+  keys from the update payload and resubmits the remainder through the same
+  `updateCategory` store action — still `PATCH
+/admin-hours/categories/{id}`, still `admin_hours.manage`-gated, still
+  `apply_updates`-backed server-side (confirmed above: the endpoint/schema
+  files are byte-identical to pass 14). No new endpoint, no new permission,
+  no path to write a field the server has already refused.
+- Swept all eleven files for `window.confirm`/`alert`/`prompt`,
+  `dangerouslySetInnerHTML`, `innerHTML`, a new bare `fetch(`/`axios`
+  import, `localStorage`/`sessionStorage`, and the banned
+  `.toLocale*`/`date-fns` imports: zero hits.
+- The one shared-utility file touched outside this feature's own module,
+  `frontend/src/utils/serverFieldErrors.ts` (+8/-0, a Pydantic
+  `ge`/`gt`/`le`/`lt` message-wording improvement), belongs to Feature 34
+  (Frontend shared, still ⬜) and was read only to confirm it is a pure
+  string-formatting addition with no new network call or stored value.
+
+### Route inventory, re-enumerated by AST (not trusted from pass 14's count)
+
+A Python `ast` walk over every `@router.*` decorator in `admin_hours.py`
+(not a text grep) finds **30 routes**, byte-identical to pass 14 — matching
+the zero-diff confirmed above, but re-run rather than assumed. Depends
+extracted the same way, per route: **17** carry
+`Depends(require_permission("admin_hours.manage"))`; **13** carry
+`Depends(get_current_user)` alone; 17 + 13 = 30, no route with zero auth
+dependency. Full per-route table matches pass 14's and is not repeated
+here.
+
+### Standing findings
+
+No open or flagged finding carries forward from passes 1–14 — all were
+already closed (by fix or owner decision) as of pass 14, and nothing in
+this pass's delta (the crew-category override, the CSV Source column, the
+shared tie-break, and the eleven frontend form-error files) touches any of
+them. `KNOWN_LIMITATIONS.md`'s two admin-hours rows were re-read and still
+match the current code exactly — no edit needed.
+
+### Completion gate (pass 15)
+
+| Check                                                             | Result                                              |
+| ----------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (flake8 7.4.1, CI's pin)            | ✅ 0 violations                                     |
+| `black --check app/ tests/ alembic/` (black 26.10.1, CI's pin)    | ✅ 3374 files unchanged                             |
+| `isort --check-only app/ tests/ alembic/` (isort 9.0.2, CI's pin) | ✅ clean                                            |
+| `python3 scripts/validate_migrations.py --strict`                 | ✅ 804 revisions, single head `3daf47506e9e`        |
+| `python3 scripts/generate_schema_docs.py --check`                 | ✅ up to date (no model/schema change this pass)    |
+| `pytest tests/ -q -k "admin_hours"`                               | ✅ 176 passed, 1 pre-existing environment-only skip |
+| `python3 scripts/check_route_permissions.py --strict` (repo root) | ✅ 329 routes, 0 errors/warnings                    |
+| `cd frontend && npm run typecheck`                                | ✅ 0 errors                                         |
+| `cd frontend && npm run lint`                                     | ✅ 0 errors/warnings (`--max-warnings 10`)          |
+| `npx vitest run src/modules/admin-hours`                          | ✅ all passing                                      |
+
+No admin-hours backend route, schema, model, or permission changed this
+pass — the real delta (three service-level additions and eleven frontend
+form-error files) all pre-date this pass and were reviewed, not written,
+here. This pass's own contribution is the trace above, the route
+re-enumeration, and recording the new unclaimed Apparatus Events module.
+
+Next: Feature 22 (Grants & fundraising).
+
+---
 
 ## Pass 14 (2026-11-10) — 0 fixed, 0 new findings; one new external writer of this feature's table (Historical Data Import) traced safe
 

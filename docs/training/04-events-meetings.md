@@ -1539,6 +1539,41 @@ event templates** permission (`apparatus_events.manage`). Taking a seat needs
 **Sign up for crew seats** (`apparatus_events.signup`), which every position
 that can see events has by default.
 
+### Before you start
+
+Apparatus events are usually run by your outreach coordinator, who often
+cannot change the things below. Most are set up **once**, by whoever
+administers your apparatus, positions, Admin Hours or email. Check them
+before building your first template, and ask for whatever is missing.
+
+**Ask an administrator, once:**
+
+- [ ] **Your permission.** The built-in **Public Outreach** position already
+      has **Manage apparatus event templates**. If you hold a position your
+      department created, ask for that permission to be added to it on the
+      positions screen. Members of the **Community Education / Outreach
+      Team** can take seats but cannot build templates.
+- [ ] **The apparatus.** At least one unit in the **Apparatus** module. With
+      none, Apparatus Events says _Add an apparatus first_.
+- [ ] **Who may drive.** If your department enforces EVOC, each driver's EVOC
+      level recorded on that apparatus, or an approved driver exception.
+      Otherwise nobody can take a Driver seat set to **Enforce**.
+- [ ] **Where the hours go.** An **Admin Hours** category for outreach, such
+      as _Community Outreach_. If neither your template nor the event type
+      points to a category, the crew's hours are **not credited**. The
+      template editor and **Edit this night** warn you when that is the case.
+- [ ] **Email.** Email set up for the department, so **Email members** can
+      send. If it is not, the email is refused and nothing is recorded.
+- [ ] **Member classes and statuses.** Kept up to date on member profiles if
+      you want to email, say, only operational or life members. A member
+      whose class and status were never set counts as Operational / Regular.
+
+**Then, yourself:**
+
+- [ ] Build a template, choosing the apparatus, seats, Driver EVOC rule and
+      Admin Hours category.
+- [ ] Schedule the nights and email members about the open seats.
+
 ### Building a template
 
 A template is the plan you reuse: which apparatus goes out, which seats it
@@ -1595,6 +1630,34 @@ the seat says so.
 Coordinators see **Assign…** and **Change…** on every seat. For a Driver seat,
 the list starts with the members who qualify, each judged by the same EVOC
 rule the seat uses.
+
+### Emailing members about open seats
+
+On a night's event page, **Email members** sends one email about the whole run:
+it lists every upcoming night that still has a seat members can take, with the
+date, place, apparatus, which seats are open, and a link to take one. Nights
+that are full, have started, or take no self sign-ups are left out, and you
+can add a note that goes at the top.
+
+Choose who gets it in three groups, and leave a group empty to include
+everyone in it:
+
+- **Member class** — Operational, Administrative, Social.
+- **Membership status** — Probationary, Regular, Life and the rest, plus your
+  department's own membership tiers.
+- **Positions** — for example, only Lieutenants.
+
+Within a group, any ticked box counts (Regular _or_ Life). Across groups, a
+member must match every group you narrowed (Regular _and_ Lieutenant). The
+dialog shows how many members will be emailed before you send, and **Send
+email** stays off until at least one will be.
+
+Only current members are emailed — never anyone on leave, suspended, retired
+or dropped — and members who turned off **Volunteer calls** in their email
+settings are skipped (the count says how many). It is email only, never a
+text. You can send again later; the card shows when the membership was last
+emailed and to how many. If email is not set up for the department, nothing
+is sent and nothing is recorded.
 
 ### On the schedule
 
@@ -2817,7 +2880,10 @@ In the panel you can also:
    department calendar. A room that is already booked at that time is
    refused.
 4. **Open volunteer signups** and **Email the Membership**, on a scheduled
-   request. Bringing an apparatus? Add a crew from a template under
+   request. Choose who to ask by member class, membership status and
+   positions, the same way as
+   [emailing members about open seats](#emailing-members-about-open-seats);
+   leave everything empty to ask every current member. Bringing an apparatus? Add a crew from a template under
    **Apparatus Crew** as well, or instead — see
    [Staffing a public request with an apparatus](#staffing-a-public-request-with-an-apparatus).
 5. **Add comments** for internal notes. The requester never sees them.

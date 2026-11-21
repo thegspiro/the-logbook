@@ -10,6 +10,7 @@ import {
   ApparatusEventSeatType,
   type ApparatusEventTemplate,
   type ApparatusEventTemplatePayload,
+  type EditorOptions,
   type NightSpec,
 } from '../../types/apparatusEvent';
 import { EventType } from '../../constants/enums';
@@ -245,3 +246,14 @@ export const nightToSpec = (night: NightDraft, timezone: string): NightSpec | nu
     location: night.location.trim() || undefined,
   };
 };
+
+/**
+ * True when nothing would credit a crew's hours: no category is chosen and the
+ * backend reports no mapping for the event type (`mapped_event_types`, the same
+ * rule crediting uses). Null options mean "not loaded yet", which warns nobody.
+ */
+export const hoursWouldNotBeCredited = (
+  categoryId: string,
+  eventType: string,
+  options: EditorOptions | null
+): boolean => options !== null && !categoryId && !options.mapped_event_types.includes(eventType);

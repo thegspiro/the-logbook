@@ -171,6 +171,18 @@ Finalize Attendance…
 > in place of the event type's usual category, so nobody is credited twice.
 > That's apparatus events. The full steps are in the Events guide.
 
+### Not in the 2026-11-17 recording: emailing members about open seats
+
+**Email members** on the crew card was added on 2026-11-20, after the silent
+recording was made. To cover it, record one more scene on a coordinator's
+crew card: press **Email members**, tick a class or a position, show the
+member count, add a note and press **Send email**.
+
+> To fill the run faster, press Email members. Choose who to ask — by member
+> class, membership status or position — and the dialog tells you how many
+> members that is before you send. One email lists every night that still
+> has an open seat. Members who turned off volunteer call emails are skipped.
+
 ## Before publishing
 
 - Watch it once with the app open and check that every control the narration

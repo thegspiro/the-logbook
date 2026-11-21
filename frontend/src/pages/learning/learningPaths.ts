@@ -385,6 +385,19 @@ export const learningPaths: LearningPath[] = [
         success: 'The nights appear under Upcoming nights, and on Shift Scheduling as Outreach · not a shift.',
       },
       {
+        id: 'email',
+        label: 'Email members about open seats',
+        path: '/events/admin?tab=apparatus_events',
+        why: 'Members find out about open seats by browsing, or not at all. One email listing every night that still needs crew fills the run faster than asking around.',
+        how: [
+          'Open any upcoming night of the run and press Email members on its crew card.',
+          'Narrow who gets it by Member class, Membership status and Positions, or leave a group empty to include everyone in it. The dialog counts the members before you send.',
+          'Add a note if you like, then press Send email. One email lists every upcoming night that still has a seat a member can take.',
+          'Members who turned off volunteer call emails are skipped. You can send again later; the card shows the last send.',
+        ],
+        success: 'The crew card says when members were last emailed and how many.',
+      },
+      {
         id: 'request',
         label: 'Put a crew on a public request',
         path: '/events/admin?tab=requests',

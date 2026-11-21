@@ -20,6 +20,7 @@ import {
   APPARATUS_EVENT_TYPES,
   blankSeat,
   blankUnit,
+  hoursWouldNotBeCredited,
   toPayload,
   totalSeats,
   validateDraft,
@@ -28,6 +29,7 @@ import {
   type UnitDraft,
 } from './templateForm';
 import { TONE } from './tones';
+import HoursNotCreditedNote from './HoursNotCreditedNote';
 
 interface TemplateEditorProps {
   initial: TemplateDraft;
@@ -241,6 +243,9 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ initial, templat
               Confirmed crew hours post here instead of the event type’s usual category. They never count as shift
               hours.
             </p>
+            {hoursWouldNotBeCredited(draft.admin_hours_category_id, draft.event_type, options) && (
+              <HoursNotCreditedNote eventType={draft.event_type} hasCategories={options.categories.length > 0} />
+            )}
           </div>
 
           <fieldset className="border-theme-surface-border space-y-2 border-t pt-4">

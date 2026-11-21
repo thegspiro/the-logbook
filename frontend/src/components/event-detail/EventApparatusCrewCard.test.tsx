@@ -3,6 +3,10 @@ const mockClaim = vi.fn();
 const mockRelease = vi.fn();
 const mockAssign = vi.fn();
 const mockRemovePlan = vi.fn();
+const mockEditorOptions = vi.fn();
+const mockSendSeatCall = vi.fn();
+const mockAudienceOptions = vi.fn();
+const mockAudiencePreview = vi.fn();
 
 vi.mock('../../services/api', () => ({
   apparatusEventService: {
@@ -11,9 +15,14 @@ vi.mock('../../services/api', () => ({
     releaseSeat: (...args: unknown[]) => mockRelease(...args) as unknown,
     assignSeat: (...args: unknown[]) => mockAssign(...args) as unknown,
     removePlan: (...args: unknown[]) => mockRemovePlan(...args) as unknown,
+    sendSeatCall: (...args: unknown[]) => mockSendSeatCall(...args) as unknown,
     getAssignableMembers: () => Promise.resolve([]),
     getDriverCandidates: () => Promise.resolve(null),
-    getEditorOptions: () => Promise.resolve({ apparatus: [], categories: [] }),
+    getEditorOptions: (...args: unknown[]) => mockEditorOptions(...args) as unknown,
+  },
+  memberAudienceService: {
+    getOptions: (...args: unknown[]) => mockAudienceOptions(...args) as unknown,
+    preview: (...args: unknown[]) => mockAudiencePreview(...args) as unknown,
   },
 }));
 vi.mock('react-hot-toast', () => ({
@@ -113,6 +122,7 @@ const board = (overrides: Partial<CrewBoard> = {}): CrewBoard => ({
   can_manage: false,
   can_sign_up: true,
   warnings: [],
+  last_seat_call: null,
   ...overrides,
 });
 
@@ -123,6 +133,17 @@ describe('EventApparatusCrewCard', () => {
     mockRelease.mockReset();
     mockAssign.mockReset();
     mockRemovePlan.mockReset();
+    mockEditorOptions.mockReset();
+    mockEditorOptions.mockResolvedValue({ apparatus: [], categories: [], mapped_event_types: [] });
+    mockSendSeatCall.mockReset();
+    mockAudienceOptions.mockReset();
+    mockAudiencePreview.mockReset();
+    mockAudienceOptions.mockResolvedValue({
+      member_classes: ['operational', 'administrative', 'social'],
+      member_statuses: [{ value: 'regular', label: null }],
+      positions: [],
+    });
+    mockAudiencePreview.mockResolvedValue({ recipients: 9, skipped_opted_out: 1 });
   });
 
   it('renders nothing on an event that is not an apparatus night', async () => {
@@ -221,5 +242,79 @@ describe('EventApparatusCrewCard', () => {
     await waitFor(() => expect(mockRemovePlan).toHaveBeenCalledWith('night-1'));
     await waitFor(() => expect(screen.queryByText('Outreach · not a shift')).not.toBeInTheDocument());
     expect(screen.queryByRole('region', { name: 'Apparatus & Crew' })).not.toBeInTheDocument();
+  });
+
+  it('offers the open-seat email to a coordinator only', async () => {
+    mockGetBoard.mockResolvedValue(board());
+    const { unmount } = renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+    await screen.findByText('Outreach · not a shift');
+    expect(screen.queryByRole('button', { name: /Email members/ })).not.toBeInTheDocument();
+    unmount();
+
+    mockGetBoard.mockResolvedValue(board({ can_manage: true }));
+    renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+    expect(await screen.findByRole('button', { name: /Email members/ })).toBeInTheDocument();
+  });
+
+  it('emails the chosen members about the run and shows the last send', async () => {
+    mockGetBoard.mockResolvedValueOnce(board({ can_manage: true }));
+    mockGetBoard.mockResolvedValue(
+      board({
+        can_manage: true,
+        last_seat_call: { sent_at: '2026-12-01T15:00:00Z', recipients: 9, sent_by_name: 'Coordinator Tester' },
+      })
+    );
+    mockSendSeatCall.mockResolvedValue({
+      message: 'Emailed 9 members about 2 nights.',
+      recipients: 9,
+      failed: 0,
+      skipped_opted_out: 1,
+      nights_listed: 2,
+      sent_at: '2026-12-01T15:00:00Z',
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+    await user.click(await screen.findByRole('button', { name: /Email members/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Email members about open seats' });
+    const send = within(dialog).getByRole('button', { name: /Send email/ });
+    expect(send).toBeDisabled();
+    await user.click(await within(dialog).findByRole('checkbox', { name: 'Administrative' }));
+    expect(await within(dialog).findByText('9 members will be emailed')).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText('Note (optional)'), '  Bring a coat  ');
+    await waitFor(() => expect(send).toBeEnabled());
+    await user.click(send);
+
+    await waitFor(() =>
+      expect(mockSendSeatCall).toHaveBeenCalledWith('night-1', {
+        member_classes: ['administrative'],
+        member_statuses: [],
+        position_ids: [],
+        message: 'Bring a coat',
+      })
+    );
+    expect(await screen.findByText(/Members last emailed about open seats/)).toHaveTextContent(
+      '9 members · by Coordinator Tester'
+    );
+  });
+
+  it('warns in Edit this night when clearing the category would credit nothing', async () => {
+    mockGetBoard.mockResolvedValue(board({ can_manage: true }));
+    mockEditorOptions.mockResolvedValue({
+      apparatus: [],
+      categories: [{ id: 'cat-1', name: 'Community Outreach' }],
+      mapped_event_types: [],
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+    await user.click(await screen.findByRole('button', { name: /Edit this night/ }));
+    const category = await screen.findByLabelText('Admin Hours category');
+    await screen.findByRole('option', { name: 'Community Outreach' });
+    expect(screen.queryByText(/hours won’t be credited/)).not.toBeInTheDocument();
+
+    await user.selectOptions(category, '');
+
+    expect(await screen.findByText(/hours won’t be credited/)).toBeInTheDocument();
   });
 });
