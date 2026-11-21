@@ -2,7 +2,8 @@
 
 **Prefix:** `TR` · **Iteration:** 17 · **Reviewed:** 2026-10-19 (pass 9),
 2026-10-24 (pass 10), 2026-10-26 (pass 11), 2026-10-29 (pass 12), 2026-11-02
-(pass 13), 2026-11-08 (pass 14) · **PR:** see `PROGRESS.md`'s **Open PR** row
+(pass 13), 2026-11-08 (pass 14), 2026-11-21 (pass 15) · **PR:** see
+`PROGRESS.md`'s **Open PR** row
 
 **Backend:** `api/v1/endpoints/training.py`,
 `api/v1/endpoints/training_programs.py`,
@@ -14,6 +15,8 @@ scope-correction note; closes the gap `docs/KNOWN_LIMITATIONS.md`'s "Training
 `api/v1/endpoints/shift_evaluations.py` (both added in pass 13 — see that
 pass's scope-correction note; EC-14 pass 14 explicitly disclaimed ownership
 of this surface and left it for whichever row claimed it),
+`api/public/shift_evaluations.py` (added pass 15 — the preceptor-link
+no-login surface; see pass 15's own scope note),
 `services/training_service.py`, `services/training_program_service.py`,
 `services/training_session_service.py`, `services/training_compliance.py`,
 `services/training_requirement_removal.py`, `services/training_course_names.py`,
@@ -21,9 +24,12 @@ of this surface and left it for whichever row claimed it),
 (pass 13), `services/shift_evaluation_template_service.py` (pass 13),
 `services/requirement_override_service.py` (pass 14 — new, serves only
 `training.py`'s three override routes),
+`services/shift_evaluation_link_service.py` (added pass 15 — preceptor links),
+`services/training_course_links.py` (added pass 15 — Course Links + undo),
 `mcp/tools/training.py`,
 `models/training.py`, `models/knowledge_test.py` (pass 12),
 `models/shift_evaluation.py` (pass 13),
+`models/training_course_link.py` (added pass 15),
 `schemas/training_program.py`, `schemas/knowledge_test.py` (pass 12),
 `schemas/shift_evaluation.py` (pass 13)
 **Frontend:** `modules/training`, and the pipeline/program pages under
@@ -2649,6 +2655,330 @@ confirmed) and no change to `node_modules/typescript` vs.
 `node_modules/typescript-native`'s split. Both `npm run typecheck` and
 `npm run lint` then passed clean — **this sandbox's incomplete dependency
 install, not training-core's code, was what the first run hit.**
+
+---
+
+## Pass 15 (2026-11-21) — 0 fixed, 0 new findings; large real delta (48 commits, three new surfaces), all of it already fixed and tested before this pass read it
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable. A fresh
+`list_pull_requests` (state=open, 20 PRs) found none with a
+`claude/security-review-*` head. Row 17 was confirmed the next `⬜` row
+directly against the feature table. Branch `claude/security-review-
+training-core-p15` — `-p14` already has a merged PR (#4151) and the leftover
+remote branch `-p13` (tip `c19d19e19`, actually pass 11's content under a
+mis-numbered name, never opened as a PR) is neither open nor usable, so
+`-p15` is the correct next suffix (Pitfall #24).
+
+### Window and method
+
+Baseline `51e6e1b5` (pass 14's merge, PR #4151) — confirmed a genuine
+ancestor of current `main` (`git merge-base --is-ancestor` succeeds) — to
+`b31b8dea` (current `main`, PR #4475's merge). That is 883 non-merge commits
+repo-wide; **48** touch this feature's declared files or its three scope
+additions below with a real diff. Diffstat across the twelve files `git log`
+names: **4,043 insertions / 599 deletions**. 49 migrations land in the window
+repo-wide; of those, the ones touching training/shift-evaluation tables are
+individually identified in **Schema & migration notes** below, and
+`validate_migrations.py --strict` confirms a single current head.
+
+**Route inventory, re-enumerated by AST (regex over `@router.<verb>(` paired
+with each handler's full signature, not pass 14's count), across all six
+endpoint files:**
+
+| File                            | Routes (pass 14) | Routes (pass 15) | Auth-gated  |
+| ------------------------------- | ---------------- | ---------------- | ----------- |
+| `training.py`                   | 39               | **45**           | 45/45       |
+| `training_programs.py`          | 47               | **48**           | 48/48       |
+| `training_sessions.py`          | 12               | **13**           | 13/13       |
+| `knowledge_tests.py`            | 13               | 13               | 13/13       |
+| `shift_evaluation_templates.py` | 8                | 8                | 8/8         |
+| `shift_evaluations.py`          | 10               | **14**           | 14/14       |
+| **Total**                       | 129              | **141**          | **141/141** |
+
++12 net routes: `training.py` gains 6 (the five `/course-links*` routes —
+list, link, link-suggested, history, undo — plus one from a more exact
+recount of a multi-line decorator pass 14's regex undercounted); `training_
+programs.py` gains 1 (`/milestone-options`); `training_sessions.py` gains 1
+(a more exact recount of a multi-line decorator, not a new route — the
+route set is otherwise unchanged); `shift_evaluations.py` gains 4 (the four
+`/preceptor-links/...` routes). Every one of the 141 has a `Depends(...)`
+carrying either `get_current_user` or `require_permission(...)`/
+`require_all_permissions(...)` in its signature — confirmed
+programmatically (AST-adjacent regex walk over every decorator and its full
+multi-line signature), not sampled. No route is missing an auth dependency.
+
+**Coverage — read in full, not sampled:** the complete diffs of
+`training.py` (+589/−?), `training_programs.py` (+125), `training_sessions.py`
+(+109), `schemas/training.py` (+154), `requirement_override_service.py`
+(+30), `training_compliance.py` (+742, specifically audited for new
+unscoped `select()`s — none found, every new query filters
+`organization_id`), `training_program_service.py` (+667), `training_
+service.py` (+203), `training_session_service.py` (+727), the new `api/
+public/shift_evaluations.py` (121 lines, whole file), the new `services/
+shift_evaluation_link_service.py` (whole file, 459 lines), the new
+`services/training_course_links.py` (whole file, 451 lines), the new
+`models/training_course_link.py` and the preceptor-link additions to
+`models/shift_evaluation.py`, and every migration touching a training/
+shift-evaluation table. **Not re-derived line-by-line:** the ~1,064-line
+diff to `shift_evaluation_service.py`'s grading/crediting arithmetic beyond
+the specific hunks named below (the credit-locking fix, the `_is_viewer`
+redaction, the frozen-requirements read, the new `evaluated_calls` branch) —
+that is grading logic with no new query, permission or tenancy surface of
+its own, each already shipped with its own guard tests, and this pass
+confirmed those tests pass rather than re-deriving the arithmetic.
+
+### Scope additions: the no-login preceptor-evaluation surface
+
+The largest new thing in the window is a **public, unauthenticated** route
+pair added for a shift evaluation nobody who has an account here can fill
+out: `GET /api/public/v1/shift-evaluations/{token}` and
+`POST .../{token}/submit` (`api/public/shift_evaluations.py`,
+`services/shift_evaluation_link_service.py`, migration `533f8aba187e`).
+Reviewed to the same depth as a declared file precisely because it is the
+highest-risk new surface in the window and nothing else in this rotation is
+going to look at it until Feature 03 (Public surface & webhooks) comes back
+around:
+
+- **Token handling.** `secrets.token_urlsafe(32)` (256 bits). Stored only as
+  `token_hash` (SHA-256, `UniqueConstraint`) for lookup; `token` itself is
+  `EncryptedText`, kept only so the authenticated owner can re-show the same
+  link. The public routes resolve by hash equality through an indexed unique
+  column — not a timing-safe comparison, but irrelevant at this entropy and
+  behind IP rate limiting. A malformed token (`_TOKEN_SHAPE` regex) is
+  rejected before any query.
+- **Every unusable state reads identically (404).** Unknown, revoked,
+  expired, the shift gone, the evaluation no longer called for, or the
+  linked member no longer a current account (`member.is_active`, the
+  Pitfall #32 hybrid, not a literal status check) — `resolve()` returns
+  `None` for all of them, so a guessed token learns nothing about which
+  failure mode it hit. Only "already submitted" is distinguished (409), by
+  design, so a preceptor who resubmits is told their answer arrived.
+- **The body cannot name whose record it writes.** `PreceptorEvaluationSubmit`
+  carries no `member_id`/`organization_id`/`template_id` — only
+  `header_values`, `statistics`, `responses`, `closing_comments` and
+  `preceptor_name`, every one bounded (`max_length` on every dict/string).
+  `submit()` resolves the member, org, scope and template entirely from the
+  token (`resolved.entry.user_id`, `link.organization_id`, `link.scope_key`),
+  so the docstring's claim — "the token, never the request body, decides
+  whose record is written" — is exactly what the code does.
+- **Single use under a row lock.** `resolve(token, lock=True)` takes
+  `with_for_update()` before `submit()` writes `used_at`; a second
+  concurrent submission waits on the lock and then finds the link already
+  used (Pitfall #36). A refused submission (a validation error) rolls back,
+  so the link stays open for a correction — verified by reading `submit()`'s
+  exception handling, not assumed from the docstring.
+  `create()` separately locks the shift-hours row before revoking the prior
+  open link and inserting the new one, closing the same double-tap race
+  Pitfall #27 describes.
+- **No answers leak through the "blank form".** `public_view()` builds
+  `PublicShiftEvaluationView` by hand from `organization_name`, `member_name`,
+  the shift's date/times, `form.unit_label` and `form.template` only — it
+  never forwards `form.evaluation`, so a draft a training officer already
+  started (if one exists) contributes nothing past its template _structure_
+  (field definitions, not answers) to what the preceptor sees. Confirmed by
+  reading `entry_form`/`_form`'s full return shape, not by trusting the
+  module docstring's claim.
+- **Every response is private-by-default.** `no-store`, `Referrer-Policy:
+no-referrer`, `X-Robots-Tag: noindex, nofollow, noarchive` on every
+  response, including every error path (`_refuse()` re-attaches the headers
+  because FastAPI drops a `Response`-set header once an `HTTPException` is
+  raised instead — read and confirmed, not assumed).
+- **Audit event carries ids only.** `shift_evaluation_submitted` logs
+  `organization_id`, `evaluation_id`, `external_shift_id`, `member_id`,
+  `via: preceptor_link` — no answer content, no preceptor name.
+- **The authenticated management side (`/preceptor-links/{entry_id}` GET/
+  POST/.../send/DELETE, `shift_evaluations.py`) gates correctly.**
+  `_entry_for_link` resolves the outside-shift entry org-scoped
+  (`get_entry`) and then requires the caller to be either the member who
+  logged it or `training.manage` — anyone else gets the same 404 a missing
+  entry gives, so a member cannot use this to learn which shifts another
+  member logged. Preceptor emails are rate-limited at 10/hour per caller
+  (`check_rate_limit`, pre-existing shared infra) so a department's name
+  cannot be used to spam an arbitrary address.
+- **Migration `533f8aba187e`** is `create_all`-tolerant (checks for
+  `external_shift_hours` before creating `shift_evaluation_links`), every
+  `SET NULL` FK (`created_by`, `evaluation_id`) is `nullable=True`, the new
+  `shift_evaluation_link_days` column on `training_module_configs` has a
+  `server_default` so existing rows read the documented default (Pitfall
+  #35, row 1 handled), and the enum widen for the new email-template type
+  reads live nullability rather than assuming it.
+
+No finding here. This is the kind of feature the checklist exists to catch
+early, and it was already built defensively before this review read it.
+
+### Other new surfaces, verified rather than re-flagged
+
+- **Course Links + undo (`services/training_course_links.py`,
+  `models/training_course_link.py`, migration `0d54dd90d6ba`,
+  `training.py`'s five `/course-links*` routes).** All five routes are
+  `training.manage`-gated. `link()`/`unlink()` both resolve their course/
+  link by id **and** `organization_id` before writing; `unlink()` additionally
+  takes `with_for_update()` on the link row and is a no-op on an
+  already-undone link (`ValueError`, not a silent double-apply). The
+  `course_link_history` endpoint's name-lookup for `linked_by`/`undone_by`
+  filters `User.organization_id == current_user.organization_id` alongside
+  the `id.in_(...)`, so it cannot resolve a foreign user's name even if a
+  stale row ever carried one. `TrainingCourseLinkRecord.record_id` is
+  `ondelete="CASCADE"` (a deleted record has nothing to restore);
+  `TrainingCourseLink.course_id`/`linked_by`/`undone_by` are `SET NULL` and
+  correctly `nullable=True`.
+- **Separation of duties on Chief overrides (`abdd1927e`, already landed
+  before this pass).** `RequirementOverrideService.grant` now refuses
+  `user_id == granted_by` — a Chief can no longer grant themselves a
+  session-attendance override, closing exactly the self-approval gap
+  checklist item 2 names. Re-read the current method body to confirm the
+  check sits before the org-membership check, so a Chief naming themselves
+  gets the dedicated refusal message rather than falling through.
+- **Former-member refusal on write paths (`d7637cde0`, already landed).**
+  `assert_current_members` (`app/utils/org_scoping.py`) now gates the
+  training-session lead-instructor field on create and recurring-create
+  (`training_sessions.py`), using `User.is_active` — the Pitfall #32 hybrid
+  (active or probationary), never a literal `== ACTIVE`. A record that
+  already names someone who has since left is left alone on edit; only a
+  newly-chosen former member is refused.
+- **Attachment-field write refusal (`c8e1a32c4`, already landed).**
+  `TrainingRecordCreate`/`Update` and the submission-schema equivalents now
+  422 on any `attachments` value in the request body (null and `[]`
+  included) via a `field_validator` that always raises — closing a gap where
+  a client could set a bare file name with no `file_path`, orphaning the
+  real upload and letting a submission satisfy a required-evidence setting
+  with a name nobody uploaded. Companion migration `0c22a95b94b8` settles
+  every pre-existing bare-string entry into the one canonical dict shape
+  (Pitfall #20), tested against rows (Pitfall #35), exactly reversible.
+- **Credit-locking fix (`58af63de5`, already landed).** `apply_requirement_
+credit`/`revoke_requirement_credit` (`training_program_service.py`) now
+  take the progress row `FOR UPDATE` with `populate_existing=True`, and the
+  ledger lookup is a locking read too — closing the exact read-then-write
+  race Pitfall #27 describes (two evaluations crediting the same requirement
+  at once previously lost one side's credit). Three behavioral tests mutate
+  the row from outside the session mid-test and were seen failing against
+  the pre-fix code.
+- **`evaluated_calls` requirement type (`4b4825aa1`, already landed).** A
+  new type credited from a submitted shift evaluation's own `calls`
+  statistic, kept distinct from `CALLS` (credited from shift reports) so a
+  call on an evaluated shift is not counted twice. Every reader that grades
+  `CALLS` against `required_calls` checks the type first, so the shared
+  column cannot be misread across types. Migration `9d044fc1d81b` widens the
+  native ENUM, `create_all`-tolerant, downgrade maps the new type back to
+  `checklist`.
+- **Member-visible evaluation redaction (`323fefe90`, already landed, dated
+  before this pass's own window but re-verified as still in effect).** The
+  `_is_viewer` mechanism in `shift_evaluation_service.py` zeroes
+  `average_rating`/`rated_count`/`low_rating_count` and withholds the saved
+  answers whenever the viewer is the evaluated member — re-read `_roster`
+  and `_form` directly rather than trusting the commit message; the
+  mechanism is exactly as described and the public preceptor path (which
+  never passes a `viewer_id`) is unaffected by it either way, since
+  `public_view()` never asks `_form` for anything beyond the blank template.
+- **Frozen shift-evaluation requirements at shift-end (`611204dcf8d1`,
+  already landed).** `shifts.evaluation_requirements` (nullable `JSON`,
+  `create_all`-tolerant) stores each crew member's requirement set on first
+  read after the shift ends, so a later settings change cannot orphan an
+  evaluation already on file. The write path reassigns a **new** dict
+  literal (`{**stored, ...}`) rather than mutating `stored` in place —
+  correctly cites Pitfall #12 in its own comment, and was read to confirm
+  the comment matches the code.
+- **`program_milestones.py` gains new call sites, not new org-scoping
+  logic.** `training_programs.py`'s `get_training_program`,
+  `get_enrollment_progress`, and the new `/milestone-options` /
+  `_milestone_payload` helper all call `load_milestones`/
+  `load_milestones_by_id`, neither of which filters `organization_id`
+  itself — by design, matching the checklist's "resolves through an
+  already-org-scoped parent" allowance. Verified each call site actually
+  supplies an org-validated id: `get_training_program` and
+  `get_enrollment_progress` both resolve their `program`/`enrollment`
+  through `organization_id`-filtered service calls _before_ loading
+  milestones from the resulting id, and `_milestone_payload` is only ever
+  called with a `milestone_id` this same request's org-scoped create/update
+  call just produced — never with a client-supplied id reachable on its
+  own. No finding; this is the parent-resolution shape done correctly, not
+  a new instance of the bare-by-id query the ratchet test watches for.
+
+### Re-verified standing items
+
+- **TR14-2 — unchanged, still ACCEPTED (owner decision 2026-11-10).** The
+  `events.manage`-gated session-attendance linkage is now also reachable
+  through the training-event form (`training_details.attendance_
+requirement_ids` on event create/edit, since 2026-11-11/15 per `docs/
+KNOWN_LIMITATIONS.md`), still behind `events.manage`, still audited the
+  same way, and a caller admitted to the event edit only as a training
+  manager is refused `training_details` (403) — the widening did not move
+  who decides. No code or disposition change needed.
+- **The `enroll_member` concurrency/structural-completeness gap this
+  document's own history once carried is resolved, not merely superseded.**
+  TR7-1's duplicate route is deleted (confirmed again: no `/enrollments` POST
+  in `training.py`'s current route list). Separately, and worth stating
+  explicitly since `docs/KNOWN_LIMITATIONS.md`'s historical narrative still
+  reads as open at its last-dated paragraph: `TrainingProgramService.
+enroll_member` (the kept path) was read line-by-line this pass and
+  already carries `lock_organization_scope(...)` followed by a `.with_for_
+update()` locking read before its duplicate-active-enrollment check, and
+  already creates `RequirementProgress` rows, a starting phase, a recert
+  deadline and the enrollment notification in the same call. Nothing to fix;
+  the KNOWN_LIMITATIONS entry's own "✅ Resolved" banner already says so, and
+  this pass just confirms the code matches it.
+
+### Verdict
+
+**Zero new findings.** This is the largest real delta this feature has had
+in one pass (48 commits, 4,043 insertions, three new backend files, one new
+public endpoint file, five new migrations touching this feature's tables),
+and every security-relevant change in it had already been built with its
+own guard tests by the commits that introduced it — several explicitly
+labelled "review finding" or "owner decision" in their own messages,
+meaning other review/fix passes (ad hoc, not this rotation) had already
+caught what a security pass would look for. This pass's job was to verify
+those claims against the current code rather than take them on faith, which
+is what the route re-enumeration, the full reads of the new public surface,
+and the targeted checks on org-scoping, locking and redaction above did.
+Nothing found disagrees with what the commit messages and `docs/
+KNOWN_LIMITATIONS.md` already say.
+
+## Schema & migration notes (pass 15)
+
+Five migrations in the window touch this feature's tables, all already
+described above: `533f8aba187e` (preceptor links), `9d044fc1d81b`
+(`evaluated_calls`), `611204dcf8d1` (frozen shift-evaluation requirements),
+`0d54dd90d6ba` (Course Links), `0c22a95b94b8` (settle bare-string
+attachments). All five are `create_all`-tolerant, every `SET NULL` FK is
+`nullable=True`, every new required column has a `server_default` or starts
+on an empty table, and `validate_migrations.py --strict` confirms a single
+current head. No fix was needed. (A handful of other migrations in the
+883-commit window edit these same files' `down_revision` only, to re-point
+them after an unrelated Alembic-head merge elsewhere in the tree — not a
+content change to any training-domain migration.)
+
+## Guard tests added (pass 15)
+
+None — no new finding to guard. The pass's own verification relied on the
+guard tests the commits above already shipped with
+(`test_shift_evaluation_links.py`, `test_requirement_credit_locking.py`,
+`test_current_member_guards.py`, `test_training_attachment_writes.py`,
+`test_training_attachment_shape_migration.py`,
+`test_evaluated_calls_migration.py`, `test_evaluated_calls_requirement.py`,
+`test_training_course_links.py`, `test_shift_evaluation_review_fixes.py`),
+all included in the scoped test run below.
+
+## Completion gate (pass 15)
+
+| Check                                                                                                                                                                                     | Result                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.5.0, and re-run at CI's 7.4.1-adjacent pin)                                                                                                              | ✅ 0 violations                                                   |
+| `black --check app/ tests/ alembic/` (26.10.1, the CI pin)                                                                                                                                | ✅ 3318 files unchanged                                           |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, the CI pin)                                                                                                                             | ✅ clean                                                          |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                         | ✅ 793 revisions, single head `56377b666eb3`                      |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                         | ✅ 328 routes, 0 errors, 0 warnings                               |
+| `python3 scripts/generate_schema_docs.py --check`                                                                                                                                         | ✅ up to date                                                     |
+| `pytest tests/ -q -k "training or compliance or knowledge_test or shift_evaluation or requirement_override or session_attendance or course_link or program_milestone or evaluated_calls"` | ✅ 3224 passed, 1 pre-existing environment-only skip (`py_vapid`) |
+| Standing guard suites (capacity locking, org-scoping ratchet, LIKE escaping, CSV sweep, `create_all` tolerance, account-status gates, log-call shape, baseline member grants)             | ✅ 184 passed                                                     |
+| `npm run typecheck`                                                                                                                                                                       | ✅ 0 errors                                                       |
+| `npm run lint` (`--max-warnings 10`)                                                                                                                                                      | ✅ 0 errors, 0 warnings                                           |
+| `npx vitest run` (this feature's pages/components/modules — 88 files)                                                                                                                     | ✅ 959 passed                                                     |
+
+Rotation row 17 → ✅ (pending this PR's merge). Next: Feature 18 (Training
+extended) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ---
 
