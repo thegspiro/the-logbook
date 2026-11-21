@@ -1510,7 +1510,8 @@ const ReportsSection: React.FC = () => {
           <Download className="mb-2 h-6 w-6 text-blue-500" />
           <h3 className="text-theme-text-primary text-sm font-medium">Compliance Report</h3>
           <p className="text-theme-text-muted mt-1 text-xs">
-            Department-wide compliance status for all members and requirements
+            Each member's current standing on every requirement, as the Compliance Matrix shows it, with training hours
+            and records since January 1
           </p>
         </button>
 

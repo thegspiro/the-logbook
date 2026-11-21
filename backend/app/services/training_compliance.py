@@ -2991,7 +2991,43 @@ async def grade_org_members(
 
     if config is None:
         config = await _load_compliance_config(db, org_id)
-    grading = ComplianceGrading.from_config(config)
+    return await grade_members(
+        db,
+        org_id,
+        members,
+        requirements,
+        today,
+        ComplianceGrading.from_config(config),
+        waivers_by_user=await fetch_org_waivers(db, str(org_id)),
+        held_sessions=await load_held_sessions(db, str(org_id), requirements),
+    )
+
+
+async def grade_members(
+    db: AsyncSession,
+    org_id: str,
+    members: Sequence[User],
+    requirements: Sequence[TrainingRequirement],
+    today: date,
+    grading: ComplianceGrading,
+    *,
+    waivers_by_user: Mapping[str, Sequence[WaiverPeriod]],
+    held_sessions: Mapping[str, Sequence[HeldSession]],
+) -> List[MemberCompliance]:
+    """Grade ``members`` against ``requirements``, in the order given.
+
+    The one grading loop behind the compliance matrix
+    (``get_compliance_matrix``), :func:`grade_org_members`, and the compliance
+    CSV, PDF and forecast (``ReportExportService``), so none of them can read a
+    member differently from the others (CLAUDE.md pitfall 29). It loads the
+    records, credited shifts and evaluation credits for exactly these members;
+    the org-wide waivers and held sessions are passed in, so a caller grading
+    in batches loads them once. ``members`` need ``positions`` loaded: a
+    compliance profile can match on them.
+    """
+    if not members or not requirements:
+        return []
+    requirements = list(requirements)
     member_ids = [m.id for m in members]
     records_by_user: Dict[str, list] = {}
     for r in await load_graded_records(
@@ -3004,8 +3040,6 @@ async def grade_org_members(
     evaluations_by_user = await load_evaluation_credits(
         db, org_id, member_ids, requirements, today, grading.include_current_month
     )
-    held_sessions = await load_held_sessions(db, str(org_id), requirements)
-    waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
     graded: List[MemberCompliance] = []
     for member in members:
