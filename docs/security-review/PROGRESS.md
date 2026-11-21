@@ -16,6 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#4497](https://github.com/thegspiro/the-logbook/pull/4497)
+(branch `claude/security-review-compliance`, Feature 20, Compliance, pass 15) merged (`38b98147014b7a06b85ec456e47c55db90bf080c`) — confirmed via a
+fresh `list_pull_requests` (state=open) finding no `claude/security-review-*`
+head. Row 20 is marked ✅ above. This iteration (watchdog pickup, the
+dedicated `/loop 30m /security-review` session still unreachable) is working
+Feature 21 (Admin hours), confirmed the next `⬜` row by reading the rotation
+table directly on this freshly fetched `main`.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 15, PR #4497, merged), preserved for history</summary>
+
 **PR [#4497](https://github.com/thegspiro/the-logbook/pull/4497)**
 (branch `claude/security-review-compliance`): Feature 20 (Compliance), pass
 15 — watchdog pickup (the dedicated `/loop 30m /security-review` session,
@@ -33,6 +44,8 @@ re-verified unchanged, both owner-accepted, by design. Full write-up:
 
 Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 15, PR #4496, merged), preserved for history</summary>
@@ -27241,7 +27254,7 @@ iteration's commit" rule.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (31 routes, added pass 17)                              | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 17)                                                                                                                                                                                                             | ⬜     |
@@ -27295,9 +27308,74 @@ than being re-discovered piecemeal by SEC-00 or another feature's table-write
 slice again. Folded into Feature 27's declared scope above (row 27) so a
 future pass's accumulated-scope diff covers it by default.
 
+**Apparatus Events, flagged unclaimed by Feature 21's pass 15, no rotation
+row yet:** a new module (`endpoints/apparatus_events.py`, 20 routes, all
+gated `apparatus_events.manage`/`.signup`; `services/apparatus_event_service.py`,
+1,578 L; `models/apparatus_event.py`; `schemas/apparatus_event.py`) landed
+(commit `a80760942`, "Add apparatus events backend") with no feature row
+covering it — outreach that rolls an apparatus with a named crew, scheduling
+them onto `Event` nights, with its own `EventApparatusPlan`/
+`ApparatusEventTemplate` tables. Admin Hours' pass 15
+(`docs/security-review/AH-21-admin-hours.md`'s **Pass 15** section) found and
+traced only the slice touching its own `AdminHoursCategory` table (both
+org-scoped, no finding) — the module as a whole has not had a
+seven-dimension pass. Its permission prefix (`apparatus_events`) and its
+dependency on the `Apparatus`/EVOC model both point to Feature 13 (Apparatus
+& NFC) as the natural home, the same way Historical Data Import's
+`integrations` prefix pointed it to Feature 27; a future pass should fold it
+into row 13's declared scope rather than leaving it to be rediscovered.
+
 ---
 
 ## Log
+
+### 2026-11-21 — Feature 20 (Compliance, pass 15) merged; Feature 21 (Admin hours, pass 15): watchdog pickup, real delta (apparatus-night category override, CSV Source column, shared profile tie-break), 0 fixed, 0 new findings; a new unclaimed module (Apparatus Events) found and recorded
+
+Watchdog pickup (the dedicated `/loop 30m /security-review` session
+remained unreachable). PR [#4497](https://github.com/thegspiro/the-logbook/pull/4497)
+(Feature 20, Compliance, pass 15) had already merged
+(`38b98147014b7a06b85ec456e47c55db90bf080c`) — confirmed via a fresh
+`list_pull_requests` (state=open) finding no `claude/security-review-*`
+head. Row 20 marked ✅; the stale **Open PR** row (still naming #4497) was
+cleared. Row 21 (Admin hours) was confirmed the next `⬜` by reading the
+rotation table directly on a freshly fetched `main`.
+
+Real delta since pass 14 (baseline `9eac8df98`, PR #4224): three
+independent additions to `admin_hours_service.py` — an apparatus night's
+own category now overrides its event-type mapping for hour credit (reads
+`EventApparatusPlan`, org-filtered on both sides of its join, with the
+category id itself validated in-org at every write via `assert_in_org`);
+CSV exports gain an "Imported"/"The Logbook" Source column from a shared,
+non-user-controlled lookup; and the profile priority tie-break now calls
+the shared `ordered_profiles()` instead of a local sort, matching
+Compliance's own already-reviewed rule (Pitfall #29). Eleven frontend
+files adopt the shared `FormField`/`mapServerFieldErrors` 422-mapping
+pattern on three forms, plus two files' AA/AAA contrast correction. All
+traced end to end; no new tenancy, authorization, injection, or
+data-exposure gap. Route re-enumeration: **30/30** (17 + 13), byte-identical
+to pass 14 — no backend endpoint/schema/model file changed.
+
+A new, previously-unclaimed module (**Apparatus Events** — 20 routes, all
+gated) was found writing into this feature's `AdminHoursCategory` table the
+same way Historical Data Import was at pass 14; the touching slice was
+traced and found org-scoped and permission-gated (no finding), and the
+module was recorded as unclaimed (natural home: Feature 13, Apparatus &
+NFC) rather than rediscovered piecemeal.
+
+**0 fixed, 0 newly flagged, 0 findings closed.** No open findings remain in
+this feature. Full write-up: `docs/security-review/AH-21-admin-hours.md`'s
+**Pass 15** section.
+
+Completion gate: flake8/black/isort (CI's pins) clean; `validate_migrations.py
+--strict` — 804 revisions, single head; `generate_schema_docs.py --check` up
+to date; `pytest -k admin_hours` — 176 passed, 1 pre-existing environment
+skip; `check_route_permissions.py --strict` — 329 routes, 0 errors/warnings;
+frontend `typecheck`/`lint` clean; `vitest run src/modules/admin-hours` —
+131/131 (15 files).
+
+Next: Feature 22 (Grants & fundraising).
+
+---
 
 ### 2026-11-21 — Feature 19 (Skills testing, pass 15) merged; Feature 20 (Compliance, pass 15): watchdog pickup, real delta (evaluated-shift credit, optional requirements, monthly pace), 0 new findings
 
