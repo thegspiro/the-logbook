@@ -7,7 +7,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy import select
+from fastapi import HTTPException
+from sqlalchemy import insert, select
 
 from app.api.v1.endpoints import users as users_endpoint
 from app.models.forms import Form, FormSubmission
@@ -35,8 +36,10 @@ from app.models.user import (
     LeaveType,
     MemberLeaveOfAbsence,
     Organization,
+    Position,
     User,
     UserStatus,
+    user_positions,
 )
 from app.services import file_storage_service, member_anonymization_service
 from app.services.member_anonymization_service import MemberAnonymizationService
@@ -632,6 +635,52 @@ class TestAnonymizeMember:
         with pytest.raises(ValueError, match="already anonymized"):
             await service.anonymize_member(user)
 
+    async def test_refuses_a_member_with_privileges_beyond_the_callers(
+        self, db_session, monkeypatch
+    ):
+        """Delete, archive and status change refuse a target holding
+        permissions the caller lacks; anonymisation, which cannot be undone,
+        refuses it too (2026-11-21 member-files review)."""
+        org = await _make_org(db_session)
+        manager = await _make_departed_member(db_session, org, deleted_at=None)
+        chief = await _make_departed_member(db_session, org)
+        admin_position = Position(
+            organization_id=org.id, name="Admin", slug="admin", permissions=["*"]
+        )
+        db_session.add(admin_position)
+        await db_session.flush()
+        await db_session.execute(
+            insert(user_positions).values(
+                user_id=chief.id, position_id=admin_position.id
+            )
+        )
+        chief_id = str(chief.id)
+        # Drop the cached instance so the endpoint loads the position just
+        # inserted, as it would in a fresh request.
+        db_session.expunge(chief)
+        monkeypatch.setattr(
+            users_endpoint, "report_privilege_escalation_attempt", AsyncMock()
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await users_endpoint.anonymize_member(
+                user_id=chief_id,
+                request=fake_request(),
+                current_user=SimpleNamespace(
+                    id=manager.id,
+                    organization_id=org.id,
+                    rank=None,
+                    positions=[SimpleNamespace(permissions=["members.manage"])],
+                ),
+                db=db_session,
+                _stepup=None,
+            )
+
+        assert exc.value.status_code == 403
+        stored = await db_session.get(User, chief_id)
+        assert stored.anonymized_at is None
+        assert stored.first_name == "Pat"
+
     async def test_org_scoped_lookup_blocks_cross_tenant(self, db_session):
         org_a = await _make_org(db_session, name="Org A")
         org_b = await _make_org(db_session, name="Org B")
@@ -904,7 +953,12 @@ class TestSelfReportCertificates:
         await users_endpoint.anonymize_member(
             user_id=str(user.id),
             request=fake_request(),
-            current_user=SimpleNamespace(id=admin.id, organization_id=org.id),
+            current_user=SimpleNamespace(
+                id=admin.id,
+                organization_id=org.id,
+                rank=None,
+                positions=[SimpleNamespace(permissions=["*"])],
+            ),
             db=db_session,
             _stepup=None,
         )
@@ -1123,7 +1177,12 @@ class TestTrainingRecordUploads:
         await users_endpoint.anonymize_member(
             user_id=str(user.id),
             request=fake_request(),
-            current_user=SimpleNamespace(id=admin.id, organization_id=org.id),
+            current_user=SimpleNamespace(
+                id=admin.id,
+                organization_id=org.id,
+                rank=None,
+                positions=[SimpleNamespace(permissions=["*"])],
+            ),
             db=db_session,
             _stepup=None,
         )

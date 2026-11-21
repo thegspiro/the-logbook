@@ -66,6 +66,7 @@ from typing import Any
 
 from sqlalchemy import case, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.attendance_waiver import (
@@ -127,12 +128,19 @@ class MemberAnonymizationService:
     async def get_user_for_anonymization(
         self, user_id: str, organization_id: str
     ) -> User | None:
-        """Org-scoped fetch — never resolve a target across tenants."""
+        """Org-scoped fetch — never resolve a target across tenants.
+
+        Positions are loaded because the endpoint checks the target's
+        permissions against the caller's before erasing the account, and a
+        lazy load would raise under async.
+        """
         result = await self.db.execute(
-            select(User).where(
+            select(User)
+            .where(
                 User.id == user_id,
                 User.organization_id == organization_id,
             )
+            .options(selectinload(User.positions))
         )
         user: User | None = result.scalar_one_or_none()
         return user
