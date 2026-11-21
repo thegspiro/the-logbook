@@ -906,6 +906,13 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxTinyText: 0,
     permissions: ['inventory.check_manage'],
   },
+  {
+    path: '/inventory/admin/checklists/templates/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage'],
+    expectText: 'Build from scratch',
+  },
   // The equipment-check screens a crew and its officers use day to day. Each
   // was exempt until helpers.ts served the equipment-check reads; four of them
   // threw on the catch-all's `{}`. One grant set for all six, so they share a
@@ -1019,6 +1026,13 @@ export const ALL_ROUTES: RouteCheck[] = [
   // heading is an h2, so a route stuck on it has no h1 at all.
   // manage: so its header buttons render — see the note on /events.
   { path: '/apparatus', maxSmallTargets: 0, maxTinyText: 0, permissions: ['apparatus.view', 'apparatus.manage'] },
+  {
+    path: '/apparatus/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['apparatus.view', 'apparatus.create'],
+    expectText: 'Add Apparatus',
+  },
   { path: '/apparatus-basic', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/locations', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/locations/qr-codes', maxSmallTargets: 0, maxTinyText: 0 },
@@ -1616,6 +1630,13 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/ip-security', maxSmallTargets: 0, maxTinyText: 0, permissions: ['security.manage'] },
   // Both are settings.manage-gated, so they cost no extra sign-in between them.
   { path: '/integrations', maxSmallTargets: 0, maxTinyText: 0, permissions: ['settings.manage'] },
+  {
+    path: '/integrations/historical-import',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['integrations.historical_import'],
+    expectText: 'Historical Data Import',
+  },
   { path: '/admin/public-portal', maxSmallTargets: 0, maxTinyText: 0, permissions: ['settings.manage'] },
   //: The onboarding wizard is 22 routes and none was measured. It is also the
   //: one flow reached before any session exists — a chief standing in the
