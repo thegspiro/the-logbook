@@ -16,6 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4504](https://github.com/thegspiro/the-logbook/pull/4504)**
+(branch `claude/security-review-medical-supplies-p21` —
+`claude/security-review-medical-supplies-p20` already carries a merged PR,
+#4228 pass 20, so this pass uses a `-p21` suffix per CLAUDE.md Pitfall
+#24): Feature 23 (Medical supplies), pass 21 — watchdog pickup (the
+dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). PR #4503
+(Feature 22, Grants & fundraising, pass 15) merged (`fd8cc24c`) since the
+last iteration; row 22 marked ✅ below. Real delta since pass 20 (baseline
+`c0baae03`): backend's own files are byte-identical to pass 20; the actual
+delta is an unrelated plan-metadata field, an equipment-check-failure-alert
+recipients fix belonging to a different, already-✅ feature, and a
+forms-rollout rewrite of five frontend components onto the already-reviewed
+`FormField`/`useFieldErrors`/`useDiscardGuard`/`saveExceptRefused` pattern.
+**0 fixed, 0 newly flagged.** Full write-up:
+`docs/security-review/MSUP-23-medical-supplies.md`'s **Pass 21** section.
+
+Row 23 → ✅ (pending this PR's merge); next is Feature 24 (Meetings &
+minutes) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 15, PR #4503, merged), preserved for history</summary>
+
 **PR [#4503](https://github.com/thegspiro/the-logbook/pull/4503)**
 (branch `claude/security-review-grants-fundraising-p15` —
 `claude/security-review-grants-fundraising` already carries several merged
@@ -40,9 +64,9 @@ picker. Both halves backed by new guard tests, seen red against the
 unfixed code first. **0 newly flagged.** Full write-up:
 `docs/security-review/GF-22-grants-fundraising.md`'s **Pass 15** section.
 
-Row 22 → ✅ (pending this PR's merge); next is Feature 23 (Medical
-supplies) — re-check `list_pull_requests` fresh rather than trusting this
-note.
+Row 22 → ✅ (merged as `fd8cc24c`); next was Feature 23 (Medical supplies).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 15, PR #4500, merged), preserved for history</summary>
@@ -27300,7 +27324,7 @@ iteration's commit" rule.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 17)                                                                                                                                                                                                             | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ⬜     |
@@ -27372,6 +27396,49 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-21 — Feature 22 (Grants & fundraising, pass 15) merged; Feature 23 (Medical supplies, pass 21): watchdog pickup, 0 fixed, 0 new findings (true re-verification pass)
+
+PR #4503 merged as `fd8cc24c`. A fresh `list_pull_requests` (state=open)
+found no `claude/security-review-*` head, and row 23 was the next `⬜` row,
+confirmed directly against the table on a freshly pulled `main`.
+
+Baseline `c0baae03` (pass 20's own baseline, PR #4228). Backend's own files
+(`medical_supplies.py`, `app/mcp/tools/medical_supplies.py`,
+`models/inventory.py`, `schemas/inventory.py`) are byte-identical to pass
+20 — confirmed by `git diff --stat`, not assumed. The real delta in the
+window is an unrelated one-line plan-metadata field in
+`inventory_service.py`, an equipment-check-failure-alert recipients fix in
+the shared `equipment_check_service.py` (CLAUDE.md Pitfall #19/#29, correct,
+but belongs to Feature 14, already ✅ — it notifies on a failed check, not
+the medical-domain truck-stock methods this router calls), and a
+forms-rollout rewrite of five frontend components
+(`MedicalImportExportModal.tsx`, `MedicalItemLotsModal.tsx`,
+`MedicalSupplyItemPicker.tsx`, `ReceiveDeliveryModal.tsx`,
+`MedicalCategoriesPage.tsx`) adopting the shared `FormField`/
+`useFieldErrors`/`useDiscardGuard`/`saveExceptRefused` pattern already
+reviewed on four other modules. All read in full; create/update payload
+semantics (CLAUDE.md Pitfall #1) and the new partial-save retry's
+delete-the-refused-key behavior re-confirmed correct, no `window.confirm`
+introduced, no new request path. 29 routes re-enumerated by AST, unchanged.
+
+**0 fixed, 0 new findings.** MSUP-4 and MSUP-11 remain the only open items,
+both owner-accepted (2026-10-05, `docs/KNOWN_LIMITATIONS.md`). Full
+write-up: `docs/security-review/MSUP-23-medical-supplies.md`'s **Pass 21**
+section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean. `validate_migrations.py --strict` — 804
+revisions, single head `3daf47506e9e` (unchanged). `check_route_permissions.py
+--strict` — 329 routes, 0 errors/warnings (unchanged). Scoped backend pytest
+(`-k "medical_supplies or medical_supply or lot_recall"`) — 216 passed, 1
+pre-existing environment-only skip (`py_vapid`). `npm run typecheck` — 0
+errors. `npm run lint` — 0 errors, 0 warnings. `npx vitest run
+src/modules/medical-supplies` — 210 passed (10 files, up from pass 20's 196).
+
+Row 23 → ✅ (pending this PR's merge). Next is Feature 24 (Meetings &
+minutes) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-11-21 — Feature 21 (Admin hours, pass 15) merged; Feature 22 (Grants & fundraising, pass 15): watchdog pickup, 1 fixed (GF15-1, LOW) — compliance-task assignee gained the same current-member guard the application assignee already had
 
