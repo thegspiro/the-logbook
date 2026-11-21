@@ -23,10 +23,10 @@ from unittest.mock import AsyncMock
 import pymysql
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import selectinload
-from sqlalchemy.sql import Select
+from sqlalchemy.sql import Select, Update
 
 from app.api.v1.endpoints import training as training_endpoints
 from app.api.v1.endpoints.training import (
@@ -187,6 +187,53 @@ class TestAStaleLinkRecordsNothing:
         )
 
         assert seen == [True]
+
+
+class TestUndoKeepsAnOfficersRelink:
+    async def test_a_record_relinked_after_the_undos_read_keeps_its_course(
+        self, db_session, setup_org_and_admin, monkeypatch
+    ):
+        org_id, admin = setup_org_and_admin
+        _member, cpr, bls, records = await _seed(db_session, org_id)
+        service = TrainingCourseLinkService(db_session)
+        await service.link(org_id, name_key("CPR Refresher"), cpr.id, admin)
+        await db_session.commit()
+        link_id = (
+            await db_session.execute(
+                select(TrainingCourseLink.id).where(
+                    TrainingCourseLink.organization_id == org_id
+                )
+            )
+        ).scalar_one()
+        relinked = records[0]
+
+        # Another officer saves the record with BLS after the undo has read
+        # it, and before the undo writes.
+        real_execute = db_session.execute
+        done = []
+
+        async def execute(statement, *args, **kwargs):
+            if (
+                not done
+                and isinstance(statement, Update)
+                and str(statement).startswith("UPDATE training_records SET course_id")
+            ):
+                done.append(True)
+                await real_execute(
+                    update(TrainingRecord)
+                    .where(TrainingRecord.id == relinked.id)
+                    .values(course_id=bls.id)
+                )
+            return await real_execute(statement, *args, **kwargs)
+
+        monkeypatch.setattr(db_session, "execute", execute)
+        result = await service.unlink(org_id, link_id, admin)
+        monkeypatch.undo()
+
+        assert done == [True]
+        assert await _course_of(db_session, relinked.id) == bls.id
+        assert await _course_of(db_session, records[1].id) is None
+        assert (result.reverted, result.kept) == (1, 1)
 
 
 class TestALockConflictIsARetry:

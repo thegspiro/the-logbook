@@ -29,7 +29,7 @@ from types import SimpleNamespace
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from loguru import logger
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,7 +44,7 @@ from app.services.external_course_mapping import (
     normalize_course_title,
 )
 from app.services.qualification_service import QualificationService
-from app.utils.edit_window import changed_since
+from app.utils.edit_window import EDIT_TOLERANCE, as_utc, changed_since
 from app.utils.sql_results import rows_affected
 from app.utils.training_match_key import training_match_key
 
@@ -453,15 +453,28 @@ class TrainingCourseLinkService:
         )
         restore: Dict[Tuple[Optional[str], Optional[str]], List[str]] = {}
         users: set[str] = set()
-        kept = 0
+        candidates = 0
         for rid, category, training_type, course_id, updated_at, user_id in rows.all():
+            candidates += 1
             if str(course_id or "") != str(link.course_id or "") or changed_since(
                 updated_at, link.linked_at
             ):
-                kept += 1
                 continue
             restore.setdefault((category, training_type), []).append(str(rid))
             users.add(str(user_id))
+        # The read above is a snapshot, so the UPDATE re-checks the same test
+        # against the row as committed (pitfall #27): a record an officer
+        # re-linked or edited after the read keeps their change. Anything the
+        # UPDATE skips is counted as kept.
+        still_linked = (
+            TrainingRecord.course_id.is_(None)
+            if link.course_id is None
+            else TrainingRecord.course_id == str(link.course_id)
+        )
+        # linked_at is never null (server default); were it, changed_since
+        # above reads every record as untouched, and so does this.
+        linked_at = as_utc(link.linked_at) or datetime.now(timezone.utc)
+        untouched_until = linked_at + EDIT_TOLERANCE
         reverted = 0
         for (category, training_type), ids in restore.items():
             values: Dict[str, object] = {"course_id": None, "category_id": category}
@@ -473,11 +486,17 @@ class TrainingCourseLinkService:
                     .where(
                         TrainingRecord.organization_id == org_id,
                         TrainingRecord.id.in_(ids[start : start + _NAME_CHUNK]),
+                        still_linked,
+                        or_(
+                            TrainingRecord.updated_at.is_(None),
+                            TrainingRecord.updated_at <= untouched_until,
+                        ),
                     )
                     .values(**values)
                     .execution_options(synchronize_session=False)
                 )
                 reverted += int(rows_affected(result) or 0)
+        kept = candidates - reverted
         if link.course_id and users:
             # A recompute from the records still on the course: one that no
             # longer supports a granted qualification removes it.
