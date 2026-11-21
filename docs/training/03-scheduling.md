@@ -2179,6 +2179,12 @@ If your department requires review, reports wait for a reviewer before the
 member can see them. Reviewers are officers who can manage training records.
 Training credit is given only when a report is approved.
 
+A reviewer who holds the review role but cannot manage training records does
+not see reports they filed themselves, in the queue or anywhere else, and
+cannot review them _(2026-11-15)_. Someone else reviews those. Only reports
+that are pending review or flagged can be reviewed; a draft or an approved
+report is refused.
+
 #### Reviewing one report
 
 Open a report and select review to open the review window. It shows the whole
@@ -2368,6 +2374,13 @@ Pick one section at a time from the list. There are seven:
 > report, and is not owed a shift evaluation for a shift they did not work.
 > Declined and cancelled members were already left out. The Shift Completion
 > Report still lists pending members, so you can file for one who did work.
+>
+> **Evaluations already submitted** _(2026-11-16)_: taking a member off the
+> shift, or marking them **No-show**, takes back the program credit that
+> shift's evaluation gave them. Once the shift's end time passes, which
+> evaluations it needs is fixed, so changing evaluation settings or a member's
+> program afterwards does not hold up its close-out. See
+> [Shift Evaluations](./02-training.md#shift-evaluations-2026-10-31--11-01).
 
 The reminder goes only to shifts that have a Shift Officer. In departments
 that record a call count at close-out, it also asks the officer to record the

@@ -452,10 +452,10 @@ record to open the Attachments panel]**
 ### FINALIZING A TRAINING SESSION (9:00 – 9:30)
 
 **[SCREEN: Show the training-event form's **Training Info** step (step 2),
-highlighting the **Require sign-off** checkbox under *Training completion*]**
+highlighting the **Require sign-off** checkbox under _Training completion_]**
 
-> "When you create a training session, the **Training Info** step has a
-> **Require sign-off** box, under Training completion. This controls what happens when the class is over and
+> "When you create a training session, the second step, **Training Info**, has a
+> **Require sign-off** box under _Training completion_. This controls what happens when the class is over and
 > someone presses **Finalize Attendance** on the event page. Leave it unchecked
 > — the default — and finalizing completes every checked-in attendee's training
 > record, with the minutes they were actually there. Check it, and those
@@ -510,6 +510,12 @@ step.]**
 > Data, brings in years of records from a CSV. Match members by membership
 > number, check the preview, confirm. Every row needs a completion date. A row
 > without one is listed under Errors and isn't imported."
+
+**[EDITOR — 2026-11-17. Re-record the first line: the tab reads **Import
+History** since 2026-11-08 (it was "Import Past Training"). Records it imports
+since 2026-11-15 show the source "Imported". A name that matches no course can
+be linked later under Curriculum → **Course Links** — a candidate one-line add
+here, about 8 seconds.]**
 
 **[PRODUCTION NOTE — 2026-11-05. New beat, about 20 seconds; re-time Chapter 4.
 The department's historical data import also turns training rows into completed

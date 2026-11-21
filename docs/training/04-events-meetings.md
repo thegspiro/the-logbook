@@ -115,13 +115,14 @@ event ran, or who was not in its audience, is never listed as having missed
 it.
 
 **How far ahead a mandatory event asks for your answer** _(2026-11-17)_. An
-unanswered mandatory event joins the band once it starts within your
-department's response window, so a recurring mandatory series does not ask
-about every future meeting at once; later ones appear as they come within
-range. The window is 60 days unless an event manager changes it under
-**Event settings → Attendance → Mandatory event responses** (1 to 365 days).
-An event whose RSVP deadline is less than two days away is always in the band,
-whatever the window.
+unanswered mandatory event joins the band, with the card's **Response needed**
+strip, once it starts within your department's response window, so a recurring
+mandatory series does not ask about every future meeting at once; later ones
+appear as they come within range. The window is 60 days unless an event manager
+changes it under **Event settings → Attendance → Mandatory event responses**
+(1 to 365 days). An event whose RSVP deadline is less than two days away is
+always in the band, whatever the window. You can still respond to a later date
+from its card or page at any time.
 
 **An empty list.** When nothing is scheduled you see **No upcoming events
 yet**, a short explanation of what will appear here, and a link: **Take the
@@ -155,7 +156,7 @@ card, and the tools to check people in. Other members may see a **Who's
 going** list, if the department shares it (see
 [Who's going](#whos-going-rsvp-and-the-waitlist)).
 
-![An upcoming Training event's page as a member: RSVP Now and Add to Calendar beside the title and no View QR Code, then the Event Details, Training Session Details, Requirements & Programs and Event Information cards](./images/04-02-event-detail.png)
+![An upcoming Training event's page as a member: RSVP Now and Add to Calendar beside the title and no View QR Code, then the Event Details, Training Session Details, Training details and Event Information cards](./images/04-02-event-detail.png)
 
 **To RSVP:**
 
@@ -996,7 +997,10 @@ Choose another room or time.
 **Drafts.** A draft is visible only to officers who can manage events. When it
 is ready, open it and select **Publish**. Editing and saving a draft keeps it a
 draft; before 2026-10-26 the edit form did not know the event was a draft, and
-saving it published it.
+saving it published it. _(2026-11-15)_ Nobody can check in to a draft, by QR
+code, NFC tag, kiosk or self check-in, and its QR code does not work until it
+is published. Its folder and training session stay hidden from anyone who
+cannot manage events.
 
 _(2026-11-15)_ Nobody can check in to a draft: a QR scan, an NFC tap and a
 kiosk all refuse it with "Cannot check in to an unpublished event", and its QR
@@ -1296,7 +1300,7 @@ its attendance is finalized — however the event was created.
    finalized, only **Counts toward attendance** can change among the training
    details.
 
-![Create Event with the type set to Training: the Training details (optional) group with a course picked, its training type and category filled in, and the Create Training Session link](./images/04-61-training-details-create.png)
+![Create Event after choosing Training: the Switched to the training form note with its Change back to button, above the training-event form on its Training Info step with a course picked](./images/04-61-training-details-create.png)
 
 **What each member is credited.** Finalizing gives every checked-in member a
 **Completed** training record for:
@@ -2138,6 +2142,9 @@ copy's files stay in its leadership-only folder. Documents shows a paperclip on
 published minutes. A signed copy filed after publishing appears at the next
 publish. The public copy never carries attachments. The minutes PDF embeds
 image attachments and appends PDF attachments, within size and page limits.
+_(2026-11-16)_ The minutes PDF shows the department's logo beside the heading
+on page 1, and every later page has a short header with the logo, the
+department's name and the meeting's title.
 
 **Action-item email.** Meeting-record action items are emailed on the same
 schedule as the bell reminder. The department can opt out of this email under
@@ -2441,7 +2448,7 @@ too, since meetings have no list like My Training's.
 
 **Deciding.** Everyone who decides is emailed a link to the request. The list
 of requests waiting for you is **Governance → Waiver Requests**, which appears
-for everyone who decides meeting requests (by a chosen position, as Chief,
+(with the Minutes module on) for everyone who decides meeting requests (by a chosen position, as Chief,
 President or Secretary, as the alternate, or by managing meetings), with the
 number waiting on you badged on it at the top of every Governance page. It is
 also on Meeting Attendance as **Waiver requests**. Each request opens the same
@@ -3168,6 +3175,12 @@ have moved, been renamed or work differently.
 
 ### Works differently now
 
+- **A mandatory event far off no longer asks for a response** _(2026-11-16)_.
+  The **Needs You** band lists an unanswered mandatory event only within the
+  department's response window (60 days unless changed), or when its RSVP
+  deadline is under two days away.
+- **A draft event cannot be checked into** _(2026-11-15)_, by any method,
+  until it is published.
 - **Training events credit training records, not admin hours.** Finalizing
   writes the records. Older admin-hours mappings for training show **Not in
   effect**.

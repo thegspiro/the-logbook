@@ -303,6 +303,16 @@ On the **Expenditures** tab, record spending against the budget:
    unlinked.
 4. Save with **Record Expenditure**.
 
+_(2026-11-16)_ **A dialog that cannot save says why inside it.** A missing
+description, amount or date is named on its box ("Enter the amount spent.")
+before anything is sent. A refusal from the server is shown on the field it is
+about, or at the top of the dialog, and the dialog stays open with what you
+typed. This applies to **Add Budget Item**, **Record Expenditure**, **Add
+Task** and **Add Note**. Editing a budget line or an expenditure saves all of
+it or none of it: if one field is refused, the stored line is left exactly as
+it was, so a grant's money is never half-changed. The overspend warning below
+still appears after a save.
+
 _(2026-11-06)_ A recorded expenditure has **Edit** and **Delete** buttons too.
 Deleting one asks you to confirm with **Delete expenditure**, and the totals
 fall by that amount.
@@ -395,9 +405,12 @@ the grant dates **before** you move the application to Awarded.
 2. To add a task, select **Add Task** and enter the **Task Type**, **Title**,
    **Description (optional)**, **Due Date**, **Priority** and **Report Template
    (optional)**.
-   _(2026-11-06)_ The form has an **Assigned To (optional)** choice, so a task can name its
-   member when it is created, not only afterwards. Only members of your
-   department can be chosen.
+   _(2026-11-06)_ The form has an **Assigned To (optional)** choice, so a task
+   can name its member when it is created, not only afterwards. Only members of
+   your department can be chosen. The choice appears only if you can view the
+   member list; without it the task is created unassigned.
+   A missing **Title** or **Due Date** is named on its box when you select
+   **Add Task**.
 3. Change a task's status as the work moves along, and select **Mark Complete**
    when it is done.
 
@@ -416,9 +429,10 @@ Each reminder is sent once. If you change a task's due date, its reminders
 start again for the new date.
 
 The reminder goes to the member the task is assigned to, if they are active
-and can open Grants & Fundraising. A task assigned to nobody (**Unassigned**)
-is reminded to every active member with **Manage fundraising**. Reminders
-are email only. Each member can turn them off under their email preferences (_Grants and fundraising reminders_), unless your
+and can open Grants & Fundraising. A task assigned to no one, or to someone who
+cannot receive it, sends its reminder to every active member with **Manage
+fundraising**. Reminders are email only. Each member can turn them off under
+their email preferences (_Grants and fundraising reminders_), unless your
 department has made them required.
 
 Use **Compliance Tasks Due** on the dashboard (the next 30 days) and

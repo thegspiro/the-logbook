@@ -221,6 +221,11 @@ days), so they can extend or close it. Each series is reminded once
 **Needs You** band ("Events needing your response") at the top. The band's
 overflow link narrows the grid to what needs a response.
 
+Until an unanswered **mandatory** event enters the response window described
+below _(2026-11-16)_, it renders as routine and its RSVP buttons still work.
+The band, the card's "Response needed" strip and the needs-response filter
+all read `getEventUrgency`, so they agree.
+
 - **Mandatory events awaiting a response** _(2026-11-16, #4338)_ — an
   unanswered mandatory event is urgent (`action`) and in the band only once it
   starts within the department's response window (**Events settings →
