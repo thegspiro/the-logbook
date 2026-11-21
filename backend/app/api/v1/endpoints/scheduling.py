@@ -215,6 +215,33 @@ def _is_shift_officer(shift, user: User) -> bool:
     return bool(shift.shift_officer_id and str(shift.shift_officer_id) == str(user.id))
 
 
+def _own_hours_locked(user: User) -> str | None:
+    """The member whose hours ``user`` may not record on a shift they manage:
+    themselves, when they are admitted as the shift's officer without
+    ``scheduling.manage``; None when they hold it.
+
+    Owner decision 2026-11-16 (ADV2-8). Pre-shift work refuses a shift
+    officer approving their own time and events refuse an organizer recording
+    their own attendance; close-out is held to the same line. The officer
+    checks in and out like any member, or a scheduling admin records them.
+    Only meaningful after ``_authorize_shift_management`` has admitted them.
+    """
+    if user_has_permission(user, "scheduling.manage"):
+        return None
+    return str(user.id)
+
+
+_OWN_HOURS_REFUSED = (
+    "You cannot record your own hours on a shift you run. "
+    "Check in and out yourself, or ask a scheduling admin."
+)
+
+
+def _with_lock(state: dict, user: User) -> dict:
+    """The close-out state, with the row the caller may not change named."""
+    return {**state, "own_hours_locked_user_id": _own_hours_locked(user)}
+
+
 def _can_view_platoon_roster(shift, user: User) -> bool:
     """True when ``user`` may see the shift's staffing availability details."""
     return (
@@ -1001,6 +1028,9 @@ async def finalize_shift(
 
     Once finalized the shift is considered closed and attendance is locked.
 
+    An officer admitted on the shift alone may not credit themselves through
+    ``manual_hours`` (ADV2-8, 403).
+
     **Permissions required:** scheduling.manage, or being the shift's officer.
     """
     service = SchedulingService(db)
@@ -1016,6 +1046,9 @@ async def finalize_shift(
             status_code=403,
             detail="Only a scheduling admin can close out without the trainee reports",
         )
+    locked = _own_hours_locked(current_user)
+    if locked and any(str(e.user_id) == locked for e in body.manual_hours or []):
+        raise HTTPException(status_code=403, detail=_OWN_HOURS_REFUSED)
     manual = None
     if body.manual_hours:
         manual = [
@@ -1149,7 +1182,7 @@ async def get_shift_closeout_state(
         raise HTTPException(
             status_code=404, detail=_safe_detail("Shift not found.", error)
         )
-    return state
+    return _with_lock(state, current_user)
 
 
 @router.patch(
@@ -1166,30 +1199,38 @@ async def save_shift_closeout_attendance(
     Saves immediately rather than holding the answer until the last screen, so
     an interrupted close-out keeps the hours already confirmed.
 
+    An officer admitted on the shift alone may send their own row back but
+    not change it (ADV2-8): that is 403, and nothing in the save is applied.
+
     **Permissions required:** scheduling.manage, or being the shift's officer.
     """
     service = SchedulingService(db)
     await _authorize_shift_management(
         service, current_user, shift_id, "scheduling.manage"
     )
-    state, error = await service.save_closeout_attendance(
-        shift_id,
-        current_user.organization_id,
-        [
-            {
-                "user_id": str(e.user_id),
-                "checked_in_at": e.checked_in_at,
-                "checked_out_at": e.checked_out_at,
-            }
-            for e in body.entries
-        ],
-    )
+    try:
+        state, error = await service.save_closeout_attendance(
+            shift_id,
+            current_user.organization_id,
+            [
+                {
+                    "user_id": str(e.user_id),
+                    "checked_in_at": e.checked_in_at,
+                    "checked_out_at": e.checked_out_at,
+                }
+                for e in body.entries
+            ],
+            locked_user_id=_own_hours_locked(current_user),
+        )
+    except PermissionError:
+        await db.rollback()
+        raise HTTPException(status_code=403, detail=_OWN_HOURS_REFUSED)
     if state is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to save attendance.", error),
         )
-    return state
+    return _with_lock(state, current_user)
 
 
 @router.patch("/shifts/{shift_id}/closeout/calls", response_model=CloseoutStateResponse)
@@ -1232,7 +1273,7 @@ async def save_shift_closeout_calls(
             status_code=400,
             detail=_safe_detail("Unable to save call count.", error),
         )
-    return state
+    return _with_lock(state, current_user)
 
 
 @router.post("/shifts/{shift_id}/reopen", response_model=ShiftResponse)
@@ -1436,12 +1477,17 @@ async def add_attendance(
 ):
     """Add an attendance record to a shift.
 
+    An officer admitted on the shift alone may not add their own record
+    (ADV2-8): they check in like any member, or a scheduling admin adds it.
+
     **Permissions required:** scheduling.manage, or being the shift's officer.
     """
     service = SchedulingService(db)
     await _authorize_shift_management(
         service, current_user, shift_id, "scheduling.manage"
     )
+    if _own_hours_locked(current_user) == str(attendance.user_id):
+        raise HTTPException(status_code=403, detail=_OWN_HOURS_REFUSED)
     result, error = await service.add_attendance(
         shift_id, current_user.organization_id, attendance.model_dump(exclude_none=True)
     )

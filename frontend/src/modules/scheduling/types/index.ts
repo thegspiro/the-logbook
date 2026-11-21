@@ -623,6 +623,12 @@ export interface CloseoutState {
    * picker. Claimed ones (`attached`) are part of `reported_call_count`.
    */
   attachable_calls: CloseoutAttachableCall[];
+  /**
+   * The member whose times the caller may not change: their own, when they
+   * run the shift without scheduling.manage (ADV2-8). Null when the caller may
+   * record everyone.
+   */
+  own_hours_locked_user_id?: string | null | undefined;
 }
 
 /** What close-out still needs in trainee reports (GET /shifts/{id}/trainee-reports). */
