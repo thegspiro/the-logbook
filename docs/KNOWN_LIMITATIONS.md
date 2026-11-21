@@ -9040,6 +9040,40 @@ need an owner decision before anything is built.
   safe set (headings, lists) so that adapting the built-in text does not make
   the page look worse.
 
+## Events and Series — Choices Made Fixing the 2026-11-21 Review
+
+Five defects in training events and recurring series were fixed on
+2026-11-21 (owner approval of that date). Where the review left a choice, the
+conservative option was taken; each can be redirected:
+
+- **Cancelling a series' future ends the series.** "Only cancel future
+  events" now sets the series' end date to the last kept occurrence and turns
+  rolling extension off, as a "this and future" delete already did. There is
+  no "pause and resume" for a rolling series; to continue it, create a new
+  one. Separately, the nightly extension job never creates a date the series
+  already holds, cancelled or not.
+- **A sign-off session is not held while its approval is pending.** A session
+  that requires completion confirmation drops out of every
+  session-attendance grade from finalize until a training officer approves or
+  rejects it. The alternative — counting attendees with a pending record as
+  attended — was not taken, because nothing ends a pending approval on its
+  own and it would credit attendance an officer may still reject. Only the
+  newest approval counts; "newest" is by a one-second `created_at`, and a tie
+  with a pending approval reads as pending.
+- **A series time change that would strand check-ins refuses the whole save.**
+  The refusal names how many members and occurrences are affected; nothing is
+  moved. Postponing each affected occurrence is the way through.
+- **Credit hours follow the event's length only when they still equal it.**
+  On a move without the training form (a training manager's edit, a series
+  time change, a postponement), a session with no course whose hours equal
+  the old scheduled length takes the new length. Typed hours and a course's
+  hours stay as they were.
+- **A duplicate is always a draft.** Copying the source's flag was not taken:
+  a duplicate of a published event would appear on every calendar at the
+  source's date and room before the officer changed anything. The copy keeps
+  the source's organizer and alternate; one who can no longer run an event is
+  replaced by the duplicating officer.
+
 ## Events — Files Cannot Be Attached From the App (2026-09-30)
 
 `POST /api/v1/events/{id}/attachments` (`events.manage`) accepts a file, and
