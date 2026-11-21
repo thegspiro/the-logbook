@@ -93,7 +93,9 @@ describe('RequestApparatusCrewSection', () => {
     const user = userEvent.setup();
     renderWithRouter(<RequestApparatusCrewSection requestId="r1" eventId="ev-1" />);
 
-    await user.selectOptions(await screen.findByLabelText('Template'), 'tpl-truck');
+    // The select renders before the template list arrives; pick only once the option exists.
+    await screen.findByRole('option', { name: /^Touch-a-Truck/ });
+    await user.selectOptions(screen.getByLabelText('Template'), 'tpl-truck');
     expect(await screen.findByText('E2 is already on Holiday Parade.')).toBeInTheDocument();
     const add = screen.getByRole('button', { name: /Add apparatus crew/ });
     expect(add).toBeDisabled();

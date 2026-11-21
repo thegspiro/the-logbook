@@ -1,7 +1,7 @@
 """Record each "email members about open seats" send for an apparatus run
 
 Revision ID: 3daf47506e9e
-Revises: 3f8a1c6e2b94
+Revises: 7b4e2d9c1a63
 Create Date: 2026-11-20 13:00:00.000000
 
 Adds one table, ``apparatus_event_seat_calls``. Nothing existing is altered
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "3daf47506e9e"
-down_revision: Union[str, None] = "3f8a1c6e2b94"
+down_revision: Union[str, None] = "7b4e2d9c1a63"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

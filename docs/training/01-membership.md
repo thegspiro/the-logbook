@@ -2255,6 +2255,61 @@ leave**):
    recorded** email. A denial emails the member with the approver's note. A
    member can **Withdraw** a request while it waits, under **Your requests**.
 
+**Finding requests** _(2026-11-16)_. **Leave Requests** appears in the menu
+for every member when the department takes requests, and for anyone with a
+request to decide even when it does not. The count beside it is what waits on
+you: requests to decide, and your own requests waiting on your answer.
+
+**Extending a leave.** A request whose dates overlap your current leave, or
+start the day after it ends, is a request to extend that leave: the page says
+so, and approving it moves that leave's dates rather than recording a second
+leave. A request entirely inside your leave is refused (it is already
+covered), and so is one that overlaps another request still waiting.
+Approval checks again, in case an officer recorded leave meanwhile.
+
+**Ask a question.** An approver can ask the member a question instead of
+voting. Voting pauses until the member answers on the Leave Requests page.
+The member is told by email and in the app; the question and the answer are
+not emailed.
+
+**Approve with changes.** An approver can propose different dates. The member
+accepts or keeps their own:
+
+- **Accept** moves the request onto the new dates and starts voting again,
+  with the proposer's approval already counted. Under **Any one approver**
+  that approves it at once; under the other rules the approvers vote again on
+  the new dates, and votes on the old dates no longer count.
+- **Keep my dates** declines them; the request and the votes already cast
+  stand, and voting resumes.
+
+**Reminders.** An approver who has not decided a request is reminded by email
+and in the app three days after it was made, then weekly while it waits. A
+request waiting on its member is not reminded about.
+
+**Daily recheck.** Votes count against whoever holds the approver positions
+today. If an approver steps down after enough others have approved (under
+**A majority** or **Every approver**), the request is settled the next
+morning as if the last vote had settled it.
+
+**A request left waiting reaches the Chief** _(2026-11-17)_. A request still
+undecided after the department's chosen number of days (**Tell the Chief
+about a request still undecided after this many days**, 21 unless changed) is
+sent once to the Chief, by email and in the app, naming who it is waiting on.
+If the Chief cannot open requests (they neither decide them nor manage
+leave), everyone who can record leave is told instead. A member who is the
+Chief is never told about their own request. **0** turns this off; the
+approvers' own reminders continue either way.
+
+**Ending your leave early.** While your department takes leave requests and
+you are on leave, **Leave Requests** shows **Your leave** with **I&rsquo;m back
+early**. Give your first day back and confirm: your leave now ends the day
+before, and your training requirements follow the new date. No vote is
+needed. The officers who manage leave are told by email and in the app, so
+they can correct a wrong date; after this only an officer can change it. You
+cannot end a leave that has not begun or has already ended, set a date that
+does not shorten it (to stay away longer, ask for leave instead), or end it
+while a request to extend it is still waiting.
+
 The reason is shown to the member, their approvers and officers who can manage
 member profiles only. No email, from
 any of these, carries a leave's reason or its type. The wording of each is a

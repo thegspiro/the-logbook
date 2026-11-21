@@ -11,6 +11,7 @@ organization.
 import json
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from typing import Any
 
 import pytest
 from sqlalchemy import func, select, text
@@ -50,10 +51,10 @@ from tests.clock_support import reread_each_test
 pytestmark = pytest.mark.integration
 
 
-def _clock() -> dict[str, datetime]:
-    return {
-        "FUTURE": datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=20)
-    }
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    return {"FUTURE": now + timedelta(days=20)}
 
 
 (FUTURE,) = _clock().values()
