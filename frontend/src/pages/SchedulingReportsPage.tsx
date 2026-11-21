@@ -834,9 +834,12 @@ export const SchedulingReportsPage: React.FC = () => {
                         <td data-label="By Type" className="px-4 py-3">
                           <div className="flex min-w-0 flex-wrap gap-1">
                             {Object.entries(row.by_type).map(([type, count]) => (
+                              // An imported incident type can be one unbroken word of up to
+                              // 100 characters, so the chip may break anywhere to stay inside
+                              // the card rather than pushing the table wider than it.
                               <span
                                 key={type}
-                                className="inline-flex items-center rounded-sm bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-500/20 dark:text-blue-400"
+                                className="inline-flex max-w-full items-center rounded-sm bg-blue-500/10 px-2 py-0.5 text-xs font-medium break-all text-blue-700 dark:bg-blue-500/20 dark:text-blue-400"
                               >
                                 {type}: {count}
                               </span>
