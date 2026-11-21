@@ -105,10 +105,13 @@ popup a recording never shows.
 
 **Never show a scannable QR code.** The app's codes encode live links, and a
 viewer can scan one straight off the video. `prepare()` hides every QR code
-from its first paint, and a shot that shows one calls `decoyQr` to swap in a
-pattern that looks like a code and decodes to nothing, as 8D does. For 8D,
-two decoders (OpenCV and zbar) read a real code of the same size and found
-nothing in any of the capture's frames.
+from its first paint (anything in a `.qr-container`, and any qrcode.react SVG
+wherever it sits), and a shot that shows one calls `decoyQr` on the code's
+parent element to swap in a pattern that looks like a code and decodes to
+nothing, as 8D and 8G do. A setup key or link printed beside the code should
+be invalid as well: 8G's is not base32, so no authenticator accepts it. For
+8D and 8G, two decoders (OpenCV and zbar) read a real code of the same size
+and found nothing in any frame sampled while the decoy was on screen.
 
 Two things that cost time on 8B:
 
