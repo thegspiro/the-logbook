@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4503](https://github.com/thegspiro/the-logbook/pull/4503)**
+(branch `claude/security-review-grants-fundraising-p15` —
+`claude/security-review-grants-fundraising` already carries several merged
+PRs, most recently pass 14's PR #4226, so this pass uses a `-p15` suffix
+per CLAUDE.md Pitfall #24): Feature 22 (Grants & fundraising), pass 15 —
+watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). PR #4500
+(Feature 21, Admin hours, pass 15) merged (`fd8ba8c5`) since the last
+iteration; row 21 marked ✅ below. Real delta since pass 14 (baseline
+`c0baae03`, PR #4226): a single non-rotation commit
+(`d7637cde`, a repo-wide former-member-assignee sweep) touched
+`grant_service.py`'s `_validate_application_fks`, correctly hardening
+`GrantApplication.assigned_to` against a newly-chosen former member — but
+left the sibling `GrantComplianceTask.assigned_to` (create and update) on
+the old `assert_in_org`-only check, and left `GrantDetailPage.tsx`'s
+compliance-task assignee picker unfiltered. **1 fixed (GF15-1, LOW): both
+gaps closed** — backend now calls the same shared `assert_current_members`
+helper on create/update (with `keep` on update, matching
+`update_application`'s shape), and the picker now filters to
+`isActiveAccount` members, matching `GrantApplicationFormPage.tsx`'s own
+picker. Both halves backed by new guard tests, seen red against the
+unfixed code first. **0 newly flagged.** Full write-up:
+`docs/security-review/GF-22-grants-fundraising.md`'s **Pass 15** section.
+
+Row 22 → ✅ (pending this PR's merge); next is Feature 23 (Medical
+supplies) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 15, PR #4500, merged), preserved for history</summary>
+
 **PR [#4500](https://github.com/thegspiro/the-logbook/pull/4500)**
 (branch `claude/security-review-admin-hours-p15` — `claude/security-review-admin-hours`
 already carries a merged PR, #3336 pass 8, so this pass uses a `-p15`
@@ -32,9 +63,10 @@ and the module recorded as unclaimed (natural home: Feature 13). **0
 fixed, 0 newly flagged, 0 findings closed.** Full write-up:
 `docs/security-review/AH-21-admin-hours.md`'s **Pass 15** section.
 
-Row 21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
-fundraising) — re-check `list_pull_requests` fresh rather than trusting
-this note.
+Row 21 → ✅ (merged as `fd8ba8c5`); next was Feature 22 (Grants &
+fundraising).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 15, PR #4497, merged), preserved for history</summary>
@@ -27267,7 +27299,7 @@ iteration's commit" rule.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 17)                                                                                                                                                                                                             | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ⬜     |
@@ -27340,6 +27372,70 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-21 — Feature 21 (Admin hours, pass 15) merged; Feature 22 (Grants & fundraising, pass 15): watchdog pickup, 1 fixed (GF15-1, LOW) — compliance-task assignee gained the same current-member guard the application assignee already had
+
+Watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remained unreachable per `ListAgents`).
+PR [#4500](https://github.com/thegspiro/the-logbook/pull/4500) (Feature 21,
+Admin hours, pass 15) had already merged (`fd8ba8c5`) — confirmed via a
+fresh `list_pull_requests` (state=open) finding no `claude/security-review-*`
+head. Row 21 marked ✅; the stale **Open PR** row (still naming #4500) was
+cleared. Row 22 (Grants & fundraising) was confirmed the next `⬜` by
+reading the rotation table directly on a freshly fetched `main`.
+
+Baseline `c0baae03` (PR #4226's merge, pass 14). `git diff c0baae03..HEAD
+--stat` against the declared backend scope found exactly one changed file:
+`grant_service.py` (+18/−3), from a non-rotation, repo-wide sweep
+(`d7637cde`, "Refuse former members on the member-picker write paths" —
+CLAUDE.md Pitfall #32). That commit correctly hardened
+`GrantApplication.assigned_to` (via `_validate_application_fks`) against a
+newly-chosen former member, with a matching `GrantApplicationFormPage.tsx`
+picker filter and its own test file — but missed the sibling
+`GrantComplianceTask.assigned_to` on both `create_compliance_task` and
+`update_compliance_task` (still `assert_in_org`-only), and
+`GrantDetailPage.tsx`'s compliance-task assignee picker offered every
+directory entry with no filter at all. No models/schemas/migrations
+changed; the Zeffy files remain byte-identical. 23 frontend files changed
+in the window, all from already-reviewed repo-wide patterns (forms-rollout
+batch 18, mobile reflow, a heading-level pass) plus the one picker gap
+above.
+
+**Fixed: GF15-1 (LOW).** `grant_service.py`'s `create_compliance_task` and
+`update_compliance_task` now call the same shared `assert_current_members`
+helper the application path uses (`update_compliance_task` with
+`keep=[task.assigned_to]`, mirroring `update_application`'s shape exactly).
+`GrantDetailPage.tsx`'s picker now renders from `members` filtered by
+`isActiveAccount`, matching `GrantApplicationFormPage.tsx`'s own treatment;
+unlike that sibling form, no "stored assignee" preservation was needed,
+since this form has no edit path for an existing task's assignee. Both
+halves are backed by new guard tests
+(`backend/tests/test_current_member_guards.py::TestTheGrantComplianceTaskAssignee`,
+`frontend/.../GrantDetailPage.complianceAssignee.test.tsx`) seen red
+against the unfixed code first (Pitfall #37), confirmed by temporarily
+reverting each fix and re-running. A pre-existing mocked-task fixture in
+`test_grant_service.py` was missing an `assigned_to` attribute entirely
+(an `AttributeError`, not a behavioral failure) and was given one to match
+the real ORM model's shape. **0 newly flagged.** Full write-up:
+`docs/security-review/GF-22-grants-fundraising.md`'s **Pass 15** section.
+
+**Completion gate:** `flake8`, `black --check` (one file reformatted by
+this pass, then clean) and `isort --check-only` on `app/ tests/ alembic/`
+all clean. `validate_migrations.py --strict` — 804 revisions, single head
+`3daf47506e9e` (unchanged — no migration in scope this window).
+`check_route_permissions.py --strict` — 329 routes, 0 errors/warnings.
+Scoped backend pytest (`-k "grant or fundraising or donor or pledge or
+zeffy or federal_program or current_member_guards"`) — 1626 passed, 1
+pre-existing environment-only skip (`py_vapid`). `npm run typecheck` — 0
+errors. `npm run lint` — 0 errors, 0 warnings. `npx vitest run
+src/modules/grants-fundraising` — 192 passed (35 files, up from 158/29 at
+pass 14). `npx vitest run src/modules/testing/testingRegistry.test.ts` —
+12 passed (unchanged, no new route). `npx playwright test
+src/e2e/mobile-route-integrity.spec.ts --project=chromium` — 1 passed.
+
+Row 22 → ✅ (pending this PR's merge). Next is Feature 23 (Medical
+supplies) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-11-21 — Feature 20 (Compliance, pass 15) merged; Feature 21 (Admin hours, pass 15): watchdog pickup, real delta (apparatus-night category override, CSV Source column, shared profile tie-break), 0 fixed, 0 new findings; a new unclaimed module (Apparatus Events) found and recorded
 

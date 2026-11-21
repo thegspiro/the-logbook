@@ -64,6 +64,7 @@ import {
 import { BUDGET_CATEGORY_ORDER, readBudgetSummary, readKeyContacts } from '../utils/applicationStructuredFields';
 import { useGrantsStore } from '../store/grantsStore';
 import { memberLabel, useMemberNames } from '../hooks/useMemberNames';
+import { isActiveAccount } from '@/constants/enums';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { blankToNull } from '@/utils/formValues';
 import { useConfirm } from '@/contexts/ConfirmContext';
@@ -372,6 +373,10 @@ export const GrantDetailPage: React.FC = () => {
   const { busy: complianceBusy, run: runCompliance } = useSubmitGuard();
   const tz = useTimezone();
   const { members, nameOf } = useMemberNames();
+  // Only current members are offered as a new compliance-task assignee; a
+  // task already assigned to someone who has left is still named by nameOf()
+  // above, which reads the full, unfiltered list.
+  const assignableMembers = (members ?? []).filter((m) => isActiveAccount(m.status));
   const { confirm } = useConfirm();
   // Every mutation this page can trigger (edit, budget/expenditure/task
   // creation, task status changes, notes) requires fundraising.manage on the
@@ -2099,7 +2104,7 @@ export const GrantDetailPage: React.FC = () => {
                   className={selectClass}
                 >
                   <option value="">Unassigned</option>
-                  {members.map((member) => (
+                  {assignableMembers.map((member) => (
                     <option key={member.id} value={member.id}>
                       {memberLabel(member)}
                     </option>
