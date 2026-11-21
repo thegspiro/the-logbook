@@ -206,6 +206,16 @@ def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
+def _to_minute(value: Optional[datetime]) -> Optional[datetime]:
+    """A time as an aware UTC instant cut to the minute, for telling whether
+    the close-out wizard sent a time back changed: its fields hold minutes,
+    so a stored check-in's seconds never survive the round trip."""
+    instant = _as_utc(value)
+    if instant is None:
+        return None
+    return instant.astimezone(timezone.utc).replace(second=0, microsecond=0)
+
+
 def _minutes_phrase(total: int) -> str:
     """ "90 minutes" as "an hour and a half" — how an officer would say it.
 
@@ -11640,6 +11650,7 @@ class SchedulingService:
         shift_id: UUID,
         organization_id: UUID | str,
         entries: List[Dict[str, Any]],
+        locked_user_id: Optional[str] = None,
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Step 1 — record when each member was actually on.
 
@@ -11656,6 +11667,13 @@ class SchedulingService:
         ``finalize_shift``'s shift-then-attendance order. A closeout-attendance
         save racing a finalize on the same shift could deadlock, aborting one
         of two otherwise unrelated, ordinary requests.
+
+        ``locked_user_id`` is the caller when they are admitted as the shift's
+        officer alone (owner decision 2026-11-16, ADV2-8): their own row may
+        come back unchanged, since the wizard sends every member on each
+        save, but any change to it raises ``PermissionError``. Compared to the
+        minute, the precision the wizard's time fields carry, so a check-in
+        stamped at 07:02:34 and returned as 07:02 is not a change.
         """
         shift = await self.get_shift_by_id(shift_id, organization_id, for_update=True)
         if not shift:
@@ -11688,6 +11706,22 @@ class SchedulingService:
         for entry in entries:
             uid = str(entry["user_id"])
             att = existing.get(uid)
+            if locked_user_id and uid == str(locked_user_id):
+                stored = (
+                    (_to_minute(att.checked_in_at), _to_minute(att.checked_out_at))
+                    if att is not None
+                    else (None, None)
+                )
+                sent = (
+                    _to_minute(entry.get("checked_in_at")),
+                    _to_minute(entry.get("checked_out_at")),
+                )
+                if sent != stored:
+                    raise PermissionError(
+                        "You cannot record your own hours on a shift you run. "
+                        "Check in and out yourself, or ask a scheduling admin."
+                    )
+                continue
             if att is None:
                 # A client-supplied id must not pull a user from another org
                 # onto this shift. This admits any member of the caller's org,

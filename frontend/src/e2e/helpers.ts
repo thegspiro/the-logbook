@@ -15,6 +15,7 @@ import type {
   TrainingSummaryReport,
 } from '../modules/reports/types';
 import type { KnowledgeTest } from '../types/knowledgeTest';
+import type { Facility, Inspection, MaintenanceRecord } from '../modules/facilities/types/facilities';
 import type {
   AlbumSummary,
   ClearanceStep,
@@ -754,6 +755,100 @@ const EVENT_ANALYTICS_SUMMARY = {
     },
   ],
 };
+
+const FACILITY_LIST: Facility[] = [
+  {
+    id: 'fac-1',
+    name: 'Station 1 — Headquarters',
+    facilityNumber: 'ST-1',
+    isArchived: false,
+    createdAt: '2020-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'fac-2',
+    name: 'Station 2 (Northfield Substation)',
+    facilityNumber: 'ST-2',
+    isArchived: false,
+    createdAt: '2020-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  },
+];
+
+const FACILITY_MAINTENANCE: MaintenanceRecord[] = [
+  {
+    id: 'fmr-1',
+    facilityId: 'fac-1',
+    description: 'Annual overhead bay door service — springs, rollers and safety reversing sensors',
+    dueDate: '2026-10-31',
+    isCompleted: false,
+    isOverdue: true,
+    vendor: 'Overhead Door Co.',
+    createdAt: '2026-09-01T12:00:00Z',
+    updatedAt: '2026-09-01T12:00:00Z',
+  },
+  {
+    id: 'fmr-2',
+    facilityId: 'fac-2',
+    description: 'Generator load-bank test',
+    dueDate: '2026-11-25',
+    isCompleted: false,
+    isOverdue: false,
+    createdAt: '2026-10-01T12:00:00Z',
+    updatedAt: '2026-10-01T12:00:00Z',
+  },
+  {
+    id: 'fmr-3',
+    facilityId: 'fac-1',
+    description: 'HVAC filter replacement',
+    completedDate: '2026-11-02',
+    isCompleted: true,
+    performedBy: 'Alex Johnson',
+    cost: 184.5,
+    createdAt: '2026-10-20T12:00:00Z',
+    updatedAt: '2026-11-02T12:00:00Z',
+  },
+];
+
+const FACILITY_INSPECTIONS: Inspection[] = [
+  {
+    id: 'fin-1',
+    facilityId: 'fac-1',
+    inspectionType: 'fire_safety',
+    title: 'Annual fire alarm and sprinkler inspection',
+    inspectionDate: '2026-09-15',
+    nextInspectionDate: '2027-09-15',
+    passed: true,
+    inspectorName: 'Dana Whitfield',
+    inspectorOrganization: 'County Fire Marshal',
+    createdAt: '2026-09-15T12:00:00Z',
+    updatedAt: '2026-09-15T12:00:00Z',
+  },
+  {
+    id: 'fin-2',
+    facilityId: 'fac-2',
+    inspectionType: 'electrical',
+    title: 'Electrical panel and emergency lighting inspection',
+    inspectionDate: '2026-10-20',
+    passed: false,
+    findings: 'Two emergency lights in the apparatus bay failed the 90-minute battery test.',
+    correctiveActions: 'Replace both battery packs and retest.',
+    correctiveActionDeadline: '2026-11-30',
+    correctiveActionCompleted: false,
+    createdAt: '2026-10-20T12:00:00Z',
+    updatedAt: '2026-10-20T12:00:00Z',
+  },
+  {
+    id: 'fin-3',
+    facilityId: 'fac-1',
+    inspectionType: 'elevator',
+    title: 'Elevator certificate renewal',
+    inspectionDate: '2026-12-05',
+    passed: null,
+    createdAt: '2026-11-01T12:00:00Z',
+    updatedAt: '2026-11-01T12:00:00Z',
+  },
+];
 
 const TRAINING_CREW_CONTEXT: CrewRecordingContext = {
   can_record: true,
@@ -4940,6 +5035,24 @@ const routes = ({
   ['**/api/v1/facilities/types**', () => []],
   ['**/api/v1/facilities/statuses**', () => []],
   ['**/api/v1/facilities/maintenance-types**', () => []],
+  // The list read with `?is_archived=…` (the maintenance and inspection
+  // screens name each record's facility from it); `/page` and the dashboard
+  // keep their own answers above.
+  ['**/api/v1/facilities?**', () => (empty ? [] : FACILITY_LIST)],
+  [
+    '**/api/v1/facilities/maintenance/page**',
+    () =>
+      empty
+        ? { items: [], total: 0, skip: 0, limit: 50 }
+        : { items: FACILITY_MAINTENANCE, total: 3, skip: 0, limit: 50 },
+  ],
+  [
+    '**/api/v1/facilities/inspections/page**',
+    () =>
+      empty
+        ? { items: [], total: 0, skip: 0, limit: 50 }
+        : { items: FACILITY_INSPECTIONS, total: 3, skip: 0, limit: 50 },
+  ],
 
   ['**/api/v1/forms**', () => ({ forms: [], total: 0 })],
   ['**/api/v1/prospective-members**', () => ({ applicants: [], total: 0 })],

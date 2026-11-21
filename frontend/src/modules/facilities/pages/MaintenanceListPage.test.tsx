@@ -10,6 +10,7 @@ import { renderWithRouter } from '../../../test/utils';
 
 const mockUseMaintenanceForm = vi.fn();
 let mockStatusFilter = 'all';
+let mockRecords: unknown[] = [];
 
 vi.mock('../store/facilitiesStore', () => ({
   useFacilitiesStore: () => ({
@@ -27,7 +28,7 @@ vi.mock('../hooks/useMaintenanceForm', () => ({
   useMaintenanceForm: (options: unknown) => {
     mockUseMaintenanceForm(options);
     return {
-      records: [],
+      records: mockRecords,
       page: 1,
       setPage: vi.fn(),
       total: 0,
@@ -61,6 +62,7 @@ describe('MaintenanceListPage status from the URL', () => {
   beforeEach(() => {
     mockUseMaintenanceForm.mockReset();
     mockStatusFilter = 'all';
+    mockRecords = [];
   });
 
   afterEach(() => {
@@ -102,5 +104,35 @@ describe('MaintenanceListPage status from the URL', () => {
       idPrefix: 'maintenance-list',
     });
     expect(screen.queryByText(/Open work due in the next 30 days/)).not.toBeInTheDocument();
+  });
+});
+
+describe('MaintenanceListPage record cost', () => {
+  beforeEach(() => {
+    mockUseMaintenanceForm.mockReset();
+    mockStatusFilter = 'all';
+    mockRecords = [];
+  });
+
+  // The cost was printed as "$" + formatNumber(cost), which drops trailing
+  // zeros: a $184.50 invoice read "$184.5".
+  it('shows a cost as currency, cents included', () => {
+    mockRecords = [
+      {
+        id: 'fmr-1',
+        facilityId: 'fac-1',
+        description: 'HVAC filter replacement',
+        isCompleted: true,
+        completedDate: '2026-11-02',
+        cost: 184.5,
+        createdAt: '2026-10-20T12:00:00Z',
+        updatedAt: '2026-11-02T12:00:00Z',
+      },
+    ];
+
+    renderWithRouter(<MaintenanceListPage />);
+
+    expect(screen.getByText('$184.50')).toBeInTheDocument();
+    expect(screen.queryByText('$184.5')).not.toBeInTheDocument();
   });
 });

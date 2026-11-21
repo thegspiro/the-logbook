@@ -316,7 +316,10 @@ using templates the department edits under Communications → Email Templates:
 
 The meeting templates (_Meeting Waiver Requested / Decided / Withdrawn_) are
 sent the same way for business-meeting requests, under the event-duty and
-event-change email preferences rather than the training ones.
+event-change email preferences rather than the training ones. Their buttons
+and the member's link open the meeting request page,
+`/meetings/waiver-requests/{id}`: the training page reads only training
+requests, so a meeting request opened there is not found.
 
 **Supporting documents.** When the policy's `attachment` is `optional` or
 `required`, a member may file up to three documents with a request: PDF,

@@ -89,6 +89,22 @@ eight hours, until #4333 carried the merge revision from #4331.
 - **CI fast enough** that a pull request usually finishes before `main` moves
   would make the up-to-date setting workable again.
 
+## Sign-In Email — An SSO-Only Member Cannot Change Their Own (ADV2-2, 2026-11-17)
+
+Since #4316 (2026-11-15), changing your **own** login email asks you to
+confirm your identity (step-up), because with only a stolen session an
+attacker could repoint the address and then use forgot-password. Step-up
+accepts a passkey, an authenticator code, or the account password
+(`step_up` in `backend/app/api/v1/endpoints/auth.py`). A member who signs in
+only through Google or Microsoft and has set up neither a password nor a
+second factor has nothing to prove with, so the change is refused until they
+set up two-step sign-in. An officer with the right to edit members can still
+change it for them, under the reset ceiling.
+
+Found by the 2026-11-17 documentation pass from the code; not reproduced in a
+browser. **For the owner:** accept this (an SSO account's address is normally
+managed by the directory anyway), or let a fresh SSO sign-in count as step-up.
+
 ## Attendance Waiver Emails and Template Copies — Choices Made Without a Ruling (2026-11-11)
 
 The waiver emails and the template-CC fix (defect D1) follow the owner
@@ -241,16 +257,14 @@ decisions did not settle, each answered conservatively:
   `main` (#4243). An evaluation drafted between 2026-11-11 and then recorded
   "no" in its snapshot and keeps it, as every snapshot keeps what was true
   when it was taken.
+- **"Attachment on file" is what was on file when the figures were taken.**
+  Attachments are deleted `attachment_retention_days` after a request closes
+  (a year by default), so an evaluation drafted after that reads no for a
+  request that once had one.
 - **A voided request is listed, and counted only as voided.** Nothing voids a
   request yet. When something does, the history shows the request and that it
   was voided, and the summary counts it under `voided` rather than as approved
   or denied, since a voided approval no longer counts toward the cap.
-- **The screens show the summary's count, not its breakdown.** The evaluation
-  pages and PDF print a count source as its number; the approved / denied /
-  withdrawn split is stored beside it (`breakdown`) and every request's
-  outcome is on the history lines, but nothing shows the split on its own.
-  Showing it would mean teaching the frontend's `formatFigure` and the PDF's
-  `format_figure` about an extra field. **Open:** whether to.
 - **Deciders are named by their current name**, or "a former member" when the
   account is gone, as the request screens name them. A decision log step
   carries no name snapshot.
@@ -1476,7 +1490,7 @@ the owner, because closing them changes how members get into their accounts:
   is; the email change itself is now ceiling-bound, step-up gated, audited and
   reported to the previous address.
 
-## Separation of Duties — Four Decisions Left Open (ADV-02, 2026-11-14)
+## Separation of Duties — Three Decisions Left Open (ADV-02, 2026-11-14)
 
 The adversarial pass over the month to 2026-11-14 found these items. Its
 findings are in `docs/security-review/ADV-02-adversarial-last-month.md`. Each
@@ -1490,9 +1504,13 @@ fix changes a workflow some departments rely on, so the owner decides:
   step-up. On upgrade, an evaluation already waiting on an approval whose only
   position holder is its evaluator stays open until a manager names someone.
   See `docs/EVALUATIONS_MODULE.md`.
-- **A shift officer can write their own close-out hours (ADV2-8).** Pre-shift
-  work and event attendance refuse the self case. On a one-person shift nobody
-  else could record it.
+- ~~**A shift officer can write their own close-out hours (ADV2-8).**~~ ✅
+  Resolved 2026-11-20 (owner: block it). A shift officer without
+  `scheduling.manage` cannot change their own times or hours at close-out, or
+  add themselves as an attendee there; their own row comes from their check-in
+  and check-out. On a one-person shift where the officer missed a check-in or
+  check-out, a scheduling admin now records their hours. See
+  `docs/security-review/ADV-02-adversarial-last-month.md`.
 - **An officer can grant themselves a leave, and with it a training waiver
   (ADV2-9).** This needs `members.manage` and `scheduling.assign`.
 - **An applicant's edited email or name and birth date can make a coordinator's
@@ -7093,6 +7111,16 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   requirement completed before the period would print **Not Met** in the
   export beside a matrix that shows it met (CLAUDE.md pitfall #29). Fixing it
   changes what the export's period means, so it needs its own decision.
+- **Compliance emails: a rolling requirement is in one non-compliance notice
+  per member, ever — open, found 2026-11-21.** A rolling requirement's window
+  ends on the grading day, which made both member emails repeat daily (the
+  reminder called it "due today", and the notice's key moved with the date).
+  The fix gives a rolling requirement no deadline reminder and keys its notice
+  on the requirement alone (`compliance_member_notices.py`). The cost: a member
+  who meets it, and months later falls short again, is not told again unless
+  the same notice is triggered by some other requirement, which then lists it.
+  Telling them again needs a recorded "met again" date to key on, which the
+  task does not keep. Tests: `tests/test_compliance_member_notices.py`.
 - **The Compliance Officer dashboard's forecast summary cards keep fixed
   colour bands — open.** The department "Current" average card colours green
   at 80% or more and yellow below, and the 30/60/90 average cards and every
@@ -10969,11 +10997,27 @@ each case):
 
 **Accepted residuals:**
 
-- **A permanent delete's files go after its commit.** A process killed, or a
-  remote store unreachable, between the commit and the deletes leaves files no
-  later run can find. A failed delete is logged and counted
-  (`files_not_deleted` in the `user_hard_deleted` audit event); closing the
-  crash window would need a durable pending-deletion table and a migration.
+- ~~**A permanent delete's files go after its commit.**~~ **Resolved
+  2026-11-20** (owner decision "Hard-delete crash gap"): the files are queued
+  in `pending_file_deletions` in the delete's own transaction, removed right
+  after the commit, and an hourly `pending_file_deletions` sweep retries what
+  a crash or an unreachable store left. `files_not_deleted` in the
+  `user_hard_deleted` audit event now means files left queued for the sweep.
+- **A queued file that never deletes is visible only in logs and the
+  table.** A remote store that is gone, or a path that no longer confines to
+  its department's area (a moved uploads root), keeps its row, retried every
+  hour and logged as a warning after 24 failures. There is no screen listing
+  them and no way to dismiss one short of a database edit.
+- **A crash after the delete commits can lose its audit record.** The
+  `user_hard_deleted` event is written after the delete's commit and committed
+  with the request, so a process killed in between keeps the delete (and now
+  the queued files) but loses the critical audit row. Writing the event
+  inside the delete's transaction would close it, but changes the event's
+  shape (the per-file counts are known only after the commit), so it awaits
+  the owner.
+- **Member deletes outside the endpoint queue nothing**:
+  `historical_import_undo` and the onboarding reset delete users directly and
+  leave any files their rows named.
 - **An upload racing a permanent delete** (a certificate stored for the member
   after the files were collected) is orphaned.
 - **A relocation or remote migration running at the same moment** can rewrite
@@ -11031,3 +11075,48 @@ each case):
 
 Related, still open: **LIFE-11** (the separation letter in Documents), and the
 Member Files personal-folder documents, which neither path touches.
+
+## Apparatus — Three Decisions From App Review B2 Pass 6 (2026-11-20)
+
+Recorded rather than changed, because each one alters what a department sees.
+Findings, code references and failure scenarios are in
+`docs/app-review/apparatus.md` → Pass 6.
+
+### AP2-13 — The odometer and engine hours can move backwards
+
+A fuel log, a status change and an apparatus edit each overwrite the vehicle's
+`current_mileage` / `current_hours` with whatever was entered, and stamp the
+`*_updated_at` time with now even when the fill was backdated. Entering last
+month's receipt at 48,000 miles on a truck reading 52,000 sets it back to
+48,000, and every mileage-based figure reads from there.
+
+**The decision:** only ever raise the reading (a lower one is kept on the fuel
+log but does not move the vehicle), or refuse a lower one outright. Either
+needs a way through for a replaced or corrected odometer, such as an officer
+override on the apparatus edit.
+
+### AP2-14 — Re-activating a former member's operator record skips the current-member check
+
+Adding an operator refuses anyone who is not a current member. Editing an
+existing operator record does not: a record left from before the member
+departed can be set back to active and certified, putting them back on the
+driver roster. The create path keeps such records editable on purpose, so
+notes and dates on them can still be corrected.
+
+**The decision:** whether setting `is_active` (or `is_certified`) back to true
+counts as a new certification, and so refuses a former member the way adding
+one does.
+
+### AP2-15 — Apparatus custom-field definitions are stored and never read
+
+The custom-field definitions (`apparatus_custom_fields`: required flag,
+options, minimum and maximum, length, pattern) have API endpoints and no
+screen, and nothing on the backend checks an apparatus's
+`custom_field_values` against them. Renaming a definition's key leaves every
+stored value under the old key; deleting one leaves its values behind. This is
+the shape CLAUDE.md pitfall #19 warns about: configuration whose only effect is
+being stored.
+
+**The decision:** build the reader (validate values on apparatus create and
+update, migrate values when a key is renamed) and a management screen, or
+retire the definitions.

@@ -385,6 +385,31 @@ describe('apparatusStore', () => {
       expect(state.isLoading).toBe(false);
       expect(state.error).toBeTypeOf('string');
     });
+
+    // The store holds the last apparatus opened. A failed fetch of another one
+    // left it in place, and the edit page filled its form from it (AP2-9).
+    it('drops a different apparatus while fetching, so a failure leaves none', async () => {
+      useApparatusStore.setState({ currentApparatus: makeApparatus({ id: 'app-a' }) as never });
+      mockGetApparatus.mockReset();
+      mockGetApparatus.mockRejectedValue(new Error('Not found'));
+
+      const promise = getState().fetchApparatus('app-b');
+      expect(getState().currentApparatus).toBeNull();
+      await promise;
+
+      expect(getState().currentApparatus).toBeNull();
+    });
+
+    it('keeps the same apparatus on screen while it is re-fetched', async () => {
+      const held = makeApparatus({ id: 'app-a' });
+      useApparatusStore.setState({ currentApparatus: held as never });
+      mockGetApparatus.mockReset();
+      mockGetApparatus.mockResolvedValue(held);
+
+      const promise = getState().fetchApparatus('app-a');
+      expect(getState().currentApparatus).toEqual(held);
+      await promise;
+    });
   });
 
   // =========================================================================
