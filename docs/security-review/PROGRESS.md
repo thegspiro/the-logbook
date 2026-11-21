@@ -16,6 +16,41 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#PENDING](#)** (branch `claude/security-review-compliance-p15`):
+Feature 20 (Compliance), pass 15 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session remains unreachable; this iteration was picked up
+directly, not via `ListAgents`). PR #4496 (Feature 19, Skills testing, pass 15) had already merged (`8597b7ac`) before this iteration started. A fresh
+`list_pull_requests` (state `open`, no head filter) found no
+`claude/security-review-*` head, and `PROGRESS.md`'s own table (row 19 ✅,
+row 20 ⬜) confirmed row 20 as the next pending feature.
+
+**0 fixed, 0 new findings — real delta across 11 declared-scope files (1,102
+insertions), all of it either already fixed elsewhere (the rolling-requirement
+notice fix, SEC17-1's error-sanitization fix via SEC-00's own pass 17) or new,
+reviewed, pure/org-scoped business logic (evaluation-credited requirement
+types, a profile tie-break rule, never-graded optional requirements, a
+monthly-pace figure, a shared `ordered_profiles` helper).** The one new query
+(`load_evaluation_credits`) is org-scoped directly on every table it joins,
+not merely inherited from its caller. Route surface unchanged at 21/21
+(13 + 8), AST-recounted directly. Full write-up:
+`docs/security-review/CMP-20-compliance.md`'s **Pass 15** section.
+
+Completion gate: `flake8`/`black --check` (CI's pinned `26.10.1`, reinstalled
+via `uv tool install --force` after the ambient copy drifted to `26.5.1`)/
+`isort --check-only` (CI's pinned `9.0.2`) on `app/ tests/ alembic/` all
+clean; `validate_migrations.py --strict` — 803 revisions, single head
+`7b4e2d9c1a63`; `generate_schema_docs.py --check` — up to date;
+`check_route_permissions.py --strict` — 329 routes, 0 errors/warnings;
+scoped backend pytest (`-k "compliance"`) — 760 passed, 1 environment-only
+skip (`pywebpush`); `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; 14 compliance-scoped frontend test files — 183 passed.
+
+Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 15, PR #4496, merged), preserved for history</summary>
+
 **PR [#4496](https://github.com/thegspiro/the-logbook/pull/4496)**
 (branch `claude/security-review-skills-testing-p15`): Feature 19 (Skills
 testing), pass 15 — watchdog pickup (the dedicated `/loop 30m
@@ -27219,7 +27254,7 @@ iteration's commit" rule.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13), `api/public/shift_evaluations.py` (added pass 15)                                                        | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (31 routes, added pass 17)                              | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ⬜     |
@@ -27277,6 +27312,62 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-21 — Feature 19 (Skills testing, pass 15) merged; Feature 20 (Compliance, pass 15) — watchdog pickup, real delta, 0 new findings
+
+Watchdog pickup outside the dedicated `/loop 30m /security-review` session.
+`mcp__github__list_pull_requests` (state `open`, no head filter) found 8 open
+PRs, none with a `claude/security-review-*` head. PR #4496 (Feature 19,
+Skills testing, pass 15) had already merged (`8597b7ac`) before this
+iteration started; a fresh branch was cut from `origin/main` at that commit.
+Row 20 (Compliance) was confirmed the next `⬜` row directly against the
+rotation table, matching the **Open PR** note's own "next is Feature 20".
+
+Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, and this feature's
+own `CMP-20-compliance.md` (14 prior passes, most recently pass 14) before
+reading any code; also checked `docs/module-audit/compliance-skills.md` and
+`docs/app-review/compliance-skills.md` for anything filed against this
+surface — both already folded into CMP-20's own standing findings (CS-8,
+`grace_period_days`), nothing new.
+
+Baseline `c0baae039` (confirmed by content, not just message, to postdate
+pass 14's own merge — PR #4213). Real delta across all 11 of this feature's
+declared-scope files (1,102 insertions, 62 deletions): owner-decision work
+from 2026-11-14 through 2026-11-21 threading evaluation-credited requirement
+types, a profile tie-break rule, never-graded optional requirements, and a
+monthly-pace figure through `training_compliance.py` (this feature's own
+grading module, 760 of the insertions), plus a new shared `ordered_profiles`
+helper, audit logging on config/profile saves, and a genuine bug fix (daily-
+repeating compliance emails for rolling requirements) that had already
+landed with its own 7 regression tests, each seen red first.
+
+AST-re-enumerated both endpoint files directly: 21 routes (13 + 8), unchanged
+from pass 14. The one new query (`load_evaluation_credits`) filters
+`organization_id` directly on every table it joins; `member_ids` is always
+derived from an already org-scoped member query at every call site. CS-8
+(attestation dual control) and `grace_period_days` (unwired column) remain
+the only standing OPEN items, both owner-accepted by design, re-verified
+unchanged at their current citations. SEC17-1 (error-message sanitization)
+reconfirmed FIXED, landing in this window via SEC-00's own pass-17 commit.
+
+**0 fixed (nothing needed fixing), 0 newly flagged.** Full write-up:
+`docs/security-review/CMP-20-compliance.md`'s **Pass 15** section.
+
+Completion gate: `flake8`/`black --check` (CI's pinned `26.10.1`)/
+`isort --check-only` (CI's pinned `9.0.2`) on `app/ tests/ alembic/` all
+clean (the sandbox's ambient `uv tool`-installed `black` had drifted to
+`26.5.1`; reinstalled at the pinned version with `uv tool install
+black==26.10.1 --force` so the bare `black --check` CI actually runs was
+exercised, not a stale ambient copy); `validate_migrations.py --strict` —
+803 revisions, single head `7b4e2d9c1a63`; `generate_schema_docs.py --check`
+— up to date; `check_route_permissions.py --strict` — 329 routes, 0
+errors/warnings; scoped backend pytest (`-k "compliance"`) — 760 passed, 1
+environment-only skip (`pywebpush`); `npm run typecheck` — 0 errors; `npm
+run lint` — 0 errors/warnings; 14 compliance-scoped frontend test files —
+183 passed.
+
+Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-21 — Feature 18 (Training extended, pass 15) merged; Feature 19 (Skills testing, pass 15) — watchdog pickup, true zero delta, 0 new findings
 
