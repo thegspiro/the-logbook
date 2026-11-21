@@ -223,7 +223,7 @@ const ErrorMonitoringPage: React.FC = () => {
             onClick={() => {
               void exportErrors();
             }}
-            className="btn-secondary text-sm font-medium text-blue-700 dark:text-blue-400"
+            className="btn-secondary text-sm font-medium text-blue-900 dark:text-blue-300"
           >
             Export Errors
           </button>
@@ -320,7 +320,7 @@ const ErrorMonitoringPage: React.FC = () => {
                           className={`inline-flex rounded-full px-2 py-1 text-xs leading-5 font-semibold ${
                             error.errorType?.startsWith('BACKEND_')
                               ? 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
-                              : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400'
+                              : 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300'
                           }`}
                         >
                           {error.errorType}
@@ -386,7 +386,7 @@ const ErrorMonitoringPage: React.FC = () => {
                       <td data-label="Details" className="px-6 py-4 text-right whitespace-nowrap">
                         <button
                           type="button"
-                          className="touch:min-h-11 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
+                          className="touch:min-h-11 text-sm font-medium text-blue-900 hover:underline dark:text-blue-300"
                           // Every row's button read "View details" alone (W75).
                           aria-label={`${expandedErrors.has(error.id) ? 'Hide' : 'View'} details of ${error.errorType ?? 'error'} ${error.id?.split('-')[0] ?? ''}`.trim()}
                           aria-expanded={expandedErrors.has(error.id)}
@@ -616,10 +616,10 @@ const ErrorMonitoringPage: React.FC = () => {
               <div key={error.id} className="rounded-r border-l-4 border-red-500 bg-red-500/10 p-4">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-medium text-red-700 dark:text-red-300">{error.errorType}</p>
-                    <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error.userMessage}</p>
+                    <p className="text-sm font-medium text-red-900 dark:text-red-300">{error.errorType}</p>
+                    <p className="mt-1 text-sm text-red-900 dark:text-red-300">{error.userMessage}</p>
                   </div>
-                  <span className="text-xs text-red-700 dark:text-red-400">{formatTime(error.timestamp, tz)}</span>
+                  <span className="text-xs text-red-900 dark:text-red-300">{formatTime(error.timestamp, tz)}</span>
                 </div>
               </div>
             ))}
