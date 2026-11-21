@@ -639,6 +639,55 @@ class TestGranting:
         assert all(r.waiver_request_id != request.id for r in rows)
 
 
+class TestRemovingTheRowAnApprovalWrote:
+    """The attendee row an approved request wrote is what excuses the member.
+
+    Deleting it left the request reading approved and counting toward the cap
+    while the tally charged the meeting as an unexcused absence.
+    """
+
+    async def _approved(self, db, dept):
+        meeting_id = await make_minutes_record(
+            db, dept.org, dept.ids["secretary"], event_id=dept.meeting
+        )
+        request = await _submit(db, dept)
+        await _svc(db).approve(dept.org, dept.clerk, request.id)
+        return meeting_id, request
+
+    async def test_it_is_refused(self, db_session, dept):
+        meeting_id, request = await self._approved(db_session, dept)
+        attendee = await _attendee(db_session, meeting_id, dept.ids["member"])
+
+        ok, error = await MeetingsService(db_session).remove_attendee(
+            meeting_id, attendee.id, dept.org
+        )
+
+        assert ok is False
+        assert "approved waiver request" in error
+        kept = await _attendee(db_session, meeting_id, dept.ids["member"])
+        assert kept is not None
+        assert kept.waiver_request_id == request.id
+
+    async def test_another_row_is_still_removed(self, db_session, dept):
+        meeting_id, _ = await self._approved(db_session, dept)
+        other = MeetingAttendee(
+            id=uid(),
+            organization_id=dept.org,
+            meeting_id=meeting_id,
+            user_id=dept.ids["other"],
+            present=True,
+        )
+        db_session.add(other)
+        await db_session.flush()
+
+        ok, error = await MeetingsService(db_session).remove_attendee(
+            meeting_id, other.id, dept.org
+        )
+
+        assert (ok, error) == (True, None)
+        assert await _attendee(db_session, meeting_id, dept.ids["other"]) is None
+
+
 class TestCarryOver:
     async def test_create_from_event_carries_approved_requests(self, db_session, dept):
         # With no President, the Chief's request goes to a named alternate
