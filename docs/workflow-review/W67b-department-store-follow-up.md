@@ -688,11 +688,50 @@ install sends no email.
 - **W67b-11 — HIGH — "Placed with the vendor" is emailed to members whose
   unpaid orders were held back.** `record_vendor_order` skips unpaid orders
   under pay-before-vendor-order. It then mails `_window_customer_emails`,
-  which is every non-cancelled order in the window.
+  which is every non-cancelled order in the window. ✅ **FIXED
+  (2026-11-21).** Under that policy the notice goes only to members whose
+  orders are settled. "Settled" is decided by the same `_is_settled` rule
+  that holds an order back, so the two cannot disagree. Other policies are
+  unchanged. Two tests in `TestVendorOrderNoticeRecipients`
+  (`tests/test_storefront_notifications.py`); the held-member case failed
+  against the old code. Not driven in the browser, since this install sends
+  no email.
 - **W67b-12 — MED — Cancelling or fulfilling a window has no transition guard
   and leaves its orders open.** Payment reminders then keep chasing members
   for goods that will never be ordered. Where: `set_window_status`;
-  `run_payment_reminders` filters on order status only.
+  `run_payment_reminders` filters on order status only. ✅ **FIXED
+  (2026-11-21).** Owner decisions:
+  - **Cancelling a window** (`cancel_window`) cancels each order still open
+    in it, through `cancel_order`. Each gets its date, the reason "The order
+    window was cancelled", a timeline entry and the member's notice. It is
+    refused while any of those orders has money recorded or a payment report
+    waiting, naming them, so no money is left on cancelled orders (W67b-2).
+    A fulfilled window cannot be cancelled. Cancelling again changes
+    nothing, and nobody is emailed twice.
+  - **Marking a window fulfilled** (`fulfill_window`) is allowed only for a
+    closed window, and only once every order in it is fulfilled or
+    cancelled. Otherwise it is refused with the number still outstanding.
+  - **Payment reminders** skip orders in a cancelled window, which covers
+    windows cancelled before this fix. Orders whose window was deleted are
+    still reminded.
+  - `set_window_status` is removed; its only two callers were these
+    endpoints.
+
+  **Tests:** seven in `TestWindowCancelAndFulfil`
+  (`tests/test_storefront_service.py`). Six exercise the two new methods, so
+  against the old code they fail because the methods do not exist; the
+  reminder case failed on the behaviour itself.
+
+  **Re-driven:**
+  1. Cancelling a window holding a $5 payment was refused, naming
+     ORD-2026-0013.
+  2. After the refund, the window cancelled, and both of its orders read
+     "The order window was cancelled".
+  3. Cancelling it again changed nothing.
+  4. In the windows tab, "Mark fulfilled" on a closed window with three open
+     orders showed "3 orders are not fulfilled or cancelled yet…", and the
+     window stayed closed.
+
 - **W67b-13 — MED — `record_vendor_order` has three faults.**
   - It advances only the first 200 orders.
   - It moves Ready for pickup orders back to Ordered.

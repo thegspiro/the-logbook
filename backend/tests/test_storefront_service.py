@@ -2814,3 +2814,120 @@ class TestShippedOrderWording:
 
         sent = service.notifications.send_order_update.await_args
         assert sent.kwargs["status_label"] == "Ready for pickup"
+
+
+class TestWindowCancelAndFulfil:
+    """W67b-12, owner decisions 2026-11-21. Cancelling a window cancels its open
+    orders, unless one has money on it. A window is marked fulfilled only once
+    closed and with every order fulfilled or cancelled."""
+
+    async def _window_with_orders(self, db_session, count=2):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org, payment_policy=StorePaymentPolicy.NONE)
+        product = await _make_product(db_session, org, price=Decimal("15.00"))
+        window = await _make_open_window(db_session, org)
+        orders = []
+        for index in range(count):
+            member = await _make_member(db_session, org, first=f"M{index}")
+            orders.append(await service.create_order(org.id, member, _cart(product.id)))
+        service.notifications.send_order_cancelled = AsyncMock()
+        return service, org, window, orders
+
+    async def test_cancelling_a_window_cancels_its_open_orders(self, db_session):
+        service, org, window, orders = await self._window_with_orders(db_session)
+
+        cancelled = await service.cancel_window(window.id, org.id, None)
+
+        assert cancelled.status == StoreWindowStatus.CANCELLED
+        for order in orders:
+            current = await service.get_order(order.id, org.id)
+            assert current.status == StoreOrderStatus.CANCELLED
+            assert current.cancellation_reason == "The order window was cancelled"
+        assert service.notifications.send_order_cancelled.await_count == len(orders)
+
+    async def test_a_window_with_money_on_an_order_is_not_cancelled(self, db_session):
+        service, org, window, orders = await self._window_with_orders(db_session)
+        paid = orders[0]
+        await service.record_payment(
+            paid.id, org.id, Decimal("5.00"), None, notify_member=False
+        )
+
+        with pytest.raises(ValueError, match=paid.order_number):
+            await service.cancel_window(window.id, org.id, None)
+
+        current_window = await service.get_window(window.id, org.id)
+        assert current_window.status == StoreWindowStatus.OPEN
+        for order in orders:
+            current = await service.get_order(order.id, org.id)
+            assert current.status != StoreOrderStatus.CANCELLED
+
+    async def test_cancelling_a_cancelled_window_again_changes_nothing(
+        self, db_session
+    ):
+        service, org, window, orders = await self._window_with_orders(db_session)
+        await service.cancel_window(window.id, org.id, None)
+        sent = service.notifications.send_order_cancelled.await_count
+
+        again = await service.cancel_window(window.id, org.id, None)
+
+        assert again.status == StoreWindowStatus.CANCELLED
+        assert service.notifications.send_order_cancelled.await_count == sent
+
+    async def test_a_fulfilled_window_cannot_be_cancelled(self, db_session):
+        service, org, window, orders = await self._window_with_orders(
+            db_session, count=0
+        )
+        window.status = StoreWindowStatus.FULFILLED
+        await db_session.flush()
+
+        with pytest.raises(ValueError, match="fulfilled"):
+            await service.cancel_window(window.id, org.id, None)
+
+    async def test_an_open_window_cannot_be_marked_fulfilled(self, db_session):
+        service, org, window, orders = await self._window_with_orders(
+            db_session, count=0
+        )
+
+        with pytest.raises(ValueError, match="closed"):
+            await service.fulfill_window(window.id, org.id)
+
+    async def test_a_window_is_fulfilled_only_once_every_order_is_done(
+        self, db_session
+    ):
+        service, org, window, orders = await self._window_with_orders(db_session)
+        window.status = StoreWindowStatus.CLOSED
+        await db_session.flush()
+
+        with pytest.raises(ValueError, match="2 orders"):
+            await service.fulfill_window(window.id, org.id)
+
+        await service.update_order_status(
+            orders[0].id, org.id, StoreOrderStatus.FULFILLED, None, notify_member=False
+        )
+        await service.cancel_order(orders[1].id, org.id, None, notify_member=False)
+
+        done = await service.fulfill_window(window.id, org.id)
+        assert done.status == StoreWindowStatus.FULFILLED
+
+    async def test_no_payment_reminder_for_an_order_in_a_cancelled_window(
+        self, db_session
+    ):
+        # A window cancelled before W67b-12 left its orders open; a member must
+        # not be chased for goods that will never be ordered.
+        service, org, window, orders = await self._window_with_orders(
+            db_session, count=1
+        )
+        await service.update_settings(
+            org.id, {"send_payment_reminders": True, "payment_reminder_days": 1}
+        )
+        order = orders[0]
+        order.submitted_at = datetime.now(timezone.utc) - timedelta(days=10)
+        window.status = StoreWindowStatus.CANCELLED
+        await db_session.flush()
+        service.notifications.send_payment_reminder = AsyncMock(return_value=True)
+
+        sent = await service.run_payment_reminders(org.id)
+
+        assert sent == 0
+        service.notifications.send_payment_reminder.assert_not_awaited()

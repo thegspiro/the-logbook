@@ -178,6 +178,19 @@ would force a false ordering on two independent things.
 A refused move answers 400 with the reason. The bulk endpoint skips the order
 and reports why.
 
+**Cancelling and fulfilling a window** (W67b-12, 2026-11-21):
+
+- **Cancelling a window** cancels every order still open in it, each with the
+  reason "The order window was cancelled" and a notice to the member. It is
+  refused while any of those orders has money recorded or a payment report
+  waiting, naming them; refund or settle those first.
+- **A window is marked fulfilled** only when it is closed and every order in
+  it is fulfilled or cancelled.
+- **Payment reminders** never go out for an order in a cancelled window.
+- **The "placed with the vendor" notice** goes, under pay-before-vendor-order,
+  only to members whose orders were settled and so went into the order
+  (W67b-11).
+
 **Prices and payments that cannot go wrong** (W67b-6 and W67b-7, 2026-11-16):
 
 - **No price below zero.** An option, such as a youth size, may lower a

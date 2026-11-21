@@ -1144,15 +1144,110 @@ class StorefrontService:
                     await self.db.commit()
         return window
 
-    async def set_window_status(
-        self, window_id: str, organization_id: str, status: StoreWindowStatus
+    _WINDOW_CANCEL_REASON = "The order window was cancelled"
+
+    async def cancel_window(
+        self, window_id: str, organization_id: str, actor_id: Optional[str]
     ) -> StoreOrderWindow:
+        """Cancel a window and, with it, every order still open in it.
+
+        Owner decision (W67b-12, 2026-11-21). A cancelled window's orders used
+        to stay open, so payment reminders kept chasing members for goods that
+        would never be ordered. Each open order now goes through cancel_order,
+        so it gets its date, reason, timeline entry and cancellation notice.
+
+        Refused while any of those orders has money recorded or a payment report
+        waiting: cancelling leaves amount_paid alone, and a whole window of
+        cancelled orders still holding money is W67b-2 in bulk. Staff refund or
+        settle those first; the refusal names them.
+
+        Safe to run twice: a cancelled window is returned as it is, and a run
+        that stopped part way skips the orders it already cancelled, so nobody
+        is emailed twice.
+        """
         window = await self.get_window(window_id, organization_id)
         if not window:
             raise ValueError("Order window not found")
-        window.status = status
-        if status == StoreWindowStatus.CANCELLED:
-            window.cancelled_at = _utcnow()
+        if window.status == StoreWindowStatus.CANCELLED:
+            return window
+        if window.status == StoreWindowStatus.FULFILLED:
+            raise ValueError("A fulfilled window cannot be cancelled")
+
+        result = await self.db.execute(
+            select(StoreOrder).where(
+                StoreOrder.window_id == str(window_id),
+                StoreOrder.organization_id == str(organization_id),
+                StoreOrder.status.notin_(
+                    [StoreOrderStatus.CANCELLED, StoreOrderStatus.FULFILLED]
+                ),
+            )
+        )
+        open_orders = list(result.scalars().all())
+        holding_money = sorted(
+            order.order_number
+            for order in open_orders
+            if _money(order.amount_paid) > 0
+            or order.payment_status == StorePaymentStatus.PENDING_VERIFICATION
+        )
+        if holding_money:
+            raise ValueError(
+                "These orders have money recorded or a payment report waiting: "
+                f"{', '.join(holding_money)}. Refund or settle them before "
+                "cancelling the window."
+            )
+
+        order_ids = [str(order.id) for order in open_orders]
+        for order_id in order_ids:
+            await self.cancel_order(
+                order_id,
+                organization_id,
+                actor_id,
+                reason=self._WINDOW_CANCEL_REASON,
+                notify_member=True,
+            )
+
+        window = await self.get_window(window_id, organization_id)
+        if not window:
+            raise ValueError("Order window not found")
+        window.status = StoreWindowStatus.CANCELLED
+        window.cancelled_at = _utcnow()
+        await self.db.commit()
+        await self.db.refresh(window)
+        return window
+
+    async def fulfill_window(
+        self, window_id: str, organization_id: str
+    ) -> StoreOrderWindow:
+        """Mark a window as fully distributed.
+
+        Owner decision (W67b-12, 2026-11-21): only a closed window, and only
+        once every order in it is fulfilled or cancelled. It could be marked
+        from any state before, an open one included, which skipped the close
+        and its notice and called a window done while members waited.
+        """
+        window = await self.get_window(window_id, organization_id)
+        if not window:
+            raise ValueError("Order window not found")
+        if window.status == StoreWindowStatus.FULFILLED:
+            return window
+        if window.status != StoreWindowStatus.CLOSED:
+            raise ValueError("Only a closed window can be marked fulfilled")
+        outstanding = await self.db.scalar(
+            select(func.count(StoreOrder.id)).where(
+                StoreOrder.window_id == str(window_id),
+                StoreOrder.organization_id == str(organization_id),
+                StoreOrder.status.notin_(
+                    [StoreOrderStatus.CANCELLED, StoreOrderStatus.FULFILLED]
+                ),
+            )
+        )
+        if outstanding:
+            noun = "order is" if outstanding == 1 else "orders are"
+            raise ValueError(
+                f"{outstanding} {noun} not fulfilled or cancelled yet. Finish or "
+                "cancel them before marking the window fulfilled."
+            )
+        window.status = StoreWindowStatus.FULFILLED
         await self.db.commit()
         await self.db.refresh(window)
         return window
@@ -3897,11 +3992,24 @@ class StorefrontService:
             return 0
 
         cutoff = _utcnow() - timedelta(days=int(settings.payment_reminder_days or 3))
+        # Orders in a cancelled window are skipped: a window cancelled before
+        # W67b-12 left its orders open, and nobody should be chased for goods
+        # that will never be ordered.
+        cancelled_windows = select(StoreOrderWindow.id).where(
+            StoreOrderWindow.organization_id == str(organization_id),
+            StoreOrderWindow.status == StoreWindowStatus.CANCELLED,
+        )
         result = await self.db.execute(
             select(StoreOrder)
             .options(selectinload(StoreOrder.items))
             .where(
                 StoreOrder.organization_id == str(organization_id),
+                # An order whose window was deleted has no window_id, and a
+                # bare NOT IN drops NULLs, so it is kept explicitly.
+                or_(
+                    StoreOrder.window_id.is_(None),
+                    StoreOrder.window_id.notin_(cancelled_windows),
+                ),
                 StoreOrder.status.notin_(
                     [StoreOrderStatus.CANCELLED, StoreOrderStatus.FULFILLED]
                 ),
