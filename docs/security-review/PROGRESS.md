@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD](https://github.com/thegspiro/the-logbook/pull/)**
+**PR [#4503](https://github.com/thegspiro/the-logbook/pull/4503)**
 (branch `claude/security-review-grants-fundraising-p15` —
 `claude/security-review-grants-fundraising` already carries several merged
 PRs, most recently pass 14's PR #4226, so this pass uses a `-p15` suffix
