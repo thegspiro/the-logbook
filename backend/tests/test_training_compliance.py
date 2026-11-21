@@ -1258,6 +1258,7 @@ class TestEvaluateRequirementDetailFields:
             "waiver_months",
             "active_months",
             "cert_expired",
+            "expiry_date",
             "blocks_activity",
             "catch_up_deadline",
             "next_window_opens",

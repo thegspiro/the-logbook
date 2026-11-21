@@ -111,6 +111,11 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.OPEN_ENDED_LEAVE_DIGEST.value: "c8d2f61a7e34",
     EmailTemplateType.LEAVE_REQUEST_SUBMITTED.value: "c8d2f61a7e34",
     EmailTemplateType.LEAVE_REQUEST_DENIED.value: "c8d2f61a7e34",
+    EmailTemplateType.LEAVE_REQUEST_FOR_MEMBER.value: "e5a9c3d71b28",
+    EmailTemplateType.LEAVE_REQUEST_UPDATE.value: "e5a9c3d71b28",
+    EmailTemplateType.LEAVE_REQUEST_REMINDER.value: "e5a9c3d71b28",
+    EmailTemplateType.LEAVE_REQUEST_ESCALATION.value: "7b4e2d9c1a63",
+    EmailTemplateType.LEAVE_ENDED_EARLY.value: "7b4e2d9c1a63",
     EmailTemplateType.GUEST_HEADCOUNT_REMINDER.value: "73f64017f9e2",
 }
 

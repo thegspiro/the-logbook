@@ -133,14 +133,14 @@ const RecordAttachmentsModal: React.FC<{
           <ul className="mb-4 space-y-2">
             {attachments.map((a) => (
               <li
-                key={a.index}
+                key={a.id ?? a.index}
                 className="border-theme-surface-border flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
               >
                 <span className="text-theme-text-primary truncate text-sm">
                   {a.file_name || `Attachment ${a.index + 1}`}
                 </span>
                 <a
-                  href={documentService.getAttachmentDownloadUrl(recordId, a.index)}
+                  href={documentService.getAttachmentDownloadUrl(recordId, a)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex shrink-0 items-center gap-1 text-sm text-red-600 hover:text-red-500"

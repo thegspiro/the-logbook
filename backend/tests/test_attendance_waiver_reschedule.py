@@ -44,7 +44,9 @@ from app.models.notification import NotificationLog
 from app.models.user import MemberLeaveOfAbsence
 from app.schemas.event import EventUpdate
 from app.services import attendance_waiver_service as engine
+from app.services.attendance_waiver_expiry import AttendanceWaiverExpiry
 from app.services.attendance_waiver_service import (
+    EXPIRY_DAYS,
     MEMBER_UPDATE_CATEGORY,
     REVIEW_PROMPT_CATEGORY,
     AttendanceWaiverService,
@@ -452,6 +454,44 @@ class TestMeetings:
         row = await _row(db_session, request.id)
         assert row.status == AttendanceWaiverStatus.PENDING
         assert row.reconfirm_requested_at is not None
+
+    async def test_a_late_correction_gives_the_member_a_full_week(
+        self, db_session, dept, monkeypatch
+    ):
+        """A start corrected weeks after the meeting must not expire at once.
+
+        The expiry used to be measured from the session alone, so a
+        reconfirmation on a session more than eight days past was already
+        overdue when it was asked, and the next hourly sweep closed it as a
+        missed meeting before the member could answer.
+        """
+        minutes, request = await self._approved(db_session, dept)
+        later = DRILL + timedelta(days=20)
+        monkeypatch.setattr(engine, "_now", lambda: later)
+
+        await _move(db_session, dept, dept.meeting, start=DRILL + timedelta(minutes=30))
+        await AttendanceWaiverExpiry(db_session).sweep(
+            now=later + timedelta(hours=1), organization_ids=[dept.org]
+        )
+
+        row = await _row(db_session, request.id)
+        assert row.status == AttendanceWaiverStatus.PENDING
+        assert row.reconfirm_requested_at is not None
+        service = _meetings(db_session)
+        (described,) = await service.describe(
+            dept.org, dept.member, await service.list_mine(dept.org, dept.member)
+        )
+        assert engine._utc(described["expires_at"]) == later + timedelta(
+            days=EXPIRY_DAYS
+        )
+
+        # A week after the notice it closes as any unanswered request does.
+        await AttendanceWaiverExpiry(db_session).sweep(
+            now=later + timedelta(days=EXPIRY_DAYS, minutes=1),
+            organization_ids=[dept.org],
+        )
+        row = await _row(db_session, request.id)
+        assert row.status == AttendanceWaiverStatus.EXPIRED
 
     async def test_the_secretarys_own_waiver_stays(self, db_session, dept):
         minutes, _ = await self._approved(db_session, dept)

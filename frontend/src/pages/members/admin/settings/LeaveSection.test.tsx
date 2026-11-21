@@ -23,6 +23,7 @@ const stored = {
   requests_enabled: false,
   request_approver_position_ids: ['pos-board'],
   request_decision_rule: 'any',
+  request_escalation_days: 21,
   available_positions: [
     { id: 'pos-board', name: 'Board of Directors', holder_count: 0 },
     { id: 'pos-chief', name: 'Fire Chief', holder_count: 1 },
@@ -55,6 +56,7 @@ describe('LeaveSection', () => {
       requests_enabled: true,
       request_approver_position_ids: ['pos-board'],
       request_decision_rule: 'any',
+      request_escalation_days: 21,
     });
     expect(screen.getByRole('checkbox', { name: /Board of Directors/ })).toBeChecked();
     // The chosen position is vacant, and the screen says where requests go.
@@ -81,6 +83,22 @@ describe('LeaveSection', () => {
 
     expect(saveDebounced).toHaveBeenCalled();
     expect(updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({ end_reminder_days: 14 }));
+  });
+
+  it('the escalation days save through the debounced autosave, capped at 180', async () => {
+    const user = userEvent.setup();
+    getSettings.mockResolvedValue({ ...structuredClone(stored), requests_enabled: true });
+    render(<LeaveSection save={save} saveDebounced={saveDebounced} />);
+
+    const days = await screen.findByLabelText('Tell the Chief about a request still undecided after this many days');
+    expect(days).toHaveValue(21);
+    await user.clear(days);
+    await user.type(days, '0');
+    expect(updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({ request_escalation_days: 0 }));
+
+    await user.clear(days);
+    await user.type(days, '400');
+    expect(updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({ request_escalation_days: 180 }));
   });
 
   it('a failed load says so rather than showing defaults', async () => {

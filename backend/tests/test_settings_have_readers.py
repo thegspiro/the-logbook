@@ -51,7 +51,6 @@ _KNOWN_UNWIRED = {
     # review.py::test_every_trigger_the_code_sends_is_configurable proves these
     # three are genuinely reachable.
     "request_pipeline.email_triggers.on_in_progress": "sent via f-string",
-    "request_pipeline.email_triggers.on_completed": "sent via f-string",
     "request_pipeline.email_triggers.on_declined": "sent via f-string",
     # Writable through EventSettingsUpdate and consulted by nothing. Reported
     # 2026-08-25; left as-is deliberately rather than widening that change.

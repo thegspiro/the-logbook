@@ -296,6 +296,16 @@ export interface CommunityEventReach {
   reach_is_estimate: boolean;
   crew: number;
   member_hours: number;
+  /** What happened, recorded when the event closed. */
+  outcome_note?: string | null;
+  materials?: CommunityMaterial[];
+  photos?: 'none' | 'consented' | 'not_consented' | null;
+}
+
+/** Something handed out at outreach events, and how many. */
+export interface CommunityMaterial {
+  item: string;
+  quantity: number;
 }
 
 export interface CommunityEngagement {
@@ -315,6 +325,8 @@ export interface CommunityEngagement {
   granularity: 'month' | 'year';
   by_period: CommunityReachBucket[];
   by_type: CommunityTypeBucket[];
+  /** Everything handed out across the period, one line per item, most first. */
+  materials?: CommunityMaterial[];
   recent_events: CommunityEventReach[];
 }
 

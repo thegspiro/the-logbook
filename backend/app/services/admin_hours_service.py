@@ -6,10 +6,10 @@ manual entry, and approval workflows.
 """
 
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Dict, List, Optional, Sequence, Tuple
 
 from loguru import logger
-from sqlalchemy import and_, func, select
+from sqlalchemy import Select, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
@@ -23,6 +23,7 @@ from app.models.admin_hours import (
     AdminHoursEntryStatus,
     EventHourMapping,
 )
+from app.models.apparatus_event import EventApparatusPlan
 from app.models.event import Event
 from app.models.user import Organization, User
 from app.services.import_provenance import admin_hours_imported, label_for
@@ -1990,6 +1991,37 @@ class AdminHoursService:
         await self.db.delete(mapping)
         await self.db.flush()
 
+    @staticmethod
+    def _active_mappings(organization_id: str, *columns: Any) -> Select[Any]:
+        """Mappings that credit hours: active, onto an active category.
+
+        The one definition of "this event type is mapped", shared by
+        ``get_mappings_for_event`` (which credits) and ``mapped_event_types``
+        (which the apparatus template editor reads to warn when a crew's hours
+        would go nowhere), so the warning cannot disagree with the credit.
+        """
+        return (
+            select(*columns)
+            .join(
+                AdminHoursCategory,
+                EventHourMapping.admin_hours_category_id == AdminHoursCategory.id,
+            )
+            .where(
+                EventHourMapping.organization_id == organization_id,
+                EventHourMapping.is_active.is_(True),
+                AdminHoursCategory.is_active.is_(True),
+            )
+        )
+
+    async def mapped_event_types(self, organization_id: str) -> List[str]:
+        """Event types with at least one mapping that credits hours."""
+        result = await self.db.execute(
+            self._active_mappings(organization_id, EventHourMapping.event_type)
+            .where(EventHourMapping.event_type.isnot(None))
+            .distinct()
+        )
+        return sorted(str(t) for t in result.scalars().all())
+
     async def get_mappings_for_event(
         self,
         organization_id: str,
@@ -2000,17 +2032,8 @@ class AdminHoursService:
 
         Returns list of (category_id, percentage, category) tuples.
         """
-        query = (
-            select(EventHourMapping, AdminHoursCategory)
-            .join(
-                AdminHoursCategory,
-                EventHourMapping.admin_hours_category_id == AdminHoursCategory.id,
-            )
-            .where(
-                EventHourMapping.organization_id == organization_id,
-                EventHourMapping.is_active.is_(True),
-                AdminHoursCategory.is_active.is_(True),
-            )
+        query = self._active_mappings(
+            organization_id, EventHourMapping, AdminHoursCategory
         )
         if event_type:
             query = query.where(EventHourMapping.event_type == event_type)
@@ -2061,6 +2084,39 @@ class AdminHoursService:
             by_source.setdefault(key, []).append((mapping.percentage, cat.name))
         return by_source
 
+    async def crew_hour_category_overrides(
+        self, organization_id: str, event_ids: Sequence[str]
+    ) -> Dict[str, AdminHoursCategory]:
+        """The Admin Hours category an apparatus night credits, by event id.
+
+        An apparatus event names its own category, and that category replaces
+        the event-type mapping for the night — it is never credited *as well*,
+        which would pay a crew twice wherever the department also maps the
+        event's type (Public Education, say). One definition, read by
+        :meth:`credit_event_attendance` and by the events list and detail
+        estimate, so the card and the ledger cannot disagree (pitfall #29).
+
+        A night whose category is unset or no longer active is absent, and so
+        falls back to the ordinary mapping exactly as any other event does.
+        """
+        ids = [str(event_id) for event_id in event_ids if event_id]
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(EventApparatusPlan.event_id, AdminHoursCategory)
+            .join(
+                AdminHoursCategory,
+                EventApparatusPlan.admin_hours_category_id == AdminHoursCategory.id,
+            )
+            .where(
+                EventApparatusPlan.organization_id == str(organization_id),
+                EventApparatusPlan.event_id.in_(ids),
+                AdminHoursCategory.organization_id == str(organization_id),
+                AdminHoursCategory.is_active.is_(True),
+            )
+        )
+        return {str(event_id): category for event_id, category in result.all()}
+
     async def credit_event_attendance(
         self,
         organization_id: str,
@@ -2098,9 +2154,16 @@ class AdminHoursService:
         if event_type in EVENT_TYPES_WITHOUT_ADMIN_HOURS:
             return 0
 
-        mappings = await self.get_mappings_for_event(
-            organization_id, event_type, custom_category
-        )
+        crew_category = (
+            await self.crew_hour_category_overrides(organization_id, [event_id])
+        ).get(str(event_id))
+        mappings: List[Tuple[str, int, Optional[AdminHoursCategory]]]
+        if crew_category is not None:
+            mappings = [(crew_category.id, 100, crew_category)]
+        else:
+            mappings = await self.get_mappings_for_event(
+                organization_id, event_type, custom_category
+            )
         if not mappings:
             return 0
 

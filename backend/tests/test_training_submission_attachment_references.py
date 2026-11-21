@@ -134,7 +134,7 @@ class TestRemovingOneAttachment:
         await _voided_record(db_session, org, member, [_entry(kept)])
 
         await training_submissions.delete_submission_attachment(
-            submission.id, 0, db=db_session, current_user=member
+            submission.id, "0", expected_id=None, db=db_session, current_user=member
         )
 
         assert kept.exists()
@@ -154,7 +154,7 @@ class TestRemovingOneAttachment:
         )
 
         await training_submissions.delete_submission_attachment(
-            submission.id, 0, db=db_session, current_user=member
+            submission.id, "0", expected_id=None, db=db_session, current_user=member
         )
 
         assert certificate.exists()
@@ -173,7 +173,7 @@ class TestRemovingOneAttachment:
         )
 
         await training_submissions.delete_submission_attachment(
-            submission.id, 0, db=db_session, current_user=member
+            submission.id, "0", expected_id=None, db=db_session, current_user=member
         )
 
         assert not certificate.exists()
@@ -199,7 +199,7 @@ class TestRemovingOneAttachment:
         )
 
         await training_submissions.delete_submission_attachment(
-            submission.id, 0, db=db_session, current_user=member
+            submission.id, "0", expected_id=None, db=db_session, current_user=member
         )
 
         assert certificate.exists()

@@ -1481,28 +1481,54 @@ class ShiftEligibilityService:
         there is one place where the rule can be read and no second
         implementation to drift.
         """
-        outcome: Dict[str, Any] = {
-            "allowed": True,
-            "blocked_reason": None,
-            "warnings": [],
-            "exception": None,
-        }
-
         shift = await self._get_shift(shift_id, organization_id)
         if not shift:
-            return outcome
+            return self._allowed_driver_outcome()
 
         apparatus_id = getattr(shift, "apparatus_id", None)
         if not apparatus_id:
             # No apparatus on the shift means no EVOC requirement to check
             # against — the position is a label, not a seat behind a wheel.
-            return outcome
+            return self._allowed_driver_outcome()
 
         # The date the driving would happen, not today. A certification that
         # is current now but lapses before the shift does not qualify anyone to
         # drive it, and the exception lookup below already reasons about the
         # shift date — the two must agree or one of them is wrong.
         as_of = on_date or getattr(shift, "shift_date", None)
+        return await self.evaluate_driver_for_apparatus(
+            user_id=user_id,
+            apparatus_id=str(apparatus_id),
+            organization_id=organization_id,
+            on_date=as_of,
+        )
+
+    @staticmethod
+    def _allowed_driver_outcome() -> Dict[str, Any]:
+        return {
+            "allowed": True,
+            "blocked_reason": None,
+            "warnings": [],
+            "exception": None,
+        }
+
+    async def evaluate_driver_for_apparatus(
+        self,
+        user_id: str,
+        apparatus_id: str,
+        organization_id: str,
+        on_date: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        """The driver rule for one member, one apparatus and one date.
+
+        The body of :meth:`evaluate_driver_assignment` once the shift has been
+        resolved to its apparatus and date, so a seat that is not on a shift —
+        the Driver seat on an apparatus event — is judged by the same rule,
+        honouring the department's ``enforce_evoc`` setting and approved driver
+        exceptions, rather than by a second implementation that could drift.
+        """
+        outcome = self._allowed_driver_outcome()
+        as_of = on_date
 
         evoc_service = EvocLevelService(self.db)
         result = await evoc_service.check_driver_evoc_eligibility(

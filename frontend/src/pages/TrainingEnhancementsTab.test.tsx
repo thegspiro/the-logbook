@@ -293,3 +293,16 @@ describe('TrainingEnhancementsTab compliance forecast', () => {
     expect(screen.getByText('60%')).toHaveClass('text-green-700');
   });
 });
+
+describe('TrainingEnhancementsTab compliance report export', () => {
+  it('says the status columns are the current standing and what the period covers', () => {
+    // The export grades as the Compliance Matrix does, as of today; only the
+    // hours and record counts run from 1 January (owner decision 2026-11-21).
+    renderWithRouter(<TrainingEnhancementsTab activeTab="reports" />);
+
+    const card = screen.getByRole('button', { name: /Compliance Report/ });
+    expect(card).toHaveTextContent(/current standing on every requirement/);
+    expect(card).toHaveTextContent(/as the Compliance Matrix shows it/);
+    expect(card).toHaveTextContent(/training hours and records since January 1/);
+  });
+});

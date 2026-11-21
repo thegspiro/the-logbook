@@ -79,6 +79,7 @@ _LATER_GRANTS = (
     _VERSIONS / "20261031_2054_b65eaef983b9_grant_evaluation_setup_to_chief.py",
     _VERSIONS / "20261101_1930_1476abf56dd3_grant_evaluation_conduct_to_chief.py",
     _VERSIONS / "20261102_0500_857291750c67_evaluation_deletion.py",
+    _VERSIONS / "20261116_1602_3f8a1c6e2b94_apparatus_events_tables_and_grants.py",
 )
 
 
@@ -123,6 +124,11 @@ def _pristine_registry_set(slug: str) -> set[str]:
         grant = _load_module(path, f"_later_grant_{index}")
         if hasattr(grant, "_GRANTS"):
             permissions.difference_update(grant._GRANTS.get(slug, ()))
+        elif hasattr(grant, "_EVIDENCE_GRANTS"):
+            # Several grants, each gated on its own evidence in the row.
+            for permission, evidence in grant._EVIDENCE_GRANTS:
+                if permissions & evidence:
+                    permissions.discard(permission)
         elif hasattr(grant, "_EVIDENCE"):
             # Gated on what the row holds rather than on its slug.
             if permissions & grant._EVIDENCE:

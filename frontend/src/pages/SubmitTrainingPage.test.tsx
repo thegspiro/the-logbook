@@ -30,8 +30,8 @@ vi.mock('../services/api', () => ({
     deleteSubmission: vi.fn(),
     deleteAttachment: (...args: unknown[]) => mockDeleteAttachment(...args) as unknown,
     getAttachments: (...args: unknown[]) => mockGetAttachments(...args) as unknown,
-    getAttachmentDownloadUrl: (id: string, index: number) =>
-      `/api/v1/training/submissions/${id}/attachments/${index}/download`,
+    getAttachmentDownloadUrl: (id: string, attachment: { index: number; id?: string | null }) =>
+      `/api/v1/training/submissions/${id}/attachments/${attachment.id ?? attachment.index}/download`,
   },
   trainingService: {
     getCategories: (...args: unknown[]) => mockGetCategories(...args) as unknown,
@@ -154,7 +154,7 @@ describe('SubmitTrainingPage', () => {
           completion_date: '2026-03-12',
           hours_completed: 4,
           status: 'pending_review',
-          attachments: [{ index: 0, file_name: 'certificate.pdf' }],
+          attachments: [{ index: 0, id: 'entry-1', file_name: 'certificate.pdf' }],
           submitted_at: '2026-03-12T12:00:00Z',
           updated_at: '2026-03-12T12:00:00Z',
         },
@@ -186,7 +186,11 @@ describe('SubmitTrainingPage', () => {
 
       await user.click(await screen.findByRole('button', { name: 'Remove file' }));
 
-      await waitFor(() => expect(mockDeleteAttachment).toHaveBeenCalledWith('sub-1', 0));
+      // By the entry's id, so a retry after a lost response cannot remove
+      // whichever file has moved into its place.
+      await waitFor(() =>
+        expect(mockDeleteAttachment).toHaveBeenCalledWith('sub-1', expect.objectContaining({ id: 'entry-1' }))
+      );
       await waitFor(() => expect(screen.queryByText('certificate.pdf')).not.toBeInTheDocument());
     });
   });

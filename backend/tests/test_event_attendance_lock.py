@@ -779,6 +779,8 @@ class TestAdminHoursResync:
         svc.get_mappings_for_event = AsyncMock(
             return_value=[("cat-1", 100, SimpleNamespace())]
         )
+        # An ordinary event: no apparatus night redirecting its credit.
+        svc.crew_hour_category_overrides = AsyncMock(return_value={})
         return svc, db
 
     def _entry(self, method=AdminHoursEntryMethod.EVENT_ATTENDANCE):
