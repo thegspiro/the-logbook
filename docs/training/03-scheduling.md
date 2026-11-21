@@ -5040,6 +5040,12 @@ well as ones still in service. If members should still log hours on it, switch
 it on in **Outside Apparatus** settings after you commit. Units already hidden
 stay pickable in the import, marked **hidden from members**. Names that are not
 a vehicle at all (`POV`, `Other EMS`) can each be sent to **Catch-all: Other**.
+That puts all of them on a single outside unit named **Other**, under an agency
+named **Other**, created on the first commit and reused after that.
+
+<!-- Screenshot needed:
+A draft import's Units tab: POV and Other EMS sent to Catch-all: Other, and Medic 7 open on Add as an outside agency's unit with its agency picked from the list
+-->
 
 **Shift notification CC boxes** _(2026-11-09)_. The four **CC additional email
 addresses** boxes in Scheduling notification settings now refuse text that is
@@ -5051,8 +5057,6 @@ accepted and saved onto the CC list.
 in-app notice now list each call type once with a count, most frequent first
 ("EMS ×10"), instead of one line per call. Every type is listed; the old notice
 stopped after five calls and the email after ten.
-That puts all of them on a single outside unit named **Other**, under an agency
-named **Other**, created on the first commit and reused after that.
 
 **Retired units of your own.** To stop a unit of your own being scheduled,
 **archive** it in the Apparatus module, or **deactivate** it on the basic
