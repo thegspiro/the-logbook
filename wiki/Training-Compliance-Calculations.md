@@ -61,13 +61,17 @@ Profiles** (`/training/compliance-config?tab=profiles`, needs `settings.manage`
 or `compliance.manage`).
 
 - Profiles are tried **highest Priority first**; the first one that matches
-  the member is used and the rest are ignored.
+  the member is used and the rest are ignored. At equal Priority the older
+  profile is tried first.
 - A profile matches on **Applies to Membership Types**. A profile with no
   membership types selected **matches every member**.
 - **Required Training Requirements** replaces the department's list for those
   members. If you save a profile with **none** ticked, the members it matches
   are graded against nothing and read **N/A**.
-- **Optional/Tracked Requirements** are not graded.
+- **Optional Requirements** are listed on the member's My Training page and
+  the officer's view of the member, marked Optional, and are not graded. A
+  requirement ticked as both is required. A profile created through the API
+  with no required list grades every requirement except its optional ones.
 - **Compliant / At-Risk Threshold Override** replace the department thresholds
   for those members.
 - A member no profile matches is graded against every active requirement, at
@@ -284,7 +288,9 @@ ends, while the card's figure already shows it as expired.
 
 - **Grace Period (days)** on the Thresholds tab is saved but **not read** by
   any compliance calculation; the screen says so.
-- **Optional/Tracked Requirements** on a profile are not graded.
+- **Optional Requirements** on a profile are listed but not graded — except
+  that a profile with no required list set (API only) leaves them out of what
+  it grades.
 
 ## Programs that link a department requirement
 

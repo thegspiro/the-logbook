@@ -1298,6 +1298,49 @@ enforces `max_attempts`.
 > and keeping recertification testing possible. See
 > [SKILLS_TESTING_FEATURE.md §14.5](./SKILLS_TESTING_FEATURE.md).
 
+#### 9. Shift-Evaluation Requirements
+
+Four types are credited only by submitted shift evaluations the member can
+see, never by a training record (owner decision 2026-11-14): whether the
+requirement is a program's own (the credit ledger) or a department requirement
+linked into the program, graded by `training_compliance`. The per-type rule is
+`shift_evaluation_rules.credit_units`.
+
+| Type               | Target field          | One evaluation credits                                                                |
+| ------------------ | --------------------- | ------------------------------------------------------------------------------------- |
+| `evaluated_shifts` | `required_shifts`     | 1, or 0 when `evaluation_excludes_lowest_rating` and any item is at the lowest rating |
+| `transports`       | `required_transports` | the evaluation's `transports` statistic                                               |
+| `refusals`         | `required_refusals`   | the evaluation's `refusals` statistic                                                 |
+| `evaluated_calls`  | `required_calls`      | the evaluation's `calls` statistic _(2026-11-15)_                                     |
+
+`evaluated_calls` shares `required_calls` with the `calls` type; every reader
+that grades `calls` checks the type first, and `calls` stays credited by shift
+reports, so no call counts toward both. Migration `9d044fc1d81b` widens the
+`requirement_type` ENUM; its downgrade turns `evaluated_calls` requirements into
+`checklist`.
+
+```json
+{
+  "requirement_type": "evaluated_calls",
+  "required_calls": 25
+}
+```
+
+**Credit is re-stated** _(2026-11-16)_ when a requirement's type or
+`evaluation_excludes_lowest_rating` changes (every evaluation's credit is
+re-counted, or removed where evaluations no longer count), and when a member is
+taken off a shift or marked No-show (that shift's evaluation credit is taken
+back). An outside entry moved to an agency that does not evaluate shifts, and a
+program dropped from a combined evaluation's scope, keep earlier credit until
+the evaluation is saved again (`docs/KNOWN_LIMITATIONS.md`).
+
+**Which evaluations a shift needs is frozen at its end** _(2026-11-15)_. The
+first read after a department shift's `end_time` stores each crew member's
+evaluations in `shifts.evaluation_requirements` (migration `611204dcf8d1`), and
+later reads use it; the crew itself stays live. Outside-shift entries are
+always worked out live. A form a program or the general-form setting names
+cannot be deactivated, and an inactive form cannot be newly chosen for either.
+
 ### Requirement Sources
 
 - **Department**: Custom requirements created by the training officer
@@ -2812,7 +2855,7 @@ Training records now support real file attachments (previously metadata-only):
 | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `POST /api/v1/training/records/{id}/attachments`                 | Multipart upload, ≤ **25 MB**, magic-byte MIME detection (PDF/JPEG/PNG/GIF/WEBP/DOC/DOCX) |
 | `GET /api/v1/training/records/{id}/attachments`                  | Lists **sanitized metadata only** (no server file paths)                                  |
-| `GET /api/v1/training/records/{id}/attachments/{index}/download` | Streams a stored attachment by index                                                      |
+| `GET /api/v1/training/records/{id}/attachments/{entry}/download` | Streams a stored attachment by id (or a legacy index)                                     |
 
 - **Access:** the record owner manages their own attachments; everyone else
   needs `training.manage`.

@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from functools import lru_cache
 from types import SimpleNamespace
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence
 
 from loguru import logger
 from sqlalchemy import delete, func, select, union_all, update
@@ -67,6 +67,10 @@ from app.services.user_deletion_service import (
     release_user_references,
 )
 from app.utils.edit_window import EDIT_TOLERANCE, as_utc, changed_since
+
+if TYPE_CHECKING:
+    # Imported where used at runtime, as the void below is.
+    from app.services.attendance_waiver_service import MemberNotice
 
 STEP_ADMIN = "admin"
 STEP_TRAINING = "training"
@@ -137,6 +141,11 @@ def _chunks(values: Sequence[str]) -> Iterable[List[str]]:
 class HistoricalImportUndoService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        # The emails owed to members whose pending waiver requests an undo
+        # voided (its events were deleted). ``undo`` runs inside the caller's
+        # transaction, so the caller sends them with ``send_member_notices``
+        # once it has committed (CLAUDE.md pitfall #18).
+        self.waiver_notices: List[MemberNotice] = []
 
     # ------------------------------------------------------------------
     # Preview
@@ -497,7 +506,9 @@ class HistoricalImportUndoService:
         if event_ids:
             from app.services.attendance_waiver_service import void_pending_for_events
 
-            await void_pending_for_events(self.db, org_id, event_ids, "deleted")
+            self.waiver_notices.extend(
+                await void_pending_for_events(self.db, org_id, event_ids, "deleted")
+            )
         removed += await self._delete_ids(Event, org_id, event_ids)
         removed += await self._delete_ids(
             Shift, org_id, by_kind.get(ImportedRecordKind.SHIFT.value, [])
@@ -939,7 +950,9 @@ class HistoricalImportUndoService:
 
         from app.services.attendance_waiver_service import void_pending_for_events
 
-        await void_pending_for_events(self.db, org_id, event_ids, "deleted")
+        self.waiver_notices.extend(
+            await void_pending_for_events(self.db, org_id, event_ids, "deleted")
+        )
         # The session and its requirement links cascade from the event.
         return await self._delete_ids(Event, org_id, event_ids)
 

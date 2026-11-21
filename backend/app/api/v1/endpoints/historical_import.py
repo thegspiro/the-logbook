@@ -26,6 +26,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
@@ -61,6 +62,7 @@ from app.schemas.historical_import import (
     UndoPreview,
     UndoResult,
 )
+from app.services.attendance_waiver_service import send_member_notices
 from app.services.historical_import_service import (
     HistoricalImportLocked,
     HistoricalImportNotFound,
@@ -950,6 +952,15 @@ async def undo_step(
     except Exception as exc:
         await db.rollback()
         raise _http_error(exc)
+    if undo.waiver_notices:
+        # After the commit, so no member is told of a void that rolled back;
+        # never failing the undo, which has already happened.
+        try:
+            await send_member_notices(db, org, undo.waiver_notices)
+        except Exception:
+            logger.exception(
+                "Failed to email the waiver requests import {} voided", import_id
+            )
     await log_audit_event(
         db=db,
         event_type="historical_import_step_undone",

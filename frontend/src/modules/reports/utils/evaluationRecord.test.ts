@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { figureDetail, formatFigure, needsJustification, partItems, withAnswer } from './evaluationRecord';
+import { figureDetail, formatFigure, gradeCounts, needsJustification, partItems, withAnswer } from './evaluationRecord';
 import type { TemplateDefinition, TemplateItem } from '../types/evaluations';
 
 function item(key: string, include = true): TemplateItem {
@@ -122,5 +122,19 @@ describe('figureDetail', () => {
     expect(figureDetail('events.meeting_attendance_pct', { available: true, value: 75 })).toBeNull();
     expect(figureDetail('calls.response_pct', { available: false, value: null, note: 'x' })).toBeNull();
     expect(figureDetail('calls.response_pct', undefined)).toBeNull();
+  });
+});
+
+describe('gradeCounts', () => {
+  const row = (overall_grade: string | null) => ({ overall_grade }) as Parameters<typeof gradeCounts>[0][number];
+
+  it('counts each grade in grade order, then other results, and skips ungraded rows', () => {
+    expect(
+      gradeCounts([row('Outstanding'), row('Needs improvement'), row(null), row('72% (weighted)'), row('Outstanding')])
+    ).toEqual([
+      { label: 'Needs improvement', count: 1 },
+      { label: 'Outstanding', count: 2 },
+      { label: '72% (weighted)', count: 1 },
+    ]);
   });
 });

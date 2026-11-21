@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithRouter } from '../test/utils';
+import { nth, renderWithRouter } from '../test/utils';
 import MyTrainingPage from './MyTrainingPage';
 
 // Mock the services
@@ -552,6 +552,35 @@ describe('MyTrainingPage', () => {
       renderWithRouter(<MyTrainingPage />);
       expect(await screen.findByText('Upcoming Expirations & Due Dates')).toBeInTheDocument();
       expect(screen.getAllByText('Annual Training Hours').length).toBeGreaterThan(0);
+    });
+
+    it('lists optional requirements after the graded ones, outside Upcoming', async () => {
+      mockGetMyTraining.mockResolvedValue({
+        ...mockTrainingData,
+        optional_requirements_detail: [
+          {
+            id: 'req-opt',
+            name: 'Rope Rescue',
+            frequency: 'annual',
+            required_hours: 8,
+            completed_hours: 0,
+            progress_percentage: 0,
+            is_met: false,
+            due_date: '2026-12-15',
+            days_until_due: 20,
+          },
+        ],
+      });
+      renderWithRouter(<MyTrainingPage />);
+
+      const heading = await screen.findByRole('heading', { name: 'Optional' });
+      const gradedCopies = screen.getAllByText('Annual Training Hours');
+      const graded = nth(gradedCopies, gradedCopies.length - 1);
+      const optional = screen.getByText('Rope Rescue');
+      expect(graded.compareDocumentPosition(heading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(heading.compareDocumentPosition(optional)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      // The Upcoming list reads requirements_detail only.
+      expect(screen.getAllByText('Rope Rescue')).toHaveLength(1);
     });
 
     it("shows the member's own leave beside their requirements", async () => {

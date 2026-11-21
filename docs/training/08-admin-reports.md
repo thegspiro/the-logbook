@@ -932,6 +932,21 @@ report shows **Open Work Orders**.
      cover the report on screen even if you have since changed the dates;
    - **Compare** shows the previous period of the same length beside it.
 
+**The downloads** _(2026-11-15)_. The **CSV** has the same columns as before,
+so a spreadsheet built on it keeps working. The **PDF**:
+
+- turns sideways for a wide report, and prints call volume's call types in
+  bands, each labelled, for example "Call types 1–9 of 14";
+- repeats a short header on every page after the first, with the
+  department's logo and name, the report and its period _(2026-11-16)_;
+- shows times in the department's time zone, and who made it;
+- on a report that lists members, prints _"Confidential: contains member
+  records. Do not post or forward."_
+
+The download needs the same permissions as **Generate Report**. If the
+server refuses it, a message says why. A saved report downloads exactly what
+**Run** shows.
+
 **Report results show as cards** _(2026-11-17)_. The report window is never
 wider than about 970 pixels, and most reports have more columns than fit, so
 the results used to scroll sideways with no sign there was more — on a phone
@@ -946,8 +961,8 @@ Roster report._
 **A Source column where rows can come from an import** _(2026-11-19)_. Two
 reports say where each row came from in their **CSV** and **PDF** downloads
 (the on-screen results are unchanged): **Certification Expiration** (the training provider's name for a
-synced record, **Imported** for one the Historical Data Import wrote, otherwise
-**The Logbook**) and **Admin Hours** (**Imported** or **The Logbook**). The
+synced record, **Imported** for one the Historical Data Import or, since
+2026-11-15, a training CSV import wrote, otherwise **The Logbook**) and **Admin Hours** (**Imported** or **The Logbook**). The
 same column is added at the end of the **Export CSV** on Admin Hours' **All
 Entries** tab, of the training record exports (see
 [Training, Bulk and Reporting Exports](./02-training.md#bulk-and-reporting-exports-reports-tab))
@@ -956,6 +971,7 @@ and of the event exports (see
 **Source** is not the same as Admin Hours' **Method** column, which says how
 an entry was logged (clock in, manual, QR). Reports whose rows cannot be told
 apart this way have no Source column, by the owner's decision of 2026-11-16.
+
 **"Today" in a report is the department's date.** The certification report's
 expiring and expired flags, apparatus inspection due dates and the call-volume
 year-to-date all follow the department's clock. A custom range is read the same
@@ -2710,15 +2726,19 @@ Profiles let different groups be held to different standards.
 2. Fill in:
    - **Profile Name** — for example "Line Officers" or "Probationary Members";
    - **Priority** — when a member matches more than one profile, the highest
-     priority applies;
+     priority applies; at equal priority the profile created first applies.
+     The form warns when the number you type ties with another active
+     profile, and a tied profile's card says so, but the save is allowed;
    - **Description**;
    - **Applies to Membership Types**;
    - **Applies to Members Holding a Position** _(2026-10-29)_ — see
      [Scoping a Compliance Profile by Position](./02-training.md#scoping-a-compliance-profile-by-position-2026-10-29);
    - optional **threshold overrides** for this group;
    - **Required Training Requirements** — what must be met;
-   - **Optional/Tracked Requirements** — tracked, but not needed for
-     compliance;
+   - **Optional Requirements** — shown to these members, and to officers, on
+     the member's training page, marked Optional. They never count toward
+     standing or percentage, and no reminders are sent. Ticking a requirement
+     Required takes it out of this list;
    - **Required Admin Hours** — admin-hours categories and the hours required.
 3. Save.
 
@@ -3162,6 +3182,9 @@ have moved, been renamed or work differently.
 
 ### Works differently now
 
+- **Print / PDF is now PDF** _(2026-11-15)_. It downloads a PDF built by the
+  server, with page numbers and a header on every page, instead of opening
+  the browser's print window. Both downloads are recorded in the audit log.
 - **Every email template uses the current design, including ones your
   department edited.** Earlier wording is in each template's **Previous version**
   panel. There is no **CSS Styles** box. If anyone pressed **Reset** expecting to

@@ -1133,12 +1133,12 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           {storedAttachments.length > 0 && (
             <ul className="flex flex-col gap-1.5">
               {storedAttachments.map((stored) => (
-                <li key={stored.index} className="flex items-center gap-2 text-sm">
+                <li key={stored.id ?? stored.index} className="flex items-center gap-2 text-sm">
                   <Paperclip className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
                   <a
                     href={
                       editSubmission
-                        ? trainingSubmissionService.getAttachmentDownloadUrl(editSubmission.id, stored.index)
+                        ? trainingSubmissionService.getAttachmentDownloadUrl(editSubmission.id, stored)
                         : '#'
                     }
                     className="text-theme-text-secondary link-underline truncate"
@@ -1151,7 +1151,6 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                       aria-label={`Remove ${stored.file_name || 'attachment'}`}
                       onClick={() => {
                         const submissionId = editSubmission.id;
-                        const index = stored.index;
                         const fileName = stored.file_name || `Attachment ${stored.index + 1}`;
                         void (async () => {
                           // The file is deleted from the server immediately,
@@ -1167,7 +1166,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                           });
                           if (!agreed) return;
                           try {
-                            await trainingSubmissionService.deleteAttachment(submissionId, index);
+                            await trainingSubmissionService.deleteAttachment(submissionId, stored);
                             setStoredAttachments(await trainingSubmissionService.getAttachments(submissionId));
                           } catch {
                             toast.error('Failed to remove the attachment');

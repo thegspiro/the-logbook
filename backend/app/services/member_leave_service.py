@@ -104,7 +104,17 @@ class MemberLeaveService:
         Unless ``exempt_from_training_waiver`` is True, a matching
         TrainingWaiver is automatically created so the member's training
         requirements are adjusted for the leave period.
+
+        Nobody grants their own leave (owner decision 2026-11-16, ADV2-9): a
+        leave carries a training waiver, so it would let an officer excuse
+        their own requirements. Their own leave goes through a leave request,
+        whose approvers never include the requester.
         """
+        if granted_by is not None and str(granted_by) == str(user_id):
+            raise ValueError(
+                "You cannot grant your own leave of absence. Submit a leave "
+                "request, or ask another officer."
+            )
         # The target user_id is client-supplied — verify it belongs to the
         # caller's org before writing the leave (and its linked waiver), so we
         # don't create org-local rows referencing a foreign member.

@@ -30,7 +30,7 @@ Member performance evaluation endpoints — setup.
 
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -526,6 +526,36 @@ async def list_evaluations(
         current_user,
         period_id=period_id,
         status=status,
+    )
+
+
+@router.get("/export")
+async def export_period_results(
+    period_id: str = Query(min_length=1, max_length=36),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.view_all")),
+):
+    """A review period's evaluations as CSV, with each finalized one's overall
+    grade. Requires ``evaluations.view_all``: grades are personnel content,
+    and a manager runs the process without reading it."""
+    csv_text = await EvaluationService(db).period_results_csv(
+        current_user.organization_id, current_user, period_id
+    )
+    if csv_text is None:
+        raise HTTPException(status_code=404, detail="Review period not found")
+    await _audit(
+        db,
+        current_user,
+        "evaluation_period_exported",
+        {"period_id": period_id},
+    )
+    return Response(
+        content=csv_text,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="evaluation-results.csv"',
+            "Cache-Control": "no-store",
+        },
     )
 
 
