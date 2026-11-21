@@ -41,10 +41,10 @@ runs:
         cache: pip
         cache-dependency-path: backend/requirements.txt
 
+    # Cached: both callers run ffmpeg in tests/test_history_media*.py, and on
+    # an image without it the download is what fails the job.
     - name: Install system dependencies
-      shell: bash
-      run: |
-        "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
+      uses: ./.github/actions/system-deps
 
     - name: Install Python dependencies
       shell: bash

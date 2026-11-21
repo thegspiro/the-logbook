@@ -451,9 +451,10 @@ jobs:
         # Not a bare `apt-get update`: that is unbounded, and on 2026-08-19
         # it stalled long enough to consume a whole job budget. The script
         # skips apt when the library is already there and bounds it when it
-        # is not — see its header for the incident.
-        run: |
-          "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
+        # is not — see its header for the incident. The action caches the
+        # downloaded packages, so an image without ffmpeg does not fetch it
+        # from the mirror on every run.
+        uses: ./.github/actions/system-deps
 
       - name: Install Python dependencies
         run: pip install -r requirements.txt
