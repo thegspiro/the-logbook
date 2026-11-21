@@ -186,10 +186,17 @@ in the future. (Error code: LB-VAL-001)". Fixed with W42-7, which is the same
 formatting. Covered by `errorHandling.test.ts`; the new cases fail against the
 old formatter.
 
-### W40-9 — NIT — The kit member picker calls pool issuances "items assigned" — OPEN
+### W40-9 — NIT — The kit member picker calls pool issuances "items assigned" — ✅ FIXED
 
 Blair Carter's row read "2 items assigned" for 2 pool-issued boxes of gloves.
 Left: the picker is shared, and its count is a total of everything held.
+**Where:** `frontend/src/components/MemberPickerModal.tsx`.
+**Fix:** the row names each kind of holding in the Members page's words,
+from the counts the summary already carries: "2 issued", or "3 permanent · 1
+checked out". The shared picker changes for every caller (kits, items, item
+detail, the admin hub), which is the point, since the total was mislabelled
+everywhere. Covered by `MemberPickerModal.test.tsx`; the new case fails against
+the old row.
 
 ## Checklist
 
@@ -202,7 +209,7 @@ Left: the picker is shared, and its count is a total of everything held.
 | 5. Coming back to it    | ✅ counts and loans survive reload; fixed W40-5 (due date a day early)       |
 | 6. On a phone           | ✅ pool page, Issue dialog and loans page at 390×844                         |
 | 7. Everyone can use it  | Fixed W40-3, W40-4                                                           |
-| 8. What happens around  | Fixed W40-2, W40-8; flagged W40-7; W40-9 open                                |
+| 8. What happens around  | Fixed W40-2, W40-8, W40-9; flagged W40-7                                     |
 
 ## Completion gate
 
