@@ -51,6 +51,7 @@ from app.schemas.apparatus_event import (
     NightSpec,
     ScheduleNightsRequest,
 )
+from app.services.admin_hours_service import AdminHoursService
 from app.services.event_service import attendance_is_finalized
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.utils.member_names import format_display_name
@@ -1187,6 +1188,12 @@ class ApparatusEventService:
                 {"id": str(category_id), "name": name}
                 for category_id, name in categories
             ],
+            # A night with no category of its own is credited through its event
+            # type's mapping; the editor warns when neither would credit the
+            # crew's hours.
+            "mapped_event_types": await AdminHoursService(self.db).mapped_event_types(
+                organization_id
+            ),
         }
 
     # ------------------------------------------------------------------

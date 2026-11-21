@@ -269,7 +269,7 @@ const ApparatusEventsTab: React.FC = () => {
         <EmptyState
           icon={Truck}
           title="Add an apparatus first"
-          description="Apparatus events use the department’s apparatus records, so the Driver seat can follow each unit’s EVOC level. Add your apparatus in the Apparatus module, then come back to build a template."
+          description="Apparatus events use the department’s apparatus records, so the Driver seat can follow each unit’s EVOC level. Ask whoever manages your apparatus to add your units in the Apparatus module, then come back to build a template."
           compact
         />
       ) : templates.length === 0 ? (
