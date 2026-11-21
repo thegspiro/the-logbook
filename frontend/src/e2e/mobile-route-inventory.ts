@@ -1099,8 +1099,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/members/my-crew',
     source: 'src/modules/membership/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/members/leave-requests',
@@ -1148,7 +1148,7 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     path: '/members/admin/settings',
     source: 'src/modules/membership/routes.tsx',
     coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    detail: 'redirect to its first section (Contact Visibility); every section route is inventoried',
   },
   {
     path: '/members/admin/settings/visibility',
