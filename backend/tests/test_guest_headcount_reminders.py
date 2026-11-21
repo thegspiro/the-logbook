@@ -42,7 +42,7 @@ async def _member_by_rank(db_session, org, rank):
     await db_session.execute(
         text(
             "INSERT INTO users (id, organization_id, username, first_name, "
-            "last_name, email, password_hash, status, rank) "
+            "last_name, email, password_hash, status, `rank`) "
             "VALUES (:id, :org, :un, 'Pat', 'Chief', :em, 'hashed', 'active', :rank)"
         ),
         {
