@@ -16,6 +16,12 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+None — Feature 24 (Meetings & minutes, pass 14) is in progress; this commit
+records PR #4504's merge below.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 21, PR #4504, merged), preserved for history</summary>
+
 **PR [#4504](https://github.com/thegspiro/the-logbook/pull/4504)**
 (branch `claude/security-review-medical-supplies-p21` —
 `claude/security-review-medical-supplies-p20` already carries a merged PR,
@@ -33,9 +39,10 @@ forms-rollout rewrite of five frontend components onto the already-reviewed
 **0 fixed, 0 newly flagged.** Full write-up:
 `docs/security-review/MSUP-23-medical-supplies.md`'s **Pass 21** section.
 
-Row 23 → ✅ (pending this PR's merge); next is Feature 24 (Meetings &
-minutes) — re-check `list_pull_requests` fresh rather than trusting this
-note.
+Row 23 → ✅ (merged as `b739fcae`); next was Feature 24 (Meetings &
+minutes).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 15, PR #4503, merged), preserved for history</summary>
@@ -27325,7 +27332,7 @@ iteration's commit" rule.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 17)                                                                                                                                                                                                             | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 14)                                                                                                                                                                                                             | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (31 routes, added pass 13), `historical_staffing_*.py`                                                                                                                                                                | ⬜     |
@@ -27396,6 +27403,65 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-21 — Feature 23 (Medical supplies, pass 21) merged; Feature 24 (Meetings & minutes, pass 14): watchdog pickup, real delta is a whole new member-initiated meeting-waiver workflow, 0 fixed, 0 new findings
+
+PR #4504 merged as `b739fcae`. A fresh `list_pull_requests` (state=open)
+found no `claude/security-review-*` head, and row 24 was the next `⬜` row,
+confirmed directly against the table on a freshly pulled `main`.
+
+Baseline `47d68bce` (pass 13's own merge, PR #4232). The usual per-commit
+`git log --no-merges` mis-showed one commit (`7d542235`) as a whole-file add
+for several of this feature's files — a history-simplification artifact of
+this repo's heavy rebase/re-point history, not a real reset — so the
+cumulative `git diff --stat <baseline>..HEAD` was used as the authority
+throughout, cross-checked against every file read in full.
+
+Two correctness fixes already landed by other work, re-verified rather than
+authored here: `MeetingsService.remove_attendee` now refuses to delete an
+attendee row an approved waiver request wrote (it previously deleted any
+row, which could charge the meeting unexcused while the request still read
+approved), and `AttendanceDashboardService.grant_waiver`'s find-or-create
+gained the row lock this file's own carried-forward note (passes 5–12) had
+flagged as missing — closing that standing item.
+
+The real delta is much larger than those two fixes: a brand-new
+member-initiated business-meeting waiver-request workflow
+(`app/api/v1/endpoints/meeting_waiver_requests.py`, 430 lines, entirely new;
+`AttendanceWaiverService` generalized from a training-only engine to a
+second `WorkflowSpec` bound to `BUSINESS_MEETING`, +2195/−144 lines; three
+entirely new shared frontend pages under `pages/training/` serving both
+workflows; three migrations settling `meeting_attendees` into one row per
+member per meeting). Traced the shared engine's tenant- and
+workflow-isolation end to end for the meeting side specifically: every
+by-id lookup filters `organization_id` **and** `workflow`, the decider pool
+for meetings resolves `meetings.manage`/Secretary positions rather than
+training's Chief/permission, `save_policy` validates position ids in-org
+and the chief-alternate as a current member, and the two paths that can
+write a meeting waiver lock the same parent row in the same order. 98
+routes re-enumerated by AST (up from 81 — the +17 is the new endpoint
+file), all auth-gated; the 14 permission-less ones are in
+`tests/permissionless_route_baseline.txt`, matching the module's documented
+"who decides is a position, not a permission the route could name" design.
+**0 fixed, 0 newly flagged** by this pass. Full write-up:
+`docs/security-review/MM-24-meetings-minutes.md`'s **Pass 14** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 804
+revisions, single head `3daf47506e9e`; `generate_schema_docs.py --check` —
+up to date; `check_route_permissions.py --strict` — 329 routes, 0
+errors/warnings; scoped backend suite (`-k "meeting or minutes or minute or
+quorum or attendance_dashboard or motion or action_item or
+attendance_waiver"`) — 2,144 passed, 1 environment-only skip (`py_vapid`);
+`npm run typecheck` — 0 errors; `npm run lint` — 0 errors/warnings; `npx
+vitest run src/modules/minutes src/pages/ActionItemsPage.test.tsx
+src/pages/training/AttendanceWaiver*.tsx
+src/pages/training/SessionWaiverSettingsPanel.test.tsx` — 545 passed (66
+files).
+
+Row 24 → ✅ (pending this PR's merge); next is Feature 25 (Messaging &
+notifications) — re-check `list_pull_requests` fresh rather than trusting
+this note.
 
 ### 2026-11-21 — Feature 22 (Grants & fundraising, pass 15) merged; Feature 23 (Medical supplies, pass 21): watchdog pickup, 0 fixed, 0 new findings (true re-verification pass)
 
