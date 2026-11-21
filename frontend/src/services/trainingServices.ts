@@ -2364,6 +2364,8 @@ export interface TrainingAttachment {
   index: number;
   /** The entry's stable id. Null only on an entry stored before ids existed. */
   id?: string | null;
+  /** Whether the caller may remove this file; the server decides (owner decision 2026-11-21). */
+  can_remove?: boolean;
   file_name: string | null;
   file_type: string | null;
   file_size: number | null;
@@ -2396,6 +2398,11 @@ export const documentService = {
 
   getAttachmentDownloadUrl(recordId: string, attachment: AttachmentEntryRef): string {
     return `/api/v1/training/records/${recordId}/attachments/${attachmentSegment(attachment)}/download`;
+  },
+
+  /** Remove one file from a training record, by its stable id; a repeat is a no-op. */
+  async deleteAttachment(recordId: string, entryId: string): Promise<void> {
+    await api.delete(`/training/records/${recordId}/attachments/${encodeURIComponent(entryId)}`);
   },
 };
 
