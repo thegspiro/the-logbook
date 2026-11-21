@@ -37,7 +37,7 @@ the timeline switch on titles and the dates entered on titles. Take a database
 backup (``scripts/backup.sh``) before downgrading past this revision.
 
 Revision ID: 9cce83b31c70
-Revises: 3daf47506e9e
+Revises: 1a5c18b46791
 Create Date: 2026-11-21 12:00:00.000000
 
 """
@@ -48,7 +48,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "9cce83b31c70"
-down_revision: Union[str, None] = "3daf47506e9e"
+down_revision: Union[str, None] = "1a5c18b46791"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
