@@ -45,10 +45,19 @@ from app.services.apparatus_event_service import (
     ConflictsNotAcknowledged,
 )
 from app.services.event_service import EventService
+from tests.clock_support import reread_each_test
 
 pytestmark = pytest.mark.integration
 
-FUTURE = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=20)
+
+def _clock() -> dict[str, datetime]:
+    return {
+        "FUTURE": datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=20)
+    }
+
+
+(FUTURE,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 def _night(day_offset: int = 0, hours: int = 3) -> NightSpec:
