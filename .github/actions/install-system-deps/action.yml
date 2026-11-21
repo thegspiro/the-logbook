@@ -1,0 +1,71 @@
+name: Install backend system dependencies
+description: >-
+  Run .github/scripts/install-system-deps.sh with the apt archive cache in
+  front of it, so a runner image without ffmpeg installs the .deb files a
+  previous run downloaded instead of fetching them from the mirror again.
+
+# For the jobs that run ffmpeg: Backend Unit Tests, and the integration and
+# contract jobs through backend-db-setup. Type Check and Security Scan call the
+# script directly with INSTALL_MEDIA_TOOLS=false and download nothing, so they
+# do not need this.
+#
+# ubuntu-26.04 does not ship ffmpeg, and the script then downloads ~66 MB (81
+# packages) through the runner's regional mirror. On 2026-11-18 that mirror was
+# slow enough to fail the install on #4290 and #4386 four times in one day, and
+# raising the script's budget from 240s to 600s (2026-11-19) only gives a slow
+# mirror longer. With the .debs cached, apt still runs `update` and still
+# verifies and installs every package, but downloads only what the cache lacks.
+#
+# On ubuntu-24.04, which ships ffmpeg, the script installs nothing and the
+# saved archive is empty; the release in the key keeps it from being restored
+# on 26.04.
+#
+# A run whose install failed does not save: actions/cache saves only when the
+# job succeeds, so a half-downloaded archive never becomes the cached one.
+
+runs:
+  using: composite
+  steps:
+    # Read from /etc/os-release rather than the image's ImageOS variable, which
+    # is the runner image's own convention and not part of the Actions contract.
+    # The same step in the Mobile Safari job explains why the release must be
+    # in the key: one release's .debs are not another's.
+    - name: Identify the Ubuntu release
+      id: distro
+      shell: bash
+      run: echo "release=$(. /etc/os-release && echo "${ID}-${VERSION_ID}")" >> "$GITHUB_OUTPUT"
+
+    # /var/cache/apt/archives is root-owned, so the cache restore, which runs as
+    # the runner user, cannot write into it without this. apt installs via sudo
+    # whoever owns the directory.
+    - name: Allow the apt cache restore to write the archive directory
+      shell: bash
+      run: sudo mkdir -p /var/cache/apt/archives/partial && sudo chown -R "$(id -u):$(id -g)" /var/cache/apt/archives
+
+    # The script decides which packages to install, so its hash is in the key.
+    # The restore key lets a changed script start from the previous archive;
+    # apt fetches only what that archive lacks.
+    - name: Cache apt packages for backend system dependencies
+      uses: actions/cache@v6
+      with:
+        path: /var/cache/apt/archives
+        key: apt-system-deps-${{ runner.os }}-${{ steps.distro.outputs.release }}-${{ hashFiles('.github/scripts/install-system-deps.sh') }}
+        restore-keys: |
+          apt-system-deps-${{ runner.os }}-${{ steps.distro.outputs.release }}-
+
+    # Not a bare `apt-get update`: that is unbounded, and on 2026-08-19 it
+    # stalled long enough to consume a whole job budget. The script skips apt
+    # when the library is already there and bounds it when it is not — see its
+    # header for the incident.
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
+
+    # apt hands archives/partial back to its `_apt` user, mode 0700, while it
+    # installs. The post-job save runs tar as the runner user and would drop
+    # the save with a warning ("Cannot open: Permission denied"), as the Mobile
+    # Safari job's cache did until it took the directory back the same way.
+    - name: Let the post-job cache save read the apt archive directory
+      shell: bash
+      run: sudo chown -R "$(id -u):$(id -g)" /var/cache/apt/archives
