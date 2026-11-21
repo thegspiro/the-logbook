@@ -16,8 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — Feature 23 (Medical supplies, pass 21) is in progress; this commit
-records PR #4503's merge below.
+**PR [#4504](https://github.com/thegspiro/the-logbook/pull/4504)**
+(branch `claude/security-review-medical-supplies-p21` —
+`claude/security-review-medical-supplies-p20` already carries a merged PR,
+#4228 pass 20, so this pass uses a `-p21` suffix per CLAUDE.md Pitfall
+#24): Feature 23 (Medical supplies), pass 21 — watchdog pickup (the
+dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). PR #4503
+(Feature 22, Grants & fundraising, pass 15) merged (`fd8cc24c`) since the
+last iteration; row 22 marked ✅ below. Real delta since pass 20 (baseline
+`c0baae03`): backend's own files are byte-identical to pass 20; the actual
+delta is an unrelated plan-metadata field, an equipment-check-failure-alert
+recipients fix belonging to a different, already-✅ feature, and a
+forms-rollout rewrite of five frontend components onto the already-reviewed
+`FormField`/`useFieldErrors`/`useDiscardGuard`/`saveExceptRefused` pattern.
+**0 fixed, 0 newly flagged.** Full write-up:
+`docs/security-review/MSUP-23-medical-supplies.md`'s **Pass 21** section.
+
+Row 23 → ✅ (pending this PR's merge); next is Feature 24 (Meetings &
+minutes) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 15, PR #4503, merged), preserved for history</summary>
