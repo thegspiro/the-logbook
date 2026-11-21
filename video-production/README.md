@@ -129,6 +129,12 @@ Write narration for the ear. The voice slurs some pairings whatever the take:
 "Tap Submit" reliably became "tax submit", so 8B says "Tap the Submit Training
 button". If a line warns, reword it.
 
+A word the voice cannot say at all, in any wording, gets a respelling. Put the
+line as it should be heard in `say`, which captions nothing but is what the
+check scores against, and the respelt line in `speak`, which is what the voice
+reads. "Schedule" is the one so far: across five takes each, "Schedule" was
+heard right once and "Sked-yool" four times, so 8H's line speaks the second.
+
 To see what a capture sends while it runs, set `VIDEO_DEBUG=1`: the 8E
 capture logs each request that changes something and each console error.
 
