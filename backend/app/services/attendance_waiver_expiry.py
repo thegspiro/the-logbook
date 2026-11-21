@@ -149,7 +149,8 @@ class AttendanceWaiverExpiry:
 
         The date bound is the calendar half of ``expires_at_for`` (due once
         the department's date is at least eight days after the session), so
-        only those rows are read; the event half is then checked per row.
+        only those rows are read; the event and reconfirmation halves, which
+        only ever make a request due later, are then checked per row.
         """
         latest_session = local_date(now, tz) - timedelta(days=EXPIRY_DAYS + 1)
         rows = (
@@ -158,6 +159,7 @@ class AttendanceWaiverExpiry:
                     AttendanceWaiverRequest.id,
                     AttendanceWaiverRequest.event_id,
                     AttendanceWaiverRequest.session_date,
+                    AttendanceWaiverRequest.reconfirm_requested_at,
                 )
                 .where(
                     AttendanceWaiverRequest.organization_id == org_id,
@@ -183,7 +185,10 @@ class AttendanceWaiverExpiry:
             for r in rows
             if now
             >= expires_at_for(
-                r.session_date, tz, events.get(str(r.event_id)) if r.event_id else None
+                r.session_date,
+                tz,
+                events.get(str(r.event_id)) if r.event_id else None,
+                r.reconfirm_requested_at,
             )
         ]
 
@@ -236,7 +241,9 @@ class AttendanceWaiverExpiry:
                     )
                 )
             ).scalar_one_or_none()
-        if now < expires_at_for(request.session_date, tz, event):
+        if now < expires_at_for(
+            request.session_date, tz, event, request.reconfirm_requested_at
+        ):
             await self.db.rollback()
             return None
 

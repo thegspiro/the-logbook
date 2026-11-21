@@ -360,7 +360,10 @@ only) sends it back to the deciders, unless the member has since checked in or,
 for a meeting, a leave or the Secretary now excuses them, in which case it is
 refused and the member withdraws instead. A denied request is never touched. A
 change that leaves the start alone does nothing, and a second run for one move
-writes nothing. A member who never answers is closed by the seven-day expiry.
+writes nothing. A member who never answers is closed by the seven-day expiry,
+which for a request waiting on its member runs at least seven days from the
+notice: a start corrected weeks after the session still gives the member a
+week to answer before the session counts as missed.
 
 **Where it is in the app.**
 

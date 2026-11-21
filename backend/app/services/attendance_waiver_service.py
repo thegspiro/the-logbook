@@ -368,7 +368,10 @@ EXPIRY_DEADLINE_PRESET = "7d_after_end"
 
 
 def expires_at_for(
-    session_date: date, tz: ZoneInfo, event: Optional[Event]
+    session_date: date,
+    tz: ZoneInfo,
+    event: Optional[Event],
+    reconfirm_requested_at: Optional[datetime] = None,
 ) -> datetime:
     """The instant a still-pending request for this session expires, in UTC.
 
@@ -380,11 +383,22 @@ def expires_at_for(
     deadline would close for the event, while the event exists: the second
     term means a request can never expire while it could still be submitted,
     which matters for a session that runs past its own start date.
+
+    A request waiting on the member to confirm a moved start
+    (``reconfirm_requested_at``) also stays open for ``EXPIRY_DAYS`` after it
+    was asked. A start corrected weeks after the session is still a move (owner
+    decision, 2026-11-13), and measured from the session alone that request
+    would already be overdue, so the next sweep would charge the member before
+    they could answer.
     """
-    day_end = local_day_start_utc(session_date + timedelta(days=EXPIRY_DAYS + 1), tz)
-    if event is None:
-        return day_end
-    return max(day_end, deadline_for(EXPIRY_DEADLINE_PRESET, event))
+    candidates = [
+        local_day_start_utc(session_date + timedelta(days=EXPIRY_DAYS + 1), tz)
+    ]
+    if event is not None:
+        candidates.append(deadline_for(EXPIRY_DEADLINE_PRESET, event))
+    if reconfirm_requested_at is not None:
+        candidates.append(_utc(reconfirm_requested_at) + timedelta(days=EXPIRY_DAYS))
+    return max(candidates)
 
 
 def _cap_period_label(period: CapPeriod, day: date, noun: str = "session") -> str:
@@ -2005,6 +2019,7 @@ class AttendanceWaiverService:
                 r.session_date,
                 tz,
                 events.get(str(r.event_id)) if r.event_id else None,
+                r.reconfirm_requested_at,
             )
             for r in pending
         }
@@ -2878,7 +2893,8 @@ async def reconfirm_for_rescheduled_events(
     notices, for ``send_member_notices``.
 
     A member who never answers is not chased: the expiry task closes a request
-    still pending seven days after its (new) session.
+    still pending seven days after its (new) session, and never sooner than
+    seven days after this notice (``expires_at_for``).
     """
     ids = [str(e) for e in event_ids if e]
     if not ids:

@@ -10728,8 +10728,19 @@ option was taken; each is open for the owner to revisit.
   to `/meetings/waiver-requests/{id}`, which the frontend does not have until
   the meeting screens land; the member's notice links to the event. Until then
   the policy can be saved only through the API, so no prompt is sent.
-- **Postponing an event does not touch its waiver requests.** A request keeps
-  the session date it was made for (training and meetings alike).
+- **A moved start reopens a decided request, even when the move is a
+  correction made after the session** _(corrected 2026-11-21; this line used
+  to say postponing left requests alone, which stopped being true with the
+  2026-11-13 reschedule decision)_. Any change to a pending or approved
+  request's start sends it back to the member to confirm, and an approved
+  meeting request's waiver comes off the minutes until they do. Since
+  2026-11-21 the member always gets seven days from that notice to answer
+  (`expires_at_for` reads `reconfirm_requested_at`); before, a start fixed
+  more than eight days after the session expired the request on the next
+  hourly sweep and charged the meeting as missed. **For the owner:** whether a
+  correction to a session already held — or one that keeps the same local
+  date, such as 19:00 fixed to 19:30 — should reopen the decision at all. Not
+  reopening it would change the 2026-11-13 decision, so it was not done here.
 - **`idx_meeting_attendees_meeting` is now a prefix of the new unique
   `(meeting_id, user_id)` index** and could be dropped; it was left to keep
   the migration to what the feature needs.
