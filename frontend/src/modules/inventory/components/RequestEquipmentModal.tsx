@@ -519,7 +519,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
                 <span className="text-theme-text-primary block text-sm font-medium">{product.name}</span>
                 <span className="text-theme-text-muted mt-0.5 block text-xs">
                   {[product.category_name, availabilityNote(product)].filter(Boolean).join(' · ')}
-                  {product.has_sizes && ` · ${product.variants.length} sizes`}
+                  {product.has_sizes && ` · ${product.variants.length} size${product.variants.length === 1 ? '' : 's'}`}
                 </span>
               </button>
             ))}

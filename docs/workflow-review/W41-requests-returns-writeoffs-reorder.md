@@ -183,9 +183,13 @@ Denied here with a note. Nothing was retired.
 
 It may need a migration. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
 
-### W41-7 — NIT — Request Equipment says "1 sizes" — OPEN
+### W41-7 — NIT — Request Equipment says "1 sizes" — ✅ FIXED
 
 Structural Coat's catalog row read "None on hand — you can still ask · 1 sizes".
+**Where:** `frontend/src/modules/inventory/components/RequestEquipmentModal.tsx`.
+**Fix:** the count is singular for one size ("· 1 size") and plural otherwise.
+Covered by a new case in `RequestEquipmentModal.test.tsx`, which fails against
+the old row.
 
 ## Checklist
 
@@ -198,7 +202,7 @@ Structural Coat's catalog row read "None on hand — you can still ask · 1 size
 | 5. Coming back to it    | ✅ decisions and notes reach the member's list after reload                                           |
 | 6. On a phone           | ✅ Request Equipment and the return notice at 390×844                                                 |
 | 7. Everyone can use it  | Fixed W41-3, W41-4                                                                                    |
-| 8. What happens around  | Flagged W41-5, W41-6; W41-7 open                                                                      |
+| 8. What happens around  | Flagged W41-5, W41-6; fixed W41-7                                                                     |
 
 ## Completion gate
 
