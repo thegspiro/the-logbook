@@ -10986,3 +10986,48 @@ each case):
 
 Related, still open: **LIFE-11** (the separation letter in Documents), and the
 Member Files personal-folder documents, which neither path touches.
+
+## Apparatus — Three Decisions From App Review B2 Pass 6 (2026-11-20)
+
+Recorded rather than changed, because each one alters what a department sees.
+Findings, code references and failure scenarios are in
+`docs/app-review/apparatus.md` → Pass 6.
+
+### AP2-13 — The odometer and engine hours can move backwards
+
+A fuel log, a status change and an apparatus edit each overwrite the vehicle's
+`current_mileage` / `current_hours` with whatever was entered, and stamp the
+`*_updated_at` time with now even when the fill was backdated. Entering last
+month's receipt at 48,000 miles on a truck reading 52,000 sets it back to
+48,000, and every mileage-based figure reads from there.
+
+**The decision:** only ever raise the reading (a lower one is kept on the fuel
+log but does not move the vehicle), or refuse a lower one outright. Either
+needs a way through for a replaced or corrected odometer, such as an officer
+override on the apparatus edit.
+
+### AP2-14 — Re-activating a former member's operator record skips the current-member check
+
+Adding an operator refuses anyone who is not a current member. Editing an
+existing operator record does not: a record left from before the member
+departed can be set back to active and certified, putting them back on the
+driver roster. The create path keeps such records editable on purpose, so
+notes and dates on them can still be corrected.
+
+**The decision:** whether setting `is_active` (or `is_certified`) back to true
+counts as a new certification, and so refuses a former member the way adding
+one does.
+
+### AP2-15 — Apparatus custom-field definitions are stored and never read
+
+The custom-field definitions (`apparatus_custom_fields`: required flag,
+options, minimum and maximum, length, pattern) have API endpoints and no
+screen, and nothing on the backend checks an apparatus's
+`custom_field_values` against them. Renaming a definition's key leaves every
+stored value under the old key; deleting one leaves its values behind. This is
+the shape CLAUDE.md pitfall #19 warns about: configuration whose only effect is
+being stored.
+
+**The decision:** build the reader (validate values on apparatus create and
+update, migrate values when a key is renamed) and a management screen, or
+retire the definitions.

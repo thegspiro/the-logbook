@@ -11,6 +11,7 @@ import type { ApparatusFuelLog } from '../types';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 import { FuelLogModal } from './FuelLogModal';
+import { useAuthStore } from '../../../stores/authStore';
 
 interface FuelLogsTabProps {
   fuelLogs: ApparatusFuelLog[];
@@ -22,6 +23,12 @@ interface FuelLogsTabProps {
 
 export const FuelLogsTab: React.FC<FuelLogsTabProps> = ({ fuelLogs, loadingTab, timezone, apparatusId, onRefresh }) => {
   const [showModal, setShowModal] = useState(false);
+  // The backend records a fuel log for maintenance, edit or manage.
+  const checkPermission = useAuthStore((state) => state.checkPermission);
+  const canRecord =
+    checkPermission('apparatus.maintenance') ||
+    checkPermission('apparatus.edit') ||
+    checkPermission('apparatus.manage');
 
   return (
     <>
@@ -31,9 +38,11 @@ export const FuelLogsTab: React.FC<FuelLogsTabProps> = ({ fuelLogs, loadingTab, 
             <Fuel className="h-5 w-5" />
             Fuel Logs
           </h2>
-          <button onClick={() => setShowModal(true)} className="btn-primary text-sm">
-            Add Fuel Log
-          </button>
+          {canRecord && (
+            <button onClick={() => setShowModal(true)} className="btn-primary text-sm">
+              Add Fuel Log
+            </button>
+          )}
         </div>
         {loadingTab ? (
           <div className="py-8 text-center">
@@ -41,7 +50,7 @@ export const FuelLogsTab: React.FC<FuelLogsTabProps> = ({ fuelLogs, loadingTab, 
           </div>
         ) : fuelLogs.length === 0 ? (
           <p className="text-theme-text-muted py-8 text-center">
-            No fuel logged yet. Select Add Fuel Log to record a fill-up.
+            No fuel logged yet.{canRecord && ' Select Add Fuel Log to record a fill-up.'}
           </p>
         ) : (
           <div className="rwd-table-container overflow-x-auto">
