@@ -50,6 +50,7 @@ from app.services.training_waiver_service import (
     override_covers,
     total_months_in_period,
 )
+from app.utils.compliance_profiles import ordered_profiles
 from app.utils.hours import meets_required_hours
 from app.utils.membership import MemberStatus, canonical_member_status
 from app.utils.org_timezone import (
@@ -2110,9 +2111,12 @@ def _find_matching_profile(
     member: User,
     profiles: List[ComplianceProfile],
 ) -> Optional[ComplianceProfile]:
-    """Find the highest-priority active profile that matches a member.
+    """Find the first active profile, in resolution order, that matches a member.
 
-    Matches by membership_type and/or role_ids. A profile with no
+    The order is :func:`app.utils.compliance_profiles.ordered_profiles`:
+    higher priority first, then the older profile, then the smaller id, so a
+    caller may pass profiles in any order. Matches by membership_type and/or
+    role_ids. A profile with no
     membership_types and no role_ids matches all members. Returns None
     if no profile matches.
     """
@@ -2137,7 +2141,7 @@ def _find_matching_profile(
             if position_id:
                 member_role_ids.append(str(position_id))
 
-    for profile in profiles:
+    for profile in ordered_profiles(profiles):
         if not profile.is_active:
             continue
 
@@ -2644,6 +2648,12 @@ class MemberGrading:
     requirements: List[TrainingRequirement]
     compliant_threshold: float
     at_risk_threshold: float
+    # The matched profile's optional requirements that apply to the member:
+    # listed on the member's training page, never graded (owner decision
+    # 2026-11-21). Kept beside ``requirements`` rather than inside it so no
+    # tally, notice, export or matrix that reads ``requirements`` can count
+    # one by accident.
+    optional_requirements: List[TrainingRequirement] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -2663,7 +2673,8 @@ class ComplianceGrading:
     at_risk_threshold: float = 75.0
     threshold_type: str = "percentage"
     include_current_month: bool = True
-    # Highest priority first: _find_matching_profile takes the first match.
+    # In resolution order (ordered_profiles); _find_matching_profile takes
+    # the first match and re-applies the order for callers that do not.
     profiles: Tuple[ComplianceProfile, ...] = ()
 
     @classmethod
@@ -2676,9 +2687,7 @@ class ComplianceGrading:
             at_risk_threshold=config.at_risk_threshold,
             threshold_type=config.threshold_type or "percentage",
             include_current_month=bool(config.include_current_month),
-            profiles=tuple(
-                sorted(config.profiles or [], key=lambda p: p.priority, reverse=True)
-            ),
+            profiles=tuple(ordered_profiles(config.profiles or [])),
         )
 
     def for_member(
@@ -2688,10 +2697,14 @@ class ComplianceGrading:
 
         A matching profile narrows the requirement list and may override the
         thresholds; then every requirement that does not apply to the member
-        (``requirement_applies_to_user``) is dropped. ``member.positions``
+        (``requirement_applies_to_user``) is dropped. The profile's optional
+        requirements are resolved the same way into ``optional_requirements``
+        and never graded; with no required list set, they are also left out
+        of the graded set. ``member.positions``
         must be loaded when any profile exists.
         """
         member_reqs = list(requirements)
+        optional_reqs: List[TrainingRequirement] = []
         compliant_threshold = self.compliant_threshold
         at_risk_threshold = self.at_risk_threshold
         profile = (
@@ -2700,17 +2713,28 @@ class ComplianceGrading:
             else None
         )
         if profile:
+            by_id = {str(r.id): r for r in requirements}
+            required_ids = profile.required_requirement_ids
+            # Required wins when an id is in both lists; an id for a deleted
+            # or inactive requirement is not in by_id and drops out.
+            required_set = set(required_ids or [])
+            optional_ids = [
+                rid
+                for rid in (profile.optional_requirement_ids or [])
+                if rid in by_id and rid not in required_set
+            ]
+            optional_reqs = [by_id[rid] for rid in optional_ids]
             # `is not None`, not truthy: a profile that explicitly selects zero
             # required requirements (`[]`, "nothing is required for this
             # group") must not fall through to grading against every org-wide
             # requirement — `[]` and "never set" (`None`) differ. See CMP2-3.
-            if profile.required_requirement_ids is not None:
-                by_id = {str(r.id): r for r in requirements}
-                member_reqs = [
-                    by_id[rid]
-                    for rid in profile.required_requirement_ids
-                    if rid in by_id
-                ]
+            if required_ids is not None:
+                member_reqs = [by_id[rid] for rid in required_ids if rid in by_id]
+            elif optional_ids:
+                # Never set grades every requirement except the ones the
+                # profile calls optional, as the editor and guides promise.
+                optional_set = set(optional_ids)
+                member_reqs = [r for r in requirements if str(r.id) not in optional_set]
             # Threshold overrides apply whenever the profile matched,
             # independent of whether it also narrows the list (CMP2-3).
             if profile.compliant_threshold_override is not None:
@@ -2726,6 +2750,9 @@ class ComplianceGrading:
             ],
             compliant_threshold=compliant_threshold,
             at_risk_threshold=at_risk_threshold,
+            optional_requirements=[
+                req for req in optional_reqs if requirement_applies_to_user(req, member)
+            ],
         )
 
     def classify(
