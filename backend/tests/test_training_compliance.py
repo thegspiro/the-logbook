@@ -1570,41 +1570,6 @@ class TestCheckRequirementProgressZeroTarget:
         assert progress.percentage_complete == 0.0
 
 
-class TestProjectedStanding:
-    """The compliance forecast's per-member figures and standings (TR4-4).
-
-    Formerly ``_forecast_pct``; the figures are the same, now taken from the
-    member's own classification so each comes with its standing (owner
-    direction 2026-11-21).
-    """
-
-    @staticmethod
-    def _project(met, total, expiring, compliant=100.0, at_risk=75.0):
-        from app.services.training_compliance import ComplianceGrading, MemberGrading
-        from app.services.training_enhancement_service import _project
-
-        grading = ComplianceGrading()
-        member = MemberGrading(
-            requirements=[], compliant_threshold=compliant, at_risk_threshold=at_risk
-        )
-        return _project(grading, member, met, total, expiring)
-
-    def test_member_nothing_grades_has_no_percentage(self):
-        # Was 100 for every horizon, which the compliance officer dashboard
-        # then averaged into the department's "current" figure.
-        assert self._project(0, 0, 0) == ("not_applicable", None)
-        assert self._project(0, 0, 2) == ("not_applicable", None)
-
-    def test_expiring_certifications_lower_the_forecast(self):
-        assert self._project(2, 4, 0) == ("non_compliant", 50.0)
-        assert self._project(2, 4, 1) == ("non_compliant", 25.0)
-        assert self._project(2, 4, 3) == ("non_compliant", 0.0)
-
-    def test_standing_uses_the_members_thresholds(self):
-        assert self._project(3, 4, 0) == ("at_risk", 75.0)
-        assert self._project(2, 4, 0, compliant=50, at_risk=25) == ("compliant", 50.0)
-
-
 class TestClassifyAverage:
     """A department forecast average, by the department's thresholds and
     threshold type (owner direction 2026-11-21)."""

@@ -7255,18 +7255,24 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   in `ComplianceOfficerDashboard.test.tsx` and
   `TrainingEnhancementsTab.test.tsx`.
 - **The compliance forecast's projection charges every certificate expiring
-  in the window — open, owner decision pending.** The 30/60/90-day estimate
-  subtracts one met requirement for each completed record whose expiry falls
-  in the window, including a certificate no graded requirement reads and a
-  superseded record whose renewal already exists. Since 2026-11-21 that
-  estimate drives a standing colour, so on a default install (100 / 75, no
-  profiles) a fully compliant member with three graded requirements and one
-  unrelated certificate expiring in 20 days reads 66.7% non-compliant (red)
-  at 30 days; with four requirements, 75.0% at risk. The estimate's inputs
-  were deliberately not changed. The options are to keep colouring the
-  estimate as it is, to narrow it to certificates a graded requirement reads
-  (and skip superseded renewals), or to re-grade each requirement at today +
-  N days.
+  in the window — ✅ fixed (owner decision 2026-11-21: re-grade at today +
+  N).** The 30/60/90-day estimate subtracted one met requirement for each
+  completed record whose expiry fell in the window, including a certificate
+  no graded requirement reads and a superseded record whose renewal already
+  exists, so on a default install a fully compliant member with three
+  requirements and one unrelated certificate expiring in 20 days read 66.7%
+  non-compliant at 30 days. Each projection is now
+  `training_compliance.grade_members` — the matrix's grader — run as of
+  today + 30, 60 and 90 days on the records already logged, by the member's
+  own thresholds. Ungraded and superseded certificates cost nothing, and
+  lapses that are not certificate expiries are now charged: a rolling window
+  letting old hours fall out, a catch-up period ending, and a calendar period
+  rolling into a new one with nothing logged in it yet (viewed on 21
+  November, a member who has met this year's annual requirement reads it unmet
+  at 60 and 90 days, because those days fall in next year's period).
+  The projections assume nothing new is logged; the screens now say so. The
+  "expiring certifications" list and count are unchanged and informational.
+  Tests: `tests/test_compliance_forecast_horizons.py`.
 - **A requirement with zero currently-applicable members renders as a
   failing 0% (CMP4-4, LOW) — ✅ fixed 2026-09-29, workflow review W29-4.**
   `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`
