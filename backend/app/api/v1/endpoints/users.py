@@ -1525,6 +1525,11 @@ async def assign_user_roles(
     # first would both hide the retained positions from that diff (so their
     # rows would never be re-inserted) and leave the loaded collection stale,
     # making the delete of a dropped position raise StaleDataError.
+    # Named before the assignment replaces the loaded collection: the audit row
+    # says what changed, which the resulting id list alone cannot (W11-13).
+    roles_added = sorted(r.name for r in roles if str(r.id) not in held)
+    roles_removed = sorted(r.name for r in user.roles if str(r.id) not in kept_ids)
+
     note_position_actor(db, current_user.id)
     user.roles = roles
     await db.commit()
@@ -1555,6 +1560,8 @@ async def assign_user_roles(
             "target_user_id": str(user_id),
             "role_ids": [str(r) for r in role_assignment.role_ids],
             "action": "roles_replaced",
+            "roles_added": roles_added,
+            "roles_removed": roles_removed,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -3490,6 +3497,15 @@ async def delete_photo(
     return {"message": "Photo removed successfully"}
 
 
+def _stored_name_in_words(name: object) -> str:
+    """A stored field name or status as the officer reads it (W11-11).
+
+    The history is read by people: "membership_number" and "dropped_voluntary"
+    are how the rows store them, not what the screen should say.
+    """
+    return str(name).replace("_", " ")
+
+
 # Human-readable descriptions for audit event types
 _AUDIT_EVENT_DESCRIPTIONS = {
     "user_created": "Member account created",
@@ -3637,7 +3653,9 @@ async def get_member_audit_history(
         if log.event_type == "user_profile_updated":
             fields = data.get("fields_updated", [])
             if fields:
-                description += f": {', '.join(fields)}"
+                description += ": " + ", ".join(
+                    _stored_name_in_words(f) for f in fields
+                )
         elif log.event_type == "user_role_assigned":
             action = data.get("action", "")
             role_name = data.get("role_name", "")
@@ -3646,12 +3664,31 @@ async def get_member_audit_history(
             elif action == "role_removed" and role_name:
                 description = f"Role removed: {role_name}"
             elif action == "roles_replaced":
-                description = "All roles replaced"
+                added = data.get("roles_added")
+                removed = data.get("roles_removed")
+                if added is None and removed is None:
+                    # Written before W11-13: only the resulting ids were kept.
+                    description = "All roles replaced"
+                else:
+                    parts = []
+                    if added:
+                        parts.append(f"added {', '.join(added)}")
+                    if removed:
+                        parts.append(f"removed {', '.join(removed)}")
+                    description = (
+                        f"Positions changed: {'; '.join(parts)}"
+                        if parts
+                        else "Positions saved with no change"
+                    )
         elif log.event_type == "member_status_changed":
             prev = data.get("previous_status", "")
             new = data.get("new_status", "")
             if prev and new:
-                description = f"Status changed: {prev} → {new}"
+                description = (
+                    "Status changed: "
+                    f"{_stored_name_in_words(prev).capitalize()} → "
+                    f"{_stored_name_in_words(new).capitalize()}"
+                )
 
         entries.append(
             MemberAuditLogEntry(
@@ -3768,6 +3805,13 @@ async def anonymize_member(
             "self_report_files_deleted": summary["self_report_files_deleted"],
             "self_report_files_not_deleted": summary["self_report_files_not_deleted"],
             "self_report_files_shared_kept": summary["self_report_files_shared_kept"],
+            "training_record_files_deleted": summary["training_record_files_deleted"],
+            "training_record_files_not_deleted": summary[
+                "training_record_files_not_deleted"
+            ],
+            "training_record_files_shared_kept": summary[
+                "training_record_files_shared_kept"
+            ],
         },
         **_request_origin(request),
     )

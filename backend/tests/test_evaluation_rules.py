@@ -21,7 +21,9 @@ from app.services.evaluation_service import (
     completeness_errors,
     form_definition,
     form_items,
+    previous_review_summary,
     shape_errors,
+    standing_overall,
     weighted_overall,
 )
 from app.services.scheduling_service import SchedulingService
@@ -432,3 +434,135 @@ class TestWeightedOverall:
 
     def test_nothing_rated_is_no_overall(self):
         assert weighted_overall(_content(), self.items) is None
+
+
+class TestPreviousReviewSummary:
+    DEFINITION = TemplateDefinition.model_validate(
+        {
+            "overall_mode": "sectioned",
+            "sections": [
+                {
+                    "key": "duty",
+                    "title": "Duty",
+                    "weight": 100,
+                    "items": [
+                        {
+                            "key": "skills",
+                            "label": "Skills",
+                            "tool": "labeled_scale",
+                            "levels": LEVELS,
+                            "weight": 100,
+                        },
+                        {
+                            "key": "next_year",
+                            "label": "Goals for next year",
+                            "tool": "goals",
+                        },
+                        {"key": "notes", "label": "Notes", "tool": "narrative"},
+                    ],
+                }
+            ],
+        }
+    )
+
+    def _view(self, *, grades=None, answers=None):
+        parts = []
+        if answers is not None:
+            parts.append(
+                {
+                    "kind": "evaluator",
+                    "content": PartContent.model_validate({"answers": answers}),
+                }
+            )
+        return {
+            "id": "prev",
+            "period_name": "2025 Annual",
+            "period_start": date(2025, 1, 1),
+            "period_end": date(2025, 12, 31),
+            "definition": self.DEFINITION,
+            "grades": grades,
+            "weighted_overall": None,
+            "parts": parts,
+        }
+
+    def test_the_grade_that_stood_and_the_goals_set(self):
+        # A view carries the grades its own evaluator part yields: a 4 on the
+        # form's only scored item grades the section and the form alike.
+        grades = {
+            "overall": {"label": "Exceeds expectations"},
+            "sections": [
+                {"key": "duty", "title": "Duty", "label": "Exceeds expectations"}
+            ],
+        }
+        answers = {
+            "skills": {"rating": 4},
+            "next_year": {"text": "  Finish driver training.  "},
+            "notes": {"text": "Not a goal."},
+        }
+
+        summary = previous_review_summary(self._view(grades=grades, answers=answers))
+
+        assert summary == {
+            "evaluation_id": "prev",
+            "period_name": "2025 Annual",
+            "period_start": date(2025, 1, 1),
+            "period_end": date(2025, 12, 31),
+            "overall": "Exceeds expectations",
+            "sections": [
+                {"key": "duty", "title": "Duty", "label": "Exceeds expectations"}
+            ],
+            "goals": [
+                {
+                    "key": "next_year",
+                    "label": "Goals for next year",
+                    "text": "Finish driver training.",
+                }
+            ],
+        }
+
+    def test_a_viewer_who_may_read_neither_grades_nor_part_gets_none(self):
+        assert previous_review_summary(self._view()) is None
+
+    def test_a_blank_goal_is_not_listed(self):
+        summary = previous_review_summary(
+            self._view(
+                grades={"overall": {"label": "Meets expectations"}, "sections": []},
+                answers={"skills": {"rating": 3}, "next_year": {"text": "   "}},
+            )
+        )
+        assert summary is not None
+        assert summary["goals"] == []
+
+
+class TestStandingOverall:
+    """One definition of a review's overall result, for the last-review panel,
+    the conduct list and the period export."""
+
+    def test_a_sectioned_form_gives_the_evaluators_override_when_there_is_one(self):
+        definition = TestPreviousReviewSummary.DEFINITION
+        calculated = PartContent.model_validate({"answers": {"skills": {"rating": 4}}})
+        overridden = PartContent.model_validate(
+            {
+                "answers": {"skills": {"rating": 4}},
+                "overall_rating": 5,
+                "overall_override_reason": "Led the county drill.",
+            }
+        )
+
+        assert standing_overall(definition, calculated) == "Exceeds expectations"
+        assert standing_overall(definition, overridden) == "Outstanding"
+
+    def test_a_weighted_form_gives_its_percentage(self):
+        content = PartContent.model_validate({"answers": {"attendance": {"rating": 4}}})
+        expected = weighted_overall(content, form_items(DEFINITION, "evaluator"))
+        assert expected is not None
+        assert standing_overall(DEFINITION, content) == f"{expected:g}% (weighted)"
+
+    def test_an_evaluator_rated_form_gives_the_rating_chosen(self):
+        definition = DEFINITION.model_copy(update={"overall_mode": "evaluator"})
+        content = PartContent.model_validate({"answers": {}, "overall_rating": 2})
+        assert standing_overall(definition, content) == "Needs improvement"
+
+    def test_nothing_to_report_is_none(self):
+        definition = DEFINITION.model_copy(update={"overall_mode": "none"})
+        assert standing_overall(definition, PartContent()) is None

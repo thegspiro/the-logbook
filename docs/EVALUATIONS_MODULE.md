@@ -261,12 +261,15 @@ They are **never scored** (`DataSource.scored=False`: a count of waivers is not
 a grade), and they **never carry the member's reason, a decider's note or an
 attachment**: an evaluation is permanent, the member reads it, and any of the
 three may be medical. The rows are read column by column, so neither text is
-loaded at all. `attachment_on_file` says whether a file is on file for the
-request, read from `attendance_waiver_attachments`; never the file, its name
-or how many. The evaluation screens and the PDF show the summary's
-`breakdown` beside the count _(2026-11-13)_, and the history lines say what
-became of each request. Adding these sources changed the stored
-shape of no existing entry, so `SNAPSHOT_VERSION` stays 2.
+loaded at all. `attachment_on_file` says whether at least one document is
+on file for the request, read from `attendance_waiver_attachments`
+(`_waiver_attachments_on_file`), and nothing else about it: not its name,
+type, size or how many. Attachments are deleted `attachment_retention_days`
+after a request closes, so the flag reports what was on file when the snapshot
+was taken. The evaluation screens and PDF show the summary's `breakdown`
+beside its count, and the history lines say what became of each request.
+Adding these sources changed the stored shape of no existing entry, so
+`SNAPSHOT_VERSION` stays 2.
 
 ## Workflow
 
@@ -315,6 +318,40 @@ that up.
   the member. Records are listed at `GET /removed` (officers) and
   `GET /mine/removed` (the member).
 
+## The last review
+
+Every evaluation read (`GET /{id}` and each write that returns the evaluation)
+carries `previous_review`: the member's most recent finalized evaluation on the
+same template, whatever its version, whose period ended before this one began.
+It holds that review's period, the overall grade and each section's grade that
+stood (the evaluator's where they changed the calculated one; a weighted form
+gives its percentage, an evaluator-rated form its overall rating), and the text
+of its Goals items, so this year's review can say whether they were met.
+
+It is read through `EvaluationService.detail` as the caller, so it shows exactly
+what the caller could see by opening that review, and is `null` when they could
+see none of it. An evaluator who could not open last year's review (a different
+evaluator without `evaluations.view_all`) gets nothing. It is shown on the
+screen beside the form and is not printed on the PDF: the PDF is the record of
+this review alone.
+
+## Period results
+
+For a holder of `evaluations.view_all`, the conduct list (`GET /evaluations`)
+gives each finalized evaluation its `overall_grade`: the result that stood, from
+`standing_overall` (a sectioned form's overall grade, the evaluator's override
+where they changed it; a weighted form's percentage; an evaluator-rated form's
+overall rating). Anyone else gets `null`, and so does a review still in
+progress, whose grade is not settled. A manager runs the process without
+reading personnel content, so `evaluations.manage` alone does not show grades.
+
+On the screen, choosing a period on the list shows how many of its reviews are
+complete and how many stand at each grade, counted from the rows the server
+sent. `GET /evaluations/export?period_id=` (view_all) downloads the period as
+CSV, one row per evaluation with its grade, written with `SafeCsvWriter`. Each
+export is audited as `evaluation_period_exported`. The caller's own evaluation
+is left out of both, as the list leaves it out.
+
 ## Emails
 
 All seven are editable templates under Communications → Email Templates →
@@ -351,6 +388,7 @@ All under `/api/v1/evaluations`.
 | `GET /draft-options`, `POST ""`                                                                                               | `conduct` or `manage`                                                                         |
 | `GET /bulk-preview`, `POST /bulk`                                                                                             | `manage`                                                                                      |
 | `GET /removed`                                                                                                                | `view_all`, `manage` or `delete`                                                              |
+| `GET /export?period_id=`                                                                                                      | `view_all`                                                                                    |
 | `GET /mine`, `/mine/live-data`, `/mine/removed`                                                                               | sign-in                                                                                       |
 | `GET /crew`                                                                                                                   | sign-in; lists only the evaluations of members the caller supervises today                    |
 | `GET /{id}` and its actions                                                                                                   | anyone with a part in it; the service decides who may do what, and answers 404 to anyone else |

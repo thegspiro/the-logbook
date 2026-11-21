@@ -569,6 +569,12 @@ Select **Department Store** in the sidebar.
 8. Add **Notes for the quartermaster (optional)** if you need to, then tap
    **Submit order**.
 
+_(2026-11-15)_ If you chose shipping and left the address empty, **Submit
+order** says _"Enter the address to ship to, or choose pickup."_ under
+**Shipping address**, and nothing is sent. If the store refuses the order for
+another reason, the reason stays on the page beside **Submit order** and your
+cart is kept.
+
 You get an order number like `ORD-2026-0042` and a confirmation email. That
 number links your payment to your order, so keep it.
 
@@ -667,6 +673,14 @@ Open an order to work on it:
 | **Cancel order**                      | For an order that will not be filled. Takes an optional **Reason for cancelling (shown to the member)** and emails the member               |
 
 The order also shows its **Timeline**: everything that has happened to it.
+
+**When an action is refused** _(2026-11-15)_. Each section of the order is
+saved on its own. A refusal is shown on the box it is about (an **Amount**, a
+**Reference**, a **Reason**) or at the top of that section, and what you typed
+stays, so you can correct it and try again. Other sections are not touched.
+**Send update** is no longer greyed out until it is ready: pressing it says
+what is missing, either the message or a choice of **In-app notification**,
+**Email** or both.
 
 **What the member asked for** _(2026-11-14)_. The order shows a **Delivery**
 box: **Pick up** or **Ship to the member**, the **Ship to** address on a

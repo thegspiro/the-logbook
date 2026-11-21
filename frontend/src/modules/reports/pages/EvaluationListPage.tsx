@@ -6,18 +6,20 @@
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ClipboardList, Plus, Users } from 'lucide-react';
+import { ClipboardList, Download, Plus, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { useAuthStore } from '../../../stores/authStore';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { saveBlob } from '../../../utils/saveBlob';
 import { conductListLabel } from '../../../components/layout/evaluationsNavigation';
 import { EvaluationsPageHeader } from '../components/evaluations/EvaluationsPageHeader';
 import { BulkDraftDialog } from '../components/evaluations/BulkDraftDialog';
 import { DeletionRecordList } from '../components/evaluations/DeletionRecordList';
 import { evaluationsService } from '../services/evaluationsApi';
+import { gradeCounts } from '../utils/evaluationRecord';
 import {
   EvaluationTemplateKind,
   type DraftOptions,
@@ -41,6 +43,10 @@ const EvaluationListPage: React.FC = () => {
     (state) => state.checkPermission('evaluations.conduct') || state.checkPermission('evaluations.manage')
   );
   const title = useAuthStore((state) => conductListLabel(state.checkPermission));
+  // Grades are personnel content: the server sends them only to view_all.
+  const canViewAll = useAuthStore((state) => state.checkPermission('evaluations.view_all'));
+  const [periodId, setPeriodId] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [evaluations, setEvaluations] = useState<EvaluationSummary[]>([]);
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
@@ -82,6 +88,28 @@ const EvaluationListPage: React.FC = () => {
       .then(setRemoved)
       .catch((err: unknown) => setRemovedError(getErrorMessage(err, 'Could not load deleted evaluations.')));
   }, [canSeeRemoved]);
+
+  const periods = [
+    ...new Map(
+      evaluations
+        .filter((e) => e.period_id)
+        .map((e) => [e.period_id ?? '', e.period_name ?? formatCalendarDate(e.period_end)] as const)
+    ).entries(),
+  ];
+  const shown = periodId ? evaluations.filter((e) => e.period_id === periodId) : evaluations;
+  const finalizedCount = shown.filter((e) => e.status === 'finalized').length;
+
+  const exportPeriod = async () => {
+    if (!periodId) return;
+    setExporting(true);
+    try {
+      saveBlob(await evaluationsService.exportPeriod(periodId), 'evaluation-results.csv');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not export the review period.'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const openDraft = async () => {
     setDraft(EMPTY_DRAFT);
@@ -152,21 +180,78 @@ const EvaluationListPage: React.FC = () => {
           }
         />
 
-        <div className="mb-4 flex items-center gap-2">
-          <label htmlFor="evaluation-status" className="text-theme-text-secondary text-sm">
-            Show
-          </label>
-          <select
-            id="evaluation-status"
-            className="form-input w-48"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="">All</option>
-            <option value="in_progress">In progress</option>
-            <option value="finalized">Complete</option>
-          </select>
+        <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex items-center gap-2">
+            <label htmlFor="evaluation-status" className="text-theme-text-secondary text-sm">
+              Show
+            </label>
+            <select
+              id="evaluation-status"
+              className="form-input w-48"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              <option value="">All</option>
+              <option value="in_progress">In progress</option>
+              <option value="finalized">Complete</option>
+            </select>
+          </div>
+          {periods.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label htmlFor="evaluation-period" className="text-theme-text-secondary text-sm">
+                Period
+              </label>
+              <select
+                id="evaluation-period"
+                className="form-input w-56"
+                value={periodId}
+                onChange={(e) => setPeriodId(e.target.value)}
+              >
+                <option value="">All periods</option>
+                {periods.map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
+
+        {canViewAll && periodId && (
+          <section aria-labelledby="period-results-heading" className="card mb-4 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 id="period-results-heading" className="text-theme-text-primary text-base font-semibold">
+                  Period results
+                </h2>
+                <p className="text-theme-text-secondary text-sm">
+                  {finalizedCount} of {shown.length} complete
+                  {status ? ' (of those shown)' : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary inline-flex items-center gap-2 text-sm"
+                disabled={exporting}
+                onClick={() => void exportPeriod()}
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                {exporting ? 'Exporting…' : 'Export CSV'}
+              </button>
+            </div>
+            {gradeCounts(shown).length > 0 && (
+              <dl className="mt-3 flex flex-wrap gap-2 text-sm">
+                {gradeCounts(shown).map(({ label, count }) => (
+                  <div key={label} className="card-secondary px-3 py-2">
+                    <dt className="text-theme-text-secondary text-xs">{label}</dt>
+                    <dd className="text-theme-text-primary font-semibold">{count}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </section>
+        )}
 
         {loadError && (
           <div className="alert-danger mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -201,10 +286,15 @@ const EvaluationListPage: React.FC = () => {
                   <th scope="col" className="px-4 py-3">
                     Waiting on
                   </th>
+                  {canViewAll && (
+                    <th scope="col" className="px-4 py-3">
+                      Overall grade
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {evaluations.map((evaluation) => (
+                {shown.map((evaluation) => (
                   <tr key={evaluation.id} className="border-theme-surface-border border-t">
                     <td data-label="Member" className="px-4 py-3">
                       <Link
@@ -228,6 +318,11 @@ const EvaluationListPage: React.FC = () => {
                           ? `${evaluation.current_step}${evaluation.current_step_due ? ` · due ${formatCalendarDate(evaluation.current_step_due)}` : ''}`
                           : '—'}
                     </td>
+                    {canViewAll && (
+                      <td data-label="Overall grade" className="text-theme-text-primary px-4 py-3">
+                        {evaluation.overall_grade ?? '—'}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

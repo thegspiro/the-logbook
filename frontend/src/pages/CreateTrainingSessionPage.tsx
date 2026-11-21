@@ -20,7 +20,7 @@ import { EventComposer } from '../components/event-form/EventComposer';
 import { EventType as EventTypeEnum } from '../constants/enums';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
-import { templateToInitialData } from '../utils/eventTemplates';
+import { templateToInitialData, templateToInitialTraining } from '../utils/eventTemplates';
 import { EventTemplatePicker } from '../components/event-form/EventTemplatePicker';
 
 const CreateTrainingSessionPage: React.FC = () => {
@@ -33,9 +33,12 @@ const CreateTrainingSessionPage: React.FC = () => {
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   // The picker is offered on Event Details only: a pick starts the form afresh.
   const [onFirstStep, setOnFirstStep] = useState(true);
-  const templateInitialData = useMemo(() => {
+  const { templateInitialData, templateInitialTraining } = useMemo(() => {
     const template = templates.find((t) => t.id === selectedTemplateId);
-    return template ? templateToInitialData(template, tz) : undefined;
+    return {
+      templateInitialData: template ? templateToInitialData(template, tz) : undefined,
+      templateInitialTraining: template ? templateToInitialTraining(template) : undefined,
+    };
   }, [templates, selectedTemplateId, tz]);
 
   useEffect(() => {
@@ -107,13 +110,14 @@ const CreateTrainingSessionPage: React.FC = () => {
                 templates={templates}
                 value={selectedTemplateId}
                 onChange={setSelectedTemplateId}
-                hint="Training templates only. A template fills the event's own fields, replacing what is already typed."
+                hint="Training templates only. A template fills the event and its training details, replacing what is already typed."
               />
             )}
             {/* A template starts the form afresh from its values. */}
             <EventComposer
               key={selectedTemplateId || 'no-template'}
               initialData={templateInitialData}
+              initialTraining={templateInitialTraining}
               lockedType={EventTypeEnum.TRAINING}
               onSubmit={handleSubmit}
               onSubmitRecurring={handleSubmitRecurring}

@@ -1241,12 +1241,16 @@ class EvaluationDataService:
     async def _waiver_attachments_on_file(
         self, org_id: str, request_ids: Sequence[str]
     ) -> Set[str]:
-        """The requests with at least one attachment on file.
+        """The requests with at least one attachment on file now.
 
         A row in ``attendance_waiver_attachments`` is a file on file: the
         retention task and anonymisation delete the file and then the row.
-        Only the fact is reported, never the file, its name or how many: an
-        attachment is the member's evidence, often medical.
+        Attachments are deleted ``attachment_retention_days`` after a request
+        closes, so a request whose files have gone reads no; a snapshot keeps
+        what was true when it was taken, as every figure does. Only the fact
+        is reported, never the file, its type, its name or how many: an
+        attachment is the member's evidence, often medical, and only the
+        member and the request's deciders may open one.
         """
         if not request_ids:
             return set()

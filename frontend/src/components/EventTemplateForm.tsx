@@ -5,13 +5,32 @@
  * Includes all configurable template fields organized in collapsible sections.
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { EventTemplate, EventTemplateCreate } from '../types/event';
-import { EventType } from '../constants/enums';
+import type { TrainingCourse } from '../types/training';
+import type { User } from '../types/user';
+import { EventType, isActiveAccount } from '../constants/enums';
 import { getEventTypeLabel } from '../utils/eventHelpers';
+import { displayNameOf } from '../utils/memberName';
+import { trainingService, userService } from '../services/api';
+import { useRanks } from '../hooks/useRanks';
 import { FIELD_ERROR_CLASS, FormField } from './ux/FormField';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import type { TrainingLinkageData } from '../hooks/useTrainingLinkageData';
+import { TrainingInfoStep } from './training-event/TrainingInfoStep';
+import {
+  DEFAULT_TRAINING_DETAILS,
+  TRAINING_FIELDS,
+  applyLibraryCourse,
+  fromTemplateTrainingDetails,
+  reconcileTemplateTraining,
+  toTemplateTrainingDetails,
+  withCourseChoice,
+  type InstructorOption,
+  type TrainingDetailsForm,
+  type TrainingField,
+} from './training-event/trainingDetailsModel';
 
 interface EventTemplateFormProps {
   initialData?: EventTemplate | undefined;
@@ -39,22 +58,220 @@ const CHECK_IN_WINDOW_OPTIONS = [
   { value: 'window', label: 'Window' },
 ];
 
-type TemplateField = 'name' | 'description' | 'default_title' | 'default_description' | 'default_location';
+/** The training fields a template carries, drawn by TrainingInfoStep's template variant. */
+const TEMPLATE_TRAINING_FIELDS = [
+  'course_id',
+  'course_name',
+  'course_code',
+  'training_type',
+  'credit_hours',
+  'instructor_id',
+  'issuing_agency',
+  'certification_number_prefix',
+  'expiration_months',
+] as const satisfies readonly TrainingField[];
+type TemplateTrainingField = (typeof TEMPLATE_TRAINING_FIELDS)[number];
+
+type TemplateField =
+  'name' | 'description' | 'default_title' | 'default_description' | 'default_location' | TemplateTrainingField;
+
+const trainingSpec = (field: TemplateTrainingField) => {
+  const spec = TRAINING_FIELDS[field];
+  return { id: spec.id, label: spec.label, apiKeys: typeof spec.api === 'string' ? [spec.api] : spec.api };
+};
 
 // EventTemplateCreate has no alias generator, so a 422 names the snake_case
-// request keys, which are these field names.
+// request keys, which are these field names; a training detail's is
+// `training_details.<field>`, the same paths the training form maps.
 const TEMPLATE_FIELDS: FieldSpecs<TemplateField> = {
   name: { id: 'template-name', label: 'Template Name' },
   description: { id: 'template-description', label: 'Description' },
+  ...Object.fromEntries(TEMPLATE_TRAINING_FIELDS.map((field) => [field, trainingSpec(field)])),
   default_title: { id: 'template-default-title', label: 'Default Title' },
   default_description: { id: 'template-default-description', label: 'Default Description' },
   default_location: { id: 'template-default-location', label: 'Default Location' },
+} as FieldSpecs<TemplateField>;
+
+/** A template carries no requirement or program links, so the step's pickers have nothing to offer. */
+const NO_LINKAGE: TrainingLinkageData = { categories: [], requirements: [], programs: [], phases: [] };
+
+/**
+ * The refusals the backend's EventTemplateTrainingDetails makes, checked here
+ * so each lands on its field rather than on the course choice a model-level
+ * 422 is reported against. Nothing the backend accepts is refused: hours that
+ * follow the event's length need no figure on a template, which has no date.
+ */
+const checkTemplateTraining = (value: TrainingDetailsForm): FieldErrors<TemplateField> => {
+  const problems: FieldErrors<TemplateField> = {};
+  if (value.course_mode === 'library' && !value.course_id) {
+    problems.course_id = 'Choose a course from the Course Library.';
+  }
+  if (value.course_mode === 'oneoff' && !value.course_name.trim()) {
+    problems.course_name = 'Enter a course name.';
+  }
+  if (value.credit_hours_source === 'manual') {
+    const hours = value.credit_hours.trim();
+    if (!hours) problems.credit_hours = "Enter the credit hours, or let them follow the event's length.";
+    else if (!(Number(hours) >= 0)) problems.credit_hours = 'Credit hours must be 0 or more.';
+  }
+  if (value.issues_certification && value.expiration_months.trim()) {
+    const months = value.expiration_months.trim();
+    if (!/^\d+$/.test(months) || Number(months) < 1) {
+      problems.expiration_months = 'Enter a whole number of months, or leave it blank.';
+    }
+  }
+  return problems;
 };
 
 const inputClass = 'form-input px-3 text-sm';
 const selectClass = 'form-input px-3 text-sm';
 const labelClass = 'form-label';
 const checkboxClass = 'form-checkbox';
+
+interface TemplateTrainingSectionProps {
+  value: TrainingDetailsForm;
+  setValue: React.Dispatch<React.SetStateAction<TrainingDetailsForm>>;
+  /** The stored details, until they have been checked against the lists. */
+  seeded: TrainingDetailsForm | undefined;
+  onSeededRead: (notes: string[]) => void;
+  notes: readonly string[];
+  errors: Partial<Record<TrainingField, string>>;
+  clearErrors: (keys: string[]) => void;
+  eventTitle: string;
+  durationHours: number | null;
+}
+
+/**
+ * The editor's Training Details: TrainingInfoStep's template variant, with
+ * the Course Library and member list it picks from.
+ */
+const TemplateTrainingSection: React.FC<TemplateTrainingSectionProps> = ({
+  value,
+  setValue,
+  seeded,
+  onSeededRead,
+  notes,
+  errors,
+  clearErrors,
+  eventTitle,
+  durationHours,
+}) => {
+  const { formatRank } = useRanks(false);
+  const [courses, setCourses] = useState<TrainingCourse[]>([]);
+  const [coursesLoaded, setCoursesLoaded] = useState(false);
+  const [coursesSettled, setCoursesSettled] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
+  const [usersLoaded, setUsersLoaded] = useState(false);
+  const [usersSettled, setUsersSettled] = useState(false);
+
+  useEffect(() => {
+    trainingService
+      .getCourses()
+      .then((list) => {
+        setCourses(list);
+        setCoursesLoaded(true);
+      })
+      .catch(() => {
+        /* non-critical: the library choice offers nothing */
+      })
+      .finally(() => setCoursesSettled(true));
+    userService
+      .getUsers()
+      .then((list) => {
+        setUsers(list);
+        setUsersLoaded(true);
+      })
+      .catch(() => {
+        /* non-critical: the lead instructor list is empty */
+      })
+      .finally(() => setUsersSettled(true));
+  }, []);
+
+  const members = useMemo<InstructorOption[]>(
+    () =>
+      users.map((user) => {
+        const memberName = displayNameOf(user) || user.username;
+        return {
+          id: user.id,
+          name: memberName,
+          label: user.rank ? `${memberName} (${formatRank(user.rank)})` : memberName,
+          former: !isActiveAccount(user.status),
+        };
+      }),
+    [users, formatRank]
+  );
+
+  // The stored details checked once against the lists they name, as applying
+  // the template does, so the editor shows what picking it would fill. A
+  // list that failed to load is skipped rather than taken as empty.
+  useEffect(() => {
+    if (!seeded || !coursesSettled || !usersSettled) return;
+    const listedCourses = coursesLoaded ? courses : undefined;
+    const listedMembers = usersLoaded ? members : undefined;
+    onSeededRead(reconcileTemplateTraining(value, seeded, listedCourses, listedMembers).notes);
+    setValue((prev) => reconcileTemplateTraining(prev, seeded, listedCourses, listedMembers).value);
+  }, [
+    seeded,
+    coursesSettled,
+    usersSettled,
+    coursesLoaded,
+    usersLoaded,
+    courses,
+    members,
+    value,
+    onSeededRead,
+    setValue,
+  ]);
+
+  const update = (patch: Partial<TrainingDetailsForm>) => {
+    setValue((prev) => {
+      const next = { ...prev, ...patch };
+      const courseOf = (v: TrainingDetailsForm) => courses.find((c) => c.id === v.course_id);
+      return withCourseChoice(next, courseOf(next), { value: prev, course: courseOf(prev) });
+    });
+    clearErrors(Object.keys(patch));
+  };
+  // Pre-fills type, hours, instructor and expiry as the training form does.
+  // A course's participant limit is not copied into Max Attendees: the
+  // template's own is authoritative, and the category and program it fills
+  // are not saved on a template.
+  const pickCourse = (course: TrainingCourse | undefined) => {
+    if (!course) {
+      update({ course_id: '' });
+      return;
+    }
+    const picked = applyLibraryCourse(
+      value,
+      course,
+      members.filter((m) => !m.former),
+      undefined,
+      value.course_mode === 'library' ? courses.find((c) => c.id === value.course_id) : undefined
+    );
+    setValue(picked);
+    clearErrors([
+      'course_id',
+      ...(Object.keys(picked) as (keyof TrainingDetailsForm)[]).filter((key) => picked[key] !== value[key]),
+    ]);
+  };
+
+  return (
+    <TrainingInfoStep
+      variant="template"
+      value={value}
+      onChange={update}
+      onPickCourse={pickCourse}
+      errors={errors}
+      eventTitle={eventTitle}
+      durationHours={durationHours}
+      courses={courses}
+      members={members}
+      linkageData={NO_LINKAGE}
+      isSeries={false}
+      coursesLoaded={coursesLoaded}
+      templateNotes={notes}
+    />
+  );
+};
 
 export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
   initialData,
@@ -118,12 +335,45 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
 
   const fieldErrors = useFieldErrors(TEMPLATE_FIELDS);
 
+  // Training details (owner decision 2026-11-20): Training templates only.
+  // Held here so they survive a change of type and back, as typed values do;
+  // the section that loads the Course Library and member list mounts only
+  // while the type is Training, so a template of any other type makes no
+  // such request.
+  const isTraining = eventType === EventType.TRAINING;
+  const [seededTraining, setSeededTraining] = useState<TrainingDetailsForm | undefined>(() =>
+    initialData?.event_type === EventType.TRAINING && initialData.training_details
+      ? fromTemplateTrainingDetails(initialData.training_details)
+      : undefined
+  );
+  const [training, setTraining] = useState<TrainingDetailsForm>(seededTraining ?? DEFAULT_TRAINING_DETAILS);
+  const [trainingNotes, setTrainingNotes] = useState<string[]>([]);
+  const onSeededTrainingRead = useCallback((notes: string[]) => {
+    setTrainingNotes(notes);
+    setSeededTraining(undefined);
+  }, []);
+  const clearTrainingErrors = (keys: string[]) => {
+    for (const key of keys) {
+      if ((TEMPLATE_TRAINING_FIELDS as readonly string[]).includes(key)) {
+        fieldErrors.setError(key as TemplateTrainingField, null);
+      }
+    }
+  };
+  const trainingErrors: Partial<Record<TrainingField, string>> = Object.fromEntries(
+    TEMPLATE_TRAINING_FIELDS.flatMap((field) => {
+      const message = fieldErrors.errors[field];
+      return message ? [[field, message]] : [];
+    })
+  );
+  const durationMinutes = parseInt(defaultDurationMinutes, 10);
+  const templateHours = durationMinutes > 0 ? Math.round((durationMinutes / 60) * 100) / 100 : null;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Checked here rather than by the browser's required bubble, which
     // vanished after a few seconds and was tied to no field (forms review F-3).
-    const problems: FieldErrors<TemplateField> = {};
+    const problems: FieldErrors<TemplateField> = isTraining ? checkTemplateTraining(training) : {};
     if (!name.trim()) problems.name = 'Enter a name for the template.';
     fieldErrors.setFormError(null);
     fieldErrors.setErrors(problems);
@@ -188,6 +438,11 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
     const parsedMinsAfter = parseInt(checkInMinutesAfter, 10);
     if (checkInMinutesAfter.trim() && parsedMinsAfter >= 0) data.check_in_minutes_after = parsedMinsAfter;
     else if (isEdit) data.check_in_minutes_after = null;
+    // Training: the whole object on every save, so a cleared field is stored
+    // cleared (pitfall #1). Another type: null on an edit, which drops what a
+    // Training template stored; left out on a create.
+    if (isTraining) data.training_details = toTemplateTrainingDetails(training);
+    else if (isEdit) data.training_details = null;
 
     // A caller that lets a failed save reject has its 422 shown on the field
     // it names, and anything else inside the form rather than lost.
@@ -271,6 +526,20 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
           </select>
         </div>
       </div>
+
+      {isTraining && (
+        <TemplateTrainingSection
+          value={training}
+          setValue={setTraining}
+          seeded={seededTraining}
+          onSeededRead={onSeededTrainingRead}
+          notes={trainingNotes}
+          errors={trainingErrors}
+          clearErrors={clearTrainingErrors}
+          eventTitle={defaultTitle}
+          durationHours={templateHours}
+        />
+      )}
 
       {/* Default Event Values */}
       <div className="space-y-4">

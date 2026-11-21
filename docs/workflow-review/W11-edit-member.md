@@ -200,3 +200,102 @@ Seen and left:
 | black --check            | n/a                                                                                                                                                                                                                                                     |
 | frontend tests (touched) | ✅ full suite: 604 files, 8,212 tests. An earlier full run, which overlapped a concurrent run while a test file was being edited, reported 3 failures that were not captured by name; the clean re-run found none. Every new case failed before its fix |
 | backend tests (touched)  | n/a                                                                                                                                                                                                                                                     |
+
+## Second pass — editing a member after the forms and step-up changes (2026-11-16)
+
+**Driven:** 2026-11-16 · **As:** `admin`, with `member2` refused · **Viewports:** 1280×900, 390×844
+**Commit:** `4c0fe2b` plus this pass's fixes · **Database:** continued from the W10 second pass; no reset
+
+The owner asked to continue with W11. Since the first pass:
+
+- the edit page saves with a field error flagged rather than refusing the whole save (owner decision 2026-11-05);
+- a change to a member's rank or positions asks the officer to confirm it's them;
+- the base Member position can't be removed from a current member (W11-9, owner decision 2026-10-05);
+- the last-administrator check now takes a locking read (`assert_not_last_administrator`, W11-8).
+
+### What was driven
+
+All on Reese Varga, imported in W09.
+
+1. As `admin`, Members Administration → Edit:
+   - set the middle name and membership number, cleared the phone, set the rank;
+   - added an emergency contact with a name, relationship and phone but no email;
+   - saved, cancelled "Confirm it's you", saved again and confirmed.
+2. From the profile, Change status → Leave with a reason. Later, tried Leave → Probationary.
+3. View History, then each change below in turn.
+4. Members Administration:
+   - Reset Password, first with `Abcdefgh1234!`, then a valid password;
+   - Manage positions: added Historian (with step-up), then removed it with its "×";
+   - `DELETE` of the base Member position through the API.
+5. As `member2`: the edit page, `PATCH /profile`, `PATCH /status`, `GET /audit-history`, `POST /reset-password`.
+6. The edit page and the history page at 390×844.
+7. Put Reese back to probationary.
+
+### Held up ✅
+
+- **Every edit was stored:** middle name, membership number and rank. The phone cleared to `null`, and the contact saved with `email: null` (W11-1 holds).
+- **Step-up:** a rank change asks "Confirm it's you". Cancelling keeps every edit on the page, and confirming saves them.
+- **Reset Password:** the weak password is held at the field with the rule list, and nothing is sent. The valid one is confirmed ("Password reset for Reese Varga").
+- **Positions:**
+  - Historian was added after step-up and removed with "×". The confirmation names it ("Remove Historian from Reese Varga?").
+  - The base Member position offers no "×" and is locked in the dialog. The API refuses its removal: "The Member position carries the baseline access every member needs, so it can only be removed from an archived member."
+- **The history** shows each change with date and time in the department's timezone (W11-6 holds).
+- **`member2` is refused** on the page and on every endpoint (`403`).
+- **Phone:** no sideways scroll on either page. The two checkboxes sit inside full-width labels, and the only control under 44px is the exempt inline "Set it up now" link.
+
+### W11-10 — LOW — Cancelling "Confirm it's you" told an administrator they had no permission — ✅ FIXED
+
+**Saw:** after cancelling the step-up prompt on Save Changes: "You do not have permission to update this member. Contact an administrator." The officer is an administrator, and they had only declined to confirm.
+**Where:** `MemberAdminEditPage.tsx`. Every 403 was read as a missing permission, including the server's `LB-AUTH-013` step-up refusal, which the API client passes on when the prompt is cancelled.
+**Fix:** that refusal now reads "Not saved: the confirmation was cancelled. Your changes are still here; save again to confirm it's you." A real permission refusal still reads as one. Re-driven.
+**Test:** `MemberAdminEditPage.test.tsx`. The new case failed before the fix; the permission case is the control.
+
+### W11-11 — LOW — The history printed stored field names and statuses — ✅ FIXED
+
+**Saw:** "Member profile updated: middle_name, phone, membership_number, rank, emergency_contacts" and "Status changed: probationary → leave".
+**Where:** `get_member_audit_history` (`backend/app/api/v1/endpoints/users.py`).
+**Fix:** the history reads "middle name, phone, membership number, rank, emergency contacts" and "Probationary → Leave" ("Dropped voluntary", not `dropped_voluntary`). Re-driven.
+**Test:** `tests/test_member_audit_history_wording.py`, whose two cases failed before the fix.
+
+### W11-12 — LOW — Reset Password and Add Member showed the password rules' state only as ✓ / ○ — ✅ FIXED
+
+**Saw:** each rule in both checklists began with a bare ✓ or ○. A screen reader reads "check mark" or "white circle", or skips it. W03-10 had fixed the same thing on the reset page and in My Account.
+**Fix:** the mark is hidden from assistive technology, and each rule starts with a visually hidden "Met:" or "Not met:".
+**Test:** `MembersAdminPage.test.tsx` and `AddMember.test.tsx`. The Reset Password test asserted the visible "○ No runs…" string; it now asserts the state text, as the Add Member test does. Both failed before the fix.
+
+### W11-13 — LOW — Every position change in the history read "All roles replaced" — ✅ FIXED
+
+**Saw:** adding Historian and removing it were both listed as "All roles replaced". The admin screens change positions through the replace-all `PUT /users/{id}/roles`, whose audit row kept only the resulting position ids, so the history could not say what had changed.
+**Fix:** the row now records the names added and removed, and the history reads "Positions changed: added Historian" / "Positions changed: removed Historian". Rows written before this keep their old wording. Re-driven.
+**Test:**
+
+- `tests/test_users_delete_endpoint.py`: a new case asserts the names in the audit row. Two existing cases gained a `name` on their stand-in positions, which every real position has; their assertions are unchanged.
+- `tests/test_member_audit_history_wording.py`: the new wording, and the old wording for an old row.
+
+The new cases failed before the fix.
+
+### W11-14 — LOW — The status dialog offered changes the server refuses — ✅ FIXED
+
+**Did:** with Reese on leave, chose Probationary.
+**Saw:** the dialog offered all eight statuses. The server answered `400`: "Cannot change status from 'leave' to 'probationary'. Allowed: active, dropped_involuntary, …".
+**Where:** the profile's Change Member Status dialog (`MemberProfilePage.tsx`) listed every status. The lifecycle rules live in `ALLOWED_STATUS_TRANSITIONS` (`member_status.py`).
+**Fix:** `GET /users/{id}/status-change` now also returns `allowed_next_statuses`, read from that same table. This is an added field, and nothing existing changes. The dialog reads it on opening and lists the current status plus those. If the read fails, it offers every status as before. Re-driven: for a member on leave the list no longer has Probationary.
+**Test:** `tests/test_status_change_allowed_next.py` (every status matches the table) and `MemberProfilePage.test.tsx`. Both failed before the fix.
+
+Seen and left:
+
+- **The server's refusal lists raw values** ("Allowed: active, dropped_involuntary, …"). The dialog no longer leads there, so it is now reached only through the API.
+- **A new emergency contact is not primary until ticked.** The edit page has a "Primary contact" checkbox, and nothing in the app reads the flag for a member's contacts.
+
+### Checklist
+
+| Section                 | Result                                                               |
+| ----------------------- | -------------------------------------------------------------------- |
+| 1. The job gets done    | ✅ edit → clear → step-up → status → positions → reset → history     |
+| 2. The right people     | ✅ `member2` refused on page and API; base Member position protected |
+| 3. Wrong input, failure | ✅ after W11-10 and W11-14                                           |
+| 4. Browser signals      | ✅ only the provoked `403`s (step-up) and the `400` behind W11-14    |
+| 5. Coming back to it    | ✅ every change stored and in the history, after W11-11 and W11-13   |
+| 6. On a phone           | ✅ clean                                                             |
+| 7. Everyone can use it  | ✅ after W11-12                                                      |
+| 8. What happens around  | ✅ each change audited with its fields and positions named           |

@@ -115,13 +115,14 @@ event ran, or who was not in its audience, is never listed as having missed
 it.
 
 **How far ahead a mandatory event asks for your answer** _(2026-11-17)_. An
-unanswered mandatory event joins the band once it starts within your
-department's response window, so a recurring mandatory series does not ask
-about every future meeting at once; later ones appear as they come within
-range. The window is 60 days unless an event manager changes it under
-**Event settings → Attendance → Mandatory event responses** (1 to 365 days).
-An event whose RSVP deadline is less than two days away is always in the band,
-whatever the window.
+unanswered mandatory event joins the band, with the card's **Response needed**
+strip, once it starts within your department's response window, so a recurring
+mandatory series does not ask about every future meeting at once; later ones
+appear as they come within range. The window is 60 days unless an event manager
+changes it under **Event settings → Attendance → Mandatory event responses**
+(1 to 365 days). An event whose RSVP deadline is less than two days away is
+always in the band, whatever the window. You can still respond to a later date
+from its card or page at any time.
 
 **An empty list.** When nothing is scheduled you see **No upcoming events
 yet**, a short explanation of what will appear here, and a link: **Take the
@@ -155,7 +156,7 @@ card, and the tools to check people in. Other members may see a **Who's
 going** list, if the department shares it (see
 [Who's going](#whos-going-rsvp-and-the-waitlist)).
 
-![An upcoming Training event's page as a member: RSVP Now and Add to Calendar beside the title and no View QR Code, then the Event Details, Training Session Details, Requirements & Programs and Event Information cards](./images/04-02-event-detail.png)
+![An upcoming Training event's page as a member: RSVP Now and Add to Calendar beside the title and no View QR Code, then the Event Details, Training Session Details, Training details and Event Information cards](./images/04-02-event-detail.png)
 
 **To RSVP:**
 
@@ -901,7 +902,8 @@ Select **Create Event** on the Events page. It opens the **Create Event** tab
 of **Manage Events**.
 
 1. Optionally pick a template under **Start from a Template** — _"Pick a
-   template to pre-fill common settings, or start blank."_
+   template to pre-fill common settings, or start blank. A Training template
+   opens the step-by-step form and fills its training details."_
 2. Set the **event type**, **title**, start and end date and time. Moving the
    start past the end carries the end with it, keeping the event's length.
 3. Add a **location** and a **description**.
@@ -933,7 +935,10 @@ of **Manage Events**.
 > instructor, credit hours, certification and sign-off on **Training Info**. A
 > note at the top says **Switched to the training form**, with a **Change back
 > to …** button; picking another type also brings the single-page form back,
-> again with your entries. See
+> again with your entries. A Training template that saved training details
+> also fills **Training Info** _(2026-11-20)_: the course, training type,
+> credit hours, lead instructor and certification settings (see
+> [Templates](#templates)). See
 > [Training Credit from Events](#training-credit-from-events).
 
 > **What if Require RSVP is on but there is no deadline?** On a single event,
@@ -992,7 +997,10 @@ Choose another room or time.
 **Drafts.** A draft is visible only to officers who can manage events. When it
 is ready, open it and select **Publish**. Editing and saving a draft keeps it a
 draft; before 2026-10-26 the edit form did not know the event was a draft, and
-saving it published it.
+saving it published it. _(2026-11-15)_ Nobody can check in to a draft, by QR
+code, NFC tag, kiosk or self check-in, and its QR code does not work until it
+is published. Its folder and training session stay hidden from anyone who
+cannot manage events.
 
 _(2026-11-15)_ Nobody can check in to a draft: a QR scan, an NFC tap and a
 kiosk all refuse it with "Cannot check in to an unpublished event", and its QR
@@ -1292,7 +1300,7 @@ its attendance is finalized — however the event was created.
    finalized, only **Counts toward attendance** can change among the training
    details.
 
-![Create Event with the type set to Training: the Training details (optional) group with a course picked, its training type and category filled in, and the Create Training Session link](./images/04-61-training-details-create.png)
+![Create Event after choosing Training: the Switched to the training form note with its Change back to button, above the training-event form on its Training Info step with a course picked](./images/04-61-training-details-create.png)
 
 **What each member is credited.** Finalizing gives every checked-in member a
 **Completed** training record for:
@@ -1367,11 +1375,36 @@ credited automatically.
 A template saves the settings you use again and again — title, type,
 location, time, length, description and reminders.
 
+**A Training template also saves the session's training details**
+_(2026-11-20)_: the course (from the Course Library, a one-off name and code,
+or none), the training type, the credit hours and where they come from (the
+event's length, the course, or a typed figure), the lead instructor, and the
+certification settings — whether it issues one, the number prefix, the
+issuing agency and the expiry in months. Picking the template fills
+**Training Info** with them, replacing what was there. A template does not
+save requirement or program links, **Counts toward attendance**, or the
+completion settings; those start on their defaults for each session.
+
+- If the template's course is no longer in the Course Library, the session
+  starts on **No course yet**, with a note saying so on **Training Info**.
+- If its lead instructor is no longer a current member, **Lead instructor**
+  starts empty, with a note.
+- Hours that come from the course are refreshed to the course's current
+  figure when the template is picked.
+- Under a library course, a blank **Lead Instructor** or **Expiration** is
+  still saved as the course's, as on any training event.
+
 **Making one:**
 
-- On an event's page, select **More → Save as Template**; or
+- On an event's page, select **More → Save as Template**. On a Training
+  event this saves its training details too. If they cannot be read, the
+  template is not saved and a message says so; try again; or
 - on the Events page, open the **⋯** menu → **Event Templates** and select
-  **Create Template**.
+  **Create Template**. With **Event Type** set to **Training**, a **Training
+  Details** section offers the course, type, hours, lead instructor and
+  certification. Picking a library course fills type, hours, instructor and
+  expiry from it, but leaves the template's **Max Attendees** alone. Saving
+  a template as another type clears any training details it had.
 
 **Using one:** pick it under **Start from a Template** on **Create Event**, or
 choose it from **Create from Template** in the Events page's **⋯** menu.
@@ -2109,6 +2142,9 @@ copy's files stay in its leadership-only folder. Documents shows a paperclip on
 published minutes. A signed copy filed after publishing appears at the next
 publish. The public copy never carries attachments. The minutes PDF embeds
 image attachments and appends PDF attachments, within size and page limits.
+_(2026-11-16)_ The minutes PDF shows the department's logo beside the heading
+on page 1, and every later page has a short header with the logo, the
+department's name and the meeting's title.
 
 **Action-item email.** Meeting-record action items are emailed on the same
 schedule as the bell reminder. The department can opt out of this email under
@@ -2412,7 +2448,7 @@ too, since meetings have no list like My Training's.
 
 **Deciding.** Everyone who decides is emailed a link to the request. The list
 of requests waiting for you is **Governance → Waiver Requests**, which appears
-for everyone who decides meeting requests (by a chosen position, as Chief,
+(with the Minutes module on) for everyone who decides meeting requests (by a chosen position, as Chief,
 President or Secretary, as the alternate, or by managing meetings), with the
 number waiting on you badged on it at the top of every Governance page. It is
 also on Meeting Attendance as **Waiver requests**. Each request opens the same
@@ -3139,6 +3175,12 @@ have moved, been renamed or work differently.
 
 ### Works differently now
 
+- **A mandatory event far off no longer asks for a response** _(2026-11-16)_.
+  The **Needs You** band lists an unanswered mandatory event only within the
+  department's response window (60 days unless changed), or when its RSVP
+  deadline is under two days away.
+- **A draft event cannot be checked into** _(2026-11-15)_, by any method,
+  until it is published.
 - **Training events credit training records, not admin hours.** Finalizing
   writes the records. Older admin-hours mappings for training show **Not in
   effect**.

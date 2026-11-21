@@ -449,10 +449,18 @@ _(2026-11-17)_. The training record and submission stay, so the completion
 still counts, but the uploaded file is removed and downloading it returns
 "not found", as it does after the retention period. A file another record
 still uses is kept. The confirmation dialog now lists **Certificates uploaded
-with their training reports**. Files attached to a training record by an
-officer are department training evidence and are **kept**. _Screenshot:
-create one of the Anonymize Member dialog's Removed list showing the new
-line (the guide has no image of the dialog yet)._
+with their training reports**. _Screenshot: create one of the Anonymize Member
+dialog's Removed list showing the new lines (the guide has no image of the
+dialog yet)._
+
+**Documents attached to a training record are deleted too** _(2026-11-20)_.
+Files an officer or the member attached to the member's own training
+records go with the member's identity, like the certificates. The records
+stay, so the completions still count, but the files cannot be downloaded
+again. A file another member's record also uses is kept. The dialog lists
+**Documents attached to their training records**. **Download any of these
+files the department must keep before you anonymize** — nothing brings them
+back.
 
 **Permanently deleting a member also removes their files** _(2026-11-17)_:
 the files on the training submissions, training records and attendance waiver
