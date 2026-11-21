@@ -125,6 +125,7 @@ from app.services.security_monitoring import report_privilege_escalation_attempt
 from app.services.upload_scanning import reject_if_malicious
 from app.services.user_deletion_service import (
     count_records_removed_with_member,
+    delete_transferred_applications,
     find_hard_delete_blockers,
     release_user_references,
     return_member_inventory,
@@ -2575,7 +2576,10 @@ async def delete_user(
     inside the delete's own transaction and removed right after its commit,
     keeping any file another row still references; an hourly sweep retries
     whatever a crash or an unreachable store left. A refused delete queues
-    and touches nothing.
+    and touches nothing. The applicant record the member was converted from
+    (its details, interviews, activity log and form answers) is deleted in
+    the same transaction, and its uploaded documents are queued with the
+    member's other files.
 
     **Authentication required**
 
@@ -2671,10 +2675,16 @@ async def delete_user(
         owned_files = await collect_member_files(
             db, str(user_id), str(current_user.organization_id)
         )
+        # The application that became this member is linked by a SET NULL
+        # key, so the delete below would only detach it. It goes here, in
+        # this transaction, and its ID documents are queued with the rest.
+        applications = await delete_transferred_applications(
+            db, str(user_id), str(current_user.organization_id)
+        )
         pending_ids = enqueue_pending_file_deletions(
             db,
             str(current_user.organization_id),
-            owned_files.paths_by_area(),
+            {**owned_files.paths_by_area(), **applications.document_paths},
             PendingDeletionReason.MEMBER_HARD_DELETE,
         )
 
@@ -2727,6 +2737,7 @@ async def delete_user(
                 "files_deleted": removal.deleted,
                 "files_not_deleted": removal.not_deleted,
                 "files_shared_kept": removal.shared_kept,
+                "applicant_records_deleted": applications.applications,
             },
             user_id=str(current_user.id),
             username=current_user.username,
