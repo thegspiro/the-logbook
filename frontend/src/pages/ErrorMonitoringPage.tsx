@@ -584,14 +584,14 @@ const ErrorMonitoringPage: React.FC = () => {
                           <td data-label="Code" className="px-4 py-3 font-mono text-xs whitespace-nowrap">
                             {entry.code}
                           </td>
-                          <td data-label="Meaning" className="max-w-md px-4 py-3 text-sm">
-                            <div className="min-w-0">
+                          <td data-label="Meaning" className="px-4 py-3 text-sm">
+                            <div className="max-w-md min-w-0">
                               <div className="text-theme-text-primary font-medium">{entry.title}</div>
                               <div className="text-theme-text-secondary mt-1 text-xs">{entry.description}</div>
                             </div>
                           </td>
-                          <td data-label="How to resolve" className="max-w-md px-4 py-3">
-                            <ul className="text-theme-text-secondary min-w-0 list-disc space-y-1 pl-4 text-xs">
+                          <td data-label="How to resolve" className="px-4 py-3">
+                            <ul className="text-theme-text-secondary max-w-md min-w-0 list-disc space-y-1 pl-4 text-xs">
                               {entry.resolution.map((step) => (
                                 <li key={step}>{step}</li>
                               ))}

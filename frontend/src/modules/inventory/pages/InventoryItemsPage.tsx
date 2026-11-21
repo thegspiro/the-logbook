@@ -427,8 +427,10 @@ const VariantProductRow: React.FC<VariantProductRowProps> = ({
         </td>
       )}
       {showLocation && (
-        <td data-label="Location" className="text-theme-text-muted max-w-[160px] truncate px-3 py-3">
-          {!location.shared ? mixed : location.value || '-'}
+        <td data-label="Location" className="text-theme-text-muted px-3 py-3">
+          <div className="max-w-[160px] truncate" title={location.shared ? location.value || undefined : undefined}>
+            {!location.shared ? mixed : location.value || '-'}
+          </div>
         </td>
       )}
       {/* No mobile-only detail cells here. They describe one physical item
@@ -914,8 +916,10 @@ const ItemTable: React.FC<ItemTableProps> = ({
                           </td>
                         )}
                         {!grouped('location') && (
-                          <td data-label="Location" className="text-theme-text-muted max-w-[160px] truncate px-3 py-3">
-                            {loc || '-'}
+                          <td data-label="Location" className="text-theme-text-muted px-3 py-3">
+                            <div className="max-w-[160px] truncate" title={loc || undefined}>
+                              {loc || '-'}
+                            </div>
                           </td>
                         )}
                         {/* Mobile-only detail cells (hidden on desktop, revealed by the reflow) */}
