@@ -5043,9 +5043,7 @@ a vehicle at all (`POV`, `Other EMS`) can each be sent to **Catch-all: Other**.
 That puts all of them on a single outside unit named **Other**, under an agency
 named **Other**, created on the first commit and reused after that.
 
-<!-- Screenshot needed:
-A draft import's Units tab: POV and Other EMS sent to Catch-all: Other, and Medic 7 open on Add as an outside agency's unit with its agency picked from the list
--->
+![A draft import's Units tab: POV and Other EMS both recorded on the catch-all Other unit, and Medic 7 open on Add as an outside agency's unit with Lakeside Volunteer Rescue picked from the Agency list, Medic 7 in the Unit box, and the note that a unit added here starts hidden from members](./images/03-140-history-import-units.png)
 
 **Shift notification CC boxes** _(2026-11-09)_. The four **CC additional email
 addresses** boxes in Scheduling notification settings now refuse text that is
