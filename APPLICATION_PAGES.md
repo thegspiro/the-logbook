@@ -363,6 +363,10 @@ Requires `events.manage` permission. Drawn with the same two-level navigation as
 
 A missing or unknown `?tab=` opens Create Event.
 
+### Outreach Request (`/events/admin/requests/:requestId`)
+
+Requires `events.manage` permission. One request from the Community Outreach **Requests** board, on a page of its own _(2026-11-21, owner decision: a page rather than the side panel it replaced)_: its next action, checklist, scheduling, volunteer staffing, what was asked for, contact details and activity, with a link back to the board. A row on the board, and a request just entered with **New request**, open here, so a request can be linked, bookmarked, refreshed into and left with the back button.
+
 > _(2026-11-11)_ **Create Event hands a Training event to the training-event form.** Picking **Training** as the type, or a Training template, swaps the single-page form for the step-by-step one in place, carrying every value typed so far; picking another type swaps it back. `?tab=create&template=<id>` (the Events list's **Use template** link) opens with that template applied.
 
 **Legacy redirects:**

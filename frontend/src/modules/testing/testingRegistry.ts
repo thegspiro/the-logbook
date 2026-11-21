@@ -361,6 +361,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/events/:id/qr-code', label: 'Event QR code' },
       { path: '/events/:id/check-in', label: 'Event self check-in' },
       { path: '/events/admin', label: 'Events administration hub', permission: 'events.manage' },
+      {
+        path: '/events/admin/requests/:requestId',
+        label: 'Outreach request',
+        permission: 'events.manage',
+        note: 'One request from the Requests board, on its own page',
+      },
       { path: '/events/templates', label: 'Event templates', permission: 'events.manage' },
       { path: '/events/attendance-requests', label: 'Attendance requests across events' },
       { path: '/events/:id/edit', label: 'Edit event', anyPermission: ['events.manage', 'training.manage'] },

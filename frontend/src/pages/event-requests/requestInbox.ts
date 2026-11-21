@@ -36,6 +36,12 @@ export const INBOX_GROUPS: InboxGroup[] = [
 
 export type InboxScope = 'all' | 'mine' | 'unassigned';
 
+/** The board's address, where a request page goes back to. */
+export const REQUEST_BOARD_PATH = '/events/admin?tab=requests';
+
+/** A request's own page (owner decision, 2026-11-21: a page, not a side panel). */
+export const requestPagePath = (id: string): string => `/events/admin/requests/${id}`;
+
 /** A request is still open while anybody has something left to do on it. */
 export const isOpenStatus = (status: EventRequestStatus): boolean =>
   status !== 'completed' && status !== 'declined' && status !== 'cancelled';
