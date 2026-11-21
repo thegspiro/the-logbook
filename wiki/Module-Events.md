@@ -1065,6 +1065,10 @@ Administration → Community Outreach → Apparatus Events**
   driver exceptions as shift driver assignment.
 - **Hours**: check in as usual, then **Finalize Attendance**. A night's
   category **replaces** the event type's Admin Hours mapping — never both.
+- **Email members** on the crew card emails chosen members about the run's
+  open seats: one email listing every upcoming night a member can still take
+  a seat on (`POST /apparatus-events/events/{id}/seat-call`). Each send is
+  recorded in `apparatus_event_seat_calls` and the card shows the last one.
 - **Shift Scheduling** shows nights as read-only `Outreach · not a shift`
   chips; they never count toward shift staffing.
 - **Public requests**: a scheduled request's drawer has **Apparatus Crew →
@@ -1074,7 +1078,16 @@ Administration → Community Outreach → Apparatus Events**
   stands it down. Volunteer signups stay available alongside it.
 
 API under `/api/v1/apparatus-events/` (uncacheable — crew boards name
-members). Choices the first release made without a ruling are in
+members).
+
+**Choosing who an email goes to** (`member_audience`, shared by the open-seat
+email and the request volunteer call): member classes, membership statuses
+(with the department's own tiers) and positions. Any match within a group,
+every group across them, an empty group does not narrow. Only current members
+(`ACTIVE_ACCOUNT_STATUSES`) with an address, and the **Volunteer calls**
+opt-out applies. `GET /member-audience/options` and `POST
+/member-audience/preview` (a count) need `events.manage` or
+`apparatus_events.manage`. Choices the first release made without a ruling are in
 `docs/KNOWN_LIMITATIONS.md` → "Apparatus Events".
 
 ---
@@ -1152,7 +1165,8 @@ tab of the Events admin hub.
 - **Volunteer staffing** — for a scheduled request, open a volunteer signup
   sheet (an open-to-all shift on the confirmed date, filled through the
   ordinary Open Shifts flow) and email the membership asking who can help
-  (email only — not an SMS alert). Bringing an apparatus? **Add apparatus
+  (email only — not an SMS alert), narrowed by member class, membership
+  status and positions. Bringing an apparatus? **Add apparatus
   crew** puts a template's crew on the request's calendar event — see
   [Apparatus Events](#apparatus-events).
 - **Comment thread** — internal discussion visible to coordinators.

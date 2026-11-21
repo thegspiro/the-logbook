@@ -11,6 +11,9 @@ const updateRequestStatus = vi.fn();
 const createRequest = vi.fn();
 const getOutreachTypeLabels = vi.fn(() => Promise.resolve({}));
 const toastError = vi.fn();
+const sendVolunteerCall = vi.fn();
+const getAudienceOptions = vi.fn();
+const previewAudience = vi.fn();
 
 vi.mock('react-hot-toast', () => ({
   default: Object.assign(vi.fn(), {
@@ -31,6 +34,11 @@ vi.mock('../services/api', () => ({
     listEmailTemplates: () => Promise.resolve([]),
     getOutreachRoles: () => Promise.resolve([]),
     getStaffing: () => Promise.resolve(null),
+    sendVolunteerCall: (...args: unknown[]) => sendVolunteerCall(...args) as unknown,
+  },
+  memberAudienceService: {
+    getOptions: (...args: unknown[]) => getAudienceOptions(...args) as unknown,
+    preview: (...args: unknown[]) => previewAudience(...args) as unknown,
   },
   eventService: {
     getModuleSettings: () =>
@@ -701,5 +709,55 @@ describe('EventRequestsTab completing a scheduled request', () => {
 
     const page = await screen.findByRole('article', { name: 'Oakwood Library' });
     expect(within(page).getByRole('button', { name: 'Mark completed' })).toBeInTheDocument();
+  });
+});
+
+describe('EventRequestsTab volunteer call', () => {
+  beforeEach(() => {
+    for (const mock of [listRequests, getRequest, sendVolunteerCall, getAudienceOptions, previewAudience]) {
+      mock.mockReset();
+    }
+    listRequests.mockResolvedValue([]);
+    getRequest.mockResolvedValue({
+      id: 'sched-1',
+      contact_name: 'Kevin Wu',
+      contact_email: 'kwu@example.org',
+      organization_name: 'Scout Troop 12',
+      outreach_type: 'station_tour',
+      status: 'scheduled',
+      description: 'A station tour.',
+      date_flexibility: 'flexible',
+      event_date: new Date(Date.now() + 3 * 86_400_000).toISOString(),
+      created_at: '2026-11-01T00:00:00Z',
+      activity_log: [],
+    });
+    getAudienceOptions.mockResolvedValue({
+      member_classes: ['operational', 'administrative', 'social'],
+      member_statuses: [{ value: 'regular', label: null }],
+      positions: [{ id: 'pos-lt', name: 'Lieutenant' }],
+    });
+    previewAudience.mockResolvedValue({ recipients: 7, skipped_opted_out: 0 });
+    sendVolunteerCall.mockResolvedValue({ message: 'Volunteer call emailed to 7 members.', recipients: 7 });
+    useAuthStore.setState({ user: ME });
+  });
+
+  it('asks only the members the coordinator chose', async () => {
+    const user = userEvent.setup();
+    renderBoard('/events/admin/requests/sched-1');
+
+    const page = await screen.findByRole('article', { name: 'Scout Troop 12' });
+    await user.click(within(page).getByRole('button', { name: /Email the Membership/ }));
+    await user.click(await within(page).findByRole('checkbox', { name: 'Lieutenant' }));
+    expect(await within(page).findByText('7 members will be emailed')).toBeInTheDocument();
+    await user.click(within(page).getByRole('button', { name: /Send Request for Help/ }));
+
+    await waitFor(() =>
+      expect(sendVolunteerCall).toHaveBeenCalledWith('sched-1', {
+        member_classes: [],
+        member_statuses: [],
+        position_ids: ['pos-lt'],
+        message: undefined,
+      })
+    );
   });
 });

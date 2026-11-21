@@ -837,6 +837,45 @@ class TestEditorOptions:
         }
         assert other.engine.id not in {a["id"] for a in options["apparatus"]}
 
+    async def test_names_the_event_types_whose_hours_a_mapping_credits(
+        self, db_session: AsyncSession
+    ):
+        """The same rule crediting uses: an active mapping onto an active
+        category. The editor warns for any other event type."""
+        w = await _world(db_session)
+        closed = AdminHoursCategory(
+            id=str(uuid.uuid4()),
+            organization_id=w.org.id,
+            name="Retired category",
+            is_active=False,
+        )
+        db_session.add(closed)
+        await db_session.flush()
+        db_session.add_all(
+            [
+                EventHourMapping(
+                    id=str(uuid.uuid4()),
+                    organization_id=w.org.id,
+                    event_type=EventType.CEREMONY.value,
+                    admin_hours_category_id=closed.id,
+                    percentage=100,
+                ),
+                EventHourMapping(
+                    id=str(uuid.uuid4()),
+                    organization_id=w.org.id,
+                    event_type=EventType.SOCIAL.value,
+                    admin_hours_category_id=w.outreach.id,
+                    percentage=100,
+                    is_active=False,
+                ),
+            ]
+        )
+        await db_session.flush()
+
+        options = await w.service.editor_options(w.org.id)
+
+        assert options["mapped_event_types"] == [EventType.PUBLIC_EDUCATION.value]
+
 
 class TestCalendar:
     async def test_a_night_shows_unless_its_plan_opts_out(

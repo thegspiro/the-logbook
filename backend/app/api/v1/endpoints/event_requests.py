@@ -2038,7 +2038,7 @@ async def send_request_volunteer_call(
             org,
             actor=current_user,
             message=data.message,
-            membership_types=data.membership_types,
+            audience=data.to_filter(),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

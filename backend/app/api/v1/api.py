@@ -65,6 +65,7 @@ from app.api.v1.endpoints import (
     medical_supplies,
     meeting_waiver_requests,
     meetings,
+    member_audience,
     member_badges,
     member_id_cards,
     member_leaves,
@@ -175,6 +176,9 @@ api_router.include_router(
 api_router.include_router(event_requests.router, tags=["event-requests"])
 api_router.include_router(
     apparatus_events.router, prefix="/apparatus-events", tags=["apparatus-events"]
+)
+api_router.include_router(
+    member_audience.router, prefix="/member-audience", tags=["member-audience"]
 )
 api_router.include_router(locations.router, prefix="/locations", tags=["locations"])
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])

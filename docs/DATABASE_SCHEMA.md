@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**398 tables · 6300 columns · 1328 foreign keys**
+**399 tables · 6309 columns · 1330 foreign keys**
 
 ---
 
@@ -110,6 +110,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`apparatus_event_seat_calls`](#apparatus_event_seat_calls) | `ApparatusEventSeatCall` | 9 | One "email members about open seats" send for a run of nights. |
 | [`apparatus_event_template_seats`](#apparatus_event_template_seats) | `ApparatusEventTemplateSeat` | 8 | A named job on a template's apparatus, ``count`` seats wide ("Elf", |
 | [`apparatus_event_template_units`](#apparatus_event_template_units) | `ApparatusEventTemplateUnit` | 5 | One apparatus on a template, with its seats. |
 | [`apparatus_event_templates`](#apparatus_event_templates) | `ApparatusEventTemplate` | 17 | A reusable plan for an apparatus event, scheduled onto any number of |
@@ -2034,6 +2035,28 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_tmpl_changelog_template` (`template_id`)
 
 ## Apparatus_Event
+
+### `apparatus_event_seat_calls`
+
+**ApparatusEventSeatCall** · `app/models/apparatus_event.py`
+
+> One "email members about open seats" send for a run of nights. Kept so the crew card can say when the membership was last asked and how many it reached, and so an officer can see who sent what to whom. The recipients' addresses are not stored: the count and the filter answer those questions, and a copy of the address list would be member PII kept for no reader.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `series_id` | VARCHAR(36) | no |  |  |  |
+| `sent_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `sent_at` | DATETIME | no |  | `now()` |  |
+| `recipients` | INTEGER | no |  |  |  |
+| `skipped_opted_out` | INTEGER | no |  | `0` |  |
+| `nights_listed` | INTEGER | no |  |  |  |
+| `audience` | JSON | yes |  |  |  |
+
+**Indexes**
+
+- `ix_apparatus_event_seat_calls_series` (`organization_id`, `series_id`, `sent_at`)
 
 ### `apparatus_event_template_seats`
 
@@ -13579,7 +13602,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (481 references)
+### → `users` (482 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13600,6 +13623,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus_custom_fields` | `created_by` | SET NULL | yes |
 | `apparatus_documents` | `uploaded_by` | SET NULL | yes |
 | `apparatus_equipment` | `assigned_by` | SET NULL | yes |
+| `apparatus_event_seat_calls` | `sent_by` | SET NULL | yes |
 | `apparatus_event_templates` | `created_by` | SET NULL | yes |
 | `apparatus_fuel_logs` | `recorded_by` | SET NULL | yes |
 | `apparatus_location_history` | `created_by` | SET NULL | yes |
@@ -14065,7 +14089,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (323 references)
+### → `organizations` (324 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14080,6 +14104,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus_custom_fields` | `organization_id` | CASCADE | no |
 | `apparatus_documents` | `organization_id` | CASCADE | no |
 | `apparatus_equipment` | `organization_id` | CASCADE | no |
+| `apparatus_event_seat_calls` | `organization_id` | CASCADE | no |
 | `apparatus_event_templates` | `organization_id` | CASCADE | no |
 | `apparatus_fuel_logs` | `organization_id` | CASCADE | no |
 | `apparatus_location_history` | `organization_id` | CASCADE | no |

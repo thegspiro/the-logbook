@@ -102,9 +102,8 @@ for it.
 
 ### Left out, because nothing would read them yet (pitfall #19)
 
-- **"Email the membership that seats are open"** on Schedule nights. A switch
-  that sent nothing would claim an email went out. Notifying members is a
-  follow-up that should go through the existing notification rules.
+- **"Email the membership that seats are open"** — built 2026-11-20 as
+  **Email members** on the crew card; see "Open-seat email" below.
 - **"Coordinator approves self sign-ups."** A claimed seat is taken at once.
   An approval step needs a pending state on the seat and a reviewer's screen.
 - **"Message crew"** on the night. The existing event reminders reach a
@@ -130,6 +129,23 @@ for it.
   `3f8a1c6e2b94` adds them to every system position holding `events.view` or
   `events.manage`. A position a department created itself is left alone, per
   the seeded-grant rule; grant them on the positions screen if wanted.
+
+### Open-seat email (2026-11-20)
+
+The owner chose a button that can be sent any time, recipients narrowed by
+member class, membership status and positions, the existing **Volunteer
+calls** opt-out, and the same picker on the request pipeline's Email the
+Membership. Choices made without a ruling:
+
+- **Every chosen member gets the same email.** A member who already holds a
+  seat on one of the listed nights is not left out, and a Driver seat is
+  listed to members who could not take it under Enforce (the email names the
+  EVOC level it needs). Tailoring the email per member would mean one
+  message per member's eligibility rather than one send.
+- **A night that takes no self sign-ups is never listed.** A member could not
+  act on it; a coordinator who wants to ask anyway can use the note.
+- **Sending again is allowed and not blocked.** The card shows the last send
+  instead, so a second one is a decision.
 
 ### Public requests (2026-11-17)
 

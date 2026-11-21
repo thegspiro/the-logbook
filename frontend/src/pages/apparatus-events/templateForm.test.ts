@@ -8,6 +8,7 @@ import {
   blankDraft,
   blankSeat,
   duplicateDraft,
+  hoursWouldNotBeCredited,
   nightToSpec,
   toPayload,
   totalSeats,
@@ -139,5 +140,19 @@ describe('templateForm', () => {
     expect(
       nightToSpec({ key: 'n', date: '', start_time: '18:00', duration_minutes: '60', location: '' }, 'UTC')
     ).toBeNull();
+  });
+});
+
+describe('hoursWouldNotBeCredited', () => {
+  const options = (mapped: string[]) => ({ apparatus: [], categories: [], mapped_event_types: mapped });
+
+  it('warns only when no category is chosen and the event type is unmapped', () => {
+    expect(hoursWouldNotBeCredited('', 'public_education', options([]))).toBe(true);
+    expect(hoursWouldNotBeCredited('cat-1', 'public_education', options([]))).toBe(false);
+    expect(hoursWouldNotBeCredited('', 'public_education', options(['public_education']))).toBe(false);
+  });
+
+  it('says nothing before the options have loaded', () => {
+    expect(hoursWouldNotBeCredited('', 'public_education', null)).toBe(false);
   });
 });

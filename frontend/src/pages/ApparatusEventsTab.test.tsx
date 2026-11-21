@@ -82,6 +82,7 @@ describe('ApparatusEventsTab', () => {
     mockGetOptions.mockResolvedValue({
       apparatus: [ENGINE],
       categories: [{ id: 'cat-1', name: 'Community Outreach' }],
+      mapped_event_types: ['public_education'],
     });
   });
 
@@ -104,9 +105,36 @@ describe('ApparatusEventsTab', () => {
     expect(screen.getByText('Never')).toBeInTheDocument();
   });
 
+  it('warns while nothing would credit the crew’s hours, and stops once a category is chosen', async () => {
+    mockGetOptions.mockResolvedValue({
+      apparatus: [ENGINE],
+      categories: [{ id: 'cat-1', name: 'Community Outreach' }],
+      mapped_event_types: [],
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusEventsTab />);
+
+    await user.click(await screen.findByRole('button', { name: /New template/ }));
+    expect(await screen.findByText(/hours won’t be credited/)).toHaveTextContent(
+      'ask whoever manages Admin Hours to map this event type'
+    );
+
+    await user.selectOptions(screen.getByLabelText('Admin Hours category'), 'cat-1');
+    expect(screen.queryByText(/hours won’t be credited/)).not.toBeInTheDocument();
+  });
+
+  it('does not warn when the event type is mapped', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusEventsTab />);
+
+    await user.click(await screen.findByRole('button', { name: /New template/ }));
+    expect(await screen.findByLabelText('Admin Hours category')).toHaveValue('');
+    expect(screen.queryByText(/hours won’t be credited/)).not.toBeInTheDocument();
+  });
+
   it('asks for an apparatus before a template can exist', async () => {
     mockListTemplates.mockResolvedValue([]);
-    mockGetOptions.mockResolvedValue({ apparatus: [], categories: [] });
+    mockGetOptions.mockResolvedValue({ apparatus: [], categories: [], mapped_event_types: [] });
     renderWithRouter(<ApparatusEventsTab />);
 
     expect(await screen.findByText('Add an apparatus first')).toBeInTheDocument();
