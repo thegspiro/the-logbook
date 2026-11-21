@@ -108,6 +108,11 @@ catch-up periods included). Neither sends a text message.
 | Notify members when they become non-compliant | Off         | One email listing what is unmet. Not repeated while the same items stay unmet; sent again if a further requirement, or a new period, falls short. At-risk members are not sent it |
 | Reminder Days Before Deadline                 | `30, 14, 7` | A reminder that many days before an unmet requirement's deadline. Each value 0–30; empty sends no reminders                                                                       |
 
+A **rolling** requirement ("72 hours in any 12 months") has no deadline: it is
+met or short on every day. It gets no reminder (a catch-up deadline aside), and
+the non-compliance notice lists it once, not again each day while it stays
+short (fixed 2026-11-21; it used to send both emails daily).
+
 A member who has turned training reminders off in their own email settings is
 not sent either, unless the department made that email kind required.
 
