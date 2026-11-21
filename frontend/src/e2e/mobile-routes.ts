@@ -1393,6 +1393,27 @@ export const ALL_ROUTES: RouteCheck[] = [
     expectText: 'CR-2026-0008',
   },
   {
+    path: '/finance/purchase-requests/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.request'],
+    expectText: 'New Purchase Request',
+  },
+  {
+    path: '/finance/expenses/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.request'],
+    expectText: 'New Expense Report',
+  },
+  {
+    path: '/finance/check-requests/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.request'],
+    expectText: 'New Check Request',
+  },
+  {
     path: '/finance/my-dues',
     maxSmallTargets: 0,
     maxTinyText: 0,
