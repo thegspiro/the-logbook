@@ -38,6 +38,7 @@ import { formatCalendarDate, formatDate } from '../utils/dateFormatting';
 import { formatHours, formatHoursExact, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { expectArray } from '../utils/asArray';
+import { isForecastReport } from '../utils/complianceForecast';
 import { useTimezone } from '../hooks/useTimezone';
 import type {
   ISOReadiness,
@@ -1048,8 +1049,9 @@ const ForecastSection: React.FC = () => {
     const load = async () => {
       try {
         setLoading(true);
-        const data = await reportExportService.getComplianceForecast();
-        setForecasts(expectArray(data, 'compliance forecast'));
+        const data: unknown = await reportExportService.getComplianceForecast();
+        if (!isForecastReport(data)) throw new Error('Unexpected compliance forecast response');
+        setForecasts(data.members);
       } catch {
         setError('Failed to load compliance forecast');
       } finally {

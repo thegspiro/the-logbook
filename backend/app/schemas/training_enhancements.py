@@ -590,11 +590,39 @@ class ComplianceForecast(BaseModel):
     # non_compliant, not_applicable), by the member's profile thresholds or
     # the department's. Screens colour the current figure by it.
     current_standing: str = "not_applicable"
+    # Each projection with its standing, classified the same way as the
+    # current figure. Still an estimate: every certificate expiring in the
+    # window is charged, whatever grades it.
     forecast_30_days: Optional[float]
+    forecast_30_standing: str = "not_applicable"
     forecast_60_days: Optional[float]
+    forecast_60_standing: str = "not_applicable"
     forecast_90_days: Optional[float]
+    forecast_90_standing: str = "not_applicable"
     at_risk_requirements: List[Dict[str, Any]] = Field(default_factory=list)
     expiring_certifications: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class ComplianceForecastAverage(BaseModel):
+    """A department forecast average and its standing by the department's
+    thresholds; ``pct`` None when no member is graded."""
+
+    pct: Optional[float] = None
+    standing: str = "not_applicable"
+
+
+class ComplianceForecastAverages(BaseModel):
+    current: ComplianceForecastAverage
+    days_30: ComplianceForecastAverage
+    days_60: ComplianceForecastAverage
+    days_90: ComplianceForecastAverage
+
+
+class ComplianceForecastReport(BaseModel):
+    """``GET /training/reports/compliance-forecast``."""
+
+    members: List[ComplianceForecast] = Field(default_factory=list)
+    averages: ComplianceForecastAverages
 
 
 class DepartmentComplianceTrend(BaseModel):

@@ -126,16 +126,29 @@ const COMPLIANCE_STATUSES = ['compliant', 'at_risk', 'non_compliant', 'not_appli
 
 const COMPLIANCE_PERMISSIONS = [...TRAINING_PERMISSIONS, 'compliance.manage'];
 
-const complianceForecasts = COMPLIANCE_MEMBER_NAMES.map((userName, i) => ({
-  user_id: `member-${i}`,
-  user_name: userName,
-  current_compliance_percentage: 87.5 - i * 20,
-  forecast_30_days: 75,
-  forecast_60_days: 62.5,
-  forecast_90_days: 50,
-  at_risk_requirements: [{ id: 'req-1' }, { id: 'req-2' }],
-  expiring_certifications: [{ id: 'cert-1' }, { id: 'cert-2' }, { id: 'cert-3' }],
-}));
+// The endpoint's {members, averages} envelope; the screens reject anything else.
+const complianceForecasts = {
+  members: COMPLIANCE_MEMBER_NAMES.map((userName, i) => ({
+    user_id: `member-${i}`,
+    user_name: userName,
+    current_compliance_percentage: 87.5 - i * 20,
+    current_standing: 'at_risk',
+    forecast_30_days: 75,
+    forecast_30_standing: 'at_risk',
+    forecast_60_days: 62.5,
+    forecast_60_standing: 'non_compliant',
+    forecast_90_days: 50,
+    forecast_90_standing: 'non_compliant',
+    at_risk_requirements: [{ id: 'req-1' }, { id: 'req-2' }],
+    expiring_certifications: [{ id: 'cert-1' }, { id: 'cert-2' }, { id: 'cert-3' }],
+  })),
+  averages: {
+    current: { pct: 67.5, standing: 'non_compliant' },
+    days_30: { pct: 75, standing: 'at_risk' },
+    days_60: { pct: 62.5, standing: 'non_compliant' },
+    days_90: { pct: 50, standing: 'non_compliant' },
+  },
+};
 
 const annualReport = {
   report_type: 'annual_compliance',

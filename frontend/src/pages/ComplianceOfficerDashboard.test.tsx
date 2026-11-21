@@ -22,6 +22,18 @@ const mockExportAnnualReport = vi.fn();
 const mockGetIncompleteRecords = vi.fn();
 const mockGetComplianceForecast = vi.fn();
 
+/** The forecast endpoint's envelope, with not-applicable averages unless given. */
+const forecastReport = (members: unknown[], averages: Record<string, unknown> = {}) => ({
+  members,
+  averages: {
+    current: { pct: null, standing: 'not_applicable' },
+    days_30: { pct: null, standing: 'not_applicable' },
+    days_60: { pct: null, standing: 'not_applicable' },
+    days_90: { pct: null, standing: 'not_applicable' },
+    ...averages,
+  },
+});
+
 vi.mock('../services/trainingServices', () => ({
   complianceOfficerService: {
     getAnnualReport: (...args: unknown[]) => mockGetAnnualReport(...args) as unknown,
@@ -143,7 +155,7 @@ describe('ComplianceOfficerDashboard', () => {
       fields: [],
     });
     mockGetAttestations.mockResolvedValue([]);
-    mockGetComplianceForecast.mockResolvedValue([]);
+    mockGetComplianceForecast.mockResolvedValue(forecastReport([]));
     // A compliance officer: the hub's training.manage plus the grant the
     // configuration page needs.
     useAuthStore.setState({ user: signedInWith(['training.manage', 'compliance.manage']) });
@@ -385,30 +397,32 @@ describe('ComplianceOfficerDashboard', () => {
       // Pitfall #28: reset before installing this block's default so a queued
       // one-shot from another block cannot leak in.
       mockGetComplianceForecast.mockReset();
-      mockGetComplianceForecast.mockResolvedValue([
-        {
-          user_id: 'u-at-risk',
-          user_name: 'Ada Risk',
-          current_compliance_percentage: 85,
-          current_standing: 'at_risk',
-          forecast_30_days: 84,
-          forecast_60_days: 83,
-          forecast_90_days: 82,
-          at_risk_requirements: [],
-          expiring_certifications: [],
-        },
-        {
-          user_id: 'u-compliant',
-          user_name: 'Cy Lowbar',
-          current_compliance_percentage: 60,
-          current_standing: 'compliant',
-          forecast_30_days: 59,
-          forecast_60_days: 58,
-          forecast_90_days: 57,
-          at_risk_requirements: [],
-          expiring_certifications: [],
-        },
-      ]);
+      mockGetComplianceForecast.mockResolvedValue(
+        forecastReport([
+          {
+            user_id: 'u-at-risk',
+            user_name: 'Ada Risk',
+            current_compliance_percentage: 85,
+            current_standing: 'at_risk',
+            forecast_30_days: 84,
+            forecast_60_days: 83,
+            forecast_90_days: 82,
+            at_risk_requirements: [],
+            expiring_certifications: [],
+          },
+          {
+            user_id: 'u-compliant',
+            user_name: 'Cy Lowbar',
+            current_compliance_percentage: 60,
+            current_standing: 'compliant',
+            forecast_30_days: 59,
+            forecast_60_days: 58,
+            forecast_90_days: 57,
+            at_risk_requirements: [],
+            expiring_certifications: [],
+          },
+        ])
+      );
     });
 
     it('is coloured by the standing the server classified', async () => {
@@ -440,6 +454,9 @@ describe('ComplianceOfficerDashboard', () => {
       ],
       ['attestations', 'Failed to load attestation history', () => mockGetAttestations.mockResolvedValue({})],
       ['forecast', 'Failed to load compliance forecast', () => mockGetComplianceForecast.mockResolvedValue({})],
+      // The bare member list the endpoint returned before the averages moved
+      // server-side: a stale API must reach the error, not an empty table.
+      ['forecast', 'Failed to load compliance forecast', () => mockGetComplianceForecast.mockResolvedValue([])],
     ])('shows the %s error message', async (tab, message, malform) => {
       malform();
       renderWithRouter(<ComplianceOfficerDashboard activeTab={tab} />);

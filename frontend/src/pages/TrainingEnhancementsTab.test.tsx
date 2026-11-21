@@ -253,30 +253,49 @@ describe('TrainingEnhancementsTab add dialogs name every control', () => {
 describe('TrainingEnhancementsTab compliance forecast', () => {
   beforeEach(() => {
     getComplianceForecast.mockReset();
-    getComplianceForecast.mockResolvedValue([
-      {
-        user_id: 'u-at-risk',
-        user_name: 'Ada Risk',
-        current_compliance_percentage: 85,
-        current_standing: 'at_risk',
-        forecast_30_days: 84,
-        forecast_60_days: 83,
-        forecast_90_days: 82,
-        at_risk_requirements: [],
-        expiring_certifications: [],
+    getComplianceForecast.mockResolvedValue({
+      members: [
+        {
+          user_id: 'u-at-risk',
+          user_name: 'Ada Risk',
+          current_compliance_percentage: 85,
+          current_standing: 'at_risk',
+          forecast_30_days: 84,
+          forecast_60_days: 83,
+          forecast_90_days: 82,
+          at_risk_requirements: [],
+          expiring_certifications: [],
+        },
+        {
+          user_id: 'u-compliant',
+          user_name: 'Cy Lowbar',
+          current_compliance_percentage: 60,
+          current_standing: 'compliant',
+          forecast_30_days: 59,
+          forecast_60_days: 58,
+          forecast_90_days: 57,
+          at_risk_requirements: [],
+          expiring_certifications: [],
+        },
+      ],
+      averages: {
+        current: { pct: 72.5, standing: 'at_risk' },
+        days_30: { pct: 71.5, standing: 'non_compliant' },
+        days_60: { pct: 70.5, standing: 'non_compliant' },
+        days_90: { pct: 69.5, standing: 'non_compliant' },
       },
-      {
-        user_id: 'u-compliant',
-        user_name: 'Cy Lowbar',
-        current_compliance_percentage: 60,
-        current_standing: 'compliant',
-        forecast_30_days: 59,
-        forecast_60_days: 58,
-        forecast_90_days: 57,
-        at_risk_requirements: [],
-        expiring_certifications: [],
-      },
-    ]);
+    });
+  });
+
+  it('reports a body that is not a forecast report rather than an empty table', async () => {
+    // Before the envelope, a stray object rendered nothing and said nothing.
+    getComplianceForecast.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingEnhancementsTab activeTab="reports" />);
+
+    await user.click(screen.getByRole('button', { name: /Load Forecast/ }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to load forecast'));
   });
 
   it('colours the current figure by the standing the server classified', async () => {

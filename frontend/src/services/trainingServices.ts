@@ -2334,8 +2334,8 @@ export const reportExportService = {
     return response.data as Blob;
   },
 
-  async getComplianceForecast(): Promise<import('../types/training').ComplianceForecast[]> {
-    const response = await api.get<import('../types/training').ComplianceForecast[]>(
+  async getComplianceForecast(): Promise<import('../types/training').ComplianceForecastReport> {
+    const response = await api.get<import('../types/training').ComplianceForecastReport>(
       '/training/reports/compliance-forecast'
     );
     return response.data;

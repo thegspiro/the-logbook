@@ -741,13 +741,17 @@ async def get_compliance_forecast(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_permission("training.manage")),
 ):
-    """Get predictive compliance forecast for all members"""
+    """Each member's compliance forecast and the department's averages.
+
+    ``{"members": [...], "averages": {current, days_30, days_60, days_90}}``,
+    each average ``{"pct", "standing"}`` classified by the department's
+    thresholds (``ComplianceForecastReport``).
+    """
     try:
         service = ReportExportService(db)
-        forecasts = await service.generate_compliance_forecast(
+        return await service.generate_compliance_forecast_report(
             current_user.organization_id
         )
-        return forecasts
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 

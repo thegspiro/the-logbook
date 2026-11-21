@@ -33,6 +33,7 @@ import { EmptyState } from '../components/ux/EmptyState';
 import { CompetencyHeatmap } from '../components/training/CompetencyHeatmap';
 import useLoadData from '../hooks/useLoadData';
 import { getErrorMessage } from '../utils/errorHandling';
+import { isForecastReport } from '../utils/complianceForecast';
 import { displayNameOf } from '../utils/memberName';
 import { userService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
@@ -1483,8 +1484,9 @@ const ReportsSection: React.FC = () => {
   const handleLoadForecast = async () => {
     setLoading(true);
     try {
-      const data = await reportExportService.getComplianceForecast();
-      setForecasts(data);
+      const data: unknown = await reportExportService.getComplianceForecast();
+      if (!isForecastReport(data)) throw new TypeError('The compliance forecast response was not a report');
+      setForecasts(data.members);
     } catch {
       toast.error('Failed to load forecast');
     } finally {
