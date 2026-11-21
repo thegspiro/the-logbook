@@ -756,7 +756,7 @@ export const EventDetailPage: React.FC = () => {
     try {
       setSubmitting(true);
       const newEvent = await eventService.duplicateEvent(eventId);
-      toast.success('Event duplicated');
+      toast.success('Event duplicated as a draft');
       void navigate(`/events/${newEvent.id}/edit`);
     } catch (err) {
       toast.error(getErrorDetail(err) || 'Failed to duplicate event');

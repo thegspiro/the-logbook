@@ -2511,10 +2511,37 @@ class EventService:
             for lifecycle_key in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS:
                 custom_fields.pop(lifecycle_key, None)
 
+        # The source's organizers, rechecked: one who can no longer run an
+        # event gives way to the duplicating officer, as on create, rather
+        # than refusing the duplicate.
+        try:
+            organizers = await self._organizer_columns(
+                source_event.organizer_id,
+                source_event.alternate_organizer_id,
+                organization_id,
+                created_by,
+            )
+        except ValueError:
+            try:
+                organizers = await self._organizer_columns(
+                    source_event.organizer_id, None, organization_id, created_by
+                )
+            except ValueError:
+                organizers = await self._organizer_columns(
+                    None, None, organization_id, created_by
+                )
+
         # Fields to copy from the source event
         new_event = Event(
             organization_id=organization_id,
             created_by=created_by,
+            # Always a draft: the officer is sent straight to the copy's edit
+            # form and publishes from there. Copying the flag published a
+            # duplicate of a hidden draft at once, and a duplicate of a
+            # published event appeared on every calendar, at the source's own
+            # date and room, before the officer had changed anything.
+            is_draft=True,
+            **organizers,
             title=source_event.title,
             description=source_event.description,
             event_type=source_event.event_type,

@@ -1629,6 +1629,11 @@ RSVPs, attendance, cancellation and recurrence are not copied. A Training
 event's copy keeps its training details and the requirements it counts
 toward, and starts with attendance open.
 
+The copy is saved as a **draft**, whether or not the original was published,
+so members do not see it until you untick **Draft** and save. It keeps the
+original's organizer and alternate; if either can no longer run an event, you
+become the organizer in their place.
+
 ### Selecting several events
 
 On the Events page, open the **⋯** menu and choose **Select Events**. Tick the
