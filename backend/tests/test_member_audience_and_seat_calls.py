@@ -27,8 +27,9 @@ from app.services.member_audience import (
     audience_options,
     resolve_audience,
 )
+from tests.clock_support import reread_each_test
 from tests.test_apparatus_event_service import (
-    FUTURE,
+    _clock,
     _night,
     _scheduled,
     _seat,
@@ -37,6 +38,12 @@ from tests.test_apparatus_event_service import (
 )
 
 pytestmark = pytest.mark.integration
+
+# The helpers imported above read FUTURE from their own module, so it is
+# refreshed there as well as here.
+(FUTURE,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
+_reread_service_clock = reread_each_test("tests.test_apparatus_event_service", _clock)
 
 SEND = "app.services.email_service.EmailService.send_email"
 
