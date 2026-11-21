@@ -1145,10 +1145,21 @@ jobs:
             select: --grep @sweep --shard=3/4
           - name: sweep 4/4
             select: --grep @sweep --shard=4/4
+          # Two workers on the `rest` legs only. playwright.config.ts runs CI
+          # at one worker, which left three of a runner's four cores idle for
+          # the 21-23 minutes each of these legs took. Before this was turned
+          # on, the whole selection ran twice under CI settings at two workers
+          # (2026-11-21): 965 passed both times, none on a retry, which matters
+          # because a pass on retry fails the job. The sweep legs were not in
+          # that trial and their per-test budgets were measured at one worker,
+          # so they stay at one; Mobile Safari stays at one because WebKit
+          # composites in software there.
+          # If a spec starts failing only on these legs, suspect a test that
+          # depends on having the dev server to itself before removing this.
           - name: rest 1/2
-            select: --grep-invert '@screenshots|@sweep' --shard=1/2
+            select: --grep-invert '@screenshots|@sweep' --shard=1/2 --workers=2
           - name: rest 2/2
-            select: --grep-invert '@screenshots|@sweep' --shard=2/2
+            select: --grep-invert '@screenshots|@sweep' --shard=2/2 --workers=2
     steps:
       - uses: actions/checkout@v7
 
