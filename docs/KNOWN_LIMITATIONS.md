@@ -7042,6 +7042,38 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   exclusion in every place the matrix frontend counts cells
   (`complianceMatrixModel.ts`), the print page, the exports and the `as_of`
   minimum; missing one recreates the drift of CLAUDE.md pitfall #29.
+- **My Training, requirement progress and the competency matrix graded with
+  their own rules — ✅ fixed 2026-11-21 (review findings).** Three more
+  copies of the grading rules disagreed with the compliance matrix (CLAUDE.md
+  pitfall #29). `TrainingService.evaluate_requirement_detail` (My Training,
+  the officer's member view, and through it the compliance exports and the
+  forecast) now takes met and expired from the shared grader.
+  `check_requirement_progress` (requirement progress, the user training
+  report, the MCP progress tool) is now built from that detail. The
+  competency matrix maps the shared grader's status to its cells. The
+  compliance matrix screen no longer demotes a cell the backend graded met
+  because the expiry it carries has passed. Visible changes:
+  - A certification never held reads "not met", not "Expired — renew ASAP".
+  - An hours requirement with a zero target is not met by one logged hour.
+  - A biannual hours requirement is no longer lapsed by an unrelated
+    certificate outside its window.
+  - A biannual courses requirement with a lapsed newest expiry reads expired.
+  - With the current month excluded, `days_until_due` counts from the real
+    day, so a due date that passed this month reads overdue, not upcoming.
+  - Requirement progress follows the include-current-month setting, and its
+    batch preload now carries the columns certification and category
+    matching read. It used to match no certificate by name.
+  - Competency cells part way to a target read `in_progress`, which
+    readiness does not count. They used to read `expiring_soon` and count as
+    ready. The summary adds `in_progress_count`. A certification cell's
+    `details` is now the grader's progress, not the certificate number.
+- **Competency matrix endpoint has no screen — open, owner question
+  2026-11-21.** No frontend code or MCP tool calls
+  `GET /training/competency-matrix`; the Training heat map reads the
+  skills-evaluation view (`/training/competency/department`). The endpoint
+  now grades through the shared grader rather than its own rules. Whether to
+  keep it for direct API callers or retire it, with its documentation, is not
+  decided.
 - **Profiles: admin hours choose their own profile — open, owner question
   2026-11-21.** A member's admin-hours targets come from the highest-priority
   matching profile that _carries_ admin hours (ties now resolved as grading

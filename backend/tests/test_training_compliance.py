@@ -500,9 +500,10 @@ class TestEvaluateRequirementDetailHours:
         assert result["is_met"] is False
         assert result["progress_percentage"] == 0.0
 
-    def test_hours_zero_required_with_a_completion_is_met(self):
-        # Once the member actually completes matching training, a no-minimum
-        # requirement is satisfied.
+    def test_hours_zero_required_with_a_completion_is_not_met(self):
+        # The shared grader leaves a requirement with no hours target in
+        # progress whatever is logged, as the requirement form warns ("members
+        # won't earn credit"); the detail used to call one hour enough.
         req = _make_requirement(required_hours=0)
         records = [
             _make_record(hours_completed=2.0, completion_date=date(2026, 3, 1)),
@@ -510,8 +511,8 @@ class TestEvaluateRequirementDetailHours:
         result = TrainingService.evaluate_requirement_detail(
             req, records, date(2026, 6, 15)
         )
-        assert result["is_met"] is True
-        assert result["progress_percentage"] == 100.0
+        assert result["is_met"] is False
+        assert result["progress_percentage"] == 0.0
 
     def test_hours_filtered_by_training_type(self):
         from app.models.training import TrainingType
@@ -784,7 +785,10 @@ class TestEvaluateRequirementDetailCertification:
         )
         result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
         assert result["is_met"] is False
-        assert result["cert_expired"] is True
+        # Never held is not expired: the shared grader reads it not_started,
+        # and the card says "not met" rather than "Expired - renew ASAP".
+        assert result["cert_expired"] is False
+        assert result["blocks_activity"] is False
 
     def test_certification_matched_by_registry_code(self):
         req = _make_requirement(
@@ -1189,6 +1193,28 @@ class TestBiannualRequirements:
             _make_record(
                 hours_completed=12.0,
                 completion_date=date(2024, 6, 1),
+                expiration_date=date(2026, 1, 1),
+            ),
+        ]
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 6, 15)
+        )
+        # The record predates the 2025-2026 window, so it counts for nothing;
+        # the shared grader's expiry override reads the window's records only,
+        # so this is unmet rather than expired.
+        assert result["is_met"] is False
+        assert result["cert_expired"] is False
+        assert result["progress_percentage"] == 0.0
+
+    def test_biannual_hours_with_a_lapsed_card_in_the_window(self):
+        req = _make_requirement(
+            frequency=SimpleNamespace(value="biannual"),
+            required_hours=10.0,
+        )
+        records = [
+            _make_record(
+                hours_completed=12.0,
+                completion_date=date(2025, 3, 1),
                 expiration_date=date(2026, 1, 1),
             ),
         ]
