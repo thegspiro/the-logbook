@@ -247,4 +247,6 @@ export interface PublicFormSubmissionResponse {
   form_name: string;
   submitted_at: string;
   message: string;
+  /** For an outreach request form: the requester's status page path. */
+  event_request_status_path?: string | null;
 }

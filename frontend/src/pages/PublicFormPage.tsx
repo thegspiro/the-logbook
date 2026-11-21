@@ -44,6 +44,9 @@ const PublicFormPage = ({ embedded = false }: PublicFormPageProps) => {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitMessage, setSubmitMessage] = useState('');
+  // An outreach request form's submission answers with the requester's status
+  // page (owner decision, 2026-11-21); shown once, here, and stored nowhere.
+  const [statusPath, setStatusPath] = useState<string | null>(null);
   // Honeypot ref - hidden from real users, bots will fill it
   const honeypotRef = useRef<HTMLInputElement>(null);
   const captcha = useCaptcha('form_submit');
@@ -137,6 +140,7 @@ const PublicFormPage = ({ embedded = false }: PublicFormPageProps) => {
       );
       setSubmitted(true);
       setSubmitMessage(result.message);
+      setStatusPath(result.event_request_status_path || null);
     } catch (err: unknown) {
       const msg = getErrorMessage(err, "Your response wasn't sent. Try again.");
       setError(msg);
@@ -384,11 +388,40 @@ const PublicFormPage = ({ embedded = false }: PublicFormPageProps) => {
           </div>
           <h2 className="text-theme-text-primary mb-2 text-xl font-bold">Submission Received</h2>
           <p className="text-theme-text-secondary">{submitMessage || 'Thank you for your submission!'}</p>
+          {statusPath && (
+            <div className="bg-theme-surface-secondary mt-5 rounded-lg p-4 text-left text-sm">
+              <p className="text-theme-text-primary font-medium">Follow your request</p>
+              <p className="text-theme-text-secondary mt-1">
+                Your request's own page shows where it stands and lets you cancel it. Bookmark it: anyone with the link
+                can see and cancel this request, so keep it to yourself.
+              </p>
+              {embedded ? (
+                // Inside a department website's frame the status page would
+                // open in that frame, which it refuses; a tab of its own works.
+                <a
+                  href={statusPath}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-flex min-h-11 items-center font-medium text-blue-700 underline dark:text-blue-400"
+                >
+                  View your request status
+                </a>
+              ) : (
+                <Link
+                  to={statusPath}
+                  className="mt-2 inline-flex min-h-11 items-center font-medium text-blue-700 underline dark:text-blue-400"
+                >
+                  View your request status
+                </Link>
+              )}
+            </div>
+          )}
           {form?.allow_multiple_submissions && (
             <button
               onClick={() => {
                 setSubmitted(false);
                 setFormData({});
+                setStatusPath(null);
               }}
               className="btn-info mt-6 px-6"
             >
