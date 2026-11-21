@@ -10704,6 +10704,15 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
 - **Retention covers the training workflow only.** The business-meeting
   workflow files no documents; when it does, its own policy needs to be read
   by the sweep.
+- **The meeting policy refuses documents** _(2026-11-21)_. Saving the
+  business-meeting policy with `attachment` other than `off` is a 400
+  (`takes_documents` on `WorkflowSpec`), since the workflow has no upload
+  route and such a policy refused every submission. **No stored rows were
+  rewritten and no migration was added:** the policy screen never offered the
+  field for meetings, so only a direct API save could have stored one, and
+  the reader now treats any stored value as `off` (the next save stores
+  `off`). If the meeting workflow ever takes documents, lift the refusal and
+  the read coercion together.
 - **HEIC is stored as filed, not converted.** A decider on Windows may need
   the HEIF extension to open an iPhone photo; nothing previews it in the page.
 - **The upload field sits in the request dialog and the document list on the

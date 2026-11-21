@@ -237,6 +237,46 @@ class TestPolicy:
         assert org.settings["meetings"]["other"] == 1
 
 
+class TestThePolicyTakesNoDocuments:
+    """The meeting workflow has no upload route, so a policy that asked for a
+    document refused every submission while eligibility said allowed."""
+
+    @pytest.mark.parametrize("mode", ["optional", "required"])
+    async def test_saving_one_that_asks_for_documents_is_refused(
+        self, db_session, dept, mode
+    ):
+        with pytest.raises(ValueError, match="do not take documents"):
+            await _svc(db_session).save_policy(
+                dept.org,
+                AttendanceWaiverPolicy(enabled=True, attachment=mode),
+                dept.secretary,
+            )
+
+    async def test_the_training_policy_still_takes_them(self, db_session, dept):
+        saved = await AttendanceWaiverService(db_session).save_policy(
+            dept.org,
+            AttendanceWaiverPolicy(enabled=True, attachment="required"),
+            dept.secretary,
+        )
+        assert saved.attachment == "required"
+
+    async def test_a_stored_one_reads_as_off_and_members_can_still_ask(
+        self, db_session, dept
+    ):
+        """Only a direct API save could have stored one; it reads as off."""
+        await set_meeting_policy(
+            db_session,
+            dept.org,
+            approver_position_ids=[dept.clerk_pos],
+            attachment="required",
+        )
+
+        assert (await _svc(db_session).get_policy(dept.org)).attachment == "off"
+        request = await _submit(db_session, dept)
+        (body,) = await _svc(db_session).describe(dept.org, dept.member, [request])
+        assert body["can_attach"] is False
+
+
 class TestEligibility:
     async def test_a_business_meeting_is_open(self, db_session, dept):
         result = await _svc(db_session).eligibility(dept.org, dept.member, dept.meeting)

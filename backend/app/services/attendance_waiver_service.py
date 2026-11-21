@@ -242,6 +242,9 @@ class WorkflowSpec:
     # uses, so a member who turned training reminders off is still told
     # (CLAUDE.md pitfall #18). A void is not one: its session is not held.
     member_record_email_kind: EmailKind
+    # Whether a request may carry documents. Only training has the upload
+    # routes and the retention sweep; a meeting policy cannot ask for them.
+    takes_documents: bool
 
 
 TRAINING_SPEC = WorkflowSpec(
@@ -259,6 +262,7 @@ TRAINING_SPEC = WorkflowSpec(
     decider_email_kind=EmailKind.TRAINING_DUTIES,
     member_email_kind=EmailKind.TRAINING_REMINDERS,
     member_record_email_kind=EmailKind.TRAINING_RECORD_CHANGES,
+    takes_documents=True,
 )
 
 MEETING_SPEC = WorkflowSpec(
@@ -276,6 +280,7 @@ MEETING_SPEC = WorkflowSpec(
     decider_email_kind=EmailKind.EVENT_DUTIES,
     member_email_kind=EmailKind.EVENT_CHANGES,
     member_record_email_kind=EmailKind.EVENT_CHANGES,
+    takes_documents=False,
 )
 
 SPECS: Dict[AttendanceWaiverWorkflow, WorkflowSpec] = {
@@ -551,12 +556,23 @@ class AttendanceWaiverService:
             else None
         )
         raw = section.get(self.spec.policy_key) if isinstance(section, dict) else None
-        return policy_from_settings(raw)
+        policy = policy_from_settings(raw)
+        if not self.spec.takes_documents and policy.attachment != "off":
+            # Only a direct API save before 2026-11-21 could have stored one,
+            # and it refused every submission (there is nowhere to upload).
+            # Read as off rather than rewritten; the next save stores off.
+            policy = policy.model_copy(update={"attachment": "off"})
+        return policy
 
     async def save_policy(
         self, organization_id: str, policy: AttendanceWaiverPolicy, actor: User
     ) -> AttendanceWaiverPolicy:
         org_id = str(organization_id)
+        if not self.spec.takes_documents and policy.attachment != "off":
+            raise ValueError(
+                f"{self.spec.default_title} requests do not take documents; "
+                "set attachments to off."
+            )
         await assert_all_in_org(
             self.db, Position, policy.approver_position_ids, org_id, label="position"
         )
@@ -1984,6 +2000,7 @@ class AttendanceWaiverService:
                     and not own
                     and r.status == AttendanceWaiverStatus.DENIED,
                     "can_attach": own
+                    and self.spec.takes_documents
                     and r.status == AttendanceWaiverStatus.PENDING
                     and policy.attachment != "off"
                     and len(files.get(str(r.id), [])) < MAX_ATTACHMENTS,
