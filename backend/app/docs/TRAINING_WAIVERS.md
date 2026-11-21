@@ -283,7 +283,10 @@ member who attended anyway is still credited with attending.
 
 **Privacy.** The reason and the deciders' notes are encrypted at rest, shown
 only to the member and to those who may decide, and kept out of notifications
-and the audit log. The member's data export carries their requests, reasons
+and the audit log. Whoever decided a request can still open it once they no
+longer may decide (moved out of the approver position, say), but they then
+see its outcome only: no reason, no documents, and no notes but their own. The
+member's data export carries their requests, reasons
 included, and the decision log of each, notes included; it does not carry
 notes the member wrote as a decider on anyone else's request. Anonymizing a
 departed member clears the reason and the notes; the request itself is kept.

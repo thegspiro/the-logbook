@@ -1934,6 +1934,14 @@ class AttendanceWaiverService:
         for r in requests:
             own = str(r.user_id) == str(viewer.id)
             decider = await self._may_decide_in(org_id, pool, viewer, r.user_id)
+            # The reason, the notes and the filed documents can be medical:
+            # only the member and those who may decide read them
+            # (TRAINING_WAIVERS.md). Whoever decided a request can still open
+            # it (``_may_view``), so their history keeps working, but once
+            # they no longer may decide they see the outcome without the
+            # protected text, as the attachment download already refuses
+            # them. A note they wrote themselves stays theirs to read.
+            sees_text = own or decider
             bodies.append(
                 {
                     "id": str(r.id),
@@ -1946,7 +1954,7 @@ class AttendanceWaiverService:
                     "session_date": r.session_date,
                     "status": r.status.value,
                     "category": r.category,
-                    "reason": r.reason,
+                    "reason": r.reason if sees_text else None,
                     "submitted_at": r.submitted_at,
                     "decided_at": r.decided_at,
                     "decided_by": str(r.decided_by) if r.decided_by else None,
@@ -1984,7 +1992,7 @@ class AttendanceWaiverService:
                             "file_size": f.file_size,
                             "uploaded_at": f.uploaded_at,
                         }
-                        for f in files.get(str(r.id), [])
+                        for f in (files.get(str(r.id), []) if sees_text else [])
                     ],
                     "actions": [
                         {
@@ -1994,7 +2002,11 @@ class AttendanceWaiverService:
                             "actor_name": (
                                 names.get(str(a.actor_id)) if a.actor_id else None
                             ),
-                            "note": a.note,
+                            "note": (
+                                a.note
+                                if sees_text or str(a.actor_id) == str(viewer.id)
+                                else None
+                            ),
                             "created_at": a.created_at,
                         }
                         for a in actions.get(str(r.id), [])
