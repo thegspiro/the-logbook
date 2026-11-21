@@ -397,6 +397,26 @@ def attendance_is_settled(event: Event, now: datetime) -> bool:
     )
 
 
+def _stranded_check_ins_error(stranded: int, occurrences: int = 0) -> str:
+    """The refusal for a schedule change that would strand check-ins.
+
+    ``occurrences`` is given by the series door, which checks every open
+    occurrence a "this and all future events" save moves.
+    """
+    members = "member is" if stranded == 1 else "members are"
+    where = ""
+    if occurrences:
+        where = (
+            " in 1 occurrence" if occurrences == 1 else f" in {occurrences} occurrences"
+        )
+    return (
+        f"{stranded} {members} already checked in{where} at a time outside "
+        "the new schedule, and would be credited for the new date. "
+        "Postpone the event instead, which starts its attendance "
+        "afresh, or remove or correct those check-ins first."
+    )
+
+
 def attendance_locked_error(action: str) -> str:
     """Build the sentinel-prefixed refusal for a write blocked by the lock.
 
@@ -1427,6 +1447,18 @@ class EventService:
     ) -> None:
         """Refuse a schedule change that would strand existing check-ins.
 
+        See :meth:`_count_stranded_check_ins` for the rule; this is its
+        single-event door, and ``update_future_events`` is its series one.
+        """
+        stranded = await self._count_stranded_check_ins(event, update_data)
+        if stranded:
+            raise ValueError(_stranded_check_ins_error(stranded))
+
+    async def _count_stranded_check_ins(
+        self, event: Event, update_data: Dict[str, Any]
+    ) -> int:
+        """Count the check-ins a schedule change would strand.
+
         A check-in is a timestamp, and crediting clamps an early one forward
         to the scheduled start (``_credited_check_in_time``). Moving an event
         a week out therefore turned a tap at the original drill into a full
@@ -1449,7 +1481,7 @@ class EventService:
             "check_in_minutes_after",
         }
         if not window_fields.intersection(update_data):
-            return
+            return 0
 
         def proposed(name: str) -> Any:
             return update_data.get(name, getattr(event, name, None))
@@ -1468,7 +1500,7 @@ class EventService:
         )
         opens, closes = self._get_check_in_window(moved)
         if (opens, closes) == current:
-            return
+            return 0
         window_type = moved.check_in_window_type or CheckInWindowType.FLEXIBLE
         if window_type != CheckInWindowType.STRICT:
             opens -= timedelta(hours=1)
@@ -1484,14 +1516,7 @@ class EventService:
             at = self._as_utc(checked_in_at)
             if at is not None and not opens <= at <= closes:
                 stranded += 1
-        if stranded:
-            members = "member is" if stranded == 1 else "members are"
-            raise ValueError(
-                f"{stranded} {members} already checked in at a time outside "
-                "the new schedule, and would be credited for the new date. "
-                "Postpone the event instead, which starts its attendance "
-                "afresh, or remove or correct those check-ins first."
-            )
+        return stranded
 
     async def complete_deferred_writes(self, organization_id: UUID | str) -> None:
         """Run what ``defer_commit`` writes owe once their batch has committed.
@@ -1682,6 +1707,38 @@ class EventService:
                     )
                     + " would change)"
                 )
+            )
+
+        # The 2026-11-08 rule against stranding check-ins holds on this door
+        # too: each open occurrence is checked against its own new times (it
+        # moves by the anchor's shift) and any check-in settings sent, and the
+        # whole save is refused before anything is written. A finalized
+        # occurrence was refused above if its times change.
+        stranded = 0
+        stranded_occurrences = 0
+        for occurrence in future_events:
+            if attendance_is_finalized(occurrence):
+                continue
+            # Only settings that differ: the edit form re-sends them all.
+            proposed = {
+                key: value
+                for key, value in update_data.items()
+                if key.startswith("check_in_")
+                and value != getattr(occurrence, key, None)
+            }
+            if times_change:
+                start_wall = _wall_time(occurrence.start_datetime, tz) + shift
+                proposed["start_datetime"] = _stored_time(start_wall, tz)
+                proposed["end_datetime"] = _stored_time(start_wall + length, tz)
+            if not proposed:
+                continue
+            count = await self._count_stranded_check_ins(occurrence, proposed)
+            if count:
+                stranded += count
+                stranded_occurrences += 1
+        if stranded:
+            raise ValueError(
+                _stranded_check_ins_error(stranded, occurrences=stranded_occurrences)
             )
 
         # XC-1 (BXC-1): update_event and create_event validate a newly-set
