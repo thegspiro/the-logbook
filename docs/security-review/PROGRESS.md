@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](#)** (branch `claude/security-review-compliance-p15`):
+**PR [#4499](https://github.com/thegspiro/the-logbook/pull/4499)**
+(branch `claude/security-review-compliance-p15`):
 Feature 20 (Compliance), pass 15 — watchdog pickup (the dedicated `/loop 30m
 /security-review` session remains unreachable; this iteration was picked up
 directly, not via `ListAgents`). PR #4496 (Feature 19, Skills testing, pass 15) had already merged (`8597b7ac`) before this iteration started. A fresh
