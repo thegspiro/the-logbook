@@ -265,15 +265,17 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
     EmailTemplateType.MEETING_WAIVER_WITHDRAWN.value: _COMMON_VARS,
 }
 
-_SAMPLE_BUTTONS = (
-    '<p><a href="https://example.org/attendance-waivers/sample?action=approve">'
-    "Approve</a> &middot; "
-    '<a href="https://example.org/attendance-waivers/sample?action=deny">'
-    "Deny</a></p>"
-)
+
+def _sample_buttons(page: str) -> str:
+    return (
+        f'<p><a href="https://example.org{page}/sample?action=approve">'
+        "Approve</a> &middot; "
+        f'<a href="https://example.org{page}/sample?action=deny">'
+        "Deny</a></p>"
+    )
 
 
-def _sample_set(session_title: str, noun: str) -> Dict[str, Dict[str, str]]:
+def _sample_set(session_title: str, noun: str, page: str) -> Dict[str, Dict[str, str]]:
     common = {
         "recipient_name": "Captain Maria Lopez",
         "member_name": "Alex Johnson",
@@ -289,11 +291,10 @@ def _sample_set(session_title: str, noun: str) -> Dict[str, Dict[str, str]]:
             ),
             "category": "Work",
             "reason_provided": "Yes",
-            "review_buttons_html": _SAMPLE_BUTTONS,
+            "review_buttons_html": _sample_buttons(page),
             "review_links_text": (
-                "Approve: https://example.org/attendance-waivers/sample"
-                "?action=approve\n"
-                "Deny: https://example.org/attendance-waivers/sample?action=deny"
+                f"Approve: https://example.org{page}/sample?action=approve\n"
+                f"Deny: https://example.org{page}/sample?action=deny"
             ),
         },
         "decided": {
@@ -307,7 +308,7 @@ def _sample_set(session_title: str, noun: str) -> Dict[str, Dict[str, str]]:
             "outcome_word": "approved",
             "decided_by": "Captain Maria Lopez",
             "decision_note": f"Thanks for letting us know before the {noun}.",
-            "request_url": "https://example.org/attendance-waivers/sample",
+            "request_url": f"https://example.org{page}/sample",
         },
         "withdrawn": {
             **common,
@@ -319,8 +320,12 @@ def _sample_set(session_title: str, noun: str) -> Dict[str, Dict[str, str]]:
     }
 
 
-_TRAINING_SAMPLES = _sample_set("Hose Line Advancement", "session")
-_MEETING_SAMPLES = _sample_set("November Business Meeting", "meeting")
+_TRAINING_SAMPLES = _sample_set(
+    "Hose Line Advancement", "session", "/attendance-waivers"
+)
+_MEETING_SAMPLES = _sample_set(
+    "November Business Meeting", "meeting", "/meetings/waiver-requests"
+)
 
 SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
     EmailTemplateType.SESSION_WAIVER_REQUESTED.value: _TRAINING_SAMPLES["requested"],

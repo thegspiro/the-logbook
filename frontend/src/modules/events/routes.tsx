@@ -24,6 +24,9 @@ const GuestCheckInPage = lazyWithRetry(() => import('../../pages/GuestCheckInPag
 const EventsAdminHub = lazyWithRetry(() =>
   import('../../pages/EventsAdminHub').then((m) => ({ default: m.EventsAdminHub }))
 );
+const CommunityEngagementPrintPage = lazyWithRetry(
+  () => import('../../pages/community-engagement/CommunityEngagementPrintPage')
+);
 const EventEditPage = lazyWithRetry(() =>
   import('../../pages/EventEditPage').then((m) => ({ default: m.EventEditPage }))
 );
@@ -127,6 +130,18 @@ export const getEventsRoutes = () => {
           <ProtectedRoute requiredPermission="events.manage">
             <Suspense fallback={null}>
               <EventsAdminHub />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* The Community Engagement report as a printable summary */}
+      <Route
+        path="/events/admin/community/print"
+        element={
+          <ProtectedRoute requiredPermission="events.manage">
+            <Suspense fallback={null}>
+              <CommunityEngagementPrintPage />
             </Suspense>
           </ProtectedRoute>
         }

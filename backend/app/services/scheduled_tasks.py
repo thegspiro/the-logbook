@@ -574,6 +574,12 @@ SCHEDULE = {
         "recommended_time": "every hour",
         "cron": "20 * * * *",
     },
+    "pending_file_deletions": {
+        "description": "Remove the stored files a permanent member delete queued and could not remove right after its commit (a crash, an unreachable remote store). Checks every file's references again first and keeps one another row names; a row that keeps failing stays queued and is retried every hour.",
+        "frequency": "hourly",
+        "recommended_time": "every hour",
+        "cron": "50 * * * *",
+    },
     "scheduled_emails": {
         "description": "Process pending scheduled emails that are due to be sent",
         "frequency": "every 1 minute",
@@ -4763,6 +4769,18 @@ async def run_stored_file_malware_scan(db: AsyncSession) -> Dict[str, Any]:
     return await StoredFileRescan(db).run()
 
 
+async def run_pending_file_deletions(db: AsyncSession) -> Dict[str, Any]:
+    """Finish the file removals a committed hard delete left queued.
+
+    See app/services/pending_file_deletions.py. Commits per organization
+    itself, the row resolutions with their audit record, so one department's
+    failure does not discard another's.
+    """
+    from app.services.pending_file_deletions import PendingFileDeletionSweep
+
+    return await PendingFileDeletionSweep(db).run()
+
+
 async def run_message_history_cleanup(db: AsyncSession) -> Dict[str, Any]:
     """
     Legacy alias for message-history retention (kept for existing crontabs).
@@ -8724,6 +8742,7 @@ TASK_RUNNERS = {
     ),
     "attendance_waiver_expiry": run_attendance_waiver_expiry,
     "stored_file_malware_scan": run_stored_file_malware_scan,
+    "pending_file_deletions": run_pending_file_deletions,
     "scheduled_emails": run_scheduled_emails,
     "storefront_window_lifecycle": run_storefront_window_lifecycle,
     "storefront_payment_reminders": run_storefront_payment_reminders,
@@ -8923,6 +8942,10 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Hourly, a bounded batch per run; once every stored object has a ledger
     # row a run only compares references (stored_file_rescan).
     "stored_file_malware_scan": 3600,
+    # Hourly. Idempotent: rows are claimed FOR UPDATE SKIP LOCKED, resolved
+    # by id with a checked affected count, and a missing file counts as
+    # deleted (pending_file_deletions).
+    "pending_file_deletions": 3600,
     # Monthly (approx — 30 days)
     "membership_tier_advance": 2592000,
 }

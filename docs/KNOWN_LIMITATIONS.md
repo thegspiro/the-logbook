@@ -7061,6 +7061,16 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   due date from `TrainingService.evaluate_requirement_detail`, the only
   evaluator that computes one; it decides no status. Tests:
   `tests/test_compliance_export_period.py`.
+- **Compliance emails: a rolling requirement is in one non-compliance notice
+  per member, ever — open, found 2026-11-21.** A rolling requirement's window
+  ends on the grading day, which made both member emails repeat daily (the
+  reminder called it "due today", and the notice's key moved with the date).
+  The fix gives a rolling requirement no deadline reminder and keys its notice
+  on the requirement alone (`compliance_member_notices.py`). The cost: a member
+  who meets it, and months later falls short again, is not told again unless
+  the same notice is triggered by some other requirement, which then lists it.
+  Telling them again needs a recorded "met again" date to key on, which the
+  task does not keep. Tests: `tests/test_compliance_member_notices.py`.
 - **The Compliance Officer dashboard's forecast summary cards keep fixed
   colour bands — ✅ resolved 2026-11-21 (owner direction: follow the
   department's and the member's thresholds).** Each member's 30/60/90-day
@@ -10970,11 +10980,27 @@ each case):
 
 **Accepted residuals:**
 
-- **A permanent delete's files go after its commit.** A process killed, or a
-  remote store unreachable, between the commit and the deletes leaves files no
-  later run can find. A failed delete is logged and counted
-  (`files_not_deleted` in the `user_hard_deleted` audit event); closing the
-  crash window would need a durable pending-deletion table and a migration.
+- ~~**A permanent delete's files go after its commit.**~~ **Resolved
+  2026-11-20** (owner decision "Hard-delete crash gap"): the files are queued
+  in `pending_file_deletions` in the delete's own transaction, removed right
+  after the commit, and an hourly `pending_file_deletions` sweep retries what
+  a crash or an unreachable store left. `files_not_deleted` in the
+  `user_hard_deleted` audit event now means files left queued for the sweep.
+- **A queued file that never deletes is visible only in logs and the
+  table.** A remote store that is gone, or a path that no longer confines to
+  its department's area (a moved uploads root), keeps its row, retried every
+  hour and logged as a warning after 24 failures. There is no screen listing
+  them and no way to dismiss one short of a database edit.
+- **A crash after the delete commits can lose its audit record.** The
+  `user_hard_deleted` event is written after the delete's commit and committed
+  with the request, so a process killed in between keeps the delete (and now
+  the queued files) but loses the critical audit row. Writing the event
+  inside the delete's transaction would close it, but changes the event's
+  shape (the per-file counts are known only after the commit), so it awaits
+  the owner.
+- **Member deletes outside the endpoint queue nothing**:
+  `historical_import_undo` and the onboarding reset delete users directly and
+  leave any files their rows named.
 - **An upload racing a permanent delete** (a certificate stored for the member
   after the files were collected) is orphaned.
 - **A relocation or remote migration running at the same moment** can rewrite
