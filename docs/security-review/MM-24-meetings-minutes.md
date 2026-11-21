@@ -1,6 +1,6 @@
 # Security Review — Meetings & Minutes
 
-**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27 (pass 10), 2026-10-30 (pass 11), 2026-11-03 (pass 12), 2026-11-11 (pass 13) · **PR:** #1906 (pass 1), [#2079](https://github.com/thegspiro/the-logbook/pull/2079) (pass 2), #2303 (pass 3), [#2502](https://github.com/thegspiro/the-logbook/pull/2502) (pass 4), [#2881](https://github.com/thegspiro/the-logbook/pull/2881) (pass 5), pass 6 PR recorded in `PROGRESS.md`, pass 7 PR recorded in `PROGRESS.md`, [#3456](https://github.com/thegspiro/the-logbook/pull/3456) (pass 8), [#3636](https://github.com/thegspiro/the-logbook/pull/3636) (pass 9), [#3767](https://github.com/thegspiro/the-logbook/pull/3767) (pass 10), #3849 (pass 11), [#3978](https://github.com/thegspiro/the-logbook/pull/3978) (pass 12), pass 13 (this PR)
+**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27 (pass 10), 2026-10-30 (pass 11), 2026-11-03 (pass 12), 2026-11-11 (pass 13), 2026-11-21 (pass 14) · **PR:** #1906 (pass 1), [#2079](https://github.com/thegspiro/the-logbook/pull/2079) (pass 2), #2303 (pass 3), [#2502](https://github.com/thegspiro/the-logbook/pull/2502) (pass 4), [#2881](https://github.com/thegspiro/the-logbook/pull/2881) (pass 5), pass 6 PR recorded in `PROGRESS.md`, pass 7 PR recorded in `PROGRESS.md`, [#3456](https://github.com/thegspiro/the-logbook/pull/3456) (pass 8), [#3636](https://github.com/thegspiro/the-logbook/pull/3636) (pass 9), [#3767](https://github.com/thegspiro/the-logbook/pull/3767) (pass 10), #3849 (pass 11), [#3978](https://github.com/thegspiro/the-logbook/pull/3978) (pass 12), [#4232](https://github.com/thegspiro/the-logbook/pull/4232) (pass 13), pass 14 (this PR)
 
 ## Pass 1 (2026-08-26)
 
@@ -3132,3 +3132,236 @@ beyond `app/api/v1/endpoints/dashboard.py` (MM-21's fix) and its two guard-test
 files. Everything else reviewed above (`7884706fa` and its siblings) was
 landed by other work and independently re-verified here against all seven
 `CHECKLIST.md` dimensions.
+
+## Pass 14 (2026-11-21) — watchdog pickup, real delta is a whole new member-initiated meeting-waiver workflow, 0 fixed, 0 newly flagged
+
+Watchdog pickup of `/loop 30m /security-review`: the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable. `list_pull_requests`
+(state `open`) found no `claude/security-review-*` head immediately before
+starting; PR #4503 (Feature 22, Grants & fundraising, pass 15) had already
+merged, and row 24 (Meetings & minutes) was confirmed the next `⬜` row on a
+freshly fetched `main`. Baseline: pass 13's own merge,
+`47d68bce90d62e782d0fcc8998180e9e36f60b21` (PR #4232).
+
+**Backend, read in full against the baseline:** `app/api/v1/endpoints/meetings.py`,
+`app/api/v1/endpoints/minutes_records.py` (one line — the PDF running-header
+logo), `app/models/meeting.py`, `app/schemas/meetings.py`,
+`app/services/meetings_service.py`, `app/services/attendance_dashboard_service.py`,
+and, because the real delta pulled them in, the brand-new
+`app/api/v1/endpoints/meeting_waiver_requests.py` (430 lines, entirely new) and
+the relevant slice of `app/services/attendance_waiver_service.py` (which grew
+by +2195/−144 lines to generalize what was a training-only engine into one
+shared by both workflows) and `app/schemas/attendance_waiver.py` (+145/−... ).
+`app/api/v1/endpoints/minutes.py`, `minutes_records.py`'s own routes,
+`app/api/public/minutes.py`, `app/mcp/tools/meetings.py`,
+`app/services/minute_service.py`, `app/services/minutes_record_service.py`,
+`app/services/quorum_service.py`, `app/models/minute.py`,
+`app/schemas/minute.py` are confirmed byte-identical to pass 13
+(`git diff --stat` against the baseline shows no entry for any of them).
+**Frontend:** every file under `frontend/src/modules/minutes/` the diff
+touched (not sampled — `AdoptDialog`, `AgendaEditorDialog`, `AgendaItemsEditor`,
+`CarryForwardDialog`, `ElectionResultsPanel`, `OutlineEditorModal`,
+`PersonPicker`, `ReminderSettingsPanel`, `SignDialog`, `SignerSettingsPanel`,
+`SuggestChangeForm`, `AttendanceDashboardPage`, the new
+`MeetingWaiverSettingsPage`, `MinutesDetailPage`, `MinutesPage`, `OutlinesPage`,
+`routes.tsx`, `types/minutes.ts`, the new `utils/agendaItemFields.ts`),
+`frontend/src/services/meetingsServices.ts`, and the three new shared pages the
+new routes depend on (`frontend/src/pages/training/AttendanceWaiverQueuePage.tsx`,
+`AttendanceWaiverDecisionPage.tsx`, `SessionWaiverSettingsPanel.tsx` — entirely
+new; a check of the pass-13 tree confirms no training waiver UI existed at
+all before this window, so these serve both workflows from day one, not a
+rename of a training-only predecessor). **Migrations:**
+`20261111_1321_7b6db9dd8e4f` (meeting-attendee waiver-request link, one row
+per member per meeting), `20261113_2027_7d4374ffee39` (attendance provenance
+columns) and `20261114_0012_7735ee22aa76` (a pure rejoin of the two heads
+above) — all three read in full.
+
+### Scope since pass 13's merge
+
+The usual `git log <baseline>..HEAD --no-merges -- <this feature's files>`
+mis-showed one commit (`7d542235`) as a whole-file add for several of these
+paths — a `git log -p` history-simplification artifact of this repo's heavy
+rebase/re-point history, not a real reset of the files. `git diff --stat
+<baseline>..HEAD -- <paths>` (the cumulative diff, not per-commit) is the
+authority used throughout this section, and it is consistent with every file
+read in full above.
+
+- **`b8ba320f` ("Refuse to remove the minutes row an approved meeting waiver
+  wrote")** — `MeetingsService.remove_attendee` previously deleted any
+  attendee row unconditionally; a row an approved waiver request wrote
+  (`waiver_request_id` set) could be deleted, charging the meeting as
+  unexcused while the request still read approved and counted toward the
+  member's cap, with nothing to restore it. Now refuses (400) a row carrying
+  `waiver_request_id`. Still org-scoped as before (`meeting_id` +
+  `organization_id` + `id`, all filtered). A correctness fix, not a new
+  attack surface; guarded by a new test seen failing against the unfixed
+  code. Verified good.
+- **A whole new member-initiated meeting-waiver-request workflow** — the
+  real delta of this pass, and the reason the file list above is much larger
+  than usual. `AttendanceWaiverService`, already reviewed (presumably under
+  Feature 17/18, Training) for the training session workflow, has been
+  generalized to also serve business meetings via a second
+  `WorkflowSpec` (`MEETING_SPEC`: `event_type=BUSINESS_MEETING`,
+  `fallback_slugs` = the Secretary's positions, `manage_permission =
+meetings.manage`, `takes_documents=False`). Traced the shared engine's
+  tenant- and workflow-isolation end to end for the meeting side
+  specifically, not assumed from the training review:
+  - **`_find`/`_locked_request`** (the two paths every by-id route goes
+    through) filter `organization_id == org_id AND workflow == self.workflow`
+    together — a business-meeting request id cannot be read, decided or
+    leaked through the training-bound service instance, and vice versa.
+    **XC-3, verified good.**
+  - **`submit()`** resolves the event through `_event()`
+    (`Event.id == ... AND Event.organization_id == org_id`, draft events
+    404), refuses when `event.event_type != self.spec.event_type` (a training
+    session cannot be asked about under the meeting workflow or the reverse),
+    and locks the member row then the event row (shared) in that order before
+    inserting, matching Pitfall #27 — two submissions by the same member race
+    on the member lock, and the unique `live_key` is the durable backstop a
+    stale read cannot defeat. **XC-1/XC-3 and abuse-resistance, verified
+    good.**
+  - **`_require_decider`/`may_decide`/`_route_ids`** — the routes that decide,
+    deny, override, ask or answer a question carry **no** permission
+    dependency on purpose (the module's own docstring: "who may decide is a
+    matter of holding a position... not a permission the route could name"),
+    so the service is the entire authorization boundary. Confirmed: a
+    requester can never decide their own request (`_require_decider`'s first
+    check); `_may_decide_in` for the meeting workflow reads
+    `self.spec.manage_permission` (`meetings.manage`, via `_managers`) rather
+    than training's permission, and `fallback_slugs` resolves Secretary
+    positions, not the Chief's (training's fallback) — the two workflows'
+    decider pools cannot cross-contaminate because `_pool`/`_holder_ids`
+    filter `Position.organization_id == org_id` and the slug sets are
+    workflow-specific constants, not a shared mutable list. A caller who may
+    view but not decide gets 403 (`_may_view`); anyone else gets 404 — no
+    id-existence oracle. **Authorization, verified good.**
+  - **`save_policy`** validates `approver_position_ids`/`cc_position_ids`
+    in-org via `assert_all_in_org` (Pitfall #14c) and
+    `chief_alternate_user_id` via `_current_member_id` (current-member check,
+    Pitfall #32), locks the `Organization` row before reading its settings,
+    and deep-copies the nested JSON section before mutating it (Pitfall #12)
+    — the exact shape Pitfall #12's own example warns against getting wrong.
+    **Verified good.**
+  - **`_decide`** calls `grant_meeting_waiver` only when
+    `self.workflow == MEETING_WORKFLOW and status == APPROVED`, which locks
+    the meeting(s) tied to the request's event and then the attendee row
+    before writing (same lock order as the Secretary's own ad-hoc grant below)
+    — the two paths that can write a meeting waiver (a decided request here,
+    and `POST /meetings/{id}/attendance-waiver` below) cannot race each other
+    into two rows. **Pitfall #27, verified good.**
+  - Attachment routes (upload/list/download) exist only in the training
+    endpoint file; `meeting_waiver_requests.py` has none, matching
+    `takes_documents=False` and `save_policy`'s refusal of a non-"off"
+    attachment setting for this workflow. **Verified good, n/a otherwise.**
+  - Route count for the feature re-enumerated by AST: 98 (17 `meetings.py` +
+    32 `minutes.py` + 30 `minutes_records.py` + 2 `api/public/minutes.py` +
+    17 `meeting_waiver_requests.py`), up from pass 13's 81 — the +17 is
+    entirely the new file. Every route carries an auth dependency; the 14
+    permission-less ones (everything but the three `policy*` routes) are
+    recorded in `tests/permissionless_route_baseline.txt`, and
+    `check_route_permissions.py --strict` is clean (329 routes repo-wide, 0
+    errors/warnings). **Checklist §1/§2, verified good.**
+- **`POST /meetings/{meeting_id}/attendance-waiver` moved from query
+  parameters to a JSON body** (`MeetingAttendanceWaiverGrant`, with its own
+  `min_length=5`/`max_length=500` + trim validator on `reason`) and the audit
+  event for the grant no longer logs the free-text `reason` (ids only) —
+  exactly CLAUDE.md Pitfall #33's rule, and the reason was already flagged in
+  this file's own history as possibly medical. Both the meeting and the
+  target user are still looked up org-scoped before the grant. **Data
+  exposure, a security-positive fix already landed; verified good, not this
+  pass's own finding.**
+- **`AttendanceDashboardService.grant_waiver`** (the Secretary's ad-hoc path)
+  gained the lock this file's own carried-forward "looked at, not a finding"
+  note (passes 5–12) had flagged as unlocked: it now locks the meeting row,
+  then does a locking read (`with_for_update().execution_options(populate_
+existing=True)`) on the `MeetingAttendee` find-or-create, matching Pitfall
+  #27. **This closes a standing carried-forward item; not logged as a new
+  finding id because no exploit was ever demonstrated against the unlocked
+  version, only flagged as worth checking — the carried-forward note is
+  removed from "Confirmed still open" below.**
+- **`MeetingAttendee` schema integrity** — `waiver_request_id`
+  (`ondelete="SET NULL"`, correctly `nullable=True`, Pitfall #2) and
+  `recorded_by` (`ondelete="SET NULL"`, `nullable=True`) both check out. A new
+  unique index on `(meeting_id, user_id)` enforces one row per member per
+  meeting at the database layer, backed by migration `7b6db9dd8e4f`'s
+  pre-settlement of the rows that already broke it (Pitfall #35: a
+  demonstrated, explicitly-irreversible backfill, documented in the
+  migration's own docstring and pointing at `docs/UPGRADING.md`'s backup
+  guidance) — read in full, logic verified correct (the kept row is the one
+  carrying a waiver, else the most recent; `present`/`excused` are merged
+  from the removed rows so a check-in on a dropped duplicate is not lost).
+  Both newer migrations (`7d4374ffee39`, the rejoin `7735ee22aa76`) are
+  additive, nullable, and guarded on `_has_table()`/`_has_column()` for the
+  `create_all`-only table (Pitfall #26). **Checklist §7, verified good.**
+- **`MeetingsService.create_from_event`** (building a minutes record from an
+  event) now folds duplicate `EventRSVP` rows per member into one attendee
+  (matching the new unique index) and calls the new
+  `carry_over_meeting_waivers`, which takes a locking read
+  (`with_for_update(read=True)`) of approved requests for the event — inside
+  the same lock the method already held on the event (Pitfall #27: the
+  caller's own read of "no minutes record yet" predates an approval that
+  could commit while it waited). **Verified good.**
+- **`PersonPicker.tsx`** (motion mover/seconder) and the dialogs it feeds
+  pick from the meeting's own attendee _names_, not a member-id picker, so
+  the former-member-filtering concern (Pitfall #32) does not apply here; it
+  gained `FormField`/discard-guard wiring only. **n/a.**
+- **Frontend rollout, read in full, no finding:** the `FormField`/
+  `useDiscardGuard`/`mapServerFieldErrors` pattern already reviewed across
+  several other modules, applied to `AdoptDialog`, `AgendaEditorDialog`,
+  `AgendaItemsEditor`, `CarryForwardDialog`, `OutlineEditorModal`,
+  `ReminderSettingsPanel`, `SignDialog`, `SignerSettingsPanel` and
+  `SuggestChangeForm`; create-payload semantics checked at each dialog's
+  submit (`||` to coerce an empty string to `undefined`, never `??` —
+  Pitfall #1 — confirmed by grep across every changed file, zero `?? undefined`
+  hits). A `getLoadFailureMessage`/`getActionFailureMessage` wording sweep
+  (owner decisions 2026-11-16/17) touched `MinutesPage.tsx`'s load and delete
+  failures only — wording, not behavior. A PDF running-header/table-layout
+  change added the department logo to the minutes PDF context
+  (`minutes_records.py`'s one-line diff) and three ReportLab table fixes — no
+  data or auth change. **No `window.confirm`/`alert`/`prompt` introduced
+  anywhere in this window (0 hits).**
+- **New routes registered in all three registries** (Pitfall #30a):
+  `/minutes/attendance/waiver-settings` (`meetings.manage`),
+  `/meetings/waiver-requests` and `/meetings/waiver-requests/:id` (signed-in
+  only, matching the backend) all appear in `APPLICATION_PAGES.md`,
+  `testingRegistry.ts` and `mobile-route-inventory.ts`. **Verified good.**
+
+**0 fixed, 0 newly flagged.** The one correctness fix in scope (`b8ba320f`)
+and the lock fix to `grant_waiver` were both already landed by other work,
+independently re-verified here rather than authored by this pass.
+
+### Confirmed still open / still flagged, unchanged
+
+- **`minutes.view_executive` tier** — still a product/role decision, not
+  touched. **FLAGGED**, unchanged.
+- **MM2-3** (app-review) — still out of this rotation's scope. Not
+  re-derived.
+- **`reports_service.py`'s department-overview `open_meeting_items` count**
+  (MM-21's sibling gap, flagged for Feature 29/Reports & analytics) — not
+  this feature's file, not touched; still **FLAGGED** for that rotation slot.
+- `grant_waiver`'s unlocked find-or-create (carried forward since pass 5) is
+  **no longer open** — see above; it is fixed, by other work, this pass.
+
+`docs/KNOWN_LIMITATIONS.md`'s MM-9, MM-17, MM-19, MM-20 and MM5-4 entries
+re-read against current code: all five still accurate. No edit needed.
+
+### Completion gate (pass 14)
+
+| Check                                                                                                                                                                   | Result                                             |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                           | clean (0 violations)                               |
+| `black --check app/ tests/ alembic/`                                                                                                                                    | clean (3,374 files unchanged)                      |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                               | clean                                              |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                       | PASSED — 804 revisions, single head `3daf47506e9e` |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                       | 329 routes, 0 errors, 0 warnings                   |
+| `python3 scripts/generate_schema_docs.py --check`                                                                                                                       | up to date                                         |
+| backend tests, scope (`-k "meeting or minutes or minute or quorum or attendance_dashboard or motion or action_item or attendance_waiver"`)                              | 2,144 passed, 1 skipped (pre-existing, `py_vapid`) |
+| `cd frontend && npm run typecheck`                                                                                                                                      | 0 errors                                           |
+| `cd frontend && npm run lint`                                                                                                                                           | 0 errors, 0 warnings (`--max-warnings 10`)         |
+| `npx vitest run src/modules/minutes src/pages/ActionItemsPage.test.tsx src/pages/training/AttendanceWaiver*.tsx src/pages/training/SessionWaiverSettingsPanel.test.tsx` | 545 passed (66 files)                              |
+
+No other source file under this feature's scope changed behavior this pass
+beyond what is traced above. Everything in the new waiver-request workflow
+was landed by other (non-rotation) work and independently re-verified here
+against all seven `CHECKLIST.md` dimensions for the meeting side
+specifically.

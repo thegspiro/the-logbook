@@ -2727,10 +2727,17 @@ Only explicitly named users can evaluate.
 
 **Returns**: A matrix of members vs. requirements with status for each cell:
 
-- **current** (green): Active and not expiring soon
-- **expiring_soon** (yellow): Expires within 90 days
-- **expired** (red): Past expiration date
-- **not_started** (gray): No record on file
+- **current** (green): Met, and not expiring soon
+- **expiring_soon** (yellow): Met, with an expiry inside 90 days
+- **in_progress**: Part way to the target; not counted toward readiness
+- **expired** (red): Lapsed
+- **not_started** (gray): Nothing counted yet
+
+Since 2026-11-21 every cell is the compliance matrix's own grading (the shared
+grader), so the two views agree, rolling and custom-annual windows and
+category filters included. Before that, partial progress read
+`expiring_soon` and counted toward `readiness_percentage`. The summary also
+reports `in_progress_count`.
 
 **Filtering**:
 

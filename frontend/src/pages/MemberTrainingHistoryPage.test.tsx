@@ -9,6 +9,8 @@ const mockVoidRecord = vi.fn();
 const mockUpdateRecord = vi.fn();
 const mockGetUser = vi.fn();
 const mockExportReport = vi.fn();
+const mockGetRecordAttachments = vi.fn();
+const mockDeleteAttachment = vi.fn();
 let mockPermissions: string[] = [];
 
 vi.mock('react-router', async (importOriginal) => ({
@@ -43,9 +45,10 @@ vi.mock('../services/api', () => ({
 vi.mock('../services/trainingServices', () => ({
   reportExportService: { exportReport: (...args: unknown[]) => mockExportReport(...args) as unknown },
   documentService: {
-    getRecordAttachments: vi.fn(),
+    getRecordAttachments: (...args: unknown[]) => mockGetRecordAttachments(...args) as unknown,
     uploadAttachment: vi.fn(),
     getAttachmentDownloadUrl: vi.fn(),
+    deleteAttachment: (...args: unknown[]) => mockDeleteAttachment(...args) as unknown,
   },
 }));
 
@@ -334,5 +337,66 @@ describe('MemberTrainingHistoryPage record list', () => {
     expect(await screen.findByText('Expired 1/1/2025')).toBeInTheDocument();
     expect(screen.getByText('Expires 6/30/2028')).toBeInTheDocument();
     expect(screen.getByText(/0\.5 hrs/)).toBeInTheDocument();
+  });
+});
+
+describe('MemberTrainingHistoryPage removing a record file', () => {
+  const upload = {
+    index: 0,
+    id: 'entry-1',
+    file_name: 'scan.pdf',
+    file_type: 'application/pdf',
+    file_size: 10,
+    uploaded_at: null,
+    can_remove: true,
+  };
+  const certificate = { ...upload, index: 1, id: 'entry-2', file_name: 'certificate.pdf', can_remove: false };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRecords.mockReset();
+    mockGetRecords.mockResolvedValue([record()]);
+    mockGetUser.mockReset();
+    mockGetUser.mockResolvedValue({ id: 'member-1', full_name: 'Pat Member', username: 'pat' });
+    mockGetRecordAttachments.mockReset();
+    mockGetRecordAttachments.mockResolvedValue({ record_id: 'rec-1', attachments: [upload, certificate] });
+    mockDeleteAttachment.mockReset();
+    mockDeleteAttachment.mockResolvedValue(undefined);
+    mockPermissions = ['training.manage'];
+  });
+
+  const openFiles = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderWithRouter(<MemberTrainingHistoryPage />);
+    await user.click(await screen.findByRole('button', { name: 'Files for HIPAA Awareness' }));
+    return screen.findByRole('dialog', { name: 'Attachments' });
+  };
+
+  it('offers Remove only where the server says the caller may remove the file', async () => {
+    const user = userEvent.setup();
+    const dialog = await openFiles(user);
+
+    expect(await within(dialog).findByRole('button', { name: 'Remove scan.pdf' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Remove certificate.pdf' })).not.toBeInTheDocument();
+  });
+
+  it('removes the file by its id once confirmed, then reloads the list', async () => {
+    const user = userEvent.setup();
+    const dialog = await openFiles(user);
+
+    await user.click(await within(dialog).findByRole('button', { name: 'Remove scan.pdf' }));
+    await user.click(await screen.findByRole('button', { name: 'Remove file' }));
+
+    await waitFor(() => expect(mockDeleteAttachment).toHaveBeenCalledWith('rec-1', 'entry-1'));
+    await waitFor(() => expect(mockGetRecordAttachments).toHaveBeenCalledTimes(2));
+  });
+
+  it('keeps the file when the confirmation is declined', async () => {
+    const user = userEvent.setup();
+    const dialog = await openFiles(user);
+
+    await user.click(await within(dialog).findByRole('button', { name: 'Remove scan.pdf' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep it' }));
+
+    expect(mockDeleteAttachment).not.toHaveBeenCalled();
   });
 });

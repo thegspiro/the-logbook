@@ -4733,12 +4733,22 @@ Compliance Matrix _(2026-11-20)_. The **Current** figure is coloured by the
 member's standing there — the profile's thresholds when it sets its own,
 otherwise the department's — so the same member reads the same here, on the
 Training Enhancements forecast and on the matrix. The 30, 60 and 90-day
-figures are estimates and keep fixed colour bands. They subtract every
-certificate expiring in the window, including one no requirement grades, so
-for a member whose profile lists few requirements one expiring certificate
-moves the projection further.
+figures are coloured the same way, by that member's thresholds _(2026-11-21)_.
+They are estimates: they subtract every certificate expiring in the window,
+including one no requirement grades, so for a member whose profile lists few
+requirements one expiring certificate moves the projection further, and can
+turn it red.
+
+The four summary cards are the department's averages over the members who are
+graded, coloured by the **department's** thresholds. When the department
+requires every requirement (**All required**), an average reads compliant only
+when every graded member is compliant at that point. A member measured against
+their profile's lower bar can therefore read green while the department card
+beside them reads red; that is intended.
 
 ![Compliance forecast projecting each member's compliance over 90 days](./images/02-75-compliance-forecast.png)
+
+_The screenshot predates the 2026-11-21 colours (it shows the old fixed bands)._
 
 ### Edge Cases
 
@@ -4770,6 +4780,20 @@ later.
 
 > **Hint:** You can manage attachments on **your own** records. Training
 > officers can manage attachments on any member's records.
+
+### Removing an Attachment _(2026-11-21)_
+
+Select the bin icon beside a file, then **Remove file** to confirm (or
+**Keep it** to cancel). The file is deleted; the training record stays.
+
+- A training officer can remove any file uploaded to the record.
+- A member can remove only a file they uploaded themselves.
+- A certificate that came with an approved self-report cannot be removed
+  here: the approval rests on it. It has no bin icon.
+- A voided record keeps all its files.
+
+_Screenshot: retake `02-79-training-attachments.png` to show the bin icon
+beside a removable file._
 
 ### Edge Cases
 

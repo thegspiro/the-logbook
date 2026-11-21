@@ -227,6 +227,7 @@ async def _config(
     compliant: float = 100.0,
     at_risk: float = 75.0,
     include_current_month: bool = True,
+    threshold_type: str = "percentage",
 ) -> str:
     config_id = _uid()
     await db.execute(
@@ -234,7 +235,7 @@ async def _config(
             "INSERT INTO compliance_configs "
             "(id, organization_id, compliant_threshold, at_risk_threshold, "
             "threshold_type, include_current_month, created_at, updated_at) "
-            "VALUES (:id, :org, :c, :a, 'percentage', :icm, :now, :now)"
+            "VALUES (:id, :org, :c, :a, :tt, :icm, :now, :now)"
         ),
         {
             "id": config_id,
@@ -242,6 +243,7 @@ async def _config(
             "c": compliant,
             "a": at_risk,
             "icm": 1 if include_current_month else 0,
+            "tt": threshold_type,
             "now": _now(),
         },
     )
@@ -503,6 +505,113 @@ class TestComplianceForecastFollowsTheProfile:
         assert row["current_compliance_percentage"] == 100.0
         assert row["forecast_30_days"] == 50.0
         assert len(row["expiring_certifications"]) == 1
+        # The projection is classified by the member's profile bar (50 / 25),
+        # and the department average by the department's (100 / 75).
+        assert row["forecast_30_standing"] == "compliant"
+        report = await ReportExportService(
+            db_session
+        ).generate_compliance_forecast_report(dept.org)
+        assert report["averages"]["current"] == {"pct": 100.0, "standing": "compliant"}
+        assert report["averages"]["days_30"] == {
+            "pct": 50.0,
+            "standing": "non_compliant",
+        }
+
+
+class TestForecastStandingsAndAverages:
+    async def test_default_install_classifies_the_projection(self, db_session):
+        # No compliance config: the 100 / 75 defaults decide. Four met hours
+        # requirements and one certificate nothing grades, expiring in 20
+        # days: 3 of 4 at 30 days, at risk.
+        org_id, today = await _org(db_session)
+        reqs = {
+            name: await _hours_req(db_session, org_id, name) for name in HOURS_TYPES
+        }
+        extra = TrainingRequirement(
+            id=_uid(),
+            organization_id=org_id,
+            name="Delta",
+            requirement_type=RequirementType.HOURS,
+            training_type=TrainingType.REFRESHER,
+            required_hours=1,
+            frequency=RequirementFrequency.ANNUAL,
+            due_date_type=DueDateType.CALENDAR_PERIOD,
+            period_start_month=1,
+            period_start_day=1,
+            applies_to_all=True,
+            shift_credited=False,
+            active=True,
+        )
+        db_session.add(extra)
+        member = await _member(db_session, org_id, "Mike")
+        for name in reqs:
+            await _hours(db_session, org_id, member, name, today)
+        db_session.add(
+            TrainingRecord(
+                id=_uid(),
+                organization_id=org_id,
+                user_id=member,
+                course_name="Refresher",
+                training_type=TrainingType.REFRESHER,
+                status=TrainingStatus.COMPLETED,
+                completion_date=today,
+                hours_completed=1.0,
+            )
+        )
+        await _expiring_cert(db_session, org_id, member, today, 20)
+
+        row = (await _forecast(db_session, org_id))[member]
+
+        assert row["current_standing"] == "compliant"
+        assert (row["forecast_30_days"], row["forecast_30_standing"]) == (
+            75.0,
+            "at_risk",
+        )
+        assert (row["forecast_90_days"], row["forecast_90_standing"]) == (
+            75.0,
+            "at_risk",
+        )
+
+    async def test_all_required_average_needs_every_member_compliant(self, db_session):
+        org_id, today = await _org(db_session)
+        for name in HOURS_TYPES:
+            await _hours_req(db_session, org_id, name)
+        complete = await _member(db_session, org_id, "Complete")
+        partial = await _member(db_session, org_id, "Partial")
+        for name in HOURS_TYPES:
+            await _hours(db_session, org_id, complete, name, today)
+        await _hours(db_session, org_id, partial, "Alpha", today)
+        await _hours(db_session, org_id, partial, "Bravo", today)
+        await _config(db_session, org_id, at_risk=50, threshold_type="all_required")
+
+        report = await ReportExportService(
+            db_session
+        ).generate_compliance_forecast_report(org_id)
+
+        # Mean 83.3 clears the 50 bar, but one member is not compliant.
+        for key in ("current", "days_30", "days_60", "days_90"):
+            assert report["averages"][key] == {"pct": 83.3, "standing": "at_risk"}
+
+    async def test_report_members_are_the_forecast_rows(self, db_session):
+        dept = await _profiled_org(db_session)
+        rows = await ReportExportService(db_session).generate_compliance_forecast(
+            dept.org
+        )
+        report = await ReportExportService(
+            db_session
+        ).generate_compliance_forecast_report(dept.org)
+        assert report["members"] == rows
+
+    async def test_no_graded_member_gives_not_applicable_averages(self, db_session):
+        org_id, _ = await _org(db_session)
+        await _member(db_session, org_id, "Mike")
+        report = await ReportExportService(
+            db_session
+        ).generate_compliance_forecast_report(org_id)
+        assert report["averages"] == {
+            key: {"pct": None, "standing": "not_applicable"}
+            for key in ("current", "days_30", "days_60", "days_90")
+        }
 
 
 class TestDepartmentCutOffReachesExportsAndForecast:

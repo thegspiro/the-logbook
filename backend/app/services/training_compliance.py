@@ -2630,16 +2630,41 @@ def classify_standing(
         return STANDING_NOT_APPLICABLE, None
 
     pct = round(completed_count / total_count * 100, 1)
+    return (
+        _standing_for_pct(
+            pct,
+            completed_count >= total_count,
+            compliant_threshold,
+            at_risk_threshold,
+            threshold_type,
+        ),
+        pct,
+    )
 
+
+def _standing_for_pct(
+    pct: float,
+    all_met: bool,
+    compliant_threshold: float,
+    at_risk_threshold: float,
+    threshold_type: str,
+) -> str:
+    """The threshold ladder, the one place it is written.
+
+    ``pct`` is the rounded figure the screen shows, so a displayed 75.0 never
+    reads below a 75 bar. Under ``all_required`` only ``all_met`` is
+    compliant, however close ``pct`` rounds to 100. Shared by
+    :func:`classify_standing` (a member) and
+    :meth:`ComplianceGrading.classify_average` (a department average).
+    """
     if threshold_type == "all_required":
-        if completed_count >= total_count:
-            return "compliant", pct
+        if all_met:
+            return "compliant"
     elif pct >= compliant_threshold:
-        return "compliant", pct
-
+        return "compliant"
     if pct >= at_risk_threshold:
-        return "at_risk", pct
-    return "non_compliant", pct
+        return "at_risk"
+    return "non_compliant"
 
 
 def _evaluate_member_compliance(
@@ -2824,6 +2849,35 @@ class ComplianceGrading:
             grading.compliant_threshold,
             grading.at_risk_threshold,
             self.threshold_type,
+        )
+
+    def classify_average(
+        self, figures: Iterable[Tuple[Optional[float], str]]
+    ) -> Tuple[str, Optional[float]]:
+        """A department average of member figures, and its standing.
+
+        ``figures`` is each member's ``(pct, standing)`` at one horizon, as
+        :meth:`classify` returned it; members nothing grades (``None``) are
+        left out. The mean, rounded to one decimal, is classified by the
+        department's thresholds and threshold type, not a profile's (owner
+        direction 2026-11-21). Under ``all_required`` the average is
+        compliant only when every graded member is: the exact form of "the
+        average is 100%", which a rounded mean can fake.
+        """
+        graded = [(pct, standing) for pct, standing in figures if pct is not None]
+        if not graded:
+            return STANDING_NOT_APPLICABLE, None
+        mean = round(sum(pct for pct, _ in graded) / len(graded), 1)
+        all_met = all(standing == "compliant" for _, standing in graded)
+        return (
+            _standing_for_pct(
+                mean,
+                all_met,
+                self.compliant_threshold,
+                self.at_risk_threshold,
+                self.threshold_type,
+            ),
+            mean,
         )
 
 

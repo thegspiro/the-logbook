@@ -729,6 +729,7 @@ GET    /api/v1/training/reports/compliance-forecast         # Compliance forecas
 GET    /api/v1/training/records/{id}/attachments                       # List attachments (metadata only, no file paths)
 POST   /api/v1/training/records/{id}/attachments                       # Upload attachment (multipart, ≤25MB, magic-byte type check, malware scan)
 GET    /api/v1/training/records/{id}/attachments/{entry}/download       # Download a stored attachment by id (or a legacy index)
+DELETE /api/v1/training/records/{id}/attachments/{entry}                # Remove a file uploaded to the record (training.manage: any; member: own uploads; never an approved certificate or a voided record)
 ```
 
 Access is the record owner or `training.manage`.

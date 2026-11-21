@@ -51,11 +51,11 @@ from app.models.user import ACTIVE_ACCOUNT_STATUSES, Position, User
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
     NOT_YET_HELD_STATUS,
-    STANDING_NOT_APPLICABLE,
     ComplianceGrading,
     EvaluationCredits,
     HeldSession,
     MemberCompliance,
+    MemberGrading,
     _load_compliance_config,
     grade_members,
     load_credited_shift_dates,
@@ -104,16 +104,22 @@ def _stringify_uuids(data: dict) -> dict:
     }
 
 
-def _forecast_pct(met: int, total: int, expiring_count: int) -> Optional[float]:
-    """A member's compliance percentage with ``expiring_count`` lapsed.
+def _project(
+    grading: ComplianceGrading,
+    member_grading: MemberGrading,
+    met: int,
+    total: int,
+    expiring_count: int,
+) -> Tuple[str, Optional[float]]:
+    """A member's standing and percentage with ``expiring_count`` lapsed.
 
-    Simple forecast: each expiring certification costs one requirement. None
-    when nothing grades the member — they are not applicable (TR4-4).
+    Simple forecast: each expiring certification costs one met requirement.
+    Classified by the member's own thresholds and the department's threshold
+    type, as their current standing is, so a figure and its colour come from
+    one call. ``("not_applicable", None)`` when nothing grades the member
+    (TR4-4).
     """
-    if total <= 0:
-        return None
-    current = met / total * 100
-    return round(max(0, current - (expiring_count / total * 100)), 1)
+    return grading.classify(member_grading, max(0, met - expiring_count), total)
 
 
 def _member_batches(members: Sequence[User]) -> List[Sequence[User]]:
@@ -1485,7 +1491,40 @@ class ReportExportService:
     async def generate_compliance_forecast(
         self, organization_id: str
     ) -> List[Dict[str, Any]]:
-        """Generate predictive compliance forecast for all members"""
+        """Each member's compliance forecast (see ``_forecast_rows``)."""
+        rows, _ = await self._forecast_rows(organization_id)
+        return rows
+
+    async def generate_compliance_forecast_report(
+        self, organization_id: str
+    ) -> Dict[str, Any]:
+        """The members' forecasts and the department's four averages.
+
+        Each average is the mean of the graded members' figures at that
+        horizon, classified by the department's thresholds and threshold type
+        (``ComplianceGrading.classify_average``), so the screen colours it as
+        the backend decided rather than by bands of its own (CLAUDE.md
+        pitfall 29, owner direction 2026-11-21).
+        """
+        rows, grading = await self._forecast_rows(organization_id)
+        horizons = {
+            "current": ("current_compliance_percentage", "current_standing"),
+            "days_30": ("forecast_30_days", "forecast_30_standing"),
+            "days_60": ("forecast_60_days", "forecast_60_standing"),
+            "days_90": ("forecast_90_days", "forecast_90_standing"),
+        }
+        averages: Dict[str, Dict[str, Any]] = {}
+        for key, (pct_field, standing_field) in horizons.items():
+            standing, pct = grading.classify_average(
+                (row[pct_field], row[standing_field]) for row in rows
+            )
+            averages[key] = {"pct": pct, "standing": standing}
+        return {"members": rows, "averages": averages}
+
+    async def _forecast_rows(
+        self, organization_id: str
+    ) -> Tuple[List[Dict[str, Any]], ComplianceGrading]:
+        """Every graded member's forecast row, and the grading behind them."""
         today = await resolve_org_today(self.db, organization_id)
         forecasts = []
 
@@ -1560,6 +1599,8 @@ class ReportExportService:
                 forecasts.append(
                     self._member_forecast(
                         user,
+                        grading,
+                        grading.for_member(user, list(all_requirements)),
                         graded.get(str(user.id)),
                         records_by_user.get(str(user.id), []),
                         today,
@@ -1571,7 +1612,7 @@ class ReportExportService:
                     )
                 )
 
-        return forecasts
+        return forecasts, grading
 
     async def _completed_records(
         self, organization_id: str, user_ids: Sequence[str]
@@ -1594,6 +1635,8 @@ class ReportExportService:
     @staticmethod
     def _member_forecast(
         user: User,
+        grading: ComplianceGrading,
+        member_grading: MemberGrading,
         compliance: Optional[MemberCompliance],
         records: Sequence[TrainingRecord],
         today: date,
@@ -1609,9 +1652,11 @@ class ReportExportService:
         (``grade_members``, CLAUDE.md pitfall 29). The at-risk list reads each
         graded requirement's due date, which only
         ``TrainingService.evaluate_requirement_detail`` computes; it decides
-        no status here. The projections subtract every certificate expiring in
-        the window, whatever grades it, so they are an estimate rather than a
-        standing.
+        no status here. Each projection subtracts every certificate expiring
+        in the window, whatever grades it, and is classified by the member's
+        own thresholds like the current figure (owner direction 2026-11-21).
+        It is still an estimate: a certificate no requirement reads, or one
+        already renewed, lowers it too (docs/KNOWN_LIMITATIONS.md).
         """
         from app.services.training_service import TrainingService
 
@@ -1652,19 +1697,28 @@ class ReportExportService:
         # in every department average (TR4-4), and not 0%, which dividing by
         # a substituted 1 once reported.
         met, total = tally_standing(ev.status for _, ev in evaluations)
-        expiring_30 = sum(1 for e in expiring if e["days_remaining"] <= 30)
-        expiring_60 = sum(1 for e in expiring if e["days_remaining"] <= 60)
-        expiring_90 = len(expiring)
+        current_standing, current_pct = _project(grading, member_grading, met, total, 0)
+        horizons = {
+            days: _project(
+                grading,
+                member_grading,
+                met,
+                total,
+                sum(1 for e in expiring if e["days_remaining"] <= days),
+            )
+            for days in (30, 60, 90)
+        }
         return {
             "user_id": str(user.id),
             "user_name": f"{user.first_name} {user.last_name}",
-            "current_compliance_percentage": _forecast_pct(met, total, 0),
-            "current_standing": (
-                compliance.standing if compliance else STANDING_NOT_APPLICABLE
-            ),
-            "forecast_30_days": _forecast_pct(met, total, expiring_30),
-            "forecast_60_days": _forecast_pct(met, total, expiring_60),
-            "forecast_90_days": _forecast_pct(met, total, expiring_90),
+            "current_compliance_percentage": current_pct,
+            "current_standing": current_standing,
+            "forecast_30_days": horizons[30][1],
+            "forecast_30_standing": horizons[30][0],
+            "forecast_60_days": horizons[60][1],
+            "forecast_60_standing": horizons[60][0],
+            "forecast_90_days": horizons[90][1],
+            "forecast_90_standing": horizons[90][0],
             "at_risk_requirements": at_risk,
             "expiring_certifications": expiring,
         }
