@@ -470,6 +470,16 @@ delete itself, so a server restart or an unreachable file store in the
 middle no longer leaves them behind: an hourly task finishes the job. Files in a member's personal Member Files folder and
 the separation letter in Documents are not touched by either action yet.
 
+**Permanently deleting a member also removes their application**
+_(2026-11-21)_. If the member joined through the membership pipeline, their
+applicant record went with them only by name before: deleting the member left
+it behind, with their ID documents, background checks and form answers, and
+nothing could remove it afterwards. Now the delete removes the application,
+its interviews and notes, its form answers and its uploaded documents. The
+confirmation dialog lists it as **Applicant record, with its documents and
+form answers**. An external-attendee check-in at an event, made before they applied, stays
+with the event's history, as it does when an application is purged.
+
 ### What is kept
 
 Training completions and certifications, attendance and service hours,

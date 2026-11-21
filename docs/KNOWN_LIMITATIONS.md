@@ -10922,6 +10922,18 @@ each case):
   only, so a department that has not set it keeps the file until someone
   removes it by hand.
 
+- ~~**A permanent delete left the member's applicant record behind.**~~
+  **Resolved 2026-11-21** (member-files review, high).
+  `prospective_members.transferred_user_id` is `SET NULL`, so the delete
+  only detached the application, its documents and its form answers, and
+  Purge takes only inactive applications. `delete_transferred_applications`
+  now deletes them in the delete's transaction and queues the document files
+  on `pending_file_deletions`. **Kept, deliberately:** an event guest
+  check-in that created the prospect (`event_external_attendees.prospect_id`, `SET NULL`)
+  stays with the event's history, as it does when Purge removes an
+  application. Default taken without a further ruling; it holds the
+  guest's name and contact details as the event recorded them.
+
 **Accepted residuals:**
 
 - ~~**A permanent delete's files go after its commit.**~~ **Resolved
