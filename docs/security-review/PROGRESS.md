@@ -16,6 +16,57 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#PENDING](#)** (branch `claude/security-review-training-extended-p15`):
+Feature 18 (Training extended), pass 15 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable per `ListAgents`). PR #4491 (Feature 17, Training core,
+pass 15) had already merged (`abcf2fc2`) before this iteration started. A
+fresh `list_pull_requests` (state `open`) found no `claude/security-review-*`
+head, and row 18 was confirmed the next `⬜` row directly against the table
+on a freshly fetched `main`.
+
+**0 fixed, 0 new findings — real delta across eleven files (1,080
+insertions), all of it already fixed and tested before this pass read it;
+one new-scope item deferred.** Baseline `fde02bac` (pass 14's merge, PR
+#4180). The window's real work: a fourth waiver source
+(`SOURCE_SESSION_EXCUSAL`, an approved attendance-waiver-request excusing one
+named session, org-scoped) threaded into training grading; row locking added
+to the requirement-progress credit/reversal paths (Pitfall #27); the
+compliance-profile-grading integration (Pitfall #29, owner decision
+2026-11-20/21) threaded through every export plus a PDF-rendering rewrite;
+centralized attachment-path confinement and orphan cleanup on training
+submissions; a body-level refusal of a client-supplied `attachments` field;
+audit logging added to waiver writes and report exports (ids/parameters
+only, confirmed free-text reasons never logged); a former-member refusal on
+cohort enrollment and instructor qualifications; and a provider-connection
+reset that now keys off the stored values rather than which keys a save
+merely included. All 108 routes across the seven declared endpoint files
+re-enumerated by AST, unchanged from pass 14. No new org-scoping gap found in
+a full read of every changed file.
+
+**New scope found, deferred rather than reviewed:** `attendance_waiver_requests.py`
+(31 routes) was folded into this feature's declared scope by SEC-00's own
+pass-14→15 lap note without itself receiving a seven-dimension review.
+PR #4481, an independent, owner-approved review of exactly this surface, is
+open and unmerged against `main` as of this pass — reviewing it now would
+duplicate that PR's findings and risk flagging lines it is already rewriting.
+Deferred to the pass after #4481 merges. Full write-up:
+`docs/security-review/TRX-18-training-extended.md`'s **Pass 15** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 794
+revisions, single head `d5946cb2bd41`; `check_route_permissions.py
+--strict` — 328 routes, 0 errors/warnings; `generate_schema_docs.py --check`
+— up to date; scoped backend pytest — 3550 passed, 1 pre-existing
+environment-only skip (`py_vapid`); `npm run typecheck` — 0 errors; `npm run
+lint` — 0 errors (within `--max-warnings 10`).
+
+Row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills testing) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 15, PR #4491, merged), preserved for history</summary>
+
 **PR [#4491](https://github.com/thegspiro/the-logbook/pull/4491)**
 (branch `claude/security-review-training-core-p15`): Feature 17 (Training
 core), pass 15 — watchdog pickup (the dedicated `/loop 30m
@@ -61,9 +112,9 @@ pre-existing environment-only skip (`py_vapid`); standing guard suites —
 warnings; `npx vitest run` (this feature's pages/components/modules, 88
 files) — 959 passed.
 
-Row 17 → ✅ (pending this PR's merge); next is Feature 18 (Training
-extended) — re-check `list_pull_requests` fresh rather than trusting this
-note.
+Row 17 → ✅ (merged as `abcf2fc2`); next was Feature 18 (Training extended).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 15, PR #4473, merged), preserved for history</summary>
@@ -27137,7 +27188,7 @@ iteration's commit" rule.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13), `api/public/shift_evaluations.py` (added pass 15)                                                        | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (31 routes, added pass 17)                              | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (31 routes, added pass 17)                              | 🔄     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ⬜     |
@@ -27197,6 +27248,54 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-21 — Feature 17 (Training core, pass 15) merged; Feature 18 (Training extended, pass 15) — watchdog pickup, 0 fixed/0 new findings, real delta already fixed and tested before this pass read it; new scope deferred
+
+Watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable per `ListAgents`).
+PR #4491 (Feature 17, Training core, pass 15) had already merged (`abcf2fc2`)
+before this iteration started. A fresh `list_pull_requests` (state `open`)
+found no `claude/security-review-*` head; row 18 (Training extended) was
+confirmed the next `⬜` row directly against the rotation table on a freshly
+fetched `main`.
+
+The baseline was `fde02bac` (pass 14's merge, PR #4180). Eleven declared
+files carried a real diff (1,080 insertions/373 deletions): a fourth waiver
+source (`SOURCE_SESSION_EXCUSAL`, org-scoped) threaded into training
+grading; row locking added to the requirement-progress credit/reversal
+paths (Pitfall #27); the compliance-profile-grading integration (Pitfall
+#29) threaded through every export plus a PDF-rendering rewrite; centralized
+attachment-path confinement and orphan cleanup on training submissions; a
+body-level refusal of a client-supplied `attachments` field; audit logging
+added to waiver writes and report exports; a former-member refusal on cohort
+enrollment and instructor qualifications; and a provider-connection-reset
+fix keyed off stored values rather than which keys a save merely included.
+All of it was already fixed and tested by the commits that introduced it;
+this pass's job was re-verifying the claims against the current code. 108
+routes across the seven declared endpoint files re-enumerated by AST,
+unchanged from pass 14. **0 fixed, 0 new findings.**
+
+**New scope deferred, not reviewed:** `attendance_waiver_requests.py` (31
+routes) was folded into this feature's scope by `SEC-00-cross-cutting-baseline.md`'s
+own pass-14→15 lap note without itself receiving a seven-dimension review.
+PR #4481, an independent, owner-approved review of that exact surface, is
+open and unmerged — reviewing it now would duplicate that PR's own findings
+and risk flagging code it is already rewriting. Deferred to the pass after
+#4481 merges.
+
+`docs/security-review/TRX-18-training-extended.md`'s **Pass 15** section has
+the full review.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 794
+revisions, single head `d5946cb2bd41`; `check_route_permissions.py --strict`
+— 328 routes, 0 errors/warnings; `generate_schema_docs.py --check` — up to
+date; scoped backend pytest — 3550 passed, 1 pre-existing environment-only
+skip (`py_vapid`); `npm run typecheck` — 0 errors; `npm run lint` — 0 errors
+(exit 0, within `--max-warnings 10`).
+
+Row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills testing) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-21 — Feature 16 (Events & requests, pass 15) merged; Feature 17 (Training core, pass 15) — watchdog pickup, 0 fixed/0 new findings, large real delta already fixed and tested before this pass read it
 

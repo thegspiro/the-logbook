@@ -1387,6 +1387,7 @@ class EventService:
         if updated_by:
             event.updated_by = str(updated_by)
         event.updated_at = datetime.now(dt_timezone.utc)
+        await self._move_own_staffing(event, organization_id)
 
         if defer_commit:
             await self.db.flush()
@@ -1927,6 +1928,11 @@ class EventService:
         await self.db.refresh(event)
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
         await self._send_waiver_notices(waiver_notices, organization_id)
+        await self._stand_down_own_staffing(
+            getattr(event, "staffing_shift_id", None),
+            organization_id,
+            "The outreach event this covered was cancelled.",
+        )
 
         # Send cancellation notifications if requested
         if send_notifications and rsvps_to_notify:
@@ -2142,6 +2148,8 @@ class EventService:
         waiver_notices = await self._reconfirm_waiver_requests_if_moved(
             {str(event.id): old_start}, [event], organization_id
         )
+
+        await self._move_own_staffing(event, organization_id)
 
         await self.db.commit()
         await self.db.refresh(event)
@@ -2742,6 +2750,7 @@ class EventService:
             [event], organization_id, "deleted"
         )
 
+        sheet_id = getattr(event, "staffing_shift_id", None)
         await self.db.delete(event)
         try:
             await self.db.commit()
@@ -2760,7 +2769,41 @@ class EventService:
 
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
         await self._send_waiver_notices(waiver_notices, organization_id)
+        await self._stand_down_own_staffing(
+            sheet_id,
+            organization_id,
+            "The outreach event this covered was deleted.",
+        )
         return True
+
+    async def _move_own_staffing(
+        self, event: Event, organization_id: UUID | str
+    ) -> None:
+        """Keep an event's own signup sheet on its time (owner decision,
+        2026-11-20). Inside the event's transaction; a request-owned sheet is
+        moved by the request's own sync instead."""
+        # getattr: callers in tests hand in plain stand-ins without the column.
+        if not getattr(event, "staffing_shift_id", None):
+            return
+        from app.services.event_staffing_service import move_event_staffing
+
+        org = await self.db.scalar(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        await move_event_staffing(self.db, event, org)
+
+    async def _stand_down_own_staffing(
+        self, sheet_id: Optional[str], organization_id: UUID | str, reason: str
+    ) -> None:
+        """Cancel an event's own signup sheet and tell its crew, after the
+        event's own commit (``cancel_shift`` commits)."""
+        if not sheet_id:
+            return
+        from app.services.event_staffing_service import stand_down_event_staffing
+
+        await stand_down_event_staffing(
+            self.db, sheet_id, str(organization_id), None, reason
+        )
 
     async def delete_event_series(
         self,
@@ -4627,6 +4670,7 @@ class EventService:
                 event, organization_id, finalized_by
             )
             await self._advance_prospects_after_finalize(event)
+            await self._complete_request_after_finalize(event, finalized_by)
             return outcome
 
         updated_count = 0
@@ -4734,8 +4778,37 @@ class EventService:
                 credit, organization_id, finalized_by, can_manage_training
             )
         await self._advance_prospects_after_finalize(event)
+        await self._complete_request_after_finalize(event, finalized_by)
 
         return outcome
+
+    async def _complete_request_after_finalize(
+        self, event: Event, finalized_by: UUID | str | None
+    ) -> None:
+        """Close the outreach request this event came from (owner decision,
+        2026-11-20); see ``complete_request_for_finalized_event``.
+
+        Runs after the close is durable and swallows its own failure, as the
+        applicant advance beside it does: the attendance and credited hours
+        are what finalizing is for, and a request left scheduled is one press
+        of Mark completed away, now that its date has passed.
+        """
+        from app.services.event_request_service import (
+            complete_request_for_finalized_event,
+        )
+
+        try:
+            await complete_request_for_finalized_event(
+                self.db, event, str(finalized_by) if finalized_by else None
+            )
+        except Exception:
+            logger.exception(
+                "Could not complete the request for finalized event {}", event.id
+            )
+            try:
+                await self.db.rollback()
+            except Exception:
+                logger.exception("Rollback after that failure also failed")
 
     async def _advance_prospects_after_finalize(self, event: Event) -> None:
         """Move applicants this event's now-settled attendance clears.

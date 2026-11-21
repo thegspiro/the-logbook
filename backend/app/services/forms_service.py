@@ -7,7 +7,7 @@ fields, submissions, public forms, integrations, and reporting.
 
 import html as html_lib
 import re
-from datetime import datetime, timezone, tzinfo
+from datetime import date, datetime, timezone
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -22,7 +22,6 @@ from typing import (
     Tuple,
 )
 from uuid import UUID
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from loguru import logger
 from sqlalchemy import delete, func, or_, select, update
@@ -50,6 +49,7 @@ from app.utils.contact_visibility import ContactPolicy
 from app.utils.model_updates import apply_updates
 from app.utils.org_timezone import (
     local_day_start_utc,
+    org_today,
     resolve_scheduling_timezone,
     today_in,
 )
@@ -3356,32 +3356,23 @@ class FormsService:
         if is_public and not pipeline.get("accept_public_requests", False):
             return {"success": False, "error": self.EVENT_REQUEST_CLOSED_ERROR}
 
-        # A date picker submits a calendar date ("2026-09-10") with no time.
-        # Stamping it midnight UTC turns it into the previous evening for
-        # every negative-offset department, so the coordinator's screen shows
-        # the day before the requester chose. Anchor date-only values to
-        # midnight in the organization's own timezone instead.
-        request_tz: tzinfo
-        try:
-            request_tz = ZoneInfo(getattr(org, "timezone", None) or "UTC")
-        except (ZoneInfoNotFoundError, ValueError):
-            request_tz = timezone.utc
-
-        def _parse_request_date(value: Any) -> Optional[datetime]:
+        # A date picker submits a calendar date ("2026-09-10"), and the column
+        # is a calendar date (owner decision, 2026-11-20), so the day is stored
+        # as written. It used to be anchored to midnight in the department's
+        # timezone and written to a DATETIME, which has no zone: the wall clock
+        # was kept and the offset dropped, the value was read back as UTC
+        # midnight, and the coordinator saw the evening before.
+        def _parse_request_date(value: Any) -> Optional[date]:
             """Best-effort ISO parse for the requester's date preferences —
             a malformed date must not fail the whole request."""
             if not value:
                 return None
             text = str(value).strip()
             try:
-                parsed = datetime.fromisoformat(text)
+                # A value carrying a time is still the day written in it.
+                return datetime.fromisoformat(text.replace("Z", "+00:00")).date()
             except ValueError:
                 return None
-            if parsed.tzinfo is None:
-                # Date-only values carry no instant; a value that supplied its
-                # own time is still read as local to the department.
-                parsed = parsed.replace(tzinfo=request_tz)
-            return parsed
 
         preferred_start = _parse_request_date(mapped_data.get("preferred_date_start"))
         # Parsed here rather than at the model build below: the normalizer and
@@ -3454,6 +3445,7 @@ class FormsService:
             pipeline,
             date_flexibility,
             preferred_start,
+            today=org_today(org),
             preferred_date_end=preferred_end,
         )
 

@@ -2,12 +2,14 @@ import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import type { OutreachEventTypeConfig, OutreachRole } from '../../types/event';
 import type { OutreachSectionProps } from './types';
+import TypeRolePreset from './TypeRolePreset';
 
 const OutreachSection: React.FC<OutreachSectionProps> = ({
   settings,
   saving,
   onAddType,
   onRemoveType,
+  onSaveTypeRoles,
   newTypeLabel,
   onNewTypeLabelChange,
   onAddRole,
@@ -20,7 +22,8 @@ const OutreachSection: React.FC<OutreachSectionProps> = ({
       <div>
         <h2 className="text-theme-text-primary text-lg font-semibold">Request Types</h2>
         <p className="text-theme-text-muted mt-1 text-sm">
-          The kinds of outreach event a requester can choose from on the request form.
+          The kinds of outreach event a requester can choose from on the request form, and the roles each usually needs.
+          A type&apos;s roles fill in its signup sheet, which the coordinator can still change for each event.
         </p>
       </div>
 
@@ -28,11 +31,19 @@ const OutreachSection: React.FC<OutreachSectionProps> = ({
         {settings.outreach_event_types.map((ot: OutreachEventTypeConfig) => (
           <div
             key={ot.value}
-            className="border-theme-surface-border flex items-center justify-between rounded-lg border p-3"
+            className="border-theme-surface-border flex items-start justify-between gap-2 rounded-lg border p-3"
           >
-            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="text-theme-text-primary text-sm font-medium">{ot.label}</span>
-              <span className="text-theme-text-muted min-w-0 font-mono text-xs break-all">{ot.value}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="text-theme-text-primary text-sm font-medium">{ot.label}</span>
+                <span className="text-theme-text-muted min-w-0 font-mono text-xs break-all">{ot.value}</span>
+              </div>
+              <TypeRolePreset
+                type={ot}
+                roles={settings.outreach_roles}
+                saving={saving}
+                onSave={(roles) => onSaveTypeRoles(ot.value, roles)}
+              />
             </div>
             {ot.value !== 'other' && (
               <button
