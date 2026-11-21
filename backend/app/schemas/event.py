@@ -29,8 +29,16 @@ from app.schemas.base import UTCDateTime, UTCResponseBase, as_utc
 from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.schemas.reminder_limits import ReminderLeadDays, ReminderLeadHours
 from app.schemas.training_session import (
+    CertificationNumberPrefix,
+    CourseCode,
+    CourseName,
+    CreditHours,
+    ExpirationMonths,
+    InstructorName,
+    IssuingAgency,
     TrainingSessionAttach,
     TrainingSessionDetailsUpdate,
+    TrainingTypeName,
 )
 
 _response_config = ConfigDict(from_attributes=True)
@@ -1205,6 +1213,122 @@ class CheckInMonitoringStats(UTCResponseBase):
 # Event Templates
 # ============================================================
 
+TemplateCourseMode = Literal["none", "library", "oneoff"]
+TemplateCreditHoursSource = Literal["duration", "course", "manual"]
+
+
+class EventTemplateTrainingDetailsBase(BaseModel):
+    """The training details a Training template stores, as it is read back.
+
+    A tolerant read (pitfall #19): every field has a default and nothing is
+    refused, so a stored object can always be answered. The write side, and
+    the single authority on the stored shape, is EventTemplateTrainingDetails.
+    """
+
+    course_mode: str = "none"
+    course_id: Optional[str] = None
+    course_name: Optional[str] = None
+    course_code: Optional[str] = None
+    training_type: str = "continuing_education"
+    credit_hours: Optional[float] = None
+    credit_hours_source: str = "duration"
+    instructor_id: Optional[str] = None
+    instructor: Optional[str] = None
+    issues_certification: bool = False
+    certification_number_prefix: Optional[str] = None
+    issuing_agency: Optional[str] = None
+    expiration_months: Optional[int] = None
+
+
+class EventTemplateTrainingDetails(BaseModel):
+    """The training details a Training template saves (owner decision
+    2026-11-20): the course, training type, credit hours and their source,
+    lead instructor and certification settings, and nothing else.
+
+    The one canonical stored shape of ``event_templates.training_details``
+    (pitfall #20). The validator settles every combination into it, and the
+    service re-validates whatever the endpoint dumped and stores
+    ``model_dump(mode="json")``, so the column always holds a complete,
+    JSON-native object. The frontend's ``toTemplateTrainingDetails``
+    (trainingDetailsModel.ts) builds the same shape for the request; this
+    class is the authority, and that one must not refuse anything this one
+    accepts.
+
+    Unknown keys are refused, so a requirement, category or attendance link
+    (none of which a template carries) is a 422 rather than silently dropped.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    course_mode: TemplateCourseMode = "none"
+    course_id: Optional[UUID] = None
+    course_name: Optional[CourseName] = None
+    course_code: Optional[CourseCode] = None
+    training_type: TrainingTypeName = "continuing_education"
+    credit_hours: Optional[CreditHours] = None
+    credit_hours_source: TemplateCreditHoursSource = "duration"
+    instructor_id: Optional[UUID] = None
+    instructor: Optional[InstructorName] = None
+    issues_certification: bool = False
+    certification_number_prefix: Optional[CertificationNumberPrefix] = None
+    issuing_agency: Optional[IssuingAgency] = None
+    expiration_months: Optional[ExpirationMonths] = None
+
+    @field_validator(
+        "course_name",
+        "course_code",
+        "instructor",
+        "certification_number_prefix",
+        "issuing_agency",
+        mode="before",
+    )
+    @classmethod
+    def _blank_is_none(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return v.strip() or None
+        return v
+
+    @model_validator(mode="after")
+    def _settle(self) -> "EventTemplateTrainingDetails":
+        if self.course_mode == "library":
+            if self.course_id is None:
+                raise ValueError("Pick a course from the Course Library")
+            self.course_name = None
+            self.course_code = None
+        elif self.course_mode == "oneoff":
+            if self.course_id is not None:
+                raise ValueError(
+                    "Pick a course from the library or name a one-off course, "
+                    "not both"
+                )
+            if not self.course_name:
+                raise ValueError("Name the one-off course")
+        else:
+            self.course_id = None
+            self.course_name = None
+            self.course_code = None
+
+        # 'course' keeps the figure the course carried when the template was
+        # saved, so the form can still save if the Course Library fails to
+        # load when the template is applied; applying it refreshes the figure
+        # to the course's current one when the course is listed.
+        if self.credit_hours_source == "course" and (
+            self.course_mode != "library" or self.credit_hours is None
+        ):
+            self.credit_hours_source = "duration"
+        if self.credit_hours_source == "duration":
+            self.credit_hours = None
+        elif self.credit_hours_source == "manual" and self.credit_hours is None:
+            raise ValueError(
+                "Enter the credit hours, or let them follow the event's length"
+            )
+
+        if not self.issues_certification:
+            self.certification_number_prefix = None
+            self.issuing_agency = None
+            self.expiration_months = None
+        return self
+
 
 class EventTemplateCreate(BaseModel):
     """Schema for creating an event template"""
@@ -1252,6 +1376,8 @@ class EventTemplateCreate(BaseModel):
     reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
     reminder_schedule: List[ReminderLeadHours] = Field(default=[24])
     custom_fields_template: Optional[Dict[str, Any]] = None
+    # Training templates only; the service refuses it on any other type.
+    training_details: Optional[EventTemplateTrainingDetails] = None
 
 
 class EventTemplateUpdate(BaseModel):
@@ -1289,6 +1415,8 @@ class EventTemplateUpdate(BaseModel):
     reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
     reminder_schedule: Optional[List[ReminderLeadHours]] = None
     custom_fields_template: Optional[Dict[str, Any]] = None
+    # Replaces the whole object; null clears it. Training templates only.
+    training_details: Optional[EventTemplateTrainingDetails] = None
     is_active: Optional[bool] = None
 
 
@@ -1321,6 +1449,7 @@ class EventTemplateResponse(UTCResponseBase):
     reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
     reminder_schedule: List[int] = Field(default=[24])
     custom_fields_template: Optional[Dict[str, Any]] = None
+    training_details: Optional[EventTemplateTrainingDetailsBase] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime

@@ -1,4 +1,8 @@
 import type { EventCreate, EventTemplate } from '../types/event';
+import {
+  fromTemplateTrainingDetails,
+  type TrainingDetailsForm,
+} from '../components/training-event/trainingDetailsModel';
 import { formatForDateTimeInput, localToUTC } from './dateFormatting';
 
 /**
@@ -9,8 +13,9 @@ import { formatForDateTimeInput, localToUTC } from './dateFormatting';
  * browser-clock strings this used to build were read as browser time, which put the
  * default an hour or a day out for anyone away from the department (workflow review W21).
  *
- * A template carries the event's own fields only: EventTemplate has no training
- * details, so a Training template opens Training Info on its defaults.
+ * A Training template's training details are read separately, by
+ * `templateToInitialTraining`, since the training form holds them apart from
+ * the event's own fields.
  */
 export function templateToInitialData(template: EventTemplate, tz: string): Partial<EventCreate> {
   const nowLocal = formatForDateTimeInput(new Date(), tz);
@@ -45,4 +50,16 @@ export function templateToInitialData(template: EventTemplate, tz: string): Part
     custom_fields:
       (template.custom_fields_template as Record<string, string | number | boolean | null> | undefined) || undefined,
   };
+}
+
+/**
+ * Training Info for a picked template: its saved training details laid onto
+ * the form's defaults, or undefined when it has none to fill — any type but
+ * Training, or a Training template saved before templates carried training
+ * details (owner decision 2026-11-20), which opens Training Info on its
+ * defaults as before.
+ */
+export function templateToInitialTraining(template: EventTemplate): TrainingDetailsForm | undefined {
+  if (template.event_type !== 'training' || !template.training_details) return undefined;
+  return fromTemplateTrainingDetails(template.training_details);
 }

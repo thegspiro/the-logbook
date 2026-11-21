@@ -901,7 +901,8 @@ Select **Create Event** on the Events page. It opens the **Create Event** tab
 of **Manage Events**.
 
 1. Optionally pick a template under **Start from a Template** — _"Pick a
-   template to pre-fill common settings, or start blank."_
+   template to pre-fill common settings, or start blank. A Training template
+   opens the step-by-step form and fills its training details."_
 2. Set the **event type**, **title**, start and end date and time. Moving the
    start past the end carries the end with it, keeping the event's length.
 3. Add a **location** and a **description**.
@@ -933,7 +934,10 @@ of **Manage Events**.
 > instructor, credit hours, certification and sign-off on **Training Info**. A
 > note at the top says **Switched to the training form**, with a **Change back
 > to …** button; picking another type also brings the single-page form back,
-> again with your entries. See
+> again with your entries. A Training template that saved training details
+> also fills **Training Info** _(2026-11-20)_: the course, training type,
+> credit hours, lead instructor and certification settings (see
+> [Templates](#templates)). See
 > [Training Credit from Events](#training-credit-from-events).
 
 > **What if Require RSVP is on but there is no deadline?** On a single event,
@@ -1367,11 +1371,36 @@ credited automatically.
 A template saves the settings you use again and again — title, type,
 location, time, length, description and reminders.
 
+**A Training template also saves the session's training details**
+_(2026-11-20)_: the course (from the Course Library, a one-off name and code,
+or none), the training type, the credit hours and where they come from (the
+event's length, the course, or a typed figure), the lead instructor, and the
+certification settings — whether it issues one, the number prefix, the
+issuing agency and the expiry in months. Picking the template fills
+**Training Info** with them, replacing what was there. A template does not
+save requirement or program links, **Counts toward attendance**, or the
+completion settings; those start on their defaults for each session.
+
+- If the template's course is no longer in the Course Library, the session
+  starts on **No course yet**, with a note saying so on **Training Info**.
+- If its lead instructor is no longer a current member, **Lead instructor**
+  starts empty, with a note.
+- Hours that come from the course are refreshed to the course's current
+  figure when the template is picked.
+- Under a library course, a blank **Lead Instructor** or **Expiration** is
+  still saved as the course's, as on any training event.
+
 **Making one:**
 
-- On an event's page, select **More → Save as Template**; or
+- On an event's page, select **More → Save as Template**. On a Training
+  event this saves its training details too. If they cannot be read, the
+  template is not saved and a message says so; try again; or
 - on the Events page, open the **⋯** menu → **Event Templates** and select
-  **Create Template**.
+  **Create Template**. With **Event Type** set to **Training**, a **Training
+  Details** section offers the course, type, hours, lead instructor and
+  certification. Picking a library course fills type, hours, instructor and
+  expiry from it, but leaves the template's **Max Attendees** alone. Saving
+  a template as another type clears any training details it had.
 
 **Using one:** pick it under **Start from a Template** on **Create Event**, or
 choose it from **Create from Template** in the Events page's **⋯** menu.

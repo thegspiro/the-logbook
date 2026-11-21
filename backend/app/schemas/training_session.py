@@ -8,12 +8,38 @@ from datetime import datetime
 from typing import Annotated, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase, as_utc
 from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 from app.schemas.enum_validation import validate_enum_value
+
+
+def _training_type_value(v: str) -> str:
+    return validate_enum_value(v, ModelTrainingType, "training_type")
+
+
+# The bounds on a session's training details, declared once. Event create
+# (TrainingSessionAttach), event edit (TrainingSessionDetailsUpdate) and the
+# training details an event template stores (EventTemplateTrainingDetails in
+# schemas/event.py) all use these, so a template cannot hold a value that
+# creating an event from it would then refuse.
+CourseName = Annotated[str, Field(max_length=255)]
+CourseCode = Annotated[str, Field(max_length=50)]
+InstructorName = Annotated[str, Field(max_length=255)]
+CertificationNumberPrefix = Annotated[str, Field(max_length=50)]
+IssuingAgency = Annotated[str, Field(max_length=255)]
+CreditHours = Annotated[float, Field(ge=0, le=FLOAT32_MAX)]
+ExpirationMonths = Annotated[int, Field(ge=1, le=INT32_MAX)]
+TrainingTypeName = Annotated[str, AfterValidator(_training_type_value)]
 
 
 class TrainingSessionCreate(BaseModel):
@@ -259,21 +285,21 @@ class TrainingSessionAttach(BaseModel):
 
     course_id: Optional[UUID] = None
     # A one-off course name, not added to the Course Library.
-    course_name: Optional[str] = Field(None, max_length=255)
-    course_code: Optional[str] = Field(None, max_length=50)
+    course_name: Optional[CourseName] = None
+    course_code: Optional[CourseCode] = None
     category_id: Optional[UUID] = None
     program_id: Optional[UUID] = None
     phase_id: Optional[UUID] = None
     requirement_id: Optional[UUID] = None
-    training_type: Optional[str] = None
-    credit_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
-    instructor: Optional[str] = Field(None, max_length=255)
+    training_type: Optional[TrainingTypeName] = None
+    credit_hours: Optional[CreditHours] = None
+    instructor: Optional[InstructorName] = None
     instructor_id: Optional[UUID] = None
 
     issues_certification: bool = False
-    certification_number_prefix: Optional[str] = Field(None, max_length=50)
-    issuing_agency: Optional[str] = Field(None, max_length=255)
-    expiration_months: Optional[int] = Field(None, ge=1, le=INT32_MAX)
+    certification_number_prefix: Optional[CertificationNumberPrefix] = None
+    issuing_agency: Optional[IssuingAgency] = None
+    expiration_months: Optional[ExpirationMonths] = None
 
     counts_toward_certification: bool = True
     auto_create_records: bool = True
@@ -288,13 +314,6 @@ class TrainingSessionAttach(BaseModel):
             "members they grade are charged with attending it"
         ),
     )
-
-    @field_validator("training_type")
-    @classmethod
-    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        return validate_enum_value(v, ModelTrainingType, "training_type")
 
     @model_validator(mode="after")
     def _one_course_source(self) -> "TrainingSessionAttach":
@@ -323,21 +342,21 @@ class TrainingSessionDetailsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     course_id: Optional[UUID] = None
-    course_name: Optional[str] = Field(None, max_length=255)
-    course_code: Optional[str] = Field(None, max_length=50)
+    course_name: Optional[CourseName] = None
+    course_code: Optional[CourseCode] = None
     category_id: Optional[UUID] = None
     program_id: Optional[UUID] = None
     phase_id: Optional[UUID] = None
     requirement_id: Optional[UUID] = None
-    training_type: Optional[str] = None
-    credit_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
-    instructor: Optional[str] = Field(None, max_length=255)
+    training_type: Optional[TrainingTypeName] = None
+    credit_hours: Optional[CreditHours] = None
+    instructor: Optional[InstructorName] = None
     instructor_id: Optional[UUID] = None
 
     issues_certification: Optional[bool] = None
-    certification_number_prefix: Optional[str] = Field(None, max_length=50)
-    issuing_agency: Optional[str] = Field(None, max_length=255)
-    expiration_months: Optional[int] = Field(None, ge=1, le=INT32_MAX)
+    certification_number_prefix: Optional[CertificationNumberPrefix] = None
+    issuing_agency: Optional[IssuingAgency] = None
+    expiration_months: Optional[ExpirationMonths] = None
 
     counts_toward_certification: Optional[bool] = None
     auto_create_records: Optional[bool] = None
@@ -345,13 +364,6 @@ class TrainingSessionDetailsUpdate(BaseModel):
     approval_deadline_days: Optional[int] = Field(None, ge=1, le=30)
 
     attendance_requirement_ids: Optional[List[UUID]] = Field(None, max_length=50)
-
-    @field_validator("training_type")
-    @classmethod
-    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        return validate_enum_value(v, ModelTrainingType, "training_type")
 
     @model_validator(mode="after")
     def _one_course_source(self) -> "TrainingSessionDetailsUpdate":

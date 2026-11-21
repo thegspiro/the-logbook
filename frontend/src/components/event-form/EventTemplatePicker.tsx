@@ -15,8 +15,9 @@ interface EventTemplatePickerProps {
 
 /**
  * "Start from a Template", above an event form. A pick replaces what is
- * typed, so the host remounts its form with the template's values; the picker
- * itself stays mounted, keeping focus on it.
+ * typed, so the host remounts its form with the template's values — a
+ * Training template's saved training details replace Training Info too; the
+ * picker itself stays mounted, keeping focus on it.
  */
 export const EventTemplatePicker: React.FC<EventTemplatePickerProps> = ({
   templates,
