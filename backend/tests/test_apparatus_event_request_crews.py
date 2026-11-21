@@ -25,8 +25,9 @@ from app.models.event_request import (
 from app.models.user import User
 from app.services.admin_hours_service import AdminHoursService
 from app.services.apparatus_event_service import ConflictsNotAcknowledged
+from tests.clock_support import reread_each_test
 from tests.test_apparatus_event_service import (
-    FUTURE,
+    _clock,
     _scheduled,
     _seat,
     _template_body,
@@ -34,6 +35,13 @@ from tests.test_apparatus_event_service import (
 )
 
 pytestmark = pytest.mark.integration
+
+
+# The helpers imported above read FUTURE from their own module, so it is
+# refreshed there as well as here.
+(FUTURE,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
+_reread_service_clock = reread_each_test("tests.test_apparatus_event_service", _clock)
 
 
 async def _event(db: AsyncSession, w, **overrides) -> Event:
