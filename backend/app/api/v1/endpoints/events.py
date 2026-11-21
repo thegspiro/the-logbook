@@ -103,6 +103,10 @@ from app.schemas.event import (
     UserRSVPSummary,
     VisibleEventTypesResponse,
 )
+from app.schemas.event_request import (
+    EventRequestStaffingCreate,
+    EventStaffingResponse,
+)
 from app.schemas.organization import mandatory_for_tiers
 from app.schemas.training_session import TrainingSessionAttach
 from app.services import file_storage_service as file_storage
@@ -128,6 +132,10 @@ from app.services.event_service import (
     SeriesPhaseGateWarning,
     attendance_lock_reason,
     resolve_attendee_visibility,
+)
+from app.services.event_staffing_service import (
+    get_event_staffing,
+    open_event_staffing,
 )
 from app.services.file_storage_service import (
     FileRules,
@@ -1685,6 +1693,11 @@ async def get_event(
         can_record_guest_headcount=await guest_headcount_offered(
             db, event, current_user
         ),
+        can_staff_event=(
+            user_has_permission(current_user, EVENT_MANAGER_PERMISSION)
+            and not event.is_cancelled
+            and await is_outreach_event(db, current_user.organization_id, event.id)
+        ),
         user_attended=user_attended,
         credited_hours=credited_hours,
         hour_category_label=hour_category_label,
@@ -3179,6 +3192,93 @@ async def set_guest_headcount(
         can_record_guest_headcount=True,
         can_edit_event=True,
     )
+
+
+async def _staffed_event(db: AsyncSession, current_user: User, event_id: UUID):
+    """The event and its organization, org-scoped (pitfall #14a), or a 404."""
+    event = await db.scalar(
+        select(Event).where(
+            Event.id == str(event_id),
+            Event.organization_id == str(current_user.organization_id),
+        )
+    )
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+    org = await db.scalar(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    return event, org
+
+
+@router.get("/{event_id}/staffing", response_model=EventStaffingResponse)
+async def get_event_staffing_sheet(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    The volunteer signup sheet that staffs this event, and who has signed up.
+
+    The sheet is the request's when the event was scheduled from a public
+    request (``request_id`` names it), otherwise the event's own.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    event, org = await _staffed_event(db, current_user, event_id)
+    return await get_event_staffing(db, event, org)
+
+
+@router.post(
+    "/{event_id}/staffing",
+    response_model=EventStaffingResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def open_event_staffing_sheet(
+    event_id: UUID,
+    data: EventRequestStaffingCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Open a volunteer signup sheet on an outreach event created directly.
+
+    Owner decision, 2026-11-20: the same role-based sheet a request opens, for
+    an outreach event with no request behind it. Members claim a role from
+    Scheduling → Open Shifts. Refused for an event that came from a request
+    (its sheet is opened from the request), a cancelled event, an event that is
+    not an outreach event, and an event that already has one.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    event, org = await _staffed_event(db, current_user, event_id)
+    error = await open_event_staffing(
+        db,
+        event,
+        org,
+        [role.model_dump() for role in data.roles],
+        str(current_user.id),
+        notes=data.notes,
+    )
+    if error:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    roles = event.staffing_roles
+    await log_audit_event(
+        db=db,
+        event_type="event_staffing_opened",
+        event_category="events",
+        severity="info",
+        event_data={"event_id": str(event_id), "staffing_roles": roles},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+    event, org = await _staffed_event(db, current_user, event_id)
+    return await get_event_staffing(db, event, org)
 
 
 @router.post(

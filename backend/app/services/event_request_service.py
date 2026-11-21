@@ -14,13 +14,14 @@ nobody — requester or coordinator — was told a request had arrived.
 
 import html as _html
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Optional, Union
 
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import list_within_detail_limit
+from app.models.event import Event
 from app.models.event_request import EventRequest, EventRequestActivity
 from app.models.user import Organization, User
 from app.schemas.event import MAX_EVENT_DURATION_MINUTES
@@ -814,6 +815,11 @@ def outreach_role_label(org: Optional[Organization], role: Optional[str]) -> str
     return role_label(get_outreach_roles(org), role)
 
 
+def outreach_timezone(org: Optional[Organization]):
+    """The timezone an outreach sheet's calendar date is read in."""
+    return _org_timezone(org)
+
+
 def _org_timezone(org: Optional[Organization]):
     """The organization's tzinfo, falling back to UTC."""
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -873,57 +879,40 @@ def validate_staffing_roles(
     return normalized
 
 
-async def open_staffing_shift(
+async def create_outreach_shift(
     db: AsyncSession,
-    event_request: EventRequest,
+    organization_id: str,
     org: Optional[Organization],
-    staffing_roles: Any,
+    start: datetime,
+    end: Optional[datetime],
+    roles: list[dict[str, Any]],
+    note_lines: list[str],
     actor_id: str,
-    notes: Optional[str] = None,
 ):
-    """Create the shift members sign up on to cover a scheduled request.
+    """Create the shift members sign up on to staff an outreach event.
 
-    Returns ``(shift, error)``. The shift is ``open_to_all_members`` so the
-    eligibility service returns its seats to every member — an outreach event
-    is staffed by whoever can come, not by operational rank — and self-signup
-    capacity is what caps it at the number of seats requested.
+    Shared by a request's sheet and an event's own (owner decision,
+    2026-11-20), so the two are the same kind of shift to every reader. The
+    shift is ``open_to_all_members`` so the eligibility service returns its
+    seats to every member — an outreach event is staffed by whoever can come,
+    not by operational rank — and self-signup capacity is what caps it at the
+    number of seats requested. It gets one plain ``volunteer`` seat per person;
+    the caller stores ``roles`` to say which seat is which job.
 
-    ``staffing_roles`` says what the day needs by job ("2 tour guides, 1
-    educator"). It is stored on the request; the shift gets one plain
-    ``volunteer`` seat per person so every operational reader still
-    understands it.
+    Returns ``(shift, error)``.
     """
     from app.services.scheduling_service import SchedulingService
 
-    if not event_request.event_date:
-        return None, "Confirm a date before opening volunteer signups."
-
-    try:
-        roles = validate_staffing_roles(org, staffing_roles)
-    except ValueError as e:
-        return None, str(e)
     seat_count = sum(entry["count"] for entry in roles)
-
     tz = _org_timezone(org)
-    start = event_request.event_date
     if start.tzinfo is None:
         start = start.replace(tzinfo=timezone.utc)
-    end = event_request.event_end_date or (start + timedelta(hours=2))
+    end = end or (start + timedelta(hours=2))
     if end.tzinfo is None:
         end = end.replace(tzinfo=timezone.utc)
 
-    label = outreach_type_label(org, event_request.outreach_type)
-    who = event_request.organization_name or event_request.contact_name
-    note_lines = [f"Community outreach: {label} for {who}."]
-    note_lines.append("Roles needed: " + describe_roles(org, roles))
-    if notes:
-        note_lines.append(notes)
-    if event_request.venue_address:
-        note_lines.append(f"Location: {event_request.venue_address}")
-
-    service = SchedulingService(db)
-    shift, error = await service.create_shift(
-        event_request.organization_id,
+    shift, error = await SchedulingService(db).create_shift(
+        organization_id,
         {
             # Stored as the calendar date in the department's own timezone: an
             # evening event stamped from a UTC date lands on the following day
@@ -942,6 +931,52 @@ async def open_staffing_shift(
     )
     if error or shift is None:
         return None, error or "Unable to create the volunteer signup shift."
+    return shift, None
+
+
+async def open_staffing_shift(
+    db: AsyncSession,
+    event_request: EventRequest,
+    org: Optional[Organization],
+    staffing_roles: Any,
+    actor_id: str,
+    notes: Optional[str] = None,
+):
+    """Create the shift members sign up on to cover a scheduled request.
+
+    Returns ``(shift, error)``. ``staffing_roles`` says what the day needs by
+    job ("2 tour guides, 1 educator"); it is stored on the request.
+    """
+    if not event_request.event_date:
+        return None, "Confirm a date before opening volunteer signups."
+
+    try:
+        roles = validate_staffing_roles(org, staffing_roles)
+    except ValueError as e:
+        return None, str(e)
+    seat_count = sum(entry["count"] for entry in roles)
+
+    label = outreach_type_label(org, event_request.outreach_type)
+    who = event_request.organization_name or event_request.contact_name
+    note_lines = [f"Community outreach: {label} for {who}."]
+    note_lines.append("Roles needed: " + describe_roles(org, roles))
+    if notes:
+        note_lines.append(notes)
+    if event_request.venue_address:
+        note_lines.append(f"Location: {event_request.venue_address}")
+
+    shift, error = await create_outreach_shift(
+        db,
+        event_request.organization_id,
+        org,
+        event_request.event_date,
+        event_request.event_end_date,
+        roles,
+        note_lines,
+        actor_id,
+    )
+    if error or shift is None:
+        return None, error
 
     event_request.staffing_shift_id = shift.id
     event_request.staffing_roles = roles
@@ -984,10 +1019,15 @@ def _released_seat_statuses() -> list[Any]:
 
 async def get_staffing_state(
     db: AsyncSession,
-    event_request: EventRequest,
+    event_request: Union[EventRequest, Event],
     org: Optional[Organization] = None,
 ) -> dict[str, Any]:
-    """Who has signed up to cover this request, and which roles are still open."""
+    """Who has signed up to cover this request, and which roles are still open.
+
+    ``event_request`` is whichever owns the sheet: a request, or an outreach
+    event that opened one directly. Both carry ``staffing_shift_id`` and
+    ``staffing_roles``; only a request records a volunteer call.
+    """
     from app.models.training import ShiftAssignment
 
     empty: dict[str, Any] = {
@@ -997,7 +1037,9 @@ async def get_staffing_state(
         "slots_filled": 0,
         "roles": [],
         "volunteers": [],
-        "volunteer_call_sent_at": event_request.volunteer_call_sent_at,
+        "volunteer_call_sent_at": getattr(
+            event_request, "volunteer_call_sent_at", None
+        ),
     }
     if not event_request.staffing_shift_id:
         return empty
@@ -1084,7 +1126,9 @@ async def get_staffing_state(
         "slots_filled": len(volunteers),
         "roles": roles,
         "volunteers": volunteers,
-        "volunteer_call_sent_at": event_request.volunteer_call_sent_at,
+        "volunteer_call_sent_at": getattr(
+            event_request, "volunteer_call_sent_at", None
+        ),
     }
 
 
@@ -1371,7 +1415,7 @@ async def resolve_outreach_signup_role(
     # and — because the shift's generic capacity is shared across roles — can
     # leave another role with no seat left to fill. Serializing on the request
     # row makes the pair atomic; every claim for one sheet contends on one row.
-    event_request = await db.scalar(
+    owner: Union[EventRequest, Event, None] = await db.scalar(
         select(EventRequest)
         .where(
             EventRequest.staffing_shift_id == str(shift.id),
@@ -1379,9 +1423,18 @@ async def resolve_outreach_signup_role(
         )
         .with_for_update()
     )
-    needed = normalize_staffing_roles(
-        event_request.staffing_roles if event_request else None
-    )
+    if owner is None:
+        # A sheet an outreach event opened directly, with no request behind it
+        # (owner decision, 2026-11-20). Locked the same way, on its event row.
+        owner = await db.scalar(
+            select(Event)
+            .where(
+                Event.staffing_shift_id == str(shift.id),
+                Event.organization_id == str(organization_id),
+            )
+            .with_for_update()
+        )
+    needed = normalize_staffing_roles(owner.staffing_roles if owner else None)
     if not needed:
         # A sheet opened before roles existed, or whose request has since been
         # unlinked. Those seats are plain volunteer seats and the generic
@@ -1487,7 +1540,7 @@ async def sync_staffing_shift_cancelled(
 
 
 async def get_live_staffing_shift(
-    db: AsyncSession, event_request: EventRequest
+    db: AsyncSession, event_request: Union[EventRequest, Event]
 ) -> Optional[Any]:
     """The signup sheet this request is linked to, when it is still standing.
 
@@ -1594,7 +1647,6 @@ async def get_linked_calendar_event(
     """
     if not event_request.event_id:
         return None
-    from app.models.event import Event
 
     return await db.scalar(
         select(Event).where(

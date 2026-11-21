@@ -302,6 +302,16 @@ class EventRequestStaffingResponse(UTCResponseBase):
     volunteer_call_sent_at: Optional[datetime] = None
 
 
+class EventStaffingResponse(EventRequestStaffingResponse):
+    """The signup sheet that staffs an event, whichever owns it.
+
+    ``request_id`` is set when the sheet belongs to the request the event was
+    scheduled from; the event page sends the organizer there to change it.
+    """
+
+    request_id: Optional[str] = None
+
+
 class EventRequestVolunteerCall(BaseModel):
     """Schema for emailing the membership asking for help on a request."""
 

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**390 tables · 6210 columns · 1301 foreign keys**
+**390 tables · 6212 columns · 1302 foreign keys**
 
 ---
 
@@ -242,7 +242,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 18 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 30 | Event Template model for reusable event configurations |
-| [`events`](#events) | `Event` | 60 | Event model for managing department events |
+| [`events`](#events) | `Event` | 62 | Event model for managing department events |
 | [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 9 | RSVP History model for tracking RSVP status changes. |
 
 ### External_Shift_Hours
@@ -3538,6 +3538,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `actual_start_time` | DATETIME | yes |  |  |  |
 | `actual_end_time` | DATETIME | yes |  |  |  |
 | `guest_headcount` | INTEGER | yes |  |  |  |
+| `staffing_shift_id` | VARCHAR(36) | yes | FK |  | → `shifts.id` ON DELETE SET NULL |
+| `staffing_roles` | JSON | yes |  |  |  |
 | `requires_rsvp` | BOOL | no |  | `0` |  |
 | `rsvp_deadline` | DATETIME | yes |  |  |  |
 | `max_attendees` | INTEGER | yes |  |  |  |
@@ -14248,6 +14250,26 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_records` | `source_event_id` | SET NULL | yes |
 | `training_sessions` | `event_id` | CASCADE | no |
 
+### → `shifts` (15 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_requests` | `staffing_shift_id` | SET NULL | yes |
+| `events` | `staffing_shift_id` | SET NULL | yes |
+| `open_swap_notices` | `offering_shift_id` | CASCADE | no |
+| `org_call_responses` | `shift_id` | SET NULL | yes |
+| `shift_assignments` | `shift_id` | CASCADE | no |
+| `shift_attendance` | `shift_id` | CASCADE | no |
+| `shift_calls` | `shift_id` | CASCADE | no |
+| `shift_completion_reports` | `shift_id` | SET NULL | yes |
+| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
+| `shift_evaluations` | `shift_id` | SET NULL | yes |
+| `shift_pattern_occurrences` | `shift_id` | SET NULL | yes |
+| `shift_pre_work_sessions` | `shift_id` | CASCADE | no |
+| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
+| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
+| `training_submissions` | `shift_id` | SET NULL | yes |
+
 ### → `locations` (14 references)
 
 | From table | Column | On delete | Nullable |
@@ -14266,25 +14288,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `nfc_card_taps` | `location_id` | SET NULL | yes |
 | `storage_areas` | `location_id` | SET NULL | yes |
 | `training_records` | `location_id` | RESTRICT | yes |
-
-### → `shifts` (14 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `event_requests` | `staffing_shift_id` | SET NULL | yes |
-| `open_swap_notices` | `offering_shift_id` | CASCADE | no |
-| `org_call_responses` | `shift_id` | SET NULL | yes |
-| `shift_assignments` | `shift_id` | CASCADE | no |
-| `shift_attendance` | `shift_id` | CASCADE | no |
-| `shift_calls` | `shift_id` | CASCADE | no |
-| `shift_completion_reports` | `shift_id` | SET NULL | yes |
-| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
-| `shift_evaluations` | `shift_id` | SET NULL | yes |
-| `shift_pattern_occurrences` | `shift_id` | SET NULL | yes |
-| `shift_pre_work_sessions` | `shift_id` | CASCADE | no |
-| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
-| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
-| `training_submissions` | `shift_id` | SET NULL | yes |
 
 ### → `positions` (13 references)
 

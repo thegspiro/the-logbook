@@ -37,6 +37,7 @@ from app.models.call_tracking import (
     CallTrackingMode,
     OrgCallResponse,
 )
+from app.models.event import Event
 from app.models.event_request import EventRequest
 from app.models.training import (
     AssignmentStatus,
@@ -513,6 +514,16 @@ async def _enrich_shifts(
             outreach_needs[str(req.staffing_shift_id)] = normalize_staffing_roles(
                 req.staffing_roles
             )
+        # A sheet an outreach event opened directly keeps its roles on the
+        # event (owner decision, 2026-11-20).
+        event_rows = await service.db.execute(
+            select(Event.staffing_shift_id, Event.staffing_roles).where(
+                Event.staffing_shift_id.in_(outreach_ids),
+                Event.organization_id == str(organization_id),
+            )
+        )
+        for sheet_id, roles in event_rows.all():
+            outreach_needs.setdefault(str(sheet_id), normalize_staffing_roles(roles))
 
     # Resolve shift officer names
     officer_ids = list({s.shift_officer_id for s in shifts if s.shift_officer_id})

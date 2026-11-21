@@ -655,6 +655,10 @@ class EventResponse(EventBase, UTCResponseBase):
     # (outreach_event_clause) that has started and is not cancelled — the
     # checks the save applies. Detail endpoint only.
     can_record_guest_headcount: bool = False
+    # May this caller see and open the event's volunteer signup sheet:
+    # events.manage, on an outreach event that is not cancelled. Detail
+    # endpoint only (owner decision, 2026-11-20).
+    can_staff_event: bool = False
     updated_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime

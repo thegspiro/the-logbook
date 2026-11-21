@@ -180,6 +180,19 @@ class Event(Base):
     # actual audience in place of guest sign-ins; NULL means nobody counted.
     guest_headcount: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
+    # A volunteer signup sheet opened on this event directly (owner decision,
+    # 2026-11-20), for an outreach event with no public request behind it. An
+    # event a request was scheduled onto keeps its sheet on the request
+    # (event_requests.staffing_shift_id) and never sets these. The shift is a
+    # plain `volunteer` seat per person; staffing_roles says which seat is which
+    # job, in app/utils/outreach_roles' canonical shape (pitfall #20).
+    staffing_shift_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True
+    )
+    staffing_roles: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
+
     # RSVP settings
     requires_rsvp: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"

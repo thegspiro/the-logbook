@@ -116,6 +116,8 @@ export interface Event {
   /** Server-decided: events.manage on an event that counts as community
    * outreach. Detail endpoint only. */
   can_record_guest_headcount?: boolean;
+  /** May this caller see and open the event's volunteer signup sheet (detail only). */
+  can_staff_event?: boolean;
   created_at: string;
   updated_at: string;
   rsvp_count?: number;
@@ -1242,6 +1244,11 @@ export interface EventRequestStaffing {
   roles: StaffingRoleStatus[];
   volunteers: EventRequestVolunteer[];
   volunteer_call_sent_at?: string;
+}
+
+/** The signup sheet staffing an event; `request_id` when it is the request's. */
+export interface EventStaffing extends EventRequestStaffing {
+  request_id?: string | null;
 }
 
 export interface EventRequestVolunteerCallResult {

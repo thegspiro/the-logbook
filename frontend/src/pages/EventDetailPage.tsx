@@ -86,6 +86,7 @@ import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessi
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
 import EventGuestsCard from '../components/event-detail/EventGuestsCard';
 import EventGuestHeadcountCard from '../components/event-detail/EventGuestHeadcountCard';
+import EventStaffingCard from '../components/event-detail/EventStaffingCard';
 import { GuestCheckInQRCard } from '../components/events/GuestCheckInQRCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
@@ -1818,6 +1819,10 @@ export const EventDetailPage: React.FC = () => {
             {/* Pipeline meeting stages can also link prospects to ordinary
                 business events, so this is intentionally not type-gated. */}
             <EventProspectsCard eventId={event.id} createsProspects={event.guest_check_in_creates_prospect ?? false} />
+
+            {/* Volunteers for an outreach event: its own signup sheet, or the
+                request's when it was scheduled from one. */}
+            {event.can_staff_event && <EventStaffingCard eventId={event.id} />}
 
             {/* The headcount for an outreach event nobody signed in at.
                 Merged rather than replaced: the save answers with a plain
