@@ -253,7 +253,9 @@ reported as "exceeds the 10MB limit" (an `except ValueError` caught the
 
 Still not done, by design or for later phases: files stored before scanning
 was on were not rescanned (since 2026-11-03 the `stored_file_malware_scan`
-task scans them once — `docs/KNOWN_LIMITATIONS.md`); `UPLOADS_ROOT` is the fixed `/app/uploads` mount and
+task scans them once — `docs/KNOWN_LIMITATIONS.md`; since 2026-11-20 the
+hourly `pending_file_deletions` task retries the file removals a permanent
+member delete queued); `UPLOADS_ROOT` is the fixed `/app/uploads` mount and
 the unread `UPLOAD_DIR` setting stays unread (`docs/KNOWN_LIMITATIONS.md`,
 CI3-33-4).
 

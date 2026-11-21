@@ -156,6 +156,10 @@ export default function ComplianceRequirementsConfigPage() {
   const [profilePositionIds, setProfilePositionIds] = useState<string[]>([]);
   const [profileRequiredReqs, setProfileRequiredReqs] = useState<string[]>([]);
   const [profileOptionalReqs, setProfileOptionalReqs] = useState<string[]>([]);
+  // A profile loaded with no required list (null) keeps it unset unless the
+  // officer changes the required ticks: sending [] would flip it from
+  // "grade everything but the optional ones" to "grade nothing".
+  const [profileRequiredUnset, setProfileRequiredUnset] = useState(false);
   const [profileCompliantOverride, setProfileCompliantOverride] = useState('');
   const [profileAtRiskOverride, setProfileAtRiskOverride] = useState('');
   const [profilePriority, setProfilePriority] = useState(0);
@@ -318,6 +322,7 @@ export default function ComplianceRequirementsConfigPage() {
     setProfilePositionIds([]);
     setProfileRequiredReqs([]);
     setProfileOptionalReqs([]);
+    setProfileRequiredUnset(false);
     setProfileCompliantOverride('');
     setProfileAtRiskOverride('');
     setProfilePriority(0);
@@ -333,6 +338,7 @@ export default function ComplianceRequirementsConfigPage() {
     setProfilePositionIds(profile.roleIds ?? []);
     setProfileRequiredReqs(profile.requiredRequirementIds ?? []);
     setProfileOptionalReqs(profile.optionalRequirementIds ?? []);
+    setProfileRequiredUnset(profile.requiredRequirementIds == null);
     setProfileCompliantOverride(profile.compliantThresholdOverride?.toString() ?? '');
     setProfileAtRiskOverride(profile.atRiskThresholdOverride?.toString() ?? '');
     setProfilePriority(profile.priority);
@@ -380,7 +386,9 @@ export default function ComplianceRequirementsConfigPage() {
         // role_ids hold position ids (see _find_matching_profile). Always sent
         // for the same reason as membership_types.
         role_ids: profilePositionIds,
-        required_requirement_ids: profileRequiredReqs,
+        // Omitted only while an unset list is untouched, so the update leaves
+        // it unset (the backend's exclude_unset).
+        ...(profileRequiredUnset ? {} : { required_requirement_ids: profileRequiredReqs }),
         optional_requirement_ids: profileOptionalReqs,
         compliant_threshold_override: profileCompliantOverride ? parseFloat(profileCompliantOverride) : null,
         at_risk_threshold_override: profileAtRiskOverride ? parseFloat(profileAtRiskOverride) : null,
@@ -510,6 +518,23 @@ export default function ComplianceRequirementsConfigPage() {
   const toggleRequirement = (reqId: string, list: string[], setter: (v: string[]) => void) => {
     setter(list.includes(reqId) ? list.filter((id: string) => id !== reqId) : [...list, reqId]);
   };
+
+  // A requirement is required or optional, never both: required wins, as the
+  // grader reads it, so ticking Required takes it out of Optional.
+  const toggleRequired = (reqId: string) => {
+    setProfileRequiredUnset(false);
+    toggleRequirement(reqId, profileRequiredReqs, setProfileRequiredReqs);
+    setProfileOptionalReqs(profileOptionalReqs.filter((id: string) => id !== reqId));
+  };
+
+  // Other active profiles at ``priority``. Which one grades a member who
+  // matches both is the backend's decision (the older profile); this only
+  // finds the tie so the officer can choose instead.
+  const profilesTiedAt = (priority: number, excludeId: string | null): ComplianceProfile[] =>
+    (config?.profiles ?? []).filter(
+      (p: ComplianceProfile) => p.isActive && p.priority === priority && p.id !== excludeId
+    );
+  const formTies = profilesTiedAt(profilePriority, editingProfileId);
 
   const getRequirementName = (id: string) => {
     return requirements.find((r: AvailableRequirement) => r.id === id)?.name ?? id;
@@ -905,6 +930,15 @@ export default function ComplianceRequirementsConfigPage() {
                   <p className="text-theme-text-secondary mt-1 text-xs">
                     Higher = evaluated first when a member matches multiple profiles
                   </p>
+                  {formTies.length > 0 && (
+                    <p className="mt-1 text-xs text-amber-800 dark:text-amber-300" role="status">
+                      {formTies
+                        .map((p: ComplianceProfile) => `'${p.name}' (created ${formatDate(p.createdAt, tz)})`)
+                        .join(', ')}{' '}
+                      also has priority {profilePriority}. A member who matches both is graded by the profile created
+                      first; give one a higher number to choose.
+                    </p>
+                  )}
                 </div>
                 <div className="md:col-span-2">
                   <label className={labelClass} htmlFor="compliance-description">
@@ -1014,6 +1048,12 @@ export default function ComplianceRequirementsConfigPage() {
                   <p className="text-theme-text-secondary mb-2 text-xs">
                     Members MUST complete these to be considered compliant
                   </p>
+                  {profileRequiredUnset && (
+                    <p className="text-theme-text-secondary mb-2 text-xs italic">
+                      No required list is set: this profile grades every requirement that applies to the member, except
+                      the optional ones below. Ticking a requirement here sets the list.
+                    </p>
+                  )}
                   {requirements.length === 0 ? (
                     <p className="text-theme-text-secondary text-sm italic">
                       No training requirements found. Create training requirements first.
@@ -1029,7 +1069,7 @@ export default function ComplianceRequirementsConfigPage() {
                             type="checkbox"
                             className={checkboxClass}
                             checked={profileRequiredReqs.includes(req.id)}
-                            onChange={() => toggleRequirement(req.id, profileRequiredReqs, setProfileRequiredReqs)}
+                            onChange={() => toggleRequired(req.id)}
                           />
                           <span className="text-theme-text-primary text-sm">{req.name}</span>
                           <span className="text-theme-text-secondary text-xs">
@@ -1044,9 +1084,10 @@ export default function ComplianceRequirementsConfigPage() {
 
                 {/* Optional Requirements */}
                 <div className="md:col-span-2">
-                  <label className={labelClass}>Optional/Tracked Requirements</label>
+                  <label className={labelClass}>Optional Requirements</label>
                   <p className="text-theme-text-secondary mb-2 text-xs">
-                    Tracked for reporting but not required for compliance status
+                    Shown to these members, and to officers, on the member&apos;s training page, marked Optional. They
+                    never count toward compliance standing or percentage, and no reminders are sent for them.
                   </p>
                   {requirements.length > 0 && (
                     <div className="border-theme-surface-border max-h-48 space-y-1 overflow-y-auto rounded border p-2">
@@ -1185,11 +1226,13 @@ export default function ComplianceRequirementsConfigPage() {
 
           {/* Existing Profiles */}
           {config?.profiles.map((profile: ComplianceProfile) => (
-            <div key={profile.id} className="card p-4">
+            <article key={profile.id} className="card p-4" aria-labelledby={`compliance-profile-${profile.id}-name`}>
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-theme-text-primary font-semibold">{profile.name}</h3>
+                    <h3 id={`compliance-profile-${profile.id}-name`} className="text-theme-text-primary font-semibold">
+                      {profile.name}
+                    </h3>
                     {!profile.isActive && (
                       <span className="rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-400">
                         Inactive
@@ -1199,6 +1242,15 @@ export default function ComplianceRequirementsConfigPage() {
                       Priority: {profile.priority}
                     </span>
                   </div>
+                  {profile.isActive && profilesTiedAt(profile.priority, profile.id).length > 0 && (
+                    <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">
+                      Same priority as{' '}
+                      {profilesTiedAt(profile.priority, profile.id)
+                        .map((p: ComplianceProfile) => `'${p.name}'`)
+                        .join(', ')}
+                      . A member who matches both is graded by the profile created first.
+                    </p>
+                  )}
                   {profile.description && (
                     <p className="text-theme-text-secondary mt-1 text-sm">{profile.description}</p>
                   )}
@@ -1234,6 +1286,7 @@ export default function ComplianceRequirementsConfigPage() {
                 {profile.requiredRequirementIds && profile.requiredRequirementIds.length > 0 && (
                   <span>Required: {profile.requiredRequirementIds.length} requirement(s)</span>
                 )}
+                {profile.requiredRequirementIds == null && <span>Required: all except optional</span>}
                 {profile.optionalRequirementIds && profile.optionalRequirementIds.length > 0 && (
                   <span>Optional: {profile.optionalRequirementIds.length} requirement(s)</span>
                 )}
@@ -1248,6 +1301,22 @@ export default function ComplianceRequirementsConfigPage() {
                       <span
                         key={id}
                         className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300"
+                      >
+                        {getRequirementName(id)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {profile.optionalRequirementIds && profile.optionalRequirementIds.length > 0 && (
+                <div className="mt-2">
+                  <span className="text-theme-text-secondary text-xs font-medium">Optional:</span>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {profile.optionalRequirementIds.map((id: string) => (
+                      <span
+                        key={id}
+                        className="bg-theme-surface-hover text-theme-text-secondary rounded px-2 py-0.5 text-xs"
                       >
                         {getRequirementName(id)}
                       </span>
@@ -1273,7 +1342,7 @@ export default function ComplianceRequirementsConfigPage() {
                   </div>
                 </div>
               )}
-            </div>
+            </article>
           ))}
 
           {config && config.profiles.length === 0 && !showProfileForm && (

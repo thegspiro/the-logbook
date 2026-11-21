@@ -24,19 +24,30 @@ interface RequirementDetailCardProps {
   timezone: string;
   /** `self` addresses the member ("you"); `officer` describes them. */
   audience?: 'self' | 'officer';
+  /**
+   * One of the member's profile's optional requirements: listed, never
+   * graded, so it is never shown as overdue or due soon.
+   */
+  optional?: boolean;
 }
 
 export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
   requirement: req,
   timezone,
   audience = 'self',
+  optional = false,
 }) => {
   // No session held yet: nothing to have attended, so neither met nor owed,
   // and not "0/0 - Complete" (workflow review W80-9).
   const notYetHeld = req.not_applicable === true;
-  const isOverdue = !notYetHeld && req.days_until_due != null && req.days_until_due < 0 && !req.is_met;
+  const isOverdue = !optional && !notYetHeld && req.days_until_due != null && req.days_until_due < 0 && !req.is_met;
   const isDueSoon =
-    !notYetHeld && req.days_until_due != null && req.days_until_due <= 30 && req.days_until_due >= 0 && !req.is_met;
+    !optional &&
+    !notYetHeld &&
+    req.days_until_due != null &&
+    req.days_until_due <= 30 &&
+    req.days_until_due >= 0 &&
+    !req.is_met;
   const self = audience === 'self';
   const unitFor = (count: number) => requirementUnitSuffix(req.requirement_type, count);
   const breakdown = req.monthly_hours?.length ? req.monthly_hours : (req.monthly_counts ?? []);
@@ -71,13 +82,20 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
             <CheckCircle2 className="h-5 w-5 shrink-0 text-green-700 dark:text-green-400" />
           ) : isOverdue ? (
             <AlertTriangle className="h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
-          ) : notYetHeld ? (
+          ) : notYetHeld || optional ? (
             <Clock className="text-theme-text-muted h-5 w-5 shrink-0" />
           ) : (
             <Clock className="h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-400" />
           )}
           <div>
-            <p className="text-theme-text-primary text-sm font-medium">{req.name}</p>
+            <p className="text-theme-text-primary text-sm font-medium">
+              {req.name}
+              {optional && (
+                <span className="bg-theme-surface-hover text-theme-text-secondary ml-2 rounded px-1.5 py-0.5 text-xs font-normal">
+                  Optional
+                </span>
+              )}
+            </p>
             {req.description && <p className="text-theme-text-muted mt-0.5 text-xs">{req.description}</p>}
           </div>
         </div>
@@ -86,7 +104,7 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
             className={`text-sm font-bold ${
               req.is_met
                 ? 'text-green-700 dark:text-green-400'
-                : isOverdue || certState
+                : isOverdue || (certState && !optional)
                   ? 'text-red-700 dark:text-red-400'
                   : 'text-theme-text-primary'
             }`}
@@ -203,6 +221,8 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
             <span>Not graded until a session is held</span>
           ) : req.is_met ? (
             <span className="text-green-700 dark:text-green-400">Complete</span>
+          ) : optional ? (
+            <span>Not required for compliance</span>
           ) : req.catch_up_deadline ? (
             <span>Due by {formatCalendarDate(req.catch_up_deadline)}</span>
           ) : certState === 'missing' ? (

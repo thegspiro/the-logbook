@@ -574,6 +574,12 @@ SCHEDULE = {
         "recommended_time": "every hour",
         "cron": "20 * * * *",
     },
+    "pending_file_deletions": {
+        "description": "Remove the stored files a permanent member delete queued and could not remove right after its commit (a crash, an unreachable remote store). Checks every file's references again first and keeps one another row names; a row that keeps failing stays queued and is retried every hour.",
+        "frequency": "hourly",
+        "recommended_time": "every hour",
+        "cron": "50 * * * *",
+    },
     "scheduled_emails": {
         "description": "Process pending scheduled emails that are due to be sent",
         "frequency": "every 1 minute",
@@ -4763,6 +4769,18 @@ async def run_stored_file_malware_scan(db: AsyncSession) -> Dict[str, Any]:
     return await StoredFileRescan(db).run()
 
 
+async def run_pending_file_deletions(db: AsyncSession) -> Dict[str, Any]:
+    """Finish the file removals a committed hard delete left queued.
+
+    See app/services/pending_file_deletions.py. Commits per organization
+    itself, the row resolutions with their audit record, so one department's
+    failure does not discard another's.
+    """
+    from app.services.pending_file_deletions import PendingFileDeletionSweep
+
+    return await PendingFileDeletionSweep(db).run()
+
+
 async def run_message_history_cleanup(db: AsyncSession) -> Dict[str, Any]:
     """
     Legacy alias for message-history retention (kept for existing crontabs).
@@ -7126,18 +7144,24 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
             # anywhere after the first night never reaches the parent, and
             # copying the parent reverted every new occurrence to the old
             # values. The latest occurrence is the one every such edit reached.
-            latest_result = await db.execute(
+            #
+            # Every occurrence is read, cancelled ones included, because a
+            # cancelled occurrence still holds its date: a job that re-runs
+            # nightly must be a no-op for a cancelled future (CLAUDE.md
+            # pitfall #36), and creating a live copy beside a cancelled row
+            # undoes the officer's cancel.
+            series_result = await db.execute(
                 select(Event)
                 .where(
-                    (Event.id == parent.id) | (Event.recurrence_parent_id == parent.id),
-                    Event.is_cancelled.is_(False),
+                    (Event.id == parent.id) | (Event.recurrence_parent_id == parent.id)
                 )
                 .order_by(Event.start_datetime.desc())
-                .limit(1)
             )
-            latest = latest_result.scalars().first()
+            series_rows = list(series_result.scalars().all())
+            latest = next((e for e in series_rows if not e.is_cancelled), None)
             if latest is None:
                 continue
+            taken_starts = {_as_naive_utc(e.start_datetime) for e in series_rows}
 
             # Naive UTC, as `now` is above. A column select used to hand
             # these back raw (naive); an ORM row already in the session
@@ -7179,9 +7203,13 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                 exceptions=parent.recurrence_exceptions,
             )
 
-            # Filter out the first one (it's the latest existing occurrence)
-            # and any that already exist
-            new_occurrences = [(s, e) for s, e in new_occurrences if s > latest_start]
+            # Only dates after the latest live occurrence, and none the series
+            # already holds — a cancelled occurrence included.
+            new_occurrences = [
+                (s, e)
+                for s, e in new_occurrences
+                if s > latest_start and s not in taken_starts
+            ]
 
             if not new_occurrences:
                 continue
@@ -8724,6 +8752,7 @@ TASK_RUNNERS = {
     ),
     "attendance_waiver_expiry": run_attendance_waiver_expiry,
     "stored_file_malware_scan": run_stored_file_malware_scan,
+    "pending_file_deletions": run_pending_file_deletions,
     "scheduled_emails": run_scheduled_emails,
     "storefront_window_lifecycle": run_storefront_window_lifecycle,
     "storefront_payment_reminders": run_storefront_payment_reminders,
@@ -8923,6 +8952,10 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Hourly, a bounded batch per run; once every stored object has a ledger
     # row a run only compares references (stored_file_rescan).
     "stored_file_malware_scan": 3600,
+    # Hourly. Idempotent: rows are claimed FOR UPDATE SKIP LOCKED, resolved
+    # by id with a checked affected count, and a missing file counts as
+    # deleted (pending_file_deletions).
+    "pending_file_deletions": 3600,
     # Monthly (approx — 30 days)
     "membership_tier_advance": 2592000,
 }

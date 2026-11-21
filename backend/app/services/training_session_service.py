@@ -157,6 +157,13 @@ def _course_fills_blanks(
     return float(credit_hours), str(training_type)
 
 
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Naive values from the database are UTC; a sent value is aware."""
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=timezone.utc)
+
+
 def scheduled_hours(start: Optional[datetime], end: Optional[datetime]) -> float:
     """An event's scheduled length in hours: the credit a session with no hours
     of its own, and no course giving it some, files under."""
@@ -961,6 +968,50 @@ class TrainingSessionService:
         return SessionDetailsPlan(
             event=event, session=None, attach=attach, course=course
         )
+
+    async def follow_event_length(
+        self,
+        event: Event,
+        old_start: Optional[datetime],
+        old_end: Optional[datetime],
+        organization_id: UUID | str,
+    ) -> None:
+        """Keep a session's credit hours on the event's length when it moves.
+
+        A session with no course and hours equal to the event's old scheduled
+        length is following the length (the form's own test, ``fromSession``,
+        rounding the same way), so its hours become the new length. Hours an
+        officer typed, or a course's, stay as they are. The training form
+        recomputes them only when it sends ``credit_hours: null``, so every
+        door that moves an event without the form — a training manager's
+        edit, a series time change without details, a postponement — calls
+        this; left alone, the stale figure was credited at finalize and then
+        read by the form as typed, so it never followed again. A finalized
+        session is skipped: its event's times cannot change.
+        """
+        old_length = scheduled_hours(_as_utc(old_start), _as_utc(old_end))
+        new_length = scheduled_hours(
+            _as_utc(event.start_datetime), _as_utc(event.end_datetime)
+        )
+        if old_length == new_length:
+            return
+        result = await self.db.execute(
+            select(TrainingSession).where(
+                TrainingSession.event_id == str(event.id),
+                TrainingSession.organization_id == str(organization_id),
+            )
+        )
+        session = result.scalar_one_or_none()
+        if (
+            session is None
+            or session.is_finalized
+            or session.course_id
+            or session.credit_hours is None
+            or round(float(session.credit_hours), 2) != old_length
+        ):
+            return
+        session.credit_hours = new_length
+        session.updated_at = datetime.now(timezone.utc)
 
     async def apply_session_details(
         self,

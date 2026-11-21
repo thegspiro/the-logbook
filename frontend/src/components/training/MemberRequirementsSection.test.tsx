@@ -97,4 +97,45 @@ describe('MemberRequirementsSection', () => {
     render(<MemberRequirementsSection userId="member-1" timezone="UTC" />);
     expect(await screen.findByText('Network down')).toBeInTheDocument();
   });
+
+  describe('optional requirements', () => {
+    const rope: RequirementDetail = {
+      id: 'req-opt',
+      name: 'Rope Rescue',
+      frequency: 'annual',
+      required_hours: 8,
+      completed_hours: 0,
+      progress_percentage: 0,
+      is_met: false,
+      due_date: '2026-01-31',
+      days_until_due: -40,
+    };
+
+    it('lists them after the graded ones, under their own heading, outside the count', async () => {
+      mockGetMemberRequirements.mockResolvedValue(response({ optional_requirements_detail: [rope] }));
+      render(<MemberRequirementsSection userId="member-1" timezone="UTC" />);
+
+      const heading = await screen.findByRole('heading', { name: 'Optional' });
+      const graded = screen.getByText('Annual Training Hours');
+      const optional = screen.getByText('Rope Rescue');
+      expect(graded.compareDocumentPosition(heading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(heading.compareDocumentPosition(optional)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(screen.getByText('1 of 1 met')).toBeInTheDocument();
+      expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
+    });
+
+    it('does not say nothing applies when only optional requirements do', async () => {
+      mockGetMemberRequirements.mockResolvedValue(
+        response({
+          requirements_detail: [],
+          optional_requirements_detail: [rope],
+          requirements_summary: { total_requirements: 0, met_requirements: 0, avg_compliance: null },
+        })
+      );
+      render(<MemberRequirementsSection userId="member-1" timezone="UTC" />);
+
+      expect(await screen.findByText('Rope Rescue')).toBeInTheDocument();
+      expect(screen.queryByText('No training requirements apply to this member.')).not.toBeInTheDocument();
+    });
+  });
 });

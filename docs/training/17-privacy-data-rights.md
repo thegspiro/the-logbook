@@ -465,7 +465,9 @@ back.
 **Permanently deleting a member also removes their files** _(2026-11-17)_:
 the files on the training submissions, training records and attendance waiver
 documents the delete removes, once the delete has gone through. A refused
-delete removes nothing. Files in a member's personal Member Files folder and
+delete removes nothing. Since 2026-11-20 the files are recorded with the
+delete itself, so a server restart or an unreachable file store in the
+middle no longer leaves them behind: an hourly task finishes the job. Files in a member's personal Member Files folder and
 the separation letter in Documents are not touched by either action yet.
 
 ### What is kept

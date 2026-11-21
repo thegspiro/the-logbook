@@ -64,10 +64,16 @@ from app.services.email_policy import (
 from app.services.email_service import EmailService
 from app.services.email_template_service import EmailTemplateService
 
-# The request's page, which the decision page renders. ``?action=`` only
-# preselects the choice: opening the link decides nothing (see
-# email_templates_attendance_waivers).
-REQUEST_PATH = "/attendance-waivers/{id}"
+# Each workflow's request page, before the request id: the decision page
+# reads only its own workflow's requests, so a meeting request opened at the
+# training path is a 404. The engine's ``WorkflowSpec.decider_path`` reads
+# this table too, so the in-app prompts and the emails cannot disagree.
+# ``?action=`` only preselects the choice: opening the link decides nothing
+# (see email_templates_attendance_waivers).
+REQUEST_PATHS: Dict[AttendanceWaiverWorkflow, str] = {
+    AttendanceWaiverWorkflow.TRAINING_SESSION: "/attendance-waivers",
+    AttendanceWaiverWorkflow.BUSINESS_MEETING: "/meetings/waiver-requests",
+}
 
 # Shown in a copy where a value is left out on purpose.
 NOT_IN_COPY = "Not included in this copy"
@@ -132,13 +138,17 @@ def address_key(address: str) -> str:
     return f"addr:{email_fingerprint(address) or address.strip().casefold()}"
 
 
-def request_url(request_id: str, action: Optional[str] = None) -> str:
+def request_url(
+    workflow: AttendanceWaiverWorkflow,
+    request_id: str,
+    action: Optional[str] = None,
+) -> str:
     base = (getattr(settings, "FRONTEND_URL", "") or "").rstrip("/")
-    url = f"{base}{REQUEST_PATH.format(id=request_id)}"
+    url = f"{base}{REQUEST_PATHS[workflow]}/{request_id}"
     return f"{url}?action={action}" if action else url
 
 
-def review_buttons_html(request_id: str) -> str:
+def review_buttons_html(workflow: AttendanceWaiverWorkflow, request_id: str) -> str:
     """The Approve and Deny buttons, as markup safe to insert unescaped.
 
     Built from fixed text and the escaped URLs only. Colours are literal
@@ -156,8 +166,8 @@ def review_buttons_html(request_id: str) -> str:
             "</td></tr></table>"
         )
 
-    approve = request_url(request_id, "approve")
-    deny = request_url(request_id, "deny")
+    approve = request_url(workflow, request_id, "approve")
+    deny = request_url(workflow, request_id, "deny")
     return (
         button(approve, "Approve", "#047857")
         + button(deny, "Deny", "#b91c1c")
@@ -364,6 +374,10 @@ class AttendanceWaiverEmails:
     ) -> Dict[str, str]:
         title = request.event_title_snapshot
         day = _day(request.session_date)
+
+        def link(choice: Optional[str] = None) -> str:
+            return request_url(request.workflow, str(request.id), choice)
+
         copy_note = (
             " You are receiving a copy for the department's records; no action "
             "is needed from you."
@@ -389,14 +403,14 @@ class AttendanceWaiverEmails:
                     "review_buttons_html": (
                         ""
                         if recipient.is_copy
-                        else review_buttons_html(str(request.id))
+                        else review_buttons_html(request.workflow, str(request.id))
                     ),
                     "review_links_text": (
                         "No action is needed from you."
                         if recipient.is_copy
                         else (
-                            f"Approve: {request_url(str(request.id), 'approve')}\n"
-                            f"Deny: {request_url(str(request.id), 'deny')}\n"
+                            f"Approve: {link('approve')}\n"
+                            f"Deny: {link('deny')}\n"
                             "Each link opens the request in the Logbook, where "
                             "you confirm your decision."
                         )
@@ -416,7 +430,7 @@ class AttendanceWaiverEmails:
                     "decision_note": (
                         NOT_IN_COPY if recipient.is_copy else (action.note or "None")
                     ),
-                    "request_url": request_url(str(request.id)),
+                    "request_url": link(),
                 }
             )
         else:

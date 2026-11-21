@@ -16,8 +16,8 @@ requirement *outside* the profile, so the unfixed code lists something extra.
 The guards at the end pass before and after; they pin the cases the fix must
 not move.
 
-Profiles here never share a priority: equal priorities resolve in an
-undefined order.
+Profiles here never share a priority; the tie rule (the older profile
+wins) is pinned in test_compliance_profile_ties_and_optional.py.
 """
 
 import json

@@ -275,4 +275,50 @@ describe('RequirementDetailCard', () => {
       expect(screen.queryByText(/expired/i)).not.toBeInTheDocument();
     });
   });
+
+  describe('an optional requirement', () => {
+    it('does not colour a missing optional certificate as a failure', () => {
+      render(
+        <RequirementDetailCard
+          requirement={{
+            ...base,
+            name: 'Hazmat Technician',
+            requirement_type: 'certification',
+            required_hours: 1,
+            completed_hours: 0,
+            progress_percentage: 0,
+            expiry_date: null,
+          }}
+          timezone="UTC"
+          optional
+        />
+      );
+      expect(screen.getByText('Not recorded')).toHaveClass('text-theme-text-primary');
+    });
+
+    it('carries an Optional badge and no overdue wording, however late', () => {
+      render(
+        <RequirementDetailCard
+          requirement={{ ...base, name: 'Rope Rescue', due_date: '2026-01-31', days_until_due: -40 }}
+          timezone="UTC"
+          optional
+        />
+      );
+      expect(screen.getByText('Optional')).toBeInTheDocument();
+      expect(screen.getByText('Not required for compliance')).toBeInTheDocument();
+      expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
+    });
+
+    it('still reads Complete once met', () => {
+      render(
+        <RequirementDetailCard
+          requirement={{ ...base, is_met: true, completed_hours: 4, progress_percentage: 100 }}
+          timezone="UTC"
+          optional
+        />
+      );
+      expect(screen.getByText('Complete')).toBeInTheDocument();
+      expect(screen.queryByText('Not required for compliance')).not.toBeInTheDocument();
+    });
+  });
 });

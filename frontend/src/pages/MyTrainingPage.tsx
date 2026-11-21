@@ -41,6 +41,7 @@ import { MyAttendanceWaiverRequests } from '../components/training/MyAttendanceW
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { MyTrainingHistory } from '../components/training/MyTrainingHistory';
 import { RequirementDetailCard } from '../components/training/RequirementDetailCard';
+import { OptionalRequirementsGroup } from '../components/training/OptionalRequirementsGroup';
 import { LeaveOfAbsenceSummary } from '../components/training/LeaveOfAbsenceSummary';
 import { UpcomingDueList } from '../components/training/UpcomingDueList';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
@@ -863,25 +864,27 @@ const MyTrainingPage: React.FC = () => {
           {/* Outstanding Requirements. Gated on `show_requirement_details`,
               which previously only reached the copy nested under Pipeline
               Progress while this list ignored it. */}
-          {v?.show_requirement_details && data.requirements_detail && data.requirements_detail.length > 0 && (
-            <Section title="Training Requirements" icon={ClipboardList}>
-              <LeaveOfAbsenceSummary leaves={data.leaves_of_absence ?? []} rule={data.leave_month_rule} />
-              <div className="space-y-3">
-                {/* Outstanding (not met) first, then met */}
-                {[...data.requirements_detail]
-                  .sort((a: RequirementDetail, b: RequirementDetail) => {
-                    // Outstanding first, then by days until due (soonest first)
-                    if (a.is_met !== b.is_met) return a.is_met ? 1 : -1;
-                    if (a.days_until_due != null && b.days_until_due != null)
-                      return a.days_until_due - b.days_until_due;
-                    return 0;
-                  })
-                  .map((req: RequirementDetail) => (
-                    <RequirementDetailCard key={req.id} requirement={req} timezone={tz} />
-                  ))}
-              </div>
-            </Section>
-          )}
+          {v?.show_requirement_details &&
+            ((data.requirements_detail?.length ?? 0) > 0 || (data.optional_requirements_detail?.length ?? 0) > 0) && (
+              <Section title="Training Requirements" icon={ClipboardList}>
+                <LeaveOfAbsenceSummary leaves={data.leaves_of_absence ?? []} rule={data.leave_month_rule} />
+                <div className="space-y-3">
+                  {/* Outstanding (not met) first, then met */}
+                  {[...(data.requirements_detail ?? [])]
+                    .sort((a: RequirementDetail, b: RequirementDetail) => {
+                      // Outstanding first, then by days until due (soonest first)
+                      if (a.is_met !== b.is_met) return a.is_met ? 1 : -1;
+                      if (a.days_until_due != null && b.days_until_due != null)
+                        return a.days_until_due - b.days_until_due;
+                      return 0;
+                    })
+                    .map((req: RequirementDetail) => (
+                      <RequirementDetailCard key={req.id} requirement={req} timezone={tz} />
+                    ))}
+                </div>
+                <OptionalRequirementsGroup requirements={data.optional_requirements_detail ?? []} timezone={tz} />
+              </Section>
+            )}
 
           {/* Recent training: the newest few records. The full history, which
               the summary caps at the newest 100, lives on the History tab. */}
