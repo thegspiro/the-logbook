@@ -94,7 +94,10 @@ async def test_a_pdf_of_an_operational_report_is_audited(db_session: AsyncSessio
     assert "Page 1 of" in text
     assert "Officer Tester" in text
     rows = await _audit_rows(db_session, officer)
-    assert [r.event_data for r in rows] == [
+    payloads = [dict(r.event_data) for r in rows]
+    for payload in payloads:
+        assert re.fullmatch(REPORT_NUMBER_PATTERN, payload.pop("report_number"))
+    assert payloads == [
         {
             "report_type": "event_attendance",
             "format": "pdf",
