@@ -19,7 +19,8 @@ import {
   type NightPlanPayload,
 } from '../../../types/apparatusEvent';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { nextKey } from '../../../pages/apparatus-events/templateForm';
+import { hoursWouldNotBeCredited, nextKey } from '../../../pages/apparatus-events/templateForm';
+import HoursNotCreditedNote from '../../../pages/apparatus-events/HoursNotCreditedNote';
 
 interface SeatRow {
   key: string;
@@ -218,6 +219,12 @@ export const EditNightDialog: React.FC<EditNightDialogProps> = ({ board, onClose
                 <option value={categoryId}>{board.admin_hours_category_name ?? 'Current category'}</option>
               )}
             </select>
+            {hoursWouldNotBeCredited(categoryId, board.event_type, options) && (
+              <HoursNotCreditedNote
+                eventType={board.event_type}
+                hasCategories={(options?.categories.length ?? 0) > 0}
+              />
+            )}
           </div>
         </div>
         <label className="text-theme-text-secondary flex items-center gap-2 text-sm">

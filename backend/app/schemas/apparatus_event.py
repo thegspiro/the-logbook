@@ -480,6 +480,9 @@ class EditorCategoryOption(BaseModel):
 class EditorOptionsResponse(BaseModel):
     apparatus: List[EditorApparatusOption]
     categories: List[EditorCategoryOption]
+    # Event types an Admin Hours mapping credits, so the editor can warn when
+    # a template or night with no category of its own would credit nothing.
+    mapped_event_types: List[str] = Field(default_factory=list)
 
 
 class AttachCrewRequest(BaseModel):

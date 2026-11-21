@@ -3,6 +3,7 @@ const mockClaim = vi.fn();
 const mockRelease = vi.fn();
 const mockAssign = vi.fn();
 const mockRemovePlan = vi.fn();
+const mockEditorOptions = vi.fn();
 const mockSendSeatCall = vi.fn();
 const mockAudienceOptions = vi.fn();
 const mockAudiencePreview = vi.fn();
@@ -17,7 +18,7 @@ vi.mock('../../services/api', () => ({
     sendSeatCall: (...args: unknown[]) => mockSendSeatCall(...args) as unknown,
     getAssignableMembers: () => Promise.resolve([]),
     getDriverCandidates: () => Promise.resolve(null),
-    getEditorOptions: () => Promise.resolve({ apparatus: [], categories: [] }),
+    getEditorOptions: (...args: unknown[]) => mockEditorOptions(...args) as unknown,
   },
   memberAudienceService: {
     getOptions: (...args: unknown[]) => mockAudienceOptions(...args) as unknown,
@@ -132,6 +133,8 @@ describe('EventApparatusCrewCard', () => {
     mockRelease.mockReset();
     mockAssign.mockReset();
     mockRemovePlan.mockReset();
+    mockEditorOptions.mockReset();
+    mockEditorOptions.mockResolvedValue({ apparatus: [], categories: [], mapped_event_types: [] });
     mockSendSeatCall.mockReset();
     mockAudienceOptions.mockReset();
     mockAudiencePreview.mockReset();
@@ -293,5 +296,25 @@ describe('EventApparatusCrewCard', () => {
     expect(await screen.findByText(/Members last emailed about open seats/)).toHaveTextContent(
       '9 members · by Coordinator Tester'
     );
+  });
+
+  it('warns in Edit this night when clearing the category would credit nothing', async () => {
+    mockGetBoard.mockResolvedValue(board({ can_manage: true }));
+    mockEditorOptions.mockResolvedValue({
+      apparatus: [],
+      categories: [{ id: 'cat-1', name: 'Community Outreach' }],
+      mapped_event_types: [],
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+    await user.click(await screen.findByRole('button', { name: /Edit this night/ }));
+    const category = await screen.findByLabelText('Admin Hours category');
+    await screen.findByRole('option', { name: 'Community Outreach' });
+    expect(screen.queryByText(/hours won’t be credited/)).not.toBeInTheDocument();
+
+    await user.selectOptions(category, '');
+
+    expect(await screen.findByText(/hours won’t be credited/)).toBeInTheDocument();
   });
 });
