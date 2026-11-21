@@ -367,6 +367,7 @@ from app.models.knowledge_test import (
 )
 from app.models.label_printer import LabelPrinter
 from app.models.leave_request import (
+    LeaveApproverCover,
     LeaveDecisionRule,
     LeaveMessageKind,
     LeaveNoticeSend,
@@ -703,6 +704,7 @@ __all__ = [
     "LeaveRequest",
     "LeaveRequestStatus",
     "LeaveRequestVote",
+    "LeaveApproverCover",
     "LeaveVote",
     # Error log models
     "ErrorLog",

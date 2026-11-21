@@ -704,15 +704,11 @@ async def send_request_reminders(db: AsyncSession, org: Organization) -> int:
         number = reminder_number(created, today)
         if number == 0:
             continue
-        votes = await service._votes([str(request.id)])
-        voted = {
-            str(v.voter_id)
-            for v in service._current_votes(request, votes.get(str(request.id), []))
-        }
+        owing = await service.waiting_on_ids(org_id, request)
         member, approvers, count = await service.requester_and_approvers(
             org_id, request
         )
-        due = [a for a in approvers if str(a.id) not in voted]
+        due = [a for a in approvers if str(a.id) in owing]
         if not due:
             continue
         claim = await _claim(
@@ -825,15 +821,11 @@ async def send_request_escalations(db: AsyncSession, org: Organization) -> int:
         claim = await _claim(db, org_id, KIND_REQUEST_ESCALATION, str(request.id))
         if claim is None:
             continue
-        votes = await service._votes([str(request.id)])
-        voted = {
-            str(v.voter_id)
-            for v in service._current_votes(request, votes.get(str(request.id), []))
-        }
+        owing = await service.waiting_on_ids(org_id, request)
         member, approvers, _ = await service.requester_and_approvers(org_id, request)
         member_name = _name(member, "A member")
         undecided = sorted(
-            (a for a in approvers if str(a.id) not in voted),
+            (a for a in approvers if str(a.id) in owing),
             key=lambda u: _name(u).lower(),
         )
         waiting_on = waiting_on_sentence(request, member_name, undecided)
