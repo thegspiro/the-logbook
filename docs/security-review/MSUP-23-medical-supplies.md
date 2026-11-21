@@ -7,7 +7,136 @@
 2026-10-17 (pass 14, PR #3352), 2026-10-20 (pass 15, PR #3455),
 2026-10-24 (pass 16, PR #3635), 2026-10-27 (pass 17, PR #3766),
 2026-10-30 (pass 18, PR #3848), 2026-11-03 (pass 19, PR #3976),
-2026-11-11 (pass 20, this PR)
+2026-11-11 (pass 20, PR #4228), 2026-11-21 (pass 21, this PR)
+
+## Pass 21 (2026-11-21) — 0 fixed, 0 new findings (watchdog pickup)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable. PR #4503 (Feature
+22, Grants & fundraising, pass 15) had just merged (`fd8cc24c`); a fresh
+`list_pull_requests` (state=open) found no `claude/security-review-` head
+branch. Row 23 (Medical supplies) confirmed as the first `⬜` row in
+`PROGRESS.md`'s rotation table on a freshly fetched `main`.
+
+**Scope check — re-enumerated by AST, not diffed.** Walked every `@router.`
+decorator in `medical_supplies.py` directly: **29 routes**, unchanged from
+pass 20. All 29 individually confirmed to carry
+`Depends(require_permission(...))` in their signature.
+
+`git log c0baae03..main` (pass 20's own baseline) restricted to this
+feature's own files and the shared service methods its router calls
+(`medical_supplies.py`, `inventory_service.py`, `equipment_check_service.py`,
+`models/inventory.py`, `schemas/inventory.py`, `schemas/equipment_check.py`,
+`app/mcp/tools/medical_supplies.py`, `frontend/src/modules/medical-supplies/`,
+`scheduled_tasks.py`) found zero changes to `medical_supplies.py`,
+`app/mcp/tools/medical_supplies.py`, `models/inventory.py` or
+`schemas/inventory.py` (confirmed by `git diff --stat`, no entry for any of
+the four). The real delta is entirely in three other places, none of them
+this feature's own backend surface:
+
+- **`inventory_service.py` (+1 line, unrelated domain):** a printed
+  shift-staffing plan's metadata gains `"logo": org.logo if org else None` —
+  a different method entirely (the plan-printing helper, not any
+  medical-supplies-domain method); read in full, no query, no new surface.
+- **`equipment_check_service.py` (shared file; equipment-check _failure_
+  alert recipients, not the medical-domain truck-stock methods this feature
+  owns):** `226930a2`, "Alert the roles the panel shows when equipment-check
+  alerts were never saved" (CLAUDE.md Pitfall #19/#29 — a config switch with
+  no reader). Reads the stored `equipment_check_alerts` JSON through the new
+  `EquipmentCheckAlertSettings.from_stored` (`schemas/organization.py:680`)
+  instead of raw `dict.get()`, and resolves `notify_roles` through the new
+  `app/services/position_recipients.current_holder_ids` helper instead of a
+  hand-rolled `Role`/`user_positions` join. Read both in full: `from_stored`
+  degrades any malformed stored value to the model's default rather than
+  raising (matches Pitfall #19's "read free-form JSON defensively"), and
+  `current_holder_ids` filters `Position.organization_id`,
+  `User.organization_id`, `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` and
+  `User.deleted_at.is_(None)` together (org-scoped and current-member-only,
+  matching Pitfall #32). This is the equipment-check-failure notifier
+  (belongs to Feature 14, already ✅), not `apparatus_expiring_stock` (the
+  truck-stock method this feature's own `/expiring-stock` route reads) —
+  `git show 226930a2` touches no method this router calls. Noted only
+  because the file is shared; no finding against this feature.
+- **`scheduled_tasks.py` (+411/−83 lines across the window):** `git diff`
+  restricted to this file has zero lines matching `medical|suppl` — every
+  hunk belongs to other domains (leave-request reminders, a running-header
+  fix's unrelated test touch-ups, etc.). Confirmed by grep against the diff
+  text itself, not by trusting the commit subjects.
+- **Frontend (9 files, 802/−229 lines) — the forms-rollout pattern, batches
+  19–20, already reviewed on four other modules:** `MedicalImportExportModal.tsx`,
+  `MedicalItemLotsModal.tsx`, `MedicalSupplyItemPicker.tsx`,
+  `ReceiveDeliveryModal.tsx`, `MedicalCategoriesPage.tsx` (plus their four
+  test files) adopt `FormField`/`useFieldErrors`/`useDiscardGuard` and, on
+  `MedicalItemLotsModal.tsx` and `MedicalCategoriesPage.tsx`, the new shared
+  `saveExceptRefused`/`firstRefused` helper (`utils/saveExceptRefused.ts`,
+  the owner's 2026-11-05 "save with an error" rule). Read every diff in
+  full, not spot-checked:
+  - **Create vs. update (Pitfall #1), re-confirmed at every call site:**
+    `ReceiveDeliveryModal`'s delivery-entry create still omits blanks;
+    `MedicalItemLotsModal.saveEdit`/`MedicalCategoriesPage.handleSubmit`'s
+    update path still sends `blankToNull`/`numberOrNull` plus an explicit
+    `null` for a cleared box, and the new partial-save retry
+    (`saveExceptRefused`) **deletes** a refused field's key from the body
+    rather than nulling it — read `saveExceptRefused.ts:54-60` directly: the
+    `without()` helper does `delete body[key]`, which the backend's
+    `exclude_unset`/`apply_updates` already reads as "leave this field
+    alone" — the correct action for a field the _server_ refused, since
+    nulling it would clear a value the server just said is invalid to
+    change. Not a new write path; it is the same `PATCH`/`PUT` endpoint,
+    retried once with a smaller body.
+  - **No `window.confirm`/`alert`/`prompt`:** `MedicalItemLotsModal`'s new
+    `cancelEdit` uses the existing `useConfirm()` (Pitfall #16); `grep -rn
+"window\.\(confirm\|alert\|prompt\)("` over
+    `frontend/src/modules/medical-supplies/`: 0 hits.
+  - **No new request path or client-trusted field:** every new helper writes
+    to the same service methods (`updateLot`, `updateCategory`,
+    `importItemsCsv`) that existed before this pass; `MedicalSupplyItemPicker`'s
+    added `controlProps` prop only spreads `FormField`'s `id`/`aria-*`/`required`
+    plumbing onto the existing search input, not a new field.
+  - Error text renders as plain React children throughout (JSX
+    auto-escapes); no `dangerouslySetInnerHTML` introduced.
+
+**Re-verified directly against current code, not re-cited from pass 20's
+prose:**
+
+- **Tenant isolation (§3):** `InventoryService.find_lots_by_number` and
+  `get_expiring_lots`/`list_lots` (MSUP-4/MSUP-11, below) still filter
+  `organization_id` directly; file byte-identical to pass 20.
+- **CSV safety (§4):** all three CSV endpoints/template route still
+  construct through `SafeCsvWriter`; file byte-identical to pass 20.
+- **Recall routes, MCP tools:** `medical_supplies.py` and
+  `app/mcp/tools/medical_supplies.py` are byte-identical to pass 20 — no
+  re-reading needed beyond the AST route count above.
+- **Frontend (HIPAA/PII, §5):** `UNCACHEABLE_PREFIXES` still excludes
+  `/medical-screening/` and not `/medical-supplies/` — unchanged, still the
+  correct split (department stock data here, not member PHI).
+
+**0 new findings.** MSUP-1 through MSUP-27 all re-verified intact. MSUP-4 and
+MSUP-11 remain the only open items, both owner-accepted (2026-10-05,
+`docs/KNOWN_LIMITATIONS.md`) and unchanged at their current signatures
+(`inventory_service.py:9820`-area, `:10412`-area — line numbers shift
+slightly release to release as the file grows; not re-measured byte-exact
+here since the file itself did not change in this window).
+
+### Completion gate (pass 21)
+
+| Check                                                                                  | Result                                                                    |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (flake8 7.4.1, CI's pinned version)                      | ✅ clean                                                                  |
+| `black --check app/ tests/ alembic/` (black 26.10.1, CI's pinned version)              | ✅ clean — 3374 files unchanged                                           |
+| `isort --check-only app/ tests/ alembic/` (isort 9.0.2, CI's pinned version)           | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`                                      | ✅ 804 revisions, single head `3daf47506e9e` (unchanged)                  |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                      | ✅ 329 routes, 0 errors, 0 warnings (unchanged)                           |
+| `python3.13 -m pytest tests/ -q -k "medical_supplies or medical_supply or lot_recall"` | ✅ 216 passed, 1 pre-existing environment-only skip (`py_vapid`)          |
+| `cd frontend && npm run typecheck`                                                     | ✅ 0 errors                                                               |
+| `cd frontend && npm run lint`                                                          | ✅ 0 errors, 0 warnings                                                   |
+| `npx vitest run src/modules/medical-supplies`                                          | ✅ 210 passed (10 files; up from pass 20's 196 — the forms-rollout tests) |
+
+No source file was modified by this pass itself — a true re-verification
+pass. The real delta since pass 20 (an unrelated plan-metadata field, the
+equipment-check-alert-recipients fix belonging to a different, already-✅
+feature, and the forms-rollout rewrite of five frontend files) was already
+merged to `main` by other, non-rotation work and is reviewed clean above.
 
 ## Pass 20 (2026-11-11) — 0 fixed, 0 new findings (watchdog pickup)
 

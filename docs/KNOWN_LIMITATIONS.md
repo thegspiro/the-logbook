@@ -1601,6 +1601,18 @@ fix changes a workflow some departments rely on, so the owner decides:
   request, which they cannot decide. Ending one's own leave early (deleting
   it) is still allowed, since it excuses nothing. See
   `docs/security-review/ADV-02-adversarial-last-month.md`.
+- **An officer can still give themselves a training-only waiver (found
+  2026-11-21, documentation pass; awaiting an owner decision).** The ADV2-9 fix
+  closed the leave route. `POST /training/waivers` (`create_training_waiver`
+  in `backend/app/api/v1/endpoints/training_waivers.py`, `training.manage`)
+  has no `user_id == granted_by` check, so a holder can choose **Applies To:
+  Training only** on the Waivers page and excuse their own training
+  requirements, the outcome ADV2-9 was meant to stop. The fix would mirror
+  `MemberLeaveService.create_leave` and `RequirementOverrideService.grant`:
+  refuse a waiver for oneself and send the member through a waiver request
+  another officer decides. Not changed by the documentation pass, because
+  whether a Chief with no other officer may excuse their own training is the
+  owner's call.
 - **An applicant's edited email or name and birth date can make a coordinator's
   self-access guard hide their file (ADV2-10).** Refusing a member's email
   covers half of it. The rest turns on whether self-detection should trust

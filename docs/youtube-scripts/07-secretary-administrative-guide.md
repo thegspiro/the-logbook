@@ -195,18 +195,33 @@ members, and there is no approve/deny: a coordinator works the request's
 pipeline tasks, then schedules, postpones or declines it. The requester's
 status link is not in any email, so it has to be sent by hand.]**
 
-**[SCREEN: Navigate to Event Requests (EventRequestsTab). Expand a request:
-the pipeline task list, **Assign**, then **Schedule Event**, **Postpone** and
-**Decline**. Point to **Copy Link**.]**
+**[PRODUCTION NOTE — 2026-11-21. Re-record this beat: a request now opens on
+a page of its own (with **All requests** to go back) instead of expanding in
+place, the button is **Copy status link**, **Decline…** and **Postpone** sit
+under **More**, and **New request** enters one taken by phone. Finalizing the
+event's attendance now completes the request.]**
 
-> "Open a request and you'll see its tasks — the checklist your department set
-> up for these. Work through them, then **Schedule Event**, **Postpone** or
-> **Decline**. Scheduling puts it on the calendar."
+**[SCREEN: Community Outreach → Requests. Open a request: its page, the
+checklist, **Coordinator**, **Schedule event** and **More** (Postpone,
+Decline…). Point to **Copy status link** under Contact. Back on the list,
+press **New request** and show **How it came in**.]**
+
+> "Open a request and it gets a page of its own, with the checklist your
+> department set up for these. Work through it, then **Schedule event** — or,
+> under **More**, **Postpone** or **Decline**. Scheduling puts it on the
+> calendar."
+
+> "Not everyone uses the form. If a teacher phones the station, press **New
+> request**, choose **Phone call**, and type it in — a phone number is enough.
+> It goes on the board like any other."
 
 > "Whether the requester hears about each change depends on which request
 > emails your department switched on under Events settings. And one thing to
 > know: their status link isn't in any of those emails. If you want them to
-> follow along, press **Copy Link** and send it to them yourself."
+> follow along, press **Copy status link** and send it to them yourself."
+
+> "After the visit, finalizing the event's attendance marks the request
+> completed for you."
 
 > "For an open house or any event outside a room with a kiosk, the event has its
 > own guest code. Open the event's QR page and the **Guest Check-In** card shows

@@ -348,6 +348,7 @@ class TestUpdateComplianceTaskHardening:
             task_type="audit",  # plain str (Literal schema field), not enum
             status="pending",
             completed_date=None,
+            assigned_to=None,
         )
 
     async def test_rejects_foreign_assigned_to(self):

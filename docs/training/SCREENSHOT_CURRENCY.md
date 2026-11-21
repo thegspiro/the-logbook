@@ -141,6 +141,50 @@ check while the demo member has one upcoming engine shift. The external
 training provider step needs `api.vectorsolutions.com` to resolve, which this
 environment's network did not allow.
 
+**The November 20 – 21 queue below was drafted against the same build.** That
+pass audited `main` through `b0187eae`, the commit this capture was seeded
+from, so its **Replace** and **Check** rows were met by this run where the
+re-shot frame shows the subject. Each row there says which of its images are
+now current and which are still open.
+
+## Queued by the November 20 – 21 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-20--21-2026).
+Nothing was captured by this pass. Numbers continue each guide's sequence as
+of this pass; check them against `images/` before saving.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 04 | An outreach request on its own page: header, **All requests**, sections, the bottom action bar on a phone | **Replace** `04-99-event-request-drawer` (the drawer is gone) with `04-102-event-request-page`, and update the reference. Still open: the 2026-11-21 capture re-shot `04-99` as the request page at 1440px, but the rename, the reference and the phone action bar remain |
+| 04 | **New request** dialog: **Phone call**, no email, the confirmation box unticked and greyed | Create `04-103-new-request-dialog` |
+| 04 | Event Settings → Public Requests → **Types & roles**, one preset shown and one open for editing | Create `04-104-type-role-preset` |
+| 04 | **Volunteer staffing** card on an outreach event created directly, "3 of 5 signed up" with names | Create `04-105-event-volunteer-staffing` |
+| 04 | **How it went** card filled in; Community Engagement **Materials handed out** card | Create `04-106-outreach-closeout`, `04-107-materials-handed-out` |
+| 04 | `04-20-event-requests` (now has **New request**), `04-100-community-engagement` (materials card), `04-101-guest-headcount` (How it went card beside it), `04-09-event-templates` (inactive card dashed, new badge colours) | Check. Re-shot 2026-11-21: `04-20` shows **New request**. `04-100` has no materials card (none recorded), `04-101` frames the headcount card alone and `04-09` has no inactive template, so those three subjects are still open |
+| 02 | My Training hours card "6.9/6 hrs/mo avg" with "69/72 hrs total" | Create `02-148-requirement-card-hours-average` |
+| 02 | Three certification cards: **On file** (Expires …), **Expired** (date), **Not recorded** | Create `02-149-requirement-card-certification-states` |
+| 02 | My Training **Optional** heading, badge and "Not required for compliance" | Create `02-150-optional-requirements-group` |
+| 02 | Event template editor's **Training Details** section on a Training template | Optional `02-151-template-training-details` |
+| 02 | `02-108-monthly-hours-leave` (headline is now the average), `02-66-compliance-matrix` (an hours cell now leads with "3.7/2 hrs/mo avg"), `02-41-training-admin-reports` (Compliance Report card text) | Re-shot 2026-11-21: the average headline, the "hrs/mo avg" cell and the new card text are in frame |
+| 02 | `02-01-my-training`, `02-125-compliance-matrix-not-applicable` (replace if an hours cell shows), `02-75-compliance-forecast` (Current coloured by standing), `02-133-compliance-profile-positions` (now "Optional Requirements") | Checked, re-shot 2026-11-21 |
+| 02 | Evaluation step list with **Assign** and the **Who takes "…"** dialog | Create `02-144-evaluation-step-assign` |
+| 02 | **Last review** card on an evaluation | Create `02-145-evaluation-last-review` |
+| 02 | Conduct list with a period chosen: **Period results**, grade tiles, **Export CSV** (as a `view_all` holder) | Create `02-146-evaluation-period-results` |
+| 02 | **New template** dialog with "Annual Evaluation with Officer Sections" and its **Officer ranks** boxes | Create `02-147-evaluation-officer-starter` |
+| 08 | Compliance profile form with the amber "… also has priority N" warning and the Required / Optional lists | Create `08-124-profile-priority-tie-warning`. `08-70-compliance-profiles` re-shot 2026-11-21; no seeded profile has optional requirements, so no "Optional:" chips are in frame |
+| 03 | Close-out wizard step 1 as a shift officer without `scheduling.manage`: own Start/End/Hours disabled with the hint line | Create `03-138-closeout-own-row-locked`. `03-75-closeout-step1-attendance`, `03-45-finalize-checklist` re-shot 2026-11-21 |
+| 03 | History import Shifts tab: "You chose to add these members to that shift." with **Undo** | Create `03-139-history-import-existing-undo`. **Check** `wiki/images/history-import-shifts.png` |
+| 01 | Leave request: **Ask a question**; the member's view with changed dates and **Accept these dates**; **Your leave** with **Your first day back** and **End my leave**; the escalation setting | Create `01-59-leave-request-ask-question`, `01-60-leave-request-changed-dates`, `01-61-leave-back-early`, `01-62-leave-escalation-setting` |
+| 01 | `01-49-anonymize-member` (the Removed list has two more lines), `01-08-member-audit-history` (plain-word field names, new position wording) | **Replace** `01-49`: still open, it fails in the 2026-11-21 capture. `01-08` re-shot 2026-11-21 |
+| 01 | `01-29-status-change-modal` (only allowed statuses), `01-46-add-member-password-no-email` (icons replace ✓/○), `01-24-delete-member-modal` (applicant record and file lines) | Check `01-46`: still open, held back as an empty state on 2026-11-21. `01-29`, `01-24` re-shot 2026-11-21 |
+| 06 | `06-03` to `06-06` apparatus detail (buttons hidden for view-only users), `06-13-facility-maintenance` (cost in cents, scrolling filters), `06-14-facility-inspections` | Check `06-05`: still open, held back as an empty state on 2026-11-21. The rest re-shot 2026-11-21 |
+| any | Empty-state cards on the 25 screens #4382 padded (e.g. `01-11`, `01-19` if they show one); dark-mode captures with scroll-row chevrons (#4448) | Check |
+| 14 | Certified results and pre-meeting package captures footed "Page N" | Optional: now "Page X of Y" |
+
+**Made wrong by this range:** `04-99`, `01-49`, `01-08`, `02-108`, `02-66`,
+`02-41`. All but `04-99` (still to be renamed) and `01-49` (still failing) were
+re-shot on 2026-11-21.
+
 ## Queued by the November 19 – 20 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-19--20-2026).

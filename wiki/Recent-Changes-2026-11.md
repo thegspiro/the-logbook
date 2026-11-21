@@ -5,6 +5,51 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 20 – 21, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-20--21-2026).
+
+- **Outreach requests.** A coordinator can enter a request taken by phone
+  or email with **New request**. Each request now opens on its own page
+  that you can bookmark. A request type can carry a preset list of
+  volunteer roles. An outreach event you create yourself can open a
+  volunteer signup sheet. Finalizing the event completes the request, and a
+  **How it went** card records materials handed out and the outcome. Open
+  Shifts lists outreach sheets 60 days ahead. See [Events](Module-Events).
+- **Apparatus events** put a vehicle and a named crew on an outreach event,
+  can email members about open seats, and warn when a crew's hours would not
+  be credited. Organizers are reminded to record an event's guest headcount.
+- **My Training reads more plainly.** Hours requirements lead with your
+  monthly average ("6.9/6 hrs/mo avg"), certifications show **On file**,
+  **Expired** or **Not recorded**, and optional requirements are listed
+  under their own heading without counting against you. See
+  [Training](Module-Training).
+- **Compliance figures agree.** Officer views, exports and the forecast now
+  follow compliance profiles, and the Compliance Report grades as of today,
+  like the matrix. Its CSV headers changed. Members short of a rolling
+  requirement no longer get a reminder every day. See
+  [Compliance](Module-Compliance).
+- **Nobody approves their own.** An evaluator cannot calibrate or approve
+  their own evaluation, and a manager can name who takes a step. A shift
+  officer cannot record their own close-out hours, and nobody records their
+  own leave of absence; officers file a leave request like anyone else. See
+  [Evaluations](Module-Evaluations), [Scheduling](Module-Scheduling).
+- **Evaluations** add a last-review card, period results with grades and a
+  CSV export, and an annual starter with officer sections. PDFs, minutes and
+  election records are numbered "Page X of Y".
+- **Leave requests** gain questions, changed dates, extensions, reminders,
+  escalation and **I'm back early**. See
+  [Administration Pages](Administration-Pages).
+- **Member records.** Anonymising deletes files on the member's training
+  records and is refused for a member holding more privileges than you. A
+  permanent delete also removes the applicant record and finishes deleting
+  files even after a crash. See [Privacy](Security-Privacy).
+- **Training events.** Duplicating an event saves a draft, credit hours
+  follow a changed length, a series time change that would strand check-ins
+  is refused, and a session awaiting sign-off no longer counts against
+  attendees.
+
 ## Recent changes: November 19 – 20, 2026
 
 The engineering audit is

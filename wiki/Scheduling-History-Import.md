@@ -320,6 +320,12 @@ see all of them.
   already on your schedule. Choose:
   - **Add to that shift** to add these members to the existing shift;
   - **Import separately** to create a new shift.
+
+  Once answered, the card reads "You chose …" with an **Undo** link. **Undo**
+  clears the answer and asks the question again, so a wrong choice can be
+  taken back before you commit. The Rows tab ("Decided: …") and a row's edit
+  dialog offer the same **Undo** (2026-11-20).
+
 - **Joined from _N_ entries** marks back-to-back entries that were
   [joined into one](#shifts-logged-in-pieces). If they were really separate
   shifts, click **Split apart**.
