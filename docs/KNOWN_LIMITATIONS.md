@@ -7092,8 +7092,39 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   added forecast field, waivers, catch-up and not-yet-held handling. No
   migration. Tests: `tests/test_officer_compliance_views_profiles.py`.
 - **Profiles: optional requirements and equal priorities (D10 follow-up) —
-  open.** `optional_requirement_ids` has no reader, and two active profiles of
-  equal priority resolve in an undefined order.
+  ✅ resolved by owner decision 2026-11-21.** _Ties:_ the older profile wins,
+  then the smaller id, defined once in `app/utils/compliance_profiles.py` and
+  used by grading, the admin-hours lookup and the configuration response (which
+  now lists profiles in that order). The editor warns under **Priority** and on
+  each tied card, and never refuses the save. A tie used to go to whichever row
+  the database returned first, so a member matched by two tied profiles may
+  switch profile once, on every screen together, on the first request after
+  the upgrade. _Optional requirements:_ shown, never graded. The matched
+  profile's applicable optional requirements are listed, marked Optional, on My
+  Training and the officer's view of the member (`optional_requirements_detail`)
+  and reach no count, percentage, reminder, notice, matrix or export. An id in
+  both lists is required, and a save stores it so. A profile with no required
+  list (`null`, API only) grades everything except its optional requirements.
+  The editor no longer turns such a `null` into `[]` (grade nothing) on an
+  unrelated save. Tests: `tests/test_compliance_profile_resolution.py`,
+  `tests/test_compliance_profile_ties_and_optional.py`,
+  `ComplianceRequirementsConfigPage.profileRules.test.tsx`.
+- **Profiles: optional requirements are not matrix cells — open, deferred
+  2026-11-21.** The compliance matrix, its print page and the exports show only
+  graded requirements, so an officer sees a member's optional requirements on
+  that member's training page only. Adding cells would need an optional
+  exclusion in every place the matrix frontend counts cells
+  (`complianceMatrixModel.ts`), the print page, the exports and the `as_of`
+  minimum; missing one recreates the drift of CLAUDE.md pitfall #29.
+- **Profiles: admin hours choose their own profile — open, owner question
+  2026-11-21.** A member's admin-hours targets come from the highest-priority
+  matching profile that _carries_ admin hours (ties now resolved as grading
+  resolves them), not from the profile that grades their training. A member
+  whose grading profile has no admin hours therefore takes targets from a
+  lower-priority profile. `admin_hours_service.get_user_hours_compliance` also
+  matches profiles with its own rules, which lack grading's "junior" chip
+  handling. Whether admin hours should follow the grading profile is not
+  decided.
 - **The compliance exports grade Met / Not Met from the report period's
   records only — open, found 2026-11-20, not confirmed by running.**
   `ReportExportService.stream_compliance_csv` and `generate_compliance_pdf`
@@ -7104,6 +7135,16 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   requirement completed before the period would print **Not Met** in the
   export beside a matrix that shows it met (CLAUDE.md pitfall #29). Fixing it
   changes what the export's period means, so it needs its own decision.
+- **Compliance emails: a rolling requirement is in one non-compliance notice
+  per member, ever — open, found 2026-11-21.** A rolling requirement's window
+  ends on the grading day, which made both member emails repeat daily (the
+  reminder called it "due today", and the notice's key moved with the date).
+  The fix gives a rolling requirement no deadline reminder and keys its notice
+  on the requirement alone (`compliance_member_notices.py`). The cost: a member
+  who meets it, and months later falls short again, is not told again unless
+  the same notice is triggered by some other requirement, which then lists it.
+  Telling them again needs a recorded "met again" date to key on, which the
+  task does not keep. Tests: `tests/test_compliance_member_notices.py`.
 - **The Compliance Officer dashboard's forecast summary cards keep fixed
   colour bands — open.** The department "Current" average card colours green
   at 80% or more and yellow below, and the 30/60/90 average cards and every
@@ -9113,6 +9154,40 @@ need an owner decision before anything is built.
   markup reaches a public page. The decision is whether to support a small,
   safe set (headings, lists) so that adapting the built-in text does not make
   the page look worse.
+
+## Events and Series — Choices Made Fixing the 2026-11-21 Review
+
+Five defects in training events and recurring series were fixed on
+2026-11-21 (owner approval of that date). Where the review left a choice, the
+conservative option was taken; each can be redirected:
+
+- **Cancelling a series' future ends the series.** "Only cancel future
+  events" now sets the series' end date to the last kept occurrence and turns
+  rolling extension off, as a "this and future" delete already did. There is
+  no "pause and resume" for a rolling series; to continue it, create a new
+  one. Separately, the nightly extension job never creates a date the series
+  already holds, cancelled or not.
+- **A sign-off session is not held while its approval is pending.** A session
+  that requires completion confirmation drops out of every
+  session-attendance grade from finalize until a training officer approves or
+  rejects it. The alternative — counting attendees with a pending record as
+  attended — was not taken, because nothing ends a pending approval on its
+  own and it would credit attendance an officer may still reject. Only the
+  newest approval counts; "newest" is by a one-second `created_at`, and a tie
+  with a pending approval reads as pending.
+- **A series time change that would strand check-ins refuses the whole save.**
+  The refusal names how many members and occurrences are affected; nothing is
+  moved. Postponing each affected occurrence is the way through.
+- **Credit hours follow the event's length only when they still equal it.**
+  On a move without the training form (a training manager's edit, a series
+  time change, a postponement), a session with no course whose hours equal
+  the old scheduled length takes the new length. Typed hours and a course's
+  hours stay as they were.
+- **A duplicate is always a draft.** Copying the source's flag was not taken:
+  a duplicate of a published event would appear on every calendar at the
+  source's date and room before the officer changed anything. The copy keeps
+  the source's organizer and alternate; one who can no longer run an event is
+  replaced by the duplicating officer.
 
 ## Events — Files Cannot Be Attached From the App (2026-09-30)
 

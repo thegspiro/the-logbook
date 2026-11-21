@@ -195,7 +195,12 @@ async def create_compliance_profile(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_permission("settings.manage", "compliance.manage")),
 ):
-    """Create a new compliance profile."""
+    """Create a new compliance profile.
+
+    An id sent in both requirement lists is stored as required only. A
+    priority equal to another profile's is accepted: a member matched by both
+    is graded by the older profile.
+    """
     async with handle_service_errors("Failed to create profile"):
         service = ComplianceConfigService(db)
         profile = await service.create_profile(
@@ -213,7 +218,14 @@ async def update_compliance_profile(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_permission("settings.manage", "compliance.manage")),
 ):
-    """Update a compliance profile."""
+    """Update a compliance profile.
+
+    An id required after the update leaves ``optional_requirement_ids``, even
+    when the payload sent only ``required_requirement_ids``: the stored
+    optional list is rewritten without it. A priority equal to another
+    profile's is accepted: a member matched by both is graded by the older
+    profile.
+    """
     async with handle_service_errors("Failed to update profile"):
         service = ComplianceConfigService(db)
         # exclude_unset, not exclude_none: an omitted field means "leave this

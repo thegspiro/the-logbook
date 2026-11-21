@@ -33,9 +33,10 @@ def _latest_result(start, end, deadline=None):
         title="Drill",
         event_type="business_meeting",
         custom_fields=None,
+        is_cancelled=False,
     )
     result = MagicMock()
-    result.scalars.return_value.first.return_value = occurrence
+    result.scalars.return_value.all.return_value = [occurrence]
     return result
 
 
