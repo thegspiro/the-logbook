@@ -113,9 +113,10 @@ class TestUpdateFutureEventsTiming:
     async def _update(self, series, update):
         db = AsyncMock()
         db.execute.side_effect = [_scalar(series[0]), _scalars(series)]
-        # A moved series also sends its waiver requests back to their members,
-        # which reads the database; this mocked one answers only the two
-        # reads above, and the hook is pinned in its own test file.
+        # A moved series also sends its waiver requests back to their members
+        # and reads each open occurrence's check-ins, both of which read the
+        # database; this mocked one answers only the two reads above, and both
+        # are pinned in their own test files.
         with (
             patch(
                 "app.services.event_service.resolve_scheduling_timezone",
@@ -125,6 +126,9 @@ class TestUpdateFutureEventsTiming:
                 "app.services.attendance_waiver_service."
                 "reconfirm_for_rescheduled_events",
                 AsyncMock(return_value=[]),
+            ),
+            patch.object(
+                EventService, "_count_stranded_check_ins", AsyncMock(return_value=0)
             ),
         ):
             return await EventService(db).update_future_events(uuid4(), uuid4(), update)
@@ -230,9 +234,17 @@ def _drills(*finalized, **per_occurrence):
 async def _save_series(series, update):
     db = AsyncMock()
     db.execute.side_effect = [_scalar(series[0]), _scalars(series)]
-    with patch(
-        "app.services.event_service.resolve_scheduling_timezone",
-        AsyncMock(return_value=ZoneInfo("America/Chicago")),
+    # An open occurrence whose check-in window changes has its check-ins read
+    # (test_event_series_check_ins.py); this mocked session answers only the
+    # two reads above.
+    with (
+        patch(
+            "app.services.event_service.resolve_scheduling_timezone",
+            AsyncMock(return_value=ZoneInfo("America/Chicago")),
+        ),
+        patch.object(
+            EventService, "_count_stranded_check_ins", AsyncMock(return_value=0)
+        ),
     ):
         count = await EventService(db).update_future_events(uuid4(), uuid4(), update)
     return count, db

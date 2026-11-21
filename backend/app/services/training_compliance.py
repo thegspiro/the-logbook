@@ -960,12 +960,45 @@ async def load_held_sessions(
     until an officer closed it out (the same reason SHIFTS counts only
     finalized shifts). ``{}`` when none of ``requirements`` is of the type,
     and callers pass the mapping whole.
+
+    A session that requires completion confirmation is not held while its
+    newest approval is pending: finalizing it writes IN_PROGRESS records
+    only, and a member counts as attended only on a COMPLETED one, so
+    counting it from finalize charged every attendee with a session they
+    were not yet credited for, for as long as the sign-off waited. The
+    approval decides it either way — approved, the records complete and it
+    is attended; rejected, it is held and charged as any other. Only the
+    newest approval counts: a re-finalize leaves the earlier one PENDING with
+    its link killed ("newest" is by a one-second ``created_at``, so a reopen
+    and re-finalize inside the same second ties, and a tie with a pending
+    approval reads as pending). Every grader and the waiver checks read this
+    function, so the rule lives here once (pitfall #29).
     """
+    from sqlalchemy.orm import aliased
+
     from app.models.event import Event
+    from app.models.training import ApprovalStatus, TrainingApproval
 
     ids = [str(r.id) for r in requirements if is_session_attendance(r)]
     if not ids:
         return {}
+    pending = aliased(TrainingApproval)
+    newer = aliased(TrainingApproval)
+    awaiting_sign_off = (
+        select(pending.id)
+        .where(
+            pending.training_session_id == TrainingSession.id,
+            pending.organization_id == str(org_id),
+            pending.status == ApprovalStatus.PENDING,
+            ~select(newer.id)
+            .where(
+                newer.training_session_id == pending.training_session_id,
+                newer.created_at > pending.created_at,
+            )
+            .exists(),
+        )
+        .exists()
+    )
     rows = await db.execute(
         select(
             TrainingSessionRequirement.requirement_id,
@@ -983,6 +1016,7 @@ async def load_held_sessions(
             TrainingSession.organization_id == str(org_id),
             TrainingSession.is_finalized.is_(True),
             Event.is_cancelled.is_(False),
+            ~awaiting_sign_off,
         )
     )
     tz = await resolve_scheduling_timezone(db, org_id)
