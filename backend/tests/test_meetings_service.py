@@ -246,7 +246,7 @@ class TestRemoveAttendee:
         assert err == "Attendee not found"
 
     async def test_success(self):
-        db = _db([_one(SimpleNamespace(id="a1"))])
+        db = _db([_one(SimpleNamespace(id="a1", waiver_request_id=None))])
         ok, err = await MeetingsService(db).remove_attendee("m1", "a1", "org-1")
         assert ok is True
         db.delete.assert_awaited()

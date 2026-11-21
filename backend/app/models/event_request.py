@@ -14,12 +14,13 @@ requesters express preferences rather than committing to exact dates.
 import enum
 import hashlib
 import secrets
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -62,6 +63,27 @@ class EventRequestStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class EventRequestSource(str, enum.Enum):
+    """How a request reached the department.
+
+    ``web`` is the public form, through either intake path. The rest are
+    entered by a coordinator for a requester who phoned, wrote or came by,
+    and a coordinator cannot choose ``web`` for one: it would claim the
+    requester filled in the form themselves.
+    """
+
+    WEB = "web"
+    PHONE = "phone"
+    EMAIL = "email"
+    IN_PERSON = "in_person"
+    OTHER = "other"
+
+
+STAFF_ENTERED_SOURCES = tuple(
+    source for source in EventRequestSource if source != EventRequestSource.WEB
+)
+
+
 class EventRequest(Base):
     """
     Public outreach event request.
@@ -82,7 +104,10 @@ class EventRequest(Base):
 
     # Requester contact info
     contact_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    contact_email: Mapped[str] = mapped_column(EncryptedText, nullable=False)
+    # NULL for a request a coordinator entered for a caller who gave only a
+    # phone number; every email to the requester is skipped for such a request.
+    # The public form still requires an address.
+    contact_email: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     contact_phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     organization_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
@@ -100,12 +125,12 @@ class EventRequest(Base):
     date_flexibility: Mapped[str] = mapped_column(
         String(30), nullable=False, default="flexible"
     )
-    preferred_date_start: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    preferred_date_end: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    # Calendar dates on the department's calendar, not instants (owner decision,
+    # 2026-11-20). They were DATETIME, and a day stored as midnight was read
+    # back as UTC midnight and shown as the evening before anywhere west of
+    # UTC — the 15th a requester picked reached the coordinator as the 14th.
+    preferred_date_start: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    preferred_date_end: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     # Free-text for fuzzy preferences like "Saturday morning next month"
     preferred_timeframe: Mapped[Optional[str]] = mapped_column(
         String(500), nullable=True
@@ -201,6 +226,15 @@ class EventRequest(Base):
     status_token: Mapped[Optional[str]] = mapped_column(EncryptedText)
     status_token_hash: Mapped[Optional[str]] = mapped_column(
         String(64), unique=True, index=True, nullable=True
+    )
+
+    # How the request arrived (EventRequestSource). A plain string rather than
+    # a database enum, so a new intake channel is not a column migration.
+    source: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=EventRequestSource.WEB.value,
+        server_default=EventRequestSource.WEB.value,
     )
 
     # Source tracking (from form submission)

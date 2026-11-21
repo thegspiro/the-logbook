@@ -397,8 +397,8 @@ forecast print N/A where a requirement does not apply.
 JPEG, PNG, GIF, WEBP, DOC or DOCX, detected by magic bytes and malware-scanned)
 through `FileStorageService` under
 `/app/uploads/<org_id>/training-records/<record_id>/<uuid><ext>`, with metadata
-in the `TrainingRecord.attachments` JSON column. `GET .../attachments/{index}/download`
-streams a stored file. Access is the record owner or `training.manage`; server
+in the `TrainingRecord.attachments` JSON column. `GET .../attachments/{entry}/download`
+streams a stored file, named by the entry's id (or, for older clients, its index). Access is the record owner or `training.manage`; server
 file paths are never returned. The record download route also accepts the
 self-reports storage area, because approving a submission copies its
 attachment entries onto the record verbatim.
@@ -1215,7 +1215,10 @@ never sets it.
   the server-side cursor opens. PDF is available only for
   `individual`, `member_records`, and `compliance`; bulk PDFs are merged with
   `pypdf` (an empty result gets a placeholder page). An unknown `report_type`
-  returns 400.
+  returns 400. The `compliance` export's status cells come from
+  `training_compliance.grade_members`, the matrix's grader, as of the
+  department's today; `start_date` / `end_date` scope only the hours and
+  completed-record columns, whose CSV headers carry the dates _(2026-11-21)_.
 - **Personal-data exports** apply the module's result-visibility setting to
   `ShiftCompletionReport` fields: officer-only evaluation data hidden from the
   trainee in the application is also omitted from a newly generated export;

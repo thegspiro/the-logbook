@@ -147,6 +147,7 @@ class TestLeadTime:
             {"min_lead_time_days": 21},
             "specific_dates",
             datetime.now(timezone.utc) + timedelta(days=3),
+            today=datetime.now(timezone.utc).date(),
         )
         assert error is not None
         assert "21 days" in error
@@ -157,6 +158,7 @@ class TestLeadTime:
                 {"min_lead_time_days": 21},
                 "specific_dates",
                 datetime.now(timezone.utc) + timedelta(days=30),
+                today=datetime.now(timezone.utc).date(),
             )
             is None
         )
@@ -169,6 +171,7 @@ class TestLeadTime:
                     {"min_lead_time_days": 21},
                     flexibility,
                     datetime.now(timezone.utc) + timedelta(days=1),
+                    today=datetime.now(timezone.utc).date(),
                 )
                 is None
             )
@@ -179,6 +182,7 @@ class TestLeadTime:
                 {"min_lead_time_days": 0},
                 "specific_dates",
                 datetime.now(timezone.utc) + timedelta(hours=1),
+                today=datetime.now(timezone.utc).date(),
             )
             is None
         )
@@ -190,6 +194,7 @@ class TestLeadTime:
                 {"min_lead_time_days": "three weeks"},
                 "specific_dates",
                 datetime.now(timezone.utc) + timedelta(hours=1),
+                today=datetime.now(timezone.utc).date(),
             )
             is None
         )

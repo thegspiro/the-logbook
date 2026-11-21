@@ -29,6 +29,7 @@ from app.models.event import Event
 from app.services import attendance_waiver_service as engine
 from app.services.attendance_waiver_service import (
     AttendanceWaiverService,
+    send_member_notices,
     void_pending_for_events,
 )
 from app.services.event_service import EventService
@@ -216,3 +217,51 @@ class TestNothingBeforeTheCommit:
             db_session, dept.org, [dept.drill], "cancelled"
         )
         assert again == []
+
+
+class TestSendingTwice:
+    """A retried send of the same notices emails once (pitfall #36): each
+    send is claimed against the log row it reports and the member, which
+    the database keeps unique, as the template emails already are."""
+
+    async def test_the_same_notices_sent_twice_email_once(
+        self, db_session, dept, outbox
+    ):
+        await _submit(db_session, dept)
+        outbox.clear()
+        notices = await void_pending_for_events(
+            db_session, dept.org, [dept.drill], "cancelled"
+        )
+        await db_session.commit()
+
+        await send_member_notices(db_session, dept.org, notices)
+        await send_member_notices(db_session, dept.org, notices)
+
+        assert len(_closing(outbox)) == 1
+
+    async def test_a_failed_send_is_released_for_a_retry(
+        self, db_session, dept, outbox, monkeypatch
+    ):
+        await _submit(db_session, dept)
+        outbox.clear()
+        notices = await void_pending_for_events(
+            db_session, dept.org, [dept.drill], "cancelled"
+        )
+        await db_session.commit()
+        import app.services.email_service as email_service
+
+        working = email_service.EmailService
+
+        class DownEmailService:
+            def __init__(self, organization=None):
+                self.organization = organization
+
+            async def send_email(self, **kwargs):
+                return False
+
+        monkeypatch.setattr(email_service, "EmailService", DownEmailService)
+        await send_member_notices(db_session, dept.org, notices)
+        monkeypatch.setattr(email_service, "EmailService", working)
+        await send_member_notices(db_session, dept.org, notices)
+
+        assert len(_closing(outbox)) == 1

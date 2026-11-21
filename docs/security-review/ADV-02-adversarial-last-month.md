@@ -29,7 +29,7 @@ rotation's own open pull request.
 | ADV2-6  | Officer       | Low      | `members.manage` could repoint the personal email of a member above its ceiling and collect a retried directory-account password                                   | Fixed  |
 | ADV2-7  | Member        | Low      | Draft events were still reachable through the QR payload, self-check-in, the event folder and the training-session lookup                                          | Fixed  |
 | ADV2-8  | Officer       | Low      | A shift officer without `scheduling.manage` can write their own close-out hours (predates the window)                                                              | Fixed  |
-| ADV2-9  | Officer       | Low      | An officer with `members.manage` + `scheduling.assign` can grant themselves a leave, which creates their own training waiver (predates the window)                 | Owner  |
+| ADV2-9  | Officer       | Low      | An officer with `members.manage` + `scheduling.assign` can grant themselves a leave, which creates their own training waiver (predates the window)                 | Fixed  |
 | ADV2-10 | Applicant     | Low      | An applicant can set their own follow-up-form email (or name and birth date) to a coordinator's, so the coordinator's self-access guard hides the file from them   | Owner  |
 | ADV2-11 | Outsider      | Info     | A Zeffy dues payment credits whichever member's email the payer typed, and overpayment becomes a donation in that member's name                                    | Owner  |
 
@@ -110,13 +110,30 @@ hours. A holder of `scheduling.manage` is not affected.
   failed before the fix), and the "officer's own row" cases in
   `ShiftCloseoutWizard.test.tsx`.
 
+## ADV2-9 fix (2026-11-21)
+
+Owner decision: block it. Nobody grants or extends their own leave of absence.
+
+- `MemberLeaveService.create_leave` refuses `user_id == granted_by`, so the
+  rule holds for every caller, not only the route.
+  `POST /users/leaves-of-absence` answers 400.
+- `PATCH /users/leaves-of-absence/{id}` answers 403 on the caller's own leave:
+  extending it, or turning its training waiver back on, excuses requirements
+  as granting one does.
+- The caller's own leave goes through `POST /users/leave-requests`, which they
+  cannot decide. An approval creates the leave with the voter as
+  `granted_by`, so it never meets the refusal.
+- `DELETE /users/leaves-of-absence/{id}` is unchanged: ending one's own leave early
+  excuses nothing.
+- Tests: `tests/test_member_leave_self_grant.py` (five tests; the three
+  refusals failed before the fix).
+
 ## Awaiting an owner decision
 
 - **ADV2-4**: resolved 2026-11-16, owner's option 2 (refuse, and add a
-  manager's reassign-step action). See "ADV2-4 fix" below.
+  manager's reassign-step action). See "ADV2-4 fix" above.
 - **ADV2-8**: resolved 2026-11-20. See "ADV2-8 fix" above.
-- **ADV2-9**: `MemberLeaveService.create_leave` has no self check, and a leave
-  auto-creates a training waiver.
+- **ADV2-9**: resolved 2026-11-21. See "ADV2-9 fix" above.
 - **ADV2-10**: Checking that the new email is not a current member's would cover
   the email half. The name-and-birth-date half would remain, so the fix needs a
   decision on whether self-detection should trust applicant-editable fields at

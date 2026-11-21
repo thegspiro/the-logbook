@@ -1072,7 +1072,8 @@ const EVENT_REQUESTS = [
     outreach_type: 'fire_safety_demo',
     status: 'submitted',
     date_flexibility: 'specific_dates',
-    preferred_date_start: requestDay(9),
+    // A calendar date, as the API serves it.
+    preferred_date_start: requestDay(9).slice(0, 10),
     audience_size: 120,
     short_notice: false,
     created_at: requestDay(-1),
@@ -1085,7 +1086,8 @@ const EVENT_REQUESTS = [
     outreach_type: 'station_tour',
     status: 'in_progress',
     date_flexibility: 'specific_dates',
-    preferred_date_start: requestDay(5),
+    // A calendar date, as the API serves it.
+    preferred_date_start: requestDay(5).slice(0, 10),
     audience_size: 200,
     assigned_to: TEST_USER.id,
     assignee_name: 'Alex Tester',

@@ -21,6 +21,7 @@ const EventDetailPage = lazyWithRetry(() =>
 const EventQRCodePage = lazyWithRetry(() => import('../../pages/EventQRCodePage'));
 const EventSelfCheckInPage = lazyWithRetry(() => import('../../pages/EventSelfCheckInPage'));
 const GuestCheckInPage = lazyWithRetry(() => import('../../pages/GuestCheckInPage'));
+const EventRequestPage = lazyWithRetry(() => import('../../pages/EventRequestPage'));
 const EventsAdminHub = lazyWithRetry(() =>
   import('../../pages/EventsAdminHub').then((m) => ({ default: m.EventsAdminHub }))
 );
@@ -130,6 +131,18 @@ export const getEventsRoutes = () => {
           <ProtectedRoute requiredPermission="events.manage">
             <Suspense fallback={null}>
               <EventsAdminHub />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* One outreach request, on its own page (the board is /events/admin?tab=requests) */}
+      <Route
+        path="/events/admin/requests/:requestId"
+        element={
+          <ProtectedRoute requiredPermission="events.manage">
+            <Suspense fallback={null}>
+              <EventRequestPage />
             </Suspense>
           </ProtectedRoute>
         }
