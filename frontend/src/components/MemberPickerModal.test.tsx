@@ -155,3 +155,45 @@ describe('MemberPickerModal', () => {
     expect(onSelect).toHaveBeenCalledTimes(2);
   });
 });
+
+// W40-9: a member holding two pool-issued boxes of gloves read "2 items
+// assigned". The total adds assignments, loans and issued units, so the row
+// names each kind it holds, in the Members page's words.
+describe('MemberPickerModal — what each member holds', () => {
+  beforeEach(() => {
+    mockGetMembersSummary.mockReset();
+  });
+
+  it('names each kind of holding rather than calling the total "assigned"', async () => {
+    mockGetMembersSummary.mockResolvedValue({
+      members: [
+        { ...members[0], permanent_count: 3, checkout_count: 1, issued_count: 0, total_items: 4 },
+        {
+          ...members[1],
+          user_id: 'user-3',
+          full_name: 'Blair Carter',
+          first_name: 'Blair',
+          last_name: 'Carter',
+          permanent_count: 0,
+          checkout_count: 0,
+          issued_count: 2,
+          total_items: 2,
+        },
+      ],
+      total: 2,
+    });
+    render(<MemberPickerModal isOpen onClose={vi.fn()} onSelect={vi.fn()} />);
+
+    expect(await screen.findByText('3 permanent · 1 checked out')).toBeInTheDocument();
+    expect(screen.getByText('2 issued')).toBeInTheDocument();
+    expect(screen.queryByText(/assigned/)).not.toBeInTheDocument();
+  });
+
+  it('says nothing about holdings for a member who holds nothing', async () => {
+    mockGetMembersSummary.mockResolvedValue({ members: [members[1]], total: 1 });
+    render(<MemberPickerModal isOpen onClose={vi.fn()} onSelect={vi.fn()} />);
+
+    expect(await screen.findByText('Jane Doe')).toBeInTheDocument();
+    expect(screen.queryByText(/permanent|checked out|issued/)).not.toBeInTheDocument();
+  });
+});
