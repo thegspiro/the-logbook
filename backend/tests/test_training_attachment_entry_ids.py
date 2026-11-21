@@ -47,7 +47,8 @@ class TestHelpers:
         original = [kept, {"file_name": "b.pdf"}, "legacy"]
         stamped = with_entry_ids(original)
         assert stamped[0] == kept
-        assert len(stamped[1]["id"]) == UUID_SHAPE and "-" in stamped[1]["id"]
+        assert len(stamped[1]["id"]) == UUID_SHAPE
+        assert "-" in stamped[1]["id"]
         assert stamped[2] == "legacy"
         # A copy: the source list and its dicts are untouched.
         assert "id" not in original[1]
@@ -56,7 +57,8 @@ class TestHelpers:
     def test_digits_are_an_index_and_anything_else_an_id(self):
         assert parse_entry_ref("3").index == 3
         ref = parse_entry_ref(str(uuid.uuid4()))
-        assert ref.index is None and ref.entry_id
+        assert ref.index is None
+        assert ref.entry_id
 
     def test_resolve(self):
         entries = [{"id": "a"}, {"id": "b"}]

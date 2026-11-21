@@ -148,10 +148,12 @@ def test_upgrade_stamps_exactly_the_dicts_without_an_id(scratch, table):
     assert _is_uuid(upload_id)
     assert upload == _UPLOAD
     name_only = stored["r-name-only"][0]
-    assert _is_uuid(name_only["id"]) and name_only["file_name"] == "a.pdf"
+    assert _is_uuid(name_only["id"])
+    assert name_only["file_name"] == "a.pdf"
     kept, stamped = stored["r-mixed"]
     assert kept["id"] == _KEPT_ID
-    assert _is_uuid(stamped["id"]) and stamped["file_name"] == "c.pdf"
+    assert _is_uuid(stamped["id"])
+    assert stamped["file_name"] == "c.pdf"
     assert len({upload_id, name_only["id"], stamped["id"]}) == 3
 
 

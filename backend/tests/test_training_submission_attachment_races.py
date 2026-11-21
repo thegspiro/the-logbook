@@ -346,7 +346,8 @@ async def test_an_upload_finishing_after_an_approval_is_refused(dept, monkeypatc
         "first.pdf",
         "second.pdf",
     ]
-    assert stored_paths and not os.path.exists(stored_paths[0])
+    assert stored_paths
+    assert not os.path.exists(stored_paths[0])
 
 
 async def test_a_failed_record_insert_leaves_the_submission_undecided(

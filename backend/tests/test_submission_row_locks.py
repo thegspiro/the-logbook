@@ -83,7 +83,7 @@ def test_the_attachment_endpoints_lock_the_submission():
 
 
 @pytest.mark.parametrize(
-    "func, store",
+    ("func", "store"),
     [
         (training_submissions.upload_submission_attachment, "_store_attachment_file("),
         (training_enhancements.upload_record_attachment, "store_upload("),
