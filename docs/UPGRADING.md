@@ -830,6 +830,23 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A command to clear orphaned member files; removing a training record's file (2026-11-21)
+
+Nothing blocks a restart, and nothing runs by itself. Owner decisions
+2026-11-21.
+
+- **`scripts/sweep_orphaned_member_files.py`** finds files in the
+  member-owned storage areas that no record names any more, and with
+  `--apply` deletes them. Run the dry run first; it prints counts only. It
+  refuses while an upload relocation or remote migration is unfinalized, and
+  sweeps the uploads volume only. How to run it on Docker, Unraid and AWS EC2
+  is in [`backend/scripts/README.md`](../backend/scripts/README.md#sweep_orphaned_member_filespy).
+- **A file uploaded to a training record can now be removed** from the
+  record's Files dialog: by a training officer, or by the member for a file
+  they uploaded. Certificates copied by an approval, and files on voided
+  records, stay. Each removal is audited as
+  `training_record_attachment_removed`.
+
 ### The permanent-delete audit event changes shape, and a failed audit write refuses the delete (2026-11-21)
 
 Nothing blocks a restart. Owner decision 2026-11-21.

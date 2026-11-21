@@ -11170,8 +11170,16 @@ each case):
 - **A relocation or remote migration running at the same moment** can rewrite
   a reference between collection and deletion. Neither path locks against the
   other.
-- **Files orphaned by permanent deletes before this fix** are not found or
-  cleaned up; there is no sweep for them.
+- ~~**Files orphaned by permanent deletes before this fix** are not found or
+  cleaned up; there is no sweep for them.~~ **Resolved 2026-11-21** (owner
+  decision 2026-11-21, (c)): `scripts/sweep_orphaned_member_files.py`, a
+  re-runnable command, dry run by default, counts only, files at least 30
+  days old (never under 1), refused while a relocation or remote migration
+  is unfinalized. **Still open:** it sweeps the uploads volume only, so
+  orphans on a remote store are not reached (a remote store has no listing);
+  a rolled-back relocation's manifest stays unfinalized and blocks the
+  command until an operator moves it off the volume; and a removed file
+  survives in backups taken before.
 - **A certificate kept for a voided record is outside the retention sweep**
   once the submission stops naming it. Removing a submission attachment, or
   deleting the submission, now keeps a file another row still names (closed
