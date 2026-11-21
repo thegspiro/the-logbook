@@ -1022,18 +1022,105 @@ jobs:
         if: "!cancelled()"
         run: npm audit --omit=dev --audit-level=high
 
+  # Vitest, in two shards. As one job it ran 1,441 test files for about 25
+  # minutes, and since 2026-11-19 it runs on every pull request, prose-only
+  # ones included, so it had become the longest job most pull requests wait
+  # for. Measured on four cores on 2026-11-21: half the time is the tests,
+  # about 30% is jsdom being set up once per file, and no group of slow files
+  # stands out (the slowest 100 files are 45% of the test time), so there was
+  # nothing to fix in the suite itself; the threads pool made no difference.
+  #
+  # Each shard writes a blob report that carries its coverage data, and
+  # `frontend-coverage` below merges the two and applies the thresholds.
   frontend-test:
-    name: Frontend Tests
+    name: Frontend Tests (${{ matrix.shard }}/2)
     concurrency:
       group: ${{ github.workflow }}-frontend-test-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
-    # Coverage instruments the entire 414-file source denominator and the
-    # current 5,447-test suite can take just over 25 minutes on a two-core
-    # runner. Keep a bounded timeout, but leave enough headroom for the test
-    # command to emit its JUnit and lcov reports instead of killing an otherwise
-    # passing run during coverage finalization.
-    timeout-minutes: 35
+    # Half of a suite that took 25-31 minutes whole, so about 13-16; 25 leaves
+    # the same margin over a slow run that 35 left the undivided job.
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    strategy:
+      # A failure in one half says nothing about the other, and cancelling it
+      # would hide a second failing file behind the first.
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The thresholds are zeroed here and nowhere else. Half the tests cover
+      # about half the code, so a shard held to the floor in vitest.config.ts
+      # would fail on every run; `frontend-coverage` applies that floor to the
+      # two shards together. Do not copy these flags into that job.
+      #
+      # `--outputFile.junit=` (not `--outputFile=`) is required once more than
+      # one reporter is configured; with the bare form vitest has no idea which
+      # reporter the path belongs to.
+      - name: Run tests with coverage
+        run: |
+          npx vitest run --coverage --shard=${{ matrix.shard }}/2 \
+            --coverage.thresholds.lines=0 \
+            --coverage.thresholds.functions=0 \
+            --coverage.thresholds.branches=0 \
+            --coverage.thresholds.statements=0 \
+            --coverage.reporter=text-summary \
+            --reporter=default --reporter=junit --reporter=blob \
+            --outputFile.junit=reports/junit-frontend-${{ matrix.shard }}.xml \
+            --outputFile.blob=reports/blob-${{ matrix.shard }}.json
+
+      - name: Summarize test results
+        if: "!cancelled()"
+        run: |
+          python3 "$GITHUB_WORKSPACE/scripts/junit_summary.py" \
+            --title "Frontend Tests (${{ matrix.shard }}/2)" \
+            reports/junit-frontend-${{ matrix.shard }}.xml
+
+      # The blob is what `frontend-coverage` merges, so it is uploaded only
+      # from a shard that passed; the JUnit report is kept either way.
+      - name: Upload test report
+        if: "!cancelled()"
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-test-junit-${{ matrix.shard }}
+          path: frontend/reports/junit-frontend-${{ matrix.shard }}.xml
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Upload blob report
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-test-blob-${{ matrix.shard }}
+          path: frontend/reports/blob-${{ matrix.shard }}.json
+          retention-days: 1
+          if-no-files-found: error
+
+  # The coverage floor, applied to both Vitest shards together. It re-runs no
+  # test: `--merge-reports` reads the two blob reports and reports coverage as
+  # one run would, against the thresholds in vitest.config.ts. When a shard
+  # fails this job is skipped, which `ci-success` counts as a failure of its
+  # own; the shard is the one to read.
+  frontend-coverage:
+    name: Frontend Coverage
+    needs: frontend-test
+    concurrency:
+      group: ${{ github.workflow }}-frontend-coverage-${{ strategy.job-index }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: frontend
@@ -1049,34 +1136,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # `--outputFile.junit=` (not `--outputFile=`) is required once more than
-      # one reporter is configured; with the bare form vitest has no idea which
-      # reporter the path belongs to.
-      - name: Run tests with coverage
-        run: |
-          npx vitest run --coverage \
-            --reporter=default --reporter=junit \
-            --outputFile.junit=reports/junit-frontend.xml
+      - name: Download blob reports
+        uses: actions/download-artifact@v7
+        with:
+          pattern: frontend-test-blob-*
+          path: frontend/reports/blobs
+          merge-multiple: true
 
-      - name: Summarize test results
-        if: "!cancelled()"
+      # `text` and `lcov` only: the config also lists html and json, which
+      # nothing reads here and which were 90 MB of the old coverage directory.
+      - name: Check coverage thresholds across both shards
         run: |
-          python3 "$GITHUB_WORKSPACE/scripts/junit_summary.py" \
-            --title "Frontend Tests" \
-            reports/junit-frontend.xml
+          npx vitest run --merge-reports=reports/blobs --coverage \
+            --coverage.reporter=text --coverage.reporter=lcov \
+            --reporter=default
 
-      - name: Upload test reports
+      - name: Upload coverage report
         if: "!cancelled()"
         uses: actions/upload-artifact@v7
         with:
-          name: frontend-test-reports
-          # lcov.info only, not the whole coverage/ directory: that is 107 MB,
-          # 90 MB of which is a browsable HTML report and a copy of the sources,
-          # regenerable from this file and uploaded on every single run. lcov is
-          # what a diff-coverage tool reads, which is the point of keeping it.
-          path: |
-            frontend/reports/
-            frontend/coverage/lcov.info
+          name: frontend-coverage
+          # lcov is what a diff-coverage tool reads, which is the point of
+          # keeping it.
+          path: frontend/coverage/lcov.info
           retention-days: 7
           if-no-files-found: warn
 
@@ -1573,6 +1655,7 @@ jobs:
       - docker-build
       - frontend-checks
       - frontend-test
+      - frontend-coverage
       - frontend-e2e
       - frontend-e2e-safari
       - frontend-pwa
