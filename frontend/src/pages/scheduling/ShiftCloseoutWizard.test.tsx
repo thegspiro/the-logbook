@@ -868,3 +868,39 @@ describe('the shared-call picker (SCHED-10)', () => {
     expect(screen.queryByText('Already logged by another unit')).not.toBeInTheDocument();
   });
 });
+
+describe("the officer's own row (ADV2-8)", () => {
+  // An officer running the shift without scheduling.manage may not change
+  // their own times; the server names their row and refuses a change to it.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSaveAttendance.mockResolvedValue(baseState({ closeout_step: 1, own_hours_locked_user_id: 'u1' }));
+  });
+
+  it('shows the named row read-only and sends it back unchanged', async () => {
+    mockGetState.mockResolvedValue(baseState({ own_hours_locked_user_id: 'u1' }));
+    const user = userEvent.setup();
+    renderWizard();
+
+    expect(await screen.findByLabelText('Start time for Capt. Morales')).toBeDisabled();
+    expect(screen.getByLabelText('End time for Capt. Morales')).toBeDisabled();
+    expect(screen.getByLabelText('Hours for Capt. Morales')).toBeDisabled();
+    expect(screen.getByText(/Your own times come from your check-in/)).toBeInTheDocument();
+    // The rest of the crew is still the officer's to record.
+    expect(screen.getByLabelText('Start time for FF Okonjo')).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => expect(mockSaveAttendance).toHaveBeenCalled());
+    const [, entries] = mockSaveAttendance.mock.calls[0] as [string, { user_id: string; checked_in_at: string }[]];
+    const own = entries.find((e) => e.user_id === 'u1');
+    expect(own?.checked_in_at).toBe('2026-08-19T12:00:00.000Z');
+  });
+
+  it('leaves every row editable when no row is named', async () => {
+    mockGetState.mockResolvedValue(baseState());
+    renderWizard();
+
+    expect(await screen.findByLabelText('Start time for Capt. Morales')).toBeEnabled();
+    expect(screen.queryByText(/Your own times come from your check-in/)).not.toBeInTheDocument();
+  });
+});

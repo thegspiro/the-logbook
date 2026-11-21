@@ -390,6 +390,8 @@ export interface StatusChangeRecord {
   status: string;
   status_changed_at: string | null;
   status_change_reason: string | null;
+  /** The statuses `PATCH /users/{id}/status` will accept next, from the server's own table. */
+  allowed_next_statuses?: string[] | undefined;
 }
 
 /** `POST /users/{id}/reactivate` — the archived member restored to active. */

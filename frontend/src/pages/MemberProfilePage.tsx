@@ -208,6 +208,10 @@ export const MemberProfilePage: React.FC = () => {
     closeOnEscape: !statusChanging,
   });
   const [newStatus, setNewStatus] = useState<string>('');
+  // What the server will take from the current status (W11-14). null until it
+  // answers, or if it cannot: the dialog then offers every status, as before,
+  // and the server's refusal still explains a disallowed choice.
+  const [allowedNextStatuses, setAllowedNextStatuses] = useState<string[] | null>(null);
   const [statusReason, setStatusReason] = useState('');
   const [separationDate, setSeparationDate] = useState('');
 
@@ -435,7 +439,16 @@ export const MemberProfilePage: React.FC = () => {
     setNewStatus(user.status);
     setStatusReason('');
     setSeparationDate(getTodayLocalDate(tz));
+    setAllowedNextStatuses(null);
     setStatusModalOpen(true);
+    if (userId) {
+      memberStatusService
+        .getStatusChange(userId)
+        .then((record) => setAllowedNextStatuses(record.allowed_next_statuses ?? null))
+        .catch(() => {
+          // Non-critical: see allowedNextStatuses.
+        });
+    }
   };
 
   // A dropped or retired member brought back opens a new service stint, so the
@@ -899,8 +912,8 @@ export const MemberProfilePage: React.FC = () => {
                       ) : (
                         <button
                           onClick={handlePhotoClick}
-                          className="text-xs font-medium text-white"
-                          aria-label="Upload photo"
+                          className="absolute inset-0 rounded-full text-xs font-medium text-white"
+                          aria-label={user.photo_url ? 'Change photo' : 'Upload photo'}
                         >
                           {user.photo_url ? 'Change' : 'Upload'}
                         </button>
@@ -1200,7 +1213,8 @@ export const MemberProfilePage: React.FC = () => {
                   {canEdit && !editingAddress && (
                     <button
                       onClick={handleEditAddress}
-                      className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                      className="touch:min-h-11 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                      aria-label="Edit address"
                     >
                       Edit
                     </button>
@@ -1668,6 +1682,7 @@ export const MemberProfilePage: React.FC = () => {
                         change rejects it, so offering it here only produces an error. */}
                     {Object.values(UserStatus)
                       .filter((s) => s !== UserStatus.ARCHIVED)
+                      .filter((s) => !allowedNextStatuses || s === user?.status || allowedNextStatuses.includes(s))
                       .map((s) => (
                         <option key={s} value={s}>
                           {statusLabel(s)}

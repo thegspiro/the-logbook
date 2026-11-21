@@ -120,7 +120,14 @@ export const useApparatusStore = create<ApparatusState>((set, get) => ({
   },
 
   fetchApparatus: async (id: string) => {
-    set({ isLoading: true, error: null });
+    // Drop a different apparatus before fetching this one, so a failed fetch
+    // leaves nothing rather than the last record opened, which the edit page
+    // would otherwise fill its form from and save onto this id (AP2-9).
+    set({
+      isLoading: true,
+      error: null,
+      ...(get().currentApparatus?.id === id ? {} : { currentApparatus: null }),
+    });
 
     try {
       const apparatus = await apparatusService.getApparatus(id);

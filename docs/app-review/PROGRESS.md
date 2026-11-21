@@ -40,7 +40,7 @@ from its open list.
 | #   | Feature                    | Prefix | Status |
 | --- | -------------------------- | ------ | ------ |
 | B1  | medical-screening          | MS2    | ✅     |
-| B2  | apparatus                  | AP2    | ⬜     |
+| B2  | apparatus                  | AP2    | ✅     |
 | B3  | inventory                  | INV2   | ⬜     |
 | B4  | facilities                 | FAC2   | ⬜     |
 | B5  | elections                  | ELEC2  | ⬜     |
@@ -3641,3 +3641,29 @@ secrets redacted for non-admins. See
   comment said the officer screens were not built. Gate: typecheck, lint,
   flake8, black and the docs link check clean; 88 medical-screening tests pass.
   See medical-screening.md → Pass 6. Next: B2 apparatus.
+- **B2 apparatus ✅ (pass 6).** Read for the first time the sub-resources
+  (photos, documents, fuel logs, equipment, custom fields, operators, NFPA) and
+  the whole frontend module, plus the delta since pass 5 (94 endpoints, all
+  authenticated, 93 permission-gated, the approvers route deliberate). Verified:
+  uploads magic-byte checked and size-capped, downloads confined to the stored
+  path, fuel money `Decimal`, every edit form sends cleared fields as `null`, the
+  frontend types match the camelCase schemas field for field. **6 fixes:** AP2-7
+  (HIGH), deleting a vehicle's photo or document destroyed a library document it
+  only referenced, which the library itself would refuse without
+  `documents.manage` — now only the link goes unless the vehicle uploaded the
+  file and nothing else links it, and the delete's refusals answer 400/403, not
+  500; AP2-8 (MED), equipment, custom-field and operator updates answered 500 for
+  a null on a NOT NULL column — now `apply_updates`, a 400; AP2-9 (MED), the edit
+  page filled its form from the previously opened vehicle when a fetch failed and
+  would save it onto the vehicle in the URL — the store drops a different record
+  and both pages wait for a matching one; AP2-10 (LOW), tabs offered add, edit and
+  delete the backend refuses; AP2-11 (LOW, docs), `APPARATUS_MODULE.md` still
+  called AP2-4 open and the delete unguarded; AP2-12 (LOW), the EVOC gate's
+  real-database test (9 tests, two filters mutation-tested). Every fix's test went
+  red first. **3 flagged** to KNOWN_LIMITATIONS: AP2-13 (MED) odometer and hours
+  can move backwards; AP2-14 (MED) re-activating a former member's operator row
+  skips the current-member check; AP2-15 (LOW) custom-field definitions are
+  stored and never read. Nine LOW items and the unused frontend service methods
+  recorded as open. Gate: typecheck, lint, flake8, black, isort, the endpoint
+  docstring check and the docs link check clean; 228 backend and 158 apparatus
+  frontend tests pass. See apparatus.md → Pass 6. Next: B3 inventory.

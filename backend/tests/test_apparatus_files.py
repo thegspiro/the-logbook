@@ -14,7 +14,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.v1.endpoints.apparatus import (
+    create_apparatus_document,
     create_apparatus_photo,
+    delete_apparatus_document,
     delete_apparatus_photo,
     download_apparatus_document,
     download_apparatus_photo,
@@ -23,13 +25,18 @@ from app.api.v1.endpoints.apparatus import (
 )
 from app.models.apparatus import (
     Apparatus,
+    ApparatusDocument,
     ApparatusPhoto,
     ApparatusStatus,
     ApparatusType,
 )
 from app.models.document import Document, DocumentFolder, FolderVisibility
 from app.models.user import Organization, Position, User, user_positions
-from app.schemas.apparatus import ApparatusPhotoCreate, ApparatusPhotoResponse
+from app.schemas.apparatus import (
+    ApparatusDocumentCreate,
+    ApparatusPhotoCreate,
+    ApparatusPhotoResponse,
+)
 from app.services import file_storage_service
 from app.services.documents_service import DocumentsService
 
@@ -436,3 +443,135 @@ class TestDelete:
             await db_session.execute(select(Document).where(Document.id == document_id))
         ).scalar_one_or_none() is None
         assert not os.path.exists(stored)
+
+    async def test_unlinking_a_referenced_library_document_keeps_the_document(
+        self, db_session, uploads
+    ):
+        """A photo that only references a library document (``document:<id>``)
+        is unlinked, not destroyed: the library's own delete needs
+        ``documents.manage`` and a write on the folder, which
+        ``apparatus.manage`` does not carry (AP2-7)."""
+        org = await _org(db_session)
+        apparatus = await _apparatus(db_session, org)
+        officer = await _user(
+            db_session,
+            org,
+            "apparatus.view",
+            "apparatus.manage",
+            "documents.view",
+            "documents.manage",
+        )
+        library = Document(
+            organization_id=org.id, name="Pump chart", uploaded_by=officer.id
+        )
+        db_session.add(library)
+        await db_session.flush()
+        photo = await create_apparatus_photo(
+            apparatus_id=str(apparatus.id),
+            photo_data=ApparatusPhotoCreate(
+                apparatus_id=str(apparatus.id),
+                file_path=f"document:{library.id}",
+                file_name="pump-chart.png",
+            ),
+            db=db_session,
+            current_user=officer,
+        )
+        photo_id, library_id = str(photo.id), str(library.id)
+
+        await delete_apparatus_photo(
+            apparatus_id=str(apparatus.id),
+            photo_id=photo_id,
+            db=db_session,
+            current_user=officer,
+        )
+
+        db_session.expire_all()
+        assert await db_session.get(ApparatusPhoto, photo_id) is None
+        assert await db_session.get(Document, library_id) is not None
+
+    async def test_unlinking_a_referenced_document_record_keeps_the_document(
+        self, db_session, uploads
+    ):
+        org = await _org(db_session)
+        apparatus = await _apparatus(db_session, org)
+        officer = await _user(
+            db_session,
+            org,
+            "apparatus.view",
+            "apparatus.manage",
+            "documents.view",
+            "documents.manage",
+        )
+        library = Document(
+            organization_id=org.id, name="Registration", uploaded_by=officer.id
+        )
+        db_session.add(library)
+        await db_session.flush()
+        record = await create_apparatus_document(
+            apparatus_id=str(apparatus.id),
+            document_data=ApparatusDocumentCreate(
+                apparatus_id=str(apparatus.id),
+                title="Registration",
+                document_type="registration",
+                file_path=f"document:{library.id}",
+                file_name="registration.pdf",
+            ),
+            db=db_session,
+            current_user=officer,
+        )
+        record_id, library_id = str(record.id), str(library.id)
+
+        await delete_apparatus_document(
+            apparatus_id=str(apparatus.id),
+            document_id=record_id,
+            db=db_session,
+            current_user=officer,
+        )
+
+        db_session.expire_all()
+        assert await db_session.get(ApparatusDocument, record_id) is None
+        assert await db_session.get(Document, library_id) is not None
+
+    async def test_a_photo_another_vehicle_also_links_is_only_unlinked(
+        self, db_session, uploads
+    ):
+        """The vehicle's own upload is kept while another vehicle still links
+        it; deleting it would cascade that vehicle's photo row away too."""
+        org = await _org(db_session)
+        engine = await _apparatus(db_session, org)
+        ladder = Apparatus(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            unit_number="Ladder 1",
+            apparatus_type_id=engine.apparatus_type_id,
+            status_id=engine.status_id,
+        )
+        db_session.add(ladder)
+        await db_session.flush()
+        manager = await _user(
+            db_session, org, "apparatus.view", "apparatus.manage", "documents.view"
+        )
+        photo = await _upload_photo(db_session, engine, manager)
+        document_id = str(photo.document_id)
+        shared = await create_apparatus_photo(
+            apparatus_id=str(ladder.id),
+            photo_data=ApparatusPhotoCreate(
+                apparatus_id=str(ladder.id),
+                file_path=f"document:{document_id}",
+                file_name="IMG_2291.png",
+            ),
+            db=db_session,
+            current_user=manager,
+        )
+        shared_id = str(shared.id)
+
+        await delete_apparatus_photo(
+            apparatus_id=str(engine.id),
+            photo_id=str(photo.id),
+            db=db_session,
+            current_user=manager,
+        )
+
+        db_session.expire_all()
+        assert await db_session.get(Document, document_id) is not None
+        assert await db_session.get(ApparatusPhoto, shared_id) is not None

@@ -115,7 +115,9 @@ export const ApparatusDetailPage: React.FC = () => {
   const getTypeById = (typeId: string) => types.find((t) => t.id === typeId);
   const getStatusById = (statusId: string) => statuses.find((s) => s.id === statusId);
 
-  if (isLoading) {
+  // The store keeps the last apparatus opened; it is this page's only once the
+  // ids agree, and until the fetch settles it is still loading (AP2-9).
+  if (isLoading || (currentApparatus?.id !== id && !error)) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -126,7 +128,7 @@ export const ApparatusDetailPage: React.FC = () => {
     );
   }
 
-  if (!currentApparatus) {
+  if (!currentApparatus || currentApparatus.id !== id) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">

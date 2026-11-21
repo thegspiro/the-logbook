@@ -488,7 +488,8 @@ passkey** if you have one (your password, if you do not use two-step sign-in).
 A member whose only second step is a passkey must use it here; the password is
 not accepted instead. _(2026-11-15)_ The box also opens when you **change your
 own sign-in email**, and when you **set up an authenticator app while you
-already use a passkey**. Enter it and the action carries on by itself. It
+already use a passkey**, so someone who got hold of your signed-in browser
+cannot take over your account with either. Enter it and the action carries on by itself. It
 stays proven for 10 minutes on that browser, so a second sensitive action right
 after does not ask again. If you sign in only through a provider such as Google
 and have no password, authenticator or passkey, the box tells you to set up
@@ -765,6 +766,15 @@ Other changes you may notice:
   times in your department's time zone. Anything that counts days, such as a
   certificate expiring or "today" on the dashboard, uses your department's
   date.
+- **Every page of a PDF says whose it is** _(2026-11-16)_. Page 1 keeps the
+  full letterhead. Every later page has a short header with the department's
+  logo and name and what the document is, such as the report and its period,
+  the election or the meeting. Long PDFs may run a page longer. Meeting
+  minutes and the inventory impact plan now show the logo on page 1 too.
+- **Reports page downloads are built by the server** _(2026-11-15)_. **Print
+  / PDF** is now **PDF**, and downloads a file instead of opening the print
+  window. See
+  [Generating a Report](./08-admin-reports.md#generating-a-report).
 - **Hours are this month only.** The training and administrative hours on the
   dashboard used to be all-time totals. All four hour cards now count this
   month only, so the numbers may look lower. Your all-time training hours are
