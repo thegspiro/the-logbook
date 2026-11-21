@@ -531,7 +531,9 @@ tab says: _"Shifts with open seats. Sign up for one and it goes straight onto
 your schedule."_
 
 1. Use **From** to pick a start date. The list shows the next 30 days from
-   that date.
+   that date, and outreach signup sheets (volunteer roles for a public
+   education or community event) for the next 60 days, because those events
+   are booked weeks ahead _(2026-11-21)_.
 2. Select **Sign Up** on a shift.
 3. Choose the **Position**, then select **Confirm Sign Up**.
 

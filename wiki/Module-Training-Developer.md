@@ -163,6 +163,17 @@ population is not 100%. `GET /training/compliance-matrix` rows carry
 `standing` (`compliant` / `at_risk` / `non_compliant` / `not_applicable`)
 and `completion_pct`, which is `null` for a `not_applicable` member.
 
+**Fields added 2026-11-20 – 21.** An HOURS cell on the matrix and an hours
+requirement on My Training's detail carry `monthly_average` and
+`monthly_needed` (`training_compliance.monthly_pace`, display only — the
+status is graded on the total). A `certification` requirement's detail
+carries `expiry_date`, the graded certificate's expiry. The member
+requirement responses (My Training and the officer's member view) add
+`optional_requirements_detail`, the profile's optional requirements, which are
+never graded. `POST /training/course-links` and `/link-suggested` answer 409
+when two links collide on the same records ("…Nothing was linked; try
+again.").
+
 ### Training Programs
 
 The router is mounted at `/training/programs`, and program resources sit at

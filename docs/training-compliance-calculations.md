@@ -63,9 +63,13 @@ disagree about a member (owner decision 2026-11-20):
 ### Decision Logic
 
 The requirements counted are the ones that grade the member: their
-highest-priority matching compliance profile narrows the set, then each
+highest-priority matching compliance profile narrows the set (at equal
+priority the older profile, then the smaller id — owner decision 2026-11-21,
+`app/utils/compliance_profiles.py`), then each
 requirement must apply to them by membership type, rank, position and join
-date. A requirement in the member's catch-up period, or a session-based one
+date. A profile's optional requirements are never in the set; a profile with
+no required list grades every requirement except its optional ones. A
+requirement in the member's catch-up period, or a session-based one
 not yet held, counts neither way. `requirements_met` is the number graded
 completed; `requirements_total` the number graded at all.
 
@@ -201,6 +205,36 @@ is_complete = completed_hours >= required_hours
 3. `category_ids` — if the requirement specifies category IDs, records with
    matching `course_id` count
 
+**Every 2 Years:** a lapsed certificate overrides the hours — see
+[Biannual Requirements](#biannual-requirements).
+
+**The monthly average shown beside the total** _(2026-11-20)_. My Training's
+requirement card and the Compliance Matrix detail lead an hours requirement
+with the member's average against the department's monthly pace, from one
+function, `training_compliance.monthly_pace`:
+
+```
+active_months   = months in the window, through the as-of date, that no
+                  leave or waiver excused
+monthly_average = SUM(hours in active_months) / COUNT(active_months)
+                  (null when every month so far was excused)
+monthly_needed  = requirement.required_hours (unadjusted) / months in the
+                  whole window
+```
+
+Hours earned in an excused month stay in `completed_hours` but are left out
+of the average, which measures the member's pace while active. The waiver
+does not lower `monthly_needed`: leave reduces what a member owes, not the
+pace the department set. Both figures are display only; `is_complete` above
+still decides the status.
+
+```
+Maria: annual 72 hours, Jan–Dec window, as of Oct 15 (10 months, none excused)
+  completed_hours = 69           → 69 of 72, in progress
+  monthly_average = 69 / 10 = 6.9
+  monthly_needed  = 72 / 12 = 6  → card reads "6.9/6 hrs/mo avg", "69/72 hrs total"
+```
+
 #### Example: Maria vs. Jake on Annual Hours
 
 Riverside FD requires **36 hours of continuing education** per year
@@ -256,11 +290,13 @@ Jake still needs 14 more CE hours before December 31.
 A member must hold a valid (non-expired) certification.
 
 ```
-has_valid_cert = ANY record WHERE:
-    record.certification_number IS NOT NULL
-    AND record.expiration_date >= today
+matching = completed records that match the requirement (rules below)
+latest   = the matching record with the latest completion_date
 
-is_complete = has_valid_cert
+is_complete = latest exists
+              AND (latest.expiration_date IS NULL
+                   OR latest.expiration_date >= today)
+status      = "expired" when latest exists and has expired
 ```
 
 Certification matching considers:
@@ -280,6 +316,13 @@ Certification matching considers:
 - `registry_code` at the **start** of `certification_number`, by key: the
   record's stored `certification_key` begins with the code's key ("NFPA 1001"
   matches "NFPA-1001-0042"). Until 2026-11-04 the code could appear anywhere.
+
+**How the card shows it** _(2026-11-21)_. My Training and the officer's view
+of a member show a certification requirement as a state rather than "1/1" or
+"0/1": **On file** (with "Expires _date_" when the graded certificate has
+one), **Expired** (with its expiry date), or **Not recorded** when no
+matching certificate exists. The requirement detail's `expiry_date` field is
+the graded certificate's expiration date.
 
 #### Example: Carla vs. Tom on EMT Certification
 
@@ -393,6 +436,9 @@ matched = count of required_course_ids found in completed_course_ids
 is_complete = matched >= len(required_course_ids)
 ```
 
+**Every 2 Years:** a lapsed certificate on one of the counted completions
+overrides the count — see [Biannual Requirements](#biannual-requirements).
+
 #### Example: Jake's Probationary Coursework
 
 Jake's probationary program includes a requirement to complete 3 specific
@@ -436,13 +482,13 @@ progress.
 Each requirement defines a frequency that determines the date window over
 which progress is measured.
 
-| Frequency   | Period Start                                | Period End                           |
-| ----------- | ------------------------------------------- | ------------------------------------ |
-| `annual`    | Jan 1 of requirement year (or current year) | Dec 31 of that year                  |
-| `quarterly` | First day of current quarter                | Last day of current quarter          |
-| `monthly`   | First day of current month                  | Last day of current month            |
-| `biannual`  | No date window                              | Compliance based on non-expired cert |
-| `one_time`  | No date window                              | All-time evaluation                  |
+| Frequency   | Period Start                                                               | Period End                                           |
+| ----------- | -------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `annual`    | Jan 1 of requirement year (or current year)                                | Dec 31 of that year                                  |
+| `quarterly` | First day of current quarter                                               | Last day of current quarter                          |
+| `monthly`   | First day of current month                                                 | Last day of current month                            |
+| `biannual`  | Jan 1 of the year before the requirement year (or before the current year) | Dec 31 of the requirement year (or the current year) |
+| `one_time`  | No date window                                                             | All-time evaluation                                  |
 
 ### Quarter Calculation
 
@@ -955,7 +1001,8 @@ The compliance matrix provides a grid view: members (rows) × requirements
 total_hours = SUM(matching records' hours within period)
 required = adjusted for waivers
 
-IF biannual AND latest cert is expired → "expired"
+IF biannual AND the counted record with the
+   latest expiry date has expired      → "expired"
 IF total_hours >= required             → "completed"
 IF total_hours > 0                     → "in_progress"
 ELSE                                   → "not_started"
@@ -985,7 +1032,9 @@ ELSE                  → "not_started"
 **Courses:**
 
 ```
-matched = count of required courses found in completed records
+matched = count of required courses found in completed records (in window)
+IF biannual AND the counted record with the
+   latest expiry date has expired     → "expired"
 IF matched >= total required courses  → "completed"
 IF matched > 0                        → "in_progress"
 ELSE                                  → "not_started"
@@ -1087,29 +1136,59 @@ by zero would be undefined. The system treats it as automatically met.
 
 ### Biannual Requirements
 
-Biannual requirements do **not** use a time-based window. Compliance is
-determined entirely by whether the member holds a non-expired certification.
-If the latest matching record has an expired `expiration_date`, the status
-is `expired` regardless of hours completed.
+A `biannual` ("Every 2 Years") requirement is measured over two calendar
+years: the requirement's year and the year before it, or this year and last
+when it names none (`biannual_window`). What else applies depends on the type.
+
+- **Certification** requirements ignore the window, as every certification
+  requirement does: the latest matching certificate is judged on its expiry
+  date (§2b).
+- **Hours and Courses** requirements are often recertifications, so a lapsed
+  certificate fails them whatever the count says. Among the records the
+  requirement counts in its window, the one with the latest expiration date
+  is read; if that date is before the as-of date, the status is `expired`.
+  Records outside the window are not looked at. This rule is one function,
+  `training_compliance.lapsed_biannual_certificate`, which the compliance
+  grader, My Training's requirement detail and the requirement-progress check
+  all call (2026-11-21). Before, My Training read every completed record of
+  the training type, in or out of the window, for hours, and had no check at
+  all for courses, so it could disagree with the matrix in either direction.
 
 #### Example: Biannual CPR Certification
 
-Riverside FD has a biannual CPR certification requirement. The system does
-not ask "did you complete CPR training this year?" — it only asks "do you
-hold a valid CPR cert right now?"
+Riverside FD has an every-2-years CPR **certification** requirement. The
+system does not ask "did you complete CPR training this year?" — it only asks
+"do you hold a valid CPR cert right now?"
 
 **Maria** completed CPR recertification on March 15, 2024. Her cert expires
 March 15, 2026 (24-month validity). On October 15, 2025:
 
 - Expiration (Mar 15, 2026) >= today (Oct 15, 2025) → **completed**
 
-**Tom** completed CPR on January 10, 2023. His cert expired January 10, 2025. Even though Tom logged 50 hours of general training this year, his
-CPR requirement shows:
+**Tom** completed CPR on January 10, 2023. His cert expired January 10, 2025.
+Even though Tom logged 50 hours of general training this year, his CPR
+requirement shows:
 
 - Expiration (Jan 10, 2025) < today (Oct 15, 2025) → **expired**
 
-Hours completed are irrelevant for biannual certification requirements.
 Tom must recertify.
+
+#### Example: Biannual EMT Refresher Hours
+
+Riverside also has an every-2-years **hours** requirement: 40 hours of EMT
+refresher (training type EMS) in 2024–2025.
+
+**Jake** logged 44 EMS hours in 2024–2025. One of those records, his EMT
+refresher from February 2024, carries an expiration date of February 28, 2025. On October 15, 2025:
+
+- 44 ≥ 40, but the counted record with the latest expiry (Feb 28, 2025) has
+  lapsed → **expired**, on the matrix and on My Training alike.
+
+**Ana** also logged 44 EMS hours in 2024–2025, none carrying an expiry date.
+Her only dated EMS record is from 2022, with a certificate that lapsed in 2023. It is outside the window, so it is not read:
+
+- 44 ≥ 40 → **completed**. (Before 2026-11-21, My Training read the 2022
+  record and showed her expired while the matrix showed her met.)
 
 ### A Partly Covered Month
 
@@ -1238,6 +1317,13 @@ scheduling report joined them on 2026-11-20. `tests/test_requirement_grandfather
 `app/` for a call that omits it. Passing role ids through the same helper also
 fixed the dashboard, matrix and member-status views, which had ignored
 role-scoped requirements that My Training already enforced.
+
+Since 2026-11-21 the compliance CSV and PDF exports also take each status cell
+from `training_compliance.grade_members`, the loop the matrix uses, as of the
+department's today. Their report period (1 January to today by default)
+scopes only the hours and completed-record columns. Before, they graded each
+requirement from the period's records alone, so a certification earned before
+1 January printed **Not Met** beside a matrix showing it met.
 
 #### Example: Riverside Raises Its Annual Hours
 
