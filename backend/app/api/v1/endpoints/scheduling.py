@@ -180,6 +180,12 @@ router = APIRouter()
 # cannot request an arbitrarily wide date range.
 MAX_OPEN_SHIFTS_DAYS = 366
 
+# How far ahead the default open-shifts window lists outreach signup sheets,
+# against 30 days for duty shifts (owner decision, 2026-11-20). An outreach
+# event is booked weeks ahead behind its own lead time, so a 30-day window hid
+# most of them from the members asked to staff them.
+OUTREACH_LOOKAHEAD_DAYS = 60
+
 # The day panel asks about one day's shifts; a very busy station might run a
 # dozen. The cap is what stops a caller asking about a whole year in one go.
 MAX_BULK_ELIGIBILITY_SHIFTS = 50
@@ -782,6 +788,11 @@ async def get_open_shifts(
             else await resolve_org_today(db, current_user.organization_id)
         )
         end = date.fromisoformat(end_date) if end_date else start + timedelta(days=30)
+        # Only the default window reaches further for outreach sheets; a caller
+        # who named an end date gets exactly that range.
+        outreach_end = (
+            None if end_date else start + timedelta(days=OUTREACH_LOOKAHEAD_DAYS)
+        )
     except ValueError:
         raise HTTPException(
             status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
@@ -817,6 +828,7 @@ async def get_open_shifts(
             end,
             apparatus_id=apparatus_id,
             exclude_user_id=str(current_user.id),
+            outreach_end_date=outreach_end,
         )
     else:
         shifts_list = await service.get_claimable_shifts(
@@ -825,6 +837,7 @@ async def get_open_shifts(
             start,
             end,
             apparatus_id=apparatus_id,
+            outreach_end_date=outreach_end,
         )
 
     return await _enrich_shifts(service, current_user.organization_id, shifts_list)
