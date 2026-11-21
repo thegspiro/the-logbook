@@ -12,6 +12,7 @@ import {
   ZeffyPaymentState,
 } from '../types';
 import type { Donor } from '../types';
+import { formatCurrency } from '@/utils/currencyFormatting';
 
 export const GRANT_CATEGORY_LABELS: Record<GrantCategory, string> = {
   [GrantCategory.EQUIPMENT]: 'Equipment',
@@ -110,7 +111,7 @@ export const ZEFFY_STATE_LABELS: Record<string, string> = {
   [ZeffyPaymentState.IGNORED]: 'Not counted',
   [ZeffyPaymentState.UNLINKED]: 'Campaign not linked',
   [ZeffyPaymentState.BEFORE_START]: 'Before link start',
-  [ZeffyPaymentState.UNMATCHED]: 'No member match',
+  [ZeffyPaymentState.UNMATCHED]: 'Awaiting confirmation',
   [ZeffyPaymentState.APPLIED]: 'Applied',
   [ZeffyPaymentState.REVERSED]: 'Reversed',
   [ZeffyPaymentState.NEEDS_REVIEW]: 'Needs review',
@@ -125,4 +126,11 @@ export const ZEFFY_STATE_COLORS: Record<string, string> = {
   [ZeffyPaymentState.APPLIED]: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
   [ZeffyPaymentState.REVERSED]: 'bg-purple-100 text-purple-900 dark:bg-purple-500/20 dark:text-purple-300',
   [ZeffyPaymentState.NEEDS_REVIEW]: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
+};
+
+/** Zeffy also takes CAD, and nothing converts it, so a non-USD amount says which. */
+export const zeffyMoney = (amount: number | string, currency?: string | null): string => {
+  const code = (currency ?? 'USD').toUpperCase();
+  const formatted = formatCurrency(Number(amount));
+  return code === 'USD' ? formatted : `${formatted} ${code}`;
 };
