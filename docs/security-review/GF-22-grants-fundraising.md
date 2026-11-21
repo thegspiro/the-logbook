@@ -4,8 +4,8 @@
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8),
 2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11), 2026-10-30
-(pass 12), 2026-11-02 (pass 13), 2026-11-10 (pass 14) · **PR:**
-[#1904](https://github.com/thegspiro/the-logbook/pull/1904)
+(pass 12), 2026-11-02 (pass 13), 2026-11-10 (pass 14), 2026-11-21 (pass 15) ·
+**PR:** [#1904](https://github.com/thegspiro/the-logbook/pull/1904)
 (pass 1), pass 7 merged as commit `9da13118` (no PR — pushed directly), pass
 6 merged as PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875),
 pass 8 merged as PR [#3339](https://github.com/thegspiro/the-logbook/pull/3339),
@@ -14,11 +14,154 @@ pass 10 merged as PR [#3633](https://github.com/thegspiro/the-logbook/pull/3633)
 pass 11 merged as PR [#3765](https://github.com/thegspiro/the-logbook/pull/3765),
 pass 12 merged as PR [#3847](https://github.com/thegspiro/the-logbook/pull/3847),
 pass 13 merged as PR [#3962](https://github.com/thegspiro/the-logbook/pull/3962),
-pass 14 (this PR)
+pass 14 merged as PR [#4226](https://github.com/thegspiro/the-logbook/pull/4226),
+pass 15 (this PR)
 
 ---
 
-## Pass 14 (2026-11-10) — watchdog pickup, real delta (pledge-linked donations, budget-line/expenditure edit+delete, federal-program opportunity seeding), 0 fixed by this pass itself, 0 new findings
+## Pass 15 (2026-11-21) — watchdog pickup, 1 fixed (GF15-1, LOW), 0 flagged
+
+**Watchdog pickup.** PR #4500 (Feature 21, Admin hours, pass 15) had just
+merged (`fd8ba8c5` on `main`). A fresh `list_pull_requests` (state=open)
+found no PR whose head branch starts with `claude/security-review-`;
+`docs/security-review/PROGRESS.md`'s rotation table, read on a freshly
+fetched `main`, showed row 22 (Grants & fundraising) as the next `⬜`.
+
+**Backend (declared scope):** `app/api/v1/endpoints/grants.py` (46 routes,
+AST-walked — unchanged from pass 14), `app/services/grant_service.py`,
+`app/services/fundraising_service.py`, `app/models/grant.py`,
+`app/schemas/grant.py`, plus the Zeffy files (`endpoints/zeffy.py`,
+`api/public/zeffy_webhook.py`, `services/integration_services/zeffy_service.py`,
+`services/zeffy_sync_service.py`, `models/zeffy.py`, `schemas/zeffy.py`).
+**Frontend:** `frontend/src/modules/grants-fundraising/`.
+
+### Diff-scoping methodology
+
+Baseline `c0baae03` (PR #4226's merge, pass 14; confirmed an ancestor of
+`HEAD` via `git merge-base --is-ancestor`). `git diff c0baae03..HEAD --stat`
+against the declared backend scope found exactly one changed file:
+`app/services/grant_service.py` (+18/−3). No model, schema or migration in
+scope changed; the Zeffy files are byte-identical. `git log` attributes the
+one backend change to `d7637cde` ("Refuse former members on the
+member-picker write paths"), a repo-wide, non-rotation sweep applying
+CLAUDE.md Pitfall #32 (current-member gating) to several modules' assignee
+fields at once — the same sweep Apparatus & NFC's pass 23 and this
+rotation's own Admin hours pass 15 each touched a slice of.
+
+23 frontend files also changed in this window (forms-rollout batch 18's
+discard-guard/shared-field pattern on donors/campaigns/the Zeffy link,
+mobile-card reflow and stat-tile width fixes, a heading-level pass, and the
+same former-member refusal sweep reaching `GrantApplicationFormPage.tsx`'s
+assignee picker, which already shipped its own `isActiveAccount` filter and
+test, `GrantApplicationFormPage.assignedTo.test.tsx`). All traced; see
+finding GF15-1 below for the one gap the sweep left.
+
+### GF15-1 (LOW, FIXED) — compliance-task assignee was never checked for current membership, unlike the application's own `assigned_to`
+
+`grant_service.py`'s `_validate_application_fks` (used by
+`create_application`/`update_application`) was updated by the non-rotation
+sweep (`d7637cde`) to call the shared `assert_current_members` helper after
+`assert_in_org`, so a newly-chosen `GrantApplication.assigned_to` must be a
+current member (CLAUDE.md Pitfall #32), with the existing stored assignee
+kept through `keep=[stored_assignee]` so an unrelated edit does not break.
+
+`GrantComplianceTask.assigned_to` — a second, independent client-settable
+assignee FK on the same application, exercised by `create_compliance_task`
+and `update_compliance_task` — was not touched by the same sweep and still
+called only `assert_in_org` (org membership, not current membership). A
+coordinator could assign a compliance task (a performance report, an
+audit response) to a member who has retired, been dropped, or otherwise
+left the department, via the API directly (the frontend form offers no
+reassignment path today — `complianceAssignee` is reset to `''` on every
+open and never pre-filled from an existing task, so this is a create-only
+surface in the UI) or, on `create`, via the member picker in
+`GrantDetailPage.tsx`, which (unlike `GrantApplicationFormPage.tsx`) listed
+every directory entry — including a former member — with no filter at all.
+Not a tenant-isolation or auth gap (`assert_in_org` already blocked a
+cross-org id); the exposure is a department being able to hand an active
+compliance obligation to someone no longer able to act on it, same class as
+the already-fixed application-assignee case this sweep otherwise closed.
+
+**Fix (this pass):**
+
+- `backend/app/services/grant_service.py` — `create_compliance_task` now
+  calls `assert_current_members(self.db, [data.get("assigned_to")],
+organization_id, label="the assignee")` (no `keep`, matching
+  `create_application`: there is no stored value yet).
+  `update_compliance_task` calls the same helper with
+  `keep=[task.assigned_to]`, so an edit that leaves the assignee alone still
+  saves even if that member has since left, mirroring
+  `update_application`'s shape exactly.
+- `frontend/src/modules/grants-fundraising/pages/GrantDetailPage.tsx` — the
+  compliance-task "Assigned To" `<select>` now renders from
+  `assignableMembers` (`members` filtered by `isActiveAccount`), instead of
+  the full, unfiltered directory `members` list. `nameOf()` — used
+  elsewhere on the page to label an already-assigned task's owner,
+  including a former one — still reads the full, unfiltered list, so a
+  past assignment still displays a name. No `keep`/"stored assignee"
+  handling was added here (unlike `GrantApplicationFormPage.tsx`'s picker):
+  this form has no edit mode for an existing task's assignee, so there is
+  no pre-existing value to preserve.
+
+**Guard tests (seen red first, Pitfall #37):**
+`backend/tests/test_current_member_guards.py::TestTheGrantComplianceTaskAssignee`
+(3 cases: a new task refuses a former member, an edit that does not touch
+the assignee keeps one who has since left, an edit refuses newly choosing a
+former member) — 2 of the 3 failed against the unfixed code, confirmed by
+temporarily reverting `grant_service.py` and re-running. New frontend file
+`frontend/src/modules/grants-fundraising/pages/GrantDetailPage.complianceAssignee.test.tsx`
+(2 cases: the picker excludes a former member, a current member's id is
+sent) — the first failed against the unfixed `GrantDetailPage.tsx`,
+confirmed the same way.
+
+### Re-confirmed unchanged (not re-derived)
+
+- **GF-1 through GF-9, GF-14, GF-15, GF-24a, GF-27a, GF-33, GF-35, GF-36** —
+  all unchanged since pass 14; `docs/module-audit/grants-fundraising.md`
+  and `docs/app-review/grants-fundraising.md` re-read in full (Step 2), both
+  current.
+- Pass 14's reviewed surfaces (pledge-linked donations, budget-line/
+  expenditure edit+delete, federal-program opportunity seeding) —
+  unchanged; none of this window's commits touch `models/grant.py`,
+  `schemas/grant.py`, `fundraising_service.py`, or any migration in scope.
+- **LIKE escaping** — no new `.ilike()` call site this window.
+- **CSV export** — still n/a; no export exists anywhere in this module.
+- **Zeffy surface** — byte-identical since pass 13/14; not re-derived.
+
+### Route surface — re-enumerated from scratch, not carried forward
+
+46 `@router.` decorators in `grants.py` (AST walk), unchanged from pass 14.
+`scripts/check_route_permissions.py --strict` (run from the repo root): 329
+routes repo-wide, 0 errors, 0 warnings.
+
+### Schema & migration notes
+
+No migration in scope this window. (One migration landed in the window,
+`3f8a1c6e2b94` — Apparatus Events' own tables plus a seeded-grant change for
+its two new permissions — but it touches no `grant`/`donation`/`pledge`/
+`zeffy` table; its name's "_and_grants" refers to permission grants, not
+this feature's `GrantApplication`/`Donation` models. Out of scope here, and
+already tracked under Feature 13's unclaimed-module note.) Chain
+re-validated: 804 revisions, single head `3daf47506e9e`, no duplicate ids.
+
+### Completion gate (pass 15)
+
+| Check                                                                                                                | Result                                                       |
+| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`)                                                                      | ✅ 0 violations                                              |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`)                                                              | ✅ clean (1 file reformatted by this pass, then re-checked)  |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`)                                                           | ✅ clean                                                     |
+| `python3 scripts/validate_migrations.py --strict`                                                                    | ✅ 804 revisions, single head `3daf47506e9e`                 |
+| `python3.13 scripts/generate_schema_docs.py --check`                                                                 | ✅ `DATABASE_SCHEMA.md` up to date                           |
+| `pytest tests/ -q -k "grant or fundraising or donor or pledge or zeffy or federal_program or current_member_guards"` | ✅ 1626 passed, 1 pre-existing environment skip (`py_vapid`) |
+| `python3 scripts/check_route_permissions.py --strict`                                                                | ✅ 329 routes, 0 errors, 0 warnings                          |
+| `npm run typecheck`                                                                                                  | ✅ 0 errors                                                  |
+| `npm run lint`                                                                                                       | ✅ 0 errors/warnings                                         |
+| `npx vitest run src/modules/grants-fundraising`                                                                      | ✅ 192 passed (35 files, up from 158/29 at pass 14)          |
+| `npx vitest run src/modules/testing/testingRegistry.test.ts`                                                         | ✅ 12 passed (unchanged — no new route this pass)            |
+| `npx playwright test src/e2e/mobile-route-integrity.spec.ts --project=chromium`                                      | ✅ 1 passed                                                  |
+
+---
 
 **Watchdog pickup.** The dedicated `/loop 30m /security-review` session
 (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable. PR #4224 (Feature
