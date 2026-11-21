@@ -296,6 +296,38 @@ def _month_rows(
     return months
 
 
+def lapsed_biannual_certificate(req, counted, as_of: date):
+    """For a BIANNUAL hours or courses requirement, the lapsed certificate that
+    overrides its count, or None.
+
+    An "every 2 years" hours or courses requirement is often a recertification,
+    so a certificate that has lapsed fails it whatever the count says. The
+    certificate read is the one expiring last among ``counted``, the records
+    the requirement's own branch counts: the hours records
+    :func:`hours_record_counts` accepts in the window, or a courses
+    requirement's windowed completions. It is returned when its expiration
+    date is before ``as_of``.
+
+    This is the one definition. The compliance grader, My Training
+    (``TrainingService.evaluate_requirement_detail``) and
+    ``TrainingService.check_requirement_progress`` all call it. My Training
+    used to read every completed record of the training type, in or out of
+    the window, for hours, and had no check at all for courses, so a member
+    could read met on one screen and expired on the other (CLAUDE.md
+    pitfall 29). Only windowed records are loaded for the grader
+    (:func:`graded_records_clause`), so the counted records are the set every
+    caller can read.
+    """
+    freq = getattr(req.frequency, "value", req.frequency)
+    if freq != RequirementFrequency.BIANNUAL.value:
+        return None
+    dated = [r for r in counted if r.expiration_date]
+    if not dated:
+        return None
+    newest = max(dated, key=lambda r: r.expiration_date)
+    return newest if newest.expiration_date < as_of else None
+
+
 def biannual_window(req, today: date) -> tuple[date, date]:
     """The window a BIANNUAL ("Every 2 Years") requirement is graded over.
 
@@ -1173,9 +1205,6 @@ def _grade_member_requirement(
         if hasattr(req.requirement_type, "value")
         else str(req.requirement_type)
     )
-    freq = (
-        req.frequency.value if hasattr(req.frequency, "value") else str(req.frequency)
-    )
     # Resolve the effective evaluation date for this requirement (per-requirement
     # override inherits the org default). Everything below — window, proration,
     # and expiry/overdue checks — keys off this date.
@@ -1291,18 +1320,16 @@ def _grade_member_requirement(
             else None
         )
 
-        if freq == RequirementFrequency.BIANNUAL.value and type_matched:
-            with_exp = [r for r in type_matched if r.expiration_date]
-            if with_exp:
-                newest_cert = max(with_exp, key=lambda r: r.expiration_date)
-                if newest_cert.expiration_date < today:
-                    exp_comp = (
-                        newest_cert.completion_date.isoformat()
-                        if newest_cert.completion_date
-                        else latest_comp
-                    )
-                    exp_exp = newest_cert.expiration_date.isoformat()
-                    return _ev("expired", exp_comp, exp_exp, **progress)
+        lapsed = lapsed_biannual_certificate(req, type_matched, today)
+        if lapsed is not None:
+            exp_comp = (
+                lapsed.completion_date.isoformat()
+                if lapsed.completion_date
+                else latest_comp
+            )
+            return _ev(
+                "expired", exp_comp, lapsed.expiration_date.isoformat(), **progress
+            )
 
         if required > 0 and meets_required_hours(total_hours, required):
             return _ev("completed", latest_comp, latest_exp, **progress)
@@ -1343,18 +1370,16 @@ def _grade_member_requirement(
             else None
         )
 
-        if freq == RequirementFrequency.BIANNUAL.value and windowed:
-            with_exp = [r for r in windowed if r.expiration_date]
-            if with_exp:
-                newest_cert = max(with_exp, key=lambda r: r.expiration_date)
-                if newest_cert.expiration_date < today:
-                    exp_comp = (
-                        newest_cert.completion_date.isoformat()
-                        if newest_cert.completion_date
-                        else latest_comp
-                    )
-                    exp_exp = newest_cert.expiration_date.isoformat()
-                    return _ev("expired", exp_comp, exp_exp, **progress)
+        lapsed = lapsed_biannual_certificate(req, windowed, today)
+        if lapsed is not None:
+            exp_comp = (
+                lapsed.completion_date.isoformat()
+                if lapsed.completion_date
+                else latest_comp
+            )
+            return _ev(
+                "expired", exp_comp, lapsed.expiration_date.isoformat(), **progress
+            )
 
         if matched_count >= len(course_ids):
             return _ev("completed", latest_comp, latest_exp, **progress)

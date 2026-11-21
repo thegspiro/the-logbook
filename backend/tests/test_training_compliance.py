@@ -1185,10 +1185,13 @@ class TestBiannualRequirements:
             frequency=SimpleNamespace(value="biannual"),
             required_hours=10.0,
         )
+        # Inside the 2025-2026 window: the override reads only the records the
+        # requirement counts, as the compliance matrix does. An out-of-window
+        # certificate is covered by test_biannual_lapse_parity.py.
         records = [
             _make_record(
                 hours_completed=12.0,
-                completion_date=date(2024, 6, 1),
+                completion_date=date(2025, 6, 1),
                 expiration_date=date(2026, 1, 1),
             ),
         ]
@@ -1232,6 +1235,7 @@ class TestEvaluateRequirementDetailFields:
             "waiver_months",
             "active_months",
             "cert_expired",
+            "expiry_date",
             "blocks_activity",
             "catch_up_deadline",
             "next_window_opens",
