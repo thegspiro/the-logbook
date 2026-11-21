@@ -638,8 +638,8 @@ const PreviewStep: React.FC<PreviewStepProps> = ({ parseResult, courseMappings, 
       </div>
 
       {/* Data table */}
-      <div className="border-theme-surface-border overflow-x-auto rounded-xl border">
-        <table className="w-full text-sm">
+      <div className="border-theme-surface-border rwd-table-container overflow-x-auto rounded-xl border">
+        <table className="rwd-table rwd-table-wide w-full text-sm">
           <thead>
             <tr className="bg-theme-surface-secondary border-theme-surface-border border-b">
               <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase" scope="col">
@@ -670,32 +670,40 @@ const PreviewStep: React.FC<PreviewStepProps> = ({ parseResult, courseMappings, 
                   key={row.row_number}
                   className={`${isSkipped ? 'opacity-40' : ''} ${row.errors.length > 0 ? 'bg-red-500/5' : ''}`}
                 >
-                  <td className="text-theme-text-muted px-4 py-2">{row.row_number}</td>
-                  <td className="px-4 py-2">
+                  <td className="text-theme-text-muted px-4 py-2" data-label="#">
+                    {row.row_number}
+                  </td>
+                  <td className="rwd-table-lead px-4 py-2" data-label="Member">
                     {row.member_matched ? (
                       <div>
                         <span className="text-theme-text-primary">{row.matched_member_name}</span>
-                        <span className="text-theme-text-muted block text-xs">
+                        <span className="text-theme-text-muted block text-xs break-all">
                           {row.email || row.membership_number || row.member_name}
                         </span>
                       </div>
                     ) : (
                       <div>
-                        <span className="text-yellow-700 dark:text-yellow-400">
+                        <span className="break-all text-yellow-700 dark:text-yellow-400">
                           {row.member_name || row.email || row.membership_number || 'Unknown'}
                         </span>
                         <span className="block text-xs text-yellow-500">No match</span>
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-2">
-                    <span className="text-theme-text-primary">{row.course_name}</span>
-                    {row.course_matched && <CheckCircle2 className="ml-1 inline h-3.5 w-3.5 text-green-500" />}
-                    {isSkipped && <span className="text-theme-text-muted ml-1 text-xs">(skipped)</span>}
+                  <td className="px-4 py-2" data-label="Course">
+                    <div className="min-w-0">
+                      <span className="text-theme-text-primary">{row.course_name}</span>
+                      {row.course_matched && <CheckCircle2 className="ml-1 inline h-3.5 w-3.5 text-green-500" />}
+                      {isSkipped && <span className="text-theme-text-muted ml-1 text-xs">(skipped)</span>}
+                    </div>
                   </td>
-                  <td className="text-theme-text-muted px-4 py-2">{row.completion_date || '-'}</td>
-                  <td className="text-theme-text-muted px-4 py-2">{row.hours_completed ?? '-'}</td>
-                  <td className="px-4 py-2">
+                  <td className="text-theme-text-muted px-4 py-2" data-label="Date">
+                    {row.completion_date || '-'}
+                  </td>
+                  <td className="text-theme-text-muted px-4 py-2" data-label="Hours">
+                    {row.hours_completed ?? '-'}
+                  </td>
+                  <td className="px-4 py-2" data-label="Status">
                     {row.errors.length > 0 ? (
                       <span className="inline-flex items-center gap-1 text-xs text-red-700 dark:text-red-400">
                         <XCircle className="h-3.5 w-3.5" /> {row.errors[0]}

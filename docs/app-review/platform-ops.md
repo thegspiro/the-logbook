@@ -1,7 +1,110 @@
 # Application Review — Platform Ops & Data Lifecycle
 
 **Prefix:** `OPS` · **Iteration:** A9 · **Reviewed:** 2026-08-05 (pass 1),
-2026-08-08 (pass 2), 2026-10-05 (pass 3) · **last of Tier A**
+2026-08-08 (pass 2), 2026-10-05 (pass 3), 2026-11-16 (pass 4) · **last of Tier A**
+
+## Pass 4 (2026-11-16) — chain-ordered shipping, a wider export, and 28 separation guards
+
+Scope: the delta since pass 3 (`cbaa7143`): `audit_ship_service.py` (+32,
+shipping in chain order after SEC2-28-10), `data_export_service.py` (+60,
+attendance waivers and the `badge_code` exclusion), `admin_continuity_service.py`
+(+6, `ACTIVE_ACCOUNT_STATUSES`), and every `assert_different_person` call site —
+28 now, against 20 at pass 3. **1 fix (documentation), 1 flagged; every earlier
+flag is settled.**
+
+### OPS-13 — LOW — The docs told collectors two wrong things about deduplicating — ✅ DOC FIXED
+
+Since SEC2-28-10 (2026-10-12) audit rows ship in chain order, and the ids in a
+batch need not be contiguous or ascending. `UPGRADING.md` and the code say to
+deduplicate on `X-Logbook-First-Seq` / `X-Logbook-Last-Seq`. Two places still
+said otherwise:
+
+- **`wiki/Security-Audit-Logging.md:215`** said "acknowledged rows are never
+  re-shipped". That holds for one run, but OPS-7, which the owner accepted on
+  2026-11-01, is that two overlapping runs (the schedule and a manual
+  `audit_log_ship`) can each send the same later batches. A collector operator
+  who believed the sentence would not deduplicate, and that is exactly the
+  collector OPS-7 double-counts.
+- **`KNOWN_LIMITATIONS.md`'s OPS-7 entry** named `X-Logbook-First-Id` /
+  `Last-Id` as the deduplication key and did not record the owner's decision.
+
+The wiki now states at-least-once delivery and points at the `Seq` headers;
+the OPS-7 entry carries the decision and the current key, with the original
+finding kept below it.
+
+### OPS-14 — LOW — A driver-exception requester cannot deny their own request — 🚩 FLAGGED
+
+`DriverExceptionService.review_exception` (`driver_exception_service.py:223`)
+takes `approve: bool` and runs both separation guards — reviewer against
+requester, reviewer against beneficiary — before it looks at `approve`. So a
+denial is refused too, with a message about approving. Everywhere else in the
+app only the granting direction is guarded: finance says so in as many words
+(`finance_service.py:3855`, "Denial is left unguarded: withdrawing your own
+request is not a conflict", with separate unguarded `deny_step` and
+`manual_deny`), training reviews guard `action == "approve"` only, and this same
+service's `revoke_exception` exempts itself because withdrawing permission "is
+always the safe direction". There is no other way to withdraw a pending
+exception, so a chief who raised one in error waits for another chief to deny
+it.
+
+Pass 3 recorded that no site guards a denial; this one did then too (the
+guards are unchanged since). **Not fixed** because relaxing a guard is a
+behaviour change and the screen agrees with the backend on purpose:
+`DriverExceptionsPanel.tsx:456` hides Deny as well as Approve and says "another
+chief must decide", which may be the intended rule for a safety exception. The
+fix, if wanted, is to wrap both guards in `if approve:` and show Deny on the
+panel. A test written for it (requester and beneficiary each deny) failed
+against the current code and passed with the change; both were reverted.
+Recorded in `KNOWN_LIMITATIONS.md` for a decision.
+
+### Earlier flags — all settled
+
+- **OPS-5** (storefront had no separation guard) — resolved: five guards in
+  `storefront_service.py` (status update to paid, record payment, mark paid,
+  waive, refund).
+- **OPS-6** (`approve_by_token` unguarded) — resolved: an email approver equal
+  to the requester's or the raiser's address is refused unless the step allows
+  self-approval.
+- **OPS-7** (shipping can repeat a batch) — accepted by the owner, 2026-11-01.
+- **OPS-8** (recording a payment on your own dues) — resolved 2026-10-11.
+
+### Verified good ✅
+
+- **The shipping watermark kept its meaning across the switch to chain
+  positions.** Migration `bcd688674099` backfilled `chain_seq = id` for every
+  existing row and seeds the chain head no lower than the stored watermark, so
+  an upgraded installation neither skips nor re-sends; only sealed rows ship,
+  and an unsealed row reaching the watermark raises rather than stalling it.
+  The column keeps the name `last_shipped_id`, which the model documents.
+- **The export carries no credential.** Every column of `User` and of all 26
+  exported tables was swept for secret, token, hash, password, key, code,
+  serial, path and signature: `badge_code`, the MFA secrets, reset and feed
+  tokens and the OAuth subject are excluded; `email_hash` (a fingerprint of the
+  member's own address) and three internal deduplication keys are exported;
+  an attachment's `file_path` is dropped by the per-call exclusion. Audit
+  history is exported as a count and date range only. The waiver decision log is
+  joined through the member's own requests, so notes they wrote as a decider on
+  someone else's request stay out.
+- **Admin continuity** now counts probationary administrators as current, per
+  pitfall #32.
+- **The 28 separation guards each pair the actor with the right person** —
+  requester, submitter, recorder, beneficiary or member — and only OPS-14
+  guards a denial.
+
+### Pass 4 completion gate
+
+No application code changed; the four checks still ran.
+
+| Check                          | Result                                |
+| ------------------------------ | ------------------------------------- |
+| `npm run typecheck`            | ✅ exit 0                             |
+| `npm run lint`                 | ✅ exit 0                             |
+| `python -m flake8 app/ tests/` | ✅ 0 violations                       |
+| `black --check app/ tests/`    | ✅ 2470 files unchanged               |
+| `check_docs_links.py`          | ✅ 518 files, 0 broken links          |
+| OPS-14 trial fix (reverted)    | 2 new tests red before, 45 green with |
+
+---
 
 ## Pass 3 (2026-10-05) — the control pass 2 flagged got built
 

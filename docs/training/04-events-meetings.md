@@ -105,7 +105,13 @@ depends on when you actually checked in and out.
 
 **The Needs You band.** Events that need something from you sit in a **Needs
 You** band at the top of the list — an RSVP that is due, or a check-in that is
-open now. The band clears itself as you respond. A member who joined after an
+open now. The band clears itself as you respond. A **mandatory** event you have
+not answered appears there only once it is **within the department's response
+window** of starting _(2026-11-16)_, so a weekly mandatory drill series no
+longer fills the band with every drill for the year ahead. The window is 60
+days unless an officer changes it under **Events settings → Attendance →
+Mandatory event responses** (1 to 365 days). One whose RSVP deadline is less
+than two days away is listed whenever it starts. A member who joined after an
 event ran, or who was not in its audience, is never listed as having missed
 it.
 
@@ -305,7 +311,9 @@ wrong times. Confirm with **Withdraw request** (or **Keep it** to back out).
 
 **Deciding it (organizers).** The event's organizer, its alternate and
 officers who can manage events see an **Attendance Requests** card on the
-event page. Each request shows the member, when they asked, their reason and
+event page. So does a member a request was sent to because nobody else could
+be reached (see **Who is told**, below), even without permission to manage
+events; they decide the requests sent to them _(2026-11-11)_. Each request shows the member, when they asked, their reason and
 the times they gave, with **Approve** and **Decline**. A request the member
 withdrew and sent again says so — _"Withdrawn and sent again once"_ (or
 _twice_) — which is why you may have been told about it more than once.
@@ -805,10 +813,15 @@ page asks for an email address instead of a name:
 
 Anyone else is stopped with a message rather than signed in:
 
-| The email belongs to                                   | The guest is told                      |
-| ------------------------------------------------------ | -------------------------------------- |
-| A member account (active or probationary)              | To scan the **member** QR code instead |
-| Nobody — or a withdrawn, rejected or on-hold applicant | To see a member of staff               |
+| The email belongs to                                                              | The guest is told        |
+| --------------------------------------------------------------------------------- | ------------------------ |
+| Nobody, a member account, or a withdrawn, rejected or on-hold applicant           | To see a member of staff |
+
+_(2026-11-08)_ A member's own email gets the same answer as an unknown one:
+_"We couldn't find you. Please see a member of staff to sign in."_ Telling
+members to scan the member QR code also told anyone holding the public link
+which emails belong to your members. A member who reaches this page should scan
+the event's member QR code.
 
 > **First-time visitors are not signed in by the kiosk at these events.** A
 > recruitment event's kiosk records the attendance of people already in your
@@ -889,7 +902,8 @@ Select **Create Event** on the Events page. It opens the **Create Event** tab
 of **Manage Events**.
 
 1. Optionally pick a template under **Start from a Template** — _"Pick a
-   template to pre-fill common settings, or start blank."_
+   template to pre-fill common settings, or start blank. A Training template
+   opens the step-by-step form and fills its training details."_
 2. Set the **event type**, **title**, start and end date and time. Moving the
    start past the end carries the end with it, keeping the event's length.
 3. Add a **location** and a **description**.
@@ -921,7 +935,10 @@ of **Manage Events**.
 > instructor, credit hours, certification and sign-off on **Training Info**. A
 > note at the top says **Switched to the training form**, with a **Change back
 > to …** button; picking another type also brings the single-page form back,
-> again with your entries. See
+> again with your entries. A Training template that saved training details
+> also fills **Training Info** _(2026-11-20)_: the course, training type,
+> credit hours, lead instructor and certification settings (see
+> [Templates](#templates)). See
 > [Training Credit from Events](#training-credit-from-events).
 
 > **What if Require RSVP is on but there is no deadline?** On a single event,
@@ -981,6 +998,10 @@ Choose another room or time.
 is ready, open it and select **Publish**. Editing and saving a draft keeps it a
 draft; before 2026-10-26 the edit form did not know the event was a draft, and
 saving it published it.
+
+_(2026-11-15)_ Nobody can check in to a draft: a QR scan, an NFC tap and a
+kiosk all refuse it with "Cannot check in to an unpublished event", and its QR
+code shows nothing about the event. Publish it first.
 
 **Lead time when you edit.** An event saved without a lead time opens the form
 with the value the server uses: 15 minutes on a Window-type event, 60 on others.
@@ -1351,11 +1372,36 @@ credited automatically.
 A template saves the settings you use again and again — title, type,
 location, time, length, description and reminders.
 
+**A Training template also saves the session's training details**
+_(2026-11-20)_: the course (from the Course Library, a one-off name and code,
+or none), the training type, the credit hours and where they come from (the
+event's length, the course, or a typed figure), the lead instructor, and the
+certification settings — whether it issues one, the number prefix, the
+issuing agency and the expiry in months. Picking the template fills
+**Training Info** with them, replacing what was there. A template does not
+save requirement or program links, **Counts toward attendance**, or the
+completion settings; those start on their defaults for each session.
+
+- If the template's course is no longer in the Course Library, the session
+  starts on **No course yet**, with a note saying so on **Training Info**.
+- If its lead instructor is no longer a current member, **Lead instructor**
+  starts empty, with a note.
+- Hours that come from the course are refreshed to the course's current
+  figure when the template is picked.
+- Under a library course, a blank **Lead Instructor** or **Expiration** is
+  still saved as the course's, as on any training event.
+
 **Making one:**
 
-- On an event's page, select **More → Save as Template**; or
+- On an event's page, select **More → Save as Template**. On a Training
+  event this saves its training details too. If they cannot be read, the
+  template is not saved and a message says so; try again; or
 - on the Events page, open the **⋯** menu → **Event Templates** and select
-  **Create Template**.
+  **Create Template**. With **Event Type** set to **Training**, a **Training
+  Details** section offers the course, type, hours, lead instructor and
+  certification. Picking a library course fills type, hours, instructor and
+  expiry from it, but leaves the template's **Max Attendees** alone. Saving
+  a template as another type clears any training details it had.
 
 **Using one:** pick it under **Start from a Template** on **Create Event**, or
 choose it from **Create from Template** in the Events page's **⋯** menu.
@@ -2482,6 +2528,12 @@ the weekly open-items list. Changing them needs the settings permission.
 
 ![Minutes Settings, Reminders: the email switch, the first-reminder and repeat-while-overdue day fields, and the weekly open-items list switch](./images/04-75-minutes-settings-reminders.png)
 
+**Changing the wording** _(2026-11-14)_. The minutes and action-item emails
+are templates you can edit under **Communications → Email Templates**, in the
+**Meetings & Minutes** group: **Minutes Ready for Review**, **Action Items
+Assigned**, **Action Item Reminder (Minutes)**, **Open Action Items Digest**
+and **Action Item Reminder (Meetings)**. Until then their wording was fixed.
+
 ### Attendance Dashboard (Secretary)
 
 **Who can see it:** officers with the **Manage meetings** permission.
@@ -2495,7 +2547,17 @@ opens **Meeting Attendance**.
    many members may vote, and how many are blocked by attendance.
 3. The table lists each active member: attendance percentage, meetings
    attended out of those counted, absences, waived meetings, meetings during
-   leave, and whether they may vote (with the reason when not).
+   leave, and **Voting**: **Eligible** or **Not eligible**, with the reason
+   when not.
+
+_(2026-11-13)_ **Voting** and the two voting tiles report whether the member
+could vote in a new election held at a regular business meeting, under the
+**Regular business meeting** rules on **Election Settings → Voter
+Eligibility** (see
+[Elections → Voter Eligibility](./14-elections.md#voter-eligibility-2026-10-29)).
+It is the same check a ballot applies, so this screen and an election cannot
+disagree. Those rules carry their own look-back; the **Period** you choose here
+changes only the attendance columns.
 
 A member with no meeting to count reads **Not applicable**, not a
 percentage.
@@ -2510,8 +2572,8 @@ percentage.
 **The member's window** runs from the later of:
 
 - the start of the look-back period, in calendar months — the **Period** you
-  chose here, or, for the voting check, **Over the last (months)** on the
-  member's membership tier _(2026-10-29)_ — and
+  chose here, or, for the voting check, the look-back in the voter rules —
+  and
 - the start of the member's current service — their latest service period,
   otherwise their hire date —
 
@@ -2521,8 +2583,7 @@ not charged with meetings held while they were away. Nobody is charged with
 next week's meetings. A meeting that is both waived and during a leave is
 left out once, not twice.
 
-This dashboard and the voting-eligibility check use the same calculation, so
-they always agree.
+This dashboard and the voting-eligibility check count meetings the same way.
 
 **Not yet on this screen:** granting a waiver for one meeting. Waivers are
 granted from the meeting.
@@ -2718,6 +2779,10 @@ scheduling and communication.
 4. Under **Handling** (**Request Handling**), set:
    - **Default Coordinator** — the member assigned every new request. The
      list shows each member's rank by name ("Jordan Avery — Firefighter").
+     Only current members (active or probationary) are listed _(2026-11-19)_.
+     A default coordinator who has since left stays selected, marked
+     "(former member)", so saving the section does not swap them out — but
+     new requests will keep going to them until you choose someone current.
    - **Request Checklist** — your checklist steps, such as "Chief Approval",
      "Email Volunteer Signup" or "Prep Equipment". Use the up and down arrows
      to reorder them.
@@ -2792,7 +2857,9 @@ own email app. **More** holds the rest:
 In the panel you can also:
 
 1. **Assign or reassign** the coordinator, beside **Coordinator** under the
-   title.
+   title. Only current members are offered _(2026-11-19)_; choosing a former
+   member through an out-of-date screen is refused with "Only current members
+   can be chosen as coordinator".
 2. **Tick off checklist steps** as they are done. The first one ticked moves
    the request from **Submitted** to **In Progress**.
 3. **Schedule Event**: enter the **Start Date & Time**, **End Date & Time**
@@ -2832,36 +2899,82 @@ month**, **This quarter**, **This year** (the default), **Last 12 months** or
 **All time**. The **Community engagement** card on the dashboard opens this
 page on the dashboard's own period.
 
-| Figure             | What it counts                                                                |
-| ------------------ | ----------------------------------------------------------------------------- |
-| **Events held**    | Outreach events that have started; the line below says how many are scheduled |
-| **People reached** | Guests who signed in, plus estimates for events nobody signed in at (below)   |
-| **Member hours**   | Credited attendance time of members checked in, the same hours training uses  |
-| **Requests**       | Public requests received in the period, and how many of those are completed   |
+![The Community Engagement tab for this year: events held, people reached split into counted and estimated, member hours and requests completed, each with its change since last year; people reached by month; the breakdown by public request type and by department event type; and the recent outreach events table](./images/04-100-community-engagement.png)
+
+| Figure                 | What it counts                                                                     |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| **Events held**        | Outreach events that have started; the line below says how many are scheduled      |
+| **People reached**     | Guests counted, plus estimates for events where nothing was counted (below)        |
+| **Member hours**       | Credited attendance time of members checked in, the same hours training uses       |
+| **Requests completed** | Public requests completed in the period, whenever they arrived; and those received |
 
 An outreach event is any **Public Education**, **Fundraiser**, **Ceremony** or
 **Social** event, or any event a public request was scheduled onto, whatever
 its type. Cancelled events are left out.
 
-**Signed in, or estimated.** A school assembly rarely passes round a sign-in
-sheet, so for an event with no guest sign-ins **People reached** uses the
-audience size the requester gave on the request, and marks it **est.** An
-event that did record sign-ins counts them and nothing else. Members on duty
-are never counted as people reached. Where an event has both, the table shows
-the gap — **25 signed in, of ~30 expected** — and the chart heading totals it:
-how many signed in against how many requesters expected.
+**Counted, or estimated.** For each event, **People reached** takes the first
+of these that it has:
+
+1. A **guest headcount** recorded on the event (below), shown as **counted**.
+2. Guests who signed in, shown as **signed in**.
+3. The audience size the requester gave on the request, marked **est.**
+
+A headcount replaces the sign-ins rather than adding to them: it counts the
+room, and the people who stopped at the sheet were in it. Members on duty are
+never counted as people reached. Where an event has an actual figure and an
+expected one, the table shows the gap — **25 signed in, of ~30 expected** — and
+the chart heading totals it: how many were counted against how many requesters
+expected.
+
+**Requests completed.** A request counts in the period it was completed,
+whenever it arrived: one received in December and finished in January is
+January's. The line beneath gives the requests received in the period.
 
 **Change since last time.** Beside each figure is its change against the
 same stretch of the previous period — the first forty days of this quarter
 against the first forty of the last — so a period still under way is not
 compared with a finished one. **All time** has nothing to compare with.
 
-Under the figures, **People reached by month** stacks signed-in guests under
-estimates (by year for an all-time span over three years; hover or tap a bar
-for its numbers, or open **Show the figures**), **By type of outreach** ranks
-the three largest types and folds the rest into **Other**, and **Recent
-outreach events** lists the latest fifty with their crew and hours. **Export
-CSV** downloads that list.
+Under the figures:
+
+- **People reached by month** stacks counted guests under estimates (by year
+  for an all-time span over three years). Hover over or tap a bar for its
+  numbers, or open **Show the figures**.
+- **By type of outreach** has two parts, because they use two lists of names.
+  **Public requests** are grouped by what the requester asked for (Station
+  Tour, CPR / First Aid Class); **Department events** — ones no request asked
+  for — by event type (Public Education, Fundraiser). Each shows its three
+  largest types and folds the rest into **Other**.
+- **Recent outreach events** lists the latest fifty with their crew and hours.
+  **Export CSV** downloads every event in the period, not only the fifty, so a
+  spreadsheet totals to the figures on the screen.
+
+#### Recording a guest headcount
+
+For an event where guests did not sign in one by one — an assembly, a block
+party — open the event and enter the number in **Guest headcount** →
+**Guests counted**, then select **Save headcount**. **Clear** removes it.
+
+![The Guest headcount card on an event's page: the Guests counted box holding 22, with the Save headcount and Clear buttons](./images/04-101-guest-headcount.png)
+
+The card appears for officers who can manage events, on an outreach event that
+has started and is not cancelled. A headcount can be recorded or changed after
+the event's attendance is finalized: it is a count of the public, not members'
+credited time.
+
+If an outreach event ends without a headcount, the next morning its organizer
+and alternate are emailed and sent a notification asking for one, with a link
+to the event. Only those who can manage events are asked; when neither of them
+can, the officer who created the event is asked instead, and when nobody can,
+nobody is. Each event is reminded about once, and only events that ended in
+the last 14 days. Postponing an event lets it be reminded about again after
+its new date.
+
+The email is the **Guest Headcount Reminder** template under **Communications →
+Email Templates → Events & Scheduling**, where a department can reword it or
+switch it off. A member
+can stop receiving it by turning off **Event officer duties** in their email
+preferences; the notification still arrives.
 
 ### Public Request Form
 
@@ -2884,11 +2997,10 @@ connected to the pipeline — one made by the generate button, or any form
 given an **Event Request** integration. Your other published forms (a
 near-miss report, a gear-sizing survey) never appear there. Answers to a form
 without that integration are kept as form submissions; they do not open
-requests.
-
-A form still in draft carries a **Go to Forms to edit and publish** button, named
-for that form, which opens Forms to edit and publish it _(2026-11-14; was
-plain text)_.
+requests. A draft form carries the warning "This form must be published
+before it can accept submissions." with a **Go to Forms to edit and publish**
+button, named for that form, which opens Forms to edit and publish it
+_(2026-11-14; was plain text)_.
 
 Officers who can manage events see this page without needing any Forms
 permission.

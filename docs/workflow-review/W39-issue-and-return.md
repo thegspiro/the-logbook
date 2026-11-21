@@ -175,18 +175,30 @@ Covered by a new case in `InventoryScanModal.test.tsx` (fails against the old
 dialog). Re-driven: the minimum read 14:56 at 14:56 Central, and a loan due at
 6:00 PM Central was stored as 23:00Z.
 
-### W39-8 — NIT — "Review 2 Items" is disabled until a duration is chosen, and nothing says so — OPEN
+### W39-8 — NIT — "Review 2 Items" is disabled until a duration is chosen, and nothing says so — ✅ FIXED
 
 The dialog opens with neither "Ongoing assignment" nor "Temporary loan"
 selected. After scanning, the only action is disabled, with no hint that the
 fieldset above is what it waits for. Left: this is deliberate (#1885 made the
 choice explicit), so the fix is a line of copy.
+**Fix:** already in place, from #3701: while no duration is chosen a status
+line under the scanned items reads "Choose Ongoing assignment, Temporary
+assignment or Temporary loan above to continue.", and a loan without its return
+date reads "Set the expected return date to continue." Covered by
+`InventoryScanModal.test.tsx`.
 
-### W39-9 — NIT — "Notify quartermaster of return" is still offered after a notice was sent — OPEN
+### W39-9 — NIT — "Notify quartermaster of return" is still offered after a notice was sent — ✅ FIXED
 
 The coat's row keeps the button after the notice. Pressing it again gets the
 server's clear refusal, so nothing is duplicated, but the row could say the
 quartermaster has been told. Left for W41, which owns the notice flow.
+**Where:** `frontend/src/modules/inventory/pages/MyEquipmentPage.tsx`.
+**Fix:** a gear or loan row whose item has an open (`requested`) return notice
+reads "Quartermaster notified <date>" in place of the button — the same rule
+the server refuses a second notice by (`create_return_request`: one open
+notice per item), so the button shows exactly when a press would be accepted.
+It returns once the notice is received or denied. Covered by three cases in
+`MyEquipmentPage.test.tsx`; two fail against the old page.
 
 ## Checklist
 
@@ -199,7 +211,7 @@ quartermaster has been told. Left for W41, which owns the notice flow.
 | 5. Coming back to it    | ✅ assignment and notice survive reload; fixed W39-4 (Pending read 0)         |
 | 6. On a phone           | ✅ My Issued Gear and the notice dialog at 390×844                            |
 | 7. Everyone can use it  | Fixed W39-3 (return dialog unusable without a mouse), W39-4, W39-6            |
-| 8. What happens around  | Flagged W39-5; W39-8, W39-9 open                                              |
+| 8. What happens around  | Flagged W39-5; fixed W39-8, W39-9                                             |
 
 ## Completion gate
 

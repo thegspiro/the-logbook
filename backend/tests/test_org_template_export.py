@@ -12,6 +12,7 @@ import zipfile
 
 import pytest
 
+from app.models.event import EventTemplate, EventType
 from app.models.training import TrainingCategory
 from app.models.user import Organization, Position, User
 from app.services.org_template_service import OrgTemplateService
@@ -102,6 +103,39 @@ async def test_export_is_org_scoped_and_scrubbed(db_session):
     assert on_disk_manifest["source_org"]["slug"] == org_a.slug
     assert manifest["tables"].get("training_categories") == 1
     assert filename.endswith(".zip")
+
+
+async def test_training_template_details_are_not_exported(db_session):
+    """A Training template's details name a member (an id and a name the key
+    scrubber does not catch) and an org-local course, so the column is
+    written as null."""
+    org = await _make_org(db_session, "Delta FD")
+    member_id = str(uuid.uuid4())
+    course_id = str(uuid.uuid4())
+    template = EventTemplate(
+        id=str(uuid.uuid4()),
+        organization_id=org.id,
+        name="Monthly Drill",
+        event_type=EventType.TRAINING,
+        training_details={
+            "course_mode": "library",
+            "course_id": course_id,
+            "instructor_id": member_id,
+            "instructor": "Pat Example",
+        },
+    )
+    db_session.add(template)
+    await db_session.flush()
+
+    zip_bytes, _, _ = await OrgTemplateService(db_session).export_template(org.id)
+    data, _ = await _read_archive(zip_bytes)
+
+    exported = next(r for r in data["event_templates"] if r["name"] == "Monthly Drill")
+    assert exported["training_details"] is None
+    raw = json.dumps(data)
+    assert member_id not in raw
+    assert course_id not in raw
+    assert "Pat Example" not in raw
 
 
 async def test_system_positions_are_not_exported(db_session):

@@ -293,8 +293,9 @@ scan are found through its transcription.
 
 **Viewing.** The whole app is served with `frame-ancestors 'none'`, so a PDF
 cannot be shown inside an app page. The document page shows the first-page
-preview and an **Open** link that opens `/view` (the stripped copy, inline) in
-a new tab, in the browser's own viewer. Chrome refuses to show a PDF sent with
+preview and an **Open the PDF** link (**Open full size** for a scan) that
+opens `/view` (the stripped copy, inline) in a new tab, in the browser's own
+viewer. Chrome refuses to show a PDF sent with
 the CSP sandbox header, so the protection against a script in the file is the
 rebuilt copy, not a header. `/original` is always an attachment and
 `history.manage` only.

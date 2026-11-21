@@ -176,11 +176,11 @@ named FK. Sourced from a full per-table audit of every model file.
 
 ### Meetings/Events (`meeting.py`, `minute.py`, `event.py`, `event_request.py`)
 
-| Table                           | Natural key / seed | Remap / hazards                                            |
-| ------------------------------- | ------------------ | ---------------------------------------------------------- |
-| `minutes_templates`             | —                  | `header_config` JSON may embed logo_url; null `created_by` |
-| `event_templates`               | —                  | FK `default_location_id`→locations remap                   |
-| `event_request_email_templates` | —                  | null `created_by`                                          |
+| Table                           | Natural key / seed | Remap / hazards                                                                                                     |
+| ------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `minutes_templates`             | —                  | `header_config` JSON may embed logo_url; null `created_by`                                                          |
+| `event_templates`               | —                  | FK `default_location_id`→locations remap; `training_details` nulled on export (member id/name, org-local course id) |
+| `event_request_email_templates` | —                  | null `created_by`                                                                                                   |
 
 ### Membership & Finance (`membership_pipeline.py`, `finance.py`)
 

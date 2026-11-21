@@ -1515,7 +1515,7 @@ export const GrantDetailPage: React.FC = () => {
             </div>
 
             {complianceTasks.length === 0 ? (
-              <div className="card flex flex-col items-center justify-center py-12">
+              <div className="card flex flex-col items-center justify-center px-4 py-12">
                 <ClipboardCheck className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
                 <p className="text-theme-text-secondary">No compliance tasks yet</p>
               </div>
@@ -1613,7 +1613,7 @@ export const GrantDetailPage: React.FC = () => {
 
             {/* Timeline */}
             {grantNotes.length === 0 ? (
-              <div className="card flex flex-col items-center justify-center py-12">
+              <div className="card flex flex-col items-center justify-center px-4 py-12">
                 <MessageSquare className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
                 <p className="text-theme-text-secondary">No activity yet</p>
               </div>

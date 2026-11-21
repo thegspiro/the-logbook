@@ -83,6 +83,20 @@ describe('ScrollCueRow', () => {
     expect(screen.getByRole('tablist')).toHaveAttribute('data-scroll-fade', 'both');
   });
 
+  // In dark mode `bg-theme-surface` is white at 6% opacity, so a chevron
+  // painted with it lets the chip it sits on show straight through — the
+  // arrow and the chip's label read as one smudge on a phone.
+  it('paints both cues on the opaque surface so the chip beneath is hidden', () => {
+    layOut(700, 200);
+    renderRow();
+
+    for (const side of ['left', 'right'] as const) {
+      const classes = (cue(side)?.getAttribute('class') ?? '').split(/\s+/);
+      expect(classes).toContain('bg-theme-surface-modal');
+      expect(classes).not.toContain('bg-theme-surface');
+    }
+  });
+
   it('pages the row most of a screen in the cue direction', () => {
     layOut(700);
     const scrollBy = vi.fn();

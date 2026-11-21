@@ -1,0 +1,156 @@
+# Run the clock-sensitive tests at the hours they break.
+#
+# A test that compares "now minus some hours" by calendar date, or builds
+# "yesterday" from a UTC date, passes whenever CI happens to run it and fails
+# in the hour after midnight, or every evening in a US timezone. Nothing in a
+# normal run can see that, because a normal run takes the hour it is given:
+# the shift-evaluation tests merged green and turned main red at 00:00 UTC on
+# 2026-11-14, and four CheckSweepStop tests failed every evening for anyone
+# running the suite in New York.
+#
+# This runs the tests that read the clock with the clock moved to those hours:
+# around UTC midnight and around US Eastern midnight for the backend
+# (tests/clock_shift.py), and the US evening and midnight, in New York and in
+# UTC, for the frontend (src/test/clockShift.ts). Each moves to the occurrence
+# of its hour nearest the real one, so the jump is never more than twelve
+# hours. A red leg names a test that will fail on a real run at that hour.
+#
+# Nightly rather than per pull request: these legs repeat tests the CI workflow
+# already runs, and a regression in this class is a test written today that
+# fails tonight, which a nightly run reports by the next morning.
+name: Clock Shift
+
+on:
+  schedule:
+    - cron: "41 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clock-shift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend at ${{ matrix.at }} UTC
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # 23:30 and 00:30 straddle UTC midnight; 04:30 and 05:30 straddle US
+        # Eastern midnight (EST), the default scheduling timezone.
+        at: ["23:30", "00:30", "04:30", "05:30"]
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: intranet_db
+          MYSQL_USER: intranet_user
+          MYSQL_PASSWORD: test_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+          --health-start-period=40s
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: intranet_db
+      DB_USER: intranet_user
+      DB_PASSWORD: test_password
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      ENVIRONMENT: testing
+      SECRET_KEY: ci-test-secret-key-not-for-production
+      JWT_SECRET: ci-test-jwt-secret-not-for-production
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up backend against the database service
+        uses: ./.github/actions/backend-db-setup
+
+      # The modules that build times from the clock: an offset in hours, or
+      # today's date. The rest of the suite cannot depend on the hour.
+      - name: Select the clock-sensitive test modules
+        run: |
+          grep -lE 'datetime\.now\(.*\) [-+] timedelta\((hours|minutes)|timedelta\(hours=|date\.today\(\)|today_in\(' \
+            tests/test_*.py > clock-sensitive-tests.txt
+          echo "$(wc -l < clock-sensitive-tests.txt) modules"
+
+      - name: Run them at ${{ matrix.at }} UTC
+        env:
+          CLOCK_SHIFT_AT: ${{ matrix.at }}
+        run: |
+          pytest $(cat clock-sensitive-tests.txt) \
+            -p tests.clock_shift \
+            -m "not docker and not slow" \
+            --tb=short -rf \
+            --junitxml=reports/junit-clock-shift.xml
+
+      - name: Summarize test results
+        if: "!cancelled()"
+        run: |
+          python3 "$GITHUB_WORKSPACE/scripts/junit_summary.py" \
+            --title "Backend at ${{ matrix.at }} UTC" \
+            reports/junit-clock-shift.xml
+
+  frontend:
+    name: Frontend at ${{ matrix.at }} ${{ matrix.tz }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { tz: America/New_York, at: "19:30" }
+          - { tz: America/New_York, at: "23:30" }
+          - { tz: America/New_York, at: "00:30" }
+          - { tz: UTC, at: "23:30" }
+          - { tz: UTC, at: "00:30" }
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Select the clock-sensitive test files
+        run: |
+          grep -rlE 'new Date\(|Date\.now\(|getTodayLocalDate\(' src \
+            --include='*.test.ts' --include='*.test.tsx' > clock-sensitive-tests.txt
+          echo "$(wc -l < clock-sensitive-tests.txt) files"
+
+      - name: Run them at ${{ matrix.at }} in ${{ matrix.tz }}
+        env:
+          TZ: ${{ matrix.tz }}
+          CLOCK_SHIFT_AT: ${{ matrix.at }}
+        run: |
+          npx vitest run --config vitest.clock-shift.config.ts \
+            $(cat clock-sensitive-tests.txt)

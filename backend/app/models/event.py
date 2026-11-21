@@ -106,6 +106,7 @@ EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS = (
     "validation_notification_sent",
     "series_end_reminder_sent",
     "attendance_finalized",
+    "guest_headcount_reminder_sent",
 )
 
 
@@ -174,6 +175,10 @@ class Event(Base):
     actual_end_time: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )  # Recorded by secretary when event actually ends
+    # Guests a coordinator counted at an outreach event nobody signed in at —
+    # an assembly, a block party. Community Engagement reads it as the event's
+    # actual audience in place of guest sign-ins; NULL means nobody counted.
+    guest_headcount: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # RSVP settings
     requires_rsvp: Mapped[bool] = mapped_column(
@@ -614,6 +619,17 @@ class EventTemplate(Base):
 
     # Custom fields template (structure for custom data fields)
     custom_fields_template: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+
+    # The training details a Training template fills in when it is picked
+    # (owner decision 2026-11-20). Training templates only, and one canonical
+    # shape settled at the write by EventTemplateTrainingDetails (pitfall #20);
+    # NULL means none were saved, and the form opens on its defaults. The
+    # course and instructor ids inside carry no foreign key, so either can
+    # disappear; applying the template falls back to no course or no
+    # instructor, with a note.
+    training_details: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSON, nullable=True
     )
 

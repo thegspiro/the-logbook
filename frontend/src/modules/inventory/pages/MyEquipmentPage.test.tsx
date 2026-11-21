@@ -419,3 +419,94 @@ describe('MyEquipmentPage', () => {
     expect(screen.getByText('Quartermaster: We do not carry XS; ordered one for next month.')).toBeInTheDocument();
   });
 });
+
+// W39-9: the row kept offering "Notify quartermaster of return" after a notice
+// was sent, and a second press only reached the server's refusal.
+describe('MyEquipmentPage — a return notice already sent', () => {
+  const openNotice = (overrides: Record<string, unknown>): Record<string, unknown> => ({
+    id: 'rr-1',
+    organization_id: 'org-1',
+    requester_id: 'me',
+    return_type: 'assignment',
+    item_id: 'it-1',
+    item_name: 'Turnout Coat',
+    assignment_id: 'as-1',
+    quantity_returning: 1,
+    reported_condition: 'good',
+    status: 'requested',
+    created_at: '2026-03-04T15:00:00Z',
+    updated_at: '2026-03-04T15:00:00Z',
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    mockGetUserInventory.mockReset();
+    mockGetUserInventory.mockResolvedValue(fullInv);
+    mockGetEquipmentRequests.mockReset();
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [] });
+    mockGetReturnRequests.mockReset();
+    mockGetReturnRequests.mockResolvedValue([]);
+    mockCreateReturnRequest.mockReset();
+    mockCreateReturnRequest.mockResolvedValue({});
+    mockToastError.mockReset();
+  });
+
+  it('says the quartermaster was notified instead of offering the button again', async () => {
+    mockGetReturnRequests.mockResolvedValue([
+      openNotice({}),
+      openNotice({
+        id: 'rr-2',
+        return_type: 'checkout',
+        item_id: 'it-2',
+        item_name: 'Thermal Camera',
+        checkout_id: 'co-1',
+      }),
+    ]);
+    renderWithRouter(<MyEquipmentPage />);
+
+    expect(await screen.findAllByText(/Quartermaster notified/)).toHaveLength(2);
+    expect(
+      screen.queryByRole('button', { name: 'Notify quartermaster of return: Turnout Coat' })
+    ).not.toBeInTheDocument();
+    // The loan row's button is unnamed beyond its text; only Work Gloves keeps one.
+    expect(screen.getAllByRole('button', { name: /Notify quartermaster of return/ })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Notify quartermaster of return: Work Gloves' })).toBeInTheDocument();
+    expect(screen.getAllByText(/Quartermaster notified/)[0]).toHaveTextContent(/Quartermaster notified \S.*2026/);
+  });
+
+  it('still shows the note when the gear-request list fails to load', async () => {
+    mockGetEquipmentRequests.mockRejectedValue(new Error('boom'));
+    mockGetReturnRequests.mockResolvedValue([openNotice({})]);
+    renderWithRouter(<MyEquipmentPage />);
+
+    expect(await screen.findByText(/Quartermaster notified/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Notify quartermaster of return: Turnout Coat' })
+    ).not.toBeInTheDocument();
+    expect(mockToastError).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers the button again once the notice is no longer open', async () => {
+    mockGetReturnRequests.mockResolvedValue([openNotice({ status: 'denied' })]);
+    renderWithRouter(<MyEquipmentPage />);
+
+    expect(
+      await screen.findByRole('button', { name: 'Notify quartermaster of return: Turnout Coat' })
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Quartermaster notified/)).not.toBeInTheDocument();
+  });
+
+  it('turns the row into the note after the member notifies', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MyEquipmentPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Notify quartermaster of return: Turnout Coat' }));
+    mockGetReturnRequests.mockResolvedValue([openNotice({})]);
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    expect(await screen.findByText(/Quartermaster notified/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Notify quartermaster of return: Turnout Coat' })
+    ).not.toBeInTheDocument();
+  });
+});

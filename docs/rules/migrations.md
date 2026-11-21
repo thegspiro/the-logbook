@@ -142,6 +142,32 @@ account. So the race above stays open: when `main` forks, the fix is a merge
 revision on a new branch. The reasoning, and what would reopen it, are in
 [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#migration-chain--branches-need-not-be-up-to-date-to-merge-owner-decision-2026-11-16).
 
+**One merge revision per fork, and look before writing one.** When `main`
+forks, every session working this repository sees the same red Migration Chain
+at about the same time, and each one that answers with its own merge revision
+forks `main` again: two merges of the same pair are two new heads. That is not
+hypothetical. The fork of `4d8e2b6f1c93` and `c4e81b7a2d95` on 2026-11-14
+drew three different merge revisions for that one pair, across four pull
+requests (#4316, #4317, #4319, #4320). Two of them merged 25 seconds apart:
+`e2b7d94c1a63` (#4317, ported from #4316) and `169a11ebf589` (#4319). With
+leave requests also landing on an older parent, `main` then had three heads,
+and two more pull requests (#4323, #4324) each proposed the three-way merge.
+`main` could not migrate for the better part of two days. So:
+
+1. **Check that `main` is still forked.** Fetch it and run `alembic heads`
+   against it (or `sh scripts/check-migration-heads.sh` from a branch that adds
+   a migration). Someone may have merged the fix since your CI run went red.
+2. **Look for an open pull request that already merges those heads** — one
+   adding a file under `backend/alembic/versions/` whose `down_revision` is a
+   tuple of them. If there is one, review it rather than writing a second.
+3. **Merge every head in one revision** (`alembic merge -m "…" <head1> <head2>
+<head3>`), never a pair at a time.
+4. **Put it on its own small branch**, not inside a feature pull request. A merge
+   revision carried by a large change waits on that change's review, and `main`
+   stays broken while it does.
+5. **Once one merges, close the others.** A second merge revision for heads
+   `main` has already merged does not cancel out; it is a new fork.
+
 `scripts/test_check_migration_heads.py` covers the script and the hook,
 including the case above: a branch whose chain is valid alone and forked once
 merged.

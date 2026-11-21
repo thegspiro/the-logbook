@@ -427,6 +427,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         audience=_O,
         includes=(
             "Attendance to validate after an event",
+            "A guest headcount to record after an outreach event",
             "A member asked to be marked present at your event",
             "You were made an event's organizer or alternate, or relieved of it",
             "An event request was assigned to you",

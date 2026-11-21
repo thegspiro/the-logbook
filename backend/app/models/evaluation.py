@@ -461,6 +461,18 @@ class EvaluationStep(Base):
     # member may read, and the member sees these once the evaluation is
     # released to them. NULL on every other step and when nothing is flagged.
     flagged_items: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    # On an approval or calibration step: the one person a manager named to
+    # act on it, in place of the step's position holders (or the view_all
+    # holders, for calibration). Set when nobody eligible holds the position
+    # -- the evaluator may not approve or calibrate their own evaluation, so a
+    # department whose only Captain wrote it has no other signer (owner
+    # decision 2026-11-16, ADV2-4). NULL means the workflow's actor decides.
+    assignee_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

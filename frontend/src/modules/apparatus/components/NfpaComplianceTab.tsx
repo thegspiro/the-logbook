@@ -93,7 +93,7 @@ export const NfpaComplianceTab: React.FC<NfpaComplianceTabProps> = ({ apparatusI
 
   if (loading && !summary) {
     return (
-      <div className="card py-8 text-center" role="status" aria-live="polite">
+      <div className="card px-4 py-8 text-center" role="status" aria-live="polite">
         <div className="border-theme-text-primary mx-auto h-8 w-8 animate-spin rounded-full border-b-2"></div>
         <span className="sr-only">Loading NFPA compliance</span>
       </div>

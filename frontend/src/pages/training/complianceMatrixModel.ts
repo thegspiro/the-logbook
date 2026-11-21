@@ -22,6 +22,7 @@ import type {
 import { COMPLIANCE_EXPIRING_SOON_DAYS } from '@/constants/config';
 import { CellTone, MemberClass, Standing } from '@/constants/enums';
 import { calendarDaysBetween, formatCalendarDate, getTodayLocalDate } from '@/utils/dateFormatting';
+import { monthlyPaceOf, paceLabel, paceSpoken } from '@/utils/requirementPace';
 
 // CellTone and Standing live in constants/enums.ts with every other `as const`
 // enum in the app. Re-exported here so the matrix's consumers can keep taking
@@ -76,8 +77,18 @@ export interface EvaluatedCell {
   tone: CellTone;
   /** 0-100, for the progress bar. */
   pct: number;
-  /** "18 of 24 hours", "Valid for 88 more days", "Nothing recorded". */
+  /**
+   * "6.9/6 hrs/mo avg" for an hours requirement the server sent an average
+   * for; otherwise "18 of 24 hours", "Valid for 88 more days", "Nothing recorded".
+   */
   progressLabel: string;
+  /** Set with an average label: what a screen reader announces in its place. */
+  progressSpoken: string | null;
+  /**
+   * Set with an average label: the total, "108.5 of 72 hours total", which
+   * is still what decides the tone.
+   */
+  totalLabel: string | null;
   /** "Expires Nov 12, 2026", "Window Jan 1 – Dec 31, 2026". */
   dateLabel: string;
   /** Set only when a waiver moved the target. */
@@ -304,12 +315,17 @@ export const evaluateCell = (
   // comfortably valid when it is inside the window today.
   const basis = cell.as_of || asOf;
   const tone = toneOf(cell, basis);
+  // Hours requirements lead with the server's monthly average (the same
+  // figure My Training shows). The bar and tone stay on the total.
+  const pace = tone === CellTone.NOT_YET_HELD ? null : monthlyPaceOf(cell.monthly_average, cell.monthly_needed);
   return {
     cell,
     requirement,
     tone,
     pct: percentOf(cell, tone),
-    progressLabel: progressLabelOf(cell, tone, basis),
+    progressLabel: pace ? paceLabel(pace) : progressLabelOf(cell, tone, basis),
+    progressSpoken: pace ? paceSpoken(pace) : null,
+    totalLabel: pace ? `${progressLabelOf(cell, tone, basis)} total` : null,
     dateLabel: dateLabelOf(cell, tone),
     waiverNote: waiverNoteOf(cell),
     overrideNote: cell.overridden ? "Met by the Chief's override" : null,

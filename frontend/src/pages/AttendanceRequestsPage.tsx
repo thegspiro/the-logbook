@@ -130,7 +130,7 @@ export const AttendanceRequestsPage: React.FC = () => {
                   <div className="split-row-main">
                     <Link
                       to={`/events/${request.event_id}`}
-                      className="text-theme-text-primary text-base font-semibold hover:underline"
+                      className="text-theme-text-primary touch:min-h-11 inline-flex items-center text-base font-semibold hover:underline"
                     >
                       {request.event_title}
                     </Link>

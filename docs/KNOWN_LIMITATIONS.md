@@ -405,14 +405,14 @@ now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
   5160 alignment were fixed on 2026-11-09; see "Printing" in
   `docs/PDF_REPORTS.md`.)
 - **Minutes, the inventory impact plan and the election documents keep their
-  own layouts.** Minutes, the evaluation and the election documents are
-  numbered "Page N" rather than "Page X of Y" (except the ballot). The impact
-  plan, which had no footer at all, is numbered "Page X of Y" since
-  2026-11-17. Since 2026-11-16 every
-  one of them repeats the department's logo, name and the document's title at
-  the top of each later page, so a loose page is still identifiable. They
-  escape correctly and are audited; moving them onto the kit's footer is a
-  layout change, not a fix.
+  own layouts.** All of them are numbered "Page X of Y": the ballot always
+  was, the impact plan since 2026-11-17, and minutes, the evaluation,
+  certified results and the pre-meeting package since 2026-11-20. Since
+  2026-11-16 every one of them repeats the department's logo, name and the
+  document's title at the top of each later page, so a loose page is still
+  identifiable. They escape correctly and are audited; what remains is only
+  that they keep their own layouts rather than the report kit's, which is a
+  layout choice, not a defect.
 
 ## Medical Screening — What Is Still Plaintext at Rest (MS-18, 2026-11-05)
 
@@ -1548,17 +1548,20 @@ the owner, because closing them changes how members get into their accounts:
   is; the email change itself is now ceiling-bound, step-up gated, audited and
   reported to the previous address.
 
-## Separation of Duties — Five Decisions Left Open (ADV-02, 2026-11-14)
+## Separation of Duties — Four Decisions Left Open (ADV-02, 2026-11-14)
 
 The adversarial pass over the month to 2026-11-14 found these items. Its
 findings are in `docs/security-review/ADV-02-adversarial-last-month.md`. Each
 fix changes a workflow some departments rely on, so the owner decides:
 
-- **One officer can conduct, calibrate and approve a personnel evaluation
-  (ADV2-4).** Only the subject is barred from the approval step and from
-  calibration. Refusing the evaluator stalls every evaluation where they are
-  the only holder of the step's position, because no action reassigns or skips
-  a step.
+- ~~**One officer can conduct, calibrate and approve a personnel evaluation
+  (ADV2-4).**~~ ✅ Resolved 2026-11-16 (owner: refuse, and add a reassign
+  action). The evaluator never approves or calibrates their own evaluation,
+  and nobody signs two approvals on one revision. Where that leaves nobody
+  eligible, an `evaluations.manage` holder names who takes the step, with
+  step-up. On upgrade, an evaluation already waiting on an approval whose only
+  position holder is its evaluator stays open until a manager names someone.
+  See `docs/EVALUATIONS_MODULE.md`.
 - **A shift officer can write their own close-out hours (ADV2-8).** Pre-shift
   work and event attendance refuse the self case. On a one-person shift nobody
   else could record it.
@@ -7019,18 +7022,93 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   on My Training. No migration. Tests:
   `tests/test_my_training_compliance_profiles.py`.
 - **The profile card's colour re-derives its thresholds (D10 follow-up) —
-  open, owner decision needed.** `get_compliance_summary` colours the card
-  red / yellow / green with its own fixed rule instead of
-  `classify_standing` with the matching profile's threshold overrides, so the
-  card can disagree with the matrix's standing for the same member (CLAUDE.md
-  pitfall #29). D10 narrowed its denominator only and left the colour rule
-  as it was; narrowing can still flip a member's colour. Remaining surfaces
-  that are not yet profile-aware, all officer-facing: the period roster
-  (`GET /training/records/member-status`, which also ignores profile
-  threshold overrides), the competency matrix, the compliance CSV/PDF export
-  cells, the compliance forecast and Scheduling's Shift Compliance report.
-  Separately, `optional_requirement_ids` has no reader, and two active
-  profiles of equal priority resolve in an undefined order.
+  ✅ fixed, owner decision 2026-11-20 ("card uses profile limits").**
+  `get_compliance_summary` coloured the card red / yellow / green with its own
+  fixed rule — red for any expired certificate or under half the requirements
+  met, yellow for any certificate expiring within 90 days or anything unmet —
+  so the card could disagree with the matrix's standing for the same member
+  (CLAUDE.md pitfall #29). It now colours the member by
+  `ComplianceGrading.classify` over the member's `ComplianceGrading.for_member`
+  grading: the matching profile's threshold overrides, else the department's
+  thresholds, and the department's threshold type — the matrix's own
+  standing. Compliant is green, at risk yellow, non-compliant red; not
+  applicable and exempt are unchanged. The profile card, My Crew and the
+  member training print page all show it. **Colours change in every
+  department, including one with no compliance configuration**: under the
+  default 100% / 75% thresholds a member meeting at least half but under 75%
+  now reads red (Non-Compliant) where the card read yellow; a member who meets
+  everything but holds a certificate expiring within 90 days reads green, not
+  yellow; a member whose only expired certificate is superseded by a renewal,
+  or graded by no requirement, reads by standing rather than red; a member
+  nothing grades reads Not Applicable whatever their certificates. A
+  department with lowered thresholds — on the configuration or on a profile —
+  and one using "all required" now see those honoured on the card. The
+  certificate counts stay in the response and on the card's Expiring Soon
+  tile for information. An expired certificate a requirement grades still
+  lowers the standing through that requirement's "expired" status, so under
+  lowered thresholds such a member can read yellow or green, as on the
+  matrix, while the tile still says "(1 expired)". The tile and the colour can
+  also differ for up to a month: with the current month left out of
+  compliance, the grader judges a certificate at the end of last month, so
+  one that lapsed this month is graded completed until the month ends, while
+  the tile counts it expired from its expiry date. No migration. Tests:
+  `tests/test_profile_card_standing.py`.
+- **Officer-facing compliance views were not compliance-profile-aware (D10
+  follow-up) — ✅ fixed, owner decision 2026-11-20 ("officer compliance
+  views").** The period roster (`GET /training/records/member-status`), the
+  competency matrix (`GET /training/competency-matrix`), the compliance CSV
+  and PDF export cells, the compliance forecast
+  (`GET /training/reports/compliance-forecast`) and Scheduling's Shift
+  Compliance report graded every applicable requirement against the
+  department's settings. Each now resolves the member through
+  `ComplianceGrading.for_member`, as the compliance matrix does, with one
+  compliance-config load per request. The views that classify a standing take
+  the profile's threshold overrides too: the roster's colour, and the
+  forecast's new `current_standing`, which the Training Enhancements tab and
+  the Compliance Officer dashboard now colour the current figure by instead
+  of their own fixed 80% / 50% rule. The others show no member standing, so
+  the profile narrows their cells only: a requirement outside the member's
+  profile reads `not_applicable` on the competency matrix, prints **N/A** in
+  the CSV and PDF (the PDF's unmet-cell count falls with it), and the member
+  is no longer listed under it on the Shift Compliance report.
+  **Reported numbers change for departments that use compliance profiles**:
+  a profiled member's roster met/total and colour, competency readiness,
+  export cells, forecast percentages and at-risk list, and a shift
+  requirement's member count and compliance rate. The forecast's 30/60/90
+  projections can **fall** for a profiled member: they still subtract every
+  certificate expiring in the window, whatever grades it, now from the
+  profile's smaller set (two requirements met plus one unrelated certificate
+  expiring in 20 days read 50% at 30 days, where three requirements read
+  33.3%). The exports and forecast also now use the department's
+  include-current-month setting, as the matrix does, instead of always
+  counting the current month, so with it off a cell or figure can move near
+  a month boundary (a certificate that lapsed this month stays Met until the
+  month ends). Unchanged: a department with no compliance configuration or
+  whose profiles match nobody, each view's population (the roster's
+  "exempt" rows, and the Shift Compliance report still listing
+  compliance-exempt members), row order, response shapes apart from the
+  added forecast field, waivers, catch-up and not-yet-held handling. No
+  migration. Tests: `tests/test_officer_compliance_views_profiles.py`.
+- **Profiles: optional requirements and equal priorities (D10 follow-up) —
+  open.** `optional_requirement_ids` has no reader, and two active profiles of
+  equal priority resolve in an undefined order.
+- **The compliance exports grade Met / Not Met from the report period's
+  records only — open, found 2026-11-20, not confirmed by running.**
+  `ReportExportService.stream_compliance_csv` and `generate_compliance_pdf`
+  hand `_requirement_cells` only the member's records completed inside the
+  report period (Jan 1 to today by default), while the compliance matrix
+  grades each requirement from the records its own window needs
+  (`load_graded_records`). By reading the code, a certification or one-time
+  requirement completed before the period would print **Not Met** in the
+  export beside a matrix that shows it met (CLAUDE.md pitfall #29). Fixing it
+  changes what the export's period means, so it needs its own decision.
+- **The Compliance Officer dashboard's forecast summary cards keep fixed
+  colour bands — open.** The department "Current" average card colours green
+  at 80% or more and yellow below, and the 30/60/90 average cards and every
+  member's 30/60/90 badge keep their 80% / 50% bands. These are averages and
+  estimates, not a member's standing, so the 2026-11-20 change colours only
+  each member's current figure by its standing; whether the averages should
+  take the department's thresholds is not decided.
 - **A requirement with zero currently-applicable members renders as a
   failing 0% (CMP4-4, LOW) — ✅ fixed 2026-09-29, workflow review W29-4.**
   `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`
@@ -8656,13 +8734,41 @@ single-page form. What it changes, and what it leaves:
   the training details.** The rest of Training Info is drawn locked; reopen
   attendance to change it. The event's own fields keep the finalized-event
   rules under "Events — Edit Form Gaps" below.
-- **A Training template fills the event's own fields, not its training
+- ~~**A Training template fills the event's own fields, not its training
   details.** Training Admin's Create Session now offers the department's
   Training templates, as the Events page does, but `EventTemplate` has no
   training fields (course, type, hours, instructor, certification, links),
   so Training Info opens on its defaults. Carrying them needs template
   fields that do not exist yet: an owner decision, since it changes what a
-  saved template is.
+  saved template is.~~ **Resolved 2026-11-20 (owner decision, "Templates
+  keep training"):** a Training template stores the course (a library
+  course, a one-off name and code, or none), the training type, credit hours
+  and their source, the lead instructor and the certification settings
+  (issues certification, number prefix, issuing agency, expiry), in
+  `event_templates.training_details`, and picking it fills Training Info as
+  well as the event. The Event Templates editor has a Training Details
+  section for them, and Save as Template on a Training event saves its
+  session's. Still not carried, because they were not in the owner's list:
+  the category, program, phase and requirement links, Counts toward
+  attendance, and the completion settings (counts toward certification,
+  auto-create records, completion sign-off and its deadline); they start on
+  their defaults. A template whose library course is no longer in the Course
+  Library opens on No course yet, and one whose lead instructor is no longer
+  a current member opens with Lead instructor empty, each with a note on
+  Training Info. The entry below still applies to an event made from a
+  template: a library-course template saved with a blank instructor or
+  expiry gets the course's.
+- **A template's lead instructor survives that member's anonymisation, as a
+  training session's instructor does.** `training_details` holds the
+  instructor's member id and name as JSON, and neither
+  `member_anonymization_service.py` nor `user_deletion_service.py` touches
+  it — nor `training_sessions.instructor`, the free-text name a session
+  stores beside its `instructor_id`, which has the same gap and was not
+  recorded before. Neither carries a foreign key, so a removed member leaves
+  a dangling id, which applying the template clears. Scrubbing both on
+  anonymisation is a change to the anonymisation service, left for an owner
+  decision. A department-template export writes `training_details` as null,
+  so neither the name nor an org-local course id leaves the installation.
 - **Under a library course, a blank Lead Instructor or Expiration is saved
   as the course's.** The backend reads `null` for those two as "use the
   course's value", on create and on edit, so an officer cannot clear either
@@ -9710,6 +9816,14 @@ only because code and tests cite it by name; history in
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)
+
+> **Accepted 2026-11-01 (owner decision: leave as is — at-least-once, and
+> collectors deduplicate).** Deduplicate on `X-Logbook-First-Seq` /
+> `X-Logbook-Last-Seq`, the chain positions. The `First-Id` / `Last-Id`
+> headers named below were the right key when this was written; since
+> SEC2-28-10 (2026-10-12) rows ship in chain order and the ids in a batch need
+> not be contiguous or ascending (OPS-13). The text below is the original
+> finding.
 
 `audit_ship_service._get_or_create_state` reads the shipping watermark with
 `SELECT ... FOR UPDATE`, added by the security review (SEC2-28-9) because this
@@ -10774,13 +10888,20 @@ beyond the feature.
   restates every evaluation's credit, or removes it where evaluations no
   longer count; a member taken off a shift, or marked No-show, loses that
   shift's evaluation credit. A shift that has started cannot be deleted, so an
-  evaluated one never is. The agency case is left: tying credit to the
-  agency's switch would also take back every past credit when an agency is
-  switched off, which needs an owner ruling.
-- **Credit is not re-stated when an evaluation's combined scope shrinks.** An
-  evaluation re-saved after one of its programs drops out of the combined
-  scope (its form cleared while the enrollment stays active) keeps the credit
-  it gave that program until the evaluation is saved again with it.
+  evaluated one never is. **The agency case is accepted (owner decision,
+  2026-11-16: keep it).** An evaluation already credited keeps its credit when
+  its outside entry moves to an agency that does not evaluate shifts: tying
+  credit to the agency's switch would also take back every past credit when an
+  agency is switched off.
+- ~~**Credit is not re-stated when an evaluation's combined scope shrinks.**~~
+  Resolved 2026-11-16 (owner decision: take it back). An evaluation re-saved
+  after one of its programs drops out of the combined scope (its form cleared
+  while the enrollment stays active) now revokes the credit it gave that
+  program; the programs it still counts for keep theirs. The credit pass reads
+  what the evaluation credited from the ledger, so it needs no record of the
+  earlier scope. A shift's evaluations are fixed once it ends, so this arises
+  on a shift still under way or on an outside shift.
+  `tests/test_combined_scope_shrink.py`.
 - ~~**A deactivated evaluation form is still offered and required**~~
   Resolved 2026-11-14 (owner decision): a form a program or the general-form
   setting uses cannot be deactivated, and an inactive form cannot be newly
@@ -10797,6 +10918,29 @@ beyond the feature.
   2026-11-14: restore now applies only to a rejected entry and answers 400
   otherwise, as approve does for one that is not pending; restore, approve and
   reject all read the entry under a row lock.
+
+## OPS-14 — A Driver-Exception Requester Cannot Deny Their Own Request (2026-11-16, app review A9)
+
+`DriverExceptionService.review_exception` decides a pending driver
+qualification exception, approve or deny, and refuses when the reviewer raised
+the request or is the member it is for. It refuses a **denial** on the same
+grounds, with a message about approving, and the Driver Exceptions panel hides
+Deny as well as Approve ("another chief must decide").
+
+Elsewhere only the granting direction needs a second person. Finance states it
+outright ("Denial is left unguarded: withdrawing your own request is not a
+conflict"), training reviews guard approval only, and this service's own
+`revoke_exception` needs no second person because withdrawing permission is the
+safe direction. There is no other way to withdraw a pending exception, so a
+chief who raised one in error waits for another chief to deny it.
+
+Options:
+
+1. **Let the requester and the beneficiary deny** — wrap both guards in
+   `if approve:` in `review_exception` and show Deny on the panel. Approval
+   still needs another chief.
+2. **Keep it as is** — a safety exception is decided by another chief either
+   way — and change the backend's message, which says "approve" on a denial.
 
 ## D11 — Erasing a Member's Uploaded Files: What Remains (2026-11-16)
 
@@ -10828,11 +10972,27 @@ each case):
 
 **Accepted residuals:**
 
-- **A permanent delete's files go after its commit.** A process killed, or a
-  remote store unreachable, between the commit and the deletes leaves files no
-  later run can find. A failed delete is logged and counted
-  (`files_not_deleted` in the `user_hard_deleted` audit event); closing the
-  crash window would need a durable pending-deletion table and a migration.
+- ~~**A permanent delete's files go after its commit.**~~ **Resolved
+  2026-11-20** (owner decision "Hard-delete crash gap"): the files are queued
+  in `pending_file_deletions` in the delete's own transaction, removed right
+  after the commit, and an hourly `pending_file_deletions` sweep retries what
+  a crash or an unreachable store left. `files_not_deleted` in the
+  `user_hard_deleted` audit event now means files left queued for the sweep.
+- **A queued file that never deletes is visible only in logs and the
+  table.** A remote store that is gone, or a path that no longer confines to
+  its department's area (a moved uploads root), keeps its row, retried every
+  hour and logged as a warning after 24 failures. There is no screen listing
+  them and no way to dismiss one short of a database edit.
+- **A crash after the delete commits can lose its audit record.** The
+  `user_hard_deleted` event is written after the delete's commit and committed
+  with the request, so a process killed in between keeps the delete (and now
+  the queued files) but loses the critical audit row. Writing the event
+  inside the delete's transaction would close it, but changes the event's
+  shape (the per-file counts are known only after the commit), so it awaits
+  the owner.
+- **Member deletes outside the endpoint queue nothing**:
+  `historical_import_undo` and the onboarding reset delete users directly and
+  leave any files their rows named.
 - **An upload racing a permanent delete** (a certificate stored for the member
   after the files were collected) is orphaned.
 - **A relocation or remote migration running at the same moment** can rewrite
@@ -10840,19 +11000,53 @@ each case):
   other.
 - **Files orphaned by permanent deletes before this fix** are not found or
   cleaned up; there is no sweep for them.
-- **Bare-string attachment entries** (the column's pre-upload-endpoint shape)
-  are invisible to `upload_relocation.collect_references`, so the shared-file
-  check cannot see them. They carry no path, so nothing deletes them either.
-- **The `TrainingRecordUpdate` path sets `attachments` blindly**, and can
-  replace dict entries with strings, which then name no file for either
-  erasure path to find.
-- **`delete_submission_attachment` does not check voided records** before
-  unlinking: a certificate a voided record still names can be deleted by the
-  member while the record's entry remains.
-- The shared-file check (`member_files.referenced_elsewhere`) covers every
-  writer of the self-report, training-record and waiver-document storage
-  areas, not every file column in the schema; there is no ratchet tying
-  `collect_references` to every file column.
+- **A certificate kept for a voided record is outside the retention sweep**
+  once the submission stops naming it. Removing a submission attachment, or
+  deleting the submission, now keeps a file another row still names (closed
+  2026-11-20, below), and after a reversal that row is the voided record.
+  `self_report_attachment_retention` walks submissions only, so it never
+  reaches that certificate again; it stays until the member is anonymised or
+  permanently deleted.
+- **An approval racing an attachment removal can lose the file.** Neither
+  `delete_submission_attachment`, `delete_submission` nor the approval locks
+  the submission (`TrainingSubmissionService.get_submission` reads without
+  `FOR UPDATE`). An approval that read the list before the member's removal
+  committed copies the removed entry onto its new record; if the member's
+  post-commit reference check runs before the approval commits, it misses
+  that record and deletes the file. Closing it is pitfall #27's shape: lock
+  the submission in both delete paths and in the approval. Escalated, not
+  fixed: it changes the approval path, which this change does not otherwise
+  touch.
+- **`DELETE /training/submissions/{id}/attachments/{index}` is not safe to
+  repeat** (pitfall #36). A retry after a lost 204 removes whichever entry has
+  moved into that index, and its file. Fixing it needs an entry identity the
+  client can name (the entries carry none) — an API change, so escalated.
+- **File names on path-less entries survive anonymisation.** The
+  anonymisation step relabels only entries naming a stored file, so a
+  `{"file_name": ...}` entry with no `file_path` (what the 2026-11-20
+  migration made of the old bare strings) keeps the uploader's filename, which
+  can be the member's name, on their submissions and records.
+- **A training record's own uploaded file has no removal route.** Officers
+  and members can add one (`POST /training/records/{id}/attachments`) but not
+  remove it; it leaves only with retention, anonymisation or a permanent
+  delete. A `DELETE /training/records/{id}/attachments/{index}` mirroring the
+  submission route is the shape if the owner wants one.
+
+**Closed 2026-11-20** (file-handling gaps, owner decision of that date):
+
+- Request bodies can no longer write `attachments` on a training record or a
+  training submission: `TrainingRecordCreate`, `TrainingRecordUpdate`,
+  `TrainingSubmissionCreate` and `TrainingSubmissionUpdate` answer 422 for the
+  field, null and `[]` included. The upload routes and the approval copy are
+  its only writers. Migration `0c22a95b94b8` settled the bare-string entries
+  already stored as `{"file_name": ...}`, losslessly.
+- Removing a submission attachment, and deleting a whole submission, go
+  through `member_files.remove_unreferenced_files`: a file a voided record (or
+  any other collected row) still names is kept.
+- An upload to a voided training record is refused, as an edit already was.
+- `tests/test_file_reference_coverage_ratchet.py` ties every file-path column
+  to `upload_relocation.collect_references` or to a commented allowlist, so
+  the shared-file check's "every other row" is enforced rather than assumed.
 
 Related, still open: **LIFE-11** (the separation letter in Documents), and the
 Member Files personal-folder documents, which neither path touches.

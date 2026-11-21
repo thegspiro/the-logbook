@@ -63,7 +63,7 @@ def _required_value(column: Any, organization_id: str, start: datetime) -> Any:
     if getattr(column.type, "enums", None):
         return column.type.enums[0]
     python_type = column.type.python_type
-    if python_type is datetime:
+    if issubclass(python_type, datetime):
         end = column.key == "end_datetime"
         return start + timedelta(hours=1 if end else 0)
     if python_type is str:

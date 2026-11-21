@@ -111,6 +111,11 @@ export interface Event {
   /** Server-decided: may this caller reopen finalized attendance —
    * events.reopen_attendance, or training.manage on a Training event. */
   can_reopen_attendance?: boolean;
+  /** Guests a coordinator counted at an outreach event nobody signed in at. */
+  guest_headcount?: number | null;
+  /** Server-decided: events.manage on an event that counts as community
+   * outreach. Detail endpoint only. */
+  can_record_guest_headcount?: boolean;
   created_at: string;
   updated_at: string;
   rsvp_count?: number;
@@ -753,6 +758,28 @@ export interface RSVPHistory {
 export type RecurrencePattern =
   'daily' | 'weekly' | 'biweekly' | 'monthly' | 'monthly_weekday' | 'annually' | 'annually_weekday' | 'custom';
 
+/**
+ * The training details a Training template stores (owner decision
+ * 2026-11-20), as the backend's EventTemplateTrainingDetails settles them:
+ * always complete, snake_case on the wire. The backend is the authority on
+ * this shape; `toTemplateTrainingDetails` builds it for a save.
+ */
+export interface EventTemplateTrainingDetails {
+  course_mode: 'none' | 'library' | 'oneoff';
+  course_id: string | null;
+  course_name: string | null;
+  course_code: string | null;
+  training_type: string;
+  credit_hours: number | null;
+  credit_hours_source: 'duration' | 'course' | 'manual';
+  instructor_id: string | null;
+  instructor: string | null;
+  issues_certification: boolean;
+  certification_number_prefix: string | null;
+  issuing_agency: string | null;
+  expiration_months: number | null;
+}
+
 export interface EventTemplate {
   id: string;
   organization_id: string;
@@ -780,6 +807,8 @@ export interface EventTemplate {
   reminder_target: 'going' | 'all' | 'none';
   reminder_schedule: number[];
   custom_fields_template?: Record<string, unknown>;
+  /** Training templates only; null when none were saved. */
+  training_details?: EventTemplateTrainingDetails | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -810,6 +839,8 @@ export interface EventTemplateCreate {
   reminder_target?: 'going' | 'all' | 'none' | undefined;
   reminder_schedule?: number[] | undefined;
   custom_fields_template?: Record<string, unknown> | undefined;
+  /** Training templates only. `null` clears it on an update. */
+  training_details?: EventTemplateTrainingDetails | null | undefined;
 }
 
 export interface RecurringEventCreate {
