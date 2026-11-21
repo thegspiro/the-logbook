@@ -16,8 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — Feature 24 (Meetings & minutes, pass 14) is in progress; this commit
-records PR #4504's merge below.
+**PR [#4507](https://github.com/thegspiro/the-logbook/pull/4507)**
+(branch `claude/security-review-meetings-minutes-p14` —
+`claude/security-review-meetings-minutes-p13` already carries a merged PR,
+#4232 pass 13, so this pass uses a `-p14` suffix per CLAUDE.md Pitfall
+#24): Feature 24 (Meetings & minutes), pass 14 — watchdog pickup (the
+dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). PR #4504
+(Feature 23, Medical supplies, pass 21) merged (`b739fcae`) since the last
+iteration; row 23 marked ✅ below. Real delta since pass 13 (baseline
+`47d68bce`): a whole new member-initiated business-meeting waiver-request
+workflow (a new endpoint file, `AttendanceWaiverService` generalized to a
+second workflow, three new shared frontend pages, three migrations), plus
+two correctness fixes already landed by other work (one closes this
+feature's own carried-forward unlocked-find-or-create item). Traced the
+shared engine's tenant- and workflow-isolation end to end for the meeting
+side. **0 fixed, 0 newly flagged.** Full write-up:
+`docs/security-review/MM-24-meetings-minutes.md`'s **Pass 14** section.
+
+Row 24 → ✅ (pending this PR's merge); next is Feature 25 (Messaging &
+notifications) — re-check `list_pull_requests` fresh rather than trusting
+this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 21, PR #4504, merged), preserved for history</summary>
