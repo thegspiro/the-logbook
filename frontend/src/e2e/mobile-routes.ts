@@ -769,6 +769,13 @@ export const ALL_ROUTES: RouteCheck[] = [
     expectText: 'County burn ban in effect through Sunday',
   },
   { path: '/admin-hours', maxSmallTargets: 0, maxTinyText: 0 },
+  {
+    path: '/admin-hours/manage',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['admin_hours.manage'],
+    expectText: 'Public education and community risk reduction',
+  },
   { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory/my-equipment', maxSmallTargets: 0, maxTinyText: 0 },
@@ -1111,6 +1118,13 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/action-items', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/forms', maxSmallTargets: 0, maxTinyText: 0, permissions: ['forms.manage'] },
   { path: '/store', maxSmallTargets: 0, maxTinyText: 0, permissions: ['storefront.view'] },
+  {
+    path: '/store/orders',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['storefront.view'],
+    expectText: 'ORD-2026-0142',
+  },
   // The store console: its overview, Orders and Payments tabs crashed on a
   // malformed response; see the Training hub block above.
   {
@@ -1171,6 +1185,16 @@ export const ALL_ROUTES: RouteCheck[] = [
   // dashboard under the name "/settings" — a green line for a page that never
   // rendered. Granting it is what makes the entry mean anything.
   { path: '/settings', maxSmallTargets: 0, maxTinyText: 0, permissions: ['settings.manage'] },
+  // Role management reads /roles, which ten other screens also read; the
+  // `roles` fixture serves it here only.
+  {
+    path: '/settings/roles',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['positions.manage_permissions'],
+    fixture: { roles: true },
+    expectText: 'Apparatus & Equipment Committee',
+  },
   // The second of the seven SettingsLayout screens, and the only other one that
   // needs no grant. Two screens is what keeps the shared shell honest: a fix to
   // the section strip that only suits one screen's section list fails here.
@@ -1653,9 +1677,29 @@ export const ALL_ROUTES: RouteCheck[] = [
     expectText: '3 records · retired',
   },
   { path: '/medical-supplies', maxSmallTargets: 0, maxTinyText: 0, permissions: ['inventory.view_medical'] },
+  {
+    path: '/medical-supplies/categories',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.view_medical', 'inventory.manage'],
+    fixture: { medicalCategories: true },
+    expectText: 'Airway management',
+  },
   { path: '/ip-security', maxSmallTargets: 0, maxTinyText: 0, permissions: ['security.manage'] },
+  {
+    path: '/ip-security/my-requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: '203.0.113.48',
+  },
   // Both are settings.manage-gated, so they cost no extra sign-in between them.
   { path: '/integrations', maxSmallTargets: 0, maxTinyText: 0, permissions: ['settings.manage'] },
+  {
+    path: '/claude/connections',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: 'Claude on the station tablet',
+  },
   {
     path: '/integrations/historical-import',
     maxSmallTargets: 0,
