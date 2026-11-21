@@ -1189,13 +1189,32 @@ class TestBiannualRequirements:
             frequency=SimpleNamespace(value="biannual"),
             required_hours=10.0,
         )
-        # Inside the 2025-2026 window: the override reads only the records the
-        # requirement counts, as the compliance matrix does. An out-of-window
-        # certificate is covered by test_biannual_lapse_parity.py.
         records = [
             _make_record(
                 hours_completed=12.0,
-                completion_date=date(2025, 6, 1),
+                completion_date=date(2024, 6, 1),
+                expiration_date=date(2026, 1, 1),
+            ),
+        ]
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 6, 15)
+        )
+        # The record predates the 2025-2026 window, so it counts for nothing;
+        # the shared grader's expiry override reads the window's records only,
+        # so this is unmet rather than expired.
+        assert result["is_met"] is False
+        assert result["cert_expired"] is False
+        assert result["progress_percentage"] == 0.0
+
+    def test_biannual_hours_with_a_lapsed_card_in_the_window(self):
+        req = _make_requirement(
+            frequency=SimpleNamespace(value="biannual"),
+            required_hours=10.0,
+        )
+        records = [
+            _make_record(
+                hours_completed=12.0,
+                completion_date=date(2025, 3, 1),
                 expiration_date=date(2026, 1, 1),
             ),
         ]

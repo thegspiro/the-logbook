@@ -42,8 +42,7 @@ async def _three(req, records):
     """(matrix status, My Training is_met, progress check is_complete)."""
     grade = _grade_member_requirement(req, records, TODAY)
     detail = TrainingService.evaluate_requirement_detail(req, records, TODAY)
-    # Everything preloaded, the department's include-current-month setting
-    # included, so the check reads nothing from a database.
+    # Everything preloaded, so the check reads nothing from a database.
     progress = await TrainingService(db=None).check_requirement_progress(
         "user-1",
         req.id,
@@ -52,6 +51,8 @@ async def _three(req, records):
         requirement=req,
         completed_records=records,
         today=TODAY,
+        # The department setting, as a batch caller passes it; without it
+        # the check would read it from the database.
         org_include_current_month=True,
     )
     return grade.status, detail["is_met"], progress.is_complete
