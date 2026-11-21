@@ -41,6 +41,10 @@ ALLOWED = {
     "services/upload_encryption.py",
     "services/upload_relocation.py",
     "services/remote_migration.py",
+    # The orphaned member-file sweep walks the uploads volume for files no row
+    # names, so it works on the local volume by design (owner decision
+    # 2026-11-21: local only); it deletes through file_storage.delete.
+    "services/orphaned_member_files.py",
     # Not uploads: the log file, a temporary PDF an election email is
     # built from and removes again, and ffmpeg's scratch files.
     "core/logging.py",
