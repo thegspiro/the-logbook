@@ -7044,12 +7044,45 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   evaluator that computes one; it decides no status. Tests:
   `tests/test_compliance_export_period.py`.
 - **The Compliance Officer dashboard's forecast summary cards keep fixed
-  colour bands — open.** The department "Current" average card colours green
-  at 80% or more and yellow below, and the 30/60/90 average cards and every
-  member's 30/60/90 badge keep their 80% / 50% bands. These are averages and
-  estimates, not a member's standing, so the 2026-11-20 change colours only
-  each member's current figure by its standing; whether the averages should
-  take the department's thresholds is not decided.
+  colour bands — ✅ resolved 2026-11-21 (owner direction: follow the
+  department's and the member's thresholds).** Each member's 30/60/90-day
+  projection now carries a standing (`forecast_30_standing`, …), classified
+  by the member's own grading exactly as `current_standing` is, so a figure
+  and its colour come from one `ComplianceGrading.classify` call. The four
+  department average cards are computed server-side by
+  `ComplianceGrading.classify_average`: the mean of the graded members'
+  figures, rounded to one decimal, classified by the department's thresholds
+  and threshold type (never a profile's). Under `all_required` an average is
+  compliant only when every graded member is compliant at that horizon,
+  otherwise at risk when the mean reaches the at-risk threshold, otherwise
+  non-compliant — a default taken pending the owner's answer. Both the
+  dashboard and the Training Enhancements forecast colour with
+  `STANDING_TEXT_COLORS`. The threshold ladder is written once
+  (`_standing_for_pct`) and shared by the member and the average. The
+  entry's "80% / 50%" was 80% / 60% for the average cards. `GET
+/training/reports/compliance-forecast` now returns `{members, averages}`
+  instead of a bare list, so the D10 entry's "response shapes apart from the
+  added forecast field" no longer holds for it. A profiled member can read
+  green beside a department average that reads red: the member is measured
+  against their profile, the average against the department. Tests:
+  `TestClassifyAverage` / `TestProjectedStanding` in
+  `tests/test_training_compliance.py`, `TestForecastStandingsAndAverages` in
+  `tests/test_officer_compliance_views_profiles.py`, and the forecast cases
+  in `ComplianceOfficerDashboard.test.tsx` and
+  `TrainingEnhancementsTab.test.tsx`.
+- **The compliance forecast's projection charges every certificate expiring
+  in the window — open, owner decision pending.** The 30/60/90-day estimate
+  subtracts one met requirement for each completed record whose expiry falls
+  in the window, including a certificate no graded requirement reads and a
+  superseded record whose renewal already exists. Since 2026-11-21 that
+  estimate drives a standing colour, so on a default install (100 / 75, no
+  profiles) a fully compliant member with three graded requirements and one
+  unrelated certificate expiring in 20 days reads 66.7% non-compliant (red)
+  at 30 days; with four requirements, 75.0% at risk. The estimate's inputs
+  were deliberately not changed. The options are to keep colouring the
+  estimate as it is, to narrow it to certificates a graded requirement reads
+  (and skip superseded renewals), or to re-grade each requirement at today +
+  N days.
 - **A requirement with zero currently-applicable members renders as a
   failing 0% (CMP4-4, LOW) — ✅ fixed 2026-09-29, workflow review W29-4.**
   `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`

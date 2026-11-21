@@ -1652,13 +1652,31 @@ const ReportsSection: React.FC = () => {
                       )}
                     </td>
                     <td data-label="30 Days" className="py-2 pr-4">
-                      {f.forecast_30_days === null ? 'N/A' : `${f.forecast_30_days}%`}
+                      {f.forecast_30_days === null ? (
+                        <span className="text-theme-text-muted">N/A</span>
+                      ) : (
+                        // An estimate, classified by the member's grading
+                        // like the current figure.
+                        <span className={STANDING_TEXT_COLORS[f.forecast_30_standing]}>{f.forecast_30_days}%</span>
+                      )}
                     </td>
                     <td data-label="60 Days" className="py-2 pr-4">
-                      {f.forecast_60_days === null ? 'N/A' : `${f.forecast_60_days}%`}
+                      {f.forecast_60_days === null ? (
+                        <span className="text-theme-text-muted">N/A</span>
+                      ) : (
+                        // An estimate, classified by the member's grading
+                        // like the current figure.
+                        <span className={STANDING_TEXT_COLORS[f.forecast_60_standing]}>{f.forecast_60_days}%</span>
+                      )}
                     </td>
                     <td data-label="90 Days" className="py-2 pr-4">
-                      {f.forecast_90_days === null ? 'N/A' : `${f.forecast_90_days}%`}
+                      {f.forecast_90_days === null ? (
+                        <span className="text-theme-text-muted">N/A</span>
+                      ) : (
+                        // An estimate, classified by the member's grading
+                        // like the current figure.
+                        <span className={STANDING_TEXT_COLORS[f.forecast_90_standing]}>{f.forecast_90_days}%</span>
+                      )}
                     </td>
                     <td data-label="At Risk" className="py-2">
                       {f.at_risk_requirements.length > 0 && (

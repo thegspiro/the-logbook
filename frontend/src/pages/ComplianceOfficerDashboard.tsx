@@ -45,7 +45,8 @@ import type {
   AnnualComplianceReport,
   RecordCompleteness,
   ComplianceAttestation,
-  ComplianceForecast,
+  ComplianceForecastAverage,
+  ComplianceForecastReport,
 } from '../types/training';
 
 /*
@@ -1041,7 +1042,7 @@ const AttestationsSection: React.FC = () => {
 // ============================================
 
 const ForecastSection: React.FC = () => {
-  const [forecasts, setForecasts] = useState<ComplianceForecast[]>([]);
+  const [report, setReport] = useState<ComplianceForecastReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -1051,7 +1052,7 @@ const ForecastSection: React.FC = () => {
         setLoading(true);
         const data: unknown = await reportExportService.getComplianceForecast();
         if (!isForecastReport(data)) throw new Error('Unexpected compliance forecast response');
-        setForecasts(data.members);
+        setReport(data);
       } catch {
         setError('Failed to load compliance forecast');
       } finally {
@@ -1064,7 +1065,8 @@ const ForecastSection: React.FC = () => {
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} />;
 
-  if (forecasts.length === 0) {
+  const forecasts = report?.members ?? [];
+  if (!report || forecasts.length === 0) {
     return (
       <div className="text-theme-text-muted py-12 text-center">
         <TrendingUp className="mx-auto mb-3 h-12 w-12 opacity-50" />
@@ -1073,13 +1075,10 @@ const ForecastSection: React.FC = () => {
     );
   }
 
-  // Department-wide averages over the members something grades. A member with
-  // no applicable requirement has no percentage, and averaging them in at 100%
-  // inflated every figure here.
-  const avgCurrent = averageOf(forecasts.map((f) => f.current_compliance_percentage));
-  const avg30 = averageOf(forecasts.map((f) => f.forecast_30_days));
-  const avg60 = averageOf(forecasts.map((f) => f.forecast_60_days));
-  const avg90 = averageOf(forecasts.map((f) => f.forecast_90_days));
+  // The department's averages and their standings are the server's: the mean
+  // over graded members, classified by the department's thresholds and
+  // threshold type (CLAUDE.md pitfall #29).
+  const { averages } = report;
   const atRiskMembers = forecasts.filter((f) => f.expiring_certifications.length > 0).length;
 
   return (
@@ -1096,15 +1095,10 @@ const ForecastSection: React.FC = () => {
 
       {/* Department Averages */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <SummaryCard
-          label="Current"
-          value={formatAverage(avgCurrent)}
-          color={avgCurrent === null ? 'muted' : avgCurrent >= 80 ? 'green' : 'yellow'}
-          icon={Shield}
-        />
-        <SummaryCard label="30 Days" value={formatAverage(avg30)} color={forecastColor(avg30)} icon={TrendingUp} />
-        <SummaryCard label="60 Days" value={formatAverage(avg60)} color={forecastColor(avg60)} icon={TrendingUp} />
-        <SummaryCard label="90 Days" value={formatAverage(avg90)} color={forecastColor(avg90)} icon={TrendingUp} />
+        <StandingCard label="Current" average={averages.current} icon={Shield} />
+        <StandingCard label="30 Days" average={averages.days_30} icon={TrendingUp} />
+        <StandingCard label="60 Days" average={averages.days_60} icon={TrendingUp} />
+        <StandingCard label="90 Days" average={averages.days_90} icon={TrendingUp} />
         <SummaryCard
           label="At Risk"
           value={String(atRiskMembers)}
@@ -1167,13 +1161,13 @@ const ForecastSection: React.FC = () => {
                     <StandingPct pct={f.current_compliance_percentage} standing={f.current_standing} />
                   </td>
                   <td data-label="30 Days" className="px-4 py-2 text-center">
-                    <PctBadge pct={f.forecast_30_days} />
+                    <StandingPct pct={f.forecast_30_days} standing={f.forecast_30_standing} />
                   </td>
                   <td data-label="60 Days" className="px-4 py-2 text-center">
-                    <PctBadge pct={f.forecast_60_days} />
+                    <StandingPct pct={f.forecast_60_days} standing={f.forecast_60_standing} />
                   </td>
                   <td data-label="90 Days" className="px-4 py-2 text-center">
-                    <PctBadge pct={f.forecast_90_days} />
+                    <StandingPct pct={f.forecast_90_days} standing={f.forecast_90_standing} />
                   </td>
                   <td data-label="Expiring Certs" className="px-4 py-2 text-center">
                     <span
@@ -1220,19 +1214,8 @@ interface SummaryCardProps {
   icon: React.ElementType;
 }
 
-/** Mean of the percentages that exist; null when none does. */
-const averageOf = (values: Array<number | null>): number | null => {
-  const graded = values.filter((v): v is number => v !== null);
-  return graded.length === 0 ? null : graded.reduce((s, v) => s + v, 0) / graded.length;
-};
-
-const formatAverage = (value: number | null): string => (value === null ? 'N/A' : `${value.toFixed(1)}%`);
-
 const pctColor = (pct: number | null): SummaryCardProps['color'] =>
   pct === null ? 'muted' : pct >= 80 ? 'green' : pct >= 50 ? 'yellow' : 'red';
-
-const forecastColor = (pct: number | null): SummaryCardProps['color'] =>
-  pct === null ? 'muted' : pct >= 80 ? 'green' : pct >= 60 ? 'yellow' : 'red';
 
 const SummaryCard: React.FC<SummaryCardProps> = ({ label, value, color, icon: Icon }) => {
   const colorMap = {
@@ -1256,6 +1239,27 @@ const SummaryCard: React.FC<SummaryCardProps> = ({ label, value, color, icon: Ic
   );
 };
 
+/**
+ * A forecast average card, coloured by the standing the server classified it
+ * with (the department's thresholds), not by bands of this screen's own.
+ */
+const StandingCard: React.FC<{ label: string; average: ComplianceForecastAverage; icon: React.ElementType }> = ({
+  label,
+  average,
+  icon: Icon,
+}) => {
+  const colour = average.pct === null ? 'text-theme-text-muted' : STANDING_TEXT_COLORS[average.standing];
+  return (
+    <div className="card p-4">
+      <div className="mb-1 flex items-center gap-2">
+        <Icon className={`h-4 w-4 ${colour}`} />
+        <p className="text-theme-text-muted text-xs">{label}</p>
+      </div>
+      <p className={`text-xl font-bold ${colour}`}>{average.pct === null ? 'N/A' : `${average.pct.toFixed(1)}%`}</p>
+    </div>
+  );
+};
+
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const config: Record<string, { bg: string; text: string; label: string }> = {
     compliant: { bg: 'bg-green-500/10', text: 'text-green-500', label: 'Compliant' },
@@ -1272,9 +1276,8 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
 };
 
 /**
- * The forecast's current figure, coloured by the standing the server
- * classified it with (the member's profile or the department's thresholds),
- * so this table and the Training Enhancements tab cannot disagree about a
+ * A forecast figure, coloured by the standing the server classified it with
+ * (the member's profile or the department's thresholds), so this table and the Training Enhancements tab cannot disagree about a
  * member (CLAUDE.md pitfall #29).
  */
 const StandingPct: React.FC<{ pct: number | null; standing: Standing }> = ({ pct, standing }) =>
@@ -1282,17 +1285,6 @@ const StandingPct: React.FC<{ pct: number | null; standing: Standing }> = ({ pct
     <span className="text-theme-text-muted text-sm">N/A</span>
   ) : (
     <span className={`text-sm font-semibold ${STANDING_TEXT_COLORS[standing]}`}>{pct.toFixed(1)}%</span>
-  );
-
-const PctBadge: React.FC<{ pct: number | null }> = ({ pct }) =>
-  pct === null ? (
-    <span className="text-theme-text-muted text-sm">N/A</span>
-  ) : (
-    <span
-      className={`text-sm font-semibold ${pct >= 80 ? 'text-green-500' : pct >= 50 ? 'text-yellow-500' : 'text-red-500'}`}
-    >
-      {pct.toFixed(1)}%
-    </span>
   );
 
 export default ComplianceOfficerDashboard;

@@ -287,6 +287,41 @@ describe('TrainingEnhancementsTab compliance forecast', () => {
     });
   });
 
+  it('colours each projection by the standing the server classified', async () => {
+    getComplianceForecast.mockResolvedValue({
+      members: [
+        {
+          user_id: 'u-1',
+          user_name: 'Ada Risk',
+          current_compliance_percentage: 85,
+          current_standing: 'at_risk',
+          forecast_30_days: 84,
+          forecast_30_standing: 'at_risk',
+          forecast_60_days: 59,
+          forecast_60_standing: 'compliant',
+          forecast_90_days: null,
+          forecast_90_standing: 'not_applicable',
+          at_risk_requirements: [],
+          expiring_certifications: [],
+        },
+      ],
+      averages: {
+        current: { pct: 85, standing: 'at_risk' },
+        days_30: { pct: 84, standing: 'at_risk' },
+        days_60: { pct: 59, standing: 'compliant' },
+        days_90: { pct: null, standing: 'not_applicable' },
+      },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingEnhancementsTab activeTab="reports" />);
+
+    await user.click(screen.getByRole('button', { name: /Load Forecast/ }));
+
+    expect(await screen.findByText('84%')).toHaveClass('text-orange-700');
+    expect(screen.getByText('59%')).toHaveClass('text-green-700');
+    expect(screen.getByText('N/A')).toHaveClass('text-theme-text-muted');
+  });
+
   it('reports a body that is not a forecast report rather than an empty table', async () => {
     // Before the envelope, a stray object rendered nothing and said nothing.
     getComplianceForecast.mockResolvedValue({});
