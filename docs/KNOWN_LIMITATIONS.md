@@ -7048,6 +7048,16 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   requirement completed before the period would print **Not Met** in the
   export beside a matrix that shows it met (CLAUDE.md pitfall #29). Fixing it
   changes what the export's period means, so it needs its own decision.
+- **Compliance emails: a rolling requirement is in one non-compliance notice
+  per member, ever — open, found 2026-11-21.** A rolling requirement's window
+  ends on the grading day, which made both member emails repeat daily (the
+  reminder called it "due today", and the notice's key moved with the date).
+  The fix gives a rolling requirement no deadline reminder and keys its notice
+  on the requirement alone (`compliance_member_notices.py`). The cost: a member
+  who meets it, and months later falls short again, is not told again unless
+  the same notice is triggered by some other requirement, which then lists it.
+  Telling them again needs a recorded "met again" date to key on, which the
+  task does not keep. Tests: `tests/test_compliance_member_notices.py`.
 - **The Compliance Officer dashboard's forecast summary cards keep fixed
   colour bands — open.** The department "Current" average card colours green
   at 80% or more and yellow below, and the 30/60/90 average cards and every
