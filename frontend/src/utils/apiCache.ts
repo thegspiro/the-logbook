@@ -176,6 +176,9 @@ const UNCACHEABLE_SUBSTRINGS = [
   // their free-text reasons (PII), and a pending/decided state that a 30s-stale
   // copy would misreport right after the organizer acts on it.
   '/eligible-members', // returns member first/last name + email (PII)
+  '/staffing', // an outreach signup sheet's volunteers by name (GET /events/{id}/staffing,
+  // /event-requests/{id}/staffing) and the historical import's staffing previews,
+  // which list members too; a cached copy would also hide a signup for 30s.
   '/issue-plan', // kit issue preview: embeds the member's recorded garment sizes (PII)
   '/external-attendees', // external attendee PII
   '/check-in-monitoring', // live attendee/location check-in data (PII)

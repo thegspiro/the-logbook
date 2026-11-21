@@ -14,8 +14,10 @@ their workflow.
 import copy
 import html as _html
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -35,6 +37,7 @@ from app.models.event_request import (
     EventRequest,
     EventRequestActivity,
     EventRequestEmailTemplate,
+    EventRequestSource,
     EventRequestStatus,
 )
 from app.models.location import Location
@@ -52,6 +55,7 @@ from app.schemas.event_request import (
     EventRequestPublicStatus,
     EventRequestResponse,
     EventRequestSchedule,
+    EventRequestStaffCreate,
     EventRequestStaffingCreate,
     EventRequestStaffingResponse,
     EventRequestStatusUpdate,
@@ -94,7 +98,11 @@ from app.services.event_request_service import (
 from app.services.forms_service import FormsService
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
-from app.utils.org_timezone import format_in_org_timezone
+from app.utils.org_timezone import (
+    format_in_org_timezone,
+    org_today,
+    scheduling_timezone,
+)
 
 router = APIRouter(prefix="/event-requests", tags=["event-requests"])
 
@@ -195,6 +203,7 @@ async def _build_response(
         staffing_roles=event_request.staffing_roles,
         volunteer_call_sent_at=event_request.volunteer_call_sent_at,
         status_token=event_request.status_token,
+        source=event_request.source,
         created_at=event_request.created_at,
         updated_at=event_request.updated_at,
         activity_log=activity_items,
@@ -342,6 +351,7 @@ async def submit_public_event_request(
         pipeline,
         settled["date_flexibility"],
         data.preferred_date_start,
+        today=org_today(org),
         preferred_date_end=data.preferred_date_end,
     )
     if lead_error:
@@ -496,6 +506,7 @@ async def check_request_status(
         decline_reason=event_request.decline_reason,
         task_progress=task_progress,
         can_cancel=can_cancel,
+        timezone=scheduling_timezone(org).key if org else None,
     )
 
 
@@ -676,6 +687,7 @@ async def list_event_requests(
                 event_date=req.event_date,
                 staffing_shift_id=req.staffing_shift_id,
                 short_notice=str(req.id) in short_notice,
+                source=req.source,
                 staffing_slots_filled=filled,
                 staffing_slots_total=total,
                 created_at=req.created_at,
@@ -683,6 +695,176 @@ async def list_event_requests(
         )
 
     return items
+
+
+_SOURCE_PHRASES = {
+    EventRequestSource.PHONE.value: "from a phone call",
+    EventRequestSource.EMAIL.value: "from an email",
+    EventRequestSource.IN_PERSON.value: "from an in-person request",
+    EventRequestSource.OTHER.value: "on the requester's behalf",
+}
+
+
+@router.post(
+    "", status_code=status.HTTP_201_CREATED, response_model=EventRequestResponse
+)
+async def create_staff_event_request(
+    data: EventRequestStaffCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Enter a request that reached the department by phone, email or in person.
+
+    Requires ``events.manage``. The coordinator is not the requester, so none
+    of the public gates apply: no CAPTCHA, no per-address or daily limit, and
+    it works while public requests are switched off. The minimum lead time is
+    flagged for the coordinator rather than refused, as for the department's
+    own published form — the person who could pick another date is not the one
+    typing. From here the request is worked exactly as a public one is.
+    """
+    org = await db.scalar(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    pipeline = get_pipeline_settings(org)
+
+    preferred_start = data.preferred_date_start
+    preferred_end = data.preferred_date_end
+
+    settled = normalize_request_preferences(
+        org,
+        {
+            "outreach_type": data.outreach_type,
+            "date_flexibility": data.date_flexibility,
+            "venue_preference": data.venue_preference,
+            "preferred_time_of_day": data.preferred_time_of_day,
+            "preferred_date_start": preferred_start,
+            "preferred_date_end": preferred_end,
+        },
+    )
+    lead_warning = lead_time_error(
+        pipeline,
+        settled["date_flexibility"],
+        preferred_start,
+        today=org_today(org),
+        preferred_date_end=preferred_end,
+    )
+
+    # A chosen coordinator is checked as the assign endpoint checks one: in
+    # this organization (pitfall #14c) and a current member.
+    assignee: Optional[User] = None
+    if data.assigned_to:
+        assignee = await db.scalar(
+            select(User).where(
+                User.id == data.assigned_to,
+                User.organization_id == current_user.organization_id,
+            )
+        )
+        if not assignee:
+            raise HTTPException(status_code=404, detail="User not found")
+        if not assignee.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail="Only current members can be chosen as coordinator",
+            )
+
+    event_request = EventRequest(
+        organization_id=current_user.organization_id,
+        source=data.source,
+        contact_name=data.contact_name.strip(),
+        contact_email=str(data.contact_email) if data.contact_email else None,
+        contact_phone=data.contact_phone,
+        organization_name=data.organization_name or None,
+        outreach_type=settled["outreach_type"],
+        description=data.description,
+        date_flexibility=settled["date_flexibility"],
+        preferred_date_start=preferred_start,
+        preferred_date_end=preferred_end,
+        preferred_timeframe=data.preferred_timeframe or None,
+        preferred_time_of_day=settled["preferred_time_of_day"],
+        audience_size=data.audience_size,
+        age_group=data.age_group or None,
+        venue_preference=settled["venue_preference"],
+        venue_address=data.venue_address or None,
+        special_requests=data.special_requests or None,
+        status=EventRequestStatus.SUBMITTED,
+        reviewer_notes=f"Short notice: {lead_warning}" if lead_warning else None,
+    )
+    db.add(event_request)
+    await db.flush()
+
+    entered_by = current_user.display_name
+    db.add(
+        EventRequestActivity(
+            request_id=event_request.id,
+            action="submitted",
+            new_status=EventRequestStatus.SUBMITTED.value,
+            notes=f"Entered by {entered_by} {_SOURCE_PHRASES[data.source]}",
+            details={"source": data.source},
+            performed_by=current_user.id,
+        )
+    )
+    if lead_warning:
+        db.add(
+            EventRequestActivity(
+                request_id=event_request.id,
+                action="lead_time_warning",
+                notes=lead_warning,
+                details={"min_lead_time_days": pipeline.get("min_lead_time_days")},
+            )
+        )
+
+    if assignee is not None:
+        event_request.assigned_to = assignee.id
+        db.add(
+            EventRequestActivity(
+                request_id=event_request.id,
+                action="assigned",
+                notes=f"Assigned to {assignee.display_name}",
+                details={
+                    "assigned_to": assignee.id,
+                    "assignee_name": assignee.display_name,
+                    "previous_assignee": None,
+                },
+                performed_by=current_user.id,
+            )
+        )
+    else:
+        await apply_default_assignee(db, event_request, pipeline)
+
+    await db.commit()
+    # Read before the notification: a failure inside it can roll the session
+    # back, which expires every object here, and an expired attribute read
+    # outside the async context raises MissingGreenlet.
+    request_id = str(event_request.id)
+    organization_id = str(current_user.organization_id)
+    logger.info(
+        "Event request {} entered by user {} (source {})",
+        request_id,
+        current_user.id,
+        data.source,
+    )
+
+    await _send_request_notification(
+        db,
+        event_request,
+        "on_submitted",
+        org,
+        skip_requester=not data.notify_requester,
+    )
+
+    result = await db.execute(
+        select(EventRequest)
+        .options(selectinload(EventRequest.activity_log))
+        .where(
+            EventRequest.id == request_id,
+            EventRequest.organization_id == organization_id,
+        )
+        .execution_options(populate_existing=True)
+    )
+    return await _build_response(db, result.scalar_one())
 
 
 @router.get("/outreach-roles")
@@ -815,6 +997,22 @@ async def update_event_request_status(
                 ValueError(
                     f"Cannot transition from {event_request.status.value} to {new_status.value}"
                 )
+            ),
+        )
+
+    # An event that has not happened cannot be completed (owner decision,
+    # 2026-11-20); the page offers Mark completed only once the date passes,
+    # and finalizing the event's attendance completes it on its own.
+    if (
+        new_status == EventRequestStatus.COMPLETED
+        and event_request.event_date is not None
+        and _as_aware(event_request.event_date) > datetime.now(timezone.utc)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This event has not happened yet. It can be marked completed "
+                "once its date has passed."
             ),
         )
 
@@ -1546,6 +1744,11 @@ async def send_template_email(
     template = template_result.scalar_one_or_none()
     if not template:
         raise HTTPException(status_code=404, detail="Email template not found")
+    if not event_request.contact_email:
+        raise HTTPException(
+            status_code=400,
+            detail="This requester gave no email address. Call them instead.",
+        )
 
     org_result = await db.execute(
         select(Organization).where(Organization.id == current_user.organization_id)
