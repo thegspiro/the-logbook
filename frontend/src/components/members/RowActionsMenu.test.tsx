@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RowActionsMenu } from './RowActionsMenu';
@@ -70,5 +70,40 @@ describe('RowActionsMenu', () => {
   it('renders nothing when there are no actions', () => {
     render(<RowActionsMenu label="More actions for Cory Self" actions={[]} />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  describe('near the phone bottom bar', () => {
+    const originalHeight = window.innerHeight;
+
+    afterEach(() => {
+      document.documentElement.style.removeProperty('--bottom-nav-height');
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalHeight });
+      vi.restoreAllMocks();
+    });
+
+    it('opens upward rather than under a bar set in rem', async () => {
+      // The app sets the bar's height as 3.5rem. Read as a bare number it was
+      // 3.5px, so a menu ending inside the bar's 56px opened downward under it.
+      document.documentElement.style.setProperty('--bottom-nav-height', '3.5rem');
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+      vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(80);
+      const { user } = setup();
+      const trigger = screen.getByRole('button', { name: 'More actions for Jordan Avery' });
+      vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+        top: 664,
+        bottom: 700,
+        left: 300,
+        right: 340,
+        width: 40,
+        height: 36,
+        x: 300,
+        y: 664,
+        toJSON: () => ({}),
+      });
+
+      await user.click(trigger);
+      // 700 + 4 + 80 = 784 is past 800 - 56 = 744, so it opens above: 664 - 4 - 80.
+      expect(screen.getByRole('menu').style.top).toBe('580px');
+    });
   });
 });
