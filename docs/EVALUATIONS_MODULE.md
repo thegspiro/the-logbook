@@ -298,7 +298,9 @@ Adding these sources changed the stored shape of no existing entry, so
    acknowledgement is done, and acknowledges receipt or refuses with a reason.
    Either finalizes it. Acknowledging is not agreement, and the PDF says so.
 6. **Finalization** freezes the PDF (`ensure_document`; built on first
-   download if building it at finalization failed).
+   download if building it at finalization failed). Since 2026-11-20 it is
+   footed "Page X of Y": `render_evaluation_pdf` lays the record out twice,
+   the first pass counting the pages. A PDF frozen earlier keeps "Page N".
 
 A signature needs the signer's name typed as on their account (case and
 spacing ignored), an intent checkbox, and step-up. The step is read under the

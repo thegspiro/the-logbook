@@ -312,6 +312,23 @@ Position" ticks.]**
 > who still ride and life members who've stopped. Tick the positions and leave
 > them all unticked to apply it regardless of position."
 
+**[SCREEN: The same profile form: the Priority field showing the amber "also
+has priority …" warning, then the Optional Requirements list.]**
+
+> "Two more things on that form. If two profiles share a **Priority**, the one
+> you created first wins, and the form warns you as you type — give one a
+> higher number if you want to choose. And **Optional Requirements** are ones
+> these members see on their training page, marked Optional, but are never
+> graded on and never reminded about. A requirement can be Required or
+> Optional, not both."
+
+**[PRODUCTION NOTE — 2026-11-21. New beat, about 20 seconds. Equal priorities
+used to resolve in no defined order, and optional requirements were stored but
+shown to nobody. The opening line of this section — "Which certifications are
+mandatory? Which are optional?" over "mandatory/optional toggles" — has no
+such toggle on screen: film the profile's Required and Optional lists for that
+shot instead.]**
+
 **[PRODUCTION NOTE — 2026-11-05. Three new beats, about 1:15 together; re-time
 Chapter 3 and the clip table. Compliance Settings under Settings & Data is
 2026-11-05; Months on leave is 2026-11-02 (before it, a month was excused only at
@@ -329,8 +346,19 @@ Say nothing about a specific percentage.]**
 
 **[SCREEN: Navigate to Reports → Training Compliance report]**
 
-> "The report lists every member with their certification status for every
-> requirement. Export it as PDF for inspectors or as CSV for your records."
+> "The report lists every member with their standing on every requirement as
+> of today — exactly what the Compliance Matrix shows — plus their training
+> hours and records since the first of January. Export it as PDF for
+> inspectors or as CSV for your records."
+
+**[PRODUCTION NOTE — 2026-11-21. Narration rewritten (#4477). The status
+columns are today's standing from the matrix's own grader; the period sets
+only the hours and record columns, whose CSV headers now carry the dates
+("Total Hours (2026-01-01 to …)", "Completed Records (…)"; it was "Completed
+Courses"). A certification earned before January used to print Not Met here.
+Re-film the CSV if its header row is on screen. The exports also follow each
+member's compliance profile and the department's Evaluation Period setting
+since 2026-11-20.]**
 
 **[PRODUCTION NOTE — 2026-10-06. The annual and monthly compliance reports now
 grade each member through their compliance profile, the same as the dashboard

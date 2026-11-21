@@ -2707,7 +2707,9 @@ by it.
 
 Members are judged the way the Training dashboard judges them. A member who has
 turned off training reminders in their own email settings is not sent these.
-Details are in
+A rolling requirement ("72 hours in any 12 months") has no deadline, so it gets
+no reminder, and the notice lists it once rather than every day while it stays
+short _(2026-11-21; before, both emails repeated daily)_. Details are in
 [Training → Compliance Emails to Members](./02-training.md#compliance-emails-to-members).
 
 ![Compliance requirements configuration: the Thresholds tab, with its status preview and reminder schedule](./images/08-69-compliance-requirements-config.png)
@@ -2745,8 +2747,17 @@ Profiles let different groups be held to different standards.
 How a profile grades the members it matches:
 
 - **The required requirements you tick are the whole list.** A profile with
-  none ticked grades its members against nothing, so they count as compliant. It
-  does not fall back to every requirement.
+  none ticked grades its members against nothing, so they read **Not
+  applicable** and are left out of the department's percentage. It does not
+  fall back to every requirement.
+- **A profile with no required list at all grades everything but its optional
+  requirements.** Only a profile created through the API can be in this state;
+  its card reads **Required: all except optional**. Since 2026-11-21, saving
+  such a profile from this screen keeps it that way. Before, an unrelated
+  save switched it to grading nothing.
+- **Optional requirements never grade.** They appear on the member's training
+  page under **Optional** and nowhere in the standing, the percentage, the
+  reports or the compliance emails. A requirement in both lists is required.
 - **Threshold overrides work on their own.** A profile whose only change is a
   stricter or gentler threshold still applies it.
 

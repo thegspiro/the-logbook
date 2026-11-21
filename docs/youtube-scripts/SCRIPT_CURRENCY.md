@@ -1,5 +1,56 @@
 # Script currency
 
+## 2026-11-21 pass
+
+**Edited:**
+
+- **03 IT Manager, Anonymizing chapter.** It said a file an officer attached
+  to a training record "stays". Since 2026-11-20 anonymising deletes those
+  files (#4462). It now says so, tells viewers to download evidence first,
+  and adds the refusal for a member with more privileges (#4476). Re-record
+  two beats, about 8 seconds.
+- **04 Fire Chief, evaluations beat.** Names the officer-section starter
+  (#4487) and adds about 20 seconds on **Assign** and separation of duties
+  (#4384) and **Period results** with its CSV export (#4377). Re-time the
+  chapter.
+- **05 Training Officer.** The retention presenter note said retained files
+  are "not scanned for malware". That is wrong: ClamAV scanning is on by
+  default. The note now also says auto-approved submissions count from
+  submission (#4476, #4483). Any take already filmed with the malware line
+  needs re-recording. A production note marks the matrix hours-cell footage
+  as dated (#4454).
+- **06 Member guide.** A new beat of about 20 seconds on the requirement
+  cards: monthly average, certification states, **Optional** (#4454, #4488,
+  #4480).
+- **07 Secretary, event requests beat.** Rewritten for the request page,
+  **Copy status link**, **Postpone** and **Decline** under **More**, **New
+  request** for phone requests, and finalizing completing the request
+  (#4474). Re-record the beat.
+- **16 Training Officer part 2.** A profile beat on equal priorities and
+  **Optional Requirements** (#4480); its "mandatory/optional toggles" shot
+  does not exist on screen. The compliance report narration now describes
+  today's standing plus hours and records since January 1 (#4477), with a
+  note on the new CSV headers.
+- **Apparatus events video script.** Scene 8 (recorded 2026-11-17) shows the
+  old request panel; re-record it on the request page.
+
+**Flagged, not edited:**
+
+- **12 Elections**, Certified Results scene and Short 12q: the footage shows
+  "Page N" footers; the narration is right (#4451). Low priority.
+- **06** has no Leave Requests beat (ask for leave, answer a question, I'm
+  back early, #4393). **04** does not mention that the Chief is told about
+  requests undecided after 21 days, or that a shift officer cannot record
+  their own close-out hours (#4468). **07**'s Waiver Management chapter
+  does not mention that nobody records their own leave (#4484). None of
+  these is wrong, only incomplete.
+- **05** (about line 431) says the add-completion form can "optionally
+  upload a copy of the certification document", and **06** that a
+  certification shows "attached documentation". Neither was checked against
+  the UI in this pass.
+
+See [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-20--21-2026).
+
 ## 2026-11-20 pass
 
 **Edited:**
