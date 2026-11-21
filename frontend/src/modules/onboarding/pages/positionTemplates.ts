@@ -389,8 +389,8 @@ const buildAllPositionTemplates = (modules: ModuleDefinition[]) => ({
       },
       {
         id: 'public_outreach',
-        name: 'Public Outreach',
-        description: 'Community events and public education',
+        name: 'Community Outreach Manager',
+        description: "Leads the department's community outreach and risk reduction work",
         icon: Users,
         priority: 55,
         permissions: generateRolePermissions(modules, 'specialist', ['events', 'documents']),
@@ -490,8 +490,8 @@ const buildAllPositionTemplates = (modules: ModuleDefinition[]) => ({
     positions: [
       {
         id: 'community_outreach_team',
-        name: 'Community Education / Outreach Team',
-        description: 'Members who deliver community education and public outreach events',
+        name: 'Community Outreach Team',
+        description: 'Members who deliver community outreach, education and risk reduction events',
         icon: Users,
         priority: 10,
         permissions: generateRolePermissions(modules, 'member'),

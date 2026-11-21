@@ -355,7 +355,7 @@ Below are ready-to-use email templates. Copy these into **Events Admin > Setting
 > written. Nothing else is filled in — an unknown variable reaches the
 > requester literally. In particular there is **no status-link variable**, and
 > no email sends the requester their status page. To give them one, press
-> **Copy Link** on the request (Events Admin > Requests) and paste the address
+> **Copy Link** on the request (Events Admin > Community Outreach > Outreach Requests) and paste the address
 > into your message yourself.
 
 ### Template: Request Received Confirmation

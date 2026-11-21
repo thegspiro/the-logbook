@@ -1,4 +1,4 @@
-"""The Community Engagement report: what public outreach reached, and at what cost.
+"""The Outreach Impact report: what public outreach reached, and at what cost.
 
 The tab this feeds answers three questions a public-education officer is asked
 for at budget time: how many events were held, how many people they reached,

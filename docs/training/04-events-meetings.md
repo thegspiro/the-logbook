@@ -1548,11 +1548,11 @@ before building your first template, and ask for whatever is missing.
 
 **Ask an administrator, once:**
 
-- [ ] **Your permission.** The built-in **Public Outreach** position already
+- [ ] **Your permission.** The built-in **Community Outreach Manager** position already
       has **Manage apparatus event templates**. If you hold a position your
       department created, ask for that permission to be added to it on the
-      positions screen. Members of the **Community Education / Outreach
-      Team** can take seats but cannot build templates.
+      positions screen. Members of the **Community Outreach Team** can
+      take seats but cannot build templates.
 - [ ] **The apparatus.** At least one unit in the **Apparatus** module. With
       none, Apparatus Events says _Add an apparatus first_.
 - [ ] **Who may drive.** If your department enforces EVOC, each driver's EVOC
@@ -1998,7 +1998,7 @@ under them a strip of the chosen area's pages with a line naming the open one.
 | Area                   | Pages                                     |
 | ---------------------- | ----------------------------------------- |
 | **Events**             | **Create Event**, **Past Events**         |
-| **Community Outreach** | **Requests**, **Community Engagement**    |
+| **Community Outreach** | **Outreach Requests**, **Outreach Impact** |
 | **Check-ins**          | **QR Code Analytics**, **Card Check-ins** |
 | **Settings**           | **Settings**                              |
 
@@ -2901,17 +2901,17 @@ so a half-written schedule or comment is never lost to a stray click.
 > **What if scheduling or postponing is refused?** The message gives the real
 > reason — for example, that the event's attendance is already closed.
 
-### Measuring Outreach: Community Engagement
+### Measuring Outreach: Outreach Impact
 
 **Who can do this:** officers who can manage events.
 
-**Manage Events → Community Outreach → Community Engagement** reports what the
+**Manage Events → Community Outreach → Outreach Impact** reports what the
 department's public outreach reached. Choose a period across the top: **This
 month**, **This quarter**, **This year** (the default), **Last 12 months** or
 **All time**. The **Community engagement** card on the dashboard opens this
 page on the dashboard's own period.
 
-![The Community Engagement tab for this year: events held, people reached split into counted and estimated, member hours and requests completed, each with its change since last year; people reached by month; the breakdown by public request type and by department event type; and the recent outreach events table](./images/04-100-community-engagement.png)
+![The Outreach Impact tab for this year: events held, people reached split into counted and estimated, member hours and requests completed, each with its change since last year; people reached by month; the breakdown by public request type and by department event type; and the recent outreach events table](./images/04-100-community-engagement.png)
 
 | Figure                 | What it counts                                                                     |
 | ---------------------- | ---------------------------------------------------------------------------------- |
@@ -3141,7 +3141,7 @@ Date Preference: October 7 or October 8
 Lt. Chen gets an email about the new request from Lincoln Elementary School
 PTA.
 
-She opens **Manage Events → Requests** and selects the new request. It shows
+She opens **Manage Events → Community Outreach → Outreach Requests** and selects the new request. It shows
 Maria's full submission, the pipeline task checklist, and the action buttons.
 
 She adds an internal comment, which Maria never sees: _"Perfect timing for
