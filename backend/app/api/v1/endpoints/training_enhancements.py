@@ -59,6 +59,7 @@ from app.services.training_enhancement_service import (
     TrainingEffectivenessService,
     XAPIService,
 )
+from app.utils.training_attachments import new_entry_id, resolve_entry
 
 router = APIRouter()
 
@@ -777,22 +778,28 @@ RECORD_ATTACHMENT_RULES = FileRules(
 )
 
 
-async def _load_record_for_attachment(db: AsyncSession, record_id: str, current_user):
+async def _load_record_for_attachment(
+    db: AsyncSession, record_id: str, current_user, *, for_update: bool = False
+):
     """Fetch a training record in the caller's org, enforcing attachment access.
 
     The record owner may manage their own attachments; everyone else needs
-    ``training.manage``.
+    ``training.manage``. ``for_update`` makes it a locking read that refreshes
+    an instance already loaded, for a path that writes the list back.
     """
     from sqlalchemy import select
 
     from app.api.dependencies import _collect_user_permissions, _has_permission
     from app.models.training import TrainingRecord
 
-    result = await db.execute(
+    query = (
         select(TrainingRecord)
         .where(TrainingRecord.id == record_id)
         .where(TrainingRecord.organization_id == current_user.organization_id)
     )
+    if for_update:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    result = await db.execute(query)
     record = result.scalar_one_or_none()
     if not record:
         raise HTTPException(status_code=404, detail="Training record not found")
@@ -838,7 +845,22 @@ async def upload_record_attachment(
     )
     file_path = stored.path
 
+    # Stored and scanned outside any lock. Re-read the record locked before
+    # writing the list back, so a void, a retention sweep or another upload
+    # committed meanwhile is seen rather than overwritten.
+    record = await _load_record_for_attachment(
+        db, record_id, current_user, for_update=True
+    )
+    if record.voided_at is not None:
+        await db.rollback()
+        await file_storage.delete_quietly(file_path)
+        raise HTTPException(
+            status_code=400,
+            detail="A voided training record can't take new attachments",
+        )
+
     attachment = {
+        "id": new_entry_id(),
         "file_name": stored.original_name,
         "file_path": file_path,
         "file_type": stored.mime_type,
@@ -865,10 +887,12 @@ async def upload_record_attachment(
 
 
 def _sanitize_attachments(attachments: list) -> list:
-    """Strip server file paths; expose only client-safe metadata + index."""
+    """Strip server file paths; expose only client-safe metadata, the entry's
+    id and its index."""
     return [
         {
             "index": i,
+            "id": a.get("id") if isinstance(a, dict) else None,
             "file_name": a.get("file_name") if isinstance(a, dict) else a,
             "file_type": a.get("file_type") if isinstance(a, dict) else None,
             "file_size": a.get("file_size") if isinstance(a, dict) else None,
@@ -892,20 +916,24 @@ async def get_record_attachments(
     }
 
 
-@router.get("/records/{record_id}/attachments/{index}/download")
+@router.get("/records/{record_id}/attachments/{entry}/download")
 async def download_record_attachment(
     record_id: str,
-    index: int,
+    entry: str,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Stream a stored training-record attachment by its index."""
+    """Stream a stored training-record attachment.
+
+    ``entry`` is the attachment's id, or, for clients written against the
+    older route, its index (a string of digits).
+    """
     record = await _load_record_for_attachment(db, record_id, current_user)
-    attachments = record.attachments or []
-    if index < 0 or index >= len(attachments):
+    found = resolve_entry(record.attachments, entry)
+    if found is None:
         raise HTTPException(status_code=404, detail="Attachment not found")
 
-    attachment = attachments[index]
+    attachment = found[1]
     if not isinstance(attachment, dict) or not attachment.get("file_path"):
         raise HTTPException(status_code=404, detail="Attachment file unavailable")
 

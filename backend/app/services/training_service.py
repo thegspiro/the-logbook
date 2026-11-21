@@ -541,6 +541,7 @@ class TrainingService:
             fallback_record_matches,
             hours_record_counts,
             is_evaluation_credited,
+            lapsed_biannual_certificate,
             latest_evaluation_credit,
             monthly_counts,
             monthly_hours,
@@ -604,6 +605,10 @@ class TrainingService:
         active_months: float = 0
         cert_expired = False
         blocks_activity = False
+        # CERTIFICATION only: the expiration date of the certificate graded,
+        # so the card can say "On file (Expires ...)" or "Expired ..."
+        # instead of 1/1 or 0/1. None when nothing matched or it never expires.
+        certificate_expiry: Optional[date] = None
         month_breakdown: Optional[List[Dict]] = None
         count_breakdown: Optional[List[Dict]] = None
         # Dates of the shifts or calls counted, for their monthly breakdown.
@@ -642,21 +647,10 @@ class TrainingService:
                     period_months=get_rolling_period_months(req),
                 )
 
-            # Biannual: expired cert overrides hours
-            if freq == RequirementFrequency.BIANNUAL.value:
-                with_exp = [r for r in completed if r.expiration_date]
-                if req.training_type:
-                    with_exp = [
-                        r for r in with_exp if r.training_type == req.training_type
-                    ]
-                if with_exp:
-                    newest = max(with_exp, key=lambda r: r.expiration_date)
-                    if newest.expiration_date < today:
-                        cert_expired = True
-                        blocks_activity = True
-                elif req.name:
-                    # No cert records at all with expiration — check by name
-                    pass
+            # Biannual: a lapsed certificate overrides the hours.
+            if lapsed_biannual_certificate(req, type_matched, today) is not None:
+                cert_expired = True
+                blocks_activity = True
 
         # ---- COURSES ----
         elif req_type == RequirementType.COURSES.value:
@@ -670,6 +664,10 @@ class TrainingService:
                 course_checklist = course_checklist_entries(
                     course_ids, windowed, course_catalog
                 )
+            # Biannual: a lapsed certificate overrides the count.
+            if lapsed_biannual_certificate(req, windowed, today) is not None:
+                cert_expired = True
+                blocks_activity = True
 
         # ---- CERTIFICATION ----
         elif req_type == RequirementType.CERTIFICATION.value:
@@ -678,6 +676,7 @@ class TrainingService:
             adjusted_required = 1
             if matching:
                 latest = max(matching, key=lambda r: r.completion_date or date.min)
+                certificate_expiry = latest.expiration_date
                 if latest.expiration_date and latest.expiration_date < today:
                     cert_expired = True
                     blocks_activity = True
@@ -1021,6 +1020,7 @@ class TrainingService:
             ),
             "active_months": active_months,
             "cert_expired": cert_expired,
+            "expiry_date": str(certificate_expiry) if certificate_expiry else None,
             "blocks_activity": blocks_activity,
             "catch_up_deadline": str(deadline) if deadline else None,
             "next_window_opens": (

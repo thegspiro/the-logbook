@@ -29,6 +29,17 @@ export interface LeaveSettings {
   requests_enabled: boolean;
   request_approver_position_ids: string[];
   request_decision_rule: LeaveDecisionRule;
+  /** Days a request may wait before the Chief is told, once; 0 never. */
+  request_escalation_days: number;
+}
+
+/** A member ended their own leave: it now ends the day before they are back. */
+export interface LeaveEndedEarly {
+  leave_id: string;
+  start_date: string;
+  end_date: string;
+  previous_end_date: string | null;
+  first_day_back: string;
 }
 
 export interface LeaveApproverPosition {
@@ -51,9 +62,38 @@ export interface LeaveRequestCreate {
 export interface LeaveRequestVoteEntry {
   voter_id: string;
   voter_name: string;
+  /** The voting round it was cast in; only the request's current round counts. */
+  round?: number;
   vote: LeaveVote;
   note: string | null;
   created_at: string;
+}
+
+export interface LeaveDates {
+  start_date: string;
+  end_date: string | null;
+}
+
+export type LeaveMessageKind = 'question' | 'answer' | 'proposal' | 'proposal_accepted' | 'proposal_declined';
+
+export interface LeaveRequestMessage {
+  kind: LeaveMessageKind;
+  author_name: string;
+  body: string | null;
+  created_at: string;
+}
+
+export interface LeaveProposal extends LeaveDates {
+  proposed_by_name: string;
+  proposed_at: string;
+}
+
+export interface LeaveRequestSummary {
+  requests_enabled: boolean;
+  /** Waiting requests the caller may vote on now and has not. */
+  to_decide: number;
+  /** The caller's own requests waiting on their answer. */
+  waiting_on_me: number;
 }
 
 export interface LeaveRequest {
@@ -71,11 +111,21 @@ export interface LeaveRequest {
   decided_at: string | null;
   decided_by_name: string | null;
   leave_id: string | null;
+  /** The active leave this request extends, as it stands. */
+  extends_leave?: LeaveDates | null;
+  /** Set while the request waits on its member. */
+  awaiting?: 'answer' | 'proposal' | null;
+  proposal?: LeaveProposal | null;
+  messages?: LeaveRequestMessage[];
+  vote_round?: number;
   votes: LeaveRequestVoteEntry[];
   approvals: number;
   denials: number;
   approver_count: number;
   approvals_needed: number;
   can_vote: boolean;
+  can_ask?: boolean;
+  can_answer?: boolean;
+  can_respond_to_changes?: boolean;
   my_vote: LeaveVote | null;
 }

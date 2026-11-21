@@ -152,12 +152,19 @@ date, rank and membership type — before it counts.
 
 > **A profile saved with no Required Training Requirements ticked grades its
 > members against nothing**, so every one of them reads N/A and drops out of the
-> department percentage. The screen always sends the list, even empty. Tick at
-> least one requirement for any group you want measured.
+> department percentage. Tick at least one requirement for any group you want
+> measured. A profile created through the API with no required list at all is
+> different: it grades every requirement except its optional ones, its card
+> reads **Required: all except optional**, and since 2026-11-21 saving it from
+> the screen keeps it that way (an unrelated save used to send an empty list
+> and switch it to grading nothing).
 
 The same resolution feeds the dashboard percentage, the compliance matrix, the
-Department Compliance card and the monthly and annual reports, so all of them
-agree. Stored reports keep the figures they were generated with.
+Department Compliance card, the member profile's compliance card, My
+Training, the monthly and annual reports and — since 2026-11-20 — the member
+status roster, competency matrix, compliance exports, forecast and
+Scheduling's Shift Compliance report, so all of them agree. Stored reports
+keep the figures they were generated with.
 
 ---
 

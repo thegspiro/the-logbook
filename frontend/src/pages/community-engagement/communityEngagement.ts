@@ -173,7 +173,16 @@ export const CSV_HEADER = [
   'Reach is an estimate',
   'Crew',
   'Member hours',
+  'Materials handed out',
+  'Photos',
+  'Outcome',
 ] as const;
+
+const PHOTO_LABELS: Record<string, string> = {
+  none: 'No photos',
+  consented: 'With consent',
+  not_consented: 'Without consent',
+};
 
 export const csvRows = (rows: CommunityEventReach[], timezone: string): CsvValue[][] => [
   [...CSV_HEADER],
@@ -190,6 +199,9 @@ export const csvRows = (rows: CommunityEventReach[], timezone: string): CsvValue
     r.crew,
     // Already on the quarter from the backend; a bare number so a spreadsheet can total it.
     r.member_hours,
+    (r.materials ?? []).map((m) => `${m.quantity} ${m.item}`).join('; '),
+    r.photos ? (PHOTO_LABELS[r.photos] ?? r.photos) : '',
+    r.outcome_note ?? '',
   ]),
 ];
 

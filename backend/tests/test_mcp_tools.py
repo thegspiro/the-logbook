@@ -4582,6 +4582,83 @@ class TestThirtiethRoundFindings:
         assert "training_records.notes" not in record_reads[0]
 
     @pytest.mark.usefixtures("_use_test_session")
+    async def test_standalone_biannual_hours_check_reads_only_counted_certificates(
+        self, org_with_members, db_session
+    ):
+        """The SQL path applies the same lapsed-certificate rule as My
+        Training and the compliance matrix: a certificate outside the
+        biannual window is not read, and a lapsed one inside it fails the
+        requirement (lapsed_biannual_certificate)."""
+        from app.models.training import (
+            RequirementFrequency,
+            RequirementType,
+            TrainingRequirement,
+        )
+        from app.services.training_service import TrainingService
+
+        org_id, _, member_id = org_with_members
+        today = date.today()
+        req = TrainingRequirement(
+            organization_id=org_id,
+            name="Recertification hours",
+            requirement_type=RequirementType.HOURS,
+            frequency=RequirementFrequency.BIANNUAL,
+            training_type=TrainingType.CERTIFICATION,
+            required_hours=2,
+            applies_to_all=True,
+            active=True,
+        )
+        db_session.add(req)
+        db_session.add_all(
+            [
+                TrainingRecord(
+                    organization_id=org_id,
+                    user_id=member_id,
+                    course_name="Drill",
+                    training_type=TrainingType.CERTIFICATION,
+                    status=TrainingStatus.COMPLETED,
+                    completion_date=today,
+                    hours_completed=3.0,
+                ),
+                # Before the biannual window opens; lapsed long ago.
+                TrainingRecord(
+                    organization_id=org_id,
+                    user_id=member_id,
+                    course_name="Old certificate",
+                    training_type=TrainingType.CERTIFICATION,
+                    status=TrainingStatus.COMPLETED,
+                    completion_date=date(today.year - 4, 3, 1),
+                    expiration_date=date(today.year - 2, 3, 1),
+                    hours_completed=3.0,
+                ),
+            ]
+        )
+        await db_session.flush()
+        service = TrainingService(db_session)
+        progress = await service.check_requirement_progress(
+            uuid.UUID(member_id), uuid.UUID(req.id), uuid.UUID(org_id), waivers=[]
+        )
+        assert progress.is_complete is True
+
+        db_session.add(
+            TrainingRecord(
+                organization_id=org_id,
+                user_id=member_id,
+                course_name="Lapsed certificate",
+                training_type=TrainingType.CERTIFICATION,
+                status=TrainingStatus.COMPLETED,
+                completion_date=date(today.year - 1, 1, 15),
+                expiration_date=today - timedelta(days=1),
+                hours_completed=1.0,
+            )
+        )
+        await db_session.flush()
+        progress = await service.check_requirement_progress(
+            uuid.UUID(member_id), uuid.UUID(req.id), uuid.UUID(org_id), waivers=[]
+        )
+        assert progress.is_complete is False
+
+    @pytest.mark.usefixtures("_use_test_session")
     async def test_scheduling_summary_uses_the_department_timezone(
         self, server, org_with_members, db_session, monkeypatch
     ):

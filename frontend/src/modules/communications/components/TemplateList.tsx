@@ -252,6 +252,11 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   open_ended_leave_digest: { icon: CalendarOff, label: 'Open-Ended Leave Digest', color: 'text-purple-500' },
   leave_request_submitted: { icon: CalendarOff, label: 'Leave Request Submitted', color: 'text-purple-500' },
   leave_request_denied: { icon: CalendarOff, label: 'Leave Request Denied', color: 'text-purple-500' },
+  leave_request_for_member: { icon: CalendarOff, label: 'Leave Request: Answer Needed', color: 'text-purple-500' },
+  leave_request_update: { icon: CalendarOff, label: 'Leave Request Updated', color: 'text-purple-500' },
+  leave_request_reminder: { icon: CalendarOff, label: 'Leave Request Reminder', color: 'text-purple-500' },
+  leave_request_escalation: { icon: CalendarOff, label: 'Leave Request Escalation', color: 'text-purple-500' },
+  leave_ended_early: { icon: CalendarOff, label: 'Leave Ended Early', color: 'text-purple-500' },
   meeting_waiver_requested: {
     icon: ClipboardCheck,
     label: 'Meeting Waiver Requested',
@@ -372,6 +377,11 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
       'open_ended_leave_digest',
       'leave_request_submitted',
       'leave_request_denied',
+      'leave_request_for_member',
+      'leave_request_update',
+      'leave_request_reminder',
+      'leave_request_escalation',
+      'leave_ended_early',
     ],
   },
   {

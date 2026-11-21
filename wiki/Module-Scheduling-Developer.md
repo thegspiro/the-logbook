@@ -213,6 +213,21 @@ own officer. `POST …/finalize` accepts `reported_call_count`,
 `attach_call_ids` claims a call another unit already logged (listed as
 `attachable_calls` on the close-out GET).
 
+**An officer admitted on the shift alone does not record their own hours**
+(2026-11-20, ADV2-8). `_own_hours_locked(user)` in
+`api/v1/endpoints/scheduling.py` returns the caller's id when they lack
+`scheduling.manage`, else `None`. Every close-out state response (GET and both
+PATCHes) carries it as `own_hours_locked_user_id`, and the wizard disables that
+row. `PATCH …/closeout/attendance` passes it to
+`save_closeout_attendance(locked_user_id=…)`: the row may come back unchanged
+(compared to the minute, the precision of the wizard's time fields), and any
+change raises `PermissionError`, answered 403 after a rollback, so nothing in
+the save is applied. `POST …/finalize` refuses a `manual_hours` entry for the
+caller, and `POST /shifts/{id}/attendance` refuses the caller's own
+`user_id`, both 403 with "You cannot record your own hours on a shift you run.
+Check in and out yourself, or ask a scheduling admin."
+`tests/test_shift_closeout_own_hours.py`.
+
 Each step writes real records as it advances, so an interrupted close-out
 resumes rather than restarting. `closeout_step` in the GET response is `0`
 (not started), `1` (attendance saved) or `2` (calls saved); a finalized
@@ -391,6 +406,11 @@ PUT    /{import_id}/mappings            # Member / unit / position decisions
 POST   /{import_id}/commit              # Commit (final)
 DELETE /{import_id}                     # Discard the draft
 ```
+
+`PUT …/mappings` also takes `existing_shifts`, keyed by proposed-shift key:
+`"accept"` (add to the shift already on the schedule), `"separate"`, or `null`,
+which clears an earlier answer so the shift asks again. The review page sends
+`null` from its **Undo** links on the Shifts and Rows tabs (2026-11-20).
 
 ### Shift completion reports — `/api/v1/training/shift-reports`
 

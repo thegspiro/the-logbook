@@ -744,10 +744,10 @@ const SubmissionCard: React.FC<{
                 <span className="text-theme-text-muted text-sm">Attached: </span>
                 <ul className="mt-1 flex flex-col gap-1">
                   {submission.attachments.map((attachment) => (
-                    <li key={attachment.index} className="flex items-center space-x-1 text-sm">
+                    <li key={attachment.id ?? attachment.index} className="flex items-center space-x-1 text-sm">
                       <Paperclip className="text-theme-text-muted h-3 w-3 shrink-0" />
                       <a
-                        href={trainingSubmissionService.getAttachmentDownloadUrl(submission.id, attachment.index)}
+                        href={trainingSubmissionService.getAttachmentDownloadUrl(submission.id, attachment)}
                         target="_blank"
                         rel="noreferrer"
                         className="text-theme-text-secondary link-underline truncate"

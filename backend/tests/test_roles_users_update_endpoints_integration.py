@@ -142,11 +142,19 @@ def _model_for_table(name: str) -> Any:
 # the update.
 _LEFT_NULL: dict[str, tuple[str, ...]] = {"User": ("emergency_contacts",)}
 
+# Member columns that name the record's subject, filled with a colleague rather
+# than the caller: nobody edits their own leave of absence (ADV2-9), so a leave
+# belonging to the caller would answer 403 before its body was read.
+_A_COLLEAGUE: dict[str, tuple[str, ...]] = {"MemberLeaveOfAbsence": ("user_id",)}
+
 
 class _Bench:
-    def __init__(self, db: AsyncSession, user: User, client: AsyncClient):
+    def __init__(
+        self, db: AsyncSession, user: User, colleague_id: str, client: AsyncClient
+    ):
         self.db = db
         self.user = user
+        self.colleague_id = colleague_id
         self.client = client
         self.organization_id = str(user.organization_id)
 
@@ -186,6 +194,10 @@ class _Bench:
                 table = next(iter(column.foreign_keys)).column.table.name
                 if table == "organizations":
                     values[column.key] = self.organization_id
+                elif table == "users" and column.key in _A_COLLEAGUE.get(
+                    model.__name__, ()
+                ):
+                    values[column.key] = self.colleague_id
                 elif table == "users":
                     values[column.key] = str(self.user.id)
                 else:
@@ -323,6 +335,20 @@ async def bench(db_session: AsyncSession) -> AsyncGenerator[_Bench]:
         text("INSERT INTO user_positions (user_id, position_id) VALUES (:u, :p)"),
         {"u": user_id, "p": position_id},
     )
+    colleague_id = str(uuid.uuid4())
+    await db_session.execute(
+        text(
+            "INSERT INTO users (id, organization_id, username, first_name, "
+            "last_name, email, password_hash, status) "
+            "VALUES (:id, :org, :un, 'Bench', 'Colleague', :em, 'hashed', 'active')"
+        ),
+        {
+            "id": colleague_id,
+            "org": org_id,
+            "un": f"bench-{colleague_id[:8]}",
+            "em": f"bench-{colleague_id[:8]}@test.example",
+        },
+    )
     user = await db_session.get(User, user_id)
     assert user is not None
     await db_session.refresh(user, ["positions"])
@@ -333,7 +359,7 @@ async def bench(db_session: AsyncSession) -> AsyncGenerator[_Bench]:
         transport=ASGITransport(app=_app(), raise_app_exceptions=False),
         base_url="http://test",
     ) as client:
-        yield _Bench(db_session, user, client)
+        yield _Bench(db_session, user, colleague_id, client)
 
 
 _EMPTY = (None, "", "null", "[]", "{}")

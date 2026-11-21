@@ -26,6 +26,7 @@ import type {
   EventCategoryConfig,
   EmailTemplate,
   EventPositionOption,
+  StaffingRoleNeed,
 } from '../types/event';
 import {
   VisibilitySection,
@@ -365,6 +366,19 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
     if (result) setNewTypeLabel('');
   };
 
+  const saveOutreachTypeRoles = async (typeValue: string, roles: StaffingRoleNeed[]): Promise<boolean> => {
+    if (!settings) return false;
+    const result = await saveSettings(
+      {
+        outreach_event_types: settings.outreach_event_types.map((t) =>
+          t.value === typeValue ? { value: t.value, label: t.label, default_roles: roles } : t
+        ),
+      },
+      'Failed to save the roles for this type.'
+    );
+    return result !== null;
+  };
+
   const removeOutreachType = (typeValue: string) => {
     if (!settings) return;
     if (typeValue === 'other') {
@@ -635,6 +649,7 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
             saving={saving}
             onAddType={() => void addOutreachType()}
             onRemoveType={(v) => void removeOutreachType(v)}
+            onSaveTypeRoles={saveOutreachTypeRoles}
             newTypeLabel={newTypeLabel}
             onNewTypeLabelChange={setNewTypeLabel}
             onAddRole={() => void addOutreachRole()}

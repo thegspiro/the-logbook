@@ -25,22 +25,22 @@ with neither grant sees no strip at all. The strip's links carry counts: on
 self-evaluation or acknowledgement), and on the conduct list, how many of the
 evaluations you can see there are past a due date.
 
-| Section                                         | Path                           | Who sees it                                                                                                                     |
-| ----------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| **My evaluations**                              | `/reports/evaluations/mine`    | every member: their own evaluations, deleted-evaluation records, and their figures for the current period                       |
-| **Evaluations I conduct** / **All evaluations** | `/reports/evaluations/conduct` | `evaluations.conduct`, `view_all` or `manage`: the evaluations to work on (named "All evaluations" for `view_all` and `manage`) |
-| **Templates & periods**                         | `/reports/evaluations`         | `evaluations.configure` or `evaluations.manage`: forms and review periods                                                       |
-| An evaluation                                   | `/reports/evaluations/<id>`    | the member, the evaluator, approvers at their step, and `view_all` holders                                                      |
+| Section                                         | Path                           | Who sees it                                                                                                                         |
+| ----------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **My evaluations**                              | `/reports/evaluations/mine`    | every member: their own evaluations, deleted-evaluation records, and their figures for the current period                           |
+| **Evaluations I conduct** / **All evaluations** | `/reports/evaluations/conduct` | `evaluations.conduct`, `view_all` or `manage`: the evaluations to work on (named "All evaluations" for `view_all` and `manage`)     |
+| **Templates & periods**                         | `/reports/evaluations`         | `evaluations.configure` or `evaluations.manage`: forms and review periods                                                           |
+| An evaluation                                   | `/reports/evaluations/<id>`    | the member, the evaluator, approvers at their step, anyone named on a step, the member's current supervisor, and `view_all` holders |
 
 ## Who can do what
 
-| Permission              | Lets them                                                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `evaluations.configure` | build and publish the forms                                                                                                           |
-| `evaluations.manage`    | open and close review periods, draft for anyone (one at a time or a whole period), choose the evaluator, amend a finalized evaluation |
-| `evaluations.conduct`   | be the evaluator; draft an evaluation they will conduct themselves                                                                    |
-| `evaluations.view_all`  | read every member's evaluations, and complete calibration                                                                             |
-| `evaluations.delete`    | delete an evaluation, with a reason                                                                                                   |
+| Permission              | Lets them                                                                                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `evaluations.configure` | build and publish the forms                                                                                                                                                           |
+| `evaluations.manage`    | open and close review periods, draft for anyone (one at a time or a whole period), choose the evaluator, amend a finalized evaluation, name who takes an approval or calibration step |
+| `evaluations.conduct`   | be the evaluator; draft an evaluation they will conduct themselves                                                                                                                    |
+| `evaluations.view_all`  | read every member's evaluations, complete calibration (never on one they wrote), see each finalized evaluation's grade on the list, and export a period's results                     |
+| `evaluations.delete`    | delete an evaluation, with a reason                                                                                                                                                   |
 
 - All five are given to the **Chief** on install and upgrade. Everyone else is
   granted them by position under **Administration → Organization Settings →
@@ -51,6 +51,10 @@ evaluations you can see there are past a due date.
 - `evaluations.manage` runs the process but does not, on its own, let someone
   read what is written in an evaluation. That needs `view_all`, being the
   evaluator, or being an approver at their step.
+- **The evaluator never calibrates or approves their own evaluation**, and
+  nobody signs two approvals on one evaluation _(2026-11-16)_. Holding the
+  approving position or `view_all` does not change that. See
+  [Naming who takes a step](#naming-who-takes-a-step).
 - **Signing** and **deleting** ask the person to confirm their identity again
   (password, passkey or authenticator), as other sensitive actions do — see
   [Authentication](Security-Authentication).
@@ -72,16 +76,25 @@ drafting rather than during it.
 
 **Evaluations → Templates & periods → New template.** Choose:
 
-- **Start from** a blank form or a ready-made one. Two are offered: an
+- **Start from** a blank form or a ready-made one. Three are offered: an
   **Annual Member Evaluation** (training, operational performance,
   professionalism and goals, weighted to 100%, with training hours, required
-  training and meeting attendance suggesting a rating) and a **Probationary
-  Check-in** (training, skills, participation and attitude on a three-level
-  scale, with no signatures). A ready-made form publishes as it stands, but its
-  wording, weights and especially its score bands are generic — change them to
-  your department's expectations first. Neither includes an officer-only
-  section, since that needs your own ranks. Choosing one fills in the name, the
-  kind and who it applies to; all of them stay editable.
+  training and meeting attendance suggesting a rating), an **Annual Evaluation
+  with Officer Sections** _(2026-11-20)_, and a **Probationary Check-in**
+  (training, skills, participation and attitude on a three-level scale, with
+  no signatures). A ready-made form publishes as it stands, but its wording,
+  weights and especially its score bands are generic — change them to your
+  department's expectations first. Choosing one fills in the name, the kind
+  and who it applies to; all of them stay editable.
+
+  The **officer** starter adds an officer-only **Leadership and supervision**
+  section (crew leadership, developing members, administrative duties). An
+  officer-only section needs your department's own ranks, so choosing this
+  starter shows an **Officer ranks** list in the dialog, and the template
+  cannot be created until at least one rank is ticked. Members of those ranks
+  get the section; everyone else is graded on the other sections alone, whose
+  weights (25 / 35 / 20, beside the leadership section's 20) keep nearly the
+  plain annual form's 30 / 45 / 25 when it is left out.
 
 - **Annual evaluation** or **Check-in.** A check-in has only the
   self-evaluation and the evaluator's part, and no signatures.
@@ -131,7 +144,11 @@ _Updated 2026-11-14._ The list is grouped by area (Training, Business
 meetings, Events, Shifts, Calls, Administrative hours, Membership) and also
 offers field shift evaluation scores, certifications expiring soon, event
 attendance by type, and waiver requests for training sessions and business
-meetings (shown, never scored). A source whose module or call tracking is off
+meetings (shown, never scored; a request's line ends "attachment on file" when
+at least one document was on file when the figures were taken, and says
+nothing else about it — attachments are deleted a set time after a request
+closes, a year by default, so a later draft can read no). A source whose
+module or call tracking is off
 reads "(turned off)". When the score bands leave values uncovered, the editor
 says "No rating is suggested for values …". Each figure now shows the counts
 behind it ("6 of 8 meetings attended"), on screen and in the PDF, and the
@@ -175,8 +192,8 @@ Each form has its steps, always in this order:
 
 1. **Self-evaluation** — the member rates themselves.
 2. **Evaluator** — the assigned evaluator completes the evaluation.
-3. **Calibration** (optional) — a `view_all` holder reviews it before it goes
-   further.
+3. **Calibration** (optional) — a `view_all` holder other than the evaluator
+   reviews it before it goes further.
 4. **Approvals** (optional, any number) — signed by whoever holds the
    position you name, such as the Deputy Chief or the Board.
 5. **Member acknowledgement** — required on an annual evaluation.
@@ -246,7 +263,8 @@ their part.
   was not submitted.
 - **The evaluator** fills in their part beside the member's figures, saves as
   they go, and submits it.
-- **Calibration**, if the form has it: a `view_all` holder opens the
+- **Calibration**, if the form has it: a `view_all` holder other than the
+  evaluator (or the person a manager named on the step) opens the
   evaluation, chooses **Mark calibration complete**, and may tick items for
   the evaluator to revisit. Only the ticks are kept; talk through the changes
   in person. The evaluator sees the ticked items marked **Flagged at
@@ -254,11 +272,58 @@ their part.
 - **Approvals:** each approver opens the evaluation and chooses the button
   named for their step (for example **Board approval**), types their name as
   it appears on their account, confirms they intend it as their signature, and
-  confirms their identity.
+  confirms their identity. The evaluator cannot sign an approval, nor can
+  someone who already signed another approval on the evaluation.
 - **The member** can read the evaluation once everything before their step is
   done. They **acknowledge receipt**, or **refuse to sign** and give a reason.
   Either one finalizes the evaluation. Acknowledging is not agreeing, and the
   PDF says so.
+
+## Naming who takes a step
+
+_(2026-11-16)_ Refusing the evaluator at calibration and approval would stall
+an evaluation where the evaluator is the only holder of the step's position —
+a department whose only Captain wrote it, say. So an `evaluations.manage`
+holder can name who takes an approval or calibration step on one evaluation:
+
+- On the evaluation's step list, a step not yet done shows **Assign** (or
+  **Change**). The **Who takes "…"** dialog lists the members who may be
+  named: any current member except the member, the evaluator and, on an
+  approval, anyone who signed another approval on this evaluation.
+- **Assign** asks the manager to confirm their identity, as signing does, and
+  is recorded in the audit log (`evaluation_step_assigned`).
+- The step then reads **Assigned to** _name_. Only that person can complete
+  it, in place of the position's holders (or the `view_all` holders, for
+  calibration). They read the evaluation as an approver does and are emailed
+  if the step is already open.
+- **No one named** → **Hand back** returns the step to the position. An
+  amendment starts its new revision with nobody named. A position holder
+  replaced by a name stops seeing the evaluation unless they have another
+  part in it.
+
+On upgrade, an evaluation already waiting on an approval whose only position
+holder is its evaluator stays open until a manager names someone.
+
+## The last review
+
+_(2026-11-20)_ An evaluation page shows a **Last review** card when the member
+has an earlier finalized evaluation on the same form (any version) for a
+period that ended before this one began. It gives that review's period, the
+overall grade and each section's grade that stood (the evaluator's where they
+changed the calculated one), and its goals under **Goals set then**, with
+**Open the last review**. You see it only if you could open that review
+yourself, so a new evaluator without `view_all` does not see a predecessor's
+review. It is not printed on the PDF.
+
+## Period results
+
+_(2026-11-20)_ On the conduct list, a **Period** dropdown filters to one review
+period. For a `view_all` holder the list adds an **Overall grade** column
+(finalized evaluations only), and choosing a period shows a **Period results**
+card — how many are complete and how many stand at each grade — with **Export
+CSV** (`evaluation-results.csv`, one row per evaluation; each export audited
+as `evaluation_period_exported`). `evaluations.manage` alone shows no grades.
+Your own evaluation is left out of the list and the export.
 
 ## Grading by section
 
@@ -278,7 +343,9 @@ call. `GET /evaluations/attention` feeds the counts on the section strip.
 When the evaluation is final, a PDF is made once, with the department's logo
 and name, the figures, every answer, the signatures, any amendments and a
 fingerprint of the record, and it is kept exactly as signed. Anyone who may
-read the evaluation can **Download PDF**; every download is recorded.
+read the evaluation can **Download PDF**; every download is recorded. Pages
+are footed "Page X of Y" _(2026-11-20)_; a PDF frozen before then keeps its
+"Page N" footer.
 
 ## After it is final
 
@@ -330,9 +397,14 @@ and never go out twice for the same step.
 **Can an evaluator see the member's self-evaluation before the member
 submits it?** No.
 
-**Can a supervisor see their crew's evaluations?** Only as the evaluator, an
-approver, or with `evaluations.view_all`. Being someone's supervisor does not,
-on its own, open their evaluations.
+**Can a supervisor see their crew's evaluations?** Yes, read-only. The
+member's supervisor today, by the dated **Reports To** assignments, finds their
+crew's evaluations under **My Crew** and sees the status and steps at once,
+and the parts, figures and signatures once the evaluation is released to the
+member: what the member can read. An assignment that has ended grants nothing,
+and being a supervisor never lets someone draft, write, sign, calibrate, amend
+or delete. To do any of that they must be the evaluator, an approver, named on
+a step, or hold the matching permission.
 
 **Why is a figure "not available"?** The Logbook could not measure it
 honestly for that member and period (for example, call tracking is off, or no

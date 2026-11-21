@@ -254,6 +254,17 @@ SCHEDULE = {
         "recommended_time": "07:20",
         "cron": "20 7 * * *",
     },
+    "leave_request_upkeep": {
+        "description": (
+            "Settle leave requests whose decision rule is already met (an "
+            "approver who stepped down can leave one decided), then remind "
+            "approvers who have not decided a request three days after it was "
+            "made, and weekly after that"
+        ),
+        "frequency": "daily",
+        "recommended_time": "07:35",
+        "cron": "35 7 * * *",
+    },
     "open_ended_leave_digest": {
         "description": (
             "Once a month, email the officers who manage leave a list of "
@@ -1180,6 +1191,18 @@ async def run_leave_ending_reminders(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(
         db, "leave_ending_reminders", send_leave_ending_reminders
     )
+
+
+async def run_leave_request_upkeep(db: AsyncSession) -> Dict[str, Any]:
+    """Settle leave requests the rule already decides, then remind approvers.
+
+    Each reminder is claimed per request and reminder number, so a second
+    run in a day sends nothing; a settled request is locked while it is
+    decided, as a vote is.
+    """
+    from app.services.leave_workflow_notices import run_request_upkeep
+
+    return await _for_each_org(db, "leave_request_upkeep", run_request_upkeep)
 
 
 async def run_open_ended_leave_digest(db: AsyncSession) -> Dict[str, Any]:
@@ -7144,18 +7167,24 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
             # anywhere after the first night never reaches the parent, and
             # copying the parent reverted every new occurrence to the old
             # values. The latest occurrence is the one every such edit reached.
-            latest_result = await db.execute(
+            #
+            # Every occurrence is read, cancelled ones included, because a
+            # cancelled occurrence still holds its date: a job that re-runs
+            # nightly must be a no-op for a cancelled future (CLAUDE.md
+            # pitfall #36), and creating a live copy beside a cancelled row
+            # undoes the officer's cancel.
+            series_result = await db.execute(
                 select(Event)
                 .where(
-                    (Event.id == parent.id) | (Event.recurrence_parent_id == parent.id),
-                    Event.is_cancelled.is_(False),
+                    (Event.id == parent.id) | (Event.recurrence_parent_id == parent.id)
                 )
                 .order_by(Event.start_datetime.desc())
-                .limit(1)
             )
-            latest = latest_result.scalars().first()
+            series_rows = list(series_result.scalars().all())
+            latest = next((e for e in series_rows if not e.is_cancelled), None)
             if latest is None:
                 continue
+            taken_starts = {_as_naive_utc(e.start_datetime) for e in series_rows}
 
             # Naive UTC, as `now` is above. A column select used to hand
             # these back raw (naive); an ORM row already in the session
@@ -7197,9 +7226,13 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                 exceptions=parent.recurrence_exceptions,
             )
 
-            # Filter out the first one (it's the latest existing occurrence)
-            # and any that already exist
-            new_occurrences = [(s, e) for s, e in new_occurrences if s > latest_start]
+            # Only dates after the latest live occurrence, and none the series
+            # already holds — a cancelled occurrence included.
+            new_occurrences = [
+                (s, e)
+                for s, e in new_occurrences
+                if s > latest_start and s not in taken_starts
+            ]
 
             if not new_occurrences:
                 continue
@@ -8708,6 +8741,7 @@ async def run_election_lifecycle(db: AsyncSession) -> Dict[str, Any]:
 TASK_RUNNERS = {
     "leave_ending_reminders": run_leave_ending_reminders,
     "open_ended_leave_digest": run_open_ended_leave_digest,
+    "leave_request_upkeep": run_leave_request_upkeep,
     "cert_expiration_alerts": run_cert_expiration_alerts,
     "medical_screening_expiry_reminders": run_medical_screening_expiry_reminders,
     "election_lifecycle": run_election_lifecycle,
@@ -8844,6 +8878,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "leave_ending_reminders": 86400,
     # Daily, sending once a month: the digest is claimed per month.
     "open_ended_leave_digest": 86400,
+    "leave_request_upkeep": 86400,
     "cert_expiration_alerts": 86400,
     "medical_screening_expiry_reminders": 86400,
     "action_item_reminders": 86400,

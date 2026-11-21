@@ -173,11 +173,22 @@ class EventDefaultsUpdate(BaseModel):
     )
 
 
+class OutreachRoleNeed(BaseModel):
+    """How many people one outreach role needs."""
+
+    role: str = Field(..., min_length=1, max_length=100)
+    count: int = Field(..., ge=1, le=50)
+
+
 class OutreachEventType(BaseModel):
     """An outreach event type option."""
 
     value: str = Field(..., min_length=1, max_length=100)
     label: str = Field(..., min_length=1, max_length=200)
+    # The roles an event of this type usually needs (owner decision,
+    # 2026-11-20). Prefills a signup sheet, which the organizer can change for
+    # each event; omitted, the sheet starts from the first configured role.
+    default_roles: Optional[List[OutreachRoleNeed]] = None
 
 
 class OutreachRole(BaseModel):
@@ -644,6 +655,15 @@ class EventResponse(EventBase, UTCResponseBase):
     # (outreach_event_clause) that has started and is not cancelled — the
     # checks the save applies. Detail endpoint only.
     can_record_guest_headcount: bool = False
+    # What happened at an outreach event, recorded when it closes.
+    outreach_outcome_note: Optional[str] = None
+    outreach_apparatus_ids: Optional[List[str]] = None
+    outreach_materials: Optional[List[Dict[str, Any]]] = None
+    outreach_photos: Optional[str] = None
+    # May this caller see and open the event's volunteer signup sheet:
+    # events.manage, on an outreach event that is not cancelled. Detail
+    # endpoint only (owner decision, 2026-11-20).
+    can_staff_event: bool = False
     updated_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
@@ -935,6 +955,26 @@ class GuestHeadcountUpdate(BaseModel):
     """Set, or clear with null, the guests counted at an outreach event."""
 
     guest_headcount: Optional[int] = Field(None, ge=0, le=MAX_GUEST_HEADCOUNT)
+
+
+class OutreachMaterial(BaseModel):
+    """Something handed out at an outreach event, and how many."""
+
+    item: str = Field(..., min_length=1, max_length=100)
+    quantity: int = Field(..., ge=1, le=100000)
+
+
+class OutreachCloseoutUpdate(BaseModel):
+    """What happened at an outreach event (owner decision, 2026-11-20).
+
+    Replaces what was recorded: every field the close-out form owns is sent on
+    every save, and an empty or null value clears it.
+    """
+
+    outcome_note: Optional[str] = Field(None, max_length=5000)
+    apparatus_ids: List[str] = Field(default_factory=list, max_length=50)
+    materials: List[OutreachMaterial] = Field(default_factory=list, max_length=50)
+    photos: Optional[Literal["none", "consented", "not_consented"]] = None
 
 
 class RecordActualTimes(BaseModel):

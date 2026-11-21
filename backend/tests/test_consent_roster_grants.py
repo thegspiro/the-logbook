@@ -152,6 +152,17 @@ def test_migration_snapshot_matches_the_registry_it_was_written_against():
             "_history_grants",
         )._PERMISSIONS
     )
+    # The apparatus event grants reached every position holding events.view
+    # or events.manage with the apparatus events tables, in their own
+    # evidence-gated revision.
+    later_grants.update(
+        permission
+        for permission, _evidence in _load_module(
+            versions
+            / "20261116_1602_3f8a1c6e2b94_apparatus_events_tables_and_grants.py",
+            "_apparatus_event_grants",
+        )._EVIDENCE_GRANTS
+    )
     for slug, expected in migration._PRIOR_DEFAULTS.items():
         current = set(DEFAULT_POSITIONS[slug]["permissions"]) - later_grants
         assert current == expected | {PERMISSION}, (

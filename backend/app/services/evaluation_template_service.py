@@ -124,6 +124,20 @@ class EvaluationTemplateService:
                 raise ValueError(
                     "That starting point is for a different kind of evaluation."
                 )
+        definition = starter.definition() if starter else default_definition()
+        workflow = starter.workflow() if starter else default_workflow(data.kind)
+        if starter is not None and starter.officer_sections:
+            if not data.officer_ranks:
+                raise ValueError("Choose the ranks that receive the officer sections.")
+            definition = definition.model_copy(
+                update={"officer_ranks": list(dict.fromkeys(data.officer_ranks))}
+            )
+            await self._assert_references_in_org(organization_id, definition, workflow)
+        elif data.officer_ranks:
+            raise ValueError(
+                "Officer ranks are chosen here only for a starting point with "
+                "officer sections; set them in the builder instead."
+            )
         await self._assert_name_free(organization_id, data.name, exclude_id=None)
         await lock_organization_scope(
             self.db, organization_id, EVALUATION_TEMPLATE_MATCHING
@@ -151,12 +165,8 @@ class EvaluationTemplateService:
                 organization_id=str(organization_id),
                 template_id=template.id,
                 version_number=1,
-                definition=(
-                    starter.definition() if starter else default_definition()
-                ).model_dump(mode="json"),
-                workflow=(
-                    starter.workflow() if starter else default_workflow(data.kind)
-                ).model_dump(mode="json"),
+                definition=definition.model_dump(mode="json"),
+                workflow=workflow.model_dump(mode="json"),
                 created_by=str(actor_id),
             )
         )
@@ -176,6 +186,7 @@ class EvaluationTemplateService:
                 "section_titles": [
                     section.title for section in s.definition().sections
                 ],
+                "needs_officer_ranks": s.officer_sections,
             }
             for s in STARTERS
         ]

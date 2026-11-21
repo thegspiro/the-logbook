@@ -362,6 +362,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/events/:id/check-in', label: 'Event self check-in' },
       { path: '/events/admin', label: 'Events administration hub', permission: 'events.manage' },
       {
+        path: '/events/admin/requests/:requestId',
+        label: 'Outreach request',
+        permission: 'events.manage',
+        note: 'One request from the Requests board, on its own page',
+      },
+      {
         path: '/events/admin/community/print',
         label: 'Community Engagement summary (print)',
         note: 'The outreach report as a printable summary — opens the print dialog',

@@ -1931,6 +1931,8 @@ export interface SelfReportConfigUpdate {
  */
 export interface SubmissionAttachment {
   index: number;
+  /** The entry's stable id. Null only on an entry stored before ids existed. */
+  id?: string | null;
   file_name?: string | null;
   file_type?: string | null;
   file_size?: number | null;
@@ -2384,6 +2386,13 @@ export interface RequirementDetail {
   /** Fractional when a partial month was excused. */
   active_months?: number;
   cert_expired?: boolean;
+  /**
+   * For a `certification` requirement: the expiration date (YYYY-MM-DD) of
+   * the certificate graded, so the card reads "On file (Expires ...)" or
+   * "Expired ..." rather than 1/1 or 0/1. Null when nothing is on file or the
+   * certificate never expires, and for every other type.
+   */
+  expiry_date?: string | null;
   blocks_activity?: boolean;
   /**
    * Set while an existing member's catch-up period runs and the requirement is

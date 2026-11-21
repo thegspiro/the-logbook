@@ -7,13 +7,14 @@ members' records, so who may point it at a real member — and that doing so is
 audited and stays inside the department — is the other half of this file.
 """
 
+import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from datetime import date
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
@@ -24,7 +25,8 @@ from app.models.evaluation import EvaluationPeriod, EvaluationTemplateVersion
 from app.models.training import TrainingRecord, TrainingStatus, TrainingType
 from app.models.user import User
 from app.schemas.evaluation import definition_publish_errors, workflow_publish_errors
-from app.services.evaluation_starters import STARTERS
+from app.services.evaluation_service import form_definition
+from app.services.evaluation_starters import STARTERS, STARTERS_BY_KEY
 from tests.test_evaluation_workflow import _org, _user
 
 ClientFactory = Callable[[User], Awaitable[AsyncClient]]
@@ -99,8 +101,36 @@ DEFINITION = {
 class TestStarterContent:
     @pytest.mark.parametrize("starter", STARTERS, ids=lambda s: s.key)
     def test_every_starter_publishes_as_it_stands(self, starter):
-        assert definition_publish_errors(starter.definition()) == []
+        """A starter with officer sections publishes once the ranks it is
+        created with are in place; it is never created without them."""
+        definition = starter.definition()
+        if starter.officer_sections:
+            assert definition_publish_errors(definition) == [
+                "Choose the ranks that receive the officer-only sections."
+            ]
+            definition = definition.model_copy(update={"officer_ranks": ["captain"]})
+        assert definition_publish_errors(definition) == []
         assert workflow_publish_errors(starter.workflow(), starter.kind) == []
+
+    def test_a_member_without_an_officer_rank_is_graded_on_the_rest(self):
+        officer = STARTERS_BY_KEY["annual_with_officers"].definition()
+        plain = STARTERS_BY_KEY["annual_member"].definition()
+
+        member_form = form_definition(officer, officer=False)
+        officer_form = form_definition(officer, officer=True)
+
+        assert "leadership" not in [s.key for s in member_form.sections]
+        assert "leadership" in [s.key for s in officer_form.sections]
+        # The officer starter is the annual starter plus one section.
+        assert [s.key for s in member_form.sections] == [s.key for s in plain.sections]
+        # Without leadership the graded sections keep nearly the plain
+        # starter's shares: 25/35/20 of 80 against 30/45/25 of 100.
+        weights = {s.key: s.weight for s in member_form.sections if s.weight}
+        total = sum(weights.values())
+        for key, plain_weight in (
+            (s.key, s.weight) for s in plain.sections if s.weight
+        ):
+            assert abs(weights[key] / total * 100 - plain_weight) < 2
 
     def test_starter_keys_are_unique(self):
         keys = [s.key for s in STARTERS]
@@ -195,6 +225,92 @@ class TestCreatingFromAStarter:
         )
 
         assert response.status_code == 400
+        assert message in response.json()["detail"]
+        versions = (
+            await db_session.execute(
+                select(EvaluationTemplateVersion).where(
+                    EvaluationTemplateVersion.organization_id == org
+                )
+            )
+        ).all()
+        assert versions == []
+
+    async def _rank(self, db_session, org: str, code: str) -> None:
+        await db_session.execute(
+            text(
+                "INSERT INTO operational_ranks (id, organization_id, rank_code, "
+                "display_name, sort_order, is_active) "
+                "VALUES (:id, :org, :code, :name, 5, 1)"
+            ),
+            {"id": str(uuid.uuid4()), "org": org, "code": code, "name": code.title()},
+        )
+
+    async def test_the_officer_starter_takes_the_ranks_and_publishes(
+        self, db_session, make_client
+    ):
+        org = await _org(db_session)
+        await self._rank(db_session, org, "captain")
+        await self._rank(db_session, org, "lieutenant")
+        builder = await _user(db_session, org, ["evaluations.configure"])
+        client = await make_client(builder)
+
+        catalog = (await client.get("/evaluations/templates/starters")).json()
+        assert {s["key"]: s["needs_officer_ranks"] for s in catalog} == {
+            "annual_member": False,
+            "annual_with_officers": True,
+            "probationary_check_in": False,
+        }
+
+        created = await client.post(
+            "/evaluations/templates",
+            json={
+                "name": "Officer Annual",
+                "kind": "annual",
+                "starter": "annual_with_officers",
+                "officer_ranks": ["captain", "lieutenant", "captain"],
+            },
+        )
+        assert created.status_code == 201, created.text
+        draft = created.json()["draft"]["definition"]
+        assert draft["officer_ranks"] == ["captain", "lieutenant"]
+        assert [s["key"] for s in draft["sections"] if s["officer_only"]] == [
+            "leadership"
+        ]
+
+        published = await client.post(
+            f"/evaluations/templates/{created.json()['id']}/publish"
+        )
+        assert published.status_code == 200, published.text
+        assert published.json()["errors"] == []
+
+    @pytest.mark.parametrize(
+        ("body", "message"),
+        [
+            ({"starter": "annual_with_officers"}, "Choose the ranks"),
+            (
+                {"starter": "annual_with_officers", "officer_ranks": ["admiral"]},
+                "not defined in your department",
+            ),
+            (
+                {"starter": "annual_member", "officer_ranks": ["captain"]},
+                "only for a starting point with officer sections",
+            ),
+            ({"officer_ranks": ["captain"]}, "only for a starting point"),
+        ],
+    )
+    async def test_officer_ranks_are_required_known_and_only_for_that_starter(
+        self, db_session, make_client, body, message
+    ):
+        org = await _org(db_session)
+        await self._rank(db_session, org, "captain")
+        builder = await _user(db_session, org, ["evaluations.configure"])
+
+        response = await (await make_client(builder)).post(
+            "/evaluations/templates",
+            json={"name": "Refused", "kind": "annual", **body},
+        )
+
+        assert response.status_code == 400, response.text
         assert message in response.json()["detail"]
         versions = (
             await db_session.execute(

@@ -3,7 +3,7 @@
  */
 
 // Import enum types from the canonical source and re-export
-import type { AttendancePetitionStatus, EventType, RSVPStatus } from '../constants/enums';
+import type { AttendancePetitionStatus, EventRequestSource, EventType, RSVPStatus } from '../constants/enums';
 export type { AttendancePetitionStatus, EventType, RSVPStatus };
 
 export interface Event {
@@ -116,6 +116,13 @@ export interface Event {
   /** Server-decided: events.manage on an event that counts as community
    * outreach. Detail endpoint only. */
   can_record_guest_headcount?: boolean;
+  /** May this caller see and open the event's volunteer signup sheet (detail only). */
+  can_staff_event?: boolean;
+  /** What happened at an outreach event, recorded when it closes. */
+  outreach_outcome_note?: string | null;
+  outreach_apparatus_ids?: string[] | null;
+  outreach_materials?: OutreachMaterial[] | null;
+  outreach_photos?: OutreachPhotos | null;
   created_at: string;
   updated_at: string;
   rsvp_count?: number;
@@ -1025,6 +1032,8 @@ export interface EventPositionOption {
 export interface OutreachEventTypeConfig {
   value: string;
   label: string;
+  /** The roles an event of this type usually needs; prefills its signup sheet. */
+  default_roles?: StaffingRoleNeed[] | undefined;
 }
 
 export interface PipelineTaskConfig {
@@ -1100,12 +1109,14 @@ export interface EventRequest {
   id: string;
   organization_id: string;
   contact_name: string;
-  contact_email: string;
+  /** Null for a request a coordinator entered for a caller who gave only a phone number. */
+  contact_email?: string | null;
   contact_phone?: string;
   organization_name?: string;
   outreach_type: string;
   description: string;
   date_flexibility: DateFlexibility;
+  /** Calendar dates, "YYYY-MM-DD": the days the requester named. */
   preferred_date_start?: string;
   preferred_date_end?: string;
   preferred_timeframe?: string;
@@ -1131,15 +1142,46 @@ export interface EventRequest {
   staffing_roles?: StaffingRoleNeed[];
   volunteer_call_sent_at?: string;
   status_token?: string;
+  /** How it arrived: `web` for the public form, otherwise as the coordinator entered it. */
+  source?: EventRequestSource;
   created_at: string;
   updated_at: string;
   activity_log: EventRequestActivity[];
 }
 
+/**
+ * A request a coordinator enters for somebody who phoned, wrote or came by
+ * (EventRequestStaffCreate). Optional keys are omitted, not sent blank; the
+ * dates are plain YYYY-MM-DD calendar dates.
+ */
+export interface EventRequestStaffCreate {
+  source: EventRequestSource;
+  contact_name: string;
+  contact_email?: string | undefined;
+  contact_phone?: string | undefined;
+  organization_name?: string | undefined;
+  outreach_type: string;
+  description: string;
+  date_flexibility: DateFlexibility;
+  preferred_date_start?: string | undefined;
+  preferred_date_end?: string | undefined;
+  preferred_timeframe?: string | undefined;
+  preferred_time_of_day: TimeOfDay;
+  audience_size?: number | undefined;
+  age_group?: string | undefined;
+  venue_preference: VenuePreference;
+  venue_address?: string | undefined;
+  special_requests?: string | undefined;
+  assigned_to?: string | undefined;
+  notify_requester: boolean;
+}
+
+export type VenuePreference = 'their_location' | 'our_station' | 'either';
+
 export interface EventRequestListItem {
   id: string;
   contact_name: string;
-  contact_email: string;
+  contact_email?: string | null;
   organization_name?: string;
   outreach_type: string;
   status: EventRequestStatus;
@@ -1154,6 +1196,7 @@ export interface EventRequestListItem {
   staffing_shift_id?: string;
   /** Intake flagged it as arriving inside the department's lead time. */
   short_notice?: boolean;
+  source?: EventRequestSource;
   /** Seats on the live signup sheet; both null when the request has none. */
   staffing_slots_filled?: number | null;
   staffing_slots_total?: number | null;
@@ -1208,6 +1251,28 @@ export interface EventRequestStaffing {
   volunteer_call_sent_at?: string;
 }
 
+/** Something handed out at an outreach event, and how many. */
+export interface OutreachMaterial {
+  item: string;
+  quantity: number;
+}
+
+/** Whether photos were taken at an outreach event, and with the host's consent. */
+export type OutreachPhotos = 'none' | 'consented' | 'not_consented';
+
+/** The close-out record an outreach event's page saves; every field, every time. */
+export interface OutreachCloseoutUpdate {
+  outcome_note: string | null;
+  apparatus_ids: string[];
+  materials: OutreachMaterial[];
+  photos: OutreachPhotos | null;
+}
+
+/** The signup sheet staffing an event; `request_id` when it is the request's. */
+export interface EventStaffing extends EventRequestStaffing {
+  request_id?: string | null;
+}
+
 export interface EventRequestVolunteerCallResult {
   message: string;
   recipients: number;
@@ -1220,6 +1285,7 @@ export interface EventRequestPublicStatus {
   outreach_type: string;
   status: EventRequestStatus;
   date_flexibility: DateFlexibility;
+  /** Calendar dates, "YYYY-MM-DD". */
   preferred_date_start?: string;
   preferred_date_end?: string;
   preferred_timeframe?: string;
@@ -1229,4 +1295,6 @@ export interface EventRequestPublicStatus {
   decline_reason?: string;
   task_progress?: TaskProgressPublic;
   can_cancel: boolean;
+  /** The department's IANA timezone, which the page shows times in. */
+  timezone?: string | null;
 }
