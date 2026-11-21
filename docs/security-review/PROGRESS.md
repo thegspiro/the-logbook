@@ -16,6 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4497](https://github.com/thegspiro/the-logbook/pull/4497)**
+(branch `claude/security-review-compliance`): Feature 20 (Compliance), pass
+15 — watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable per `ListAgents`).
+Real delta across all ten declared files since pass 14 (baseline
+`2775b491a`, PR #4213): a new evaluation-credited requirement type, a
+held-session sign-off fix, a session-excusal waiver source, optional
+compliance-profile requirements, a shared `grade_members` grading loop, and
+a monthly-pace display. All traced end to end; the one new query is
+org-scoped on every table it touches, and the new optional-requirements
+field is never read by any grading loop. **0 fixed, 0 newly flagged, 0
+findings closed.** Standing findings CS-8 and `grace_period_days`
+re-verified unchanged, both owner-accepted, by design. Full write-up:
+`docs/security-review/CMP-20-compliance.md`'s **Pass 15** section.
+
+Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 15, PR #4496, merged), preserved for history</summary>
+
 **PR [#4496](https://github.com/thegspiro/the-logbook/pull/4496)**
 (branch `claude/security-review-skills-testing-p15`): Feature 19 (Skills
 testing), pass 15 — watchdog pickup (the dedicated `/loop 30m
@@ -27219,7 +27240,7 @@ iteration's commit" rule.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13), `api/public/shift_evaluations.py` (added pass 15)                                                        | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (31 routes, added pass 17)                              | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ⬜     |
@@ -27277,6 +27298,56 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-21 — Feature 19 (Skills testing, pass 15) merged; Feature 20 (Compliance, pass 15): watchdog pickup, real delta (evaluated-shift credit, optional requirements, monthly pace), 0 new findings
+
+Watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable per `ListAgents`).
+PR #4496 (Feature 19, Skills testing, pass 15) was merged by this same
+watchdog session (CI clean, `mergeable_state: clean`); a fresh
+`list_pull_requests` (state `open`) afterward found no
+`claude/security-review-` head, and row 20 (Compliance) was confirmed the
+next `⬜` row directly against the rotation table on a freshly fetched
+`origin/main`.
+
+Baseline `2775b491a` (pass 14's merge, PR #4213). Real delta across all ten
+declared files (1,124 insertions, 68 deletions) — the largest since pass 11:
+a new evaluation-credited requirement type (evaluated shifts, transports,
+refusals, evaluated calls) graded from submitted shift evaluations rather
+than training records; a held-session fix so a session whose completion
+sign-off is still pending is not counted as attended; a new
+session-excusal waiver source; optional (never-graded) compliance-profile
+requirements, with required winning on an id in both lists; profile-order
+and grading-loop refactors (`ordered_profiles`, `grade_members`) continuing
+this feature's own "one definition" work; a monthly-pace figure shown beside
+(never substituted for) the hours total; audit logging on every
+compliance-config/profile save with email addresses redacted; and a fix
+stopping the daily repeat of deadline reminders and non-compliance notices
+for rolling requirements. All traced end to end: the one new query
+(`load_evaluation_credits`) is org-scoped on every table it touches with
+`org_id` always a caller-supplied, already-scoped parameter; the new
+optional-requirements field is populated but never read by any grading
+loop, so it cannot move a member's compliance percentage or standing; every
+other change operates on already-scoped, already-loaded inputs with no
+query of its own. Standing findings CS-8 (attestation dual control) and
+`grace_period_days` (unwired) re-verified unchanged, both owner-accepted,
+by design. Route re-enumeration: 21/21 (13 + 8), unchanged from pass 14;
+`check_route_permissions.py --strict` reports 329 total application routes
+(up from 305 on other features' new pages), 0 errors/warnings.
+
+**0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/CMP-20-compliance.md`'s **Pass 15** section.
+
+**Completion gate:** `flake8`, `black --check` (26.10.1) and
+`isort --check-only` on `app/ tests/ alembic/` all clean.
+`validate_migrations.py --strict` reports 803 revisions and a single head,
+`7b4e2d9c1a63`. `check_route_permissions.py --strict` checked 329 routes
+with 0 errors and 0 warnings. The schema docs are up to date. The scoped
+backend suite had 886 passed and 1 environment-only skip. `npm run
+typecheck` reports 0 errors, and `npm run lint` reports 0 errors and 0
+warnings. 13 compliance-scoped frontend test files: 180 passed.
+
+Row 20 → ✅ (pending this PR's merge). Next is Feature 21 (Admin hours).
 
 ### 2026-11-21 — Feature 18 (Training extended, pass 15) merged; Feature 19 (Skills testing, pass 15) — watchdog pickup, true zero delta, 0 new findings
 
