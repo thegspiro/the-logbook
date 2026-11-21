@@ -483,6 +483,13 @@ class EventRSVP(Base):
     guest_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )  # Number of additional guests
+    # Crew, not audience (owner decision, 2026-11-21): set while the member
+    # holds a role on the signup sheet that staffs this outreach event. The
+    # member takes no attendee seat — the sheet's role counts cap the crew —
+    # though any guests they bring still do. See ``rsvp_seats``.
+    is_volunteer: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     notes: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True
     )  # Special requests, dietary restrictions, etc.
