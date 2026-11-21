@@ -121,22 +121,24 @@ department.
 | Field                                  | Effect                                                                                                                           |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | Profile Name, Description              | Labels only (name up to 100 characters)                                                                                          |
-| Priority                               | **Higher number wins** when a member matches more than one profile                                                               |
+| Priority                               | **Higher number wins** when a member matches more than one profile; on a tie the older profile wins, and the editor warns        |
 | Applies to Membership Types            | `active`, `probationary`, `administrative`, `life`, `retired`, `honorary`, `associate`, `junior`; none ticked matches every type |
 | Compliant / At-Risk Threshold Override | Replaces the department value for this group; empty uses the department default                                                  |
 | Required Training Requirements         | The requirements that grade this group — **only these**                                                                          |
-| Optional/Tracked Requirements          | Stored with the profile; they do not count toward the member's percentage                                                        |
+| Optional Requirements                  | Listed on the member's training page, marked Optional; never graded, reminded or counted                                         |
 | Required Admin Hours                   | Approved [Admin Hours](Module-Admin-Hours) per category and period (annual, biannual or quarterly)                               |
 | Active                                 | Inactive profiles are skipped                                                                                                    |
 
 ### How a member's profile is chosen
 
 1. Active profiles are tried from the **highest Priority down**; the first that
-   matches is used, and the rest are ignored.
+   matches is used, and the rest are ignored. Two profiles at the same Priority
+   are tried **oldest first**, then by id (owner decision 2026-11-21), so
+   adding a profile never re-grades members an existing one already covers.
+   The profile list is shown in this order, and a tied profile's card says so.
 2. A profile matches when the member's membership type is among its types (or
    it lists none) **and** the member holds one of its positions (or it lists
-   none). Positions (`role_ids`, position ids) can only be set through the API
-   (`/api/v1/compliance/config/profiles`); the screen sets membership types.
+   none). Both are set on the profile form.
 3. A member no profile matches is graded against every active requirement that
    applies to them, at the department thresholds.
 
@@ -195,7 +197,7 @@ set. A rerun never produces a second report for the same period.
 | Situation                                             | Behavior                                                                     |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------- |
 | No configuration saved                                | Built-in defaults; current month counted                                     |
-| Member matches two profiles                           | The higher Priority wins                                                     |
+| Member matches two profiles                           | The higher Priority wins; at equal Priority, the older profile               |
 | Profile threshold override left empty                 | The department value applies                                                 |
 | Evaluation period off, mid-month                      | Graded as of the end of last month; this month does not count against anyone |
 | Requirement set to "Use department default"           | Follows the Thresholds tab checkbox                                          |

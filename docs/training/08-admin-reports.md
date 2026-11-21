@@ -2710,15 +2710,19 @@ Profiles let different groups be held to different standards.
 2. Fill in:
    - **Profile Name** — for example "Line Officers" or "Probationary Members";
    - **Priority** — when a member matches more than one profile, the highest
-     priority applies;
+     priority applies; at equal priority the profile created first applies.
+     The form warns when the number you type ties with another active
+     profile, and a tied profile's card says so, but the save is allowed;
    - **Description**;
    - **Applies to Membership Types**;
    - **Applies to Members Holding a Position** _(2026-10-29)_ — see
      [Scoping a Compliance Profile by Position](./02-training.md#scoping-a-compliance-profile-by-position-2026-10-29);
    - optional **threshold overrides** for this group;
    - **Required Training Requirements** — what must be met;
-   - **Optional/Tracked Requirements** — tracked, but not needed for
-     compliance;
+   - **Optional Requirements** — shown to these members, and to officers, on
+     the member's training page, marked Optional. They never count toward
+     standing or percentage, and no reminders are sent. Ticking a requirement
+     Required takes it out of this list;
    - **Required Admin Hours** — admin-hours categories and the hours required.
 3. Save.
 
