@@ -75,7 +75,7 @@ the two.
 | Free-text reasons on leaves, training waivers, shift time-off, meeting waivers                                                                                                          | Meeting attendance (present/excused)                            |
 | RSVP dietary restrictions, accessibility needs, notes                                                                                                                                   | RSVP attendance and check-in times                              |
 | Duplicated identity copies in external-provider mappings; candidate photos                                                                                                              | Candidate names on ballots (official election records)          |
-| The applicant-era prospect record: full PII block, notes, interview assessments, uploaded documents; its public status token is rotated                                                 | Pipeline stage history                                          |
+| The applicant-era prospect record: PII block, notes, interviews, documents, activity-log values and step notes; its public status token is rotated                                      | Pipeline stage history                                          |
 | Certificate files uploaded with self-reported training, and their copies on the member's training records (the submission and record rows stay; a file another row still names is kept) |                                                                 |
 | Files uploaded to the member's training records themselves, by an officer or the member _(2026-11-20)_ (the record rows stay; a file another row still names is kept)                   |                                                                 |
 
@@ -259,6 +259,12 @@ results share the table and are never deleted by retention.
   infected file is never stored, and the audit event carries the
   signature name and a hash, never the file or its name. See
   [Security Configuration → Malware scanning](Configuration-Security#malware-scanning-of-uploads).
+- **Files left by a permanent member delete** are queued in
+  `pending_file_deletions` inside the delete's own transaction and removed
+  right after it. Whatever a crash or an unreachable remote store left is
+  retried every hour by the `pending_file_deletions` task, which checks each
+  file's references again first and keeps one another record still uses. A
+  row that keeps failing stays queued; nothing is dropped.
 - **Public-portal access logs** (each request to the public API, including
   refused authentications, with the requester's IP address) are kept **90
   days**, a fixed platform-wide period, and deleted daily by the

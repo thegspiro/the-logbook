@@ -367,6 +367,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'events.manage',
         note: 'One request from the Requests board, on its own page',
       },
+      {
+        path: '/events/admin/community/print',
+        label: 'Community Engagement summary (print)',
+        note: 'The outreach report as a printable summary — opens the print dialog',
+        permission: 'events.manage',
+      },
       { path: '/events/templates', label: 'Event templates', permission: 'events.manage' },
       { path: '/events/attendance-requests', label: 'Attendance requests across events' },
       { path: '/events/:id/edit', label: 'Edit event', anyPermission: ['events.manage', 'training.manage'] },

@@ -19,6 +19,7 @@ import {
   Globe,
   Inbox,
   Loader2,
+  Printer,
   Users,
 } from 'lucide-react';
 import { dashboardService } from '../services/api';
@@ -304,7 +305,7 @@ const CommunityEngagementTab: React.FC = () => {
       )}
 
       <section className="card rwd-table-container overflow-hidden p-0" aria-labelledby="ce-events-heading">
-        <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div>
             <h3 id="ce-events-heading" className="text-theme-text-primary text-sm font-semibold">
               Recent outreach events
@@ -315,15 +316,26 @@ const CommunityEngagementTab: React.FC = () => {
               </p>
             )}
           </div>
-          <button
-            type="button"
-            className="btn-secondary btn-sm flex shrink-0 items-center gap-1"
-            onClick={() => void exportCsv()}
-            disabled={!rows.length || exporting}
-          >
-            <Download className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>{exporting ? 'Exporting…' : 'Export CSV'}</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={`/events/admin/community/print?period=${period}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-secondary btn-sm flex items-center gap-1"
+            >
+              <Printer className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Print summary</span>
+            </a>
+            <button
+              type="button"
+              className="btn-secondary btn-sm flex items-center gap-1"
+              onClick={() => void exportCsv()}
+              disabled={!rows.length || exporting}
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{exporting ? 'Exporting…' : 'Export CSV'}</span>
+            </button>
+          </div>
         </div>
         {!rows.length ? (
           <p className="text-theme-text-muted px-4 pb-4 text-sm">No outreach events held in this period.</p>

@@ -363,6 +363,12 @@ Requires `events.manage` permission. Drawn with the same two-level navigation as
 
 A missing or unknown `?tab=` opens Create Event.
 
+| Route                           | Page                                 | Access          |
+| ------------------------------- | ------------------------------------ | --------------- |
+| `/events/admin/community/print` | Community Engagement summary (print) | `events.manage` |
+
+> The Community Engagement tab's **Print summary** opens this page for the period chosen on the tab (`?period=`), and it opens the print dialog once the report has loaded. Every figure comes from the same two endpoints the tab and its CSV export read.
+
 ### Outreach Request (`/events/admin/requests/:requestId`)
 
 Requires `events.manage` permission. One request from the Community Outreach **Requests** board, on a page of its own _(2026-11-21, owner decision: a page rather than the side panel it replaced)_: its next action, checklist, scheduling, volunteer staffing, what was asked for, contact details and activity, with a link back to the board. A row on the board, and a request just entered with **New request**, open here, so a request can be linked, bookmarked, refreshed into and left with the back button.

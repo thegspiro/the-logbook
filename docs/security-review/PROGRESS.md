@@ -16,6 +16,59 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4473](https://github.com/thegspiro/the-logbook/pull/4473)**
+(branch `claude/security-review-events-requests`): Feature 16 (Events &
+requests), pass 15 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session remains unreachable). PR #4465 (Feature 15,
+Scheduling, pass 15) had already merged (`3734622d`) before this
+iteration started. A fresh `list_pull_requests` (state `open`) found no
+`claude/security-review-*` head, and row 16 was confirmed the next `⬜`
+row.
+
+**1 fixed (EV-31, a rank-only organizer silently skipped the guest-
+headcount reminder), 0 new findings — real delta across the two new
+routes (postpone, guest-headcount) and the widened attendance-request
+review.** Baseline `51e6e1b5` (PR #4119's merge, pass 14) — a genuine
+ancestor of current `main`. Real changes in ten declared files plus two
+scope-correction additions (`services/community_engagement_service.py`,
+`services/guest_headcount_reminder_service.py`, both new):
+`postpone_event` (org-scoped, row-locked, idempotent per CLAUDE.md
+pitfall #36), `set_guest_headcount` (org-scoped, row-locked), an
+attendance-request review widened to fallback recipients with the
+self-decision refusal re-verified intact, and an inactive-member
+coordinator refusal using the correct `User.is_active` hybrid (pitfall
+#32). Two already-landed security-positive fixes re-confirmed, not
+claimed as this rotation's own: a member-email-enumeration oracle closed
+in the public guest check-in lookup, and an MCP draft-event visibility
+gap closed in `mcp/tools/events.py`. Full write-up:
+`docs/security-review/EV-16-events-requests.md`'s **Pass 15** section.
+
+**Known, already-tracked condition, not duplicated here:** `main`
+currently carries three Alembic heads (`0c22a95b94b8`, `73f64017f9e2`,
+`a6c3e8d17f42`), one of which is this feature's own `790a86084359`-
+descended migration. Three open PRs (#4467, #4468, #4469) already carry a
+no-op merge revision resolving this; this PR does not add a fourth. This
+pass's local test database was built with `alembic upgrade heads`
+followed by `scripts/repair_schema.py`.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 3
+heads (known condition above, tracked externally); `check_route_permissions.py
+--strict` — 327 routes, 0 errors/warnings; scoped backend pytest (`-k
+"event or guest or rsvp or attendance"`) — 2894 passed, 1 pre-existing
+environment-only skip; standing guard suites — 215 passed, 2 failed (the
+same pre-existing three-head fork, not newly broken); `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings; `npx
+vitest run` (this feature's modules/pages/components) — 663 passed (42
+files).
+
+Row 16 → ✅ (pending this PR's merge); next is Feature 17 (Training
+core) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 15, PR #4465, merged), preserved for history</summary>
+
 **PR [#4465](https://github.com/thegspiro/the-logbook/pull/4465)** (branch
 `claude/security-review-scheduling-p15` — the bare name and the
 `-p12`/`-p14` branches all have merged PRs against them per this
@@ -60,6 +113,8 @@ tolerance, account-status gates, log-call shape, baseline member grants)
 Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
 requests) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 16, PR #4464, merged), preserved for history</summary>
@@ -27028,7 +27083,7 @@ iteration's commit" rule.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                                                                                                                                         | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13)                                                                                                           | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (31 routes, added pass 17)                              | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ⬜     |

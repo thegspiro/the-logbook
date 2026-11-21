@@ -28,8 +28,10 @@ tables added later are covered without editing this file.
 
 A permanent delete also removes the stored files named by the rows it
 cascades away (training submissions, training records, attendance waiver
-documents), after the commit and keeping any file another row still
-references: see ``member_files.remove_files_after_hard_delete``.
+documents), keeping any file another row still references. They are queued
+in ``pending_file_deletions`` inside the delete's own transaction and removed
+after its commit, with an hourly sweep retrying the rest: see
+``app.services.pending_file_deletions``.
 """
 
 import importlib
