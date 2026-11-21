@@ -133,7 +133,10 @@ from app.schemas.attendance_waiver import (
     CapPeriod,
     policy_from_settings,
 )
-from app.services.attendance_waiver_email_service import AttendanceWaiverEmails
+from app.services.attendance_waiver_email_service import (
+    REQUEST_PATHS,
+    AttendanceWaiverEmails,
+)
 from app.services.email_policy import (
     EmailKind,
     department_required_kinds,
@@ -242,7 +245,7 @@ TRAINING_SPEC = WorkflowSpec(
     audit_category="training",
     session_noun="training session",
     default_title="Training session",
-    decider_path="/attendance-waivers",
+    decider_path=REQUEST_PATHS[TRAINING_WORKFLOW],
     member_fallback_url="/training/my-training",
     decider_email_kind=EmailKind.TRAINING_DUTIES,
     member_email_kind=EmailKind.TRAINING_REMINDERS,
@@ -258,7 +261,7 @@ MEETING_SPEC = WorkflowSpec(
     audit_category="meetings",
     session_noun="business meeting",
     default_title="Business meeting",
-    decider_path="/meetings/waiver-requests",
+    decider_path=REQUEST_PATHS[MEETING_WORKFLOW],
     member_fallback_url="/events",
     decider_email_kind=EmailKind.EVENT_DUTIES,
     member_email_kind=EmailKind.EVENT_CHANGES,
