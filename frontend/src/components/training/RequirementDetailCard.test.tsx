@@ -106,13 +106,14 @@ describe('RequirementDetailCard', () => {
     expect(screen.queryByText(/hrs/)).not.toBeInTheDocument();
   });
 
+  // A certification reads by state and date instead (see "a certification").
   it('shows no unit for a requirement graded done or not done', () => {
     render(
       <RequirementDetailCard
         requirement={{
           ...base,
-          name: 'CPR/BLS',
-          requirement_type: 'certification',
+          name: 'Ladder Skills Check',
+          requirement_type: 'skills_evaluation',
           required_hours: 1,
           completed_hours: 0,
         }}
@@ -198,6 +199,80 @@ describe('RequirementDetailCard', () => {
       expect(screen.getByText('83.25/72 hrs')).toBeInTheDocument();
       expect(screen.queryByText(/hrs\/mo avg/)).not.toBeInTheDocument();
       expect(screen.queryByText(/total$/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('a certification', () => {
+    const cpr: RequirementDetail = {
+      ...base,
+      name: 'CPR/BLS Certification',
+      requirement_type: 'certification',
+      frequency: 'biannual',
+      training_type: 'certification',
+      required_hours: 1,
+      original_required_hours: 1,
+      completed_hours: 1,
+      progress_percentage: 100,
+      is_met: true,
+      due_date: null,
+      days_until_due: null,
+      expiry_date: '2027-03-14',
+    };
+
+    it('reads as on file with its expiry, not 1/1', () => {
+      render(<RequirementDetailCard requirement={cpr} timezone="UTC" />);
+      expect(screen.getByText('On file')).toBeInTheDocument();
+      expect(screen.getByText('(Expires Mar 14, 2027)')).toBeInTheDocument();
+      expect(screen.queryByText(/1\/1/)).not.toBeInTheDocument();
+      expect(screen.getByText('Complete')).toBeInTheDocument();
+    });
+
+    it('reads as on file alone when the certificate never expires', () => {
+      render(<RequirementDetailCard requirement={{ ...cpr, expiry_date: null }} timezone="UTC" />);
+      expect(screen.getByText('On file')).toBeInTheDocument();
+      expect(screen.queryByText(/Expires/)).not.toBeInTheDocument();
+    });
+
+    it('says when a lapsed certificate expired, not 0/1', () => {
+      render(
+        <RequirementDetailCard
+          requirement={{
+            ...cpr,
+            completed_hours: 0,
+            progress_percentage: 0,
+            is_met: false,
+            cert_expired: true,
+            blocks_activity: true,
+            expiry_date: '2026-03-14',
+          }}
+          timezone="UTC"
+        />
+      );
+      expect(screen.getByText('Expired')).toBeInTheDocument();
+      expect(screen.getByText('(Mar 14, 2026)')).toBeInTheDocument();
+      expect(screen.queryByText(/0\/1/)).not.toBeInTheDocument();
+      expect(screen.getByText(/Certification expired — renew ASAP/)).toBeInTheDocument();
+    });
+
+    it('says not recorded when nothing is on file, rather than expired', () => {
+      render(
+        <RequirementDetailCard
+          requirement={{
+            ...cpr,
+            completed_hours: 0,
+            progress_percentage: 0,
+            is_met: false,
+            cert_expired: true,
+            blocks_activity: true,
+            expiry_date: null,
+          }}
+          timezone="UTC"
+          audience="officer"
+        />
+      );
+      expect(screen.getAllByText('Not recorded')).toHaveLength(2);
+      expect(screen.getByText(/No certification on file\. This may prevent the member/)).toBeInTheDocument();
+      expect(screen.queryByText(/expired/i)).not.toBeInTheDocument();
     });
   });
 });
