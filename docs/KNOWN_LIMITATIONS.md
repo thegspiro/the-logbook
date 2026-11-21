@@ -257,16 +257,14 @@ decisions did not settle, each answered conservatively:
   `main` (#4243). An evaluation drafted between 2026-11-11 and then recorded
   "no" in its snapshot and keeps it, as every snapshot keeps what was true
   when it was taken.
+- **"Attachment on file" is what was on file when the figures were taken.**
+  Attachments are deleted `attachment_retention_days` after a request closes
+  (a year by default), so an evaluation drafted after that reads no for a
+  request that once had one.
 - **A voided request is listed, and counted only as voided.** Nothing voids a
   request yet. When something does, the history shows the request and that it
   was voided, and the summary counts it under `voided` rather than as approved
   or denied, since a voided approval no longer counts toward the cap.
-- **The screens show the summary's count, not its breakdown.** The evaluation
-  pages and PDF print a count source as its number; the approved / denied /
-  withdrawn split is stored beside it (`breakdown`) and every request's
-  outcome is on the history lines, but nothing shows the split on its own.
-  Showing it would mean teaching the frontend's `formatFigure` and the PDF's
-  `format_figure` about an extra field. **Open:** whether to.
 - **Deciders are named by their current name**, or "a former member" when the
   account is gone, as the request screens name them. A decision log step
   carries no name snapshot.
