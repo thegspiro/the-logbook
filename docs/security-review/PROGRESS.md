@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**(to be recorded — this pass's PR number lands here in a second commit on
-the same branch, per Step 9)**: Feature 25 (Messaging & notifications), pass
+**PR [#4520](https://github.com/thegspiro/the-logbook/pull/4520)**
+(branch `claude/security-review-messaging-notifications` — first use of
+this branch name, no suffix needed): Feature 25 (Messaging & notifications), pass
 14 — watchdog pickup (the dedicated `/loop 30m /security-review` session,
 `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). PR #4507 (Feature
 24, Meetings & minutes, pass 14) merged (`f571296e`) since the last
