@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import userEvent from '@testing-library/user-event';
 
 const listRequests = vi.fn();
@@ -518,6 +518,32 @@ describe('EventRequestsTab entering a request taken by phone', () => {
     await user.selectOptions(within(dialog).getByLabelText(/Type of event/), 'station_tour');
     await user.type(within(dialog).getByLabelText(/What they asked for/), 'Tour for a Cub Scout den.');
   };
+
+  it('opens straight into the dialog from ?new=1, and drops the flag once read', async () => {
+    const LocationEcho = () => <output aria-label="Location">{useLocation().search}</output>;
+    render(
+      <MemoryRouter initialEntries={['/events/admin?tab=requests&new=1']}>
+        <ConfirmProvider>
+          <Routes>
+            <Route
+              path="/events/admin"
+              element={
+                <>
+                  <EventRequestsTab />
+                  <LocationEcho />
+                </>
+              }
+            />
+          </Routes>
+        </ConfirmProvider>
+      </MemoryRouter>
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'New request' });
+    expect(await within(dialog).findByRole('option', { name: 'Station Tour' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Location' })).toHaveTextContent('?tab=requests');
+    expect(screen.getByRole('status', { name: 'Location' })).not.toHaveTextContent('new=1');
+  });
 
   it('flags every missing field on its field and sends nothing', async () => {
     const user = userEvent.setup();

@@ -89,6 +89,7 @@ from app.schemas.event import (
     GuestCheckInLinkResponse,
     GuestHeadcountUpdate,
     ManagerAddAttendee,
+    OutreachCalendarItem,
     OutreachCloseoutUpdate,
     QRCheckInData,
     RecordActualTimes,
@@ -155,6 +156,7 @@ from app.services.integration_services.notification_dispatch import (
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
 from app.services.notifications_service import NotificationsService
+from app.services.outreach_calendar_service import OutreachCalendarService
 from app.services.qr_check_in_analytics import (
     device_type_from_user_agent,
     record_check_in_outcome,
@@ -1539,6 +1541,28 @@ async def get_public_calendar(
         )
         for e in events
     ]
+
+
+@router.get("/outreach-calendar", response_model=list[OutreachCalendarItem])
+async def get_outreach_calendar(
+    start: datetime = Query(...),
+    end: datetime = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Outreach events in a date range, with their signup-sheet and crew fill,
+    for the Community Outreach Manager's Overview. At most 93 days.
+
+    **Requires permission: events.manage**
+    """
+    try:
+        rows = await OutreachCalendarService(db).calendar(
+            str(current_user.organization_id), start, end
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    return [OutreachCalendarItem(**row) for row in rows]
 
 
 @router.get("/{event_id}", response_model=EventResponse)

@@ -1687,12 +1687,31 @@ stored Guest Headcount Reminder templates. The document headings titled
 "Public Outreach Request Pipeline" were kept, because other pages link to their
 anchors.
 
+**Outreach Overview — built (2026-11-21).** The area's first page: needs
+attention (requests waiting for a reply, events short of people, events waiting
+to be closed out), a week and month planning calendar, quick actions and the
+year at a glance, read from `GET /events/outreach-calendar`. Boundaries drawn
+without a ruling:
+
+- **Which events show is `outreach_event_clause`, unchanged** — the rule
+  Outreach Impact counts by, so the two pages cannot disagree (pitfall #29). An
+  apparatus night whose template uses a non-public type (business meeting,
+  other) is therefore not on the Overview, though it stays on Apparatus Events.
+  Widening the rule would change Outreach Impact's counts too. "Tagged with a
+  CRR activity" joins the rule when Phase 3 adds activities.
+- **"Closed out" is attendance finalized**, per the 2026-11-20 decision
+  (completion on finalize). An event with a headcount but no finalize still
+  shows as waiting; a draft never does.
+- **"Short of people" counts open volunteer and crew seats together**, for
+  events not yet started in the next 60 days.
+- **New outreach event opens the ordinary event form** without a type preset;
+  the form takes a template, not a type, from its address.
+
 Decided for later phases, not yet built:
 
-- **Outreach Overview** as the area's first page — needs attention, upcoming
-  outreach with seats filled against needed, quick actions. An outreach event
-  is one scheduled from a request or tagged with an outreach type or CRR
-  activity. The planning view offers week and month, as Shift Scheduling does.
+- **Location data for CRR activities comes from a ZIP list bundled with the
+  app** (owner decision, 2026-11-21) — offline, so it works on Unraid and
+  air-gapped installs, and no ZIP code leaves the server.
 - **CRR activity tracking**, recordable both as an event and as a lightweight
   log entry. A department-configurable catalogue (smoke and CO alarm installs,
   home safety surveys, car seat inspections, extinguisher training, hands-only

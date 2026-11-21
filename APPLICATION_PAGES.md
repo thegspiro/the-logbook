@@ -355,6 +355,7 @@ Requires `events.manage` permission. Drawn with the same two-level navigation as
 | ------------------ | ------------------ | ----------------- |
 | Events             | `create`           | Create Event      |
 | Events             | `past_events`      | Past Events       |
+| Community Outreach | `overview`         | Overview          |
 | Community Outreach | `requests`         | Outreach Requests |
 | Community Outreach | `community`        | Outreach Impact   |
 | Community Outreach | `apparatus_events` | Apparatus Events  |

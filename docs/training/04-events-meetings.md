@@ -1995,10 +1995,10 @@ creation tab. Both are pages of **Events Administration**, which is laid out
 like Training, Scheduling and Inventory Administration: four area cards, and
 under them a strip of the chosen area's pages with a line naming the open one.
 
-| Area                   | Pages                                     |
-| ---------------------- | ----------------------------------------- |
-| **Events**             | **Create Event**, **Past Events**         |
-| **Community Outreach** | **Outreach Requests**, **Outreach Impact** |
+| Area                   | Pages                                                                      |
+| ---------------------- | -------------------------------------------------------------------------- |
+| **Events**             | **Create Event**, **Past Events**                                          |
+| **Community Outreach** | **Overview**, **Outreach Requests**, **Outreach Impact**, **Apparatus Events** |
 | **Check-ins**          | **QR Code Analytics**, **Card Check-ins** |
 | **Settings**           | **Settings**                              |
 
@@ -2900,6 +2900,41 @@ so a half-written schedule or comment is never lost to a stray click.
 
 > **What if scheduling or postponing is refused?** The message gives the real
 > reason — for example, that the event's attendance is already closed.
+
+### The Outreach Overview
+
+**Who can do this:** officers who can manage events — usually the Community
+Outreach Manager.
+
+**Manage Events → Community Outreach → Overview** is the outreach manager's
+home page, and the page the **Community Outreach** card opens on. It gathers
+what the other outreach pages hold, and links into them; nothing is edited on
+it.
+
+- **New outreach event**, **Log a request** and **Apparatus nights** across
+  the top. **Log a request** opens **Outreach Requests** with the **New
+  request** form already open, for a request that came in by phone, email or
+  in person.
+- **Needs attention** — three cards:
+  - **Waiting for a reply**: new requests nobody has started on, the longest
+    wait first, with who has each and whether intake flagged it as short
+    notice.
+  - **Short of people**: outreach events in the next 60 days whose volunteer
+    signup sheet or apparatus crew still has an open seat.
+  - **Waiting to be closed out**: outreach events from the last 30 days that
+    are over and whose attendance has not been finalized. Finalizing
+    attendance is what closes an outreach event out.
+- **Planning calendar** — every outreach event, by **Week** or **Month**, the
+  way Shift Scheduling draws them. A day's events are listed beside the
+  calendar, with their time, place, how full their sheet and crew are, and the
+  request each came from. On a phone, the month shows how many events each day
+  has, and the week is a list of days.
+- **This year at a glance** — the four Outreach Impact figures, with a link to
+  the full report.
+
+An outreach event is the same one Outreach Impact counts: a public education,
+fundraiser, ceremony or social event, or any event a request was scheduled
+onto. Drafts are shown and marked **Draft**; cancelled events are not shown.
 
 ### Measuring Outreach: Outreach Impact
 

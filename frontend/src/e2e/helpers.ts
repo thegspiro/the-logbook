@@ -243,6 +243,54 @@ const requestDay = (days: number) => new Date(Date.now() + days * 86_400_000).to
  * with none — because each draws a different cell, and the long organization
  * name is the one that wraps on a phone.
  */
+/** Outreach events for the Overview, placed around the moment the test runs. */
+const outreachCalendar = () => {
+  const at = (days: number, hours: number) => new Date(Date.now() + (days * 24 + hours) * 3600 * 1000).toISOString();
+  const base = {
+    event_type: 'public_education',
+    location: 'Station 1 Bay',
+    is_draft: false,
+    request_id: null,
+    request_organization: null,
+    volunteers_filled: null,
+    volunteers_total: null,
+    crew_filled: null,
+    crew_total: null,
+    unit_numbers: [] as string[],
+    attendance_finalized: false,
+  };
+  return [
+    {
+      ...base,
+      event_id: 'oc-past',
+      title: 'Block party safety booth',
+      start_datetime: at(-3, 0),
+      end_datetime: at(-3, 2),
+    },
+    {
+      ...base,
+      event_id: 'oc-today',
+      title: 'Car seat check at the library',
+      start_datetime: at(0, 0),
+      end_datetime: at(0, 2),
+      request_id: 'req-open-1',
+      request_organization: 'Falls Library',
+      volunteers_filled: 1,
+      volunteers_total: 3,
+    },
+    {
+      ...base,
+      event_id: 'oc-santa',
+      title: 'Santa run through Oak Hills',
+      start_datetime: at(4, 0),
+      end_datetime: at(4, 3),
+      crew_filled: 4,
+      crew_total: 4,
+      unit_numbers: ['E1'],
+    },
+  ];
+};
+
 const COMMUNITY_ENGAGEMENT = {
   total_public_events: 21,
   total_member_attendees: 160,
@@ -5192,6 +5240,9 @@ const routes = ({
     () => ({ ...request, ...EVENT_REQUEST_DETAIL }),
   ]),
   ['**/api/v1/dashboard/community-engagement**', () => COMMUNITY_ENGAGEMENT],
+  // The Outreach Overview's calendar and attention cards: one event short of
+  // volunteers, one with a full crew, one waiting to be closed out.
+  ['**/api/v1/events/outreach-calendar**', () => (empty ? [] : outreachCalendar())],
   ['**/api/v1/admin-hub/events/metrics', eventMetricSettings],
   ['**/api/v1/admin-hub/training/metrics', trainingMetricSettings],
   // The notifications page lists rules and needs a list, not the catch-all
