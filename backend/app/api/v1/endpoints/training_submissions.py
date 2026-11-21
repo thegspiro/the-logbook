@@ -552,8 +552,11 @@ async def delete_submission(
         # reopens the submission and voids the record approval copied from
         # it, and the voided record keeps naming the same certificates. So
         # the reference check, after the commit, decides what goes.
+        # Locked, so the paths come from the list as it stands when the
+        # delete commits, and an approval in flight is waited for and then
+        # refuses the delete below rather than losing its submission.
         submission = await service.get_submission(
-            submission_id, current_user.organization_id
+            submission_id, current_user.organization_id, for_update=True
         )
         stored_paths = (
             _confined_attachment_paths(
@@ -756,16 +759,23 @@ async def _load_submission_for_attachment(
     db: AsyncSession,
     submission_id: str,
     current_user: User,
+    *,
+    for_update: bool = False,
 ) -> TrainingSubmission:
     """Fetch a submission in the caller's org, enforcing attachment access.
 
     The submitter may read their own attachments; everyone else needs
     ``training.manage`` — a certificate can carry PHI, so a same-org member
     without the permission is refused like any other reader.
+
+    ``for_update`` locks the row for a path that rewrites the list, so it
+    serializes with an approval (pitfall #27).
     """
     service = TrainingSubmissionService(db)
     submission = ensure_found(
-        await service.get_submission(submission_id, current_user.organization_id),
+        await service.get_submission(
+            submission_id, current_user.organization_id, for_update=for_update
+        ),
         "Submission",
     )
 
@@ -857,6 +867,21 @@ async def upload_submission_attachment(
         file, current_user, db, submission_id=str(submission.id)
     )
 
+    # Storing and scanning ran outside any lock, so a slow upload never holds
+    # up an approval. Re-read the row locked and check again before writing:
+    # an approval, or a removal, may have committed meanwhile, and the list
+    # must be built from what is there now.
+    submission = await _load_submission_for_attachment(
+        db, submission_id, current_user, for_update=True
+    )
+    if submission.status not in EDITABLE_SUBMISSION_STATUSES:
+        await db.rollback()
+        await file_storage.delete_quietly(attachment["file_path"])
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot attach to a submission that has been approved or rejected.",
+        )
+
     # Plain JSON column — reassign rather than append in place so SQLAlchemy
     # detects the change (CLAUDE.md pitfall #12).
     submission.attachments = list(submission.attachments or []) + [attachment]
@@ -938,7 +963,14 @@ async def delete_submission_attachment(
     current_user: User = Depends(get_current_user),
 ):
     """Remove an attachment the member added (submitter only, before a ruling)."""
-    submission = await _load_submission_for_attachment(db, submission_id, current_user)
+    service = TrainingSubmissionService(db)
+    # The evidence check below reads the department's config, and get_config
+    # commits when it creates the default row. Settled before the lock, that
+    # commit cannot release it mid-removal.
+    await service.get_config(current_user.organization_id)
+    submission = await _load_submission_for_attachment(
+        db, submission_id, current_user, for_update=True
+    )
 
     if str(submission.submitted_by) != str(current_user.id):
         raise HTTPException(
@@ -969,7 +1001,7 @@ async def delete_submission_attachment(
     # is not in front of anybody yet, so it may be emptied freely.
     if submission.status != SubmissionStatus.DRAFT:
         try:
-            await TrainingSubmissionService(db).assert_evidence_requirement(
+            await service.assert_evidence_requirement(
                 current_user.organization_id, attachments
             )
         except ValueError as e:

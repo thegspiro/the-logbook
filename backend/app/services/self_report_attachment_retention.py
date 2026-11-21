@@ -205,11 +205,18 @@ class SelfReportAttachmentRetention:
         rows = (
             (
                 await self.db.execute(
-                    select(TrainingRecord).where(
+                    select(TrainingRecord)
+                    .where(
                         TrainingRecord.organization_id == submission.organization_id,
                         TrainingRecord.user_id == submission.submitted_by,
                         func.json_length(TrainingRecord.attachments) > 0,
                     )
+                    # The list below is written back whole, so an officer's
+                    # upload committed between this read and that write would
+                    # vanish and its file be orphaned. Submissions first, then
+                    # records: the order every member-file path takes.
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
                 )
             )
             .scalars()

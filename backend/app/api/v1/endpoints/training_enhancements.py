@@ -777,22 +777,28 @@ RECORD_ATTACHMENT_RULES = FileRules(
 )
 
 
-async def _load_record_for_attachment(db: AsyncSession, record_id: str, current_user):
+async def _load_record_for_attachment(
+    db: AsyncSession, record_id: str, current_user, *, for_update: bool = False
+):
     """Fetch a training record in the caller's org, enforcing attachment access.
 
     The record owner may manage their own attachments; everyone else needs
-    ``training.manage``.
+    ``training.manage``. ``for_update`` makes it a locking read that refreshes
+    an instance already loaded, for a path that writes the list back.
     """
     from sqlalchemy import select
 
     from app.api.dependencies import _collect_user_permissions, _has_permission
     from app.models.training import TrainingRecord
 
-    result = await db.execute(
+    query = (
         select(TrainingRecord)
         .where(TrainingRecord.id == record_id)
         .where(TrainingRecord.organization_id == current_user.organization_id)
     )
+    if for_update:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    result = await db.execute(query)
     record = result.scalar_one_or_none()
     if not record:
         raise HTTPException(status_code=404, detail="Training record not found")
@@ -837,6 +843,20 @@ async def upload_record_attachment(
         upload_kind="training_record_attachment",
     )
     file_path = stored.path
+
+    # Stored and scanned outside any lock. Re-read the record locked before
+    # writing the list back, so a void, a retention sweep or another upload
+    # committed meanwhile is seen rather than overwritten.
+    record = await _load_record_for_attachment(
+        db, record_id, current_user, for_update=True
+    )
+    if record.voided_at is not None:
+        await db.rollback()
+        await file_storage.delete_quietly(file_path)
+        raise HTTPException(
+            status_code=400,
+            detail="A voided training record can't take new attachments",
+        )
 
     attachment = {
         "file_name": stored.original_name,

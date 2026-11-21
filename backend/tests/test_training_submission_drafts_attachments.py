@@ -47,6 +47,19 @@ def _no_review_prompts(monkeypatch):
     monkeypatch.setattr(TrainingSubmissionService, "_notify_member", AsyncMock())
 
 
+@pytest.fixture(autouse=True)
+def _no_row_locks(monkeypatch):
+    """The fake sessions hold no rows to lock. submit_draft now reads the
+    department's config before it locks the member and the submission (a
+    config created on first read commits, which would release the locks), so
+    a test that never configured one gets the default. The locks themselves
+    are proven in test_training_submission_attachment_races.py."""
+    monkeypatch.setattr(TrainingSubmissionService, "_lock_submitter", AsyncMock())
+    monkeypatch.setattr(
+        TrainingSubmissionService, "get_config", AsyncMock(return_value=_config())
+    )
+
+
 class _Session:
     def __init__(self):
         self.added = []
@@ -792,11 +805,12 @@ class TestRequiredEvidenceEverywhere:
             training_submissions,
             "TrainingSubmissionService",
             lambda db: SimpleNamespace(
+                get_config=AsyncMock(),
                 assert_evidence_requirement=AsyncMock(
                     side_effect=ValueError(
                         "This department requires supporting documents on a submission"
                     )
-                )
+                ),
             ),
         )
 
