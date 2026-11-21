@@ -1525,10 +1525,18 @@ def _one(obj):
     return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
 
 
-def _scalar(val):
+def _first(obj):
     from unittest.mock import MagicMock
 
-    return MagicMock(scalar=MagicMock(return_value=val))
+    result = MagicMock()
+    result.scalars.return_value.first.return_value = obj
+    return result
+
+
+def _rows(rows):
+    from unittest.mock import MagicMock
+
+    return MagicMock(all=MagicMock(return_value=list(rows)))
 
 
 class TestCheckRequirementProgressZeroTarget:
@@ -1548,7 +1556,8 @@ class TestCheckRequirementProgressZeroTarget:
         from uuid import uuid4
 
         req = _make_requirement(id=str(uuid4()), required_hours=0)
-        db = _MockSession([_one(req), _scalar(0)])  # requirement, then hours sum
+        # The requirement, the department's config (none), the records (none).
+        db = _MockSession([_one(req), _first(None), _rows([])])
         svc = TrainingService(db)
 
         progress = await svc.check_requirement_progress(
@@ -1558,19 +1567,24 @@ class TestCheckRequirementProgressZeroTarget:
         assert progress.is_complete is False
         assert progress.percentage_complete == 0.0
 
-    async def test_hours_no_target_with_a_completion_is_complete(self):
+    async def test_hours_no_target_with_a_completion_is_not_complete(self):
+        # The shared grader leaves a zero target in progress whatever is
+        # logged, as the requirement form warns; this check used to call
+        # three hours enough and disagreed with the matrix (2026-11-21).
         from uuid import uuid4
 
         req = _make_requirement(id=str(uuid4()), required_hours=0)
-        db = _MockSession([_one(req), _scalar(3.0)])  # 3 matching hours on file
+        db = _MockSession(
+            [_one(req), _first(None), _rows([_make_record(hours_completed=3.0)])]
+        )
         svc = TrainingService(db)
 
         progress = await svc.check_requirement_progress(
             user_id="u1", requirement_id="req-1", organization_id="org-1", waivers=[]
         )
 
-        assert progress.is_complete is True
-        assert progress.percentage_complete == 100.0
+        assert progress.is_complete is False
+        assert progress.percentage_complete == 0.0
 
     async def test_courses_with_no_courses_linked_is_not_complete(self):
         from uuid import uuid4
