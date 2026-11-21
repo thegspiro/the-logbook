@@ -1576,6 +1576,23 @@ export const ALL_ROUTES: RouteCheck[] = [
     expectText: 'Transcription',
   },
   { path: '/history/albums', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Centennial Parade, 1923' },
+  { path: '/history/timeline', maxSmallTargets: 0, maxTinyText: 0, expectText: 'The Mill Street fire' },
+  { path: '/history/events', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Centennial parade' },
+  {
+    path: '/history/events/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'What happened',
+  },
+  { path: '/history/apparatus', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Hand-drawn hose reel' },
+  {
+    path: '/history/apparatus/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'Unit numbers',
+  },
   {
     path: '/history/honor-roll',
     maxSmallTargets: 0,

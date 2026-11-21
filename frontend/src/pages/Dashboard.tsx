@@ -59,6 +59,7 @@ import { MAX_BULK_ELIGIBILITY_SHIFTS } from '../constants/config';
 import { memberSignupClosedReason } from '../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../modules/scheduling/hooks/useSignupWindow';
 import { adminHoursEntryService } from '../modules/admin-hours/services/api';
+import { TodayInHistoryCard } from '../modules/history/components/TodayInHistoryCard';
 import type { PendingSignOff } from '../modules/prospective-members/types';
 import { endOfReportingDayUTC, startOfReportingDayUTC } from '../modules/admin-hours/utils/reportingRange';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -1920,6 +1921,10 @@ const Dashboard: React.FC = () => {
               {/* First thing a new member sees, because the dashboard is where
                   they land and nothing here pointed at the lessons before. */}
               <DashboardOrientation />
+              {/* "Today in history" for any member, when the department keeps
+                  its history here. It hides itself on a day with nothing to
+                  show, so it never takes room for an empty card. */}
+              {!modulesLoading && isModuleOn('history') && <TodayInHistoryCard hideWhenEmpty />}
               {/* Department-wide money, grant and outreach totals. A leader has
                   a My Department tab for exactly this, and here it pushed their
                   own shifts and training below the fold; a member whose grants

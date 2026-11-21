@@ -1076,6 +1076,41 @@ Phase 4, documents (2026-11-14), ships with these:
 - **New dependency: pypdfium2** (PDFium bindings, 5.15.2) draws the first
   page; pypdf was already installed.
 
+Phase 5, events, apparatus and timelines (2026-11-21), ships with these:
+
+- **Stations are names, not records yet (owner decision 12).** Events and
+  unit numbers pick a station from a managed list, which is renamed, retired
+  and merged like sources, so a misspelling is fixed in one place. A station
+  has no address, dates or photos of its own until full station records
+  arrive; the list becomes them then.
+- **A truck from the fleet is copied once.** Its descriptive details are
+  copied when the History record is started and nothing syncs afterwards. No
+  price, VIN, plate, financing, insurance or maintenance figure is ever
+  copied. Its type and station are matched to History's lists by name only,
+  and its disposal is read from the disposal method's wording; a word it does
+  not recognize (donated, say) reads as "not known" for the Historian to set.
+- **No apparatus or event merge.** A duplicate apparatus or event is deleted
+  while it is a draft, or returned to draft and deleted. A person merge does
+  carry event links.
+- **A title reaches the timeline only with its own date.** Titles held
+  before phase 5 have no dates: the Historian adds a "held from" date on the
+  person's record, and switches the title on in settings, before a chief's
+  term appears. A title is never placed by its service period's start. On a
+  person's own page every dated title shows, switched on or not.
+- **"Today in history" is inside the app.** It is on the History home and the
+  Dashboard; the public website widget arrives with the public feed in phase 7.
+  Only entries dated to the day match; a 29 February entry shows on 28 February
+  in other years.
+- **The event-type filter narrows events only.** Milestones have no event type;
+  the timeline's milestone switches narrow those.
+- **The decade counts are computed each time.** The timeline reads every dated
+  record of the department to count its decades. Fine for a department's
+  archive; a collection in the tens of thousands of dated records would want a
+  stored count.
+- **No civilian fields (owner decision 7).** A civilian named in an event goes
+  in the description, which the clearance list checks before anything is
+  public, or in the encrypted research notes.
+
 ## Department Store — Decisions for the Owner (2026-11-13)
 
 From the department store follow-up

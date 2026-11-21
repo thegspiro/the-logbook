@@ -23,6 +23,7 @@ import type {
   AlbumSummary,
   ClearanceStep,
   HistoryDocumentType,
+  HistoryListEntry,
   HistorySource,
   HistoryTitle,
   HonorRollEntry,
@@ -462,6 +463,39 @@ const HISTORY_CLEARANCE_STEPS: ClearanceStep[] = [
     blocked: false,
   },
 ];
+
+const HISTORY_STATIONS: HistoryListEntry[] = [
+  { id: 'station-1', name: 'Central Station', sort_order: 1, is_retired: false, usage_count: 7 },
+  { id: 'station-2', name: 'Hose Company No. 2', sort_order: 2, is_retired: true, usage_count: 3 },
+];
+
+const HISTORY_EVENT_TYPES: HistoryListEntry[] = [
+  { id: 'eventtype-1', name: 'Fire or incident', sort_order: 1, is_retired: false, usage_count: 4 },
+  { id: 'eventtype-2', name: 'Ceremony or celebration', sort_order: 2, is_retired: false, usage_count: 2 },
+];
+
+const HISTORY_APPARATUS_TYPES: HistoryListEntry[] = [
+  { id: 'apptype-1', name: 'Engine', sort_order: 1, is_retired: false, usage_count: 3 },
+  { id: 'apptype-2', name: 'Steamer', sort_order: 2, is_retired: false, usage_count: 1 },
+];
+
+const HISTORY_TIMELINE_ENTRY = {
+  key: 'event:e2e-event-1',
+  kind: 'event',
+  date: '1911-03-04',
+  precision: 'day',
+  circa: false,
+  end_date: null,
+  end_precision: null,
+  end_circa: false,
+  label: 'The Mill Street fire',
+  detail: 'Mill Street',
+  record_type: 'event',
+  record_id: 'e2e-event-1',
+  event_type_id: 'eventtype-1',
+  event_type_name: 'Fire or incident',
+  publication_level: 'members',
+};
 
 /** Answers a lookup list the way the API does: retired rows only on request. */
 const withRetired = <T extends { is_retired: boolean }>(rows: T[], request: Request): T[] =>
@@ -4333,6 +4367,97 @@ const routes = ({
       total: 2,
     }),
   ],
+
+  // History phase 5: events, apparatus, the timeline and its three lists.
+  ['**/api/v1/history/stations?**', (request) => (empty ? [] : withRetired(HISTORY_STATIONS, request))],
+  ['**/api/v1/history/event-types?**', (request) => (empty ? [] : withRetired(HISTORY_EVENT_TYPES, request))],
+  [
+    '**/api/v1/history/events**',
+    () => ({
+      items: empty
+        ? []
+        : [
+            {
+              id: 'e2e-event-1',
+              title: 'The Mill Street fire',
+              start_date: '1911-03-04',
+              start_precision: 'day',
+              start_circa: false,
+              end_date: '1911-03-06',
+              end_precision: 'day',
+              end_circa: false,
+              place: 'Mill Street',
+              station_name: 'Central Station',
+              event_type_name: 'Fire or incident',
+              publication_level: 'members',
+            },
+            {
+              id: 'e2e-event-2',
+              title: 'Centennial parade',
+              start_date: '1923-01-01',
+              start_precision: 'year',
+              start_circa: true,
+              end_date: null,
+              end_precision: 'year',
+              end_circa: false,
+              place: null,
+              station_name: null,
+              event_type_name: 'Ceremony or celebration',
+              publication_level: 'draft',
+            },
+          ],
+      total: empty ? 0 : 2,
+    }),
+  ],
+  [
+    '**/api/v1/history/apparatus**',
+    () => ({
+      items: empty
+        ? []
+        : [
+            {
+              id: 'e2e-apparatus-1',
+              name: '1924 Ahrens-Fox pumper',
+              apparatus_type_name: 'Engine',
+              year: 1924,
+              make: 'Ahrens-Fox',
+              model: 'K-S-4',
+              designations: ['Engine 1', 'Engine 3', 'Reserve Engine'],
+              service_span: '1924–1968',
+              disposition: 'preserved',
+              publication_level: 'members',
+            },
+            {
+              id: 'e2e-apparatus-2',
+              name: 'Hand-drawn hose reel',
+              apparatus_type_name: null,
+              year: null,
+              make: null,
+              model: null,
+              designations: [],
+              service_span: 'c. 1890–',
+              disposition: 'unknown',
+              publication_level: 'draft',
+            },
+          ],
+      total: empty ? 0 : 2,
+    }),
+  ],
+  // After the apparatus glob above, which also matches this URL: a later
+  // `page.route` takes precedence.
+  ['**/api/v1/history/apparatus-types?**', (request) => (empty ? [] : withRetired(HISTORY_APPARATUS_TYPES, request))],
+  [
+    '**/api/v1/history/timeline/decades**',
+    () =>
+      empty
+        ? []
+        : [
+            { decade: 1910, count: 1 },
+            { decade: 1950, count: 3 },
+          ],
+  ],
+  ['**/api/v1/history/timeline?**', () => (empty ? [] : [HISTORY_TIMELINE_ENTRY])],
+  ['**/api/v1/history/today', () => (empty ? [] : [HISTORY_TIMELINE_ENTRY])],
 
   // Three pages now reject a payload that is valid JSON but not their declared
   // type, rather than substituting empty lists: an audit log that reads "no

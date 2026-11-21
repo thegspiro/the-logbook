@@ -10,6 +10,8 @@ const mockListRevisions = vi.fn();
 
 const mockPersonMedia = vi.fn();
 const mockPersonDocuments = vi.fn();
+const mockRelatedEvents = vi.fn();
+const mockPersonTimeline = vi.fn();
 
 vi.mock('../services/api', () => ({
   historyService: {
@@ -22,6 +24,12 @@ vi.mock('../services/api', () => ({
   },
   historyDocumentService: {
     personDocuments: (...args: unknown[]) => mockPersonDocuments(...args) as unknown,
+  },
+  historyEventService: {
+    relatedTo: (...args: unknown[]) => mockRelatedEvents(...args) as unknown,
+  },
+  historyTimelineService: {
+    personTimeline: (...args: unknown[]) => mockPersonTimeline(...args) as unknown,
   },
   mediaFileUrl: (id: string, which: string) => `/api/v1/history/media/${id}/${which}`,
   documentFileUrl: (id: string, which: string) => `/api/v1/history/documents/${id}/${which}`,
@@ -127,6 +135,58 @@ describe('HistoryPersonPage', () => {
     mockPersonMedia.mockResolvedValue([]);
     mockPersonDocuments.mockReset();
     mockPersonDocuments.mockResolvedValue([]);
+    mockRelatedEvents.mockReset();
+    mockRelatedEvents.mockResolvedValue([]);
+    mockPersonTimeline.mockReset();
+    mockPersonTimeline.mockResolvedValue([]);
+  });
+
+  it('shows the events the person took part in and their own timeline', async () => {
+    mockGetPerson.mockResolvedValue(memberView());
+    mockRelatedEvents.mockResolvedValue([
+      {
+        id: 'e1',
+        title: 'Mill fire',
+        start_date: '1911-03-04',
+        start_precision: 'day',
+        start_circa: false,
+        end_date: null,
+        end_precision: 'year',
+        end_circa: false,
+        place: null,
+        station_name: null,
+        event_type_name: 'Fire or incident',
+        publication_level: 'members',
+      },
+    ]);
+    mockPersonTimeline.mockResolvedValue([
+      {
+        key: 'title:p1:sp1:t1',
+        kind: 'title',
+        date: '1955-01-01',
+        precision: 'year',
+        circa: false,
+        end_date: null,
+        end_precision: null,
+        end_circa: false,
+        label: 'John Smith became Foreman',
+        detail: null,
+        record_type: 'member',
+        record_id: 'p1',
+        event_type_id: null,
+        event_type_name: null,
+        publication_level: 'members',
+      },
+    ]);
+    renderPage();
+    expect(await screen.findByRole('link', { name: 'Mill fire' })).toHaveAttribute('href', '/history/events/e1');
+    expect(mockRelatedEvents).toHaveBeenCalledWith({ member_id: 'p1' });
+    expect(await screen.findByRole('heading', { name: 'Timeline' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'John Smith became Foreman' })).toHaveAttribute(
+      'href',
+      '/history/people/p1'
+    );
+    expect(mockPersonTimeline).toHaveBeenCalledWith('p1');
   });
 
   it('shows a member the published record and nothing of the Historian’s', async () => {
