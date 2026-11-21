@@ -31,7 +31,7 @@ from reportlab.platypus import (
     Table,
 )
 
-from app.utils.election_pdf_style import beside_logo
+from app.utils.election_pdf_style import beside_logo, identity_style
 from app.utils.minutes_pdf_attachments import (
     IMAGE,
     PDF,
@@ -284,7 +284,9 @@ def _layout(
             "Meeting Minutes",
             data.get("title"),
             meta.get("logo"),
+            reference=meta.get("report_number"),
         ),
+        banner=footer.get("confidentiality_notice"),
         # The canvas otherwise declares Helvetica, never embedded, on every page.
         initialFontName=BODY_FONT,
         pagesize=letter,
@@ -348,8 +350,18 @@ def _layout(
     heading: List[Any] = []
     if org_name:
         heading.append(Paragraph(_esc(org_name), title_style))
+    if meta.get("identity"):
+        heading.append(Paragraph(_esc(meta["identity"]), identity_style()))
     heading.append(
-        Paragraph(_esc(header.get("subtitle") or "Official Meeting Minutes"), sub_style)
+        Paragraph(
+            _esc(header.get("subtitle") or "Official Meeting Minutes")
+            + (
+                f" · Report No. {_esc(meta['report_number'])}"
+                if meta.get("report_number")
+                else ""
+            ),
+            sub_style,
+        )
     )
     story: List[Any] = beside_logo(heading, meta.get("logo"), doc.width)
     story.append(Spacer(1, 6))

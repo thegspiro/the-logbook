@@ -201,6 +201,7 @@ from app.schemas.inventory import (
     WriteOffReview,
 )
 from app.services.departure_clearance_service import DepartureClearanceService
+from app.services.document_provenance import report_number_for
 from app.services.equipment_request_notifications import (
     send_equipment_request_notice,
 )
@@ -3544,11 +3545,13 @@ async def export_impact_plan_pdf(
     )
 
     service = InventoryService(db)
+    report_number = await report_number_for(db, current_user.organization_id)
     try:
         pdf_buf = await service.generate_impact_plan_pdf(
             organization_id=current_user.organization_id,
             filters=payload.model_dump(),
             contact_visibility=contact_visibility,
+            report_number=report_number,
         )
     except ValueError as e:
         raise HTTPException(
@@ -3568,7 +3571,8 @@ async def export_impact_plan_pdf(
         event_type="inventory_impact_plan_exported",
         event_category="inventory",
         severity="info",
-        event_data={"format": "pdf"},
+        # The number is printed on every page, so a page traces back here.
+        event_data={"format": "pdf", "report_number": report_number},
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
     )

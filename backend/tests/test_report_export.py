@@ -8,6 +8,7 @@ its content. A refused download leaves none.
 
 import csv
 import io
+import re
 import uuid
 from datetime import date
 from typing import Any
@@ -28,6 +29,7 @@ from app.models.audit import AuditLog
 from app.models.user import User
 from app.services.report_tables import export_spec
 from app.utils.org_timezone import resolve_org_today
+from app.utils.report_number import REPORT_NUMBER_PATTERN
 from tests.minutes_support import _org, _user
 
 pytestmark = [pytest.mark.integration]
@@ -271,3 +273,49 @@ async def test_a_saved_report_name_in_any_script_is_encoded_in_the_header(
     assert response.headers["content-disposition"].startswith(
         "attachment; filename*=utf-8''"
     )
+
+
+async def test_a_pdf_names_its_preparer_by_rank_and_its_number_is_audited(
+    db_session: AsyncSession,
+):
+    """The page names who prepared the report by the department's own title
+    for their rank, and the report number it prints is the one in the audit
+    row, so a printed page traces back to its export (2026-11-21)."""
+    from app.models.operational_rank import OperationalRank
+
+    org_id = await _department(db_session)
+    officer = await _user(db_session, org_id, "Officer", ["reports.view"])
+    officer.rank = "captain"
+    db_session.add(
+        OperationalRank(
+            organization_id=org_id, rank_code="captain", display_name="Captain"
+        )
+    )
+    await db_session.flush()
+
+    response = await _export(
+        db_session, officer, {"format": "pdf", "report_type": "event_attendance"}
+    )
+
+    assert response.status_code == 200, response.text
+    text = " ".join(
+        page.extract_text() for page in PdfReader(io.BytesIO(response.content)).pages
+    )
+    assert "Prepared by: Officer Tester, Captain" in text
+    printed = re.search(REPORT_NUMBER_PATTERN, text)
+    assert printed is not None, text
+    rows = await _audit_rows(db_session, officer)
+    assert rows[0].event_data["report_number"] == printed.group(0)
+
+
+async def test_a_csv_carries_no_report_number(db_session: AsyncSession):
+    org_id = await _department(db_session)
+    officer = await _user(db_session, org_id, "Officer", ["reports.view"])
+
+    response = await _export(
+        db_session, officer, {"format": "csv", "report_type": "event_attendance"}
+    )
+
+    assert response.status_code == 200, response.text
+    rows = await _audit_rows(db_session, officer)
+    assert rows[0].event_data["report_number"] is None

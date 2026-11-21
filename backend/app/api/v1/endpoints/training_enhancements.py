@@ -45,6 +45,7 @@ from app.schemas.training_enhancements import (
     XAPIStatementResponse,
 )
 from app.services import file_storage_service as file_storage
+from app.services.document_provenance import preparer_label, report_number_for
 from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
@@ -607,7 +608,10 @@ async def process_xapi_statements(
 
 
 async def _audit_training_export(
-    db: AsyncSession, current_user, data: ReportExportRequest
+    db: AsyncSession,
+    current_user,
+    data: ReportExportRequest,
+    report_number: Optional[str] = None,
 ) -> None:
     """Record who exported which training report. These files carry member
     names, contact details and certification numbers, so an export is a
@@ -624,6 +628,8 @@ async def _audit_training_export(
             "subject_user_id": str(data.user_id) if data.user_id else None,
             "start_date": data.start_date.isoformat() if data.start_date else None,
             "end_date": data.end_date.isoformat() if data.end_date else None,
+            # Printed on every page of the PDF, so a page traces back here.
+            "report_number": report_number,
         },
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
@@ -643,6 +649,8 @@ async def export_report(
         service = ReportExportService(db)
 
         if data.format == "pdf":
+            report_number = await report_number_for(db, current_user.organization_id)
+            prepared_by = await preparer_label(db, current_user)
             if data.report_type == "individual":
                 if not data.user_id:
                     raise ValueError("user_id is required for individual reports")
@@ -651,28 +659,31 @@ async def export_report(
                     current_user.organization_id,
                     start_date=data.start_date,
                     end_date=data.end_date,
-                    generated_by=current_user.full_name,
+                    generated_by=prepared_by,
+                    report_number=report_number,
                 )
             elif data.report_type == "member_records":
                 pdf_buf = await service.generate_bulk_pdf(
                     current_user.organization_id,
                     start_date=data.start_date,
                     end_date=data.end_date,
-                    generated_by=current_user.full_name,
+                    generated_by=prepared_by,
+                    report_number=report_number,
                 )
             elif data.report_type == "compliance":
                 pdf_buf = await service.generate_compliance_pdf(
                     current_user.organization_id,
                     start_date=data.start_date,
                     end_date=data.end_date,
-                    generated_by=current_user.full_name,
+                    generated_by=prepared_by,
+                    report_number=report_number,
                 )
             else:
                 raise ValueError(
                     f"PDF export is not available for report type "
                     f"'{data.report_type}'."
                 )
-            await _audit_training_export(db, current_user, data)
+            await _audit_training_export(db, current_user, data, report_number)
             filename = f"training_report_{data.report_type}.pdf"
             return StreamingResponse(
                 pdf_buf,

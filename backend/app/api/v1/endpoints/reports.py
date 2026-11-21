@@ -28,6 +28,7 @@ from app.schemas.reports import (
     SavedReportResponse,
     SavedReportUpdate,
 )
+from app.services.document_provenance import preparer_label
 from app.services.report_export import (
     export_filename,
     render_report_csv,
@@ -45,8 +46,10 @@ from app.services.saved_report_schedule import (
     report_dates,
     validate_schedule,
 )
+from app.utils.election_pdf_style import department_identity
 from app.utils.model_updates import apply_updates
 from app.utils.org_timezone import format_in_org_timezone, resolve_org_today
+from app.utils.report_number import new_report_number
 
 router = APIRouter()
 
@@ -233,7 +236,9 @@ async def export_report(
 
     org_id = str(current_user.organization_id)
     today = await resolve_org_today(db, org_id)
+    report_number: Optional[str] = None
     if request.format == "pdf":
+        report_number = new_report_number(today)
         organization = (
             await db.execute(select(Organization).where(Organization.id == org_id))
         ).scalar_one_or_none()
@@ -252,8 +257,10 @@ async def export_report(
             generated_at=format_in_org_timezone(
                 datetime.now(timezone.utc), organization, "%Y-%m-%d %H:%M %Z"
             ),
-            generated_by=current_user.full_name,
+            generated_by=await preparer_label(db, current_user),
             parameters=parameters,
+            identity=department_identity(organization) or None,
+            report_number=report_number,
         )
         media_type = "application/pdf"
     else:
@@ -275,6 +282,8 @@ async def export_report(
             "end_date": _iso_date(end_date),
             "filter_keys": sorted(str(key) for key in filters),
             "row_count": len(table.rows),
+            # Printed on every page of a PDF, so a page traces back here.
+            "report_number": report_number,
         },
         user_id=str(current_user.id),
         organization_id=org_id,

@@ -110,6 +110,7 @@ def _layout(record: Dict[str, Any], total_pages: Optional[int]) -> Tuple[bytes, 
             record.get("logo"),
             styles,
             "Member Performance Evaluation",
+            identity=record.get("identity"),
         ),
         Spacer(1, 10),
     ]
