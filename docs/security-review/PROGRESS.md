@@ -16,13 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR [#4497](https://github.com/thegspiro/the-logbook/pull/4497)
-(branch `claude/security-review-compliance`, Feature 20, Compliance, pass 15) merged (`38b98147014b7a06b85ec456e47c55db90bf080c`) — confirmed via a
-fresh `list_pull_requests` (state=open) finding no `claude/security-review-*`
-head. Row 20 is marked ✅ above. This iteration (watchdog pickup, the
-dedicated `/loop 30m /security-review` session still unreachable) is working
-Feature 21 (Admin hours), confirmed the next `⬜` row by reading the rotation
-table directly on this freshly fetched `main`.
+**PR [#4500](https://github.com/thegspiro/the-logbook/pull/4500)**
+(branch `claude/security-review-admin-hours-p15` — `claude/security-review-admin-hours`
+already carries a merged PR, #3336 pass 8, so this pass uses a `-p15`
+suffix per CLAUDE.md Pitfall #24): Feature 21 (Admin hours), pass 15 —
+watchdog pickup (the dedicated `/loop 30m /security-review` session
+remains unreachable). Real delta since pass 14 (baseline `9eac8df98`, PR
+#4224): an apparatus-night category override for hour credit (org-scoped
+on both sides of its join; the category id validated in-org at every
+write), a CSV export Source column from a non-user-controlled lookup, and
+a shared profile tie-break (`ordered_profiles()`) replacing a local sort.
+A new, previously-unclaimed module (Apparatus Events, 20 gated routes) was
+found touching this feature's table; its touching slice was traced safe
+and the module recorded as unclaimed (natural home: Feature 13). **0
+fixed, 0 newly flagged, 0 findings closed.** Full write-up:
+`docs/security-review/AH-21-admin-hours.md`'s **Pass 15** section.
+
+Row 21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
+fundraising) — re-check `list_pull_requests` fresh rather than trusting
+this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 15, PR #4497, merged), preserved for history</summary>
