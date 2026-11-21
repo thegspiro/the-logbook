@@ -95,7 +95,12 @@ class TestDeleteUserHard:
         )
         monkeypatch.setattr(
             users_endpoint,
-            "remove_files_after_hard_delete",
+            "enqueue_pending_file_deletions",
+            MagicMock(return_value=[]),
+        )
+        monkeypatch.setattr(
+            users_endpoint,
+            "process_pending_file_deletions",
             AsyncMock(return_value=FileRemoval()),
         )
 

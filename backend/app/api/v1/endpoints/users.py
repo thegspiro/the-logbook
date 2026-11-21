@@ -54,6 +54,7 @@ from app.models.document import Document
 from app.models.inventory import CheckOutRecord, ItemAssignment, ItemIssuance
 from app.models.member_position_term import note_position_actor, sync_position_terms
 from app.models.passkey import UserPasskey
+from app.models.pending_file_deletion import PendingDeletionReason
 from app.models.training import TrainingRecord as TrainingRecordModel
 from app.models.user import Organization, Role, User, UserStatus, user_roles
 from app.schemas.auth import PasskeyResponse
@@ -103,10 +104,7 @@ from app.services.email_policy import (
     member_choice,
 )
 from app.services.email_service import welcome_email_can_send
-from app.services.member_files import (
-    collect_member_files,
-    remove_files_after_hard_delete,
-)
+from app.services.member_files import collect_member_files
 from app.services.member_position_term_service import past_positions_for
 from app.services.member_service_history_service import MemberServiceHistoryService
 from app.services.member_shift_release_service import (
@@ -117,6 +115,12 @@ from app.services.operational_rank_service import (
     rank_not_configured_message,
 )
 from app.services.organization_service import OrganizationService
+from app.services.pending_file_deletions import (
+    enqueue as enqueue_pending_file_deletions,
+)
+from app.services.pending_file_deletions import (
+    process as process_pending_file_deletions,
+)
 from app.services.security_monitoring import report_privilege_escalation_attempt
 from app.services.upload_scanning import reject_if_malicious
 from app.services.user_deletion_service import (
@@ -2560,8 +2564,11 @@ async def delete_user(
     Pass `hard=true` to permanently delete the member and all associated records.
     A permanent delete also removes the stored files named by the rows it
     cascades away (self-report certificates, training-record uploads,
-    attendance waiver documents), after the commit, keeping any file another
-    row still references; a refused delete touches no file.
+    attendance waiver documents). They are queued in pending_file_deletions
+    inside the delete's own transaction and removed right after its commit,
+    keeping any file another row still references; an hourly sweep retries
+    whatever a crash or an unreachable store left. A refused delete queues
+    and touches nothing.
 
     **Authentication required**
 
@@ -2651,10 +2658,17 @@ async def delete_user(
         await release_user_references(db, str(user_id))
 
         # Read before the delete: the rows naming these files CASCADE away
-        # with the member. Removed only after the commit below succeeds, so
-        # a refused delete touches no file.
+        # with the member. Queued in this transaction, so the commit below
+        # records them durably with the delete, and a refused delete (the
+        # rollback) queues nothing. Removed only after that commit.
         owned_files = await collect_member_files(
             db, str(user_id), str(current_user.organization_id)
+        )
+        pending_ids = enqueue_pending_file_deletions(
+            db,
+            str(current_user.organization_id),
+            owned_files.paths_by_area(),
+            PendingDeletionReason.MEMBER_HARD_DELETE,
         )
 
         # Deleting the User is also what removes its user_positions rows.
@@ -2681,9 +2695,11 @@ async def delete_user(
                 ),
             )
 
-        # Never raises, so the audit row below is always written.
-        removal = await remove_files_after_hard_delete(
-            db, str(user_id), str(current_user.organization_id), owned_files
+        # Never raises, so the audit row below is always written. Whatever it
+        # could not remove stays queued for the hourly sweep; its row
+        # resolutions commit with that audit row.
+        removal = await process_pending_file_deletions(
+            db, str(current_user.organization_id), pending_ids
         )
 
         await log_audit_event(
