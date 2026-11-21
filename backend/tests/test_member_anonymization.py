@@ -17,6 +17,7 @@ from app.models.membership_pipeline import (
     MembershipPipeline,
     MembershipPipelineStep,
     PipelineStepType,
+    ProspectActivityLog,
     ProspectDocument,
     ProspectElectionPackage,
     ProspectFormRequest,
@@ -494,6 +495,134 @@ class TestAnonymizeMember:
         assert progress.action_result["mapped_data"] is None
         # Structural keys survive so the pipeline history stays legible.
         assert progress.action_result["form_submission_id"] == str(duplicate.id)
+
+    async def test_scrubs_the_activity_log_and_step_notes(self, db_session):
+        """The applicant's activity log keeps every edit as from/to values,
+        every uploaded file's name and every coordinator note, and step
+        progress keeps its own notes. All of it names the applicant, so the
+        erasure redacts it while keeping the history's shape (2026-11-21
+        member-files review)."""
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        prospect = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Jane",
+            last_name="Doe",
+            email="jane.doe@example.org",
+            transferred_user_id=user.id,
+        )
+        db_session.add(prospect)
+        pipeline = MembershipPipeline(organization_id=org.id, name="Default")
+        db_session.add(pipeline)
+        await db_session.flush()
+        step = MembershipPipelineStep(
+            pipeline_id=pipeline.id,
+            name="Interview",
+            step_type=PipelineStepType.ACTION,
+        )
+        db_session.add(step)
+        await db_session.flush()
+        progress = ProspectStepProgress(
+            prospect_id=prospect.id,
+            step_id=step.id,
+            status=StepProgressStatus.COMPLETED,
+            notes="Jane mentioned her back injury",
+        )
+        db_session.add(progress)
+        # The shapes MembershipPipelineService._log_activity writes.
+        logs = [
+            ProspectActivityLog(
+                prospect_id=prospect.id,
+                action="prospect_updated",
+                details={
+                    "changes": {
+                        "phone": {"from": "555-0100", "to": "555-0199"},
+                        "email": {
+                            "from": "jane.doe@example.org",
+                            "to": "jdoe@example.org",
+                        },
+                        "date_of_birth": {"changed": True},
+                    }
+                },
+            ),
+            ProspectActivityLog(
+                prospect_id=prospect.id,
+                action="document_uploaded",
+                details={"document_type": "id", "file_name": "Jane_Doe_DL.pdf"},
+            ),
+            ProspectActivityLog(
+                prospect_id=prospect.id,
+                action="step_completed",
+                details={"step_id": str(step.id), "notes": "Jane was nervous"},
+            ),
+            ProspectActivityLog(
+                prospect_id=prospect.id,
+                action="prospect_status_changed",
+                details={
+                    "from": "active",
+                    "to": "on_hold",
+                    "reason": "Jane is recovering from surgery",
+                    "bulk": False,
+                },
+            ),
+            ProspectActivityLog(
+                prospect_id=prospect.id,
+                action="duplicate_application_detected",
+                details={
+                    "notification_sent_to": "jane.doe@example.org",
+                    "department_bcc": True,
+                },
+            ),
+            ProspectActivityLog(
+                prospect_id=prospect.id,
+                action="transferred_to_membership",
+                details={
+                    "user_id": str(user.id),
+                    "username": "jdoe",
+                    "notes": "Welcome aboard, Jane",
+                },
+            ),
+        ]
+        db_session.add_all(logs)
+        await db_session.flush()
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        stored = (
+            (
+                await db_session.execute(
+                    select(ProspectActivityLog)
+                    .where(ProspectActivityLog.prospect_id == prospect.id)
+                    .execution_options(populate_existing=True)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        by_action = {log.action: log.details for log in stored}
+        flat = repr(by_action)
+        for leaked in ("555-01", "jane", "Jane", "jdoe", "surgery", "nervous"):
+            assert leaked not in flat, leaked
+        # The history's shape survives: what changed, which step, which kind
+        # of document, which status move.
+        assert by_action["prospect_updated"] == {
+            "changes": {
+                "phone": {"changed": True},
+                "email": {"changed": True},
+                "date_of_birth": {"changed": True},
+            }
+        }
+        assert by_action["document_uploaded"] == {"document_type": "id"}
+        assert by_action["step_completed"] == {"step_id": str(step.id)}
+        assert by_action["prospect_status_changed"] == {
+            "from": "active",
+            "to": "on_hold",
+            "bulk": False,
+        }
+        assert by_action["duplicate_application_detected"] == {"department_bcc": True}
+        assert by_action["transferred_to_membership"] == {"user_id": str(user.id)}
+        assert progress.notes is None
+        assert summary["prospect_activity_scrubbed"] == len(logs)
 
     async def test_refuses_double_anonymization(self, db_session):
         org = await _make_org(db_session)

@@ -78,6 +78,7 @@ from app.models.inventory import MemberSizePreferences
 from app.models.medical_screening import ScreeningRecord
 from app.models.meeting import MeetingAttendee
 from app.models.membership_pipeline import (
+    ProspectActivityLog,
     ProspectDocument,
     ProspectElectionPackage,
     ProspectFormRequest,
@@ -318,6 +319,7 @@ class MemberAnonymizationService:
         counts["screening_records_scrubbed"] += prospect_counts["screenings"]
         counts["form_submissions_scrubbed"] = prospect_counts["form_submissions"]
         counts["step_progress_scrubbed"] = prospect_counts["step_progress"]
+        counts["prospect_activity_scrubbed"] = prospect_counts["activity"]
 
         # --- uploaded training files -----------------------------------
         # Last, so the files go as late as possible before the endpoint's
@@ -449,6 +451,7 @@ class MemberAnonymizationService:
         screenings_scrubbed = 0
         form_submissions_scrubbed = 0
         step_progress_scrubbed = 0
+        activity_scrubbed = 0
         for prospect in prospects:
             # Rows linked to BOTH user_id and prospect_id were already
             # scrubbed (and counted) by the user-scoped update in
@@ -487,6 +490,9 @@ class MemberAnonymizationService:
                 )
             )
             for progress in progress_result.scalars().all():
+                # A coordinator's free-text note on a step is written about
+                # the applicant, by name as often as not.
+                progress.notes = None
                 action_result = progress.action_result
                 if not isinstance(action_result, dict):
                     continue
@@ -540,6 +546,21 @@ class MemberAnonymizationService:
                     )
                 )
                 form_submissions_scrubbed += rows_affected(result) or 0
+
+            # The activity log records every edit as from/to values, every
+            # uploaded file's name and every coordinator's note. Keep the
+            # history's shape — what happened, at which step, to which kind
+            # of document — and drop the values.
+            activity_result = await self.db.execute(
+                select(ProspectActivityLog).where(
+                    ProspectActivityLog.prospect_id == prospect.id
+                )
+            )
+            for log in activity_result.scalars().all():
+                redacted = _redact_activity_details(log.details)
+                if redacted != log.details:
+                    log.details = redacted
+                    activity_scrubbed += 1
 
             prospect.first_name = "Former"
             prospect.last_name = f"Member-{token[:8]}"
@@ -623,7 +644,74 @@ class MemberAnonymizationService:
             "screenings": screenings_scrubbed,
             "form_submissions": form_submissions_scrubbed,
             "step_progress": step_progress_scrubbed,
+            "activity": activity_scrubbed,
         }
+
+
+# Activity-log detail keys whose values are department structure (ids, stage
+# names, statuses, counts) and never text about the applicant. An allowlist
+# rather than a list of known offenders: a key some later action adds is
+# dropped by default instead of surviving the erasure until somebody notices.
+_ACTIVITY_KEYS_KEPT = frozenset(
+    {
+        "source",
+        "bulk",
+        "by_applicant",
+        # Top-level from/to belong to prospect_status_changed and hold status
+        # values. prospect_updated nests its from/to under "changes", which
+        # is handled on its own below.
+        "from",
+        "to",
+        "step_name",
+        "to_step_name",
+        "deleted_step_name",
+        "document_type",
+        "missing_roles",
+        "recommendation",
+        "interviewer_role",
+        "trigger",
+        "updates",
+        "election_title",
+        "event_title",
+        "event_type",
+        "alert_level",
+        "days_inactive",
+        "timeout_days",
+        "recipient_count",
+        "in_app_count",
+        "delivered",
+        "department_bcc",
+        "purge_on",
+    }
+)
+
+
+def _is_plain_value(value: Any) -> bool:
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return True
+    if isinstance(value, list):
+        return all(
+            item is None or isinstance(item, (bool, int, float, str)) for item in value
+        )
+    return False
+
+
+def _redact_activity_details(details: Any) -> Any:
+    """Keep a prospect activity entry's structure and drop its values.
+
+    Returns a new dict (pitfall #12) so the plain JSON column sees the change.
+    """
+    if not isinstance(details, dict):
+        return details
+    redacted: dict[str, Any] = {}
+    for key, value in details.items():
+        if key == "changes" and isinstance(value, dict):
+            redacted[key] = {str(field): {"changed": True} for field in value}
+        elif (
+            key in _ACTIVITY_KEYS_KEPT or key.endswith("_id") or key.endswith("_ids")
+        ) and _is_plain_value(value):
+            redacted[key] = copy.deepcopy(value)
+    return redacted
 
 
 # The neutral name a kept entry gets, by the area its file confined to. The
