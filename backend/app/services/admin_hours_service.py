@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, AsyncIterator, Dict, List, Optional, Sequence, Tuple
 
 from loguru import logger
-from sqlalchemy import and_, func, select
+from sqlalchemy import Select, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
@@ -1990,6 +1990,37 @@ class AdminHoursService:
         await self.db.delete(mapping)
         await self.db.flush()
 
+    @staticmethod
+    def _active_mappings(organization_id: str, *columns: Any) -> Select[Any]:
+        """Mappings that credit hours: active, onto an active category.
+
+        The one definition of "this event type is mapped", shared by
+        ``get_mappings_for_event`` (which credits) and ``mapped_event_types``
+        (which the apparatus template editor reads to warn when a crew's hours
+        would go nowhere), so the warning cannot disagree with the credit.
+        """
+        return (
+            select(*columns)
+            .join(
+                AdminHoursCategory,
+                EventHourMapping.admin_hours_category_id == AdminHoursCategory.id,
+            )
+            .where(
+                EventHourMapping.organization_id == organization_id,
+                EventHourMapping.is_active.is_(True),
+                AdminHoursCategory.is_active.is_(True),
+            )
+        )
+
+    async def mapped_event_types(self, organization_id: str) -> List[str]:
+        """Event types with at least one mapping that credits hours."""
+        result = await self.db.execute(
+            self._active_mappings(organization_id, EventHourMapping.event_type)
+            .where(EventHourMapping.event_type.isnot(None))
+            .distinct()
+        )
+        return sorted(str(t) for t in result.scalars().all())
+
     async def get_mappings_for_event(
         self,
         organization_id: str,
@@ -2000,17 +2031,8 @@ class AdminHoursService:
 
         Returns list of (category_id, percentage, category) tuples.
         """
-        query = (
-            select(EventHourMapping, AdminHoursCategory)
-            .join(
-                AdminHoursCategory,
-                EventHourMapping.admin_hours_category_id == AdminHoursCategory.id,
-            )
-            .where(
-                EventHourMapping.organization_id == organization_id,
-                EventHourMapping.is_active.is_(True),
-                AdminHoursCategory.is_active.is_(True),
-            )
+        query = self._active_mappings(
+            organization_id, EventHourMapping, AdminHoursCategory
         )
         if event_type:
             query = query.where(EventHourMapping.event_type == event_type)

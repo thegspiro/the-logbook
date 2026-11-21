@@ -113,6 +113,8 @@ export interface EditorCategoryOption {
 export interface EditorOptions {
   apparatus: EditorApparatusOption[];
   categories: EditorCategoryOption[];
+  /** Event types an Admin Hours mapping credits; decided by the backend. */
+  mapped_event_types: string[];
 }
 
 // ---------------------------------------------------------------------------

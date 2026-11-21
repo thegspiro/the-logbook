@@ -1556,8 +1556,8 @@ before building your first template, and ask for whatever is missing.
       Otherwise nobody can take a Driver seat set to **Enforce**.
 - [ ] **Where the hours go.** An **Admin Hours** category for outreach, such
       as _Community Outreach_. If neither your template nor the event type
-      points to a category, the crew's hours are **not credited** — and
-      nothing on screen warns you yet.
+      points to a category, the crew's hours are **not credited**. The
+      template editor and **Edit this night** warn you when that is the case.
 - [ ] **Email.** Email set up for the department, so **Email members** can
       send. If it is not, the email is refused and nothing is recorded.
 - [ ] **Member classes and statuses.** Kept up to date on member profiles if
