@@ -7036,8 +7036,39 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   added forecast field, waivers, catch-up and not-yet-held handling. No
   migration. Tests: `tests/test_officer_compliance_views_profiles.py`.
 - **Profiles: optional requirements and equal priorities (D10 follow-up) —
-  open.** `optional_requirement_ids` has no reader, and two active profiles of
-  equal priority resolve in an undefined order.
+  ✅ resolved by owner decision 2026-11-21.** _Ties:_ the older profile wins,
+  then the smaller id, defined once in `app/utils/compliance_profiles.py` and
+  used by grading, the admin-hours lookup and the configuration response (which
+  now lists profiles in that order). The editor warns under **Priority** and on
+  each tied card, and never refuses the save. A tie used to go to whichever row
+  the database returned first, so a member matched by two tied profiles may
+  switch profile once, on every screen together, on the first request after
+  the upgrade. _Optional requirements:_ shown, never graded. The matched
+  profile's applicable optional requirements are listed, marked Optional, on My
+  Training and the officer's view of the member (`optional_requirements_detail`)
+  and reach no count, percentage, reminder, notice, matrix or export. An id in
+  both lists is required, and a save stores it so. A profile with no required
+  list (`null`, API only) grades everything except its optional requirements.
+  The editor no longer turns such a `null` into `[]` (grade nothing) on an
+  unrelated save. Tests: `tests/test_compliance_profile_resolution.py`,
+  `tests/test_compliance_profile_ties_and_optional.py`,
+  `ComplianceRequirementsConfigPage.profileRules.test.tsx`.
+- **Profiles: optional requirements are not matrix cells — open, deferred
+  2026-11-21.** The compliance matrix, its print page and the exports show only
+  graded requirements, so an officer sees a member's optional requirements on
+  that member's training page only. Adding cells would need an optional
+  exclusion in every place the matrix frontend counts cells
+  (`complianceMatrixModel.ts`), the print page, the exports and the `as_of`
+  minimum; missing one recreates the drift of CLAUDE.md pitfall #29.
+- **Profiles: admin hours choose their own profile — open, owner question
+  2026-11-21.** A member's admin-hours targets come from the highest-priority
+  matching profile that _carries_ admin hours (ties now resolved as grading
+  resolves them), not from the profile that grades their training. A member
+  whose grading profile has no admin hours therefore takes targets from a
+  lower-priority profile. `admin_hours_service.get_user_hours_compliance` also
+  matches profiles with its own rules, which lack grading's "junior" chip
+  handling. Whether admin hours should follow the grading profile is not
+  decided.
 - **The compliance exports grade Met / Not Met from the report period's
   records only — fixed (owner decision 2026-11-21: status as of today).**
   Confirmed by running before the fix: a certification completed on 1 March

@@ -2486,6 +2486,8 @@ export interface MemberRequirementsResponse {
     avg_compliance: number | null;
   };
   requirements_detail: RequirementDetail[];
+  /** The member's profile's optional requirements: listed, never graded. */
+  optional_requirements_detail?: RequirementDetail[];
   leaves_of_absence: MemberLeavePeriod[];
 }
 
@@ -2539,6 +2541,9 @@ export interface MyTrainingHistoryPage {
 export interface MyTrainingSummary {
   visibility: MemberVisibility;
   requirements_detail?: RequirementDetail[];
+  /** Sent with `requirements_detail`: the member's profile's optional
+   *  requirements, listed and never graded. */
+  optional_requirements_detail?: RequirementDetail[];
   /** Sent with `requirements_detail`: the leaves behind a reduced target. */
   leaves_of_absence?: MemberLeavePeriod[];
   leave_month_rule?: LeaveMonthRule;
@@ -3387,8 +3392,11 @@ export interface ComplianceProfile {
   roleIds?: string[];
   compliantThresholdOverride?: number;
   atRiskThresholdOverride?: number;
-  requiredRequirementIds?: string[];
-  optionalRequirementIds?: string[];
+  // null: no required list was ever set (only possible through the API), so
+  // the profile grades every applicable requirement except its optional ones.
+  // Distinct from [], which grades nothing.
+  requiredRequirementIds?: string[] | null;
+  optionalRequirementIds?: string[] | null;
   adminHoursRequirements?: AdminHoursRequirementItem[];
   isActive: boolean;
   priority: number;

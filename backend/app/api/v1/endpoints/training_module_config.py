@@ -281,7 +281,7 @@ async def _evaluate_member_requirements(
     org_id: str,
     today: date,
     include_course_checklist: bool = True,
-) -> tuple[list[dict[str, Any]], list[str], float]:
+) -> tuple[list[dict[str, Any]], list[str], float, list[dict[str, Any]]]:
     """Every active requirement that grades ``member``, evaluated.
 
     ``include_course_checklist`` loads the course names a COURSES
@@ -300,7 +300,12 @@ async def _evaluate_member_requirements(
     ``member_with_roles`` is the same member with positions eagerly loaded;
     when absent, ``member`` itself must have them loaded, since profile and
     position matching read ``positions`` (unloaded on an AsyncSession it
-    raises MissingGreenlet). Returns ``(details, statuses, progress_sum)``.
+    raises MissingGreenlet). Returns ``(details, statuses, progress_sum,
+    optional_details)``: the last are the matched profile's optional
+    requirements, evaluated by the same rules and counted in nothing (owner
+    decision 2026-11-21). They go back under their own key, not flagged inside
+    ``details``, so no count, sort or overdue list on either screen -- or in a
+    bundle cached from before -- can treat one as unmet.
     """
     user_id = str(member.id)
     req_result = await db.execute(
@@ -321,9 +326,12 @@ async def _evaluate_member_requirements(
         await _load_compliance_config(db, str(org_id))
     )
     subject = member_with_roles or member
-    applicable: list[Any] = grading.for_member(
-        subject, list(all_requirements)
-    ).requirements
+    member_grading = grading.for_member(subject, list(all_requirements))
+    applicable: list[Any] = member_grading.requirements
+    optional: list[Any] = member_grading.optional_requirements
+    # The loaders below read each requirement's window, so an optional one
+    # needs its shifts, evaluations and sessions loaded as well.
+    evaluated: list[Any] = applicable + optional
     join_date = member_join_date(member)
 
     # --- Fetch active waivers + leaves of absence for this user ---
@@ -347,7 +355,7 @@ async def _evaluate_member_requirements(
             db,
             str(org_id),
             [user_id],
-            applicable,
+            evaluated,
             today,
             org_include_current,
             full_history=True,
@@ -358,15 +366,15 @@ async def _evaluate_member_requirements(
             db,
             str(org_id),
             [user_id],
-            applicable,
+            evaluated,
             today,
             org_include_current,
             full_history=True,
         )
     ).get(user_id, {})
-    held_sessions = await load_held_sessions(db, str(org_id), applicable)
+    held_sessions = await load_held_sessions(db, str(org_id), evaluated)
     course_catalog = (
-        await load_required_course_catalog(db, str(org_id), applicable)
+        await load_required_course_catalog(db, str(org_id), evaluated)
         if include_course_checklist
         else None
     )
@@ -378,8 +386,8 @@ async def _evaluate_member_requirements(
     requirements_detail: list[dict[str, Any]] = []
     statuses: list[str] = []
 
-    for req in applicable:
-        detail = TrainingService.evaluate_requirement_detail(
+    def evaluate(req: Any) -> dict[str, Any]:
+        return TrainingService.evaluate_requirement_detail(
             req,
             member_records,
             today,
@@ -391,6 +399,9 @@ async def _evaluate_member_requirements(
             course_catalog=course_catalog,
             evaluation_credits=evaluation_credits,
         )
+
+    for req in applicable:
+        detail = evaluate(req)
         requirements_detail.append(detail)
         # Listed with its deadline, but left out of the summary until the
         # catch-up period ends — the same rule every compliance screen uses.
@@ -405,7 +416,8 @@ async def _evaluate_member_requirements(
         statuses.append(
             TrainingStatus.COMPLETED.value if detail["is_met"] else "not_met"
         )
-    return requirements_detail, statuses, total_progress_pct
+    optional_detail = [evaluate(req) for req in optional]
+    return requirements_detail, statuses, total_progress_pct, optional_detail
 
 
 @router.get("/my-training")
@@ -551,7 +563,7 @@ async def get_my_training_summary(
     shows_requirement_details = is_officer or visibility.get(
         "show_requirement_details", True
     )
-    requirements_detail, statuses, total_progress_pct = (
+    requirements_detail, statuses, total_progress_pct, optional_detail = (
         await _evaluate_member_requirements(
             db,
             current_user,
@@ -580,7 +592,7 @@ async def get_my_training_summary(
     # The requirement still reports itself as unmet, with its progress bar, so
     # what the member loses is the reason rather than the fact.
     if not is_officer and not visibility.get("show_certification_status", True):
-        for detail in requirements_detail:
+        for detail in requirements_detail + optional_detail:
             detail.pop("cert_expired", None)
             detail.pop("blocks_activity", None)
 
@@ -591,6 +603,7 @@ async def get_my_training_summary(
     # overdue-by-N-days — was returned to everybody.
     if shows_requirement_details:
         result["requirements_detail"] = requirements_detail
+        result["optional_requirements_detail"] = optional_detail
         # The leave behind a reduced target, so a member reading "11 months
         # on leave" can see which leave it was without asking an officer.
         result["leaves_of_absence"] = await _member_leaves(db, org_id, user_id)
@@ -918,7 +931,7 @@ async def get_member_requirements(
         raise HTTPException(status_code=404, detail="Member not found")
 
     today = await resolve_org_today(db, org_id)
-    requirements_detail, statuses, total_progress_pct = (
+    requirements_detail, statuses, total_progress_pct, optional_detail = (
         await _evaluate_member_requirements(db, member, member, org_id, today)
     )
     met_count, total_reqs = tally_standing(statuses)
@@ -935,6 +948,7 @@ async def get_member_requirements(
             ),
         },
         "requirements_detail": requirements_detail,
+        "optional_requirements_detail": optional_detail,
         "leaves_of_absence": await _member_leaves(db, org_id, str(member.id)),
     }
 

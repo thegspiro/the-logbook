@@ -94,18 +94,18 @@ exists), preserving pre-2026-05 behavior.
 
 Profiles allow different compliance standards for different groups within the organization.
 
-| Field                          | Type      | Description                                                     |
-| ------------------------------ | --------- | --------------------------------------------------------------- |
-| `name`                         | `string`  | Profile name (e.g., "Line Officers", "Probationary Members")    |
-| `description`                  | `string`  | Profile purpose                                                 |
-| `membership_types`             | `JSON`    | Array of membership types this profile applies to               |
-| `role_ids`                     | `JSON`    | Array of role IDs this profile applies to                       |
-| `compliant_threshold_override` | `float`   | Override org-level compliant threshold (null = use org default) |
-| `at_risk_threshold_override`   | `float`   | Override org-level at-risk threshold (null = use org default)   |
-| `required_requirement_ids`     | `JSON`    | Array of requirement IDs that are mandatory for this profile    |
-| `optional_requirement_ids`     | `JSON`    | Array of requirement IDs that are tracked but not required      |
-| `is_active`                    | `boolean` | Whether this profile is currently enforced                      |
-| `priority`                     | `integer` | Resolution order for members matching multiple profiles         |
+| Field                          | Type      | Description                                                       |
+| ------------------------------ | --------- | ----------------------------------------------------------------- |
+| `name`                         | `string`  | Profile name (e.g., "Line Officers", "Probationary Members")      |
+| `description`                  | `string`  | Profile purpose                                                   |
+| `membership_types`             | `JSON`    | Array of membership types this profile applies to                 |
+| `role_ids`                     | `JSON`    | Array of role IDs this profile applies to                         |
+| `compliant_threshold_override` | `float`   | Override org-level compliant threshold (null = use org default)   |
+| `at_risk_threshold_override`   | `float`   | Override org-level at-risk threshold (null = use org default)     |
+| `required_requirement_ids`     | `JSON`    | Array of requirement IDs that are mandatory for this profile      |
+| `optional_requirement_ids`     | `JSON`    | Shown on the member's training page, never graded (see below)     |
+| `is_active`                    | `boolean` | Whether this profile is currently enforced                        |
+| `priority`                     | `integer` | Higher wins; a tie goes to the older profile, then the smaller id |
 
 ### How profiles are applied _(2026-10-05)_
 
@@ -150,6 +150,28 @@ profile see no change.
   higher priority than any profile a riding Life member matches, listing only
   the requirements they still owe (or none, which reads "not applicable").
   Removing the position returns the member to operational grading.
+- **Which profile applies** _(owner decision 2026-11-21)_: the first active
+  matching profile in one order — the higher `priority`, then the older profile
+  (`created_at`), then the smaller id. Grading, the admin-hours lookup and the
+  configuration response all use `app/utils/compliance_profiles.py`, and the
+  response lists profiles in that order. The older profile wins so that adding
+  a new profile at an existing priority never re-grades the members an
+  existing one already covers. Before this a tie went to whichever row the
+  database returned first. A save that creates a tie is accepted; the editor
+  warns under **Priority** and on each tied profile's card.
+- **Optional requirements are shown, never graded** _(owner decision
+  2026-11-21)_. The matched profile's `optional_requirement_ids` that apply to
+  the member (`requirement_applies_to_user`) are listed on My Training and on
+  the officer's view of the member, marked Optional, in the response's
+  `optional_requirements_detail`. They count toward no standing, percentage,
+  reminder, notice, matrix cell or export. An id in both lists is required:
+  the grader reads it so, and a save stores it in the required list only —
+  on a partial update the stored optional list is rewritten without it. With
+  no required list set (`null`, only possible through the API), the profile
+  grades every applicable requirement except its optional ones. The compliance
+  matrix shows no optional cells (see `docs/KNOWN_LIMITATIONS.md`), and
+  requirement progress (`/training/requirements/progress`, the MCP
+  `get_member_requirements_progress` tool) lists graded requirements only.
 - **A member nothing grades is "not applicable", not compliant** (TR4-4): none
   applies, a profile selects none, or every one is still in its catch-up period.
   They are out of every percentage and show N/A. The percentage is `null` when
@@ -263,7 +285,7 @@ The daily `compliance_auto_reports` task generates a period's report on its conf
 | `compliant_threshold_override` | `Float`       | Nullable override                         |
 | `at_risk_threshold_override`   | `Float`       | Nullable override                         |
 | `required_requirement_ids`     | `JSON`        | Required training requirements            |
-| `optional_requirement_ids`     | `JSON`        | Optional tracked requirements             |
+| `optional_requirement_ids`     | `JSON`        | Shown, never graded                       |
 | `is_active`                    | `Boolean`     | Default: true                             |
 | `priority`                     | `Integer`     | Default: 0                                |
 
@@ -289,7 +311,7 @@ The daily `compliance_auto_reports` task generates a period's report on its conf
 | Scenario                                                                  | Behavior                                                                                                                                          |
 | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | First-time initialization via `/config/initialize` when config exists     | Returns error — use `PUT /config` for updates                                                                                                     |
-| Member matches multiple compliance profiles                               | Resolved by `priority` ordering (lower number = higher priority)                                                                                  |
+| Member matches multiple compliance profiles                               | The higher `priority` wins; on a tie the older profile, then the smaller id (2026-11-21)                                                          |
 | Profile threshold override is null                                        | Uses organization-level default threshold                                                                                                         |
 | Report generation failure                                                 | Status set to `failed` with `error_message`; can be regenerated                                                                                   |
 | Grace period applied                                                      | Members remain compliant during grace period after deadline                                                                                       |

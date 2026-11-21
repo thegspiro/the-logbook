@@ -124,6 +124,7 @@ from app.services.training_compliance import (
     tally_standing,
 )
 from app.services.training_course_links import (
+    CourseLinkBusy,
     TrainingCourseLinkService,
     UnlinkedName,
 )
@@ -641,6 +642,9 @@ async def link_course_name(
             str(payload.course_id),
             linked_by=str(current_user.id),
         )
+    except CourseLinkBusy as e:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     await db.commit()
@@ -667,9 +671,13 @@ async def link_suggested_course_names(
 
     **Requires permission: training.manage**
     """
-    result = await TrainingCourseLinkService(db).link_suggested(
-        str(current_user.organization_id), linked_by=str(current_user.id)
-    )
+    try:
+        result = await TrainingCourseLinkService(db).link_suggested(
+            str(current_user.organization_id), linked_by=str(current_user.id)
+        )
+    except CourseLinkBusy as e:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=str(e))
     await db.commit()
     await log_audit_event(
         db=db,
