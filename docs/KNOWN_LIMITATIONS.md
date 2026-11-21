@@ -7086,15 +7086,28 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   handling. Whether admin hours should follow the grading profile is not
   decided.
 - **The compliance exports grade Met / Not Met from the report period's
-  records only — open, found 2026-11-20, not confirmed by running.**
-  `ReportExportService.stream_compliance_csv` and `generate_compliance_pdf`
-  hand `_requirement_cells` only the member's records completed inside the
-  report period (Jan 1 to today by default), while the compliance matrix
-  grades each requirement from the records its own window needs
-  (`load_graded_records`). By reading the code, a certification or one-time
-  requirement completed before the period would print **Not Met** in the
-  export beside a matrix that shows it met (CLAUDE.md pitfall #29). Fixing it
-  changes what the export's period means, so it needs its own decision.
+  records only — fixed (owner decision 2026-11-21: status as of today).**
+  Confirmed by running before the fix: a certification completed on 1 March
+  of last year printed **Not Met** in both the CSV and the PDF while the
+  matrix showed it met, and so did a one-time requirement finished two years
+  ago, a 24-month rolling requirement met fifteen months ago, and an annual
+  requirement met today on an export for last calendar year. Each
+  requirement cell is now the member's standing as of the department's
+  today, from `training_compliance.grade_members` — the one grader the
+  Compliance Matrix, `grade_org_members`, the CSV, the PDF and the
+  compliance forecast all call (CLAUDE.md pitfall #29). The report period
+  sets only the hours and completed-record columns: the CSV headers read
+  `Total Hours (<start> to <end>)` and `Completed Records (<start> to
+<end>)` (they were `Total Hours` and `Completed Courses`; the count was
+  always every completed record, certifications included), and the PDF
+  header reads "Status graded as of" and "Hours and records". The CSV now
+  orders requirement columns by name and member rows by last and first name,
+  as the PDF and the matrix do, grades and writes 500 members per chunk, and
+  the forecast runs one record query per 500 members instead of one per
+  member. The forecast's at-risk list still reads each graded requirement's
+  due date from `TrainingService.evaluate_requirement_detail`, the only
+  evaluator that computes one; it decides no status. Tests:
+  `tests/test_compliance_export_period.py`.
 - **Compliance emails: a rolling requirement is in one non-compliance notice
   per member, ever — open, found 2026-11-21.** A rolling requirement's window
   ends on the grading day, which made both member emails repeat daily (the
