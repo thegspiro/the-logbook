@@ -24,7 +24,7 @@ events module. What the module does and how departments use it is on
 | `/events/admin`                     | Events Admin Hub (the **Manage Events** menu entry); Create/Settings deep-link here via `?tab=create` / `?tab=settings`     | `events.manage`  |
 | `/events/new`                       | Redirects to `/events/admin?tab=create`                                                                                     | `events.manage`  |
 | `/events/admin/requests/:requestId` | One outreach request on its own page (`EventRequestPage`, which renders `EventRequestsTab` with `requestId`) _(2026-11-21)_ | `events.manage`  |
-| `/events/admin/community/print`     | Printable Community Engagement summary (`?period=`)                                                                         | `events.manage`  |
+| `/events/admin/community/print`     | Printable Outreach Impact summary (`?period=`)                                                                              | `events.manage`  |
 
 The Events Admin Hub has six tabs: **Create Event**, **Past Events**,
 **Requests** (outreach requests), **QR Code Analytics**, **Community

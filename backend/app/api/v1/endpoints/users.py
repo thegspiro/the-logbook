@@ -4026,7 +4026,7 @@ async def get_photo_use_roster(
         # *weaker* gate than the per-member ``/{user_id}/consents`` beside it
         # (users.edit or members.manage) while returning strictly more.
         #
-        # users.view_consents exists because the Historian and Public Outreach
+        # users.view_consents exists because the Historian and Community Outreach Manager
         # positions have a real claim on this page — a historian curates the
         # photo archive — and share nothing with each other but broad grants
         # (users.view, members.view, events.view). Widening to any of those

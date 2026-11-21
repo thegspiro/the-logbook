@@ -2,7 +2,7 @@
  * The guests a coordinator counted at an outreach event, on the event page.
  *
  * A school assembly or a block party does not pass round a sign-in sheet, so
- * the Community Engagement report could only show the audience the requester
+ * the Outreach Impact report could only show the audience the requester
  * expected. A headcount entered here is the event's actual figure there, in
  * place of guest sign-ins. Rendered only when the detail endpoint says the
  * caller may record one (`can_record_guest_headcount`), which it decides with
@@ -71,8 +71,8 @@ const EventGuestHeadcountCard: React.FC<EventGuestHeadcountCardProps> = ({ event
         <span>Guest headcount</span>
       </h2>
       <p className="text-theme-text-muted mb-4 text-sm">
-        How many guests were there, for an event where people did not sign in one by one. Community Engagement reports
-        this in place of guest sign-ins. Members on duty are not part of it.
+        How many guests were there, for an event where people did not sign in one by one. Outreach Impact reports this
+        in place of guest sign-ins. Members on duty are not part of it.
       </p>
       <form onSubmit={submit} noValidate className="flex flex-wrap items-start gap-3">
         <FormField label="Guests counted" error={error} className="w-40">

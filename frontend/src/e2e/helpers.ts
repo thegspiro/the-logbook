@@ -238,7 +238,7 @@ const enrollments = () => [
 const requestDay = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
 
 /**
- * The Community Engagement report, shaped as
+ * The Outreach Impact report, shaped as
  * backend/app/api/v1/endpoints/dashboard.py returns it. Without it the tab
  * reads the catch-all `{}` and the sweep measures its error state. One event
  * of each reach kind — estimated, signed in against an expectation, signed in

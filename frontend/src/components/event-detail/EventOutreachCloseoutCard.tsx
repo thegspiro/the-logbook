@@ -1,7 +1,7 @@
 /**
  * What happened at an outreach event, recorded when it closes (owner decision,
  * 2026-11-20): how it went, which apparatus attended, what was handed out and
- * whether photos were taken with the host's consent. The Community Engagement
+ * whether photos were taken with the host's consent. The Outreach Impact
  * report totals the materials and exports the rest.
  *
  * Rendered on the same rule as the guest headcount (`can_record_guest_headcount`:

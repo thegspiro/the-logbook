@@ -12,7 +12,7 @@ of this pass; check them against `images/` before saving.
 | 04 | **New request** dialog: **Phone call**, no email, the confirmation box unticked and greyed | Create `04-103-new-request-dialog` |
 | 04 | Event Settings → Public Requests → **Types & roles**, one preset shown and one open for editing | Create `04-104-type-role-preset` |
 | 04 | **Volunteer staffing** card on an outreach event created directly, "3 of 5 signed up" with names | Create `04-105-event-volunteer-staffing` |
-| 04 | **How it went** card filled in; Community Engagement **Materials handed out** card | Create `04-106-outreach-closeout`, `04-107-materials-handed-out` |
+| 04 | **How it went** card filled in; Outreach Impact **Materials handed out** card | Create `04-106-outreach-closeout`, `04-107-materials-handed-out` |
 | 04 | `04-20-event-requests` (now has **New request**), `04-100-community-engagement` (materials card), `04-101-guest-headcount` (How it went card beside it), `04-09-event-templates` (inactive card dashed, new badge colours) | Check |
 | 02 | My Training hours card "6.9/6 hrs/mo avg" with "69/72 hrs total" | Create `02-148-requirement-card-hours-average` |
 | 02 | Three certification cards: **On file** (Expires …), **Expired** (date), **Not recorded** | Create `02-149-requirement-card-certification-states` |

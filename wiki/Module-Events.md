@@ -1112,8 +1112,8 @@ opt-out applies. `GET /member-audience/options` and `POST
   time), event type distribution chart, monthly trends chart and a top events
   table, with date range filtering (`GET /events/analytics/summary`).
 - **`/events/:id/analytics`** — per-event analytics dashboard.
-- **QR Code Analytics** and **Community Engagement** tabs in the Events admin
-  hub. Community Engagement (`GET /dashboard/community-engagement?period=`,
+- **QR Code Analytics** and **Outreach Impact** (formerly Community Engagement) tabs in the Events admin
+  hub. Outreach Impact (`GET /dashboard/community-engagement?period=`,
   `events.manage`) reports events held, people reached — a guest headcount
   recorded on the event, else guest sign-ins, else the request's audience
   size, reported separately — member hours, requests completed in the period

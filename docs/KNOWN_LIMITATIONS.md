@@ -1678,6 +1678,45 @@ fix changes a workflow some departments rely on, so the owner decides:
 | **A requirement cannot name one policy acknowledgment**                                 | ✅ Resolved (2026-10-07, owner decision: map provider courses to library courses) | A requirement graded only by training type (`training_compliance.py`) is still met by **any** record of that type. A particular policy is now required by mapping its Target Solutions Course ID to a library course (`external_course_mappings`) and linking a COURSES requirement to that course; imports set `TrainingRecord.course_id` from the mapping. Every version of a course maps to the same library course, so a reissued course never needs the requirement edited. **Residual, accepted:** members who complete a new version read as not current until an officer maps it. Training officers are emailed when a new course resembles a library course, and mapping it backfills the records already imported. See [16-integrations.md](./training/16-integrations.md). |
 | **Requirement grandfathering reads a missing hire date as the account's creation date** | Accepted (owner to note, 2026-10-03)                                              | A requirement's `new_member_cutoff_date` separates existing members from new ones by join date: `hire_date`, else the UTC date the account was created (`training_compliance.member_join_date`). A roster imported into The Logbook without hire dates therefore reads every imported member as having joined on the import day. If that day falls on or after a cutoff, veterans are graded as new members. Before relying on a cutoff, record hire dates for the existing roster, or choose a cutoff earlier than the import. Members already enrolled in a training program are governed separately, by the per-program `apply_to_current_enrollments` choice made when a requirement is added to it.                                                                              |
 
+## Outreach — Vocabulary and Community Risk Reduction Direction (Owner Decisions, 2026-11-21)
+
+The owner unified the outreach vocabulary around a community risk reduction
+(NFPA 1300) framing. Display labels only; slugs, tab ids (`?tab=requests`,
+`?tab=community`), permission strings, routes and file names are unchanged.
+
+| Concept                        | Term                       |
+| ------------------------------ | -------------------------- |
+| The admin hub area             | Community Outreach         |
+| The leader (`public_outreach`) | Community Outreach Manager |
+| The committee                  | Community Outreach Team    |
+| One request's assignee         | Coordinator                |
+| The inbox tab                  | Outreach Requests          |
+| The report tab                 | Outreach Impact            |
+
+Migration `1a5c18b46791` carries the new position names and descriptions to
+stored rows still holding the seeded wording, and the report's new name into
+stored Guest Headcount Reminder templates. The document headings titled
+"Public Outreach Request Pipeline" were kept, because other pages link to their
+anchors.
+
+Decided for later phases, not yet built:
+
+- **Outreach Overview** as the area's first page — needs attention, upcoming
+  outreach with seats filled against needed, quick actions. An outreach event
+  is one scheduled from a request or tagged with an outreach type or CRR
+  activity. The planning view offers week and month, as Shift Scheduling does.
+- **CRR activity tracking**, recordable both as an event and as a lightweight
+  log entry. A department-configurable catalogue (smoke and CO alarm installs,
+  home safety surveys, car seat inspections, extinguisher training, hands-only
+  CPR, Stop the Bleed, fall prevention, school programs), each activity tagged
+  by risk and by priority population, both lists configurable. Location starts
+  at a ZIP code that fills in city and state; an "add more detail" choice adds
+  the full address and resident contact, always encrypted at rest.
+- **Juvenile firesetter intervention** is a separate option a department
+  enables, shown as coming soon (pitfall #19: marked not yet in effect, with no
+  stored switch).
+- **CRR goals** — yearly targets per measure.
+
 ## Outreach Events — What the 2026-11-20 Changes Do Not Cover Yet
 
 The owner decisions of 2026-11-20 (staff-entered requests, calendar-date
