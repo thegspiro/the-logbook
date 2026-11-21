@@ -830,6 +830,24 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### The permanent-delete audit event changes shape, and a failed audit write refuses the delete (2026-11-21)
+
+Nothing blocks a restart. Owner decision 2026-11-21.
+
+- **`user_hard_deleted` is now written inside the delete's own transaction**, so a
+  delete never commits without it. It no longer carries `files_deleted`,
+  `files_not_deleted` or `files_shared_kept`, which are known only after the
+  commit. It carries `files_queued` instead.
+- **The file outcome moves to a `pending_file_deletions_completed` event**
+  written straight after, with `files_deleted`, `files_shared_kept` and
+  `files_still_pending` (the old `files_not_deleted`), plus `trigger:
+"member_hard_delete"`, `deleted_user_id` and `user_hard_deleted_audit_id`
+  naming the first event. A SIEM rule or export reading the file counts off
+  `user_hard_deleted` must move to this event.
+- **A permanent delete whose audit row cannot be written is refused** with a
+  500 and rolls back: the member and their files stay. Every other audit event
+  still never blocks the action it records.
+
 ### A permanent member delete queues its files; new hourly task (2026-11-20)
 
 Nothing blocks a restart. Migration `d5946cb2bd41` creates one new, empty
@@ -840,8 +858,9 @@ table, `pending_file_deletions`, and touches no existing row.
   an unreachable remote store in between used to leave those files with no
   record of them; the new hourly `pending_file_deletions` task now finishes
   them. It checks each file's references again first and keeps one another
-  record still uses. In the `user_hard_deleted` audit event,
-  `files_not_deleted` now counts files left queued for that task.
+  record still uses. (Since 2026-11-21 the file counts are in the
+  `pending_file_deletions_completed` event that follows `user_hard_deleted`;
+  see above.)
 - The task writes a `pending_file_deletions_completed` audit event (integer
   counts only) for a department when it removes something.
 - **Downgrading drops the table, and any rows still in it.** The files those

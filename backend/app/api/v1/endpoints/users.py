@@ -2576,7 +2576,10 @@ async def delete_user(
     inside the delete's own transaction and removed right after its commit,
     keeping any file another row still references; an hourly sweep retries
     whatever a crash or an unreachable store left. A refused delete queues
-    and touches nothing. The applicant record the member was converted from
+    and touches nothing. The user_hard_deleted audit row is written inside
+    the delete's transaction; if it cannot be written the delete is refused
+    with a 500 and nothing changes. The file outcome follows in a
+    pending_file_deletions_completed event. The applicant record the member was converted from
     (its details, interviews, activity log and form answers) is deleted in
     the same transaction, and its uploaded documents are queued with the
     member's other files.
@@ -2694,32 +2697,34 @@ async def delete_user(
         # holding rows that no longer exist, and the flush below would then
         # fail with StaleDataError.
         await db.delete(user)
+        conflict = HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This member is still referenced by records that must keep "
+                "an owner, so they cannot be permanently deleted. "
+                "Archive the member instead, then anonymize them from their "
+                "profile."
+            ),
+        )
+        # Flushed here so a reference the metadata scan expected MySQL to
+        # resolve on its own, and did not (schema drift from the models),
+        # surfaces as a 409 before the audit row is written. Left to the audit
+        # helper's savepoint, the DELETE would flush inside its swallowing try
+        # and read as an audit failure.
         try:
-            await db.commit()
+            await db.flush()
         except IntegrityError as e:
-            # A reference the metadata scan expected MySQL to resolve on its
-            # own did not resolve (schema drift from the models). Report it as
-            # a conflict rather than a 500; the real constraint is logged.
             await db.rollback()
             logger.error(f"Hard delete of user {user_id} blocked by a reference: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "This member is still referenced by records that must keep "
-                    "an owner, so they cannot be permanently deleted. "
-                    "Archive the member instead, then anonymize them from their "
-                    "profile."
-                ),
-            )
+            raise conflict
 
-        # Never raises, so the audit row below is always written. Whatever it
-        # could not remove stays queued for the hourly sweep; its row
-        # resolutions commit with that audit row.
-        removal = await process_pending_file_deletions(
-            db, str(current_user.organization_id), pending_ids
-        )
-
-        await log_audit_event(
+        # Owner decision 2026-11-21 (e): written inside the delete's
+        # transaction, so the delete never commits without it, and a delete
+        # whose audit row cannot be written does not happen. Every other
+        # audit event keeps the rule that an audit failure never blocks. What
+        # became of the files is known only after the commit, so it follows
+        # in its own event below.
+        hard_delete_audit = await log_audit_event(
             db=db,
             event_type="user_hard_deleted",
             event_category="user_management",
@@ -2734,15 +2739,61 @@ async def delete_user(
                     "pool_returns": returned.pool_returns,
                     "checked_in": returned.checked_in,
                 },
-                "files_deleted": removal.deleted,
-                "files_not_deleted": removal.not_deleted,
-                "files_shared_kept": removal.shared_kept,
+                "files_queued": len(pending_ids),
                 "applicant_records_deleted": applications.applications,
             },
             user_id=str(current_user.id),
             username=current_user.username,
             **_request_origin(request),
         )
+        if hard_delete_audit is None:
+            await db.rollback()
+            logger.error(
+                "Hard delete of user {} refused: its audit record could not be "
+                "written",
+                user_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=(
+                    "The member was not deleted: the audit record a permanent "
+                    "delete requires could not be written. Nothing was "
+                    "changed; please try again."
+                ),
+            )
+
+        try:
+            await db.commit()
+        except IntegrityError as e:
+            await db.rollback()
+            logger.error(f"Hard delete of user {user_id} blocked by a reference: {e}")
+            raise conflict
+
+        # Never raises. Whatever it could not remove stays queued for the
+        # hourly sweep; its row resolutions commit with the event below.
+        removal = await process_pending_file_deletions(
+            db, str(current_user.organization_id), pending_ids
+        )
+        if pending_ids:
+            # The sweep's event type, so one type means "files removed after a
+            # delete"; this one also names the delete it follows.
+            await log_audit_event(
+                db=db,
+                event_type="pending_file_deletions_completed",
+                event_category="user_management",
+                severity="info",
+                event_data={
+                    "files_deleted": removal.deleted,
+                    "files_shared_kept": removal.shared_kept,
+                    "files_still_pending": removal.not_deleted,
+                    "trigger": "member_hard_delete",
+                    "deleted_user_id": str(user_id),
+                    "user_hard_deleted_audit_id": hard_delete_audit.id,
+                },
+                user_id=str(current_user.id),
+                username=current_user.username,
+                **_request_origin(request),
+            )
     else:
         # Preserve membership number so it can be restored on reactivation,
         # then clear it to free the unique index for new members.

@@ -11145,20 +11145,23 @@ each case):
   2026-11-20** (owner decision "Hard-delete crash gap"): the files are queued
   in `pending_file_deletions` in the delete's own transaction, removed right
   after the commit, and an hourly `pending_file_deletions` sweep retries what
-  a crash or an unreachable store left. `files_not_deleted` in the
-  `user_hard_deleted` audit event now means files left queued for the sweep.
+  a crash or an unreachable store left. Files left queued for the sweep are
+  counted as `files_still_pending` in the `pending_file_deletions_completed`
+  event that follows the delete (since 2026-11-21).
 - **A queued file that never deletes is visible only in logs and the
   table.** A remote store that is gone, or a path that no longer confines to
   its department's area (a moved uploads root), keeps its row, retried every
   hour and logged as a warning after 24 failures. There is no screen listing
   them and no way to dismiss one short of a database edit.
-- **A crash after the delete commits can lose its audit record.** The
-  `user_hard_deleted` event is written after the delete's commit and committed
-  with the request, so a process killed in between keeps the delete (and now
-  the queued files) but loses the critical audit row. Writing the event
-  inside the delete's transaction would close it, but changes the event's
-  shape (the per-file counts are known only after the commit), so it awaits
-  the owner.
+- ~~**A crash after the delete commits can lose its audit record.**~~
+  **Resolved 2026-11-21** (owner decision 2026-11-21, (e)):
+  `user_hard_deleted` is written inside the delete's transaction and carries
+  `files_queued`; the file outcome follows in a
+  `pending_file_deletions_completed` event linked by
+  `user_hard_deleted_audit_id`. A delete whose audit row cannot be written is
+  refused (500, rolled back); every other audit event still never blocks. A
+  process killed after the commit now loses only the follow-up event; the
+  queued rows stay and the sweep reports them, unlinked to the member.
 - **Member deletes outside the endpoint queue nothing**:
   `historical_import_undo` and the onboarding reset delete users directly and
   leave any files their rows named.
