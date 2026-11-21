@@ -14,6 +14,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { AxiosError } from 'axios';
 
 const mockGetUserWithRoles = vi.fn();
 const mockUpdateUserProfile = vi.fn();
@@ -196,6 +197,53 @@ describe('MemberAdminEditPage rank field', () => {
     expect(await screen.findByText(/unknown member_status/i)).toBeInTheDocument();
     // The one request was refused whole, so nothing about the member changed.
     expect(mockUpdateUserProfile).toHaveBeenCalledTimes(1);
+  });
+});
+
+// W11-10: cancelling "Confirm it's you" surfaces the server's 403
+// LB-AUTH-013, and the page read every 403 as a missing permission, so an
+// administrator was told to contact an administrator.
+describe('MemberAdminEditPage — a cancelled confirmation', () => {
+  const refusal = (code: string) =>
+    Object.assign(new AxiosError('Request failed with status code 403'), {
+      response: { status: 403, data: { detail: 'refused', code } },
+    });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetLocations.mockResolvedValue([]);
+    mockChangeMembershipType.mockResolvedValue({});
+    mockGetTierConfig.mockReset();
+    mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
+    mockGetUserWithRoles.mockResolvedValue(member());
+    mockUpdateUserProfile.mockReset();
+  });
+
+  it('says the confirmation was cancelled and the changes are still on the page', async () => {
+    const user = userEvent.setup();
+    mockUpdateUserProfile.mockRejectedValue(refusal('LB-AUTH-013'));
+    await renderPage();
+
+    await user.type(screen.getByRole('textbox', { name: /middle name/i }), 'Jo');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    expect(
+      await screen.findByText(
+        "Not saved: the confirmation was cancelled. Your changes are still here; save again to confirm it's you."
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/do not have permission/)).not.toBeInTheDocument();
+  });
+
+  it('still reports a real permission refusal as one', async () => {
+    const user = userEvent.setup();
+    mockUpdateUserProfile.mockRejectedValue(refusal('LB-PERM-001'));
+    await renderPage();
+
+    await user.type(screen.getByRole('textbox', { name: /middle name/i }), 'Jo');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    expect(await screen.findByText(/You do not have permission to update this member/)).toBeInTheDocument();
   });
 });
 

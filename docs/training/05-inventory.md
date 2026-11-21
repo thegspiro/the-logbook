@@ -656,6 +656,12 @@ planning orders, and the request form uses them to pick the right size.
 If a member has never saved sizes, the form simply opens blank. Fields you leave
 empty are not stored.
 
+_(2026-11-15)_ If one size is refused, the others still save. The window stays
+open, says _"Sizes saved, except …"_ and marks the refused box, which keeps its
+stored value until you fix it and save again. If the current sizes cannot be
+loaded, the window says so with **Try again**, and **Save Sizes** stays off
+until they load, so a blank form cannot clear sizes already on file.
+
 ### How Size Preferences Are Used
 
 - **Request Equipment** starts the size step from the member's sizes on file
@@ -3346,9 +3352,18 @@ Supplies categories page.
   is checked out or assigned is reported and left ticked; the rest are retired.
 - **Lots.** The **Lots** button on a supply row opens its dated lots. Everyone
   who can view medical supplies can read them; managers can add, edit and delete.
+  _(2026-11-15)_ A lot that cannot be saved says why under the box at fault (a
+  new lot needs a quantity of 1 or more). When you edit a lot and one value is
+  refused, the rest save and that box keeps its stored value. Closing the
+  dialog, or cancelling a row edit, with changes not yet saved asks first.
 - **A category's supplies.** Open a category on the categories page to list its
   supplies and their stock. Cards say how many active supplies they hold.
 - **Import / export** is the button that was labelled for import alone.
+  _(2026-11-15)_ **Import** is no longer greyed out before a file is chosen.
+  Pressing it without one says _"Choose a CSV file to import."_ under **CSV
+  file to import**; a file that is not a CSV is named there too, and so is a
+  refused import. Closing the dialog with a file chosen but not imported asks
+  first.
 
 ![Medical Supplies on the All supplies tab: the summary tiles, each supply with its size beside the name, its Where path, next expiry and reorder point, and two supplies ticked with the Retire selected bar above the table](./images/05-88-medical-supplies-list.png)
 

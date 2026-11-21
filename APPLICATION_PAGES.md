@@ -366,6 +366,12 @@ A missing or unknown `?tab=` opens Create Event.
 
 > _(2026-11-16)_ **Apparatus Events** (`?tab=apparatus_events`) is outreach that rolls an apparatus with a named crew but is not a shift — a Santamobile run, a parade. Templates (apparatus, free-text seats, a Driver seat's EVOC rule, an Admin Hours category) are scheduled onto one or many nights; each night is an ordinary event whose crew card sits on its event page, and appears on Shift Scheduling as a read-only "Outreach · not a shift" chip. Managing it needs `apparatus_events.manage`; taking a seat needs `apparatus_events.signup`.
 
+| Route                           | Page                                 | Access          |
+| ------------------------------- | ------------------------------------ | --------------- |
+| `/events/admin/community/print` | Community Engagement summary (print) | `events.manage` |
+
+> The Community Engagement tab's **Print summary** opens this page for the period chosen on the tab (`?period=`), and it opens the print dialog once the report has loaded. Every figure comes from the same two endpoints the tab and its CSV export read.
+
 > _(2026-11-11)_ **Create Event hands a Training event to the training-event form.** Picking **Training** as the type, or a Training template, swaps the single-page form for the step-by-step one in place, carrying every value typed so far; picking another type swaps it back. `?tab=create&template=<id>` (the Events list's **Use template** link) opens with that template applied.
 
 **Legacy redirects:**

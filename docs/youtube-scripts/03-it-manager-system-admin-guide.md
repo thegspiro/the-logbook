@@ -2513,6 +2513,13 @@ narration only; none changes a chapter's order.
 the clip table from the recorded take. New footage needed for every screen
 named above; use made-up keys, client IDs and addresses on screen.
 
+## EDITOR — 2026-11-20 PASS
+
+Anonymizing a departed member: the dialog's **Removed** panel gained a second
+line, _Documents attached to their training records_ (2026-11-20). Show it in
+the dialog cue already re-shot for the 2026-11-18 pass; the narration beat
+there should name both lines. Adds about 5 seconds to Chapter 10.
+
 ## EDITOR — 2026-11-18 PASS
 
 Anonymizing a departed member: the dialog's **Removed** panel gained a line,

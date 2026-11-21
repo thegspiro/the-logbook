@@ -98,6 +98,9 @@ Letter only, no duplex hint).
   `HEADER_BAND` and draws the band in the space freed, inside the document's
   own top margin. Label sheets and ID cards are stock-sized and have none.
   `tests/test_pdf_running_header.py` checks every document for it.
+- **Minutes and the impact plan carry the logo on page 1** (2026-11-16). They
+  had the department name only; `beside_logo()` in `election_pdf_style.py`
+  sets the logo beside their existing heading.
 - **Documents leave scaling to the viewer.** A page shrunk to 97% by "Fit"
   is still readable.
 - **Label sheets and ID cards ask to print at actual size**

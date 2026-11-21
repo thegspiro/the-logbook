@@ -115,13 +115,13 @@ Once installed, The Logbook runs on its own, outside the browser:
 
 - **No browser toolbar.** The app uses the whole screen. The phone's status bar
   takes the colour of the app's navigation bar for the theme you picked in the
-  app — white in Light, dark navy in Dark — so the header and the bottom bar do
-  not sit on a band of another colour _(2026-11-15; it was dark red, and
-  followed the phone's own light or dark setting rather than the app's)_. On
-  Android, the gesture bar at the bottom of an installed app is dark navy
-  whatever the theme: Android takes that colour from the app when it is
-  installed, so an app installed before this change may keep dark red there
-  until it is reinstalled.
+  app: white in Light, dark navy in Dark, black in High Contrast. It no longer
+  follows the phone's own light or dark setting, so a member who chose Light on
+  a dark phone no longer gets a navy band above a white header _(2026-11-15;
+  it was dark red)_. The gesture strip along the bottom of an installed
+  Android app is different: Android fixes its colour when the app is
+  installed. See "The strip under the bottom bar is white" under Installing on
+  Android, above.
 - **Its own window.** It shows as a separate app in your app switcher, not as a
   browser tab.
 - **You stay signed in** between launches, within your department's sign-in

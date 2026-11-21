@@ -188,6 +188,38 @@ describe('EvaluationDetailPage', () => {
     expect(screen.getByText('Suggested: Level 4')).toBeInTheDocument();
   });
 
+  it('shows the last review’s grades and goals, and links to it', async () => {
+    get.mockResolvedValue(
+      detail({
+        previous_review: {
+          evaluation_id: 'ev0',
+          period_name: '2025 Annual',
+          period_start: '2025-01-01',
+          period_end: '2025-12-31',
+          overall: 'Exceeds expectations',
+          sections: [{ key: 'core', title: 'Core duties', label: 'Meets expectations' }],
+          goals: [{ key: 'next', label: 'Goals for next year', text: 'Finish driver training.' }],
+        },
+      })
+    );
+    renderPage();
+
+    const panel = await screen.findByRole('region', { name: 'Last review' });
+    expect(within(panel).getByText('Exceeds expectations')).toBeInTheDocument();
+    expect(within(panel).getByText('Meets expectations')).toBeInTheDocument();
+    expect(within(panel).getByText('Finish driver training.')).toBeInTheDocument();
+    expect(within(panel).getByRole('link', { name: 'Open the last review' })).toHaveAttribute(
+      'href',
+      '/reports/evaluations/ev0'
+    );
+  });
+
+  it('shows no last review when the server sends none', async () => {
+    renderPage();
+    expect(await screen.findAllByText('11.5 h')).not.toHaveLength(0);
+    expect(screen.queryByRole('region', { name: 'Last review' })).not.toBeInTheDocument();
+  });
+
   it('asks for a reason only when the rating departs from the suggestion', async () => {
     const user = userEvent.setup();
     renderPage();

@@ -221,6 +221,11 @@ days), so they can extend or close it. Each series is reminded once
 **Needs You** band ("Events needing your response") at the top. The band's
 overflow link narrows the grid to what needs a response.
 
+Until an unanswered **mandatory** event enters the response window described
+below _(2026-11-16)_, it renders as routine and its RSVP buttons still work.
+The band, the card's "Response needed" strip and the needs-response filter
+all read `getEventUrgency`, so they agree.
+
 - **Mandatory events awaiting a response** _(2026-11-16, #4338)_ — an
   unanswered mandatory event is urgent (`action`) and in the band only once it
   starts within the department's response window (**Events settings →
@@ -1090,7 +1095,9 @@ members). Choices the first release made without a ruling are in
   breakdown, a by-type breakdown in two groups (public request types and
   department event types) and recent events, against the same span of the
   previous period. `GET /dashboard/community-engagement/events?period=` returns
-  every event in the period, for the export. An outreach event's **Guest
+  every event in the period, for the export and for the printable summary at
+  `/events/admin/community/print?period=` (`events.manage`), which the tab's
+  **Print summary** opens. An outreach event's **Guest
   headcount** card (`PUT /events/{id}/guest-headcount`, `events.manage`) sets or
   clears `events.guest_headcount`. The daily `guest_headcount_reminders` task
   emails and notifies, once, the organizer and alternate (else the creator) who

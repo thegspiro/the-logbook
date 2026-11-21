@@ -13,6 +13,7 @@ import { formatCurrency } from '@/utils/currencyFormatting';
 import { formatDate } from '../../../utils/dateFormatting';
 import { apparatusMaintenanceService } from '../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { useAuthStore } from '../../../stores/authStore';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { MaintenanceRecordModal } from './MaintenanceRecordModal';
 
@@ -34,6 +35,14 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
   const [showModal, setShowModal] = useState(false);
   const [editRecord, setEditRecord] = useState<ApparatusMaintenance | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ApparatusMaintenance | null>(null);
+  // The backend's gates: recording or editing a record takes maintenance,
+  // edit or manage; deleting one takes manage alone.
+  const checkPermission = useAuthStore((state) => state.checkPermission);
+  const canRecord =
+    checkPermission('apparatus.maintenance') ||
+    checkPermission('apparatus.edit') ||
+    checkPermission('apparatus.manage');
+  const canRemove = checkPermission('apparatus.manage');
 
   const handleAdd = () => {
     setEditRecord(null);
@@ -65,9 +74,11 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
             <Wrench className="h-5 w-5" />
             Maintenance Records
           </h2>
-          <button onClick={handleAdd} className="btn-primary text-sm">
-            Add Record
-          </button>
+          {canRecord && (
+            <button onClick={handleAdd} className="btn-primary text-sm">
+              Add Record
+            </button>
+          )}
         </div>
         {loadingTab ? (
           <div className="py-8 text-center">
@@ -75,7 +86,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
           </div>
         ) : maintenanceRecords.length === 0 ? (
           <p className="text-theme-text-muted py-8 text-center">
-            No maintenance records yet. Select Add Record to log service or schedule upcoming work.
+            No maintenance records yet.{canRecord && ' Select Add Record to log service or schedule upcoming work.'}
           </p>
         ) : (
           <div className="space-y-3">
@@ -112,20 +123,24 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                       </span>
                     </div>
                     <div className="flex flex-col gap-1">
-                      <button
-                        onClick={() => handleEdit(record)}
-                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-md p-1.5 transition-colors"
-                        title="Edit record"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(record)}
-                        className="text-theme-text-muted hover:bg-theme-surface-secondary rounded-md p-1.5 transition-colors hover:text-red-600"
-                        title="Delete record"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {canRecord && (
+                        <button
+                          onClick={() => handleEdit(record)}
+                          className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-md p-1.5 transition-colors"
+                          title="Edit record"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      )}
+                      {canRemove && (
+                        <button
+                          onClick={() => setDeleteTarget(record)}
+                          className="text-theme-text-muted hover:bg-theme-surface-secondary rounded-md p-1.5 transition-colors hover:text-red-600"
+                          title="Delete record"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

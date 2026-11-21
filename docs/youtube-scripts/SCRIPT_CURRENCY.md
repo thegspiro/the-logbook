@@ -83,6 +83,30 @@ lists events when Minutes is off); 10 mobile segments (more tables reflow to
 cards; report results show as cards on desktop too). See
 [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-17--18-2026).
 
+## 2026-11-17 pass
+
+This pass overlapped the 2026-11-16 edits below and the month audit. Where
+both rewrote the same beat (04's event-creation beat, 05's **Require
+sign-off** beat, 12's **Publish Results** beats and Short 12c, 16's Training
+Events beats), the 2026-11-16 text and production note were kept. What this
+pass added beyond them, each with an `EDITOR` or `PRODUCTION NOTE — 2026-11-17`
+re-record note:
+
+- **04 Chief**: the drill-attendance beat said **Connect to Requirements &
+  Programs** (#4347; now **Counts toward attendance** on **Training Info**);
+  the reports beat said "Print it to PDF" (#4346, now **PDF**).
+- **05 Training Officer**: the import beat says **Import History**, with a
+  candidate line on **Course Links**.
+- **12 Elections**: members vote "right on the election's page"; the dispute
+  beat and its shot name **Integrity & Audit** (#4297), not Forensics.
+- **16 Training Officer Part 2**: **Compliance** for "Compliance Settings".
+
+**Flagged, not edited:** 12 still names "tabs" in many screen cues (Ballot,
+Candidates, Eligibility, Overrides, Proxies, Results); every shot of the old
+tab bar needs re-shooting. 07 Secretary says "Eligibility tab" once. 04 Chief
+and 06 Member could mention the phone meeting-night dashboard. See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-15--17-2026).
+
 ## Audit of 2026-10-16 → 11-16 changes, edited 2026-11-16 (not re-recorded)
 
 A pass over a month of merges for script text that had become wrong. Labels

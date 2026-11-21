@@ -36,7 +36,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, safe_error_detail
 from app.models.apparatus import Apparatus, ApparatusDocument, ApparatusPhoto
-from app.models.document import DocumentFolder
+from app.models.document import Document, DocumentFolder
 from app.models.facilities import SHARED_DOCUMENT_PREFIX, shared_document_id
 from app.models.user import User
 from app.schemas.apparatus import (  # Apparatus Type; Apparatus Status; Main Apparatus; Custom Fields; Maintenance; Fuel; Operators; Equipment; Photos & Documents; NFPA Compliance; Report Configs; Service Providers; Components; Component Notes; Service Report; EVOC Levels
@@ -1688,6 +1688,62 @@ async def _referenced_document_id(
     return str(document.id)
 
 
+# Documents this module uploaded itself, as opposed to library documents a
+# photo or document record merely references with ``document:<id>``.
+_OWN_UPLOAD_SOURCE_TYPES = frozenset({"apparatus_photo", "apparatus_document"})
+
+
+async def _deletes_backing_document(
+    db: AsyncSession, link: ApparatusPhoto | ApparatusDocument
+) -> bool:
+    """Whether removing ``link`` should delete the document behind it too.
+
+    Only the vehicle's own upload goes with its record, and only while no
+    other photo or document record still links it. A referenced library
+    document is unlinked and kept: deleting it is the library's decision,
+    which takes ``documents.manage`` and a write on its folder, and
+    ``apparatus.manage`` carries neither (AP2-7). Facilities treats its
+    references the same way. Another record's link would otherwise go with it,
+    because link rows reference the document ON DELETE CASCADE.
+    """
+    document = await db.scalar(
+        select(Document).where(
+            Document.id == link.document_id,
+            Document.organization_id == link.organization_id,
+        )
+    )
+    if (
+        document is None
+        or document.source_type not in _OWN_UPLOAD_SOURCE_TYPES
+        or str(document.source_id) != str(link.apparatus_id)
+    ):
+        return False
+    for model in (ApparatusPhoto, ApparatusDocument):
+        other = await db.scalar(
+            select(model.id)
+            .where(model.document_id == link.document_id, model.id != link.id)
+            .limit(1)
+        )
+        if other is not None:
+            return False
+    return True
+
+
+async def _delete_backing_document(
+    db: AsyncSession, document_id: str, user: User
+) -> None:
+    try:
+        await module_documents.delete_document(db, document_id, user)
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=safe_error_detail(e)
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+
 @router.get(
     "/{apparatus_id}/photos",
     response_model=list[ApparatusPhotoResponse],
@@ -1898,7 +1954,9 @@ async def delete_apparatus_photo(
     current_user: User = Depends(require_permission("apparatus.manage")),
 ):
     """
-    Delete a photo from apparatus, and its stored file
+    Delete a photo from apparatus. A file uploaded to this vehicle is
+    deleted with it; a library document the photo only references is
+    unlinked and kept, as is a file another record still links.
 
     **Authentication required**
     **Permissions required:** apparatus.manage
@@ -1916,9 +1974,9 @@ async def delete_apparatus_photo(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found"
         )
-    if photo.document_id:
+    if photo.document_id and await _deletes_backing_document(db, photo):
         # The photo row references the document ON DELETE CASCADE.
-        await module_documents.delete_document(db, photo.document_id, current_user)
+        await _delete_backing_document(db, photo.document_id, current_user)
     else:
         await ApparatusService(db).delete_photo(
             photo_id=photo_id, organization_id=current_user.organization_id
@@ -2149,7 +2207,9 @@ async def delete_apparatus_document(
     current_user: User = Depends(require_permission("apparatus.manage")),
 ):
     """
-    Delete a document from apparatus, and its stored file
+    Delete a document from apparatus. A file uploaded to this vehicle is
+    deleted with it; a library document the document only references is
+    unlinked and kept, as is a file another record still links.
 
     **Authentication required**
     **Permissions required:** apparatus.manage
@@ -2167,8 +2227,8 @@ async def delete_apparatus_document(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
         )
-    if record.document_id:
-        await module_documents.delete_document(db, record.document_id, current_user)
+    if record.document_id and await _deletes_backing_document(db, record):
+        await _delete_backing_document(db, record.document_id, current_user)
     else:
         await ApparatusService(db).delete_document(
             document_id=document_id, organization_id=current_user.organization_id
