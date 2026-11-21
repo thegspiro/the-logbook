@@ -42,6 +42,16 @@ restarts, so each email sent is recorded as an email-channel
   listed. A member still non-compliant tomorrow is not told again; one who
   falls short of a further requirement, or of the same one in a new period,
   is.
+
+**Rolling requirements have no deadline and no period** (2026-11-21). A
+rolling window ends on the grading day, so its end moved every day: read as a
+deadline it made the requirement "due today" on every run, and as part of a
+key it never repeated, so the member got a reminder and a notice daily. A
+rolling requirement is met or short on every day it is graded, and while it
+is short no date ahead of today would make it met, so it gets no deadline
+reminder (a catch-up deadline still counts) and its notice key is the
+requirement alone: a member is told once. One who meets it and later falls
+short again is not told again by this notice; see docs/KNOWN_LIMITATIONS.md.
 """
 
 from __future__ import annotations
@@ -74,6 +84,7 @@ from app.services.training_compliance import (
     RequirementEvaluation,
     grade_org_members,
 )
+from app.services.training_waiver_service import get_rolling_period_months
 from app.utils.org_timezone import org_today
 
 REMINDER_LOG_CATEGORY = "compliance_deadline_reminder"
@@ -124,12 +135,22 @@ def due_offset(deadline: date, today: date, offsets: Sequence[int]) -> Optional[
     return min(due) if due else None
 
 
-def requirement_deadline(ev: RequirementEvaluation, today: date) -> Optional[date]:
+def _is_rolling(req: TrainingRequirement) -> bool:
+    """Graded over a window ending on the grading day (``rolling_window``)."""
+    return bool(get_rolling_period_months(req))
+
+
+def requirement_deadline(
+    req: TrainingRequirement, ev: RequirementEvaluation, today: date
+) -> Optional[date]:
     """When an unmet requirement falls due for this member, if it still can."""
     if ev.status == TrainingStatus.COMPLETED.value:
         return None
     if ev.status == CATCH_UP_STATUS and ev.catch_up_deadline:
         return date.fromisoformat(ev.catch_up_deadline)
+    if _is_rolling(req):
+        # Its window_end is the grading day, not a deadline (module docstring).
+        return None
     if ev.status in _OPEN_STATUSES and ev.window_end:
         deadline = date.fromisoformat(ev.window_end)
         return deadline if deadline >= today else None
@@ -137,7 +158,24 @@ def requirement_deadline(ev: RequirementEvaluation, today: date) -> Optional[dat
 
 
 def _unmet_key(req: TrainingRequirement, ev: RequirementEvaluation) -> str:
+    # A rolling requirement has no period to key on: its window_end is the
+    # grading day, which made a new key on every run.
+    if _is_rolling(req):
+        return str(req.id)
     return f"{req.id}|{ev.window_end or ''}"
+
+
+def _already_noticed(key: str, noticed: set[str]) -> bool:
+    """Whether a notice already listed ``key``.
+
+    A rolling requirement's key is its bare id; notices logged before
+    2026-11-21 keyed it ``id|window_end``, so any such key for the same id
+    counts too, or the first run after the upgrade would tell every member
+    short of one again.
+    """
+    if key in noticed:
+        return True
+    return "|" not in key and any(k.split("|", 1)[0] == key for k in noticed)
 
 
 def _progress(ev: RequirementEvaluation) -> str:
@@ -373,7 +411,7 @@ async def _notify_non_compliant(
     rows = []
     for req, ev in sorted(unmet, key=lambda pair: pair[0].name):
         progress = _progress(ev)
-        due = requirement_deadline(ev, today)
+        due = requirement_deadline(req, ev, today)
         parts = [p for p in (progress, f"due {long_date(due)}" if due else "") if p]
         rows.append((req.name, "; ".join(parts) or "Not yet met"))
     link = _link(MY_TRAINING_PATH)
@@ -453,7 +491,7 @@ async def send_member_compliance_notices(db: AsyncSession, org: Organization) ->
             reminded = _reminded(member_logs)
             due: list[_DueReminder] = []
             for req, ev in graded.evaluations:
-                deadline = requirement_deadline(ev, today)
+                deadline = requirement_deadline(req, ev, today)
                 if deadline is None:
                     continue
                 offset = due_offset(deadline, today, offsets)
@@ -474,9 +512,12 @@ async def send_member_compliance_notices(db: AsyncSession, org: Organization) ->
                 if ev.status != TrainingStatus.COMPLETED.value
                 and ev.status not in UNGRADED_STATUSES
             ]
-            new_keys = {_unmet_key(req, ev) for req, ev in unmet} - _noticed(
-                member_logs
-            )
+            noticed = _noticed(member_logs)
+            new_keys = {
+                key
+                for key in (_unmet_key(req, ev) for req, ev in unmet)
+                if not _already_noticed(key, noticed)
+            }
             if new_keys and await _notify_non_compliant(db, org, graded, unmet, today):
                 sent += 1
 

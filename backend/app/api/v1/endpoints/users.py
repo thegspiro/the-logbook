@@ -3799,6 +3799,18 @@ async def anonymize_member(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
+    # The same ceiling delete, archive and status change apply. A departed
+    # member keeps their positions, and anonymisation cannot be undone, so a
+    # manager below a former chief's privileges must not be able to erase
+    # that account when they could not delete it.
+    await _enforce_account_reset_ceiling(
+        current_user,
+        user,
+        db,
+        action="member-anonymize",
+        detail="You cannot anonymize a member with privileges beyond your own.",
+    )
+
     try:
         summary = await service.anonymize_member(user)
     except ValueError as e:

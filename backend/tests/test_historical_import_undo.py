@@ -12,6 +12,7 @@ Pins the owner's decisions of 2026-11-16:
 """
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -19,6 +20,11 @@ from sqlalchemy import func, select, update
 
 from app.api.v1.endpoints.historical_import import undo_step
 from app.models.admin_hours import AdminHoursEntry
+from app.models.attendance_waiver import (
+    AttendanceWaiverRequest,
+    AttendanceWaiverStatus,
+    AttendanceWaiverWorkflow,
+)
 from app.models.event import Event, EventRSVP
 from app.models.historical_import import ImportedRecordKind, ImportedSourceRecord
 from app.models.qualification import MemberQualification
@@ -277,6 +283,62 @@ class TestTrainingAndDrills:
         counts = await service.commit_training(org, record.id, admin)
 
         assert counts["records_created"] == before
+
+
+class TestAPendingWaiverOnAnUndoneDrill:
+    """Undoing the drills deletes their events, which voids any pending
+    waiver request on them; the member is emailed, as for any other deleted
+    session (CLAUDE.md pitfall #18), once the undo has committed."""
+
+    @pytest.fixture
+    def outbox(self, monkeypatch):
+        sent = []
+
+        class FakeEmailService:
+            def __init__(self, organization=None):
+                self.organization = organization
+
+            async def send_email(self, **kwargs):
+                sent.append(SimpleNamespace(**kwargs))
+                return True
+
+        import app.services.email_service as email_service
+
+        monkeypatch.setattr(email_service, "EmailService", FakeEmailService)
+        return sent
+
+    async def test_the_member_is_emailed_once(self, db_session, outbox):
+        service, org, admin, record = await TestTrainingAndDrills()._committed(
+            db_session
+        )
+        event = (
+            await db_session.execute(select(Event).where(Event.organization_id == org))
+        ).scalar_one()
+        member = await db_session.get(User, admin)
+        request = AttendanceWaiverRequest(
+            organization_id=org,
+            workflow=AttendanceWaiverWorkflow.TRAINING_SESSION,
+            user_id=admin,
+            event_id=str(event.id),
+            event_title_snapshot="Company Drill",
+            event_start_snapshot=event.start_datetime,
+            session_date=event.start_datetime.date(),
+            status=AttendanceWaiverStatus.PENDING,
+        )
+        db_session.add(request)
+        await db_session.commit()
+
+        await undo_step(
+            import_id=record.id, step="drills", db=db_session, current_user=member
+        )
+
+        closed = await db_session.get(
+            AttendanceWaiverRequest, request.id, populate_existing=True
+        )
+        assert closed.status == AttendanceWaiverStatus.VOIDED
+        (mail,) = outbox
+        assert mail.to_emails == [member.email]
+        assert mail.subject == "Waiver request closed — Company Drill"
 
 
 class TestEndpoint:

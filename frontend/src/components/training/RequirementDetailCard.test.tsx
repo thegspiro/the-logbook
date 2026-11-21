@@ -200,4 +200,31 @@ describe('RequirementDetailCard', () => {
       expect(screen.queryByText(/total$/)).not.toBeInTheDocument();
     });
   });
+
+  describe('an optional requirement', () => {
+    it('carries an Optional badge and no overdue wording, however late', () => {
+      render(
+        <RequirementDetailCard
+          requirement={{ ...base, name: 'Rope Rescue', due_date: '2026-01-31', days_until_due: -40 }}
+          timezone="UTC"
+          optional
+        />
+      );
+      expect(screen.getByText('Optional')).toBeInTheDocument();
+      expect(screen.getByText('Not required for compliance')).toBeInTheDocument();
+      expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
+    });
+
+    it('still reads Complete once met', () => {
+      render(
+        <RequirementDetailCard
+          requirement={{ ...base, is_met: true, completed_hours: 4, progress_percentage: 100 }}
+          timezone="UTC"
+          optional
+        />
+      );
+      expect(screen.getByText('Complete')).toBeInTheDocument();
+      expect(screen.queryByText('Not required for compliance')).not.toBeInTheDocument();
+    });
+  });
 });

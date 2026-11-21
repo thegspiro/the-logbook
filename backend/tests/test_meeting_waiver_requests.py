@@ -237,6 +237,46 @@ class TestPolicy:
         assert org.settings["meetings"]["other"] == 1
 
 
+class TestThePolicyTakesNoDocuments:
+    """The meeting workflow has no upload route, so a policy that asked for a
+    document refused every submission while eligibility said allowed."""
+
+    @pytest.mark.parametrize("mode", ["optional", "required"])
+    async def test_saving_one_that_asks_for_documents_is_refused(
+        self, db_session, dept, mode
+    ):
+        with pytest.raises(ValueError, match="do not take documents"):
+            await _svc(db_session).save_policy(
+                dept.org,
+                AttendanceWaiverPolicy(enabled=True, attachment=mode),
+                dept.secretary,
+            )
+
+    async def test_the_training_policy_still_takes_them(self, db_session, dept):
+        saved = await AttendanceWaiverService(db_session).save_policy(
+            dept.org,
+            AttendanceWaiverPolicy(enabled=True, attachment="required"),
+            dept.secretary,
+        )
+        assert saved.attachment == "required"
+
+    async def test_a_stored_one_reads_as_off_and_members_can_still_ask(
+        self, db_session, dept
+    ):
+        """Only a direct API save could have stored one; it reads as off."""
+        await set_meeting_policy(
+            db_session,
+            dept.org,
+            approver_position_ids=[dept.clerk_pos],
+            attachment="required",
+        )
+
+        assert (await _svc(db_session).get_policy(dept.org)).attachment == "off"
+        request = await _submit(db_session, dept)
+        (body,) = await _svc(db_session).describe(dept.org, dept.member, [request])
+        assert body["can_attach"] is False
+
+
 class TestEligibility:
     async def test_a_business_meeting_is_open(self, db_session, dept):
         result = await _svc(db_session).eligibility(dept.org, dept.member, dept.meeting)
@@ -637,6 +677,55 @@ class TestGranting:
         assert approved.status == AttendanceWaiverStatus.APPROVED
         rows = (await db_session.execute(select(MeetingAttendee))).scalars().all()
         assert all(r.waiver_request_id != request.id for r in rows)
+
+
+class TestRemovingTheRowAnApprovalWrote:
+    """The attendee row an approved request wrote is what excuses the member.
+
+    Deleting it left the request reading approved and counting toward the cap
+    while the tally charged the meeting as an unexcused absence.
+    """
+
+    async def _approved(self, db, dept):
+        meeting_id = await make_minutes_record(
+            db, dept.org, dept.ids["secretary"], event_id=dept.meeting
+        )
+        request = await _submit(db, dept)
+        await _svc(db).approve(dept.org, dept.clerk, request.id)
+        return meeting_id, request
+
+    async def test_it_is_refused(self, db_session, dept):
+        meeting_id, request = await self._approved(db_session, dept)
+        attendee = await _attendee(db_session, meeting_id, dept.ids["member"])
+
+        ok, error = await MeetingsService(db_session).remove_attendee(
+            meeting_id, attendee.id, dept.org
+        )
+
+        assert ok is False
+        assert "approved waiver request" in error
+        kept = await _attendee(db_session, meeting_id, dept.ids["member"])
+        assert kept is not None
+        assert kept.waiver_request_id == request.id
+
+    async def test_another_row_is_still_removed(self, db_session, dept):
+        meeting_id, _ = await self._approved(db_session, dept)
+        other = MeetingAttendee(
+            id=uid(),
+            organization_id=dept.org,
+            meeting_id=meeting_id,
+            user_id=dept.ids["other"],
+            present=True,
+        )
+        db_session.add(other)
+        await db_session.flush()
+
+        ok, error = await MeetingsService(db_session).remove_attendee(
+            meeting_id, other.id, dept.org
+        )
+
+        assert (ok, error) == (True, None)
+        assert await _attendee(db_session, meeting_id, dept.ids["other"]) is None
 
 
 class TestCarryOver:
