@@ -16,10 +16,54 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**TBD — this pass's PR is being opened; see the Log entry above
-(2026-11-21, Feature 17, Training core, pass 15) for the full write-up.
-This row is updated with the PR number as a second commit on the review
-branch once the PR exists, per this rotation's own Step 8.**
+**PR [#4491](https://github.com/thegspiro/the-logbook/pull/4491)**
+(branch `claude/security-review-training-core-p15`): Feature 17 (Training
+core), pass 15 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session remains unreachable). PR #4473 (Feature 16,
+Events & requests, pass 15) had already merged before this iteration
+started. A fresh `list_pull_requests` (state `open`, 20 PRs) found none
+with a `claude/security-review-*` head, and row 17 was confirmed the next
+`⬜` row.
+
+**0 fixed, 0 new findings — large real delta (48 commits, three new
+surfaces), all of it already fixed and tested before this pass read it.**
+Baseline `51e6e1b5` (pass 14's merge, PR #4151) — a genuine ancestor of
+current `main`. 4,043 insertions/599 deletions across twelve declared
+files plus three scope additions (`api/public/shift_evaluations.py`,
+`services/shift_evaluation_link_service.py`,
+`services/training_course_links.py`, all new). All 141 routes (up from
+129 at pass 14) re-enumerated by AST; every one auth-gated. The largest
+new thing is a public, unauthenticated no-login preceptor-evaluation link
+— read in full as the highest-risk new surface in the window: SHA-256
+hashed single-use tokens, every unusable state answering an identical
+404, the body unable to name whose record it writes, a row lock making
+the submission race-safe (Pitfall #36), no answers ever forwarded to the
+public "blank form", and no-store/no-referrer/noindex headers throughout.
+No finding. Everything else of security interest in the window (Course
+Links undo, a Chief self-override refusal, a former-member refusal on the
+lead-instructor field, an attachments-field write refusal, a
+credit-crediting lock fix, the `evaluated_calls` requirement type, frozen
+shift-evaluation requirements at shift-end) was already fixed and tested
+by the commits that introduced it; each was re-verified against the
+current code rather than re-flagged. TR14-2 re-confirmed unchanged
+(ACCEPTED); the `enroll_member` concurrency/completeness gap this
+document's history once carried is confirmed resolved in the current
+code. Full write-up: `docs/security-review/TR-17-training-core.md`'s
+**Pass 15** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 793
+revisions, single head `56377b666eb3`; `check_route_permissions.py
+--strict` — 328 routes, 0 errors/warnings; `generate_schema_docs.py
+--check` — up to date; scoped backend pytest — 3224 passed, 1
+pre-existing environment-only skip (`py_vapid`); standing guard suites —
+184 passed; `npm run typecheck` — 0 errors; `npm run lint` — 0 errors, 0
+warnings; `npx vitest run` (this feature's pages/components/modules, 88
+files) — 959 passed.
+
+Row 17 → ✅ (pending this PR's merge); next is Feature 18 (Training
+extended) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 15, PR #4473, merged), preserved for history</summary>
