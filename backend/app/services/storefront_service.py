@@ -33,7 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.security import email_fingerprints
-from app.core.utils import generate_uuid
+from app.core.utils import generate_uuid, list_within_detail_limit
 from app.models.integration import Integration
 from app.models.inventory import InventoryItem
 from app.models.notification import NotificationChannel
@@ -1242,9 +1242,11 @@ class StorefrontService:
         )
         if holding_money:
             raise ValueError(
-                "These orders have money recorded or a payment report waiting: "
-                f"{', '.join(holding_money)}. Refund or settle them before "
-                "cancelling the window."
+                list_within_detail_limit(
+                    "These orders have money recorded or a payment report " "waiting: ",
+                    holding_money,
+                    ". Refund or settle them before cancelling the window.",
+                )
             )
 
         order_ids = [str(order.id) for order in open_orders]

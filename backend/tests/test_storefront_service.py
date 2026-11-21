@@ -17,6 +17,7 @@ import pytest
 from sqlalchemy import select
 
 from app.api.v1.endpoints import storefront as storefront_endpoints
+from app.core.utils import safe_error_detail
 from app.models.notification import NotificationChannel, NotificationLog
 from app.models.storefront import (
     StoreFulfillmentMethod,
@@ -2867,6 +2868,26 @@ class TestWindowCancelAndFulfil:
         for order in orders:
             current = await service.get_order(order.id, org.id)
             assert current.status != StoreOrderStatus.CANCELLED
+
+    async def test_a_long_refusal_still_reaches_the_officer(self, db_session):
+        # Joined whole, enough order numbers pushed the refusal past the detail
+        # cap, and safe_error_detail replaced it with "An unexpected error
+        # occurred", which names nothing to refund.
+        service, org, window, orders = await self._window_with_orders(
+            db_session, count=30
+        )
+        for order in orders:
+            await service.record_payment(
+                order.id, org.id, Decimal("1.00"), None, notify_member=False
+            )
+
+        with pytest.raises(ValueError, match="Refund or settle") as refused:
+            await service.cancel_window(window.id, org.id, None)
+
+        detail = safe_error_detail(refused.value)
+        assert orders[0].order_number in detail
+        assert "more" in detail
+        assert "Refund or settle them" in detail
 
     async def test_cancelling_a_cancelled_window_again_changes_nothing(
         self, db_session
