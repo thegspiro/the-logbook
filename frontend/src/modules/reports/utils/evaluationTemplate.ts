@@ -190,6 +190,8 @@ const DATA_SOURCE_GROUP_LABELS: Record<string, string> = {
   scheduling: 'Shifts',
   calls: 'Calls',
   admin_hours: 'Administrative hours',
+  apparatus: 'Apparatus & equipment',
+  inventory: 'Inventory',
   members: 'Membership',
 };
 
