@@ -605,3 +605,101 @@ async def test_checkout_item_sees_a_concurrent_retirement_not_its_own_stale_cach
         await session_a.close()
         await session_b.close()
         await _cleanup(org_id, item_id=item_id)
+
+
+@pytest.mark.usefixtures("_initialize_database")
+async def test_issue_from_lots_sees_a_concurrent_draw_not_its_own_stale_cache():
+    """INV2-5: ``_consume_from_lots`` locks the item's lots ``FOR UPDATE`` but
+    did not pass ``populate_existing``. The session keeps objects across
+    commits (``expire_on_commit=False``), and ``bulk_issue_from_pool``,
+    ``distribute_items`` and ``batch_return`` call ``issue_from_pool`` /
+    ``return_to_pool`` in a loop on one session, so a lot loaded by an earlier
+    issue is still cached when the next one locks it. The lock then saw the
+    row's committed count while the Python object kept the old one, and the
+    decrement was written from the old one: units another session had drawn
+    reappeared as stock.
+
+    The identity map holds objects weakly, so this bites only while
+    something in the session still references the lot. Nothing in today's
+    loops was shown to, which is why the finding is recorded as latent; the
+    test holds the reference on purpose, so the lock is pinned to the same
+    guarantee every other locked read in the service gives
+    (``_get_item_locked``'s docstring).
+
+    Session A caches the lot at 10 (standing in for the earlier issue in the
+    loop); session B commits a draw down to 3; A then issues 2. The lot must
+    end at 1, not 8. Seen failing at 8 on the unfixed code.
+    """
+    org_id = str(uuid.uuid4())
+    user_id = str(uuid.uuid4())
+    item_id = str(uuid.uuid4())
+    lot_id = str(uuid.uuid4())
+
+    async with database_manager.session_factory() as setup:
+        await _insert_org_and_user(setup, org_id, user_id)
+        await setup.execute(
+            text(
+                "INSERT INTO inventory_items "
+                "(id, organization_id, name, tracking_type, quantity, "
+                "`condition`, status) "
+                "VALUES (:id, :org, :name, :tt, 0, :cond, :status)"
+            ),
+            {
+                "id": item_id,
+                "org": org_id,
+                "name": "Trauma shears",
+                "tt": TrackingType.POOL.value,
+                "cond": ItemCondition.GOOD.value,
+                "status": ItemStatus.AVAILABLE.value,
+            },
+        )
+        await setup.execute(
+            text(
+                "INSERT INTO inventory_lots "
+                "(id, organization_id, inventory_item_id, lot_number, quantity) "
+                "VALUES (:id, :org, :item, 'LOT-A', 10)"
+            ),
+            {"id": lot_id, "org": org_id, "item": item_id},
+        )
+        await setup.commit()
+
+    session_a = database_manager.session_factory()
+    session_b = database_manager.session_factory()
+    try:
+        peek = await session_a.execute(
+            select(InventoryLot).where(InventoryLot.id == lot_id)
+        )
+        cached_lot = peek.scalar_one()
+        assert cached_lot.quantity == 10
+        await session_a.commit()
+
+        await session_b.execute(
+            text("UPDATE inventory_lots SET quantity = 3 WHERE id = :id"),
+            {"id": lot_id},
+        )
+        await session_b.commit()
+
+        issuance, error = await InventoryService(session_a).issue_from_pool(
+            item_id=uuid.UUID(item_id),
+            user_id=uuid.UUID(user_id),
+            organization_id=org_id,
+            issued_by=user_id,
+            quantity=2,
+        )
+        assert error is None, error
+        assert issuance is not None
+
+        async with database_manager.session_factory() as check:
+            remaining = await check.scalar(
+                select(InventoryLot.quantity).where(InventoryLot.id == lot_id)
+            )
+        assert remaining == 1, (
+            f"lot left at {remaining}: the decrement was written from the "
+            "stale cached 10, not the committed 3"
+        )
+    finally:
+        await session_a.rollback()
+        await session_b.rollback()
+        await session_a.close()
+        await session_b.close()
+        await _cleanup_lots(org_id)
