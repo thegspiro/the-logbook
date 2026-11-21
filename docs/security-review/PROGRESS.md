@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD](https://github.com/thegspiro/the-logbook/pull/TBD)**
+**PR [#4541](https://github.com/thegspiro/the-logbook/pull/4541)**
 (branch `claude/security-review-forms-p14` — prior branch names for this
 feature already carry merged PRs, most recently pass 13's PR #4234, so this
 pass uses a `-p14` suffix per CLAUDE.md Pitfall #24): Feature 26 (Forms),
