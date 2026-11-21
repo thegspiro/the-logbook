@@ -68,3 +68,5 @@ export const TodayInHistoryCard: React.FC<TodayInHistoryCardProps> = ({ hideWhen
     </section>
   );
 };
+
+export default TodayInHistoryCard;
