@@ -312,6 +312,51 @@ class TestAnswering:
         assert "Hollis" not in mail.text_body
         assert "Hollis" not in mail.html_body
 
+    async def test_a_chief_outside_the_route_who_asked_is_told(
+        self, db_session, dept, outbox
+    ):
+        """The Chief decides outside the chosen positions, so the routed
+        prompts alone left the person who asked unaware of the answer."""
+        chief_pos = await make_position(
+            db_session, dept.org, "Chief", slug="fire_chief"
+        )
+        chief_id = await make_member(db_session, dept.org, "Cal")
+        await assign(db_session, chief_id, chief_pos)
+        chief = await load(db_session, chief_id)
+        request = await _submit(db_session, dept)
+        await _ask(db_session, dept, request, actor=chief)
+        outbox.clear()
+
+        await _svc(db_session).respond(dept.org, dept.member, request.id, ANSWER)
+
+        fresh = [
+            p
+            for p in await _bell(db_session, REVIEW_PROMPT_CATEGORY, chief.id)
+            if p.expires_at is None
+        ]
+        assert len(fresh) == 1
+        assert "answered your question" in fresh[0].message
+        (mail,) = outbox
+        assert sorted(mail.to_emails) == sorted(
+            [dept.officer.email, dept.deputy.email, chief.email]
+        )
+
+    async def test_an_asker_who_may_no_longer_decide_is_not_told(
+        self, db_session, dept, outbox
+    ):
+        request = await _submit(db_session, dept)
+        await _ask(db_session, dept, request, actor=dept.officer)
+        await db_session.execute(
+            text("DELETE FROM user_positions WHERE user_id = :u"),
+            {"u": str(dept.officer.id)},
+        )
+        outbox.clear()
+
+        await _svc(db_session).respond(dept.org, dept.member, request.id, ANSWER)
+
+        (mail,) = outbox
+        assert mail.to_emails == [dept.deputy.email]
+
     async def test_only_the_member_may_answer(self, db_session, dept):
         request = await _submit(db_session, dept)
         await _ask(db_session, dept, request)

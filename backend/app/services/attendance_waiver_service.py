@@ -2213,6 +2213,8 @@ class AttendanceWaiverService:
         """
         try:
             recipients = await self.recipients(org_id, request, policy)
+            if answered:
+                recipients = await self._with_asker(org_id, request, policy, recipients)
             if not recipients:
                 return
             name = (await self._names(org_id, [member.id])).get(
@@ -2273,6 +2275,46 @@ class AttendanceWaiverService:
             decider_action_url(request),
             "Review Request",
         )
+
+    async def _with_asker(
+        self,
+        org_id: str,
+        request: AttendanceWaiverRequest,
+        policy: AttendanceWaiverPolicy,
+        recipients: List[User],
+    ) -> List[User]:
+        """``recipients`` plus whoever asked the question just answered.
+
+        A Chief or a President may ask (they decide outside the chosen
+        positions) but is not on the route, so the routed prompt alone left
+        the person waiting on the answer unaware of it. They are added only
+        while they still may decide, and only once.
+        """
+        asker_id = (
+            await self.db.execute(
+                select(AttendanceWaiverRequestAction.actor_id)
+                .where(
+                    AttendanceWaiverRequestAction.organization_id == org_id,
+                    AttendanceWaiverRequestAction.request_id == str(request.id),
+                    AttendanceWaiverRequestAction.action
+                    == AttendanceWaiverAction.INFO_REQUESTED,
+                )
+                .order_by(AttendanceWaiverRequestAction.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if asker_id is None or any(str(r.id) == str(asker_id) for r in recipients):
+            return recipients
+        asker = (
+            await self.db.execute(
+                select(User)
+                .options(selectinload(User.positions))
+                .where(User.id == str(asker_id), User.organization_id == org_id)
+            )
+        ).scalar_one_or_none()
+        if asker is None or not await self.may_decide(asker, request, policy):
+            return recipients
+        return [*recipients, asker]
 
     async def _prompt_deciders_with(
         self,

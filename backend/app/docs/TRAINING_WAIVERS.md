@@ -450,8 +450,10 @@ question**; the training notice links to My Training, where the answer form is.
 Only the member answers, while the question is open. Answering writes a
 `member_responded` entry whose note is the answer, clears
 `info_requested_at`, and prompts the deciders again (in-app and email, worded
-"answered your question", never the answer). Any number of rounds may follow,
-one open question at a time.
+"answered your question", never the answer). The person who asked is told as
+well, even when they are a Chief or President outside the request's route, as
+long as they still may decide. Any number of rounds may follow, one open
+question at a time.
 
 Deciders may approve or deny without waiting for the answer; deciding,
 withdrawing and voiding all clear `info_requested_at`. Questions and answers
