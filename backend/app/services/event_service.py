@@ -1348,6 +1348,7 @@ class EventService:
         was_training = self.event_credits_training(event)
         old_title = event.title
         old_start = event.start_datetime
+        old_end = event.end_datetime
         for field, value in update_data.items():
             setattr(event, field, value)
         self._forget_sent_reminders_if_moved(event, old_start)
@@ -1363,6 +1364,9 @@ class EventService:
                 updated_by,
                 previous_titles={str(event.id): old_title},
             )
+        await self._follow_event_length(
+            [(event, old_start, old_end)], training_details, organization_id
+        )
         # After the refusals above, so a refused save writes nothing here.
         waiver_notices = await self._reconfirm_waiver_requests_if_moved(
             {str(event.id): old_start}, [event], organization_id
@@ -1441,6 +1445,32 @@ class EventService:
             raise ValueError(attendance_locked_error(what))
         await training.apply_session_details(plans, organization_id, updated_by)
         self.last_training_plans = plans
+
+    async def _follow_event_length(
+        self,
+        moved: List[Tuple[Event, Optional[datetime], Optional[datetime]]],
+        training_details: Optional[TrainingSessionDetailsUpdate],
+        organization_id: UUID | str,
+    ) -> None:
+        """Keep credit hours that follow each moved event's length on it.
+
+        ``moved`` pairs each event with its times before the save. A save
+        whose training details set the hours has already decided them.
+        """
+        if (
+            training_details is not None
+            and "credit_hours" in training_details.model_fields_set
+        ):
+            return
+        from app.services.training_session_service import TrainingSessionService
+
+        training = TrainingSessionService(self.db)
+        for event, old_start, old_end in moved:
+            if not self.event_credits_training(event):
+                continue
+            await training.follow_event_length(
+                event, old_start, old_end, organization_id
+            )
 
     async def _refuse_orphaning_check_ins(
         self, event: Event, update_data: Dict[str, Any]
@@ -1757,12 +1787,14 @@ class EventService:
         training_follow_ups = []
         previous_titles: Dict[str, str] = {}
         previous_starts: Dict[str, Optional[datetime]] = {}
+        previous_times: List[Tuple[Event, Optional[datetime], Optional[datetime]]] = []
         for event in future_events:
             was_training = self.event_credits_training(event)
             old_title = event.title
             previous_titles[str(event.id)] = old_title
             old_start = event.start_datetime
             previous_starts[str(event.id)] = old_start
+            previous_times.append((event, old_start, event.end_datetime))
             for field, value in update_data.items():
                 if field == "custom_fields":
                     value = self._with_own_lifecycle_markers(event, value)
@@ -1799,6 +1831,10 @@ class EventService:
                 organization_id,
                 updated_by,
                 previous_titles=previous_titles,
+            )
+        if times_change:
+            await self._follow_event_length(
+                previous_times, training_details, organization_id
             )
 
         waiver_notices = await self._reconfirm_waiver_requests_if_moved(
@@ -2058,10 +2094,14 @@ class EventService:
             guest.checked_in = False
             guest.checked_in_at = None
 
+        old_end = event.end_datetime
         event.start_datetime = new_start
         event.end_datetime = new_end
         event.actual_start_time = None
         event.actual_end_time = None
+        await self._follow_event_length(
+            [(event, old_start, old_end)], None, organization_id
+        )
         if event.postponed_from_start is None:
             event.postponed_from_start = old_start
         event.postponed_at = now
