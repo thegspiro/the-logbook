@@ -161,6 +161,22 @@ the coordinator picks the template each time (no default per outreach type).
   coordinator adds it again. Carrying it over automatically would seat members
   on a date they never agreed to.
 
+## Sign-In Email — An SSO-Only Member Cannot Change Their Own (ADV2-2, 2026-11-17)
+
+Since #4316 (2026-11-15), changing your **own** login email asks you to
+confirm your identity (step-up), because with only a stolen session an
+attacker could repoint the address and then use forgot-password. Step-up
+accepts a passkey, an authenticator code, or the account password
+(`step_up` in `backend/app/api/v1/endpoints/auth.py`). A member who signs in
+only through Google or Microsoft and has set up neither a password nor a
+second factor has nothing to prove with, so the change is refused until they
+set up two-step sign-in. An officer with the right to edit members can still
+change it for them, under the reset ceiling.
+
+Found by the 2026-11-17 documentation pass from the code; not reproduced in a
+browser. **For the owner:** accept this (an SSO account's address is normally
+managed by the directory anyway), or let a fresh SSO sign-in count as step-up.
+
 ## Attendance Waiver Emails and Template Copies — Choices Made Without a Ruling (2026-11-11)
 
 The waiver emails and the template-CC fix (defect D1) follow the owner
@@ -204,6 +220,18 @@ taken; each is listed so the owner can confirm or reverse it.
   and withdrawal are emailed only from their templates; the hand-built emails
   remain for the notices no template covers (a question, an answer, a moved
   session, an expiry).
+- **Which training notices a member cannot switch off** _(chosen
+  2026-11-21, owner may redirect)_. A training notice is sent under the
+  required _Changes to your training record_ kind when it changes how the
+  member's attendance is graded: the expiry (the session counts as missed), a
+  moved start (the approval is cleared and, unanswered, expires as a miss) and
+  a decider's question (unanswered, the request expires as a miss). Before,
+  these went under the optional _Training and certification reminders_, so a
+  member who had turned reminders off learned of a charged miss only from the
+  bell. A **void** stays optional: its session was cancelled or deleted, so
+  nothing is graded and the cap slot is freed. Meeting notices are unchanged
+  (`EVENT_CHANGES`, optional, as above). `member_record_email_kind` on
+  `WorkflowSpec` holds the choice.
 
 ## Elections — Voter Rules by Member Type (Owner Decisions, 2026-11-13)
 
@@ -313,16 +341,14 @@ decisions did not settle, each answered conservatively:
   `main` (#4243). An evaluation drafted between 2026-11-11 and then recorded
   "no" in its snapshot and keeps it, as every snapshot keeps what was true
   when it was taken.
+- **"Attachment on file" is what was on file when the figures were taken.**
+  Attachments are deleted `attachment_retention_days` after a request closes
+  (a year by default), so an evaluation drafted after that reads no for a
+  request that once had one.
 - **A voided request is listed, and counted only as voided.** Nothing voids a
   request yet. When something does, the history shows the request and that it
   was voided, and the summary counts it under `voided` rather than as approved
   or denied, since a voided approval no longer counts toward the cap.
-- **The screens show the summary's count, not its breakdown.** The evaluation
-  pages and PDF print a count source as its number; the approved / denied /
-  withdrawn split is stored beside it (`breakdown`) and every request's
-  outcome is on the history lines, but nothing shows the split on its own.
-  Showing it would mean teaching the frontend's `formatFigure` and the PDF's
-  `format_figure` about an extra field. **Open:** whether to.
 - **Deciders are named by their current name**, or "a former member" when the
   account is gone, as the request screens name them. A decision log step
   carries no name snapshot.
@@ -1548,7 +1574,7 @@ the owner, because closing them changes how members get into their accounts:
   is; the email change itself is now ceiling-bound, step-up gated, audited and
   reported to the previous address.
 
-## Separation of Duties — Four Decisions Left Open (ADV-02, 2026-11-14)
+## Separation of Duties — Two Decisions Left Open (ADV-02, 2026-11-14)
 
 The adversarial pass over the month to 2026-11-14 found these items. Its
 findings are in `docs/security-review/ADV-02-adversarial-last-month.md`. Each
@@ -1562,11 +1588,19 @@ fix changes a workflow some departments rely on, so the owner decides:
   step-up. On upgrade, an evaluation already waiting on an approval whose only
   position holder is its evaluator stays open until a manager names someone.
   See `docs/EVALUATIONS_MODULE.md`.
-- **A shift officer can write their own close-out hours (ADV2-8).** Pre-shift
-  work and event attendance refuse the self case. On a one-person shift nobody
-  else could record it.
-- **An officer can grant themselves a leave, and with it a training waiver
-  (ADV2-9).** This needs `members.manage` and `scheduling.assign`.
+- ~~**A shift officer can write their own close-out hours (ADV2-8).**~~ ✅
+  Resolved 2026-11-20 (owner: block it). A shift officer without
+  `scheduling.manage` cannot change their own times or hours at close-out, or
+  add themselves as an attendee there; their own row comes from their check-in
+  and check-out. On a one-person shift where the officer missed a check-in or
+  check-out, a scheduling admin now records their hours. See
+  `docs/security-review/ADV-02-adversarial-last-month.md`.
+- ~~**An officer can grant themselves a leave, and with it a training waiver
+  (ADV2-9).**~~ ✅ Resolved 2026-11-21 (owner: block it). Nobody records or
+  edits their own leave of absence; their own leave goes through a leave
+  request, which they cannot decide. Ending one's own leave early (deleting
+  it) is still allowed, since it excuses nothing. See
+  `docs/security-review/ADV-02-adversarial-last-month.md`.
 - **An applicant's edited email or name and birth date can make a coordinator's
   self-access guard hide their file (ADV2-10).** Refusing a member's email
   covers half of it. The rest turns on whether self-detection should trust
@@ -1594,7 +1628,7 @@ fix changes a workflow some departments rely on, so the owner decides:
 | **An automatic waitlist promotion does not appear in an event's RSVP Activity**                                                                                                                                                                                                                       | ✅ Resolved (2026-10-11, workflow review W19-3)                                                                                          | Resolved as the owner chose — a marker column and a row: migration `43b88e6ec431` adds `rsvp_history.is_automatic` (boolean, default false; guarded, since `rsvp_history` is a `create_all`-only table), `promote_from_waitlist` writes a `waitlisted → going` row with `is_automatic = true` and no `changed_by`, `GET /events/{id}/rsvp-history` returns `is_automatic`, and RSVP Activity reads "… was moved from Waitlisted to Going (automatically, when a spot opened up)". Promotions made before the change wrote no row and are not backfilled. Original finding: `promote_from_waitlist` writes no `rsvp_history` row, so the officer's feed shows the member waitlisted and nothing after it while the list above shows them Going. A row with an empty `changed_by` would read as the member's own change ("Null means self-change"); recording it honestly as automatic needs a new column or marker on `rsvp_history`, which is a migration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Deleting an event template only deactivates it, while the dialog says it cannot be undone**                                                                                                                                                                                                         | ✅ Resolved (2026-10-11, workflow review W21-5)                                                                                          | Resolved as the owner chose — relabel, do not delete: the action is now **Deactivate** (archive icon, shown on active templates only), its dialog reads _"Deactivate "…"? It will no longer be offered when creating an event. Events already created from it are not affected, and you can reactivate it at any time with its switch."_, and the "cannot be undone" copy is gone. The backend's `DELETE /events/templates/{id}` still soft-deletes, unchanged. Original finding: Driven: Delete → "This action cannot be undone." → Delete, and the template is still listed as Inactive, identical to Deactivate. `delete_template` soft-deletes deliberately ("Soft-delete a template by deactivating it"), presumably so events created from it keep a valid reference. Whether templates can be removed — and so whether the dialog or the button is wrong — is a product decision.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **Event analytics' attendance rate counts upcoming events as no-shows**                                                                                                                                                                                                                               | ✅ Resolved (2026-10-11, workflow review W21-6)                                                                                          | Resolved as the owner chose — past events only, per-event average: `avg_attendance_rate` is now the mean of checked-in ÷ Going for each event in the period that has ended (`end_datetime <= now`) and had anyone Going, so the "Avg" label is accurate and upcoming RSVPs no longer pull it down. The response field and the card label are unchanged. **Still as before:** "Top Events by Attendance" lists upcoming events at 0%. Original finding: `get_analytics_summary` divides every checked-in RSVP by every Going RSVP in the period, pooled, including events that have not started; the review install read "Avg Attendance Rate 67%" with one past event at 100% and one upcoming event at 0%, which "Top Events by Attendance" also lists. The figure falls whenever members RSVP to something upcoming, and it is a pooled ratio despite the "Avg" label. Which events it should cover, and pooled versus per-event average, is a metric definition.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| **A public event requester is never given their status link**                                                                                                                                                                                                                                         | Accepted by the owner (2026-10-05; MED, workflow review W22-4)                                                                           | After submitting the public request form the requester sees only "Thank you for your submission!"; neither the acknowledgement nor the status-change email carries the `/event-request/status/<token>` link, which is reachable only by a coordinator pressing Copy Link and sending it by hand. That page is where the requester follows progress and cancels, and it promises email updates that depend on the department's triggers (and still promises them after a cancellation). Showing the link on the confirmation screen changes a public endpoint's response; adding a `{{status_link}}` to the default acknowledgement changes what the department emails a stranger and would not reach a customised template. Which, or both, is a product decision. **Accepted by the owner (2026-10-05):** leave as is — the status link stays something a coordinator shares by hand, the deliberate posture recorded under "Outreach Requests — Two Deliberate Choices in the Public Pipeline" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **A public event requester is never given their status link**                                                                                                                                                                                                                                         | Accepted by the owner (2026-10-05; MED, workflow review W22-4)                                                                           | After submitting the public request form the requester sees only "Thank you for your submission!"; neither the acknowledgement nor the status-change email carries the `/event-request/status/<token>` link, which is reachable only by a coordinator pressing Copy Link and sending it by hand. That page is where the requester follows progress and cancels, and it promises email updates that depend on the department's triggers (and still promises them after a cancellation). Showing the link on the confirmation screen changes a public endpoint's response; adding a `{{status_link}}` to the default acknowledgement changes what the department emails a stranger and would not reach a customised template. Which, or both, is a product decision. **Accepted by the owner (2026-10-05):** leave as is — the status link stays something a coordinator shares by hand, the deliberate posture recorded under "Outreach Requests — Two Deliberate Choices in the Public Pipeline" below. **Reaffirmed by the owner (2026-11-21):** a link on the confirmation screen was built and then withdrawn the same day. The coordinator decides whether and when the requester gets the link — a department may decline a group's request, or choose not to run a programme for it, and should not have handed it a confirmation page first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **A guest sign-in's applicant lands in no pipeline, and nobody can see it**                                                                                                                                                                                                                           | ✅ Resolved (owner decision 2026-10-08: fall back to the sole/first active pipeline + backfill stranded; workflow review W23-1)          | A guest sign-in created its prospect with no pipeline whenever the department's pipeline was not flagged `is_default`, and the board, table and source filter all omitted it. **Resolved 2026-10-11:** `_get_default_pipeline` now falls back to the organization's first active, non-template pipeline (by creation time) when none is default, so a new applicant always lands on a board when one exists. Migration `e1a5bfe7a2ed` places the applicants already stranded — open ones only (`active`, `on_hold`) — on the same pipeline, at its first stage with a progress row per stage, and logs `pipeline_assigned_by_backfill` in each applicant's activity log; closed applications stay as they were, and a department with no usable pipeline keeps its rows unplaced. The downgrade takes back exactly those placements. `tests/test_prospect_pipeline_fallback.py`, `tests/test_place_stranded_prospects_migration.py`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **No screen shows who signed in as a guest**                                                                                                                                                                                                                                                          | ✅ Resolved (2026-10-11, owner decision: guests list on the event page, not counted in member attendance)                                | A kiosk guest sign-in is stored as an external attendee (`GET /events/{id}/external-attendees`, `events.manage`), and nothing in the frontend read it, so the event page said "Attendance (0)" after guests signed in. **Built:** the event page shows a **Guests (_n_)** card to event managers (`EventGuestsCard`) — name, organization, email, phone, sign-in time and source — and states that guests are not counted in attendance; member attendance figures are unchanged (they are read from RSVPs, which guests do not have). Shown on an event that takes guest sign-ins even when empty. Not built: guests in check-in monitoring or attendance exports, and editing a guest from the card. _(2026-10-25)_ Adding a guest and signing a listed guest in from the card are built.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **A program's linked requirement starts at zero, whatever the member already holds**                                                                                                                                                                                                                  | ✅ Resolved (2026-10-06, owner decision: read the compliance result live)                                                                | A department requirement linked into a program now reads the member's compliance result: each such progress row is a projection of `evaluate_member_requirement_detail` (the compliance matrix's grader) as of the department's today — the member's graded records, shifts worked, waivers and catch-up included — written onto the row by `TrainingProgramService.refresh_linked_progress` whenever program progress is shown (enrollment detail, My Enrollments, a member's enrollments, the program's Enrollments tab, the My Training pipeline card), after which the enrollment percentage re-rolls and a completed phase advances as for any progress update. A member with 4 of 6 Hazmat hours now reads 4/6 in both places. _Linked_ means a requirement no program link owns (`owns_requirement`); a requirement a program created for itself — including one a duplicated program shares — keeps its program ledger. Feeds (shift reports, sessions, skills tests, credits) accrue nothing on a linked row and write no ledger credit; an officer cannot set its value or mark it complete (400, with the reason), only waive it for the program or lift the waiver. **Enrollments already made** read live from the next view: no migration, no row deleted; their stored values are replaced by the compliance figure on first read. **Not followed live:** completed, withdrawn, failed and expired enrollments keep the progress they finished with, so an annual requirement's new period cannot reopen last year's completion. Reports that read `requirement_progress` directly (struggling members, the program report counts) see a linked row as of its last refresh.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -1631,6 +1665,31 @@ fix changes a workflow some departments rely on, so the owner decides:
 | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **A requirement cannot name one policy acknowledgment**                                 | ✅ Resolved (2026-10-07, owner decision: map provider courses to library courses) | A requirement graded only by training type (`training_compliance.py`) is still met by **any** record of that type. A particular policy is now required by mapping its Target Solutions Course ID to a library course (`external_course_mappings`) and linking a COURSES requirement to that course; imports set `TrainingRecord.course_id` from the mapping. Every version of a course maps to the same library course, so a reissued course never needs the requirement edited. **Residual, accepted:** members who complete a new version read as not current until an officer maps it. Training officers are emailed when a new course resembles a library course, and mapping it backfills the records already imported. See [16-integrations.md](./training/16-integrations.md). |
 | **Requirement grandfathering reads a missing hire date as the account's creation date** | Accepted (owner to note, 2026-10-03)                                              | A requirement's `new_member_cutoff_date` separates existing members from new ones by join date: `hire_date`, else the UTC date the account was created (`training_compliance.member_join_date`). A roster imported into The Logbook without hire dates therefore reads every imported member as having joined on the import day. If that day falls on or after a cutoff, veterans are graded as new members. Before relying on a cutoff, record hire dates for the existing roster, or choose a cutoff earlier than the import. Members already enrolled in a training program are governed separately, by the per-program `apply_to_current_enrollments` choice made when a requirement is added to it.                                                                              |
+
+## Outreach Events — What the 2026-11-20 Changes Do Not Cover Yet
+
+The owner decisions of 2026-11-20 (staff-entered requests, calendar-date
+preferences, event signup sheets, volunteer RSVPs, close-out) left these edges
+for a later decision rather than guessing at them:
+
+- **A series cancel does not stand an event's own signup sheet down.**
+  Cancelling one event, or deleting it, cancels its sheet and tells the crew;
+  `cancel_event_series` cancels each occurrence with a deferred commit, and the
+  stand-down (`cancel_shift` commits on its own) is not run on that path. Only
+  an outreach event an officer created directly can own a sheet, and a
+  recurring one is unusual, but a cancelled series leaves its sheets on the
+  schedule until someone cancels them.
+- **A seat moved by a shift swap does not update the event's RSVPs.** Volunteer
+  RSVPs follow a seat that is created, edited, declined or removed through
+  `SchedulingService`; a swap trades the seat on another path. The next seat
+  change on the sheet settles the RSVPs again, because the sync compares the
+  whole sheet each time.
+- **An event's own signup sheet has no "Email the membership" call.** A
+  request's sheet does (`send_volunteer_call`, which is written around a
+  request's details). Members find an event's sheet on Open Shifts.
+- **A volunteer RSVP skips the event's capacity and waitlist.** The volunteers
+  are the crew, not the audience, so they are given a going RSVP directly. An
+  outreach event with a `max_attendees` set counts them toward it.
 
 ## Outreach Requests — Two Deliberate Choices in the Public Pipeline (2026-09-09)
 
@@ -7090,18 +7149,72 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   added forecast field, waivers, catch-up and not-yet-held handling. No
   migration. Tests: `tests/test_officer_compliance_views_profiles.py`.
 - **Profiles: optional requirements and equal priorities (D10 follow-up) —
-  open.** `optional_requirement_ids` has no reader, and two active profiles of
-  equal priority resolve in an undefined order.
+  ✅ resolved by owner decision 2026-11-21.** _Ties:_ the older profile wins,
+  then the smaller id, defined once in `app/utils/compliance_profiles.py` and
+  used by grading, the admin-hours lookup and the configuration response (which
+  now lists profiles in that order). The editor warns under **Priority** and on
+  each tied card, and never refuses the save. A tie used to go to whichever row
+  the database returned first, so a member matched by two tied profiles may
+  switch profile once, on every screen together, on the first request after
+  the upgrade. _Optional requirements:_ shown, never graded. The matched
+  profile's applicable optional requirements are listed, marked Optional, on My
+  Training and the officer's view of the member (`optional_requirements_detail`)
+  and reach no count, percentage, reminder, notice, matrix or export. An id in
+  both lists is required, and a save stores it so. A profile with no required
+  list (`null`, API only) grades everything except its optional requirements.
+  The editor no longer turns such a `null` into `[]` (grade nothing) on an
+  unrelated save. Tests: `tests/test_compliance_profile_resolution.py`,
+  `tests/test_compliance_profile_ties_and_optional.py`,
+  `ComplianceRequirementsConfigPage.profileRules.test.tsx`.
+- **Profiles: optional requirements are not matrix cells — open, deferred
+  2026-11-21.** The compliance matrix, its print page and the exports show only
+  graded requirements, so an officer sees a member's optional requirements on
+  that member's training page only. Adding cells would need an optional
+  exclusion in every place the matrix frontend counts cells
+  (`complianceMatrixModel.ts`), the print page, the exports and the `as_of`
+  minimum; missing one recreates the drift of CLAUDE.md pitfall #29.
+- **Profiles: admin hours choose their own profile — open, owner question
+  2026-11-21.** A member's admin-hours targets come from the highest-priority
+  matching profile that _carries_ admin hours (ties now resolved as grading
+  resolves them), not from the profile that grades their training. A member
+  whose grading profile has no admin hours therefore takes targets from a
+  lower-priority profile. `admin_hours_service.get_user_hours_compliance` also
+  matches profiles with its own rules, which lack grading's "junior" chip
+  handling. Whether admin hours should follow the grading profile is not
+  decided.
 - **The compliance exports grade Met / Not Met from the report period's
-  records only — open, found 2026-11-20, not confirmed by running.**
-  `ReportExportService.stream_compliance_csv` and `generate_compliance_pdf`
-  hand `_requirement_cells` only the member's records completed inside the
-  report period (Jan 1 to today by default), while the compliance matrix
-  grades each requirement from the records its own window needs
-  (`load_graded_records`). By reading the code, a certification or one-time
-  requirement completed before the period would print **Not Met** in the
-  export beside a matrix that shows it met (CLAUDE.md pitfall #29). Fixing it
-  changes what the export's period means, so it needs its own decision.
+  records only — fixed (owner decision 2026-11-21: status as of today).**
+  Confirmed by running before the fix: a certification completed on 1 March
+  of last year printed **Not Met** in both the CSV and the PDF while the
+  matrix showed it met, and so did a one-time requirement finished two years
+  ago, a 24-month rolling requirement met fifteen months ago, and an annual
+  requirement met today on an export for last calendar year. Each
+  requirement cell is now the member's standing as of the department's
+  today, from `training_compliance.grade_members` — the one grader the
+  Compliance Matrix, `grade_org_members`, the CSV, the PDF and the
+  compliance forecast all call (CLAUDE.md pitfall #29). The report period
+  sets only the hours and completed-record columns: the CSV headers read
+  `Total Hours (<start> to <end>)` and `Completed Records (<start> to
+<end>)` (they were `Total Hours` and `Completed Courses`; the count was
+  always every completed record, certifications included), and the PDF
+  header reads "Status graded as of" and "Hours and records". The CSV now
+  orders requirement columns by name and member rows by last and first name,
+  as the PDF and the matrix do, grades and writes 500 members per chunk, and
+  the forecast runs one record query per 500 members instead of one per
+  member. The forecast's at-risk list still reads each graded requirement's
+  due date from `TrainingService.evaluate_requirement_detail`, the only
+  evaluator that computes one; it decides no status. Tests:
+  `tests/test_compliance_export_period.py`.
+- **Compliance emails: a rolling requirement is in one non-compliance notice
+  per member, ever — open, found 2026-11-21.** A rolling requirement's window
+  ends on the grading day, which made both member emails repeat daily (the
+  reminder called it "due today", and the notice's key moved with the date).
+  The fix gives a rolling requirement no deadline reminder and keys its notice
+  on the requirement alone (`compliance_member_notices.py`). The cost: a member
+  who meets it, and months later falls short again, is not told again unless
+  the same notice is triggered by some other requirement, which then lists it.
+  Telling them again needs a recorded "met again" date to key on, which the
+  task does not keep. Tests: `tests/test_compliance_member_notices.py`.
 - **The Compliance Officer dashboard's forecast summary cards keep fixed
   colour bands — open.** The department "Current" average card colours green
   at 80% or more and yellow below, and the 30/60/90 average cards and every
@@ -9112,6 +9225,40 @@ need an owner decision before anything is built.
   safe set (headings, lists) so that adapting the built-in text does not make
   the page look worse.
 
+## Events and Series — Choices Made Fixing the 2026-11-21 Review
+
+Five defects in training events and recurring series were fixed on
+2026-11-21 (owner approval of that date). Where the review left a choice, the
+conservative option was taken; each can be redirected:
+
+- **Cancelling a series' future ends the series.** "Only cancel future
+  events" now sets the series' end date to the last kept occurrence and turns
+  rolling extension off, as a "this and future" delete already did. There is
+  no "pause and resume" for a rolling series; to continue it, create a new
+  one. Separately, the nightly extension job never creates a date the series
+  already holds, cancelled or not.
+- **A sign-off session is not held while its approval is pending.** A session
+  that requires completion confirmation drops out of every
+  session-attendance grade from finalize until a training officer approves or
+  rejects it. The alternative — counting attendees with a pending record as
+  attended — was not taken, because nothing ends a pending approval on its
+  own and it would credit attendance an officer may still reject. Only the
+  newest approval counts; "newest" is by a one-second `created_at`, and a tie
+  with a pending approval reads as pending.
+- **A series time change that would strand check-ins refuses the whole save.**
+  The refusal names how many members and occurrences are affected; nothing is
+  moved. Postponing each affected occurrence is the way through.
+- **Credit hours follow the event's length only when they still equal it.**
+  On a move without the training form (a training manager's edit, a series
+  time change, a postponement), a session with no course whose hours equal
+  the old scheduled length takes the new length. Typed hours and a course's
+  hours stay as they were.
+- **A duplicate is always a draft.** Copying the source's flag was not taken:
+  a duplicate of a published event would appear on every calendar at the
+  source's date and room before the officer changed anything. The copy keeps
+  the source's organizer and alternate; one who can no longer run an event is
+  replaced by the duplicating officer.
+
 ## Events — Files Cannot Be Attached From the App (2026-09-30)
 
 `POST /api/v1/events/{id}/attachments` (`events.manage`) accepts a file, and
@@ -10764,6 +10911,15 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
 - **Retention covers the training workflow only.** The business-meeting
   workflow files no documents; when it does, its own policy needs to be read
   by the sweep.
+- **The meeting policy refuses documents** _(2026-11-21)_. Saving the
+  business-meeting policy with `attachment` other than `off` is a 400
+  (`takes_documents` on `WorkflowSpec`), since the workflow has no upload
+  route and such a policy refused every submission. **No stored rows were
+  rewritten and no migration was added:** the policy screen never offered the
+  field for meetings, so only a direct API save could have stored one, and
+  the reader now treats any stored value as `off` (the next save stores
+  `off`). If the meeting workflow ever takes documents, lift the refusal and
+  the read coercion together.
 - **HEIC is stored as filed, not converted.** A decider on Windows may need
   the HEIF extension to open an iPhone photo; nothing previews it in the page.
 - **The upload field sits in the request dialog and the document list on the
@@ -10800,8 +10956,19 @@ option was taken; each is open for the owner to revisit.
   to `/meetings/waiver-requests/{id}`, which the frontend does not have until
   the meeting screens land; the member's notice links to the event. Until then
   the policy can be saved only through the API, so no prompt is sent.
-- **Postponing an event does not touch its waiver requests.** A request keeps
-  the session date it was made for (training and meetings alike).
+- **A moved start reopens a decided request, even when the move is a
+  correction made after the session** _(corrected 2026-11-21; this line used
+  to say postponing left requests alone, which stopped being true with the
+  2026-11-13 reschedule decision)_. Any change to a pending or approved
+  request's start sends it back to the member to confirm, and an approved
+  meeting request's waiver comes off the minutes until they do. Since
+  2026-11-21 the member always gets seven days from that notice to answer
+  (`expires_at_for` reads `reconfirm_requested_at`); before, a start fixed
+  more than eight days after the session expired the request on the next
+  hourly sweep and charged the meeting as missed. **For the owner:** whether a
+  correction to a session already held — or one that keeps the same local
+  date, such as 19:00 fixed to 19:30 — should reopen the decision at all. Not
+  reopening it would change the 2026-11-13 decision, so it was not done here.
 - **`idx_meeting_attendees_meeting` is now a prefix of the new unique
   `(meeting_id, user_id)` index** and could be dropped; it was left to keep
   the migration to what the feature needs.
@@ -10946,7 +11113,8 @@ Options:
 
 Anonymising a member now deletes the certificates they uploaded with
 self-reported training, and the entries naming them on their submissions and
-on the training records approval copied them to. Permanently deleting a member
+on the training records approval copied them to, and (since 2026-11-20) the
+files uploaded to the member's own training records. Permanently deleting a member
 now removes, after the delete commits, the files named by the training
 submissions, training records and attendance waiver documents the delete
 cascades away. Both keep any file another row still names. What this leaves:
@@ -10954,21 +11122,26 @@ cascades away. Both keep any file another row still names. What this leaves:
 **Choices made without a further owner ruling** (the conservative option in
 each case):
 
-- **Files uploaded to a training record itself survive anonymisation.** They
-  are department training evidence, and anonymisation keeps training
-  completions and certifications. A permanent delete removes them, because
-  their rows go. If the owner wants them erased on anonymisation too, it is a
-  one-line widening of the candidate set in
-  `MemberAnonymizationService._remove_self_report_certificates`.
-- **A certificate that cannot be deleted during anonymisation keeps its
-  entry**, with the uploader's filename replaced by a neutral label, and is
-  counted (`self_report_files_not_deleted` in the response and the
-  `user_anonymized` audit event). `remove_member_attachments` and the
-  applicant-document step drop the row whatever happens to the file; this
-  step does not, because anonymisation refuses to run twice and a dropped
-  reference would leave a file nothing could find again. Nothing retries
-  these: retention (`attachment_retention_days`) is opt-in, so a department
-  that has not set it keeps the file until someone removes it by hand.
+- ~~**Files uploaded to a training record itself survive anonymisation.**~~
+  **Resolved 2026-11-20** (owner decision "Anonymise officer docs too"):
+  anonymisation deletes them too, under the same shared-file check, counted
+  as `training_record_files_*` in the response and the `user_anonymized`
+  audit event. Irreversible; `docs/UPGRADING.md` tells departments to
+  download evidence they must keep first.
+- **A file that cannot be deleted during anonymisation keeps its entry**,
+  with the uploader's filename replaced by a neutral label (`certificate.<ext>`
+  for a self-report certificate, `attachment.<ext>` for a training-record
+  upload), and is counted (`self_report_files_not_deleted` /
+  `training_record_files_not_deleted` in the response and the
+  `user_anonymized` audit event). A later permanent delete of the anonymised
+  member collects these kept entries again, which is the one retry path.
+  `remove_member_attachments` and the applicant-document step drop the row
+  whatever happens to the file; this step does not, because anonymisation
+  refuses to run twice and a dropped reference would leave a file nothing
+  could find again. Nothing else retries these: retention
+  (`attachment_retention_days`) is opt-in and covers self-report certificates
+  only, so a department that has not set it keeps the file until someone
+  removes it by hand.
 
 **Accepted residuals:**
 
@@ -11007,20 +11180,25 @@ each case):
   `self_report_attachment_retention` walks submissions only, so it never
   reaches that certificate again; it stays until the member is anonymised or
   permanently deleted.
-- **An approval racing an attachment removal can lose the file.** Neither
-  `delete_submission_attachment`, `delete_submission` nor the approval locks
-  the submission (`TrainingSubmissionService.get_submission` reads without
-  `FOR UPDATE`). An approval that read the list before the member's removal
-  committed copies the removed entry onto its new record; if the member's
-  post-commit reference check runs before the approval commits, it misses
-  that record and deletes the file. Closing it is pitfall #27's shape: lock
-  the submission in both delete paths and in the approval. Escalated, not
-  fixed: it changes the approval path, which this change does not otherwise
-  touch.
-- **`DELETE /training/submissions/{id}/attachments/{index}` is not safe to
-  repeat** (pitfall #36). A retry after a lost 204 removes whichever entry has
-  moved into that index, and its file. Fixing it needs an entry identity the
-  client can name (the entries carry none) — an API change, so escalated.
+- ~~**An approval racing an attachment removal can lose the file.**~~
+  **Resolved 2026-11-21.** `get_submission(..., for_update=True)` is a
+  locking read that refreshes the instance; the approval, `submit_draft`,
+  `update_submission`, `reverse_approval`, both delete paths and both upload
+  routes (re-read after storing) take it. A path that inserts a training
+  record locks the member's `users` row first (FOR SHARE): member, then
+  submission, then records. The approval is one transaction with its record,
+  so an approved submission with no record can no longer be left behind, and
+  retention locks the records it rewrites. Proven by
+  `tests/test_training_submission_attachment_races.py`.
+- ~~**`DELETE /training/submissions/{id}/attachments/{index}` is not safe to
+  repeat**~~ **Resolved 2026-11-21.** Every entry carries a stable `id`
+  (migration `7d6769fca85c` stamped the stored ones), the routes take
+  `{entry}`, and removing an id that is no longer there answers 204 and
+  changes nothing, under the submission row lock. This departs from the
+  event-attachment route, which answers 404 for an absent id: a retry after a
+  lost 204 must not show the member a failure. **Still open:** a legacy index
+  without `?expected_id=` keeps the old behaviour and is deprecated; the
+  shipped screens send the id whenever the entry has one.
 - **File names on path-less entries survive anonymisation.** The
   anonymisation step relabels only entries naming a stored file, so a
   `{"file_name": ...}` entry with no `file_path` (what the 2026-11-20
@@ -11050,3 +11228,48 @@ each case):
 
 Related, still open: **LIFE-11** (the separation letter in Documents), and the
 Member Files personal-folder documents, which neither path touches.
+
+## Apparatus — Three Decisions From App Review B2 Pass 6 (2026-11-20)
+
+Recorded rather than changed, because each one alters what a department sees.
+Findings, code references and failure scenarios are in
+`docs/app-review/apparatus.md` → Pass 6.
+
+### AP2-13 — The odometer and engine hours can move backwards
+
+A fuel log, a status change and an apparatus edit each overwrite the vehicle's
+`current_mileage` / `current_hours` with whatever was entered, and stamp the
+`*_updated_at` time with now even when the fill was backdated. Entering last
+month's receipt at 48,000 miles on a truck reading 52,000 sets it back to
+48,000, and every mileage-based figure reads from there.
+
+**The decision:** only ever raise the reading (a lower one is kept on the fuel
+log but does not move the vehicle), or refuse a lower one outright. Either
+needs a way through for a replaced or corrected odometer, such as an officer
+override on the apparatus edit.
+
+### AP2-14 — Re-activating a former member's operator record skips the current-member check
+
+Adding an operator refuses anyone who is not a current member. Editing an
+existing operator record does not: a record left from before the member
+departed can be set back to active and certified, putting them back on the
+driver roster. The create path keeps such records editable on purpose, so
+notes and dates on them can still be corrected.
+
+**The decision:** whether setting `is_active` (or `is_certified`) back to true
+counts as a new certification, and so refuses a former member the way adding
+one does.
+
+### AP2-15 — Apparatus custom-field definitions are stored and never read
+
+The custom-field definitions (`apparatus_custom_fields`: required flag,
+options, minimum and maximum, length, pattern) have API endpoints and no
+screen, and nothing on the backend checks an apparatus's
+`custom_field_values` against them. Renaming a definition's key leaves every
+stored value under the old key; deleting one leaves its values behind. This is
+the shape CLAUDE.md pitfall #19 warns about: configuration whose only effect is
+being stored.
+
+**The decision:** build the reader (validate values on apparatus create and
+update, migrate values when a key is renamed) and a management screen, or
+retire the definitions.

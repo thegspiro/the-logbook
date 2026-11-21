@@ -3898,3 +3898,228 @@ verified by their own authors' tests.
 | `python3.13 scripts/generate_schema_docs.py --check` (backend)                                                                             | ✅ up to date                                     |
 | `cd frontend && npm run typecheck`                                                                                                         | ✅ 0 errors                                       |
 | `cd frontend && npm run lint`                                                                                                              | ✅ 0 errors, 0 warnings (`--max-warnings 10`)     |
+
+---
+
+## Pass 15 (2026-11-21) — watchdog pickup, real delta, 0 fixed, 0 new findings; a new-scope item deferred
+
+**Prefix:** `TRX15` · **PR:** see `PROGRESS.md`'s **Open PR** row
+
+**Watchdog note.** `ListAgents` reported "No reachable agents" — the dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+remains unreachable, consistent with every prior pass recorded in
+`PROGRESS.md`. PR #4491 (Feature 17, Training core, pass 15) had already
+merged (`abcf2fc2`); a fresh `list_pull_requests` (state `open`) found no
+`claude/security-review-*` head, and row 18 was confirmed the next `⬜` row
+directly against `PROGRESS.md`'s table on a freshly fetched `main`.
+
+### Real delta since pass 14 (baseline `fde02bac`, PR #4180's merge)
+
+`git diff --stat` across the seven declared backend/schema files plus
+`training_program_service.py` and `schemas/training_submission.py` returned
+eleven real changes (1,080 insertions/373 deletions):
+`training_submissions.py`, `training_enhancements.py`,
+`training_module_config.py`, `training_waivers.py` and
+`schemas/training_submission.py` (endpoints/schema); `course_cohort_service.py`,
+`external_training_service.py`, `training_enhancement_service.py` (748 lines,
+largest single file),`training_program_service.py`, and
+`training_waiver_service.py` (services). `course_cohorts.py`/
+`course_syllabus.py`/`course_syllabus_service.py`/`training_submission_service.py`/
+`training_module_config_service.py`/`schemas/course_cohort.py`/
+`schemas/training_module_config.py` are byte-identical to pass 14. Read every
+file's real diff directly (not the diffstat, and not cited from commit
+messages):
+
+- **`training_waiver_service.py`** gains a fourth waiver source,
+  `SOURCE_SESSION_EXCUSAL` — an approved `AttendanceWaiverRequest` excusing one
+  named training session. `_session_excusals_by_user` filters
+  `AttendanceWaiverRequest.organization_id == str(org_id)` and the optional
+  `user_id` the same way `_active_overrides_by_user` already does for the
+  sibling override source; `month_waivers` excludes it from month-level
+  proration exactly as it already excludes `SOURCE_OVERRIDE`. A new
+  `_leave_and_waiver_periods` helper reads a leave's `linked_training_waiver_id`
+  so a leave and the training waiver its own creation wrote are read as one
+  reason, not double-counted — read directly, no org-scoping gap.
+- **`training_program_service.py`** adds row locking to
+  `_get_org_scoped_progress` (`with_for_update(of=RequirementProgress)`, an
+  optional `lock` parameter) and to the `RequirementProgressCredit` lookups in
+  both the crediting and reversal paths (`.with_for_update()`), closing the
+  same read-then-write race Pitfall #27 names — re-read after the fix, every
+  lock precedes its read and every write path that credits or reverses now
+  takes it. `_validate_evaluation_template` gained an `is_active`/`current`
+  check (an inactive form is refused unless it's the program's own already-set
+  form) with no change to its org-scoping (still a plain `select` filtered on
+  `organization_id`, no `is_in_org` call removed without an equivalent). None
+  of this is new org-scoping surface; all of it is the same already-scoped
+  queries gaining a lock or a status check.
+- **`training_enhancement_service.py`**'s 748-line diff is almost entirely the
+  compliance-profile-grading integration (owner decision 2026-11-20/21,
+  CLAUDE.md Pitfall #29) threaded through every export
+  (`generate_compliance_csv/_pdf`, `generate_individual_csv/_pdf`,
+  `generate_bulk_csv/_pdf`, `generate_forecast`) plus a PDF-rendering rewrite
+  (`reportlab.pdfgen.canvas` → the shared `pdf_report_kit` helpers already used
+  elsewhere, column-banding for wide requirement sets). Every new query
+  (`ComplianceGrading.from_config`/`_load_compliance_config`,
+  `load_evaluation_credits`, `fetch_org_waivers`, `record_sources`/
+  `load_source_lookup`) is called with the caller's own already-validated
+  `organization_id`; none takes a client-supplied id. `InstructorQualificationService.create_qualification`
+  gained `assert_current_members` on the client-supplied `user_id` (XC-1-
+  adjacent: a former member could previously be recorded as a qualified
+  instructor). No new unscoped query found in a full read of the diff.
+- **`training_submissions.py`** centralizes attachment-path confinement
+  through the new `app/services/member_files.py` (`confined_attachment_path(s)`),
+  and the create/delete/delete-attachment paths now call
+  `member_files.remove_unreferenced_files` instead of an unconditional
+  `file_storage.delete_quietly` — closing the orphaned-upload gap the file's
+  own comment used to warn about explicitly (a repeated `client_request_id`'s
+  losing attempt's file, and a shared certificate a void left another row
+  still naming). `schemas/training_submission.py` adds a `field_validator`
+  that refuses a client-supplied `attachments` value outright on both create
+  and update (the same shape TR-17/TRX pass 1 already closed for sibling
+  record schemas) — verified the validator is `mode="before"` and raises
+  rather than silently dropping the value.
+- **`training_waivers.py`** adds `log_audit_event` calls on create/update/
+  deactivate, with only ids, the waiver type and changed field _names_ in
+  `event_data` — confirmed the free-text `reason` (often medical, encrypted at
+  rest) is never passed to `_audit`.
+- **`training_enhancements.py`** adds `log_audit_event` on every report export
+  (ids/parameters only, never report content) and refuses a new attachment
+  upload to a voided `TrainingRecord` (400, matching `update_record`'s existing
+  void-is-final rule). `export_report`'s and `training_module_config.py`'s
+  `export_my_training`'s `Content-Disposition` filenames are now quoted
+  (`filename="..."`); the filenames are server-generated constants in every
+  case, so this closes no live header-injection path, just tidies the header.
+- **`external_training.py`**'s `update_provider` now decides
+  `connection_changed` from the _stored_ values before they're overwritten,
+  rather than from which keys the request body merely included — the edit
+  form re-sends `api_base_url` on every save, so the old check un-verified a
+  provider's connection on an unrelated field edit. No change to the
+  encryption or org-scoping of the credential fields themselves.
+- **`training_module_config.py`** (endpoint) threads the same
+  `ComplianceGrading`/`load_evaluation_credits` resolution into
+  `_evaluate_member_requirements`, used by both `/my-training` and the
+  officer's `/members/{user_id}/requirements` — one definition for both screens
+  (Pitfall #29), replacing the old `requirement_applies_to_member` call.
+  `member_with_roles or member` is read as the profile/position-matching
+  subject; `get_member_requirements` still resolves `member` through an
+  org-filtered `User` lookup before calling it (XC-3, unchanged from pass 14).
+  New optional-requirements output (`optional_requirements_detail`) is
+  evaluated by the same rules and kept out of every count — read directly:
+  `statuses`/`total_progress_pct` are built only from `applicable`, never
+  `optional`.
+- **`course_cohort_service.py`** refuses a former member as a cohort
+  enrollment target (`if not valid_users[key].is_active: ... continue`,
+  Pitfall #32-shaped, matching the apparatus/instructor-qualification pattern
+  already landed elsewhere this window) rather than enrolling and crediting
+  someone no longer active.
+- **`external_training_service.py`**'s three-line addition
+  (`course_hours_credited` on the import record) is bookkeeping for which
+  hours a zero-hour provider completion was credited from — no query, no
+  auth surface.
+
+**Ten established frontend files, five changed** (`git diff --stat` against
+pass 2's inventory, which pass 14 re-confirmed current): `CohortWizard.tsx`
+and `ExternalTrainingPage.tsx` add the same `isActiveAccount` former-member
+filter to their member pickers that the backend's `course_cohort_service.py`/
+`InstructorQualificationService` fixes enforce server-side (client-side
+mirror only — the server-side check is what actually closes the gap, verified
+present above). `SubmitTrainingPage.tsx` adds a session-draft
+(`useSessionDraft`, `sessionStorage`-backed, keyed per user) so a half-written
+submission survives a navigation away; read `hooks/useSessionDraft.ts` and
+`utils/sessionDrafts.ts` directly — the stored `TrainingDraft` shape carries
+no certificate file, no PHI-shaped free text beyond the member's own course
+description, and is cleared (`draft.clear()`) the moment the server confirms
+the save. `TrainingWaiversTab.tsx`/`WaiverManagementPage.tsx` extract a shared
+`getWaiverStatusBadge` (so the filter chips, the summary counts and the row
+badge cannot disagree, the same class of bug Pitfall #29 names for a backend
+status) and add a `requirement_ids` picker to the create-waiver form — sent to
+the endpoint whose `assert_all_in_org` call (TRX-6) is re-verified intact
+below. `CohortDetailPage.tsx`/`ReviewSubmissionsPage.tsx`/`CourseSyllabusBuilder.tsx`/
+`TrainingWaiversTab.tsx`'s remaining structure/`apiCache.ts` are unchanged
+since pass 14.
+
+### New scope found, deferred rather than reviewed this pass
+
+`attendance_waiver_requests.py` (31 routes) plus its services
+(`attendance_waiver_service.py`, `attendance_waiver_attachments.py`,
+`attendance_waiver_expiry.py`, `attendance_waiver_email_service.py`,
+`email_templates_attendance_waivers.py`) and
+`models`/`schemas/attendance_waiver.py` were folded into this feature's
+declared scope by `SEC-00-cross-cutting-baseline.md`'s own pass-14→15 lap
+note (`PROGRESS.md`, "Three more `history.py` siblings, same situation")
+without themselves receiving a seven-dimension review — unlike the
+`history.py` siblings reviewed directly in that same SEC-00 pass, this surface
+was left for "an obvious existing-feature home" to pick up, i.e. this
+rotation's next pass through row 18.
+
+**Not read this pass.** PR #4481 ("Fix the remaining seven attendance-waiver
+review findings"), opened earlier the same day against an owner-approved,
+independent app/workflow review of exactly this surface, is open and unmerged
+against `main` as of this pass's start — it touches
+`attendance_waiver_service.py`, `attendance_waiver_expiry.py`,
+`historical_import_undo.py` and `meetings_service.py` directly. Reviewing
+`attendance_waiver_requests.py`'s current (pre-#4481) code now would both
+duplicate that review's own findings and risk flagging lines #4481 is already
+rewriting out from under this pass. This feature's row stays the home for
+that surface; the first full seven-dimension read is deferred to the pass
+after #4481 merges, so it reviews settled code. The one piece of this surface
+this pass _did_ read — `training_waiver_service.py`'s own
+`_session_excusals_by_user`, which queries `AttendanceWaiverRequest` from the
+training side — is covered above and is unaffected by #4481 (which touches
+`attendance_waiver_service.py`'s own methods, not the columns the training
+side reads).
+
+### Standing findings re-verified at their current citation
+
+TRX-1 through TRX-10, TRX2-1, TRX3-1/TRX4-1, and TRX14-1 re-read directly, not
+cited from this document: the `bulk_enroll_members` batch `User` lookup still
+filters `organization_id` (TRX-1); `update_provider`,
+`CourseCohortService.update_cohort`, `CourseSyllabusService.update_class` all
+still route through `apply_updates` (TRX-2/5/5b); `training_waivers.py` still
+calls `assert_all_in_org` on `requirement_ids`, now on a third call site
+(`_audit` added, not a fourth mutation path) (TRX-6);
+`training_submission_service.py` still calls `assert_in_org` on `category_id`
+(TRX-7); `RecertificationService`/`MultiAgencyService`/
+`InstructorQualificationService`/`TrainingEffectivenessService`'s
+`_validate_references` methods are all still present and called from both
+create and update (TRX-8/9); `XAPIService.ingest_statement`'s
+`_provider_validated` flag and `ingest_batch`'s once-per-batch validation are
+unchanged (TRX-10); `TrainingModuleConfigService.get_config`'s savepoint +
+`IntegrityError` catch + locking re-read is unchanged (TRX14-1). No OPEN or
+FLAGGED item existed entering this pass; none is reopened by this pass's diff.
+
+### Route re-enumeration
+
+Counted `@router.get/post/put/patch/delete` decorators directly across all
+seven declared endpoint files: `training_submissions.py` 22,
+`training_waivers.py` 5, `training_enhancements.py` 30,
+`external_training.py` 20, `course_cohorts.py` 17, `course_syllabus.py` 6,
+`training_module_config.py` 8 — **108 routes**, unchanged from pass 14's own
+count. `python3 scripts/check_route_permissions.py --strict` (repo root):
+**328 total application routes, 0 errors, 0 warnings.**
+
+## Flagged, not fixed
+
+Nothing this pass. The new-scope deferral above is a scheduling decision, not
+a flagged security gap — no code in the deferred surface was found to need a
+fix; it simply was not yet read under this rotation's own seven-dimension
+process.
+
+## Schema & migration notes
+
+No migration in this pass's window touches a training-extended table. No
+`SET NULL` nullability issue found in the new/changed code.
+
+## Completion gate (pass 15)
+
+| Check                                                                                                                              | Result                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                      | ✅ 0 violations (no Python file changed this pass)                |
+| `black --check app/ tests/ alembic/`                                                                                               | ✅ 3331 files unchanged                                           |
+| `isort --check-only app/ tests/ alembic/`                                                                                          | ✅ clean                                                          |
+| `python3 scripts/validate_migrations.py --strict`                                                                                  | ✅ 794 revisions, single head `d5946cb2bd41`                      |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                  | ✅ 328 routes, 0 errors, 0 warnings                               |
+| `python3.13 scripts/generate_schema_docs.py --check` (backend)                                                                     | ✅ up to date                                                     |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi or module_config"` | ✅ 3550 passed, 1 pre-existing environment-only skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                                                                                 | ✅ 0 errors                                                       |
+| `cd frontend && npm run lint`                                                                                                      | ✅ 0 errors (exit 0, within `--max-warnings 10`)                  |

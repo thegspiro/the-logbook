@@ -527,6 +527,15 @@ class MeetingsService:
             attendee = result.scalar_one_or_none()
             if not attendee:
                 return False, "Attendee not found"
+            # An approved meeting waiver request is made effective only by
+            # this row; deleting it would charge the meeting as unexcused
+            # while the request still reads approved and counts toward the
+            # member's cap, and no path restores it.
+            if attendee.waiver_request_id:
+                return False, (
+                    "This member is excused by an approved waiver request, and "
+                    "this row is what records it, so it cannot be removed."
+                )
 
             await self.db.delete(attendee)
             await self.db.commit()

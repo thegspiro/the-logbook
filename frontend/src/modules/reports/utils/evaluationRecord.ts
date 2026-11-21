@@ -8,6 +8,7 @@ import type {
   DataEntry,
   EvaluationDataSource,
   EvaluationPartKind,
+  EvaluationSummary,
   GradeResult,
   ItemAnswer,
   PartContent,
@@ -134,4 +135,30 @@ export function describeCalculatedGrade(result: GradeResult | undefined | null):
   if (!result || result.score === null) return 'Not graded yet';
   const score = formatNumber(result.score, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   return `${score} of 5 — ${result.calculated_label ?? ''}`;
+}
+
+/** The five overall grades, lowest first, to order a period's counts. */
+const GRADE_ORDER = [
+  'Unsatisfactory',
+  'Needs improvement',
+  'Meets expectations',
+  'Exceeds expectations',
+  'Outstanding',
+];
+
+/** How many of `rows` stand at each overall grade, in grade order, then any
+ * other result (a weighted percentage) under its own words. Counts what the
+ * server sent; it decides each grade. */
+export function gradeCounts(rows: EvaluationSummary[]): { label: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (row.overall_grade) counts.set(row.overall_grade, (counts.get(row.overall_grade) ?? 0) + 1);
+  }
+  const rank = (label: string) => {
+    const i = GRADE_ORDER.indexOf(label);
+    return i === -1 ? GRADE_ORDER.length : i;
+  };
+  return [...counts.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => rank(a.label) - rank(b.label) || a.label.localeCompare(b.label));
 }

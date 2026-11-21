@@ -211,7 +211,11 @@ async def create_leave_of_absence(
         require_all_permissions("members.manage", "scheduling.assign")
     ),
 ):
-    """Create a leave of absence for a member."""
+    """Create a leave of absence for a member.
+
+    Not for oneself (owner decision 2026-11-16, ADV2-9): the caller's own
+    leave goes through a leave request, which they cannot approve. 400.
+    """
     if data.end_date and data.end_date < data.start_date:
         raise HTTPException(status_code=400, detail="End date must be after start date")
 
@@ -350,12 +354,26 @@ async def update_leave_of_absence(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
 ):
-    """Update a leave of absence."""
+    """Update a leave of absence.
+
+    Not one's own (owner decision 2026-11-16, ADV2-9): extending a leave, or
+    turning its training waiver back on, excuses requirements as granting one
+    does, and this route needs only ``members.manage``. Ending one's own leave
+    early stays open through the delete route, since it excuses nothing.
+    """
     svc = MemberLeaveService(db)
     updates = data.model_dump(exclude_unset=True)
     existing = await svc.get_leave(
         organization_id=str(current_user.organization_id), leave_id=leave_id
     )
+    if existing is not None and str(existing.user_id) == str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "You cannot change your own leave of absence. Submit a leave "
+                "request, or ask another officer."
+            ),
+        )
     before = snapshot(existing) if existing else None
     try:
         updated = await svc.update_leave(

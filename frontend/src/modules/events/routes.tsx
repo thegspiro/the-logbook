@@ -21,8 +21,12 @@ const EventDetailPage = lazyWithRetry(() =>
 const EventQRCodePage = lazyWithRetry(() => import('../../pages/EventQRCodePage'));
 const EventSelfCheckInPage = lazyWithRetry(() => import('../../pages/EventSelfCheckInPage'));
 const GuestCheckInPage = lazyWithRetry(() => import('../../pages/GuestCheckInPage'));
+const EventRequestPage = lazyWithRetry(() => import('../../pages/EventRequestPage'));
 const EventsAdminHub = lazyWithRetry(() =>
   import('../../pages/EventsAdminHub').then((m) => ({ default: m.EventsAdminHub }))
+);
+const CommunityEngagementPrintPage = lazyWithRetry(
+  () => import('../../pages/community-engagement/CommunityEngagementPrintPage')
 );
 const EventEditPage = lazyWithRetry(() =>
   import('../../pages/EventEditPage').then((m) => ({ default: m.EventEditPage }))
@@ -127,6 +131,30 @@ export const getEventsRoutes = () => {
           <ProtectedRoute requiredPermission="events.manage">
             <Suspense fallback={null}>
               <EventsAdminHub />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* One outreach request, on its own page (the board is /events/admin?tab=requests) */}
+      <Route
+        path="/events/admin/requests/:requestId"
+        element={
+          <ProtectedRoute requiredPermission="events.manage">
+            <Suspense fallback={null}>
+              <EventRequestPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* The Community Engagement report as a printable summary */}
+      <Route
+        path="/events/admin/community/print"
+        element={
+          <ProtectedRoute requiredPermission="events.manage">
+            <Suspense fallback={null}>
+              <CommunityEngagementPrintPage />
             </Suspense>
           </ProtectedRoute>
         }

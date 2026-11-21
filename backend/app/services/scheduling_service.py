@@ -206,6 +206,16 @@ def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
+def _to_minute(value: Optional[datetime]) -> Optional[datetime]:
+    """A time as an aware UTC instant cut to the minute, for telling whether
+    the close-out wizard sent a time back changed: its fields hold minutes,
+    so a stored check-in's seconds never survive the round trip."""
+    instant = _as_utc(value)
+    if instant is None:
+        return None
+    return instant.astimezone(timezone.utc).replace(second=0, microsecond=0)
+
+
 def _minutes_phrase(total: int) -> str:
     """ "90 minutes" as "an hour and a half" — how an officer would say it.
 
@@ -1826,6 +1836,7 @@ class SchedulingService:
         start_date: date,
         end_date: date,
         now: Optional[datetime] = None,
+        outreach_end_date: Optional[date] = None,
     ) -> list:
         """The WHERE clauses that make a shift a candidate for an open-shift list.
 
@@ -1834,6 +1845,11 @@ class SchedulingService:
         with a keyset cursor and its own cap, so it cannot share the query
         itself, and when it kept a copy of these clauses the copy missed the
         has-the-shift-ended filter and kept offering shifts that were over.
+
+        ``outreach_end_date`` lets outreach signup sheets reach further than
+        duty shifts (owner decision, 2026-11-20): an outreach event is booked
+        weeks out, behind a lead time of its own, so a 30-day window hid most
+        of them from the members asked to staff them.
         """
         now = now or datetime.now(timezone.utc)
         org = (
@@ -1842,10 +1858,19 @@ class SchedulingService:
             )
         ).scalar_one_or_none()
         settings = (org.settings or {}) if org else {}
+        in_window: Any = Shift.shift_date <= end_date
+        if outreach_end_date and outreach_end_date > end_date:
+            in_window = or_(
+                in_window,
+                and_(
+                    Shift.is_outreach.is_(True),
+                    Shift.shift_date <= outreach_end_date,
+                ),
+            )
         return [
             Shift.organization_id == str(organization_id),
             Shift.shift_date >= start_date,
-            Shift.shift_date <= end_date,
+            in_window,
             Shift.is_finalized.is_(False),
             Shift.status != ShiftStatus.CANCELLED,
             shift_not_over_criteria(settings, now),
@@ -1859,6 +1884,7 @@ class SchedulingService:
         apparatus_id: Optional[str] = None,
         max_candidates: int = 500,
         now: Optional[datetime] = None,
+        outreach_end_date: Optional[date] = None,
     ) -> List[Shift]:
         """Shifts in the window that could still be signed up for.
 
@@ -1873,7 +1899,11 @@ class SchedulingService:
         has no gap left to fill, for a member or for the department.
         """
         criteria = await self.open_shift_candidate_criteria(
-            organization_id, start_date, end_date, now=now
+            organization_id,
+            start_date,
+            end_date,
+            now=now,
+            outreach_end_date=outreach_end_date,
         )
         query = select(Shift).where(*criteria)
         if apparatus_id:
@@ -1892,6 +1922,7 @@ class SchedulingService:
         apparatus_id: Optional[str] = None,
         exclude_user_id: Optional[str] = None,
         max_candidates: int = 500,
+        outreach_end_date: Optional[date] = None,
     ) -> List[Shift]:
         """Return every shift in the window that still has an open position.
 
@@ -1909,6 +1940,7 @@ class SchedulingService:
             end_date,
             apparatus_id=apparatus_id,
             max_candidates=max_candidates,
+            outreach_end_date=outreach_end_date,
         )
         return await self.filter_shifts_with_open_positions(
             organization_id, candidates, exclude_user_id=exclude_user_id
@@ -1922,6 +1954,7 @@ class SchedulingService:
         end_date: date,
         apparatus_id: Optional[str] = None,
         max_candidates: int = 500,
+        outreach_end_date: Optional[date] = None,
     ) -> List[Shift]:
         """The open-shift board, as one member sees it.
 
@@ -1951,6 +1984,7 @@ class SchedulingService:
             end_date,
             apparatus_id=apparatus_id,
             max_candidates=max_candidates,
+            outreach_end_date=outreach_end_date,
         )
         if not candidates:
             return []
@@ -5631,6 +5665,7 @@ class SchedulingService:
                 )
                 await self.db.commit()
 
+            await self._sync_outreach_rsvps(shift_id, organization_id)
             return assignment, None
         except IntegrityError:
             await self.db.rollback()
@@ -5965,6 +6000,7 @@ class SchedulingService:
             # relying on a control that did not reach them.
             self.last_assignment_warnings = (driver_verdict or {}).get("warnings") or []
 
+            await self._sync_outreach_rsvps(assignment.shift_id, organization_id)
             return assignment, None
         except CodedValueError:
             # A curated business refusal (e.g. the driver qualification
@@ -6108,6 +6144,9 @@ class SchedulingService:
                 action="removed",
             )
 
+            await self._sync_outreach_rsvps(
+                shift_id, organization_id, removed_user_ids=[str(user_id)]
+            )
             return True, None
         except Exception as e:
             await self.db.rollback()
@@ -6258,10 +6297,46 @@ class SchedulingService:
                     action="declined",
                 )
 
+            await self._sync_outreach_rsvps(assignment.shift_id, organization_id)
             return assignment, None
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    async def _sync_outreach_rsvps(
+        self,
+        shift_id: UUID | str,
+        organization_id: UUID | str,
+        removed_user_ids: Sequence[str] = (),
+    ) -> None:
+        """Keep an outreach event's RSVPs in step with its signup sheet.
+
+        Owner decision, 2026-11-20: a member who takes a seat on an outreach
+        sheet is going to the event; one who gives it up is not. Called after
+        every seat change has committed, from the one place each kind of
+        change passes through, so no path is missed. Only outreach sheets are
+        looked at, and a failure here never undoes the seat change it follows.
+        """
+        try:
+            is_outreach = await self.db.scalar(
+                select(Shift.is_outreach).where(
+                    Shift.id == str(shift_id),
+                    Shift.organization_id == str(organization_id),
+                )
+            )
+            if not is_outreach:
+                return
+            from app.services.event_staffing_service import sync_volunteer_rsvps
+
+            await sync_volunteer_rsvps(
+                self.db, str(shift_id), str(organization_id), removed_user_ids
+            )
+            await self.db.commit()
+        except Exception as e:
+            await self.db.rollback()
+            logger.warning(
+                "Could not sync volunteer RSVPs for shift {}: {}", shift_id, e
+            )
 
     # ============================================
     # Shift Decline / Drop Notifications
@@ -11640,6 +11715,7 @@ class SchedulingService:
         shift_id: UUID,
         organization_id: UUID | str,
         entries: List[Dict[str, Any]],
+        locked_user_id: Optional[str] = None,
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Step 1 — record when each member was actually on.
 
@@ -11656,6 +11732,13 @@ class SchedulingService:
         ``finalize_shift``'s shift-then-attendance order. A closeout-attendance
         save racing a finalize on the same shift could deadlock, aborting one
         of two otherwise unrelated, ordinary requests.
+
+        ``locked_user_id`` is the caller when they are admitted as the shift's
+        officer alone (owner decision 2026-11-16, ADV2-8): their own row may
+        come back unchanged, since the wizard sends every member on each
+        save, but any change to it raises ``PermissionError``. Compared to the
+        minute, the precision the wizard's time fields carry, so a check-in
+        stamped at 07:02:34 and returned as 07:02 is not a change.
         """
         shift = await self.get_shift_by_id(shift_id, organization_id, for_update=True)
         if not shift:
@@ -11688,6 +11771,22 @@ class SchedulingService:
         for entry in entries:
             uid = str(entry["user_id"])
             att = existing.get(uid)
+            if locked_user_id and uid == str(locked_user_id):
+                stored = (
+                    (_to_minute(att.checked_in_at), _to_minute(att.checked_out_at))
+                    if att is not None
+                    else (None, None)
+                )
+                sent = (
+                    _to_minute(entry.get("checked_in_at")),
+                    _to_minute(entry.get("checked_out_at")),
+                )
+                if sent != stored:
+                    raise PermissionError(
+                        "You cannot record your own hours on a shift you run. "
+                        "Check in and out yourself, or ask a scheduling admin."
+                    )
+                continue
             if att is None:
                 # A client-supplied id must not pull a user from another org
                 # onto this shift. This admits any member of the caller's org,

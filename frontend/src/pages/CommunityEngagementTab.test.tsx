@@ -186,6 +186,14 @@ describe('CommunityEngagementTab', () => {
     expect(within(cpr).getByText('of ~30 expected')).toBeInTheDocument();
   });
 
+  it('offers the summary for printing, for the period on screen', async () => {
+    renderTab('?tab=community&period=quarter');
+
+    const link = await screen.findByRole('link', { name: 'Print summary' });
+    expect(link).toHaveAttribute('href', '/events/admin/community/print?period=quarter');
+    expect(link).toHaveAttribute('target', '_blank');
+  });
+
   it("opens on the dashboard card's period and keeps a new choice in the URL", async () => {
     renderTab('?tab=community&period=quarter');
     expect(await screen.findByRole('button', { name: 'This quarter' })).toHaveAttribute('aria-pressed', 'true');

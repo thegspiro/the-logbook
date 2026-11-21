@@ -592,6 +592,10 @@ class CloseoutStateResponse(UTCResponseBase):
     reported_call_count: int = 0
     reported_call_types: dict[str, int] = Field(default_factory=dict)
     attachable_calls: List[CloseoutAttachableCall] = Field(default_factory=list)
+    # The member whose times the caller may not change: their own, when they
+    # are admitted as the shift's officer without scheduling.manage (owner
+    # decision 2026-11-16, ADV2-8). None when the caller may record everyone.
+    own_hours_locked_user_id: Optional[UUID] = None
 
 
 class ShiftCancelRequest(BaseModel):

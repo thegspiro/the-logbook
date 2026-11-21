@@ -232,6 +232,11 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "An officer voided one of your training records, and why",
             "An officer edited one of your training records",
             "A decision on your request to be excused from a training session",
+            "Your request to be excused closed undecided, so the session "
+            "counts as missed",
+            "A session you asked to be excused from moved, so the request "
+            "needs your confirmation",
+            "A question about your request to be excused, which it waits on",
             "A leave of absence recorded, changed or removed, and what it does "
             "to your training requirements",
         ),

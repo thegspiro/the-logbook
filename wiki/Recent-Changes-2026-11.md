@@ -116,6 +116,39 @@ The engineering audit is
   report window on every screen size. The inventory stock matrix keeps its
   Size column pinned.
 
+## Recent changes: November 15 – 17, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-15--17-2026).
+This pass overlapped the November 15 – 16 one below: the one training-event
+form, Elections' header and sections, Course Links, **Evaluated Calls**, the
+shift-evaluation changes, Needs You's window, apparatus operators and the
+phone status bar are described there. Also in these days:
+
+- **Waiver Requests** appears in the Training navigation (and under
+  Governance for meetings, with the Minutes module on) for whoever decides
+  them, with a count waiting. A member is emailed when a cancelled session
+  closes their request.
+- **Elections on a phone**: officers get a meeting-night dashboard with the
+  vote count, the time left and one big button for the next step.
+- **PDFs**: every page after the first carries a running header with the
+  department's logo, name and document title. The Reports page's **CSV** and
+  **PDF** (was **Print / PDF**) are built by the server and recorded in the
+  audit log.
+- **Security**: adding an authenticator app when you already have a passkey
+  also asks you to confirm who you are. Draft events cannot be checked into.
+  A shift-report reviewer cannot review their own report, and the Chief
+  cannot override their own requirement.
+- **Finance, grants and the store**: a save that is refused now says why on
+  the field or inside the dialog, and keeps what you typed. A fiscal year's
+  end date cannot be before its start. Size preferences save the rest when
+  one size is refused.
+
+**For whoever takes screenshots:** most of the Elections guide's images show
+the old tab bar and need re-shooting; the list is in
+[`docs/training/SCREENSHOT_CURRENCY.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/training/SCREENSHOT_CURRENCY.md).
+YouTube scripts 04, 05, 12 and 16 have beats marked for re-recording.
+
 ## Recent changes: the month in review, October 16 – November 16, 2026
 
 The engineering audit is

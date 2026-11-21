@@ -282,10 +282,13 @@ Configure page it opens (ComplianceRequirementsConfigPage)]**
 **[SCREENSHOT NEEDED]:** _The Compliance Requirements Thresholds tab with the "Evaluation Period" checkbox and its helper text._
 
 > "You'll find all of this in two places: **Compliance Reporting, Configure**, or
-> **Settings and Data, Compliance Settings**. The second is the same page —
+> **Settings and Data, Compliance**. The second is the same page —
 > it's there so you can find it with the rest of your settings. You need the
 > manage-settings or manage-compliance permission to save; manage-training alone
 > opens the hub but doesn't show Configure."
+
+**[EDITOR — 2026-11-17. Re-record this line: the Settings & Data tab reads
+**Compliance** since 2026-11-08 (it was "Compliance Settings").]**
 
 **[SCREEN: Thresholds tab, the Months on leave choice: Full month (default),
 15-day rule: proportional, 15-day rule: half.]**

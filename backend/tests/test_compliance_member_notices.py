@@ -12,6 +12,7 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import select
 
 from app.services import compliance_member_notices as notices
 from app.services.compliance_member_notices import (
@@ -56,16 +57,62 @@ class TestPureRules:
 
     def test_deadlines(self):
         end = date(2026, 12, 31)
-        assert requirement_deadline(_ev("not_started", end), TODAY) == end
-        assert requirement_deadline(_ev("in_progress", end), TODAY) == end
-        assert requirement_deadline(_ev("completed", end), TODAY) is None
+        assert requirement_deadline(_req(), _ev("not_started", end), TODAY) == end
+        assert requirement_deadline(_req(), _ev("in_progress", end), TODAY) == end
+        assert requirement_deadline(_req(), _ev("completed", end), TODAY) is None
         # Lapsed already: nothing left to remind about.
-        assert requirement_deadline(_ev("expired", end), TODAY) is None
-        assert requirement_deadline(_ev("not_started", date(2026, 1, 1)), TODAY) is None
+        assert requirement_deadline(_req(), _ev("expired", end), TODAY) is None
+        assert (
+            requirement_deadline(_req(), _ev("not_started", date(2026, 1, 1)), TODAY)
+            is None
+        )
         catch_up = date(2026, 11, 1)
         assert (
-            requirement_deadline(_ev("catch_up", catch_up=catch_up), TODAY) == catch_up
+            requirement_deadline(_req(), _ev("catch_up", catch_up=catch_up), TODAY)
+            == catch_up
         )
+
+
+def _rolling_req(name="Rolling CE", requirement_type="hours"):
+    return SimpleNamespace(
+        id=str(uuid.uuid4()),
+        name=name,
+        requirement_type=requirement_type,
+        due_date_type="rolling",
+        rolling_period_months=12,
+    )
+
+
+@pytest.mark.unit
+class TestRollingRequirements:
+    """A rolling window ends on the grading day, so its end is not a deadline.
+
+    "72 hours in any 12 months" is met or short on every day. Reading the
+    window end as a deadline made it "due today" on every run, and keyed
+    both emails on a date that moved each day, so neither ever repeated a
+    key (review finding, 2026-11-21).
+    """
+
+    @pytest.mark.parametrize("requirement_type", ["hours", "certification", "courses"])
+    def test_an_unmet_rolling_requirement_has_no_deadline(self, requirement_type):
+        req = _rolling_req(requirement_type=requirement_type)
+        for status in ("not_started", "in_progress"):
+            assert requirement_deadline(req, _ev(status, TODAY), TODAY) is None
+
+    def test_its_catch_up_deadline_is_still_one(self):
+        catch_up = date(2026, 11, 1)
+        req = _rolling_req()
+        assert requirement_deadline(req, _ev("catch_up", catch_up=catch_up), TODAY) == (
+            catch_up
+        )
+
+    def test_its_unmet_key_does_not_move_with_the_window(self):
+        req = _rolling_req()
+        today_key = notices._unmet_key(req, _ev("in_progress", TODAY))
+        tomorrow_key = notices._unmet_key(
+            req, _ev("in_progress", TODAY + timedelta(days=1))
+        )
+        assert today_key == tomorrow_key
 
 
 # ---------------------------------------------------------------------------
@@ -326,3 +373,93 @@ def test_the_task_is_registered_daily():
     assert "compliance_member_notices" in TASK_RUNNERS
     assert TASK_INTERVALS_SECONDS["compliance_member_notices"] == 86400
     assert SCHEDULE["compliance_member_notices"]["frequency"] == "daily"
+
+
+@pytest.mark.integration
+class TestRollingRequirementOnConsecutiveDays:
+    async def _rolling_department(self, db_session):
+        from app.models.training import (
+            DueDateType,
+            RequirementFrequency,
+            RequirementType,
+            TrainingRequirement,
+        )
+
+        org, member = await _department(db_session, days=(7,))
+        db_session.add(
+            TrainingRequirement(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                name="Rolling CE Hours",
+                requirement_type=RequirementType.HOURS,
+                required_hours=72.0,
+                frequency=RequirementFrequency.ANNUAL,
+                due_date_type=DueDateType.ROLLING,
+                rolling_period_months=12,
+                applies_to_all=True,
+                active=True,
+            )
+        )
+        await db_session.flush()
+        return org, member
+
+    async def test_the_second_day_sends_nothing(self, db_session, mailer, monkeypatch):
+        """No stubs on the grading: the shared evaluator reports the rolling
+        window ending on each grading day, as it does in production."""
+        org, member = await self._rolling_department(db_session)
+
+        monkeypatch.setattr(notices, "org_today", lambda _org: date(2026, 11, 20))
+        first = await notices.send_member_compliance_notices(db_session, org)
+        monkeypatch.setattr(notices, "org_today", lambda _org: date(2026, 11, 21))
+        second = await notices.send_member_compliance_notices(db_session, org)
+
+        assert second == 0
+        # The first day sends the non-compliance notice and no "due today"
+        # reminder: the requirement has no deadline.
+        assert first == 1
+        assert [s["subject"] for s in mailer.sends] == [
+            "You are not currently meeting your training requirements"
+        ]
+        (line,) = [
+            ln
+            for ln in mailer.sends[0]["text"].splitlines()
+            if "Rolling CE Hours" in ln
+        ]
+        assert line == "- Rolling CE Hours: 0 of 72 hours"
+
+    async def test_a_notice_sent_before_the_fix_is_not_repeated(
+        self, db_session, mailer, monkeypatch
+    ):
+        """The notices already logged keyed a rolling requirement as
+        ``id|window_end``; the first run after the upgrade must read those
+        as already told rather than send every such member one more."""
+        from app.models.notification import NotificationChannel, NotificationLog
+        from app.models.training import TrainingRequirement
+
+        org, member = await self._rolling_department(db_session)
+        req_id = (
+            await db_session.execute(
+                select(TrainingRequirement.id).where(
+                    TrainingRequirement.organization_id == org.id
+                )
+            )
+        ).scalar_one()
+        db_session.add(
+            NotificationLog(
+                organization_id=org.id,
+                recipient_id=str(member.id),
+                recipient_email=member.email,
+                channel=NotificationChannel.EMAIL,
+                category=notices.NONCOMPLIANT_LOG_CATEGORY,
+                subject="You are not currently meeting your training requirements",
+                delivered=True,
+                notification_metadata={
+                    "org_date": "2026-11-19",
+                    "unmet": [f"{req_id}|2026-11-19"],
+                },
+            )
+        )
+        await db_session.flush()
+
+        monkeypatch.setattr(notices, "org_today", lambda _org: date(2026, 11, 20))
+        assert await notices.send_member_compliance_notices(db_session, org) == 0

@@ -49,6 +49,13 @@ describe('AnonymizeMemberModal', () => {
     expect(screen.getByText('Training, attendance and hours')).toBeInTheDocument();
   });
 
+  it('names both kinds of uploaded training file it removes', () => {
+    renderModal();
+
+    expect(screen.getByText('Certificates uploaded with their training reports')).toBeInTheDocument();
+    expect(screen.getByText('Documents attached to their training records')).toBeInTheDocument();
+  });
+
   it('stays disabled until the member name is typed', async () => {
     const user = userEvent.setup();
     renderModal();

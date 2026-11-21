@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal } from '../Modal';
+import { RSVPStatus } from '../../constants/enums';
 import type { RSVP } from '../../types/event';
 import { getRSVPStatusLabel, getRSVPStatusColor } from '../../utils/eventHelpers';
 import { formatTime } from '../../utils/dateFormatting';
@@ -50,13 +51,20 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
   timezone,
   lateEntry,
 }) => {
-  const filteredMembers = eligibleMembers.filter(
-    (member) =>
-      memberSearch === '' ||
-      // Either name finds the member: the one they go by, or the legal one.
-      `${formatMemberName(member)} ${formatLegalName(member)}`.toLowerCase().includes(memberSearch.toLowerCase()) ||
-      (member.email ?? '').toLowerCase().includes(memberSearch.toLowerCase())
-  );
+  // Who said they are coming leads the list — including the volunteers who
+  // claimed a role on an outreach event's signup sheet, who are given a going
+  // RSVP (owner decision, 2026-11-20) — so the person checking in finds the
+  // crew without scrolling the roster. The order within each part is kept.
+  const going = new Set(rsvps.filter((r) => r.status === RSVPStatus.GOING).map((r) => r.user_id));
+  const filteredMembers = eligibleMembers
+    .filter(
+      (member) =>
+        memberSearch === '' ||
+        // Either name finds the member: the one they go by, or the legal one.
+        `${formatMemberName(member)} ${formatLegalName(member)}`.toLowerCase().includes(memberSearch.toLowerCase()) ||
+        (member.email ?? '').toLowerCase().includes(memberSearch.toLowerCase())
+    )
+    .sort((a, b) => Number(going.has(b.id)) - Number(going.has(a.id)));
 
   return (
     <Modal

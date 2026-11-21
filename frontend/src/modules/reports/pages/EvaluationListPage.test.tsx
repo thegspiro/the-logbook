@@ -4,7 +4,7 @@
  * evaluator of what they draft and is not offered the choice.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import type { BulkDraftPreview, DraftOptions, EvaluationSummary } from '../types/evaluations';
@@ -28,6 +28,9 @@ const removed = vi.fn();
 const bulkPreview = vi.fn();
 const bulkDraft = vi.fn();
 const attention = vi.fn();
+const exportPeriod = vi.fn();
+const saveBlob = vi.fn();
+vi.mock('../../../utils/saveBlob', () => ({ saveBlob: (...a: unknown[]) => saveBlob(...a) as unknown }));
 vi.mock('../services/evaluationsApi', () => ({
   evaluationsService: {
     list: (...a: unknown[]) => list(...a) as unknown,
@@ -37,6 +40,7 @@ vi.mock('../services/evaluationsApi', () => ({
     removed: (...a: unknown[]) => removed(...a) as unknown,
     bulkPreview: (...a: unknown[]) => bulkPreview(...a) as unknown,
     bulkDraft: (...a: unknown[]) => bulkDraft(...a) as unknown,
+    exportPeriod: (...a: unknown[]) => exportPeriod(...a) as unknown,
   },
 }));
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
@@ -93,7 +97,19 @@ const PREVIEW: BulkDraftPreview = {
 
 describe('EvaluationListPage', () => {
   beforeEach(() => {
-    for (const m of [list, draftOptions, create, navigate, removed, bulkPreview, bulkDraft, attention]) m.mockReset();
+    for (const m of [
+      list,
+      draftOptions,
+      create,
+      navigate,
+      removed,
+      bulkPreview,
+      bulkDraft,
+      attention,
+      exportPeriod,
+      saveBlob,
+    ])
+      m.mockReset();
     attention.mockResolvedValue({ mine: 0, overdue: 0 });
     list.mockResolvedValue([SUMMARY]);
     draftOptions.mockResolvedValue(OPTIONS);
@@ -204,5 +220,70 @@ describe('EvaluationListPage', () => {
     expect(await screen.findByRole('heading', { name: 'Deleted evaluations' })).toBeInTheDocument();
     expect(screen.getByText('Drafted twice.')).toBeInTheDocument();
     expect(screen.getByText(/Pat Member · 2025 Annual/)).toBeInTheDocument();
+  });
+
+  describe('period results', () => {
+    const DONE: EvaluationSummary = {
+      ...SUMMARY,
+      id: 'ev2',
+      member: { id: 'm2', name: 'Lee Recruit' },
+      status: 'finalized',
+      current_step: null,
+      current_step_due: null,
+      overall_grade: 'Meets expectations',
+    };
+    const DONE_TOO: EvaluationSummary = { ...DONE, id: 'ev3', member: { id: 'm3', name: 'Sam Driver' } };
+    const ELSEWHERE: EvaluationSummary = {
+      ...DONE,
+      id: 'ev4',
+      member: { id: 'm4', name: 'Ash Probie' },
+      period_id: 'p0',
+      period_name: '2025 Annual',
+      overall_grade: 'Outstanding',
+    };
+
+    beforeEach(() => {
+      list.mockReset();
+      list.mockResolvedValue([SUMMARY, DONE, DONE_TOO, ELSEWHERE]);
+      exportPeriod.mockResolvedValue(new Blob(['csv']));
+    });
+
+    it('shows view_all the grade column, the period counts and the export', async () => {
+      granted = new Set(['evaluations.view_all']);
+      const user = userEvent.setup();
+      renderWithRouter(<EvaluationListPage />);
+      await screen.findByRole('link', { name: 'Pat Member' });
+      expect(screen.getByRole('columnheader', { name: 'Overall grade' })).toBeInTheDocument();
+
+      await user.selectOptions(screen.getByLabelText('Period'), 'p1');
+
+      expect(screen.queryByRole('link', { name: 'Ash Probie' })).not.toBeInTheDocument();
+      const results = screen.getByRole('region', { name: 'Period results' });
+      expect(within(results).getByText('2 of 3 complete')).toBeInTheDocument();
+      expect(
+        within(results)
+          .getAllByRole('term')
+          .map((t) => t.textContent)
+      ).toEqual(['Meets expectations']);
+      expect(
+        within(results)
+          .getAllByRole('definition')
+          .map((d) => d.textContent)
+      ).toEqual(['2']);
+      await user.click(within(results).getByRole('button', { name: 'Export CSV' }));
+      await waitFor(() => expect(exportPeriod).toHaveBeenCalledWith('p1'));
+      expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'evaluation-results.csv');
+    });
+
+    it('shows no grades or export without view_all', async () => {
+      granted = new Set(['evaluations.conduct', 'evaluations.manage']);
+      const user = userEvent.setup();
+      renderWithRouter(<EvaluationListPage />);
+      await screen.findByRole('link', { name: 'Pat Member' });
+      await user.selectOptions(screen.getByLabelText('Period'), 'p1');
+
+      expect(screen.queryByRole('columnheader', { name: 'Overall grade' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Period results' })).not.toBeInTheDocument();
+    });
   });
 });
