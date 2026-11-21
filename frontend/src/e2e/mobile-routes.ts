@@ -1010,6 +1010,19 @@ export const ALL_ROUTES: RouteCheck[] = [
   },
   { path: '/facilities', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/facilities/settings', maxSmallTargets: 0, maxTinyText: 0 },
+  // Each `expectText` is drawn only by its populated fixture (helpers.ts).
+  {
+    path: '/facilities/maintenance',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: 'Annual overhead bay door service — springs, rollers and safety reversing sensors',
+  },
+  {
+    path: '/facilities/inspections',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: 'Electrical panel and emergency lighting inspection',
+  },
   { path: '/governance/org-chart', maxSmallTargets: 0, maxTinyText: 0 },
   // manage: so its header buttons render — see the note on /events.
   { path: '/elections', maxSmallTargets: 0, maxTinyText: 0, permissions: ['elections.manage'] },

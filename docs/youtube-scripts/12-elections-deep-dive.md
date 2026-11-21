@@ -500,11 +500,21 @@ update the page in place.]**
 
 ### IN-APP VOTING (21:00 – 21:45)
 
-**[SCREEN: Logged-in member on the election detail page, Cast Vote tab]**
+**[SCREEN: Logged-in member on the election detail page, the ballot on its
+Overview]**
 
-> "Members can also vote logged-in, on the Cast Vote tab. Same eligibility
+> "Members can also vote logged-in, right on the election's page. Same eligibility
 > checks, same one-ballot rule — the system tracks that a member voted, by
 > either path, and blocks a second attempt."
+
+**[PRODUCTION NOTE — 2026-11-17. RE-RECORD this beat. Since 2026-11-15 a
+member's election page has no tab strip: their ballot shows on the page
+itself, and only officers see a **Cast Vote** section link. The old narration
+said "on the Cast Vote tab". Every "tab" cue in this script is now a
+**section** with its own address (`/elections/:id/<section>`), reached from
+the section links in the header card, which starts with **Overview**; re-shoot
+any cue that shows the old tab bar. On a phone, an officer's Overview is now
+the meeting-night dashboard (guide 14, "On a phone, at the meeting").]**
 
 > "The list of who may vote is fixed when you open the election. A member who
 > isn't on it is told why: if they still fail a rule — a waiting period,
@@ -709,7 +719,12 @@ Integrity panel is now the **Integrity & Audit** section and loads on arrival.
 Election Settings is reached from the **Elections pages** row, not a gear.
 Re-shoot any footage of the tabs, the gear or the Forensics toggle.]**
 
-> "For a dispute, pull Forensics — one report with everything: the integrity
+**[PRODUCTION NOTE — 2026-11-17. RE-RECORD the shot. The collapsible
+Forensics & Integrity block at the bottom of the page is now the **Integrity &
+Audit** section in the header's section links (open and closed elections),
+and the report loads on arrival. Narration changed from "pull Forensics".]**
+
+> "For a dispute, open Integrity & Audit — one report with everything: the integrity
 > results; every soft-deleted vote with who deleted it and why — votes are
 > never physically erased; rollback history; token issuance and usage — who
 > got ballots, which were used, access counts; anomaly detection flagging
@@ -1057,7 +1072,7 @@ re-shoot every cue. The narration below has been corrected.]**
 > the membership the moment you close, the report goes to the election's
 > creator and leadership, and **Send Me a Copy** sends you one too."
 
-> "Runoffs, by the way, don't wait for the gate — if one's needed, it was
+> "Runoffs, by the way, don't wait either — if one's needed, it was
 > already created the moment you closed."
 
 **[CALLOUT: "Early close = instant results"]**
@@ -1220,6 +1235,9 @@ narrow help popover.]**
 **Audience:** Leadership, election admins
 
 **[SCREEN: The Integrity & Audit section]**
+
+**[PRODUCTION NOTE — 2026-11-17. RE-RECORD the shot: Forensics is now the
+**Integrity & Audit** section, see chapter 13.]**
 
 > "'The count is wrong.' 'Someone voted twice.' Don't argue — investigate.
 > One report answers it."

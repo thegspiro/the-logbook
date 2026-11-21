@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { Save, X, User, MapPin, Phone, Calendar, AlertCircle, Lock, Eye, EyeOff } from 'lucide-react';
+import { Save, X, User, MapPin, Phone, Calendar, AlertCircle, Lock, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MemberFormData } from '../types/member';
 import { userService, organizationService, roleService, locationsService } from '../services/api';
@@ -1019,8 +1019,23 @@ const AddMember: React.FC = () => {
                   {PASSWORD_CHECKLIST.map(({ key, label }) => {
                     const met = passwordChecks[key];
                     return (
-                      <li key={key} className={met ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}>
-                        {met ? '✓' : '○'} {label}
+                      <li key={key} className="flex items-center space-x-2">
+                        {met ? (
+                          <CheckCircle
+                            className="h-4 w-4 shrink-0 text-green-700 dark:text-green-400"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <div
+                            className="border-theme-input-border h-4 w-4 shrink-0 rounded-full border-2"
+                            aria-hidden="true"
+                          />
+                        )}
+                        {/* The icon is decorative; this is the state a screen reader hears (W11-12, as W03-10). */}
+                        <span className="sr-only">{met ? 'Met: ' : 'Not met: '}</span>
+                        <span className={met ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}>
+                          {label}
+                        </span>
                       </li>
                     );
                   })}
