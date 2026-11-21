@@ -11203,11 +11203,16 @@ each case):
   `{"file_name": ...}` entry with no `file_path` (what the 2026-11-20
   migration made of the old bare strings) keeps the uploader's filename, which
   can be the member's name, on their submissions and records.
-- **A training record's own uploaded file has no removal route.** Officers
-  and members can add one (`POST /training/records/{id}/attachments`) but not
-  remove it; it leaves only with retention, anonymisation or a permanent
-  delete. A `DELETE /training/records/{id}/attachments/{index}` mirroring the
-  submission route is the shape if the owner wants one.
+- ~~**A training record's own uploaded file has no removal route.**~~
+  **Resolved 2026-11-21** (owner decision 2026-11-21, (d)):
+  `DELETE /training/records/{id}/attachments/{entry}` and a Remove button in
+  the record's Files dialog. `training.manage` may remove any file uploaded to
+  the record; the member only a file they uploaded (an entry with no
+  `uploaded_by` is an officer's to remove). A certificate an approval copied
+  onto the record, and every file on a voided record, stays. The list carries
+  a server-computed `can_remove`. Removal is by entry id (a repeat is a 204
+  no-op), audited as `training_record_attachment_removed` with ids only, and
+  the file goes through `remove_unreferenced_files` after the commit.
 
 **Closed 2026-11-20** (file-handling gaps, owner decision of that date):
 
