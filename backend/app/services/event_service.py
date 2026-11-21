@@ -14,7 +14,17 @@ from dataclasses import field as dataclass_field
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -187,6 +197,30 @@ BULK_ADD_MAX_SIZE = 200
 # tight — it exists only so a regression in promote_from_waitlist's "no longer
 # fits" condition cannot turn one RSVP into an unbounded loop.
 MAX_WAITLIST_PROMOTIONS_PER_RELEASE = 50
+
+# What a volunteer is told when the outreach event their signup sheet covered
+# goes away — one event or a whole series, the same words.
+CANCELLED_SHEET_REASON = "The outreach event this covered was cancelled."
+DELETED_SHEET_REASON = "The outreach event this covered was deleted."
+
+
+def rsvp_seats(rsvp: Any) -> int:
+    """Attendee seats a going RSVP takes against ``max_attendees``.
+
+    One for the member and one per guest — except a volunteer, who is crew
+    rather than audience (owner decision, 2026-11-21) and takes no seat of
+    their own; their guests still do. ``rsvp_seats_sql`` is the same rule for
+    a query, and every seat count — the RSVP path, waitlist promotion, the
+    list card, the detail page and the stats — goes through one or the other
+    (pitfall #29).
+    """
+    member = 0 if getattr(rsvp, "is_volunteer", False) else 1
+    return member + (rsvp.guest_count or 0)
+
+
+def rsvp_seats_sql() -> Any:
+    """``rsvp_seats`` as a column expression, for a SUM over going RSVPs."""
+    return EventRSVP.guest_count + case((EventRSVP.is_volunteer.is_(True), 0), else_=1)
 
 
 def resolve_attendee_visibility(
@@ -506,6 +540,10 @@ class EventService:
         # Waiver-request emails owed by a move made with ``defer_commit=True``,
         # sent by ``complete_deferred_writes`` once the batch has committed.
         self._deferred_waiver_notices: List[Any] = []
+        # Signup sheets owned by events cancelled with ``defer_commit=True``,
+        # stood down by ``complete_deferred_writes`` once the batch commits
+        # (``cancel_shift`` commits on its own, so it cannot run inside it).
+        self._deferred_sheet_stand_downs: List[Tuple[str, str]] = []
 
     async def _organizer_columns(
         self,
@@ -753,7 +791,7 @@ class EventService:
         # or it will promise room the RSVP path then refuses. going_count stays
         # the member count, which is what "N going" means.
         occupied_seats_sq = (
-            select(func.coalesce(func.sum(1 + EventRSVP.guest_count), 0))
+            select(func.coalesce(func.sum(rsvp_seats_sql()), 0))
             .where(EventRSVP.event_id == Event.id)
             .where(EventRSVP.status == RSVPStatus.GOING)
             .correlate(Event)
@@ -1572,6 +1610,9 @@ class EventService:
         await self._reverse_pipeline_after_commit(pending, organization_id)
         notices, self._deferred_waiver_notices = self._deferred_waiver_notices, []
         await self._send_waiver_notices(notices, organization_id)
+        sheets, self._deferred_sheet_stand_downs = self._deferred_sheet_stand_downs, []
+        for sheet_id, reason in sheets:
+            await self._stand_down_own_staffing(sheet_id, organization_id, reason)
 
     async def publish_event(
         self, event_id: UUID, organization_id: UUID | str
@@ -1922,6 +1963,11 @@ class EventService:
             await self.db.flush()
             self._deferred_reversals.extend(pending_reversals)
             self._deferred_waiver_notices.extend(waiver_notices)
+            sheet_id = getattr(event, "staffing_shift_id", None)
+            if sheet_id:
+                self._deferred_sheet_stand_downs.append(
+                    (sheet_id, CANCELLED_SHEET_REASON)
+                )
             return event
 
         await self.db.commit()
@@ -1931,7 +1977,7 @@ class EventService:
         await self._stand_down_own_staffing(
             getattr(event, "staffing_shift_id", None),
             organization_id,
-            "The outreach event this covered was cancelled.",
+            CANCELLED_SHEET_REASON,
         )
 
         # Send cancellation notifications if requested
@@ -2441,6 +2487,7 @@ class EventService:
             list(events), organization_id, "cancelled"
         )
 
+        sheet_ids = self._own_sheet_ids(events)
         now = datetime.now(dt_timezone.utc)
         cancelled_count = 0
         for event in events:
@@ -2461,6 +2508,10 @@ class EventService:
                 pending_reversals, organization_id
             )
             await self._send_waiver_notices(waiver_notices, organization_id)
+            for sheet_id in sheet_ids:
+                await self._stand_down_own_staffing(
+                    sheet_id, organization_id, CANCELLED_SHEET_REASON
+                )
 
         return cancelled_count
 
@@ -2772,7 +2823,7 @@ class EventService:
         await self._stand_down_own_staffing(
             sheet_id,
             organization_id,
-            "The outreach event this covered was deleted.",
+            DELETED_SHEET_REASON,
         )
         return True
 
@@ -2804,6 +2855,21 @@ class EventService:
         await stand_down_event_staffing(
             self.db, sheet_id, str(organization_id), None, reason
         )
+
+    @staticmethod
+    def _own_sheet_ids(events: Sequence[Event]) -> List[str]:
+        """The signup sheets these events own, for a series cancel or delete.
+
+        Each occurrence owns its own sheet (a request-owned sheet is stood down
+        by the request's sync instead). Read before the commit: a deleted
+        row's columns cannot be read after it.
+        """
+        # getattr: callers in tests hand in plain stand-ins without the column.
+        return [
+            str(sheet_id)
+            for sheet_id in (getattr(e, "staffing_shift_id", None) for e in events)
+            if sheet_id
+        ]
 
     async def delete_event_series(
         self,
@@ -2891,6 +2957,8 @@ class EventService:
             list(events), organization_id, "deleted"
         )
 
+        # Read before the delete: the rows, and their sheet ids, are gone after.
+        sheet_ids = self._own_sheet_ids(events)
         for event in events:
             await self.db.delete(event)
 
@@ -2911,6 +2979,10 @@ class EventService:
 
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
         await self._send_waiver_notices(waiver_notices, organization_id)
+        for sheet_id in sheet_ids:
+            await self._stand_down_own_staffing(
+                sheet_id, organization_id, DELETED_SHEET_REASON
+            )
         return len(events)
 
     # RSVP Methods
@@ -3071,6 +3143,13 @@ class EventService:
             if "guest_count" in rsvp_data.model_fields_set or existing_rsvp is None
             else (existing_rsvp.guest_count or 0)
         )
+        # A volunteer holds a role on the event's signup sheet and takes no
+        # seat of their own (rsvp_seats); only their guests are audience.
+        # getattr, as in rsvp_seats: callers in tests hand in plain stand-ins.
+        volunteer = existing_rsvp is not None and bool(
+            getattr(existing_rsvp, "is_volunteer", False)
+        )
+        member_seat = 0 if volunteer else 1
 
         # Validate RSVP status against allowed statuses
         allowed_statuses = event.allowed_rsvp_statuses or DEFAULT_ALLOWED_RSVP_STATUSES
@@ -3116,7 +3195,7 @@ class EventService:
         # to wait for, and since promote_from_waitlist refuses to skip the head
         # of the queue, admitting one would block everybody behind it.
         if event.max_attendees and rsvp_data.status == RSVPStatus.GOING.value:
-            party_size = 1 + effective_guest_count
+            party_size = member_seat + effective_guest_count
             if party_size > event.max_attendees:
                 seats = (
                     "1 person"
@@ -3128,6 +3207,28 @@ class EventService:
                     f"This event holds {seats}, so a party "
                     f"of {party_size} cannot be accommodated.",
                 )
+            # A volunteer is never waitlisted: that would take them off the
+            # crew list while they still hold their role. So guests a
+            # volunteer brings must fit now, and the check runs here, before
+            # the row is touched, for the reason given above. Locking read, as
+            # at the capacity check below.
+            if volunteer and effective_guest_count and existing_rsvp is not None:
+                with self.db.no_autoflush:
+                    others = await self.db.scalar(
+                        select(func.coalesce(func.sum(rsvp_seats_sql()), 0))
+                        .where(EventRSVP.event_id == str(event_id))
+                        .where(EventRSVP.status == RSVPStatus.GOING)
+                        .where(EventRSVP.id != existing_rsvp.id)
+                        .with_for_update()
+                    )
+                room = max(0, event.max_attendees - (others or 0))
+                if effective_guest_count > room:
+                    return (
+                        None,
+                        "Your role on the signup sheet holds your own place, "
+                        f"but the event has room for {room} more "
+                        f"guest{'' if room == 1 else 's'}.",
+                    )
 
         # Soft pipeline phase gate — warn (overridable) when RSVPing to a session
         # ahead of the member's current phase. Only when actually attending.
@@ -3143,7 +3244,7 @@ class EventService:
         # below. Reducing a guest count while staying "going" frees capacity
         # just as surely as declining does.
         previous_seats = (
-            1 + (existing_rsvp.guest_count or 0)
+            rsvp_seats(existing_rsvp)
             if existing_rsvp and existing_rsvp.status == RSVPStatus.GOING
             else 0
         )
@@ -3194,7 +3295,7 @@ class EventService:
             # coalesce is required: SUM over zero rows is NULL, and comparing
             # NULL against max_attendees would skip waitlisting entirely.
             capacity_query = (
-                select(func.coalesce(func.sum(1 + EventRSVP.guest_count), 0))
+                select(func.coalesce(func.sum(rsvp_seats_sql()), 0))
                 .where(EventRSVP.event_id == str(event_id))
                 .where(EventRSVP.status == RSVPStatus.GOING)
             )
@@ -3217,7 +3318,7 @@ class EventService:
             # party of three does not fit a one-seat gap. (A party too big for
             # the event at all was already refused above, before this function
             # touched the session.)
-            requested_seats = 1 + effective_guest_count
+            requested_seats = member_seat + effective_guest_count
             would_fit = occupied_seats + requested_seats <= event.max_attendees
 
             # EV-24: a member resubmitting an RSVP that is *already* waitlisted
@@ -3267,7 +3368,8 @@ class EventService:
                     )
                 queue_jump = earlier_result.first() is not None
 
-            if not would_fit or queue_jump:
+            # A volunteer's guests were checked against the room above.
+            if (not would_fit or queue_jump) and not volunteer:
                 # Auto-waitlist instead of rejecting
                 rsvp.status = RSVPStatus.WAITLISTED
 
@@ -3301,7 +3403,7 @@ class EventService:
             rsvp.status.value if hasattr(rsvp.status, "value") else rsvp.status
         )
         current_seats = (
-            1 + (rsvp.guest_count or 0) if final_status == RSVPStatus.GOING.value else 0
+            rsvp_seats(rsvp) if final_status == RSVPStatus.GOING.value else 0
         )
         if event.max_attendees and current_seats < previous_seats:
             # Looped, because one release can admit several parties: a party of
@@ -3452,7 +3554,7 @@ class EventService:
         # party of three gets promoted into a one-seat gap the RSVP path
         # correctly refused.
         occupied_result = await self.db.execute(
-            select(func.coalesce(func.sum(1 + EventRSVP.guest_count), 0))
+            select(func.coalesce(func.sum(rsvp_seats_sql()), 0))
             .where(EventRSVP.event_id == str(event_id))
             .where(EventRSVP.status == RSVPStatus.GOING)
             .with_for_update()
@@ -3465,7 +3567,7 @@ class EventService:
         # shown. (A party that can never fit was already excluded by the query
         # above — that is a different case, and the only one worth passing
         # over.)
-        needed_seats = 1 + (waitlisted_rsvp.guest_count or 0)
+        needed_seats = rsvp_seats(waitlisted_rsvp)
         if occupied_seats + needed_seats > event.max_attendees:
             return None
 
@@ -4341,6 +4443,7 @@ class EventService:
                 func.count(EventRSVP.id),
                 func.sum(EventRSVP.guest_count),
                 func.sum(case((EventRSVP.checked_in.is_(True), 1), else_=0)),
+                func.sum(rsvp_seats_sql()),
             )
             .where(EventRSVP.event_id == str(event_id))
             .group_by(EventRSVP.status)
@@ -4353,9 +4456,11 @@ class EventService:
         total_guests = 0
         checked_in_count = 0
 
-        for status, count, guests, checked_in in rsvp_counts:
+        occupied_seats = 0
+        for status, count, guests, checked_in, seats in rsvp_counts:
             if status == RSVPStatus.GOING:
                 going_count = count
+                occupied_seats = seats or 0
                 total_guests = guests or 0
                 # Only count checked-in attendees who are still GOING
                 checked_in_count = checked_in or 0
@@ -4371,8 +4476,8 @@ class EventService:
         # fills a 10-seat event, and reporting that as 80% would have an
         # organizer expecting room that the RSVP path will refuse.
         capacity_percentage = None
+        # Volunteers take no seat of their own (rsvp_seats).
         if event.max_attendees and event.max_attendees > 0:
-            occupied_seats = going_count + total_guests
             capacity_percentage = round((occupied_seats / event.max_attendees) * 100, 2)
 
         return EventStats(

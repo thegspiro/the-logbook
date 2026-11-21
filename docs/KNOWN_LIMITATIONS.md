@@ -1723,13 +1723,6 @@ The owner decisions of 2026-11-20 (staff-entered requests, calendar-date
 preferences, event signup sheets, volunteer RSVPs, close-out) left these edges
 for a later decision rather than guessing at them:
 
-- **A series cancel does not stand an event's own signup sheet down.**
-  Cancelling one event, or deleting it, cancels its sheet and tells the crew;
-  `cancel_event_series` cancels each occurrence with a deferred commit, and the
-  stand-down (`cancel_shift` commits on its own) is not run on that path. Only
-  an outreach event an officer created directly can own a sheet, and a
-  recurring one is unusual, but a cancelled series leaves its sheets on the
-  schedule until someone cancels them.
 - **A seat moved by a shift swap does not update the event's RSVPs.** Volunteer
   RSVPs follow a seat that is created, edited, declined or removed through
   `SchedulingService`; a swap trades the seat on another path. The next seat
@@ -1738,9 +1731,13 @@ for a later decision rather than guessing at them:
 - **An event's own signup sheet has no "Email the membership" call.** A
   request's sheet does (`send_volunteer_call`, which is written around a
   request's details). Members find an event's sheet on Open Shifts.
-- **A volunteer RSVP skips the event's capacity and waitlist.** The volunteers
-  are the crew, not the audience, so they are given a going RSVP directly. An
-  outreach event with a `max_attendees` set counts them toward it.
+
+Closed on 2026-11-21: a series cancel or delete now stands down every
+occurrence's own sheet, as a single cancel or delete does; and a volunteer's
+RSVP is marked `is_volunteer` and takes no attendee seat (owner decision,
+2026-11-21 — crew, not audience; the sheet's role counts cap the crew). Guests
+a volunteer brings still take seats, and must fit when added, because a
+volunteer is never waitlisted off the crew list.
 
 ## Outreach Requests — Two Deliberate Choices in the Public Pipeline (2026-09-09)
 

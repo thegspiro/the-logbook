@@ -275,8 +275,11 @@ class TestEventRsvpCapacity:
         assert "with_for_update()" in source
 
     def test_the_rsvp_count_is_a_locking_read(self):
+        # Two: the capacity check, and (2026-11-21) the check that guests a
+        # volunteer brings fit the room left, which runs before the row is
+        # touched because a volunteer is never waitlisted.
         _assert_every_count_locks(
-            event_service.EventService.create_or_update_rsvp, expected=1
+            event_service.EventService.create_or_update_rsvp, expected=2
         )
 
     def test_waitlist_promotion_is_locked_too(self):
