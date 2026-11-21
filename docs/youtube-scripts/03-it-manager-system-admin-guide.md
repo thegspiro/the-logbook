@@ -2246,9 +2246,11 @@ name → **Anonymize** enabled (do not confirm).]**
 > the _fact_ that a medical clearance existed and when it expired."
 
 > "It also deletes the certificates they uploaded with their own training
-> reports — the photo of a CPR card, say. The training record stays and still
-> counts; the file is gone. A certificate an officer attached to a record is
-> department evidence, and it stays."
+> reports — the photo of a CPR card, say — and the documents attached to their
+> training records, including ones an officer uploaded. The training record
+> stays and still counts; the files are gone. So if a sign-in roster or a
+> skills sheet on that record is something the department must keep, download
+> it first."
 
 **[CALLOUT: "Identity removed. History kept."]**
 
@@ -2267,7 +2269,9 @@ name → **Anonymize** enabled (do not confirm).]**
 > draft first."
 
 > "It's irreversible, it only works on members who've already been dropped or
-> archived, and you can't run it on yourself. Do it _after_ departure clearance
+> archived, you can't run it on yourself, and you can't run it on someone who
+> still holds permissions you don't — a departed chief keeps their positions.
+> Do it _after_ departure clearance
 > is finished and after whatever waiting period your retention policy sets."
 
 **[CALLOUT: "Irreversible — run after clearance, per your retention policy"]**
@@ -2512,6 +2516,15 @@ narration only; none changes a chapter's order.
 **EDITOR:** roughly 6:00 on top of everything above. Re-time Chapters 2–10 and
 the clip table from the recorded take. New footage needed for every screen
 named above; use made-up keys, client IDs and addresses on screen.
+
+## EDITOR — 2026-11-21 PASS
+
+Anonymizing a departed member: the narration said a file an officer attached
+to a training record "stays". Since 2026-11-20 it is deleted too; the beat now
+says so and tells the viewer to download evidence first, and the closing line
+adds that a member holding permissions the viewer lacks cannot be anonymized
+by them. No new footage; re-record those two beats. Adds about 8 seconds to
+Chapter 10.
 
 ## EDITOR — 2026-11-20 PASS
 

@@ -413,6 +413,25 @@ early — ADDED 2026-08-24]**
 > department has set for you are met. If it says **None assigned**, nothing is
 > asked of you yet — that isn't a fault."
 
+**[SCREEN: The Training Requirements cards: an hours card reading "6.9/6 hrs/mo
+avg" with "69/72 hrs total" beneath, a certification card reading "On file
+(Expires …)", and an Optional group below with its badge.]**
+
+> "Each requirement card tells you where you stand. For hours, the big number
+> is your monthly average against the pace you need — six point nine a month
+> against six, say — with your total underneath. The total is what counts in
+> the end; the average tells you whether you're keeping up. A certification
+> just says **On file**, with its expiry date, or **Expired**, or **Not
+> recorded**. And anything under **Optional** is there for your information:
+> it never counts against you."
+
+**[PRODUCTION NOTE — 2026-11-21. New beat, about 20 seconds; re-time Chapter 4.
+The monthly average is 2026-11-20, the certification states and the Optional
+group 2026-11-21. Needs a member with an hours requirement, a certification
+requirement and a compliance profile that lists an optional requirement. Any
+earlier take showing "1/1" or "0/1" on a certification card, or an hours card
+headed only by its total, is dated.]**
+
 **[B-ROLL: A brand-new member's My Training — "Nothing is on your training
 record yet", with the three ways training reaches the page and the "Submit
 External Training" button. Added 2026-10-04; about 10 seconds, re-time

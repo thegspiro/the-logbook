@@ -1319,7 +1319,26 @@ If the event's training session needs a training officer's confirmation,
 finalizing sends the attendance to training officers instead. Members see the
 class as **In Progress** until an officer approves it. The approval page is
 linked from their email and from **Review and approve** on the event's
-**Training details** card.
+**Training details** card. _(2026-11-21)_ While that approval is waiting, the
+session is not counted as held for a session-attendance requirement either, so
+no member is charged with missing a class nobody has signed off yet.
+
+**Credit hours that follow the event's length** _(2026-11-21)_. A session with
+no course and no hours typed in is credited for the event's scheduled length.
+That figure now follows the event whenever its time changes — an edit, a
+series edit, or **Postpone** — not only when the training form is saved.
+Before, a moved event kept its old length, finalizing credited it, and the
+form then treated it as typed in. A figure you typed, or one that comes from
+a course, is never changed.
+
+**A requirement that is no longer active** _(2026-11-21)_. If the **Training
+details** card lists a linked requirement as _(no longer active)_, it says what
+that means: the session counts against no one for that requirement, and when
+no active requirement is linked, members cannot ask to be excused from it.
+Officers who can manage events are pointed at **Edit training details**, to
+link an active requirement or untick the old one. A member who opens such a
+session's page to ask to be excused now sees the reason there is nothing to
+ask for, rather than no button and no explanation.
 
 ![The Finalize attendance? confirmation on an ended Training event: how each member's time is decided, that members with no credited time get no record, that earlier admin-hours entries are removed, and Finalize and close beside Keep it open](./images/04-62-finalize-training-confirm.png)
 
@@ -1503,6 +1522,13 @@ the events list. On any occurrence's page:
 - An RSVP deadline keeps the same lead time before each occurrence's start.
 - Leaving the time alone leaves every date where it was, including
   occurrences you had moved one by one.
+- _(2026-11-21)_ A time change is refused when members are already checked in
+  to one of the occurrences it moves, at a time outside the new schedule —
+  they would be credited for the new date. The message says how many members
+  and occurrences: "2 members are already checked in in 1 occurrence at a time
+  outside the new schedule…". Postpone that occurrence on its own, or correct
+  or remove those check-ins first. A single event's edit has refused this since
+  2026-11-08.
 
 > **Hint:** Deleting a single occurrence does not affect the others. The
 > Logbook warns you when an edit will affect several events.
@@ -1841,7 +1867,9 @@ the reason. The email's wording is the **Event Cancelled** template under
 notice stays either way, and a department can make the email required.
 
 On a recurring event, **More → Cancel Entire Series** cancels the whole
-series, with **Only cancel future events (keep past events)**. Its buttons are
+series, with **Only cancel future events (keep past events)**. Cancelling only
+the future ends the series at its last kept event, so a series set to keep
+going no longer brings the cancelled dates back overnight _(2026-11-21)_. Its buttons are
 **Cancel Series** and **Keep Series**. It shows the same **Notify** box, but
 notifies no one even when it is ticked. **Cancel Selected** notifies no one
 either.
@@ -2319,7 +2347,10 @@ publish. The public copy never carries attachments. The minutes PDF embeds
 image attachments and appends PDF attachments, within size and page limits.
 _(2026-11-16)_ The minutes PDF shows the department's logo beside the heading
 on page 1, and every later page has a short header with the logo, the
-department's name and the meeting's title.
+department's name and the meeting's title. _(2026-11-21)_ Each page's footer
+reads **Page 3 of 5** rather than **Page 3**, so anyone holding the loose
+pages can tell whether one is missing. The count is the minutes' own pages: PDF
+attachments appended at the back are not numbered.
 
 **Action-item email.** Meeting-record action items are emailed on the same
 schedule as the bell reminder. The department can opt out of this email under
@@ -2630,6 +2661,22 @@ also on Meeting Attendance as **Waiver requests**. Each request opens the same
 decision page as a training request. An approved request is written onto the meeting's minutes
 roll call as an excused absence.
 
+_(2026-11-21)_ The **Approve** and **Deny** buttons in the email, and the
+member's **Open the request** link, open the meeting request's page. Before,
+they led to the training decision page, which answered "not found" for a
+meeting request.
+
+- **The excused row on the roll call cannot be removed.** It is what records
+  the approval: removing it would charge the member with an unexcused absence
+  while the request still read approved. Removing it is refused with "This
+  member is excused by an approved waiver request, and this row is what
+  records it, so it cannot be removed." Other attendees are removed as before.
+- **Someone who no longer decides sees less.** An officer who decided a
+  request and has since left the deciding position still sees its status, the
+  outcome, who decided and when, and their own note, but no longer the
+  member's reason, documents or other people's notes. The same applies to
+  training requests.
+
 ### Business-meeting waiver requests: asking for more information _(2026-11-13)_
 
 Whoever decides a member's request to be excused from a business meeting can
@@ -2637,7 +2684,9 @@ ask the member a question first, as on training requests (see
 [Training → Asking a member for more information](./02-training.md#asking-a-member-for-more-information-2026-11-13)).
 The request stays pending; the member is told by email and in the app that a
 question is waiting, never what it says; their answer prompts the deciders
-again. Deciding, withdrawing or cancelling the meeting closes an open
+again. _(2026-11-21)_ When the question was asked by the Chief or the
+President, who decide outside the chosen positions, the answer is sent to them
+as well, as long as they may still decide it. Deciding, withdrawing or cancelling the meeting closes an open
 question.
 
 The officer asks from the request's page, and the member answers on the
@@ -2692,6 +2741,12 @@ department's timezone, or later if your request deadline would still allow it)
 closes on its own as **Expired**. The meeting counts as missed: nothing is
 written to the minutes' roll call, which only an approval does. The member is
 told in the app and by email, and the request can no longer be decided.
+
+_(2026-11-21)_ A request waiting on the member to confirm a moved meeting stays
+open for at least seven days from that notice, too. Before, correcting the
+start of a meeting held more than a week earlier reopened the request already
+overdue, so it expired within the hour and the member never had a chance to
+answer.
 
 ### Requests from the Chief or the President _(2026-11-13)_
 
@@ -2761,16 +2816,21 @@ scheduling and communication.
 ### How It Works
 
 1. **Someone in the community submits a request** on a public form. No
-   account is needed.
+   account is needed. A request that reaches you by phone, email or in person
+   is entered by a coordinator with **New request** instead _(2026-11-21)_.
 2. **A coordinator is assigned automatically** (you choose who in Settings)
    and told by email.
 3. **The coordinator works the request** — ticking off your pipeline tasks,
    adding comments and writing to the requester.
 4. **When ready, the coordinator schedules it** — a confirmed date, a room,
-   and an event on the department calendar.
+   and an event on the department calendar — and can open a volunteer signup
+   sheet for it.
 5. **The requester follows progress** on a status page, and can cancel if
    plans change.
-6. **After the event, the coordinator marks it completed.**
+6. **After the event, finalizing its attendance completes the request**
+   _(2026-11-21)_. The coordinator can also mark it completed by hand once the
+   event's date has passed, and records the guest headcount and how it went
+   on the event's page.
 
 ### Setting Up Public Requests
 
@@ -2788,6 +2848,21 @@ scheduling and communication.
    Type** and enter a short key (for example `fire_safety_demo`) and a label
    (for example "Fire Safety Demonstration"). These are the choices on the
    public form.
+   - **A role preset per type** _(2026-11-21)_. Beside each type, **Set roles**
+     records the volunteers that kind of event usually needs: choose a role
+     and how many, **Add a role** for another, then **Save roles**. The type
+     then reads, for example, "Usually needs 2 × Tour Guide, 1 × Greeter".
+     **Edit roles** changes it and **Clear preset** removes it. A preset uses
+     only the outreach roles listed on the same screen and holds at most 50
+     people.
+     It is where a signup sheet starts when you open volunteer signups for a
+     request of that type, or for an outreach event you created yourself; you
+     can still change the roles before opening the sheet.
+
+   > **Screenshot needed** (`04-104-type-role-preset.png`): **Types & roles**
+   > with one type reading "Usually needs 2 × Tour Guide, 1 × Greeter" and
+   > another open for editing, showing **Add a role**, **Clear preset** and
+   > **Save roles**.
 4. Under **Handling** (**Request Handling**), set:
    - **Default Coordinator** — the member assigned every new request. The
      list shows each member's rank by name ("Jordan Avery — Firefighter").
@@ -2814,7 +2889,7 @@ scheduling and communication.
 
 ### Managing Requests
 
-Requests arrive on the **Requests** tab of Events Administration. _(2026-11-08)_
+Requests arrive on the **Outreach Requests** tab of Events Administration. _(2026-11-08)_
 The tab is a triage list grouped by what needs doing next:
 
 | Group             | Holds                                                           |
@@ -2830,9 +2905,12 @@ Each row shows:
 - **When it was received.** A new request left two days without anyone
   starting on it shows its age in red.
 - **The requested date and how soon it is**, for example _"in 5 days"_, in red
-  within a week.
-- **Short notice**, when the request arrived through a public form inside your
-  **Minimum Lead Time**.
+  within a week. A requested date is a calendar day: the 15th the requester
+  picked reads as the 15th on every screen, wherever the viewer is
+  _(2026-11-21; before, west of UTC it could show as the evening of the
+  14th)_.
+- **Short notice**, when the request arrived through a public form, or was
+  entered by a coordinator, inside your **Minimum Lead Time**.
 - **The coordinator**, or a dashed **Unassigned** chip.
 - **Checklist progress**, on a request in progress.
 - **Volunteer signups**, for example _"4 of 6 signed up"_, on a scheduled
@@ -2846,16 +2924,28 @@ coordinator, and **All / Mine / Unassigned** to narrow the list. The badge on
 **Take it** on a new, unassigned request makes you its coordinator in one
 click. It does not open the request or change its status.
 
-Select a request to open it in a panel on the right (full screen on a phone).
-The list stays where it was. The panel leads with the one action that moves
-the request forward:
+Select a request to open it on a page of its own _(2026-11-21; was a panel
+over the list)_. The page has its own web address, so you can bookmark it,
+send it to another officer, refresh it, or come back to it with the browser's
+back button. **All requests** at the top returns to the list. The page leads
+with the one action that moves the request forward; on a phone that button
+stays in a bar at the bottom of the screen while you scroll:
 
-| Status                   | Main button        |
-| ------------------------ | ------------------ |
-| New, nobody assigned     | **Take it**        |
-| New, assigned            | **Start working**  |
-| In progress or postponed | **Schedule event** |
-| Scheduled                | **Mark completed** |
+| Status                   | Main button                                     |
+| ------------------------ | ----------------------------------------------- |
+| New, nobody assigned     | **Take it**                                     |
+| New, assigned            | **Start working**                               |
+| In progress or postponed | **Schedule event**                              |
+| Scheduled                | **Mark completed**, once the event's date is past |
+
+**Completing a request** _(2026-11-21)_. **Finalizing the event's
+attendance** completes the request it was scheduled from, so you do not have
+to come back to the request afterwards. The requester gets the completion
+email, as for one you complete by hand, and the request's activity reads
+"Completed when the event's attendance was finalized". Only a request still
+**Scheduled** moves: one you postponed or cancelled is left alone.
+**Mark completed** is offered only once the event's date has passed; before
+then it is refused with "This event has not happened yet".
 
 Beside it, **Email requester** sends one of your email templates or opens your
 own email app. **More** holds the rest:
@@ -2866,7 +2956,7 @@ own email app. **More** holds the rest:
   email to the requester and on their status page.
 - **Cancel Request**, which asks you to confirm first.
 
-In the panel you can also:
+On the request's page you can also:
 
 1. **Assign or reassign** the coordinator, beside **Coordinator** under the
    title. Only current members are offered _(2026-11-19)_; choosing a former
@@ -2880,26 +2970,116 @@ In the panel you can also:
    department calendar. A room that is already booked at that time is
    refused.
 4. **Open volunteer signups** and **Email the Membership**, on a scheduled
-   request. Choose who to ask by member class, membership status and
-   positions, the same way as
+   request, under **Volunteer Staffing**. The roles start from the request
+   type's role preset, when it has one, or one of the first role; change
+   them before you open the sheet. Members claim a role from **Scheduling →
+   Open Shifts**, which lists outreach signup sheets up to 60 days ahead
+   (duty shifts, 30) _(2026-11-21)_, so a sheet booked weeks out is there to
+   claim. A member who claims a role is also marked **Going** on the event,
+   so the event's attendance list shows the crew and **Check In** lists them
+   first; one whose seat is cancelled or declined, with no other seat, goes
+   back to **Not going**. When asking, choose who by member class, membership
+   status and positions, the same way as
    [emailing members about open seats](#emailing-members-about-open-seats);
    leave everything empty to ask every current member. Bringing an apparatus? Add a crew from a template under
    **Apparatus Crew** as well, or instead — see
    [Staffing a public request with an apparatus](#staffing-a-public-request-with-an-apparatus).
 5. **Add comments** for internal notes. The requester never sees them.
-6. **Copy status link**, under **Contact**, to send to the requester.
-
-Close the panel with the **X** or **Escape**. A click outside it does nothing,
-so a half-written schedule or comment is never lost to a stray click.
+6. **Copy status link**, under **Contact**, to send to the requester. A
+   request entered by a coordinator also says **Came in by:** Phone call,
+   Email, In person or Other, and the activity log says who entered it. When
+   the requester gave no email, **Contact** reads **No email given**, and
+   **Email requester** offers their phone number instead.
 
 ![A request in progress open in the drawer: the Schedule event, Email requester and More buttons under its title, the next step, and a part-done checklist](./images/04-99-event-request-drawer.png)
 
+> **Screenshot needed** (`04-102-event-request-page.png`, replacing the drawer
+> above): the request on its own page, with **All requests** above the title, the **Schedule event**, **Email
+> requester** and **More** buttons, the next step and a part-done checklist.
+
 > **Send the requester their status link yourself.** Neither the confirmation
 > screen nor the default acknowledgement email gives the requester the status
-> page. Copying it from here is the only way they get it.
+> page. Copying it from here is the only way they get it. This is deliberate
+> (reaffirmed 2026-11-21): you decide whether and when a group gets the link,
+> for example not before you know you can take the request on.
 
 > **What if scheduling or postponing is refused?** The message gives the real
 > reason — for example, that the event's attendance is already closed.
+
+### Entering a request taken by phone _(2026-11-21)_
+
+**Who can do this:** officers who can manage events.
+
+Not every group uses the public form. When a request reaches you by phone,
+email or in person, put it on the board yourself so it is worked like any
+other:
+
+1. On the **Outreach Requests** tab, select **New request**.
+2. Choose **How it came in**: **Phone call**, **Email**, **In person** or
+   **Other**.
+3. Fill in **Requester name**, a **Phone** or an **Email** (one of them is
+   enough), the **Type of event** and **What they asked for**. The rest is
+   optional and matches the public form: **Organization**, **Expected
+   audience**, **Age group**, **Dates** (with **Earliest date** and **Latest
+   date**, or a **Timeframe**), **Time of day**, **Where** and **Special
+   requests**.
+4. Leave **Coordinator** on **Department default**, or choose a current
+   member to take it.
+5. **Email the requester a confirmation** is ticked when you gave an email.
+   Untick it if you have already told them everything on the call. Without an
+   email it cannot be ticked.
+6. Select **Add request**. The request's page opens.
+
+How it differs from a public submission:
+
+- **It works while Accept Public Requests is off**, and has no CAPTCHA or
+  daily limit: those protect the public form, and you are not the public.
+- **A date inside your Minimum Lead Time is accepted and flagged** as short
+  notice, not refused. The caller is not the one typing, so they cannot pick
+  another date.
+- **A request with no email** never sends the requester anything: every
+  automatic email to them is skipped, and choosing a template under **Email
+  requester** is refused. The coordinator's own emails still go. Call them,
+  or copy the status link and send it another way.
+
+> **Screenshot needed** (`04-103-new-request-dialog.png`): the **New request**
+> dialog with **How it came in** set
+> to Phone call, a name and phone filled in, and the confirmation box
+> unticked because no email was given.
+
+### Volunteers for an outreach event you created yourself _(2026-11-21)_
+
+**Who can do this:** officers who can manage events.
+
+An outreach event you put on the calendar yourself — a **Public Education**,
+**Fundraiser**, **Ceremony** or **Social** event no request asked for — can
+open the same volunteer signup sheet a request can.
+
+1. Open the event. The **Volunteer staffing** card is shown on an outreach
+   event that is not cancelled.
+2. Under **Start from**, pick a request type to use its role preset, or set
+   the roles yourself: a role, how many, and **Add a role** for another (at
+   most 50 people in all).
+3. Select **Open signups**.
+
+The card then shows how many have signed up for each role and who they are.
+Members claim a role from **Scheduling → Open Shifts**, and each one is marked
+**Going** on the event, as on a request's sheet. Unlike a request's sheet, an
+event's own sheet has no **Email the Membership** button yet: tell members it
+is on Open Shifts.
+
+- **An event scheduled from a request** is staffed from the request. Its card
+  says so and links to **Open the request**; it cannot open a sheet of its
+  own.
+- **Moving the event**, by editing its time or with **Postpone**, moves its
+  sheet with it. **Cancelling or deleting the
+  event** stands the sheet down and tells the members who had signed up.
+  Cancelling a whole recurring series does not yet do this; check Open
+  Shifts after cancelling a series that had a sheet.
+
+> **Screenshot needed** (`04-105-event-volunteer-staffing.png`): the
+> **Volunteer staffing** card on an outreach event with an open sheet: "3 of 5 signed up", each role's count and the names of
+> the members who signed up.
 
 ### Measuring Outreach: Outreach Impact
 
@@ -2996,6 +3176,34 @@ switch it off. A member
 can stop receiving it by turning off **Event officer duties** in their email
 preferences; the notification still arrives.
 
+#### Recording how it went _(2026-11-21)_
+
+Beside **Guest headcount**, an outreach event that has started carries a
+**How it went** card, for the same officers. Fill in what you know and select
+**Save close-out**; you can come back and change it later, after the event's
+attendance is finalized included.
+
+- **Outcome and follow-ups** — how it went and anything promised, such as a
+  return visit.
+- **Apparatus that attended** — tick each unit that went.
+- **Materials handed out** — an item and how many, with **Add an item** for
+  each kind (for example 40 smoke alarms, 200 coloring books). The same item
+  typed twice is added together.
+- **Photos** — **No photos were taken**, **Photos taken, with the host's
+  consent**, or **Photos taken, without consent — do not publish**, so whoever
+  posts to the department's social media knows which pictures they may use.
+
+**Outreach Impact** totals **Materials handed out** across the period
+you chose, in its own card under the figures, and **Export CSV** gains three
+columns: **Materials handed out**, **Photos** and **Outcome**. The printed
+summary does not include them.
+
+> **Screenshot needed** (`04-106-outreach-closeout.png` and
+> `04-107-materials-handed-out.png`): the **How it went** card on an outreach
+> event, with an outcome note, one apparatus ticked, two materials and **Photos taken, with
+> the host's consent** chosen; and the **Materials handed out** card on
+> Outreach Impact.
+
 ### Public Request Form
 
 The quickest way to make the public form is **Manage Events → Settings →
@@ -3045,7 +3253,11 @@ Every field on the form is announced by its label to screen readers.
 Each request has its own private status page. It needs no sign-in.
 
 - It shows the current status as a row of steps, the date submitted, the
-  date preferences and the scheduled date.
+  date preferences and the scheduled date. _(2026-11-21)_ The dates are your
+  department's, not the visitor's: the requested days read exactly as picked,
+  and the scheduled date and time are in your department's time zone, so a
+  requester whose phone or laptop is set to another zone sees the time you
+  will turn up.
 - If you allow it, it shows the pipeline tasks too.
 - A postponed request shows the new date, or that it is awaiting a new date.
 - The requester can **cancel** while the request is submitted, in progress,
@@ -3141,8 +3353,9 @@ Date Preference: October 7 or October 8
 Lt. Chen gets an email about the new request from Lincoln Elementary School
 PTA.
 
-She opens **Manage Events → Community Outreach → Outreach Requests** and selects the new request. It shows
-Maria's full submission, the pipeline task checklist, and the action buttons.
+She opens **Manage Events → Community Outreach → Outreach Requests** and selects the
+new request. Its page shows Maria's full submission, the pipeline task checklist,
+and the action buttons.
 
 She adds an internal comment, which Maria never sees: _"Perfect timing for
 Fire Prevention Week. We should bring Engine 3 and the smoke house trailer.
@@ -3200,8 +3413,8 @@ Scheduled Date: October 7, 9:00 AM
 
 ### Step 5: Pre-Event Communication
 
-**Task 4 — Pre-Event Email.** A week before, Lt. Chen uses **Send Email** to
-send Maria the "What to Expect" template. The fill-in fields are completed for
+**Task 4 — Pre-Event Email.** A week before, Lt. Chen uses **Email
+requester** to send Maria the "What to Expect" template. The fill-in fields are completed for
 her:
 
 > Dear Maria,
@@ -3228,9 +3441,13 @@ She ticks the last task. All four are done.
 The event is on the department calendar. FF Martinez, FF Okafor and FF Lee
 see it in their events. The event's QR code is ready for check-in.
 
-After the presentation, Lt. Chen opens the request and selects **Mark as
-Completed**. The status changes to **Completed**, and Maria gets the
-completion email.
+After the presentation, Lt. Chen opens the event, enters the **Guest
+headcount** (62 students and teachers), fills in **How it went** — Engine 3
+attended, 60 coloring books handed out, no photos — and finalizes the
+attendance. Finalizing completes the request: its status changes to
+**Completed**, and Maria gets the completion email. (Had the event not been
+finalized, Lt. Chen could have selected **Mark completed** on the request,
+which is offered once the event's date has passed.)
 
 **What Maria now sees on her status page:**
 
@@ -3255,7 +3472,7 @@ Scheduled Date: October 7, 9:00 AM
 | Pipeline  | Sees nothing of it (public progress is off)       | Ticks Chief Approval, Volunteers, Equipment, Email                        |
 | Schedule  | Gets the "scheduled" email; status page updates   | Sets the date, creates the calendar event                                 |
 | Pre-Event | Gets the "What to Expect" email                   | Sends the template from the request                                       |
-| Complete  | Gets the completion email; status page shows done | Selects Mark as Completed; the request is closed                          |
+| Complete  | Gets the completion email; status page shows done | Records the headcount and how it went, finalizes; the request completes   |
 
 > **Hint:** With **Show Checklist Progress to the Requester** switched on, Maria would also
 > see the pipeline tasks on her status page. That is open, but some
