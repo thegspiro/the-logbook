@@ -16,15 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #4496 (Feature 19, Skills testing, pass 15) merged
-(`8597b7ac7`) since the last iteration — this same watchdog session merged
-it directly (CI was clean, `mergeable_state: clean`, no unresolved review
-thread beyond a third-party Codex bot's own usage-limit comment). Row 19
-marked ✅ above; row 20 (Compliance) confirmed the next `⬜` by reading the
-rotation table directly on a freshly fetched `origin/main`, and is reviewed
-in this same iteration (see `CMP-20-compliance.md`'s **Pass 15** section).
-Next is Feature 21 (Admin hours) — re-check `list_pull_requests` (state
-`open`) fresh rather than trusting this note.
+**PR [#4497](https://github.com/thegspiro/the-logbook/pull/4497)**
+(branch `claude/security-review-compliance`): Feature 20 (Compliance), pass
+15 — watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable per `ListAgents`).
+Real delta across all ten declared files since pass 14 (baseline
+`2775b491a`, PR #4213): a new evaluation-credited requirement type, a
+held-session sign-off fix, a session-excusal waiver source, optional
+compliance-profile requirements, a shared `grade_members` grading loop, and
+a monthly-pace display. All traced end to end; the one new query is
+org-scoped on every table it touches, and the new optional-requirements
+field is never read by any grading loop. **0 fixed, 0 newly flagged, 0
+findings closed.** Standing findings CS-8 and `grace_period_days`
+re-verified unchanged, both owner-accepted, by design. Full write-up:
+`docs/security-review/CMP-20-compliance.md`'s **Pass 15** section.
+
+Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 15, PR #4496, merged), preserved for history</summary>
