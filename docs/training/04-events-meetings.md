@@ -812,9 +812,9 @@ page asks for an email address instead of a name:
 
 Anyone else is stopped with a message rather than signed in:
 
-| The email belongs to                                                              | The guest is told        |
-| --------------------------------------------------------------------------------- | ------------------------ |
-| Nobody, a member account, or a withdrawn, rejected or on-hold applicant           | To see a member of staff |
+| The email belongs to                                                    | The guest is told        |
+| ----------------------------------------------------------------------- | ------------------------ |
+| Nobody, a member account, or a withdrawn, rejected or on-hold applicant | To see a member of staff |
 
 _(2026-11-08)_ A member's own email gets the same answer as an unknown one:
 _"We couldn't find you. Please see a member of staff to sign in."_ Telling
@@ -1840,14 +1840,14 @@ and who may see the list, is covered in
 
 **The Event settings sections:**
 
-| Section              | What it holds                                                                  |
-| -------------------- | ------------------------------------------------------------------------------ |
-| **Visibility**       | Which event types and categories appear as filters (**Event Type Visibility**) |
-| **Categories**       | Your **Custom Event Categories** and their colours                             |
+| Section              | What it holds                                                                   |
+| -------------------- | ------------------------------------------------------------------------------- |
+| **Visibility**       | Which event types and categories appear as filters (**Event Type Visibility**)  |
+| **Categories**       | Your **Custom Event Categories** and their colours                              |
 | **Attendance**       | _"Who sees who's going; who takes requests"_, and **Mandatory event responses** |
-| **Hour Tracking**    | Mapping events to admin hours                                                  |
-| **Public Requests**  | Everything about outreach events the public asks for — see below               |
-| **Headline Metrics** | The four numbers at the top of the page                                        |
+| **Hour Tracking**    | Mapping events to admin hours                                                   |
+| **Public Requests**  | Everything about outreach events the public asks for — see below                |
+| **Headline Metrics** | The four numbers at the top of the page                                         |
 
 **Mandatory event responses** _(2026-11-17)_, at the foot of **Attendance**,
 sets **Ask for a response … days before the event**: how close a mandatory
