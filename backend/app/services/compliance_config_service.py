@@ -32,6 +32,37 @@ from app.utils.external_recipients import audit_external_recipients, dedupe_addr
 from app.utils.model_updates import apply_updates
 
 
+def _drop_required_from_optional(
+    data: Dict[str, Any],
+    stored_required: Optional[List[str]],
+    stored_optional: Optional[List[str]],
+) -> None:
+    """Keep an id out of a profile's optional list while it is required.
+
+    The grader already treats an id in both lists as required (owner decision
+    2026-11-21); this stores it that way. On a partial update the list the
+    payload omits is the stored one, so a payload naming only the required
+    list can still write ``optional_requirement_ids``: the ids it now
+    requires leave it. Safe to run twice: a second pass finds nothing to drop.
+    """
+    required = (
+        data["required_requirement_ids"]
+        if "required_requirement_ids" in data
+        else stored_required
+    )
+    optional = (
+        data["optional_requirement_ids"]
+        if "optional_requirement_ids" in data
+        else stored_optional
+    )
+    if not required or not optional:
+        return
+    required_set = set(required)
+    kept = [rid for rid in optional if rid not in required_set]
+    if kept != list(optional):
+        data["optional_requirement_ids"] = kept
+
+
 class ComplianceConfigService:
     """Service for managing compliance configuration."""
 
@@ -145,6 +176,7 @@ class ComplianceConfigService:
             )
 
         await self._validate_profile_fks(organization_id, data)
+        _drop_required_from_optional(data, None, None)
         profile = ComplianceProfile(config_id=config.id, **data)
         self.db.add(profile)
         await self.db.flush()
@@ -171,6 +203,12 @@ class ComplianceConfigService:
             raise ValueError("Profile not found")
 
         await self._validate_profile_fks(organization_id, data)
+        if "required_requirement_ids" in data or "optional_requirement_ids" in data:
+            _drop_required_from_optional(
+                data,
+                profile.required_requirement_ids,
+                profile.optional_requirement_ids,
+            )
         apply_updates(profile, data, skip={"config_id", "id"})
 
         await self.db.flush()

@@ -12,6 +12,7 @@ import React, { useEffect, useState } from 'react';
 import { ClipboardList } from 'lucide-react';
 import { trainingModuleConfigService } from '../../services/api';
 import { RequirementDetailCard } from './RequirementDetailCard';
+import { OptionalRequirementsGroup } from './OptionalRequirementsGroup';
 import { LeaveOfAbsenceSummary } from './LeaveOfAbsenceSummary';
 import { getErrorMessage } from '../../utils/errorHandling';
 import type { MemberRequirementsResponse } from '../../types/training';
@@ -55,6 +56,8 @@ export const MemberRequirementsSection: React.FC<MemberRequirementsSectionProps>
   }, [userId]);
 
   const summary = data?.requirements_summary;
+  // Absent from a server older than the field.
+  const optional = data?.optional_requirements_detail ?? [];
 
   return (
     <section className="card mb-6 p-4" aria-labelledby="member-requirements-heading">
@@ -77,7 +80,7 @@ export const MemberRequirementsSection: React.FC<MemberRequirementsSectionProps>
         <>
           <LeaveOfAbsenceSummary leaves={data.leaves_of_absence} rule={data.leave_month_rule} />
 
-          {data.requirements_detail.length === 0 ? (
+          {data.requirements_detail.length === 0 && optional.length === 0 ? (
             <p className="text-theme-text-muted text-sm">No training requirements apply to this member.</p>
           ) : (
             <div className="space-y-3">
@@ -88,6 +91,7 @@ export const MemberRequirementsSection: React.FC<MemberRequirementsSectionProps>
                 ))}
             </div>
           )}
+          <OptionalRequirementsGroup requirements={optional} timezone={timezone} audience="officer" />
         </>
       )}
     </section>
