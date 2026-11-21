@@ -174,6 +174,31 @@ describe('csvRows', () => {
       'yes',
       4,
       10,
+      '',
+      '',
+      '',
+    ]);
+  });
+
+  it('exports what was recorded when the event closed', () => {
+    const [header, first] = csvRows(
+      [
+        row({
+          materials: [
+            { item: 'Smoke alarms', quantity: 12 },
+            { item: 'Flyers', quantity: 100 },
+          ],
+          photos: 'not_consented',
+          outcome_note: 'Follow up with the principal',
+        }),
+      ],
+      'America/New_York'
+    );
+    expect(header?.slice(-3)).toEqual(['Materials handed out', 'Photos', 'Outcome']);
+    expect(first?.slice(-3)).toEqual([
+      '12 Smoke alarms; 100 Flyers',
+      'Without consent',
+      'Follow up with the principal',
     ]);
   });
 });

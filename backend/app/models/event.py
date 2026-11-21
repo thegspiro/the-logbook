@@ -39,6 +39,10 @@ class EventType(str, Enum):
     RECRUITMENT = "recruitment"
 
 
+#: Whether photos were taken at an outreach event, and with the host's consent.
+OUTREACH_PHOTO_CHOICES = ("none", "consented", "not_consented")
+
+
 class RSVPStatus(str, Enum):
     """RSVP status enumeration"""
 
@@ -192,6 +196,20 @@ class Event(Base):
     staffing_roles: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
         JSON, nullable=True
     )
+
+    # What happened at an outreach event, recorded when it closes (owner
+    # decision, 2026-11-20). Written only by CommunityEngagementService.
+    # set_outreach_closeout, which settles each to one shape (pitfall #20):
+    # apparatus ids checked in-org, materials as [{"item": str, "quantity":
+    # int}] with one entry per item, photos one of OUTREACH_PHOTO_CHOICES.
+    outreach_outcome_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    outreach_apparatus_ids: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )
+    outreach_materials: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
+    outreach_photos: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     # RSVP settings
     requires_rsvp: Mapped[bool] = mapped_column(

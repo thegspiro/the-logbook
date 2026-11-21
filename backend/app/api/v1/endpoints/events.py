@@ -89,6 +89,7 @@ from app.schemas.event import (
     GuestCheckInLinkResponse,
     GuestHeadcountUpdate,
     ManagerAddAttendee,
+    OutreachCloseoutUpdate,
     QRCheckInData,
     RecordActualTimes,
     RecurringEventCreate,
@@ -574,6 +575,10 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         attendance_finalized_at=event.attendance_finalized_at,
         attendance_finalized_by=event.attendance_finalized_by,
         guest_headcount=event.guest_headcount,
+        outreach_outcome_note=event.outreach_outcome_note,
+        outreach_apparatus_ids=event.outreach_apparatus_ids,
+        outreach_materials=event.outreach_materials,
+        outreach_photos=event.outreach_photos,
         created_by=event.created_by,
         organizer_id=event.organizer_id,
         alternate_organizer_id=event.alternate_organizer_id,
@@ -3182,6 +3187,69 @@ async def set_guest_headcount(
     await db.commit()
     # The commit expired the row, and the builder is synchronous: read it back
     # with what it touches loaded, or it lazy-loads outside the event loop.
+    event = await service.load_event(str(current_user.organization_id), str(event_id))
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+    return _build_event_response(
+        event,
+        can_record_guest_headcount=True,
+        can_edit_event=True,
+    )
+
+
+@router.put("/{event_id}/outreach-closeout", response_model=EventResponse)
+async def set_outreach_closeout(
+    event_id: UUID,
+    body: OutreachCloseoutUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Record what happened at an outreach event: how it went, which apparatus
+    attended, what was handed out and whether photos were taken with consent.
+
+    Owner decision, 2026-11-20. Replaces what was recorded. Refused for an
+    event that is not outreach, a cancelled one, or one that has not started.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = CommunityEngagementService(db)
+    try:
+        event = await service.set_outreach_closeout(
+            str(current_user.organization_id),
+            str(event_id),
+            body.outcome_note,
+            body.apparatus_ids,
+            [m.model_dump() for m in body.materials],
+            body.photos,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+    await log_audit_event(
+        db=db,
+        event_type="event_outreach_closeout_recorded",
+        event_category="events",
+        severity="info",
+        # Ids and counts only: the outcome note is free text.
+        event_data={
+            "event_id": str(event_id),
+            "apparatus": len(event.outreach_apparatus_ids or []),
+            "materials": len(event.outreach_materials or []),
+            "photos": event.outreach_photos,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
     event = await service.load_event(str(current_user.organization_id), str(event_id))
     if event is None:
         raise HTTPException(

@@ -99,6 +99,11 @@ class EventReach:
     #: the request's outreach type; "department" for the rest, labelled by
     #: event type. Two vocabularies, so the breakdown keeps them apart.
     group: str = "department"
+    #: What happened, recorded when the event closed (owner decision,
+    #: 2026-11-20): carried to the export, and materials totalled on the report.
+    outcome_note: Optional[str] = None
+    materials: list[dict] = field(default_factory=list)
+    photos: Optional[str] = None
 
     @property
     def has_actual(self) -> bool:
@@ -282,6 +287,9 @@ class CommunityEngagementService:
                     member_ids={str(r.user_id) for r in crew},
                     headcount=event.guest_headcount,
                     group="request" if req is not None else "department",
+                    outcome_note=event.outreach_outcome_note,
+                    materials=list(event.outreach_materials or []),
+                    photos=event.outreach_photos,
                 )
             )
         rows.sort(key=lambda r: r.start, reverse=True)
@@ -442,7 +450,27 @@ class CommunityEngagementService:
             "reach_is_estimate": r.reach_is_estimate,
             "crew": r.crew,
             "member_hours": r.member_hours,
+            "outcome_note": r.outcome_note,
+            "materials": r.materials,
+            "photos": r.photos,
         }
+
+    @staticmethod
+    def _materials(rows: list[EventReach]) -> list[dict]:
+        """What was handed out across the period, one line per item, most
+        first. Items are matched case-insensitively, as they are when saved,
+        and named as the earliest event spelled them, so a new event does not
+        relabel a running total. ``rows`` arrive newest first."""
+        totals: dict[str, dict] = {}
+        for r in reversed(rows):
+            for entry in r.materials:
+                item = str(entry.get("item") or "").strip()
+                quantity = int(entry.get("quantity") or 0)
+                if not item or quantity < 1:
+                    continue
+                line = totals.setdefault(item.casefold(), {"item": item, "quantity": 0})
+                line["quantity"] += quantity
+        return sorted(totals.values(), key=lambda line: -line["quantity"])
 
     async def events(self, organization_id: str, period: str) -> list[dict]:
         """Every held outreach event in the period, newest first — the rows
@@ -495,6 +523,7 @@ class CommunityEngagementService:
             "granularity": granularity,
             "by_period": buckets,
             "by_type": self._by_type(rows),
+            "materials": self._materials(rows),
             "recent_events": [self._row(r) for r in rows[:RECENT_EVENT_LIMIT]],
         }
 
@@ -541,6 +570,78 @@ class CommunityEngagementService:
         if _as_utc(event.start_datetime) > datetime.now(timezone.utc):
             raise ValueError("A headcount can be recorded once the event has started")
         event.guest_headcount = headcount
+        await self.db.flush()
+        return event
+
+    async def set_outreach_closeout(
+        self,
+        organization_id: str,
+        event_id: str,
+        outcome_note: Optional[str],
+        apparatus_ids: list[str],
+        materials: list[dict],
+        photos: Optional[str],
+    ) -> Optional[Event]:
+        """Record what happened at an outreach event (owner decision, 2026-11-20).
+
+        Replaces what was recorded. None when the event is not this
+        department's; refused, as a headcount is, for an event that is not
+        outreach, a cancelled one, and one that has not started. Apparatus ids
+        must each name this department's apparatus, in either table (pitfall
+        #14c). Materials are settled to one entry per item, case-insensitively,
+        quantities summed (pitfall #20). Not locked by finalized attendance,
+        which governs members' credited time, not this record.
+        """
+        from app.models.event import OUTREACH_PHOTO_CHOICES
+        from app.utils.apparatus_ref import resolve_apparatus_ref
+
+        event = (
+            await self.db.execute(
+                select(Event)
+                .where(
+                    Event.id == str(event_id),
+                    Event.organization_id == str(organization_id),
+                )
+                .options(selectinload(Event.location_obj))
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if event is None:
+            return None
+        if event.is_cancelled:
+            raise ValueError("A cancelled event has nothing to close out")
+        if not await is_outreach_event(self.db, organization_id, event_id):
+            raise ValueError("Only community outreach events are closed out here")
+        if _as_utc(event.start_datetime) > datetime.now(timezone.utc):
+            raise ValueError("An event can be closed out once it has started")
+        if photos is not None and photos not in OUTREACH_PHOTO_CHOICES:
+            raise ValueError("Unknown photo choice")
+
+        settled_apparatus: list[str] = []
+        for apparatus_id in apparatus_ids:
+            if apparatus_id in settled_apparatus:
+                continue
+            ref = await resolve_apparatus_ref(self.db, apparatus_id, organization_id)
+            if ref.full is None and ref.basic is None:
+                raise ValueError("Apparatus not found")
+            settled_apparatus.append(apparatus_id)
+
+        merged: dict[str, dict] = {}
+        for entry in materials:
+            item = str(entry.get("item") or "").strip()
+            quantity = int(entry.get("quantity") or 0)
+            if not item or quantity < 1:
+                continue
+            key = item.casefold()
+            if key in merged:
+                merged[key]["quantity"] += quantity
+            else:
+                merged[key] = {"item": item, "quantity": quantity}
+
+        event.outreach_outcome_note = (outcome_note or "").strip() or None
+        event.outreach_apparatus_ids = settled_apparatus or None
+        event.outreach_materials = list(merged.values()) or None
+        event.outreach_photos = photos
         await self.db.flush()
         return event
 

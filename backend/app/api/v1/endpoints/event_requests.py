@@ -1000,6 +1000,22 @@ async def update_event_request_status(
             ),
         )
 
+    # An event that has not happened cannot be completed (owner decision,
+    # 2026-11-20); the page offers Mark completed only once the date passes,
+    # and finalizing the event's attendance completes it on its own.
+    if (
+        new_status == EventRequestStatus.COMPLETED
+        and event_request.event_date is not None
+        and _as_aware(event_request.event_date) > datetime.now(timezone.utc)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This event has not happened yet. It can be marked completed "
+                "once its date has passed."
+            ),
+        )
+
     old_status = event_request.status.value
     event_request.status = new_status
 

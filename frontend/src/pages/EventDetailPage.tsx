@@ -87,6 +87,7 @@ import EventProspectsCard from '../components/event-detail/EventProspectsCard';
 import EventGuestsCard from '../components/event-detail/EventGuestsCard';
 import EventGuestHeadcountCard from '../components/event-detail/EventGuestHeadcountCard';
 import EventStaffingCard from '../components/event-detail/EventStaffingCard';
+import EventOutreachCloseoutCard from '../components/event-detail/EventOutreachCloseoutCard';
 import { GuestCheckInQRCard } from '../components/events/GuestCheckInQRCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
@@ -1832,6 +1833,27 @@ export const EventDetailPage: React.FC = () => {
                 event={event}
                 onSaved={(updated) =>
                   setEvent((prev) => (prev ? { ...prev, guest_headcount: updated.guest_headcount ?? null } : prev))
+                }
+              />
+            )}
+
+            {/* What happened, on the same rule as the headcount: an outreach
+                event that has started, for someone with events.manage. */}
+            {event.can_record_guest_headcount && (
+              <EventOutreachCloseoutCard
+                event={event}
+                onSaved={(updated) =>
+                  setEvent((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          outreach_outcome_note: updated.outreach_outcome_note ?? null,
+                          outreach_apparatus_ids: updated.outreach_apparatus_ids ?? null,
+                          outreach_materials: updated.outreach_materials ?? null,
+                          outreach_photos: updated.outreach_photos ?? null,
+                        }
+                      : prev
+                  )
                 }
               />
             )}

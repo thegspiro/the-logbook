@@ -284,6 +284,25 @@ const CommunityEngagementTab: React.FC = () => {
         </section>
       </div>
 
+      {(data.materials?.length ?? 0) > 0 && (
+        <section className="card mb-5 p-4" aria-labelledby="ce-materials-heading">
+          <h3 id="ce-materials-heading" className="text-theme-text-primary text-sm font-semibold">
+            Materials handed out
+          </h3>
+          <p className="text-theme-text-muted mb-3 text-xs">
+            Recorded when each event closed, {option?.label.toLowerCase()}
+          </p>
+          <ul className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            {data.materials?.map((m) => (
+              <li key={m.item} className="flex justify-between gap-3">
+                <span className="text-theme-text-primary">{m.item}</span>
+                <span className="text-theme-text-secondary tabular-nums">{formatNumber(m.quantity)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="card rwd-table-container overflow-hidden p-0" aria-labelledby="ce-events-heading">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <div>

@@ -4490,6 +4490,7 @@ class EventService:
                 event, organization_id, finalized_by
             )
             await self._advance_prospects_after_finalize(event)
+            await self._complete_request_after_finalize(event, finalized_by)
             return outcome
 
         updated_count = 0
@@ -4597,8 +4598,37 @@ class EventService:
                 credit, organization_id, finalized_by, can_manage_training
             )
         await self._advance_prospects_after_finalize(event)
+        await self._complete_request_after_finalize(event, finalized_by)
 
         return outcome
+
+    async def _complete_request_after_finalize(
+        self, event: Event, finalized_by: UUID | str | None
+    ) -> None:
+        """Close the outreach request this event came from (owner decision,
+        2026-11-20); see ``complete_request_for_finalized_event``.
+
+        Runs after the close is durable and swallows its own failure, as the
+        applicant advance beside it does: the attendance and credited hours
+        are what finalizing is for, and a request left scheduled is one press
+        of Mark completed away, now that its date has passed.
+        """
+        from app.services.event_request_service import (
+            complete_request_for_finalized_event,
+        )
+
+        try:
+            await complete_request_for_finalized_event(
+                self.db, event, str(finalized_by) if finalized_by else None
+            )
+        except Exception:
+            logger.exception(
+                "Could not complete the request for finalized event {}", event.id
+            )
+            try:
+                await self.db.rollback()
+            except Exception:
+                logger.exception("Rollback after that failure also failed")
 
     async def _advance_prospects_after_finalize(self, event: Event) -> None:
         """Move applicants this event's now-settled attendance clears.

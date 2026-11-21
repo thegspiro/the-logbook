@@ -669,11 +669,16 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
       case 'postponed':
         return { label: 'Schedule event', icon: CalendarCheck, run: () => setShowScheduleForm(!showScheduleForm) };
       case 'scheduled':
-        return {
-          label: 'Mark completed',
-          icon: CheckCircle,
-          run: () => void handleStatusChange(detail.id, 'completed'),
-        };
+        // Only once the event has happened (owner decision, 2026-11-20); the
+        // server refuses it before then, and finalizing the event's
+        // attendance completes the request on its own.
+        return detail.event_date && Date.parse(detail.event_date) <= Date.now()
+          ? {
+              label: 'Mark completed',
+              icon: CheckCircle,
+              run: () => void handleStatusChange(detail.id, 'completed'),
+            }
+          : null;
       default:
         return null;
     }

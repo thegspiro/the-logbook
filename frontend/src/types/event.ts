@@ -118,6 +118,11 @@ export interface Event {
   can_record_guest_headcount?: boolean;
   /** May this caller see and open the event's volunteer signup sheet (detail only). */
   can_staff_event?: boolean;
+  /** What happened at an outreach event, recorded when it closes. */
+  outreach_outcome_note?: string | null;
+  outreach_apparatus_ids?: string[] | null;
+  outreach_materials?: OutreachMaterial[] | null;
+  outreach_photos?: OutreachPhotos | null;
   created_at: string;
   updated_at: string;
   rsvp_count?: number;
@@ -1244,6 +1249,23 @@ export interface EventRequestStaffing {
   roles: StaffingRoleStatus[];
   volunteers: EventRequestVolunteer[];
   volunteer_call_sent_at?: string;
+}
+
+/** Something handed out at an outreach event, and how many. */
+export interface OutreachMaterial {
+  item: string;
+  quantity: number;
+}
+
+/** Whether photos were taken at an outreach event, and with the host's consent. */
+export type OutreachPhotos = 'none' | 'consented' | 'not_consented';
+
+/** The close-out record an outreach event's page saves; every field, every time. */
+export interface OutreachCloseoutUpdate {
+  outcome_note: string | null;
+  apparatus_ids: string[];
+  materials: OutreachMaterial[];
+  photos: OutreachPhotos | null;
 }
 
 /** The signup sheet staffing an event; `request_id` when it is the request's. */

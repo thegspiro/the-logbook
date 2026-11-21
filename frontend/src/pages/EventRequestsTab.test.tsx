@@ -664,3 +664,42 @@ describe('EventRequestsTab showing a request with no email', () => {
     expect(mailtoLinks(drawer)).toHaveLength(0);
   });
 });
+
+describe('EventRequestsTab completing a scheduled request', () => {
+  const scheduled = (eventDate: string) => ({
+    id: 'sched-1',
+    contact_name: 'Dana Whitfield',
+    contact_email: 'dana@example.org',
+    organization_name: 'Oakwood Library',
+    outreach_type: 'station_tour',
+    status: 'scheduled',
+    description: 'Summer reading visit.',
+    venue_preference: 'our_station',
+    date_flexibility: 'flexible',
+    event_date: eventDate,
+    created_at: '2026-11-01T00:00:00Z',
+    activity_log: [],
+  });
+
+  beforeEach(() => {
+    listRequests.mockReset();
+    getRequest.mockReset();
+    listRequests.mockResolvedValue([]);
+  });
+
+  it('does not offer Mark completed before the event has happened', async () => {
+    getRequest.mockResolvedValue(scheduled(new Date(Date.now() + 2 * 86_400_000).toISOString()));
+    renderBoard('/events/admin/requests/sched-1');
+
+    const page = await screen.findByRole('article', { name: 'Oakwood Library' });
+    expect(within(page).queryByRole('button', { name: 'Mark completed' })).not.toBeInTheDocument();
+  });
+
+  it('offers it once the event date has passed', async () => {
+    getRequest.mockResolvedValue(scheduled(new Date(Date.now() - 2 * 86_400_000).toISOString()));
+    renderBoard('/events/admin/requests/sched-1');
+
+    const page = await screen.findByRole('article', { name: 'Oakwood Library' });
+    expect(within(page).getByRole('button', { name: 'Mark completed' })).toBeInTheDocument();
+  });
+});

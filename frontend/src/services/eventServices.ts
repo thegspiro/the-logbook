@@ -305,6 +305,15 @@ export const eventService = {
     return response.data;
   },
 
+  /** Record what happened at an outreach event (events.manage); replaces what was recorded. */
+  async setOutreachCloseout(
+    eventId: string,
+    data: import('../types/event').OutreachCloseoutUpdate
+  ): Promise<import('../types/event').Event> {
+    const response = await api.put<import('../types/event').Event>(`/events/${eventId}/outreach-closeout`, data);
+    return response.data;
+  },
+
   async setGuestHeadcount(eventId: string, guestHeadcount: number | null): Promise<import('../types/event').Event> {
     const response = await api.put<import('../types/event').Event>(`/events/${eventId}/guest-headcount`, {
       guest_headcount: guestHeadcount,

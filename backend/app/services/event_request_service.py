@@ -22,7 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import list_within_detail_limit
 from app.models.event import Event
-from app.models.event_request import EventRequest, EventRequestActivity
+from app.models.event_request import (
+    EventRequest,
+    EventRequestActivity,
+    EventRequestStatus,
+)
 from app.models.user import Organization, User
 from app.schemas.event import MAX_EVENT_DURATION_MINUTES
 from app.services.email_policy import (
@@ -1881,3 +1885,46 @@ async def sync_calendar_event_cancelled(
             event_request.id,
             e,
         )
+
+
+async def complete_request_for_finalized_event(
+    db: AsyncSession, event: Any, actor_id: Optional[str]
+) -> None:
+    """Close the request an outreach event came from once its attendance is final.
+
+    Owner decision, 2026-11-20: finalizing an event's attendance is what
+    closes the outreach request it was scheduled from, so the coordinator does
+    not have to come back and press Mark completed. Only a request still
+    *scheduled* moves — one already completed, cancelled or postponed is left
+    as its coordinator set it — so running this again changes nothing
+    (pitfall #36). The requester is told as for a manual completion. Commits;
+    the caller runs it after the finalize is durable and absorbs a failure.
+    """
+    request = await db.scalar(
+        select(EventRequest)
+        .where(
+            EventRequest.event_id == str(event.id),
+            EventRequest.organization_id == str(event.organization_id),
+            EventRequest.status == EventRequestStatus.SCHEDULED,
+        )
+        .with_for_update()
+    )
+    if request is None:
+        return
+    request.status = EventRequestStatus.COMPLETED
+    db.add(
+        EventRequestActivity(
+            request_id=request.id,
+            action="status_changed_to_completed",
+            old_status=EventRequestStatus.SCHEDULED.value,
+            new_status=EventRequestStatus.COMPLETED.value,
+            notes="Completed when the event's attendance was finalized",
+            performed_by=str(actor_id) if actor_id else None,
+        )
+    )
+    await db.commit()
+    org = await db.scalar(
+        select(Organization).where(Organization.id == str(event.organization_id))
+    )
+    if org is not None:
+        await send_request_notification(db, request, "on_completed", org)
