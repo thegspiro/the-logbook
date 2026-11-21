@@ -89,6 +89,62 @@ eight hours, until #4333 carried the merge revision from #4331.
 - **CI fast enough** that a pull request usually finishes before `main` moves
   would make the up-to-date setting workable again.
 
+## Apparatus Events — What the First Release Leaves Out (2026-11-16)
+
+Apparatus events (Events Administration → Community Outreach → Apparatus
+Events) shipped from the owner's decisions of 2026-11-16: seats are both
+self-claimed and coordinator-assigned, the Driver seat's EVOC rule is set per
+template, nights show on Shift Scheduling as a read-only overlay, each night
+has its own crew, and hours post when a coordinator finalizes attendance.
+Three things in the reviewed mockups were left out, and three boundaries
+were drawn without a ruling; each is listed so the owner can confirm or ask
+for it.
+
+### Left out, because nothing would read them yet (pitfall #19)
+
+- **"Email the membership that seats are open"** on Schedule nights. A switch
+  that sent nothing would claim an email went out. Notifying members is a
+  follow-up that should go through the existing notification rules.
+- **"Coordinator approves self sign-ups."** A claimed seat is taken at once.
+  An approval step needs a pending state on the seat and a reviewer's screen.
+- **"Message crew"** on the night. The existing event reminders reach a
+  night's RSVPs, which every seat holder has.
+
+### Boundaries chosen without a ruling
+
+- **The confirmation step is the event's own Finalize Attendance.** There is
+  no second crew-confirmation screen: "Needs confirmation" lists ended nights
+  and links to each event, where the existing check-in, time overrides,
+  walk-up attendees and Finalize already live. Whether a posted entry is
+  Approved or Pending follows the chosen Admin Hours category's own approval
+  setting, as every event credit does.
+- **A night's own category replaces the event-type mapping; it is never
+  added to it.** A department that maps Public Education to an Admin Hours
+  category would otherwise pay a Santamobile crew twice. A night with no
+  category set falls back to the mapping.
+- **Conflict checks consider other apparatus nights and the apparatus's
+  status, not shifts.** The in-service engine is on a shift every day, so
+  checking shifts would flag every night ever planned. A conflict is a
+  warning the coordinator can schedule over, never a block.
+- **The new permissions reach seeded positions only.** Migration
+  `3f8a1c6e2b94` adds them to every system position holding `events.view` or
+  `events.manage`. A position a department created itself is left alone, per
+  the seeded-grant rule; grant them on the positions screen if wanted.
+
+### Public requests (2026-11-17)
+
+The owner ruled that a request's crew rides on the request's existing
+calendar event, that volunteer signups and a crew may both be used, and that
+the coordinator picks the template each time (no default per outreach type).
+
+- **A moved date is not re-checked for apparatus conflicts.** Postponing a
+  request to a new date moves its event and the crew with it; the conflict
+  check ran only when the crew was added.
+- **A postponement to a date TBD leaves the crew on the cancelled event.**
+  Rescheduling opens a new calendar event without a crew, and the
+  coordinator adds it again. Carrying it over automatically would seat members
+  on a date they never agreed to.
+
 ## Sign-In Email — An SSO-Only Member Cannot Change Their Own (ADV2-2, 2026-11-17)
 
 Since #4316 (2026-11-15), changing your **own** login email asks you to

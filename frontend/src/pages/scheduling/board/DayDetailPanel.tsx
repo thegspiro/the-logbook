@@ -9,6 +9,8 @@
 import React from 'react';
 import { ArrowLeftRight, CalendarDays, Info, Repeat } from 'lucide-react';
 import type { ShiftRecord } from '../../../modules/scheduling';
+import type { CalendarOutreachItem } from '../../../types/apparatusEvent';
+import OutreachDayCard from './OutreachDayCard';
 import type { SwapRequest } from '../../../types/scheduling';
 import {
   isShiftClaimable,
@@ -25,6 +27,8 @@ const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', '
 export interface DayDetailPanelProps {
   selectedDate: Date;
   shifts: ShiftRecord[];
+  /** The day's apparatus outreach, shown apart from its shifts. */
+  outreach?: CalendarOutreachItem[] | undefined;
   nextShift: ShiftRecord | null;
   currentUserId: string | null | undefined;
   timezone: string;
@@ -59,6 +63,7 @@ const shiftLocation = (shift: ShiftRecord | null | undefined): string => {
 export const DayDetailPanel: React.FC<DayDetailPanelProps> = ({
   selectedDate,
   shifts,
+  outreach = [],
   nextShift,
   currentUserId,
   timezone,
@@ -131,6 +136,8 @@ export const DayDetailPanel: React.FC<DayDetailPanelProps> = ({
           )}
         </section>
       )}
+
+      <OutreachDayCard items={outreach} timezone={timezone} />
 
       <section className="card shrink-0 overflow-hidden">
         <header className="border-theme-surface-border border-b px-4 py-3.5">

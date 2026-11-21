@@ -25,7 +25,7 @@ from sqlalchemy.orm import aliased, selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core.config import settings
-from app.models.admin_hours import EVENT_TYPES_WITHOUT_ADMIN_HOURS
+from app.models.admin_hours import EVENT_TYPES_WITHOUT_ADMIN_HOURS, AdminHoursCategory
 from app.models.attendance_waiver import (
     AttendanceWaiverRequest,
     AttendanceWaiverStatus,
@@ -1149,8 +1149,10 @@ class EventService:
         if not items:
             return
 
-        mappings = await AdminHoursService(self.db).get_active_mappings_by_source(
-            str(organization_id)
+        admin_hours = AdminHoursService(self.db)
+        mappings = await admin_hours.get_active_mappings_by_source(str(organization_id))
+        crew_categories = await admin_hours.crew_hour_category_overrides(
+            str(organization_id), [str(item["event"].id) for item in items]
         )
 
         for item in items:
@@ -1160,7 +1162,7 @@ class EventService:
             item["check_in_closes_at"] = check_in_closes_at
 
             credited_hours, hour_category_label = self._resolve_credited_hours(
-                event, mappings
+                event, mappings, crew_categories.get(str(event.id))
             )
             item["credited_hours"] = credited_hours
             item["hour_category_label"] = hour_category_label
@@ -1174,15 +1176,20 @@ class EventService:
         is that same rule for a single event, so the card and the detail page
         cannot state different credits.
         """
-        mappings = await AdminHoursService(self.db).get_active_mappings_by_source(
-            str(organization_id)
-        )
-        return self._resolve_credited_hours(event, mappings)
+        admin_hours = AdminHoursService(self.db)
+        mappings = await admin_hours.get_active_mappings_by_source(str(organization_id))
+        crew_category = (
+            await admin_hours.crew_hour_category_overrides(
+                str(organization_id), [str(event.id)]
+            )
+        ).get(str(event.id))
+        return self._resolve_credited_hours(event, mappings, crew_category)
 
     @staticmethod
     def _resolve_credited_hours(
         event: Event,
         mappings: Dict[Tuple[str, str], List[Tuple[int, str]]],
+        crew_category: Optional[AdminHoursCategory] = None,
     ) -> Tuple[Optional[float], Optional[str]]:
         """Hours this event's scheduled duration would credit, and to what.
 
@@ -1202,7 +1209,12 @@ class EventService:
         # promise a credit credit_event_attendance will not make.
         if event_type in EVENT_TYPES_WITHOUT_ADMIN_HOURS:
             return None, None
-        if event_type:
+        matched: Optional[List[Tuple[int, str]]]
+        if crew_category is not None:
+            # An apparatus night credits its own category in place of the
+            # event-type mapping — AdminHoursService.crew_hour_category_overrides.
+            matched = [(100, crew_category.name)]
+        elif event_type:
             matched = mappings.get(("event_type", event_type))
         elif event.custom_category:
             matched = mappings.get(("custom_category", event.custom_category))

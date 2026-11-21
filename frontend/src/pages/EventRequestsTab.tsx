@@ -70,6 +70,7 @@ import { asArray, expectArray } from '../utils/asArray';
 import { displayNameOf } from '../utils/memberName';
 import { isActiveAccount } from '../constants/enums';
 import { useAuthStore } from '../stores/authStore';
+import RequestApparatusCrewSection from './event-requests/RequestApparatusCrewSection';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import RequestInboxRow, { ChecklistBar, CoordinatorChip, RequestDateLine } from './event-requests/RequestInboxRow';
@@ -1294,6 +1295,10 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
                       </div>
                     )}
                   </section>
+                )}
+
+                {detail.status === 'scheduled' && (
+                  <RequestApparatusCrewSection requestId={detail.id} eventId={detail.event_id} />
                 )}
 
                 <section className="border-theme-surface-border space-y-3 border-t pt-4">

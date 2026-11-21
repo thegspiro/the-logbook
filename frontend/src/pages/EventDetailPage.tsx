@@ -85,6 +85,7 @@ import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplate
 import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
 import EventGuestsCard from '../components/event-detail/EventGuestsCard';
+import EventApparatusCrewCard from '../components/event-detail/EventApparatusCrewCard';
 import EventGuestHeadcountCard from '../components/event-detail/EventGuestHeadcountCard';
 import EventStaffingCard from '../components/event-detail/EventStaffingCard';
 import EventOutreachCloseoutCard from '../components/event-detail/EventOutreachCloseoutCard';
@@ -1820,6 +1821,13 @@ export const EventDetailPage: React.FC = () => {
             {/* Pipeline meeting stages can also link prospects to ordinary
                 business events, so this is intentionally not type-gated. */}
             <EventProspectsCard eventId={event.id} createsProspects={event.guest_check_in_creates_prospect ?? false} />
+
+            {/* The seats on an apparatus night (Santamobile, a parade). Renders
+                nothing on an ordinary event; asked only of someone who could
+                take or assign a seat. */}
+            {(checkPermission('apparatus_events.signup') || checkPermission('apparatus_events.manage')) && (
+              <EventApparatusCrewCard eventId={event.id} timezone={tz} />
+            )}
 
             {/* Volunteers for an outreach event: its own signup sheet, or the
                 request's when it was scheduled from one. */}

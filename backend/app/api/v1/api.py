@@ -15,6 +15,7 @@ from app.api.v1.endpoints import (
     admin_hub,
     analytics,
     apparatus,
+    apparatus_events,
     attendance_waiver_requests,
     audit_logs,
     auth,
@@ -172,6 +173,9 @@ api_router.include_router(
     event_attendance_petitions.router, prefix="/events", tags=["events"]
 )
 api_router.include_router(event_requests.router, tags=["event-requests"])
+api_router.include_router(
+    apparatus_events.router, prefix="/apparatus-events", tags=["apparatus-events"]
+)
 api_router.include_router(locations.router, prefix="/locations", tags=["locations"])
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])

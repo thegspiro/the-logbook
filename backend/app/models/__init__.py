@@ -41,6 +41,17 @@ from app.models.apparatus import (
     MaintenanceCategory,
     MaintenanceIntervalUnit,
 )
+from app.models.apparatus_event import (
+    ApparatusEventEvocMode,
+    ApparatusEventSeatMethod,
+    ApparatusEventSeatType,
+    ApparatusEventTemplate,
+    ApparatusEventTemplateSeat,
+    ApparatusEventTemplateUnit,
+    EventApparatusPlan,
+    EventApparatusSeat,
+    EventApparatusUnit,
+)
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
     AttendanceWaiverAttachment,
@@ -779,6 +790,16 @@ __all__ = [
     # Open shift swap notices
     "OpenSwapNotice",
     # Event request models
+    # Apparatus event models
+    "ApparatusEventEvocMode",
+    "ApparatusEventSeatMethod",
+    "ApparatusEventSeatType",
+    "ApparatusEventTemplate",
+    "ApparatusEventTemplateSeat",
+    "ApparatusEventTemplateUnit",
+    "EventApparatusPlan",
+    "EventApparatusSeat",
+    "EventApparatusUnit",
     "EventRequest",
     "EventRequestActivity",
     "EventRequestEmailTemplate",

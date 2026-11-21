@@ -8,6 +8,7 @@
 
 import React from 'react';
 import type { ShiftRecord } from '../../../modules/scheduling';
+import type { CalendarOutreachItem } from '../../../types/apparatusEvent';
 import {
   chipLabel,
   dayMatchesFilter,
@@ -22,7 +23,8 @@ import {
 } from '../../../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../../../modules/scheduling/hooks/useSignupWindow';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
-import { STATUS_STYLES } from './statusStyles';
+import { Truck } from 'lucide-react';
+import { OUTREACH_STYLE, STATUS_STYLES } from './statusStyles';
 
 const WEEKDAY_INITIALS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -43,6 +45,8 @@ export interface MonthGridProps {
   timezone: string;
   filter: BoardFilter;
   today?: Date;
+  /** Apparatus outreach nights by day: drawn apart from the shifts, never counted with them. */
+  outreachByDate?: Map<string, CalendarOutreachItem[]> | undefined;
   onSelect: (date: Date) => void;
 }
 
@@ -55,6 +59,7 @@ export const MonthGrid: React.FC<MonthGridProps> = ({
   timezone,
   filter,
   today = new Date(),
+  outreachByDate,
   onSelect,
 }) => {
   const signupWindow = useSignupWindow();
@@ -90,6 +95,7 @@ export const MonthGrid: React.FC<MonthGridProps> = ({
               const selected = isSameDay(day, selectedDate);
               const isToday = isSameDay(day, today);
               const visible = shifts.slice(0, MAX_VISIBLE_CHIPS);
+              const outreach = outreachByDate?.get(key) ?? [];
 
               return (
                 <button
@@ -123,6 +129,9 @@ export const MonthGrid: React.FC<MonthGridProps> = ({
                       {summary.shiftCount === 0
                         ? ', no shifts'
                         : `, ${summary.openSeats} open seat${summary.openSeats === 1 ? '' : 's'}`}
+                      {outreach.length > 0
+                        ? `, ${outreach.length} outreach event${outreach.length === 1 ? '' : 's'}, not shifts`
+                        : ''}
                     </span>
                   </span>
 
@@ -140,6 +149,20 @@ export const MonthGrid: React.FC<MonthGridProps> = ({
                   })}
                   {shifts.length > MAX_VISIBLE_CHIPS && (
                     <span className="text-theme-text-muted text-[10px]">+{shifts.length - MAX_VISIBLE_CHIPS} more</span>
+                  )}
+                  {outreach.slice(0, 1).map((item) => (
+                    <span
+                      key={item.event_id}
+                      className={`flex items-center gap-1.5 rounded-md border px-1.5 py-1 text-[11px] font-semibold ${OUTREACH_STYLE.chip}`}
+                    >
+                      <Truck className="h-3 w-3 shrink-0" aria-hidden="true" />
+                      <span className="truncate">
+                        {item.filled}/{item.total} {item.title}
+                      </span>
+                    </span>
+                  ))}
+                  {outreach.length > 1 && (
+                    <span className="text-[10px] text-red-800 dark:text-red-200">+{outreach.length - 1} outreach</span>
                   )}
                 </button>
               );
