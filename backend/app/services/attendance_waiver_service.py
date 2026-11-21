@@ -230,6 +230,14 @@ class WorkflowSpec:
     # under (CLAUDE.md pitfall #18: the email goes with the in-app row).
     decider_email_kind: EmailKind
     member_email_kind: EmailKind
+    # The kind for a member's notice that changes how their attendance is
+    # graded: the expiry (the session now counts as missed), a moved start
+    # (the approval is cleared and, unanswered, expires as a miss) and a
+    # decider's question (unanswered, it expires as a miss). For training this
+    # is the required record-changes kind, the one the decision email already
+    # uses, so a member who turned training reminders off is still told
+    # (CLAUDE.md pitfall #18). A void is not one: its session is not held.
+    member_record_email_kind: EmailKind
 
 
 TRAINING_SPEC = WorkflowSpec(
@@ -246,6 +254,7 @@ TRAINING_SPEC = WorkflowSpec(
     member_fallback_url="/training/my-training",
     decider_email_kind=EmailKind.TRAINING_DUTIES,
     member_email_kind=EmailKind.TRAINING_REMINDERS,
+    member_record_email_kind=EmailKind.TRAINING_RECORD_CHANGES,
 )
 
 MEETING_SPEC = WorkflowSpec(
@@ -262,6 +271,7 @@ MEETING_SPEC = WorkflowSpec(
     member_fallback_url="/events",
     decider_email_kind=EmailKind.EVENT_DUTIES,
     member_email_kind=EmailKind.EVENT_CHANGES,
+    member_record_email_kind=EmailKind.EVENT_CHANGES,
 )
 
 SPECS: Dict[AttendanceWaiverWorkflow, WorkflowSpec] = {
@@ -2498,7 +2508,7 @@ class AttendanceWaiverService:
                 org_id,
                 request,
                 [member],
-                SPECS[request.workflow].member_email_kind,
+                SPECS[request.workflow].member_record_email_kind,
                 subject,
                 [sentence],
                 url,
@@ -2807,6 +2817,9 @@ class MemberNotice:
     workflow: AttendanceWaiverWorkflow
     subject: str
     sentences: Tuple[str, ...]
+    # A moved start changes grading and goes under the workflow's
+    # ``member_record_email_kind``; a void does not (see ``WorkflowSpec``).
+    changes_grading: bool = False
 
 
 def _same_instant(a: datetime, b: datetime) -> bool:
@@ -3017,6 +3030,7 @@ async def reconfirm_for_rescheduled_events(
                 workflow=request.workflow,
                 subject=subject,
                 sentences=tuple(sentences),
+                changes_grading=True,
             )
         )
     await db.flush()
@@ -3069,7 +3083,11 @@ async def send_member_notices(
             str(org_id),
             request,
             [member],
-            service.spec.member_email_kind,
+            (
+                service.spec.member_record_email_kind
+                if notice.changes_grading
+                else service.spec.member_email_kind
+            ),
             notice.subject,
             notice.sentences,
             member_action_url(request),

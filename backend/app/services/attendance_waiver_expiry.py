@@ -310,7 +310,7 @@ class AttendanceWaiverExpiry:
             org_id,
             request,
             [member],
-            SPECS[request.workflow].member_email_kind,
+            SPECS[request.workflow].member_record_email_kind,
             subject,
             [sentence],
             member_action_url(request),

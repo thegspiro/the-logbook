@@ -306,7 +306,10 @@ using templates the department edits under Communications → Email Templates:
   and decides only when the approver confirms.
 - An approver may switch these off under _Training officer duties_. The
   member's decision email is always sent: it changes how their attendance is
-  graded.
+  graded. So are the member's other notices that change it — the expiry, a
+  moved start, and a decider's question — which go under _Changes to your
+  training record_ rather than _Training and certification reminders_. A
+  void, whose session is not held, follows the reminders choice.
 - A template's **default CC**, **CC positions** (say, the Secretary) and
   **BCC** each get their own copy, which has no buttons, no category and no
   decider's note, and says it is a copy for the department's records.

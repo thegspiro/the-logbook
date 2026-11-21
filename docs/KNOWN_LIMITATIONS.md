@@ -132,6 +132,18 @@ taken; each is listed so the owner can confirm or reverse it.
   and withdrawal are emailed only from their templates; the hand-built emails
   remain for the notices no template covers (a question, an answer, a moved
   session, an expiry).
+- **Which training notices a member cannot switch off** _(chosen
+  2026-11-21, owner may redirect)_. A training notice is sent under the
+  required _Changes to your training record_ kind when it changes how the
+  member's attendance is graded: the expiry (the session counts as missed), a
+  moved start (the approval is cleared and, unanswered, expires as a miss) and
+  a decider's question (unanswered, the request expires as a miss). Before,
+  these went under the optional _Training and certification reminders_, so a
+  member who had turned reminders off learned of a charged miss only from the
+  bell. A **void** stays optional: its session was cancelled or deleted, so
+  nothing is graded and the cap slot is freed. Meeting notices are unchanged
+  (`EVENT_CHANGES`, optional, as above). `member_record_email_kind` on
+  `WorkflowSpec` holds the choice.
 
 ## Elections — Voter Rules by Member Type (Owner Decisions, 2026-11-13)
 
