@@ -3,7 +3,7 @@
 Pitfall #19: a setting whose only effect is being stored invites somebody to
 believe a deadline is being extended when it is not. Its siblings on the same
 screen are wired — `at_risk_threshold` is read by
-`admin_hours_service`, `include_current_month` by `competency_matrix_service`
+`admin_hours_service`, `include_current_month` by `training_compliance`
 — and this one is not, so an officer setting it gets a success toast and no
 change in who counts as non-compliant.
 

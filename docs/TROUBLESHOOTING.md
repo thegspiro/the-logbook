@@ -2721,30 +2721,19 @@ Only explicitly named users can evaluate.
 
 #### Training: Using the Competency Matrix Dashboard
 
-**Scenario**: Training officers need an at-a-glance view of department readiness — who is current, who is expiring soon, and where the gaps are.
+**Retired 2026-11-21** (owner decision). `GET /api/v1/training/competency-matrix`
+has been removed and now answers `404`. No screen or MCP tool called it, and
+it was a third grader of training requirements to keep in step with the
+compliance matrix.
 
-**Endpoint**: `GET /api/v1/training/competency-matrix`
+**Instead:**
 
-**Returns**: A matrix of members vs. requirements with status for each cell:
-
-- **current** (green): Met, and not expiring soon
-- **expiring_soon** (yellow): Met, with an expiry inside 90 days
-- **in_progress**: Part way to the target; not counted toward readiness
-- **expired** (red): Lapsed
-- **not_started** (gray): Nothing counted yet
-
-Since 2026-11-21 every cell is the compliance matrix's own grading (the shared
-grader), so the two views agree, rolling and custom-annual windows and
-category filters included. Before that, partial progress read
-`expiring_soon` and counted toward `readiness_percentage`. The summary also
-reports `in_progress_count`.
-
-**Filtering**:
-
-- `requirement_ids`: comma-separated list to focus on specific requirements
-- `user_ids`: comma-separated list to focus on specific members
-
-**Summary Block** includes `readiness_percentage` — the percentage of all member/requirement cells that are `current` or `expiring_soon`.
+- For who meets which requirement, use the compliance matrix
+  (`GET /api/v1/training/compliance-matrix`, the Training → Compliance
+  screen). It grades members the same way as the dashboard and My Training.
+- For the skills heat map on the Training → Competency tab, the endpoint is
+  `GET /api/v1/training/competency/department`. That view is a different
+  feature, built on skills evaluations, and is unchanged.
 
 #### Training: Calendar Integration & Double-Booking Prevention
 

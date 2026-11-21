@@ -64,16 +64,16 @@ The resolved as-of date drives the requirement date window, waiver proration
 (active vs waived months), and overdue checks. It is threaded through
 `training_compliance.py` (`get_org_include_current_month`,
 `evaluate_member_requirement`, `_evaluate_member_compliance`),
-`TrainingService.evaluate_requirement_detail`, `CompetencyMatrixService`,
+`TrainingService.evaluate_requirement_detail`,
 `AnnualComplianceReportService`, and the `get_compliance_summary`,
 `get_compliance_matrix`, and `get_my_training_summary` endpoints.
 
 ### Deliberate exception: certificate "expiring soon" lookahead
 
 The certificate "expiring soon" lookahead **always uses the actual current
-date**, never the resolved as-of date. For example, `CompetencyMatrixService`
-computes `expiring_threshold = today + 90 days`, where `today` is the
-department's date from `resolve_org_today()`, independently of
+date**, never the resolved as-of date. For example,
+`GET /training/certifications/expiring` looks `days_ahead` (90 by default)
+from the department's date from `resolve_org_today()`, independently of
 `include_current_month`. Excluding the current month must not
 hide a certificate that is genuinely about to expire.
 

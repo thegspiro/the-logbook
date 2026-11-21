@@ -186,7 +186,6 @@ instead of a red "0/0 — 0%" (W29-4, closing CMP4-4).
 
 ```
 GET    /api/v1/training/compliance-matrix    # All members x requirements
-GET    /api/v1/training/competency-matrix    # Department readiness
 GET    /api/v1/training/compliance-summary/{user_id}  # Member summary card
 GET    /api/v1/training/reports/user/{id}    # Individual member report
 GET    /api/v1/training/requirements/progress/{id}    # Per-requirement progress
