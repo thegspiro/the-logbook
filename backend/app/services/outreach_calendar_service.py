@@ -79,7 +79,7 @@ class OutreachCalendarService:
             return []
         event_ids = [str(e.id) for e in events]
 
-        requests: dict[str, EventRequest] = {}
+        linked_requests: dict[str, EventRequest] = {}
         for request in (
             (
                 await self.db.execute(
@@ -96,12 +96,12 @@ class OutreachCalendarService:
         ):
             # One request per event in practice; if two were ever linked, the
             # first one is the event's origin and the one its page links to.
-            requests.setdefault(str(request.event_id), request)
+            linked_requests.setdefault(str(request.event_id), request)
 
         # Whichever owns the sheet: the request an event was scheduled from
         # keeps it there, an event created directly keeps its own.
         owners: dict[str, Union[EventRequest, Event]] = {
-            str(e.id): requests.get(str(e.id), e) for e in events
+            str(e.id): linked_requests.get(str(e.id), e) for e in events
         }
         sheets = await staffing_counts_by_request(
             db=self.db, organization_id=org_id, requests=owners.values()
@@ -141,7 +141,7 @@ class OutreachCalendarService:
         rows = []
         for event in events:
             eid = str(event.id)
-            request = requests.get(eid)
+            request = linked_requests.get(eid)
             sheet = sheets.get(str(owners[eid].id))
             crew: Optional[tuple[int, int]] = (
                 crew_counts.get(eid, (0, 0)) if eid in planned else None
