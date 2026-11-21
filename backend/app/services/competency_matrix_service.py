@@ -3,15 +3,20 @@ Competency Matrix / Heat Map Service
 
 Generates a department-wide dashboard view showing all members vs. all required
 skills/certifications, color-coded by status:
-- current (green): active and not expiring soon
-- expiring_soon (yellow): expiring within 90 days
-- expired (red): past expiration date
-- not_started (gray): no record on file
+- current (green): met, and not expiring soon
+- expiring_soon (yellow): met, with an expiry within 90 days
+- in_progress: part way to the target; not counted as ready
+- expired (red): lapsed
+- not_started (gray): nothing counted yet
+
+Every cell is the shared grader's decision
+(``training_compliance.evaluate_member_requirement_detail``), the one the
+compliance matrix reads (CLAUDE.md pitfall #29); only the 90-day overlay is
+this view's own.
 
 Gives training officers an at-a-glance department readiness picture.
 """
 
-import calendar
 from datetime import date, timedelta
 from typing import Dict, List, Mapping, Optional, Sequence
 from uuid import UUID
@@ -20,13 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.training import (
-    RequirementFrequency,
-    RequirementType,
-    TrainingRecord,
-    TrainingRequirement,
-    TrainingStatus,
-)
+from app.models.training import TrainingRecord, TrainingRequirement, TrainingStatus
 from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
@@ -35,31 +34,15 @@ from app.services.training_compliance import (
     EvaluationCredits,
     HeldSession,
     _load_compliance_config,
-    apply_recency,
-    biannual_window,
     catch_up_deadline,
-    certification_record_matches,
-    counts_shift_attendance,
     evaluate_member_requirement_detail,
-    fallback_record_matches,
-    is_evaluation_credited,
-    is_session_attendance,
     load_credited_shift_dates,
     load_evaluation_credits,
+    load_graded_records,
     load_held_sessions,
     member_join_date,
 )
-from app.services.training_period import (
-    effective_include_current_month,
-    resolve_as_of_date,
-)
-from app.services.training_waiver_service import (
-    WaiverPeriod,
-    adjust_required,
-    fetch_org_waivers,
-    get_rolling_period_months,
-)
-from app.utils.hours import meets_required_hours
+from app.services.training_waiver_service import WaiverPeriod, fetch_org_waivers
 from app.utils.org_timezone import resolve_org_today
 
 
@@ -133,22 +116,6 @@ class CompetencyMatrixService:
         user_result = await self.db.execute(user_query)
         members = list(user_result.scalars().all())
 
-        # Get all completed training records for this org
-        records_result = await self.db.execute(
-            select(TrainingRecord)
-            .where(TrainingRecord.organization_id == str(organization_id))
-            .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-        )
-        all_records = list(records_result.scalars().all())
-
-        # Index records by user_id for fast lookup
-        records_by_user: Dict[str, List[TrainingRecord]] = {}
-        for record in all_records:
-            uid = str(record.user_id)
-            if uid not in records_by_user:
-                records_by_user[uid] = []
-            records_by_user[uid].append(record)
-
         # Batch-fetch all active waivers / leaves for the org
         waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
 
@@ -164,6 +131,18 @@ class CompetencyMatrixService:
             await _load_compliance_config(self.db, str(organization_id))
         )
         org_include_current = grading.include_current_month
+        # The records the grader's windows read, as the compliance matrix
+        # loads them, rather than every completed record the org holds.
+        records_by_user: Dict[str, List[TrainingRecord]] = {}
+        for record in await load_graded_records(
+            self.db,
+            str(organization_id),
+            [str(m.id) for m in members],
+            requirements,
+            today,
+            org_include_current,
+        ):
+            records_by_user.setdefault(str(record.user_id), []).append(record)
         shifts_by_user = await load_credited_shift_dates(
             self.db,
             str(organization_id),
@@ -188,6 +167,7 @@ class CompetencyMatrixService:
         current_count = 0
         expiring_soon_count = 0
         expired_count = 0
+        in_progress_count = 0
         not_started_count = 0
         # Cells that grade nobody: the member's compliance profile does not
         # list the requirement, it does not apply to the member (type, role,
@@ -266,6 +246,8 @@ class CompetencyMatrixService:
                     expiring_soon_count += 1
                 elif s == "expired":
                     expired_count += 1
+                elif s == "in_progress":
+                    in_progress_count += 1
                 else:
                     not_started_count += 1
 
@@ -294,42 +276,11 @@ class CompetencyMatrixService:
                 "current_count": current_count,
                 "expiring_soon_count": expiring_soon_count,
                 "expired_count": expired_count,
+                "in_progress_count": in_progress_count,
                 "not_started_count": not_started_count,
                 "readiness_percentage": round(readiness, 1),
             },
         }
-
-    @staticmethod
-    def _get_date_window(req, today: date):
-        """Return (start_date, end_date) for a requirement's frequency window."""
-        freq = (
-            req.frequency.value
-            if hasattr(req.frequency, "value")
-            else str(req.frequency)
-        )
-        current_year = today.year
-
-        if freq == RequirementFrequency.ONE_TIME.value:
-            return None, None
-        elif freq == RequirementFrequency.BIANNUAL.value:
-            return biannual_window(req, today)
-        elif freq == RequirementFrequency.QUARTERLY.value:
-            quarter_month = ((today.month - 1) // 3) * 3 + 1
-            start_date = date(current_year, quarter_month, 1)
-            end_month = quarter_month + 2
-            end_year = current_year
-            if end_month > 12:
-                end_month -= 12
-                end_year += 1
-            end_day = calendar.monthrange(end_year, end_month)[1]
-            return start_date, date(end_year, end_month, end_day)
-        elif freq == RequirementFrequency.MONTHLY.value:
-            start_date = date(current_year, today.month, 1)
-            end_day = calendar.monthrange(current_year, today.month)[1]
-            return start_date, date(current_year, today.month, end_day)
-        else:
-            yr = req.year if req.year else current_year
-            return date(yr, 1, 1), date(yr, 12, 31)
 
     def _evaluate_requirement_status(
         self,
@@ -344,247 +295,49 @@ class CompetencyMatrixService:
         join_date: Optional[date] = None,
         evaluation_credits: Optional[EvaluationCredits] = None,
     ) -> Dict:
-        """Evaluate a single requirement for a single member using type-aware matching."""
-        attendance = is_session_attendance(requirement)
-        if (
-            attendance
-            or counts_shift_attendance(requirement)
-            or is_evaluation_credited(requirement)
-        ):
-            # Counted from shifts worked, sessions attended or shift
-            # evaluations, by the one shared grader, so this cell reads what
-            # the compliance matrix reads for the member (shifts-three-sources).
-            # Partial progress is yellow, as hours is.
-            ev = evaluate_member_requirement_detail(
-                requirement,
-                user_records if attendance else [],
-                today,
-                waivers=waivers,
-                org_include_current_month=org_include_current_month,
-                join_date=join_date,
-                shift_dates=shift_dates,
-                held_sessions=held_sessions,
-                evaluation_credits=evaluation_credits,
-            )
-            # A catch-up status lands on "not_started" here; the caller turns
-            # an unmet cell inside the catch-up period into its own status.
-            # No session held yet is this matrix's own "not_applicable".
-            cell_status = {
-                TrainingStatus.COMPLETED.value: "current",
-                TrainingStatus.IN_PROGRESS.value: "expiring_soon",
-                NOT_YET_HELD_STATUS: "not_applicable",
-            }.get(ev.status, "not_started")
-            return {
-                "status": cell_status,
-                "expiration_date": None,
-                "completion_date": ev.completion_date,
-                "details": (
-                    f"{ev.progress_current:g}/{ev.progress_required:g} "
-                    f"{ev.progress_unit or 'shifts'}"
-                    if cell_status != "not_started"
-                    and ev.progress_current is not None
-                    and ev.progress_required is not None
-                    else None
-                ),
-            }
-        req_type = (
-            requirement.requirement_type.value
-            if hasattr(requirement.requirement_type, "value")
-            else str(requirement.requirement_type)
-        )
-        # Resolve this requirement's effective evaluation date (per-requirement
-        # override inherits the org default). The cert "expiring soon" lookahead
-        # (expiring_threshold) intentionally stays on the real current date.
-        today = resolve_as_of_date(
+        """One member's cell: the shared grader's status in this view's words.
+
+        This view used to grade hours, courses, certifications, calls and
+        record-counted shifts by its own rules -- calendar-year windows for
+        rolling requirements, no category filter, a calls target met by one
+        record -- and disagreed with the compliance matrix (review finding of
+        2026-11-21). Partial progress is ``in_progress``, which readiness does
+        not count; it used to read ``expiring_soon`` and count as ready.
+
+        The 90-day overlay stays on the real day (``expiring_threshold``):
+        a met cell whose expiry falls inside it reads ``expiring_soon``.
+        """
+        ev = evaluate_member_requirement_detail(
+            requirement,
+            user_records,
             today,
-            effective_include_current_month(
-                getattr(requirement, "include_current_month", None),
-                org_include_current_month,
-            ),
+            waivers=waivers,
+            org_include_current_month=org_include_current_month,
+            join_date=join_date,
+            shift_dates=shift_dates,
+            held_sessions=held_sessions,
+            evaluation_credits=evaluation_credits,
         )
-        start_date, end_date = self._get_date_window(requirement, today)
-        not_started = {
-            "status": "not_started",
-            "expiration_date": None,
-            "completion_date": None,
-            "details": None,
-        }
-        _waivers = waivers or []
-
-        # Filter completed records within the date window
-        completed = [r for r in user_records if r.status == TrainingStatus.COMPLETED]
-        # Freshness window narrows the pool before the frequency window, so a
-        # stale completion can't satisfy an unbounded (one_time) requirement.
-        completed = apply_recency(requirement, completed, today)
-        if start_date and end_date:
-            windowed = [
-                r
-                for r in completed
-                if r.completion_date and start_date <= r.completion_date <= end_date
-            ]
-        else:
-            windowed = completed
-
-        # ---- HOURS requirements: sum hours by training_type within date window ----
-        if req_type == RequirementType.HOURS.value:
-            type_matched = windowed
-            if requirement.training_type:
-                type_matched = [
-                    r for r in windowed if r.training_type == requirement.training_type
-                ]
-
-            total_hours = sum(r.hours_completed or 0 for r in type_matched)
-            required = requirement.required_hours or 0
-
-            # Adjust required hours for waived months
-            if required > 0 and start_date and end_date and _waivers:
-                required, _, _ = adjust_required(
-                    required,
-                    start_date,
-                    end_date,
-                    _waivers,
-                    str(requirement.id),
-                    period_months=get_rolling_period_months(requirement),
-                )
-
-            most_recent = (
-                max(type_matched, key=lambda r: r.completion_date or date.min)
-                if type_matched
-                else None
-            )
-            if not most_recent:
-                return not_started
-
-            comp_date = most_recent.completion_date
-            exp_date = most_recent.expiration_date
-            details: Optional[str] = f"{total_hours:.1f}/{required:.1f} hrs"
-
-            if required > 0 and meets_required_hours(total_hours, required):
-                status = "current"
-            elif total_hours > 0:
-                status = "expiring_soon"  # partial progress shown as yellow
-            else:
-                return not_started
-
-            # Check expiration on most recent record
-            if exp_date and exp_date < today:
-                status = "expired"
-            elif exp_date and exp_date <= expiring_threshold and status == "current":
-                status = "expiring_soon"
-
-            return {
-                "status": status,
-                "expiration_date": exp_date.isoformat() if exp_date else None,
-                "completion_date": comp_date.isoformat() if comp_date else None,
-                "details": details,
-            }
-
-        # ---- COURSES requirements: check required course IDs ----
-        if req_type == RequirementType.COURSES.value:
-            course_ids = requirement.required_courses or []
-            if not course_ids:
-                return not_started
-            completed_course_ids = {str(r.course_id) for r in windowed if r.course_id}
-            matched_count = sum(1 for cid in course_ids if cid in completed_course_ids)
-            most_recent = (
-                max(windowed, key=lambda r: r.completion_date or date.min)
-                if windowed
-                else None
-            )
-
-            if matched_count >= len(course_ids):
-                status = "current"
-            elif matched_count > 0:
-                status = "expiring_soon"
-            else:
-                return not_started
-
-            comp_date = most_recent.completion_date if most_recent else None
-            exp_date = most_recent.expiration_date if most_recent else None
-            details = f"{matched_count}/{len(course_ids)} courses"
-            return {
-                "status": status,
-                "expiration_date": exp_date.isoformat() if exp_date else None,
-                "completion_date": comp_date.isoformat() if comp_date else None,
-                "details": details,
-            }
-
-        # ---- CERTIFICATION requirements ----
-        if req_type == RequirementType.CERTIFICATION.value:
-            matching = [
-                r for r in completed if certification_record_matches(requirement, r)
-            ]
-            if not matching:
-                return not_started
-
-            most_recent = max(matching, key=lambda r: r.completion_date or date.min)
-            exp_date = most_recent.expiration_date
-            comp_date = most_recent.completion_date
-            details = None
-            if most_recent.certification_number:
-                details = f"#{most_recent.certification_number}"
-                if most_recent.issuing_agency:
-                    details += f" ({most_recent.issuing_agency})"
-
-            if exp_date:
-                if exp_date < today:
-                    return {
-                        "status": "expired",
-                        "expiration_date": exp_date.isoformat(),
-                        "completion_date": comp_date.isoformat() if comp_date else None,
-                        "details": details,
-                    }
-                elif exp_date <= expiring_threshold:
-                    return {
-                        "status": "expiring_soon",
-                        "expiration_date": exp_date.isoformat(),
-                        "completion_date": comp_date.isoformat() if comp_date else None,
-                        "details": details,
-                    }
-
-            return {
-                "status": "current",
-                "expiration_date": exp_date.isoformat() if exp_date else None,
-                "completion_date": comp_date.isoformat() if comp_date else None,
-                "details": details,
-            }
-
-        # ---- Fallback: shifts, calls, skills_evaluation, checklist, knowledge_test ----
-        # By training type, else by name under the legacy cut-off and the
-        # stored key — the compliance grader's own fallback rule.
-        matching = fallback_record_matches(requirement, windowed)
-
-        if not matching:
-            return not_started
-
-        most_recent = max(matching, key=lambda r: r.completion_date or date.min)
-        exp_date = most_recent.expiration_date
-        comp_date = most_recent.completion_date
-        details = None
-        if most_recent.certification_number:
-            details = f"#{most_recent.certification_number}"
-            if most_recent.issuing_agency:
-                details += f" ({most_recent.issuing_agency})"
-
-        if exp_date:
-            if exp_date < today:
-                return {
-                    "status": "expired",
-                    "expiration_date": exp_date.isoformat(),
-                    "completion_date": comp_date.isoformat() if comp_date else None,
-                    "details": details,
-                }
-            elif exp_date <= expiring_threshold:
-                return {
-                    "status": "expiring_soon",
-                    "expiration_date": exp_date.isoformat(),
-                    "completion_date": comp_date.isoformat() if comp_date else None,
-                    "details": details,
-                }
-
+        # A catch-up status lands on "not_started" here; the caller turns an
+        # unmet cell inside the catch-up period into its own status.
+        status = {
+            TrainingStatus.COMPLETED.value: "current",
+            TrainingStatus.IN_PROGRESS.value: "in_progress",
+            "expired": "expired",
+            NOT_YET_HELD_STATUS: "not_applicable",
+        }.get(ev.status, "not_started")
+        expiry = date.fromisoformat(ev.expiry_date) if ev.expiry_date else None
+        if status == "current" and expiry and today <= expiry <= expiring_threshold:
+            status = "expiring_soon"
+        progress = (
+            f"{ev.progress_current:g}/{ev.progress_required:g} "
+            f"{ev.progress_unit or ''}".strip()
+            if ev.progress_current is not None and ev.progress_required is not None
+            else None
+        )
         return {
-            "status": "current",
-            "expiration_date": exp_date.isoformat() if exp_date else None,
-            "completion_date": comp_date.isoformat() if comp_date else None,
-            "details": details,
+            "status": status,
+            "expiration_date": ev.expiry_date,
+            "completion_date": ev.completion_date,
+            "details": progress if status != "not_started" else None,
         }

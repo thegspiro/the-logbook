@@ -51,6 +51,9 @@ async def _three(req, records):
         requirement=req,
         completed_records=records,
         today=TODAY,
+        # The department setting, as a batch caller passes it; without it
+        # the check would read it from the database.
+        org_include_current_month=True,
     )
     return grade.status, detail["is_met"], progress.is_complete
 

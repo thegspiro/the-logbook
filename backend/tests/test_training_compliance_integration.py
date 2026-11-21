@@ -1068,3 +1068,90 @@ class TestUserTrainingStats:
         assert stats.hours_this_year == 12.0
         # 3 completed records total
         assert stats.completed_courses == 3
+
+
+class TestRequirementProgressAgreesWithTheGrader:
+    """``check_requirement_progress`` -- behind requirement progress, the user
+    training report and the MCP progress tool -- was a third copy of the
+    grading rules. It ignored the include-current-month setting, met a
+    zero-hour target with any hour, and its batch preload lacked the columns
+    certification matching reads. It now builds its answer from
+    ``evaluate_requirement_detail``, which takes met and expired from the
+    grader the matrix uses (CLAUDE.md pitfall #29)."""
+
+    @staticmethod
+    async def _progress(db, org_id, user_id, req_id):
+        progress = await TrainingService(db).get_all_requirements_progress(
+            UUID(user_id), UUID(org_id)
+        )
+        return next(p for p in progress if str(p.requirement_id) == req_id)
+
+    @staticmethod
+    async def _exclude_current_month(db, org_id):
+        await db.execute(
+            text(
+                "INSERT INTO compliance_configs "
+                "(id, organization_id, compliant_threshold, at_risk_threshold, "
+                "threshold_type, include_current_month, created_at, updated_at) "
+                "VALUES (:id, :org, 100, 75, 'percentage', 0, NOW(), NOW())"
+            ),
+            {"id": str(uuid.uuid4()), "org": org_id},
+        )
+        await db.flush()
+
+    async def test_last_month_counts_with_the_current_month_excluded(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        org_id, user_id = setup_org_and_user
+        await self._exclude_current_month(db_session, org_id)
+        req_id = await _insert_hours_requirement(
+            db_session, org_id, required_hours=4.0, frequency="monthly"
+        )
+        last_month = _today().replace(day=1) - timedelta(days=1)
+        await _insert_training_record(
+            db_session,
+            org_id,
+            user_id,
+            hours_completed=4.0,
+            completion_date=last_month.replace(day=15),
+        )
+
+        progress = await self._progress(db_session, org_id, user_id, req_id)
+
+        assert progress.is_complete is True
+        assert progress.completed_hours == 4.0
+
+    async def test_a_certificate_matches_by_name_on_the_batch_path(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        org_id, user_id = setup_org_and_user
+        req_id = await _insert_cert_requirement(db_session, org_id)
+        await _insert_training_record(
+            db_session,
+            org_id,
+            user_id,
+            course_name="EMT Certification",
+            completion_date=_today() - timedelta(days=30),
+            expiration_date=_today() + timedelta(days=365),
+        )
+
+        progress = await self._progress(db_session, org_id, user_id, req_id)
+
+        assert progress.is_complete is True
+
+    async def test_a_zero_hour_target_is_not_met_by_one_hour(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        org_id, user_id = setup_org_and_user
+        req_id = await _insert_hours_requirement(db_session, org_id, required_hours=0.0)
+        await _insert_training_record(
+            db_session,
+            org_id,
+            user_id,
+            hours_completed=2.0,
+            completion_date=date(_today().year, 1, 15),
+        )
+
+        progress = await self._progress(db_session, org_id, user_id, req_id)
+
+        assert progress.is_complete is False
