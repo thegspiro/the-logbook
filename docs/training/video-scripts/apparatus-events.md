@@ -183,6 +183,15 @@ member count, add a note and press **Send email**.
 > members that is before you send. One email lists every night that still
 > has an open seat. Members who turned off volunteer call emails are skipped.
 
+### Scene 8 shows the old request panel
+
+Since 2026-11-21 a request opens on a page of its own rather than in a panel
+over the Requests list, and **Apparatus Crew** sits below **Volunteer
+Staffing** on that page. The 2026-11-17 recording of scene 8 shows the old
+panel. Its captions and narration still hold, but re-record the scene on the
+request's page before publishing, so the footage matches what a coordinator
+sees.
+
 ## Before publishing
 
 - Watch it once with the app open and check that every control the narration

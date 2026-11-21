@@ -209,6 +209,23 @@ status badges, and the status reason if there is one. The tabs are:
 
 ![Apparatus detail page with the unit header and tabbed sections](./images/06-03-apparatus-detail.png)
 
+**You see only the buttons you can use** _(2026-11-20)_. The **Maintenance**,
+**Fuel Logs**, **Equipment** and **Documents** tabs show their add, edit and
+delete buttons only to someone whose permissions allow that action (see each
+section below). Someone who can only view a vehicle reads the tabs with no
+buttons. Before, the buttons appeared and the save was refused.
+
+**Deleting a photo or document** on the **Documents** tab needs full
+apparatus management. A file uploaded on the tab is deleted with it, unless
+another photo or document entry still links the same file. An entry that
+points at a document from the department's **Documents** library only loses
+the link: the library document stays, because deleting it is a decision for
+whoever manages that folder _(2026-11-20)_.
+
+**The edit page always edits the vehicle you opened** _(2026-11-20)_. If a
+vehicle cannot be loaded, its edit page waits or shows the error rather than
+filling the form from the vehicle you looked at before.
+
 ### Why a Rig Shows Deficiency
 
 A **Deficiency** badge appears beside the status when an equipment check on
@@ -296,6 +313,12 @@ permissions as for logging maintenance.
 If you enter gallons and price per gallon, The Logbook fills in the total cost
 for you. If you enter the mileage or engine hours, the vehicle's current
 mileage or hours update to match.
+
+> **Caution.** The reading is replaced even when it is lower. Entering last
+> month's receipt at 48,000 miles on a truck now at 52,000 sets the vehicle
+> back to 48,000. Enter late receipts without the mileage, or correct the
+> vehicle's reading on its edit page afterwards. This is an open decision for
+> the project; see [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md).
 
 The tab's table shows **Date**, **Fuel Type**, **Gallons**, **Price/Gal**,
 **Cost**, **Mileage** and **Full Tank**. The Logbook does not work out miles
@@ -902,6 +925,11 @@ is not yet overdue, so every open record is in exactly one of the two. The
 dashboard's facilities **Maintenance due** tile opens **Due soon**, and
 **Urgent work orders** opens **Overdue**. Officers who can log maintenance can
 mark an open record done with **Mark completed**.
+
+A record's cost shows as money, cents included (**$184.50**, not $184.5)
+_(2026-11-20)_. On a phone, the filter buttons scroll sideways when they do
+not fit, and each is large enough to tap; the **Inspections** filters do the
+same.
 
 The search box looks through the description, vendor, work order number and
 **Performed By** of every record, not just the ones on screen. The list shows

@@ -551,9 +551,7 @@ const NewRequestDialog: React.FC<NewRequestDialogProps> = ({ outreachTypes, coor
               onChange={(e) => set('notifyRequester', e.target.checked)}
             />
             <span>
-              <span className="text-theme-text-primary font-medium">
-                Email the requester a confirmation with their status link
-              </span>
+              <span className="text-theme-text-primary font-medium">Email the requester a confirmation</span>
               <span className="text-theme-text-muted block">
                 {hasEmail
                   ? 'Untick it if you have already told them everything on the call.'

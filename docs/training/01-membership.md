@@ -1000,6 +1000,14 @@ Service History, or correct the stint's end date if that is what is wrong.
 **Emergency contacts** can be saved without an email. A contact missing its
 name or relationship is pointed out on the page before you save.
 
+**Changing a rank asks you to confirm it&rsquo;s you.** Saving a rank change
+opens **Confirm it&rsquo;s you** (so does adding or removing a position with
+**Manage Positions**). If you
+cancel it, nothing is saved, and since 2026-11-20 the page says so: _"Not
+saved: the confirmation was cancelled. Your changes are still here; save again
+to confirm it's you."_ Everything you typed stays on the form. (It used to say
+you had no permission to update the member.)
+
 ### Member Management Row Actions
 
 _Updated 2026-11-10._ **Former members have their own page.** In Members
@@ -1074,10 +1082,17 @@ Each entry shows:
 - **Details:** expands the entry to show the rest of what was recorded.
 
 **Old and new values.** A status change shows both, for example "Status
-changed: probationary → active". A membership-type change also records both.
+changed: Probationary → Active". A membership-type change also records both.
 An ordinary profile edit records only _which_ fields changed, not their old
-values. So a rank change reads "Member profile updated: rank". Details names
-the field, but the previous rank is not kept.
+values, named in plain words _(2026-11-20)_: "Member profile updated:
+membership number, rank" rather than `membership_number`. Details names the
+field, but the previous rank is not kept.
+
+**Position changes name the positions** _(2026-11-20)_, for example
+"Positions changed: added Historian; removed Safety Officer". A save that
+changed nothing reads "Positions saved with no change". Entries recorded
+before 2026-11-20 still read "All roles replaced", because only the resulting
+list was kept then.
 
 **Use Filter by.** Viewing a member's profile is itself recorded. An
 unfiltered history is mostly "Member profile viewed" entries, with the edits
@@ -1129,8 +1144,19 @@ There is no delete button on the profile or the Admin Edit page.
 - the member's profile and all personal information;
 - training records and certifications;
 - inventory assignments (the items are unassigned, not deleted);
-- event attendance records; and
-- shift assignments.
+- event attendance records;
+- shift assignments;
+- the files on their training submissions, training records and attendance
+  waiver documents _(2026-11-17)_; and
+- their applicant record, if they joined through the membership pipeline,
+  with its documents, interviews, notes and form answers _(2026-11-21)_. The
+  dialog lists it as **Applicant record, with its documents and form
+  answers**.
+
+The files go just after the delete. If the server restarts or the file store
+cannot be reached in between, an hourly task finishes removing them
+_(2026-11-20)_. See
+[Privacy & Data Rights](./17-privacy-data-rights.md#what-is-removed).
 
 **What is kept, with the member's name removed:** records the member
 **created, approved, issued or uploaded**, such as documents and approvals.
@@ -1190,8 +1216,8 @@ Deletion is also refused if it would remove the department's last
 administrator.
 
 **You cannot act on a member who holds permissions you do not.** Deleting,
-changing the status of, or archiving a member is refused (403) when that member
-holds a permission you lack, so a member manager cannot deactivate or delete the
+changing the status of, archiving or (since 2026-11-20) anonymizing a member
+is refused (403) when that member holds a permission you lack, so a member manager cannot deactivate or delete the
 System Owner or a more senior officer. The attempt is reported to the security
 log as a privilege-escalation attempt, the same as a password or MFA reset
 refused for the same reason. Administrators with every permission are not
@@ -1218,8 +1244,25 @@ department keeps its record of what they did.
 | Sign-in credentials                                                     | Audit log and election records, unchanged |
 | Medical screening details, and the reasons given for leaves and waivers |                                           |
 | Their original application                                              |                                           |
+| Certificates uploaded with their training reports _(2026-11-17)_        |                                           |
+| Documents attached to their training records _(2026-11-20)_             |                                           |
 
 What is kept stays linked to a placeholder named "Former Member".
+
+**Download training evidence first** _(2026-11-20)_. Files attached to the
+member's training records, by an officer or by the member, are deleted with
+their identity. The records stay, so completions and hours still count, but
+the files cannot be recovered. A file another member's record also uses is
+kept.
+
+**Their original application** includes the application's activity log and
+the coordinators' notes on each step _(2026-11-20)_. The log keeps what
+happened and at which step, without the values.
+
+**Refused for a more senior member** _(2026-11-20)_. If the departed member
+still holds a permission you lack (a departed Chief keeps their positions),
+anonymizing is refused with _"You cannot anonymize a member with privileges
+beyond your own."_ Ask an administrator who holds every permission.
 
 > **Warning.** Anonymizing cannot be undone. The member also leaves the
 > roster. Like a deactivated member, their account no longer appears anywhere
@@ -1947,8 +1990,11 @@ once their property is returned and their departure clearance is completed.
 For an archived member, the status badge opens a **Reactivate Member** dialog
 instead.
 
-**Not every change is allowed.** If you pick one that isn't, the dialog shows
-an error that lists the statuses you can choose.
+**Not every change is allowed.** _(2026-11-20)_ **New Status** lists only the
+statuses the member's current status can change to (the table below), so a
+change The Logbook would refuse, such as Leave to Probationary, is no longer
+offered. If the list cannot be loaded, every status is offered as before, and
+picking a refused one shows an error that lists the statuses you can choose.
 
 | Current status        | Can change to                                                     |
 | --------------------- | ----------------------------------------------------------------- |
@@ -2101,6 +2147,16 @@ to confirm. It never repeats a reminder, so running it early does no harm.
   **Manage member profiles** permission).
 - To create a leave: you also need **Assign members to shifts**, because a
   leave removes the member from their shifts during the leave.
+- **Never your own leave** _(2026-11-21)_. Nobody can record a leave for
+  themselves, or edit their own leave's dates or reason, whatever their
+  permissions. A leave excuses training requirements, so an officer could
+  otherwise excuse their own. The Waivers page refuses with _"You cannot grant
+  your own leave of absence. Submit a leave request, or ask another
+  officer."_ (or _"…change your own leave…"_ on **Edit**). Ask for your leave
+  on **Leave Requests**, where you never decide your own request, or ask
+  another officer to record it. You can still end your own leave early, with
+  **Deactivate** or **I&rsquo;m back early**, because ending it excuses
+  nothing.
 
 > **What if a Membership Coordinator can't create a leave?** The Membership
 > Coordinator position does not include **Assign members to shifts** by
@@ -2163,7 +2219,7 @@ requirements reads "(training requirements stay in force)".
 **The member is emailed** _(2026-11-14)_ when an officer records, changes or
 removes their leave, with its dates and what it does to their training
 requirements. The email never includes the reason or the type, and members
-cannot switch it off. An officer changing their own leave is not emailed. The
+cannot switch it off. An officer ending their own leave is not emailed. The
 wording is the **Leave of Absence Notice** template under **Communications →
 Email Templates → Training & Certifications**.
 
@@ -2267,15 +2323,18 @@ leave. A request entirely inside your leave is refused (it is already
 covered), and so is one that overlaps another request still waiting.
 Approval checks again, in case an officer recorded leave meanwhile.
 
-**Ask a question.** An approver can ask the member a question instead of
-voting. Voting pauses until the member answers on the Leave Requests page.
+**Ask a question.** An approver can select **Ask a question** instead of
+voting, type it under **Your question to the member** and select **Send
+question**. Voting pauses until the member answers on the Leave Requests page.
 The member is told by email and in the app; the question and the answer are
 not emailed.
 
-**Approve with changes.** An approver can propose different dates. The member
-accepts or keeps their own:
+**Approve with changes.** An approver can select **Approve with changes**,
+set a different **First day** and **Last day** (or tick **No end date**), add
+an optional note and select **Send changed dates**. The member accepts or
+keeps their own:
 
-- **Accept** moves the request onto the new dates and starts voting again,
+- **Accept these dates** moves the request onto the new dates and starts voting again,
   with the proposer's approval already counted. Under **Any one approver**
   that approves it at once; under the other rules the approvers vote again on
   the new dates, and votes on the old dates no longer count.
@@ -2302,13 +2361,26 @@ approvers' own reminders continue either way.
 
 **Ending your leave early.** While your department takes leave requests and
 you are on leave, **Leave Requests** shows **Your leave** with **I&rsquo;m back
-early**. Give your first day back and confirm: your leave now ends the day
+early**. Enter **Your first day back**, select **End my leave**, and confirm
+(**End your leave early?**): your leave now ends the day
 before, and your training requirements follow the new date. No vote is
 needed. The officers who manage leave are told by email and in the app, so
-they can correct a wrong date; after this only an officer can change it. You
+they can correct a wrong date; after this only another officer can change it.
+You
 cannot end a leave that has not begun or has already ended, set a date that
 does not shorten it (to stay away longer, ask for leave instead), or end it
 while a request to extend it is still waiting.
+
+> **Screenshots to create:** `01-59-leave-request-ask-question.png`, an
+> approver's request under **To decide** with **Ask a question** open
+> (**Your question to the member**, **Send question**);
+> `01-60-leave-request-changed-dates.png`, the member's own request showing
+> proposed dates with **Accept these dates** and **Keep my dates**;
+> `01-61-leave-back-early.png`, **Your leave** with **Your first day back**
+> filled in and **End my leave**; and `01-62-leave-escalation-setting.png`,
+> **Members Admin → Settings → Leave of Absence** with **Tell the Chief about a
+> request still undecided after this many days** set to 21. See
+> [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
 
 The reason is shown to the member, their approvers and officers who can manage
 member profiles only. No email, from

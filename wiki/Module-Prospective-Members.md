@@ -146,6 +146,16 @@ of applications due for deletion within 7 days before it purges, and an
 application with no recorded inactive date is never purged. Purging removes
 the applicant's uploaded documents as well and cannot be undone.
 
+**A converted applicant's record follows the member** _(2026-11-20/21)_.
+Purge never takes a transferred application. Instead, anonymising the member
+scrubs it (including the `prospect_activity_log` values and each step
+progress's `notes`; the log keeps an allowlist of structural keys such as
+`step_name` and `document_type`), and permanently deleting the member deletes
+it with its documents, interviews and form answers
+(`delete_transferred_applications`, documents queued on
+`pending_file_deletions`). An event guest check-in that created the prospect
+(`event_external_attendees.prospect_id`) is kept, as it is on Purge.
+
 ### Status page and conversion settings
 
 - **Public Application Status Page** — "Let applicants check their

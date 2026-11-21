@@ -190,6 +190,15 @@ back on All.]**
 > a month that's only partly covered by leave is treated is a department setting
 > called **Months on leave**. Part 2 shows where."
 
+**[PRODUCTION NOTE — 2026-11-21. Footage check, no narration change required.
+Since 2026-11-20 an hours requirement in a member's detail leads with the
+monthly average against the monthly pace — "2/2 hrs/mo avg" — and the total
+moves to the line beneath ("6 of 24 hours total"); the colour still follows
+the total. Any take showing an hours cell with only "6 of 24 hours" is dated.
+Optional one-line add after "the number behind it": _"For hours you also get
+their monthly average against the pace you need, so you can see who's falling
+behind before the year runs out."_]**
+
 **[PRODUCTION NOTE — 2026-11-05. Two new beats, about 35 seconds; re-time
 Chapter 2. The member-class switch (2026-10-27) and the class-split printout
 need a department with more than one member class. Leave beside the hours is
@@ -580,7 +589,13 @@ approval or rejection; empty means keep forever). A daily job then deletes the
 uploaded files from the submission and from the member's training record — the
 record itself stays. Nothing is deleted on upgrade; a department has to set a
 number. Updated 2026-10-06; the earlier take said retention was not a setting
-in the product.]**
+in the product. **Corrected 2026-11-21:** uploads are also malware-scanned
+when ClamAV is on, which it is by default, so do not say "not scanned". A
+submission approved automatically (no approval required, or under the
+auto-approve hours) counts from the day it was submitted. A certificate a
+voided record still names — after **Reverse Approval** — is kept when the
+member removes it from the submission, and the retention period no longer
+reaches it.]**
 
 **[CALLOUT: "Member submissions require Training Officer approval"]**
 

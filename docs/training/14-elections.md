@@ -1532,6 +1532,10 @@ name and the election's title _(2026-11-16)_, so a loose page still says which
 election it belongs to. The printable ballot and the pre-meeting package have
 the same header.
 
+_(2026-11-21)_ Every page's footer reads **Page 2 of 4**, not just **Page 2**,
+so a missing page shows. The pre-meeting package is numbered the same way, and
+the printable ballot already was.
+
 File the signed copy with the meeting minutes. Together with the forensics
 report, it is your full defence if the result is disputed.
 

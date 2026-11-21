@@ -232,8 +232,10 @@ shift. Officer assignment is otherwise uncapped deliberately.
 | `scheduling.report` | Scheduling reports                                                     |
 
 The named shift officer can manage that shift's crew, attendance, calls,
-close-out and cancellation without a department-wide grant. Self-signup needs
-no permission beyond membership.
+close-out and cancellation without a department-wide grant, except their own
+hours: without `scheduling.manage` they cannot change their own times at
+close-out, enter manual hours for themselves, or add their own attendance
+(2026-11-20). Self-signup needs no permission beyond membership.
 
 ---
 
@@ -497,6 +499,16 @@ finalized nor cancelled.
 apparatus bay resumes where it left off. The server's `shifts.closeout_step`
 decides the entry screen — nothing is held only in the browser. Reopening a
 finalized shift restarts the wizard at step 1.
+
+**The officer's own row is locked** _(2026-11-20, owner decision on ADV2-8)_.
+A shift officer closing out without `scheduling.manage` sees their own Start,
+End and Hours greyed out, with "Your own times come from your check-in and
+check-out. A scheduling admin can correct them." Their row is sent back
+unchanged and accepted; a changed one is refused (403) and nothing in that save
+is applied. The finalize checklist's manual hours, and adding attendance on the
+shift panel, refuse the officer's own entry the same way. On a one-person shift
+where the officer missed a check-in or check-out, a scheduling administrator
+records their hours.
 
 **The total on step 2 is derived from the per-type rows and is read-only.**
 There is exactly one source for the number; `deriveCallTotal` sums the visible
@@ -1011,6 +1023,11 @@ per shift) at `/scheduling/admin/history-import`; the full walkthrough is the
   (`keep_separate` splits them).
 - Crews group by unit and day with a confidence score: 90+ matches
   automatically, 60–89 is held for review.
+- An answer to a 60–89% match against a shift already on the schedule (**Add
+  to that shift** / **Import separately**) can be taken back with **Undo** on
+  the Shifts tab, the Rows tab or a row's edit dialog (2026-11-20). The page
+  sends `null` for that shift in `existing_shifts` on `PUT …/mappings`, which
+  clears the stored answer, and the question is asked again.
 - Exact unit names only; other agencies' units become outside-department hours
   (`ExternalShiftHours`).
 - Former members are created **archived** (`archived_at` set) with no password
