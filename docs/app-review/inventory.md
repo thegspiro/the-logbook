@@ -194,17 +194,17 @@ _Reported_ by the depth reads, recorded for the next pass:
 
 ### Completion gate (pass 6)
 
-| Check                         | Result                                                                                                                                                                        |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run typecheck`           | ✅ 0                                                                                                                                                                          |
-| `npm run lint`                | ✅ 0 errors, 0 warnings (one `no-conditional-in-test` warning in the new fulfil test was fixed by splitting the case)                                                         |
-| `flake8 app/ tests/`          | ✅ 0                                                                                                                                                                          |
-| `black --check` / isort       | ✅ clean                                                                                                                                                                      |
-| frontend tests                | ✅ **inventory module 2,002 passed** (129 files), before the lint split; the split page file passes 43                                                                        |
-| backend, targeted             | ✅ reorder (55), lot ledger, identity-map staleness and capacity locking (99), capacity locking (70), the four repo-wide sweeps (31)                                          |
-| backend, `-k inventory`-wide  | first run: **2,498 passed** before stopping at `test_s3_migration`, which failed identically without this change on a stale local schema; re-run after the upgrade: see below |
-| docs link check               | ✅ 0 broken links                                                                                                                                                             |
-| marker routing (pitfall #30b) | ✅ the new staleness test is in an `integration` module; the capacity and reorder additions sit in files already routed                                                       |
+| Check                         | Result                                                                                                                                                                                   |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run typecheck`           | ✅ 0                                                                                                                                                                                     |
+| `npm run lint`                | ✅ 0 errors, 0 warnings (one `no-conditional-in-test` warning in the new fulfil test was fixed by splitting the case)                                                                    |
+| `flake8 app/ tests/`          | ✅ 0                                                                                                                                                                                     |
+| `black --check` / isort       | ✅ clean                                                                                                                                                                                 |
+| frontend tests                | ✅ **inventory module 2,002 passed** (129 files), before the lint split; the split page file passes 43                                                                                   |
+| backend, targeted             | ✅ reorder (55), lot ledger, identity-map staleness and capacity locking (99), capacity locking (70), the four repo-wide sweeps (31)                                                     |
+| backend, `-k inventory`-wide  | ✅ **2,606 passed, 1 skipped, 0 failed** after upgrading the local schema (a first run stopped at `test_s3_migration`, which failed identically without this change on the stale schema) |
+| docs link check               | ✅ 0 broken links                                                                                                                                                                        |
+| marker routing (pitfall #30b) | ✅ the new staleness test is in an `integration` module; the capacity and reorder additions sit in files already routed                                                                  |
 
 ---
 
