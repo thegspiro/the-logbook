@@ -1,5 +1,146 @@
 # Screenshot currency
 
+## Captured 2026-11-21 — the Replace and Check rows of every open queue
+
+Taken on a demo department seeded from `main` at `b0187eae`, with malware
+scanning on (ClamAV, current signatures). One full `capture.mjs` run, then the
+shots fixed below re-run on their own. This pass covered the **Replace** and
+**Check** rows only. The **Create** and **Optional** rows in the queues below
+are still open, and the queues are left in place for them.
+
+**What a full run did.** 810 of 960 shots were re-taken. Every image they
+replaced now shows the current build, which settles the broad rows of the
+November 4 – 5 and 5 – 6 queues as far as those shots reach: toggle switches
+are the red pill, Administration headers carry the eyebrow and one title, and
+wide tables reflow as cards at tablet width. Those were re-shot, not looked at
+one by one; the images named in the queues were looked at.
+
+**52 images had been overwritten with frames the harness rejected, and were
+put back.** `capture.mjs` wrote each image before checking it, so a shot
+refused for an out-of-frame subject, an error page or an empty state had
+already replaced the committed image. It now captures to
+`<id>.capturing.png` and moves the file into place only once every check
+passes, and an empty state never replaces an existing image
+(`scripts/test_screenshot_pending_write.py`).
+
+| Image | Disposition | Notes |
+| --- | --- | --- |
+| `03-104-my-shifts-hours` | Re-shot | The redesigned Hours view: split-bar cards, year arrows, the year chart and its tiles, All shifts. Manifest waits on "at a glance"; alt rewritten |
+| `03-108-member-outside-shifts` | Re-shot | Now frames **All shifts**, since the outside-shifts card was folded into it. The demo department has no short name, so its shifts read "Oakville Fire Department" |
+| `03-113-member-hours-with-outside` | Re-shot | Cards read "0 Oakville Fire Department / +24 with other departments" |
+| `02-108-monthly-hours-leave` | Re-shot | The excused month reads **Leave** and keeps its hours. The manifest waited on "of leave not counted", which the page no longer says |
+| `02-107-my-training-history-tab` | Checked, re-shot | Still a table at 1440px. The shot clicked the sidebar's new **History** menu group instead of the page's History toggle |
+| `02-01-my-training` | Checked | Still a table at 1440px |
+| `01-01-member-directory` | Re-shot | The roster reflows to cards below a 78rem card, which 1440px with the sidebar never reaches, so the shot is now 1920px wide and asserts the table header |
+| `01-22-member-lifecycle` | Re-shot | Roster strip with Member Management and Former Members; no Status column |
+| `03-04-my-shifts` | Re-shot | Upcoming under month headers |
+| `03-12-shift-templates` | Re-shot | Heading is now **Shift Templates** with its pointer to Shift patterns, no switch; manifest and alt updated |
+| `03-129-template-reactivate` | Checked | No Templates / Patterns switch |
+| `04-68-minutes-outlines` | Re-shot | The button's accessible name is now "Make default: …"; manifest updated |
+| `04-61-training-details-create` | Re-shot | Framed from the "Switched to the training form" note, so the course card is in frame |
+| `02-80`, `02-83` | Re-shot | Training-event form's course radios and recurrence; alts rewritten. The date field is blurred before the shot |
+| `02-81`, `02-82` | Checked, re-shot | Unchanged in frame |
+| `02-91-session-confirmation-toggle` | Re-shot | Training completion on Training Info; alt no longer names step 3 |
+| `19-29-training-session-linkage` | Re-shot | Training Info step; alt no longer names the wizard |
+| `04-02-event-detail` | Re-shot | Training details card |
+| `02-40-member-training-history` | Re-shot | Period list and compact record list; alt rewritten |
+| `05-127-items-not-seen` | Re-shot | Creating an item now counts as a sighting, so the real report lists no demo item. The mock now builds its rows from the department's own items; taller frame |
+| `13-05-add-requirement` | Re-shot | The frequency note is now the shared field hint, `#req-frequency-hint` |
+| `14-01`, `14-04`, `14-05`, `14-07`, `14-16`, `14-18`, `14-19`, `14-25`, `14-26`, `14-27`, `14-31` | Re-shot | Section pages with the link row; `14-19` now on the Assistant Chief election, with Integrity & Audit |
+| `14-17-election-results` | Re-shot | 19 of 22, quorum met. `isClosedElection` now names the Assistant Chief election: "the first closed election" had become a membership vote |
+| `14-20-runoff-chain` | Re-shot | Original, Runoff 1, Runoff 2 |
+| `14-21-save-ballot-template` | Re-shot | Opens the ballot section by path |
+| `14-22-ballot-template-picker` | **Still open** | Blocked by a product bug: on the ballot page the **Use Template** picker opens upward past the top of the screen, so its heading and **Your saved ballots** cannot be reached (`BallotBuilder.tsx`, `bottom-full`). The committed image, which frames only the picker, is kept |
+| `19-25`, `19-26` | **Still open** | No longer possible as one frame: the ballot and the Voting Method card are on different pages. Retire them or keep them as August history; not changed |
+| `18-04-my-orders-unpaid` | Re-shot, partly | Shows the delivery line ("Pick up"); the seeded order has no charge line. The Zelle address also runs past its card's edge |
+| `08-34-email-templates`, `06-23`, `04-01`, `04-14`, `02-04`, `02-126`, `02-135`, `02-92`, `12-02`, `12-03`, `12-18`, `00-04`, `00-07`, `13-01` – `13-04` | Re-shot | `06-23` lists no former member |
+| `13-03-records-tab` | **Still open** | No seeded record is unlinked, so the **Not linked to a requirement** badge is not in frame |
+| `04-10`, `12-05`, `02-104-cohort-preview-step` | Kept | Flagged as empty states this run; the committed images are kept |
+
+**Seeder changes.** The elections whose paper tallies the seeder records now
+carry an explicit open roll (`OPEN_ROLL`). They used to copy the department's
+voter rules, whose attendance requirement left a roll that moved from run to
+run (22, 8, then 4), so a tally that fit one run was refused on the next.
+
+**Still failing after this pass, outside its scope (95).** Each keeps its
+committed image:
+
+`00-23-login-two-factor`, `00-29-notification-stacks`,
+`00-30-notification-stack-expanded`, `00-34-step-up-code`,
+`00-35-step-up-password`, `01-42-archived-member-row`,
+`01-48-reset-password-rules`, `01-49-anonymize-member`,
+`01-51-rejoin-status-dialog`, `01-52-service-history-restart`,
+`01-53-id-cards-roster`, `01-57-profile-leave-badges`,
+`02-102-shift-report-crew-form`, `02-112-pipeline-progress-card`,
+`02-130-shift-evaluation-status-lines`, `02-131-shift-evaluation-page`,
+`02-132-shift-evaluation-print`, `02-140-completed-by-hand`,
+`02-142-deactivate-pipeline-confirm`, `02-78-my-training-toolbar`,
+`02-79-training-attachments`, `03-08-calls-runs-section`,
+`03-09-log-call-form`, `03-114-check-out-early`,
+`03-133-pattern-form-template-inactive`, `03-136-check-form-present`,
+`03-62-dashboard-signup-positions`, `03-64-skill-score-buttons`,
+`03-97-shift-reminder-expanded`, `04-33-guest-sign-in-confirmation`,
+`04-80-event-checked-in`, `05-02-items-pinned`, `05-125-catalog-links-matches`,
+`05-14-reorder-requests`, `05-148-folded-product-rename`,
+`05-149-rename-product-dialog`, `05-45-impact-planner`,
+`05-59-impact-planner-results`, `05-62-generate-variants`,
+`05-92-catalog-links-auto-linked`, `05-98-my-equipment-empty`,
+`05-99-gear-request-not-stocked`, `07-06-form-builder`,
+`07-17-suggestion-review`, `07-19-suggestion-review-phone`,
+`07-22-suggestion-publish-dialog`, `07-29-notification-stack-expanded`,
+`07-38-compliance-review-intake-answers`, `07-39-suggestion-review-phone`,
+`07-44-submission-restricted`, `08-04b-role-save-wildcard`,
+`08-101-template-previous-version`, `08-105-pulse-customize`,
+`08-106-pulse-all-hidden`, `08-110-member-position-confirm`,
+`08-111-role-duplicate-name`, `08-119-reset-mfa-passkeys`,
+`08-67-email-preview-design`, `08-77-legal-proposal-as-proposer`,
+`08-89-rank-delete-confirm`, `08-98-my-updates-stacked-row`,
+`09-27-release-icon-test-records`, `09-30-cancel-unfinished-test-dialog`,
+`09-31-cancel-draft-test-dialog`, `09-32-keep-it-open-button`,
+`09-33-cancel-test-button`, `10-18-training-table-phone`,
+`10-19-training-table-desktop`, `11-12-purchase-request-detail`,
+`11-14-expense-report-detail`, `11-16-check-request-detail`,
+`11-21-approvals-admin-view`, `11-22-approvals-admin-override`,
+`11-28-budget-picker-inactive`, `11-31-dues-overpayment-donation`,
+`12-16-edit-opportunity`, `14-22-ballot-template-picker`,
+`15-02-board-truncated`, `15-09-bulk-action-result`, `15-09-convert-modal`,
+`15-25-sign-offs-chief`, `15-26-sign-off-dialog`,
+`15-42-applicant-email-templates`, `15-43-interview-follow-up-answers`,
+`16-09-mcp-service-key`, `16-11-mcp-oauth-register-client`,
+`16-12-mcp-oauth-client-secret`, `16-13-claude-consent`,
+`16-14-claude-connections`, `16-15-mcp-settings`,
+`19-16-legal-revision-editor`, `19-26-ballot-template-settings-after`,
+`19-27-paper-ballot-over-roster`, `19-32-notification-after-action`,
+`20-13-applicant-drawer-not-elected`
+
+**Held back as empty states (36).** Existing images kept:
+
+`01-05-add-member-form`, `01-46-add-member-password-no-email`,
+`02-104-cohort-preview-step`, `02-105-program-enrollment-progress`,
+`02-11-pipeline-wizard`, `02-42-external-integrations`,
+`02-68-vector-category-mapping`, `02-93-member-full-progress`,
+`03-31-shift-edit-times`, `03-70-check-form-carryover`,
+`03-81-closeout-override`, `04-09-rsvp-modal`, `04-10-event-attendance`,
+`04-40-end-event`, `04-47-template-reminder-audience`,
+`05-02-inventory-dashboard`, `05-03-items-grouped`, `05-46-size-preferences`,
+`05-47-items-filter-bar`, `05-53-items-grid-lot-stock`,
+`05-53-items-variant-capsules`, `05-77-setup-storage`,
+`05-83-items-select-all-matching`, `06-05-apparatus-fuel-tab`,
+`06-35-locations-member`, `07-13-integrations`, `08-07-analytics-dashboard`,
+`10-05-mobile-inventory`, `11-05-budget-detail`,
+`11-24-category-charge-access`, `12-04-create-application`,
+`12-05-applications-pipeline`, `14-02-create-election`,
+`17-03-profile-as-officer`, `19-18-profile-as-officer`, `20-17-staffing-gaps`
+
+**Seeder errors when it runs after a capture.** Re-seeding the same database
+after a full capture fails on state the capture left: an RSVP on an event whose
+attendance a shot finalized (409), the early check-in event's reschedule (400,
+a member is checked in), and the guide 15 follow-up applicant already at the
+final stage (409). `member checklist states` cannot place a part-answered
+check while the demo member has one upcoming engine shift. The external
+training provider step needs `api.vectorsolutions.com` to resolve, which this
+environment's network did not allow.
+
 ## Queued by the November 19 – 20 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-19--20-2026).

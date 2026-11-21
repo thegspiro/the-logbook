@@ -850,6 +850,9 @@ export async function setSessionStart(page) {
   await times.nth(0).selectOption("9");
   await times.nth(1).selectOption("00");
   await times.nth(2).selectOption("AM");
+  // selectOption does not move focus, so the date field would otherwise be
+  // photographed focused with its month segment highlighted.
+  await page.evaluate(() => document.activeElement?.blur());
   await page.waitForTimeout(600);
 }
 
@@ -2160,8 +2163,13 @@ function submittedFollowUpRequest(request, { detail, sentAt }) {
 export const isNominatingElection = (election) =>
   (election.status ?? "") === "nominations";
 
+// The seeded Assistant Chief special election, by title: the one closed
+// election built to be pictured, with a two-candidate paper tally, a 50%
+// quorum and attested batches. "The first closed election" stopped meaning it
+// once the membership votes and the runoff rounds were closed too.
 export const isClosedElection = (election) =>
-  (election.status ?? "") === "closed";
+  (election.status ?? "") === "closed" &&
+  (election.title ?? "") === "Assistant Chief Special Election";
 
 export const isOpenElection = (election) => (election.status ?? "") === "open";
 
@@ -5378,14 +5386,13 @@ export const SHOTS = [
     doc: "02-training.md",
     line: 1728,
     anchor: "Screenshot of the course picker with an existing course chosen",
-    alt: "The course picker with an existing course chosen and its details preview card underneath",
+    alt: "Training Info's course choice on From the Course Library: a course picked and its details card underneath, noting that type, hours, instructor and expiry were filled from it",
     route: "/training/admin?tab=sessions",
     prepare: async (page) => {
-      // Rewritten 2026-11-11 for the training-event form, and not yet run
-      // against it (SCREENSHOT_CURRENCY.md marks this shot REPLACE). The
-      // course is three radios and "No course yet" is selected at first, so
-      // the library branch, with its picker and card, has to be chosen. The
-      // radio's name is its title followed by its description.
+      // Driven through the training-event form. The course is three radios
+      // and "No course yet" is selected at first, so the library branch, with
+      // its picker and card, has to be chosen. The radio's name is its title
+      // followed by its description.
       await openSessionTrainingInfo(page);
       await page
         .getByRole("radio", { name: /^From the Course Library/ })
@@ -5439,14 +5446,12 @@ export const SHOTS = [
     doc: "02-training.md",
     line: 1718,
     anchor: "Screenshot of the recurrence block with",
-    alt: "The recurrence block with Monthly (by weekday) chosen and its ordinal and weekday pickers",
+    alt: "The recurrence block with Monthly (by weekday) chosen: the series end date beside Rolling 12-month cycle, the 2nd Tuesday picked, and the Exception dates field",
     route: "/training/admin?tab=sessions",
     prepare: async (page) => {
-      // Rewritten 2026-11-11 for the training-event form, whose recurrence is
-      // the event form's own section ("Make this a recurring event", a series
-      // end date or a rolling cycle). Not yet run against it
-      // (SCREENSHOT_CURRENCY.md marks this shot REPLACE). Addressed by the
-      // section's ids rather than by position.
+      // The training-event form's recurrence is the event form's own section
+      // ("Make this a recurring event", a series end date or a rolling
+      // cycle). Addressed by the section's ids rather than by position.
       await setSessionStart(page);
       await page.locator("#is-recurring").check({ timeout: 15_000 });
       await page.waitForTimeout(500);
@@ -5460,6 +5465,7 @@ export const SHOTS = [
       await page.locator("#recurrence-end-date").fill("2027-09-15");
       await page.locator("#recurrence-ordinal").selectOption({ label: "2nd" });
       await page.locator("#recurrence-weekday").selectOption({ label: "Tue" });
+      await page.evaluate(() => document.activeElement?.blur());
       await page.waitForTimeout(600);
     },
     selector: "div.border-l-2:has(select)",
@@ -5926,7 +5932,13 @@ export const SHOTS = [
     auth: "member",
     route: "/training/my-training",
     prepare: async (page) => {
-      await clickByName(/^History$/)(page);
+      // The page's own view toggle, not the sidebar's "History" menu group,
+      // which comes first in the DOM and is just as visible.
+      await page
+        .locator("button[aria-pressed]")
+        .filter({ hasText: /^History$/ })
+        .first()
+        .click({ timeout: 20_000 });
       await page.locator("#history-search").waitFor({ timeout: 20_000 });
       await page.waitForTimeout(1500);
     },
@@ -5939,7 +5951,7 @@ export const SHOTS = [
     line: 246,
     anchor:
       "an hours requirement with Show monthly hours open: the twelve-month",
-    alt: "Annual Minimum Training Hours with Show monthly hours open: a bar for each month, the month of leave marked and left out of the average",
+    alt: "Annual Minimum Training Hours with Show monthly hours open: a bar for each month, the month of leave labelled Leave and keeping its hours, which count toward the total, and the average taken over the months not excused",
     auth: "member",
     route: "/training/my-training",
     prepare: async (page) => {
@@ -5951,14 +5963,16 @@ export const SHOTS = [
         .getByRole("button", { name: /Show monthly hours/ })
         .last();
       await toggle.click({ timeout: 20_000 });
+      // An excused month now keeps its hours, so the summary
+      // reads "earned on leave" and averages over the months not excused.
       await page
-        .getByText(/of leave not counted/)
+        .getByText(/months not excused/)
         .first()
         .waitFor({ timeout: 15_000 });
-      await centre(page.getByText(/of leave not counted/).first());
+      await centre(page.getByText(/months not excused/).first());
       await page.waitForTimeout(500);
     },
-    expect: "of leave not counted",
+    expect: "months not excused",
   },
   {
     id: "02-109-approved-with-changes-notice",
@@ -6600,15 +6614,14 @@ export const SHOTS = [
     doc: "02-training.md",
     line: 715,
     anchor: "The Create Training Session form (Step 3)",
-    alt: "Training Info's Training completion settings on the training-event form, with Require sign-off among them",
+    alt: "Training completion on the training-event form's Training Info step: Counts toward certification requirements, Start an in-progress training record when members check in, and Require sign-off",
     // `/training/sessions/new` redirects here; the form is a tab of the
     // training admin page rather than a route of its own.
     route: "/training/admin?page=records&tab=sessions",
     prepare: async (page) => {
-      // Rewritten 2026-11-11 for the training-event form, and not yet run
-      // against it (SCREENSHOT_CURRENCY.md marks this shot REPLACE). Require
-      // sign-off moved from step 3 to Training Info's "Training completion",
-      // at the foot of step 2.
+      // Driven through the training-event form. Require sign-off moved from
+      // step 3 to Training Info's "Training completion", at the foot of
+      // step 2.
       await openSessionTrainingInfo(page);
       const signOff = page.locator("#training-require-sign-off");
       await signOff.waitFor({ timeout: 15_000 });
@@ -7968,7 +7981,12 @@ export const SHOTS = [
       "Screenshot of the Members page showing the member list table with columns",
     alt: "The Members roster: the member count tiles, the search with status, class and membership-status filters, and each member's name, rank, member number, status and hire date",
     route: "/members",
-    expect: "Membership Management",
+    // The roster table reflows to cards below a 78rem card (rwd-table-xwide),
+    // and at 1440px the sidebar leaves the card about 69rem, so the default
+    // viewport pictures cards. 1920px gives the capped page column room for
+    // the table.
+    viewport: { width: 1920, height: 1080 },
+    expect: { selector: "table.rwd-table thead th" },
   },
   {
     id: "01-02-member-profile",
@@ -9201,13 +9219,16 @@ export const SHOTS = [
     line: 239,
     anchor:
       "Screenshot of the Shift Templates tab showing a list of templates with",
-    alt: "Shift Templates tab listing templates with start and end times",
+    alt: "Shift Templates tab listing templates with start and end times, under the heading's pointer to Shift patterns for repeating a template",
     route: "/scheduling/admin/planning/templates",
-    expect: "Shift Templates & Patterns",
+    expect: "make a pattern in",
     // The Scheduling Administration header and its area cards fill the
-    // first screen, so the frame starts at the templates' own heading.
+    // first screen, so the frame starts at the templates' own heading. The
+    // heading lost "& Patterns" when patterns moved to their own tab.
     prepare: async (page) => {
-      const heading = page.getByText("Shift Templates & Patterns").first();
+      const heading = page
+        .getByRole("heading", { name: "Shift Templates", exact: true })
+        .first();
       await heading.waitFor({ timeout: 20_000 });
       await page.getByText("Day Shift").first().waitFor({ timeout: 20_000 });
       await heading.evaluate((el) => {
@@ -9709,13 +9730,13 @@ export const SHOTS = [
     route: "/minutes/outlines",
     prepare: async (page) => {
       await page
-        .getByRole("button", { name: /^Make .* the default$/ })
+        .getByRole("button", { name: /^Make default: / })
         .first()
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
     expect: {
-      selector: "button[aria-label^='Make '][aria-label$=' the default']",
+      selector: "button[aria-label^='Make default: ']",
     },
     fullPage: false,
   },
@@ -10073,9 +10094,8 @@ export const SHOTS = [
     expect: "Attendance for this event is finalized",
   },
   {
-    // Not submitted. Rewritten 2026-11-11, and not yet run (SCREENSHOT_CURRENCY.md
-    // marks this shot REPLACE): Create Event has no "Training details
-    // (optional)" group any more. Choosing Training swaps the single-page form
+    // Not submitted. Create Event has no "Training details (optional)" group
+    // any more. Choosing Training swaps the single-page form
     // for the training-event form, so the frame is that form's Training Info
     // step after the hand-off, with the first library course picked.
     id: "04-61-training-details-create",
@@ -10106,10 +10126,17 @@ export const SHOTS = [
         .locator("option:nth-child(2)")
         .getAttribute("value");
       await course.selectOption(value ?? "");
-      await page.evaluate(() => window.scrollTo(0, 0));
+      // The frame starts at the hand-off note rather than the page top: the
+      // administration header above it pushes the course card off any frame
+      // that also holds the header.
+      await page.getByText("Switched to the training form").evaluate((el) => {
+        el.scrollIntoView({ block: "start" });
+        window.scrollBy(0, -40);
+      });
       await page.waitForTimeout(600);
     },
     fullPage: false,
+    viewport: { width: 1440, height: 1100 },
     expect: "Switched to the training form",
   },
   {
@@ -14080,7 +14107,7 @@ export const SHOTS = [
       await page.evaluate(() => document.activeElement?.blur());
       await page.waitForTimeout(600);
     },
-    expect: { selector: "#req-frequency-note" },
+    expect: { selector: "#req-frequency-hint" },
     fullPage: true,
   },
   {
@@ -14300,7 +14327,7 @@ export const SHOTS = [
     line: 947,
     anchor:
       "The Member Training History page showing the export period dropdown next to",
-    alt: "Member training history with the export period selector and download buttons",
+    alt: "A member's Training History: the period list on This Year beside Export CSV, Export PDF and Print Record, the period's totals and requirement, and the compact list of the period's records",
     route: "/members",
     prepare: openFirstFromApi(
       "/users?limit=1",
@@ -15127,6 +15154,13 @@ export const SHOTS = [
       // the selector below reads "Ballot Items (1)", and `19-26` leaves this
       // draft holding the four items of an applied template.
       await openBylawDraft(page);
+      // The Ballot Builder is on the ballot section's own path since #4297.
+      await page.goto(
+        new URL(
+          `${new URL(page.url()).pathname}/ballot`,
+          page.url(),
+        ).toString(),
+      );
       const save = page.getByRole("button", { name: /^Save as Template$/ });
       await save.waitFor({ timeout: 20_000 });
       await save.click();
@@ -15146,6 +15180,13 @@ export const SHOTS = [
     route: "/elections",
     prepare: async (page) => {
       await openBylawDraft(page);
+      // The Ballot Builder is on the ballot section's own path since #4297.
+      await page.goto(
+        new URL(
+          `${new URL(page.url()).pathname}/ballot`,
+          page.url(),
+        ).toString(),
+      );
       const use = page.getByRole("button", { name: /^Use Template$/ });
       await use.waitFor({ timeout: 20_000 });
       await use.click();
@@ -15201,16 +15242,14 @@ export const SHOTS = [
     // Deny count as two, so that restricted ballot was pictured instead.
     expect: "Nine years on Engine 1",
     prepare: async (page) => {
+      // Voting is its own section path since #4297, not a #tab-voting button.
       await openFirstFromApi(
         "/elections?limit=50",
-        (id) => `/elections/${id}`,
+        (id) => `/elections/${id}/voting`,
         "elections",
         (election) =>
           (election.title ?? "") === "Line Officer Election — 2027 Term",
       )(page);
-      const tab = page.locator("#tab-voting");
-      await tab.waitFor({ timeout: 10_000 });
-      await tab.click({ timeout: 10_000 });
       await page.waitForTimeout(800);
     },
     fullPage: true,
@@ -20649,13 +20688,12 @@ export const SHOTS = [
     doc: "02-training.md",
     line: 876,
     anchor: "training-session edit flow with requirement, course, and program",
-    alt: "Step 2 of the training-session wizard: an existing course selected, and the category, requirement and program links under a plain-language line saying what attendance will advance",
+    alt: "The training-event form's Training Info step: From the Course Library chosen with a course and its card, the training type and credit hours it filled in, the category, requirement and program links under a line saying what attendance will advance, and the certification and Training completion settings",
     route: "/training/admin?page=records&tab=sessions",
     prepare: async (page) => {
-      // Rewritten 2026-11-11 for the training-event form, and not yet run
-      // against it (SCREENSHOT_CURRENCY.md marks this shot REPLACE). Step 1
-      // needs a title and times before Next moves, and the course is three
-      // radios with "No course yet" selected at first; see 02-80.
+      // Driven through the training-event form. Step 1 needs a title and
+      // times before Next moves, and the course is three radios with "No
+      // course yet" selected at first; see 02-80.
       await openSessionTrainingInfo(page);
       await page
         .getByRole("radio", { name: /^From the Course Library/ })
@@ -21492,9 +21530,9 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 3436,
     anchor: "The Hours view in My Shifts",
-    alt: "My Shifts on its Hours view: cards for this month, this year and all time, above the month-by-month table with its vs. busiest month bar column",
+    alt: "My Shifts on its Hours view: This month, this year and all-time cards with the two-colour split bar, the year picker between its Previous year and Next year arrows, the year-at-a-glance chart with its Busiest month, Months with shifts and Avg per active month tiles, and All shifts below",
     route: "/scheduling?tab=my-shifts",
-    expect: "busiest month",
+    expect: "at a glance",
     prepare: clickByName(/^Hours$/),
     fullPage: true,
   },
@@ -22194,10 +22232,11 @@ export const SHOTS = [
     line: 522,
     anchor:
       'My Shifts → Hours as a member → the "Shifts with other departments" card',
-    alt: "The Shifts with other departments card on a member's Hours view: two counted shifts with their times, hours and unit, one Not counted entry with the officer's reason, and the Log outside shift button",
+    alt: "All shifts on a member's Hours view: the All, department and Other departments filter, Log outside shift, and the year opened to a department shift labelled with the department's name beside outside shifts on a blue edge, one of them Not counted with the officer's reason",
     route: "/scheduling?tab=my-shifts",
     auth: "member",
-    selector: 'section[aria-labelledby="my-external-shifts-heading"]',
+    // The card this used to picture was folded into All shifts (2026-11-20).
+    selector: 'section[aria-labelledby="member-shift-history-heading"]',
     expect: "Not counted",
     prepare: async (page) => {
       await clickByName(/^Hours$/)(page);
@@ -22279,7 +22318,7 @@ export const SHOTS = [
     line: 560,
     anchor:
       "Member at /scheduling?tab=my-shifts&view=hours. The 'Shifts with other departments' section",
-    alt: "A member's Hours view: the This month card reading +24 hrs with other departments above the monthly table, and the Shifts with other departments section beneath with two counted entries and one Not counted with its reason",
+    alt: "A member's Hours view with outside hours: each card's figure includes them, split under the bar into the department's own hours and +24 with other departments, above the year chart and All shifts with one Not counted entry",
     route: "/scheduling?tab=my-shifts",
     auth: "member",
     fullPage: true,
@@ -25037,25 +25076,56 @@ export const SHOTS = [
     alt: "Items Not Seen at its default of 180 days and All categories: items never handled listed first as Never, then two items last seen on a date with Returned or Assigned and the days ago, and Download CSV enabled",
     route: "/inventory/admin/not-seen",
     expect: "Never",
-    viewport: { width: 1280, height: 900 },
-    // The seeder can only create records as of today, so no item is 212 days
-    // stale. The report is answered with three of its own never-handled items
-    // and two given the history an item handled the previous winter would
-    // have; the screen, its filters and its wording are the real ones.
+    // Tall enough for the five rows: the page header and filters put the
+    // first row near 1000px, below a 900px frame.
+    viewport: { width: 1280, height: 1400 },
+    // The seeder can only create records as of today, and creating an item
+    // now counts as its first sighting, so the real report lists none of the
+    // demo's items at any window. The rows are built from the department's
+    // own items instead: three as an item recorded before creation counted
+    // (never seen), two given the history an item handled the previous
+    // winter would have. The screen, its filters and its wording are real.
     beforeNavigate: async (page) => {
       await page.route(
         /\/api\/v1\/inventory\/not-seen(\?.*)?$/,
         async (route) => {
           const response = await route.fetch();
           const body = await response.json();
-          const never = (body.items ?? [])
-            .filter((row) => row.last_seen_at === null)
-            .slice(0, 5);
+          const origin = new URL(route.request().url()).origin;
+          const get = async (path) =>
+            (await page.request.get(`${origin}/api/v1${path}`)).json();
+          const [list, categories, areas] = await Promise.all([
+            get("/inventory/items?limit=50"),
+            get("/inventory/categories"),
+            get("/inventory/storage-areas"),
+          ]);
+          const categoryName = new Map(
+            (categories ?? []).map((c) => [String(c.id), c.name]),
+          );
+          const areaName = new Map(
+            (areas ?? []).map((a) => [String(a.id), a.name]),
+          );
+          const rows = (list.items ?? [])
+            .filter((item) => item.status === "available")
+            .slice(0, 5)
+            .map((item) => ({
+              id: String(item.id),
+              name: item.name,
+              serial_number: item.serial_number ?? null,
+              asset_tag: item.asset_tag ?? null,
+              category_name: categoryName.get(String(item.category_id)) ?? null,
+              status: item.status,
+              storage_area_name:
+                areaName.get(String(item.storage_area_id)) ?? null,
+              last_seen_at: null,
+              last_seen_source: null,
+              days_since_seen: null,
+            }));
           const history = [
             { days: 212, source: "return" },
             { days: 301, source: "assignment" },
           ];
-          const dated = never.slice(-2).map((row, index) => ({
+          const dated = rows.slice(3).map((row, index) => ({
             ...row,
             last_seen_at: new Date(
               Date.now() - history[index].days * 24 * 60 * 60 * 1000,
@@ -25063,10 +25133,7 @@ export const SHOTS = [
             last_seen_source: history[index].source,
             days_since_seen: history[index].days,
           }));
-          const items = [
-            ...never.slice(0, 3),
-            ...dated.sort((a, b) => a.days_since_seen - b.days_since_seen),
-          ];
+          const items = [...rows.slice(0, 3), ...dated];
           await route.fulfill({
             status: 200,
             contentType: "application/json",
