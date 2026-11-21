@@ -40,6 +40,7 @@ const PastEventsTab = lazyWithRetry(() => import('./PastEventsTab'));
 const EventRequestsTab = lazyWithRetry(() => import('./EventRequestsTab'));
 const EventsSettingsTab = lazyWithRetry(() => import('./EventsSettingsTab'));
 const EventCardCheckinsTab = lazyWithRetry(() => import('./EventCardCheckinsTab'));
+const ApparatusEventsTab = lazyWithRetry(() => import('./ApparatusEventsTab'));
 
 const TabLoading = () => (
   <div className="flex h-64 items-center justify-center">
@@ -59,6 +60,8 @@ const TabContent: React.FC<{ tab: EventsAdminTab; onMetricsSaved: () => void }> 
       return <AnalyticsDashboardPage embedded />;
     case 'community':
       return <CommunityEngagementTab />;
+    case 'apparatus_events':
+      return <ApparatusEventsTab />;
     case 'card_checkins':
       return <EventCardCheckinsTab />;
     case 'settings':

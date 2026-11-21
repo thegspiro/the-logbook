@@ -53,6 +53,14 @@ _REVOKED_SINCE_MODULES = ("apparatus",)
 _REVOKED_SINCE_PERMISSIONS = ("apparatus.view",)
 
 
+#: Grants a LATER revision added to the seeded set — ``3f8a1c6e2b94`` gives
+#: every seeded position holding ``events.view`` ``apparatus_events.signup``,
+#: through its own backfill. A row these revisions produce does not hold it
+#: yet, so it is subtracted from today's registry, the mirror of the
+#: revocations above.
+_ADDED_SINCE_PERMISSIONS = ("apparatus_events.signup",)
+
+
 def _emt_modules():
     """The modules EMT had a checkbox for when this migration ran.
 
@@ -80,9 +88,9 @@ def _registry_at_this_point():
     today's. A later revocation leaves today's registry one grant shorter than
     the row this one legitimately produces.
     """
-    return set(DEFAULT_POSITIONS["emt"]["permissions"]) | set(
-        _REVOKED_SINCE_PERMISSIONS
-    )
+    return (
+        set(DEFAULT_POSITIONS["emt"]["permissions"]) | set(_REVOKED_SINCE_PERMISSIONS)
+    ) - set(_ADDED_SINCE_PERMISSIONS)
 
 
 def _editor_output():
@@ -225,7 +233,9 @@ class TestTheRestoredSet:
         changes, this catches it rather than letting the migration quietly
         restore the wrong thing.
         """
-        seeded = set(DEFAULT_POSITIONS["emt"]["permissions"])
+        seeded = set(DEFAULT_POSITIONS["emt"]["permissions"]) - set(
+            _ADDED_SINCE_PERMISSIONS
+        )
 
         assert set(_migration()._RESTORE) == seeded - _editor_output()
 

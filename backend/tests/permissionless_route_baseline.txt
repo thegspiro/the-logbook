@@ -730,11 +730,23 @@ app/api/v1/endpoints/scheduling.py::review_time_off_request
 # request; list-me returns the caller's own; list and get return only requests
 # the caller may decide (every one for members.manage), 404 for any other; a
 # vote by anyone outside the request's approvers is 404 (409 for the member or
-# a members.manage holder who is not one of them).
+# a members.manage holder who is not one of them). Added 2026-11-16: question
+# and changes act only for the request's approvers, on the same terms as a
+# vote; answer and changes/respond only for the request's own member (404 for
+# anyone else); summary returns counts for the caller alone and no request.
+# Added 2026-11-17: end-early acts only on a leave whose user_id is the
+# caller's, in the caller's organization (404 for any other), and only where
+# the department takes leave requests.
+app/api/v1/endpoints/leave_requests.py::answer_leave_request_question
+app/api/v1/endpoints/leave_requests.py::ask_leave_request_question
 app/api/v1/endpoints/leave_requests.py::create_leave_request
+app/api/v1/endpoints/leave_requests.py::end_own_leave_early
 app/api/v1/endpoints/leave_requests.py::get_leave_request
 app/api/v1/endpoints/leave_requests.py::get_leave_request_config
+app/api/v1/endpoints/leave_requests.py::get_leave_request_summary
 app/api/v1/endpoints/leave_requests.py::list_leave_requests_to_decide
 app/api/v1/endpoints/leave_requests.py::list_my_leave_requests
+app/api/v1/endpoints/leave_requests.py::propose_leave_request_changes
+app/api/v1/endpoints/leave_requests.py::respond_to_leave_request_changes
 app/api/v1/endpoints/leave_requests.py::vote_on_leave_request
 app/api/v1/endpoints/leave_requests.py::withdraw_leave_request

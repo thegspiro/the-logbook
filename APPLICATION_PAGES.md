@@ -176,7 +176,7 @@ Complete reference of all pages in the application, organized by module.
 | `/members/my-crew`          | My Crew                 | Authenticated |
 | `/members/leave-requests`   | Leave Requests          | Authenticated |
 
-> **Leave Requests (`/members/leave-requests`)** _(added 2026-11-14)_. A member asks for a leave of absence here, when the department has turned requests on under **Members Settings — Leave of Absence**, and sees where their requests stand. Members who may decide a request see it under **To decide**: the department's chosen approver positions, or, when nobody else holds them, the Chief, then everyone with `members.manage`. Authenticated with no permission: who decides is not a permission, and the server lists each caller only the requests they may see (`GET /users/leave-requests`, `GET /users/leave-requests/me`). The member's reason is shown to them and their approvers only, and is never emailed.
+> **Leave Requests (`/members/leave-requests`)** _(added 2026-11-14)_. A member asks for a leave of absence here, when the department has turned requests on under **Members Settings — Leave of Absence**, and sees where their requests stand. Members who may decide a request see it under **To decide**: the department's chosen approver positions, or, when nobody else holds them, the Chief, then everyone with `members.manage`. Authenticated with no permission: who decides is not a permission, and the server lists each caller only the requests they may see (`GET /users/leave-requests`, `GET /users/leave-requests/me`). The member's reason is shown to them and their approvers only, and is never emailed. _(2026-11-16)_ The menu offers the page when the department takes requests or one waits on the member (`GET /users/leave-requests/summary`); approvers can ask a question or approve with changed dates, and the member answers or accepts there. _(2026-11-17)_ A member on leave can end it early from **Your leave** (`POST /users/leave-requests/my-leaves/{leave_id}/end-early`, their own leave only).
 
 > **My Crew (`/members/my-crew`)** _(added 2026-11-04)_. The members the signed-in member supervises today, by the dated Reports To assignments (owner decision 2026-11-01, crew views). Authenticated with no permission: the assignment is the grant, and the server lists only the caller's current crew (`GET /users/me/crew`). Each card shows the member's training standing from `GET /training/compliance-summary/{id}` and links to their training records; the page also lists the evaluations written about the crew (`GET /evaluations/crew`). The menu offers My Crew only to a member who supervises someone. Medical records and contact details are not part of crew access.
 
@@ -351,17 +351,20 @@ Set per event on **Edit Event → Check-In Settings**. Both default to off.
 
 Requires `events.manage` permission. Drawn with the same two-level navigation as Training, Scheduling and Inventory Administration: area cards above a strip of the chosen area's pages (the shared AdminHubAreaNav, with the areas declared in eventsAdminTabs). The URL is `?tab=<page>`; the area is derived from the page, so a link never names it.
 
-| Area               | `?tab=`         | Label                |
-| ------------------ | --------------- | -------------------- |
-| Events             | `create`        | Create Event         |
-| Events             | `past_events`   | Past Events          |
-| Community Outreach | `requests`      | Requests             |
-| Community Outreach | `community`     | Community Engagement |
-| Check-ins          | `analytics`     | QR Code Analytics    |
-| Check-ins          | `card_checkins` | Card Check-ins       |
-| Settings           | `settings`      | Settings             |
+| Area               | `?tab=`            | Label                |
+| ------------------ | ------------------ | -------------------- |
+| Events             | `create`           | Create Event         |
+| Events             | `past_events`      | Past Events          |
+| Community Outreach | `requests`         | Requests             |
+| Community Outreach | `community`        | Community Engagement |
+| Community Outreach | `apparatus_events` | Apparatus Events     |
+| Check-ins          | `analytics`        | QR Code Analytics    |
+| Check-ins          | `card_checkins`    | Card Check-ins       |
+| Settings           | `settings`         | Settings             |
 
 A missing or unknown `?tab=` opens Create Event.
+
+> _(2026-11-16)_ **Apparatus Events** (`?tab=apparatus_events`) is outreach that rolls an apparatus with a named crew but is not a shift — a Santamobile run, a parade. Templates (apparatus, free-text seats, a Driver seat's EVOC rule, an Admin Hours category) are scheduled onto one or many nights; each night is an ordinary event whose crew card sits on its event page, and appears on Shift Scheduling as a read-only "Outreach · not a shift" chip. Managing it needs `apparatus_events.manage`; taking a seat needs `apparatus_events.signup`.
 
 | Route                           | Page                                 | Access          |
 | ------------------------------- | ------------------------------------ | --------------- |

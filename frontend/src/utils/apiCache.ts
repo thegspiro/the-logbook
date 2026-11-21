@@ -108,6 +108,7 @@ const UNCACHEABLE_PREFIXES = [
   '/minutes-records/', // meeting minutes with potentially sensitive discussions
   '/meetings', // meeting list + detail: attendee PII, notes/motions/agenda (no trailing slash covers both)
   '/event-requests', // external event-request intake: contact name/email/phone, venue address (PII)
+  '/apparatus-events/', // crew boards and seat pickers: which member holds which seat, member names (PII)
   '/events/missed-mandatory', // caller's own missed mandatory attendance (per-member compliance)
   '/forms', // form defs carry admin notification emails + creator id; no trailing slash so GET /forms list is covered too
   '/inventory/users/', // member-specific inventory, issuances & history (PII)

@@ -9,6 +9,8 @@
 import React from 'react';
 import { Calendar, Check, ChevronLeft, Info, Repeat } from 'lucide-react';
 import type { ShiftRecord } from '../../../modules/scheduling';
+import type { CalendarOutreachItem } from '../../../types/apparatusEvent';
+import OutreachDayCard from './OutreachDayCard';
 import type { SwapRequest } from '../../../types/scheduling';
 import { buildSeats, memberInitials, shiftCrewName, toDateKey } from '../../../modules/scheduling/utils/shiftBoard';
 import { positionLabel } from '../../../modules/scheduling/utils/positionLabels';
@@ -18,6 +20,8 @@ import ShiftSeatList from './ShiftSeatList';
 export interface PhoneDaySheetProps {
   selectedDate: Date;
   shifts: ShiftRecord[];
+  /** The day's apparatus outreach, shown apart from its shifts. */
+  outreach?: CalendarOutreachItem[] | undefined;
   currentUserId: string | null | undefined;
   timezone: string;
   eligibleByShift: Record<string, string[]>;
@@ -44,6 +48,7 @@ export interface PhoneDaySheetProps {
 export const PhoneDaySheet: React.FC<PhoneDaySheetProps> = ({
   selectedDate,
   shifts,
+  outreach = [],
   currentUserId,
   timezone,
   eligibleByShift,
@@ -174,6 +179,12 @@ export const PhoneDaySheet: React.FC<PhoneDaySheetProps> = ({
           </p>
         </div>
       </div>
+
+      {outreach.length > 0 && (
+        <div className="mb-3">
+          <OutreachDayCard items={outreach} timezone={timezone} />
+        </div>
+      )}
 
       {shifts.length === 0 ? (
         <p className="text-theme-text-muted border-theme-surface-border rounded-lg border border-dashed px-4 py-8 text-center text-sm">

@@ -55,6 +55,14 @@ _SEEDED_GRANTS_TS = (
 _REVOKED_SINCE_MODULES = ("apparatus",)
 
 
+#: Grants a LATER revision added to the seeded set — ``3f8a1c6e2b94`` gives
+#: every seeded position holding ``events.view`` ``apparatus_events.signup``,
+#: through its own backfill. A row these revisions produce does not hold it
+#: yet, so it is subtracted from today's registry, the mirror of the
+#: revocations above.
+_ADDED_SINCE_PERMISSIONS = ("apparatus_events.signup",)
+
+
 def _emt_modules():
     """The modules EMT had a checkbox for when these revisions ran.
 
@@ -81,9 +89,10 @@ def _registry_at_this_point():
     ``b6e4a0d17c93`` later revoked ``apparatus.view``, which leaves today's
     registry one grant shorter than the row this pair legitimately produces.
     """
-    return set(DEFAULT_POSITIONS["emt"]["permissions"]) | {
-        f"{module}.view" for module in _REVOKED_SINCE_MODULES
-    }
+    return (
+        set(DEFAULT_POSITIONS["emt"]["permissions"])
+        | {f"{module}.view" for module in _REVOKED_SINCE_MODULES}
+    ) - set(_ADDED_SINCE_PERMISSIONS)
 
 
 def _editor_output():
@@ -270,7 +279,9 @@ class TestComposedWithItsPredecessor:
 class TestTheRestoredSet:
     def test_it_is_exactly_what_the_editor_could_not_express(self):
         """Derived here, frozen there — a drift in either is a failure."""
-        seeded = set(DEFAULT_POSITIONS["emt"]["permissions"])
+        seeded = set(DEFAULT_POSITIONS["emt"]["permissions"]) - set(
+            _ADDED_SINCE_PERMISSIONS
+        )
 
         assert set(_migration()._RESTORE) == seeded - _editor_output()
 

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**391 tables · 6225 columns · 1303 foreign keys**
+**398 tables · 6300 columns · 1328 foreign keys**
 
 ---
 
@@ -103,6 +103,19 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`equipment_check_templates`](#equipment_check_templates) | `EquipmentCheckTemplate` | 15 | Master template for an equipment checklist. |
 | [`evoc_levels`](#evoc_levels) | `EvocLevel` | 13 | Organization-configurable EVOC (Emergency Vehicle Operator Course) levels. |
 | [`template_change_logs`](#template_change_logs) | `TemplateChangeLog` | 11 | Granular audit trail for equipment check template edits. |
+
+### Apparatus_Event
+
+<sub>`app/models/apparatus_event.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`apparatus_event_template_seats`](#apparatus_event_template_seats) | `ApparatusEventTemplateSeat` | 8 | A named job on a template's apparatus, ``count`` seats wide ("Elf", |
+| [`apparatus_event_template_units`](#apparatus_event_template_units) | `ApparatusEventTemplateUnit` | 5 | One apparatus on a template, with its seats. |
+| [`apparatus_event_templates`](#apparatus_event_templates) | `ApparatusEventTemplate` | 17 | A reusable plan for an apparatus event, scheduled onto any number of |
+| [`event_apparatus_plans`](#event_apparatus_plans) | `EventApparatusPlan` | 10 | Marks an ``Event`` as an apparatus night and carries the rules copied |
+| [`event_apparatus_seats`](#event_apparatus_seats) | `EventApparatusSeat` | 12 | One seat on one night's apparatus — open when ``user_id`` is NULL. |
+| [`event_apparatus_units`](#event_apparatus_units) | `EventApparatusUnit` | 7 | One apparatus committed to one night. |
 
 ### Attendance Waiver Requests
 
@@ -474,8 +487,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`leave_notice_sends`](#leave_notice_sends) | `LeaveNoticeSend` | 5 | A scheduled leave email claimed before it is sent. |
-| [`leave_request_votes`](#leave_request_votes) | `LeaveRequestVote` | 7 | One approver's vote on one request. One per approver, by constraint. |
-| [`leave_requests`](#leave_requests) | `LeaveRequest` | 14 | One member's request for a leave of absence. |
+| [`leave_request_messages`](#leave_request_messages) | `LeaveRequestMessage` | 8 | The conversation on a request: questions, answers and changed dates. |
+| [`leave_request_votes`](#leave_request_votes) | `LeaveRequestVote` | 8 | One approver's vote on one request. One per approver, by constraint. |
+| [`leave_requests`](#leave_requests) | `LeaveRequest` | 21 | One member's request for a leave of absence. |
 
 ### Legal
 
@@ -2019,6 +2033,149 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_tmpl_changelog_org` (`organization_id`)
 - `idx_tmpl_changelog_template` (`template_id`)
 
+## Apparatus_Event
+
+### `apparatus_event_template_seats`
+
+**ApparatusEventTemplateSeat** · `app/models/apparatus_event.py`
+
+> A named job on a template's apparatus, ``count`` seats wide ("Elf", 4). Scheduling expands it into ``count`` individual night seats.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `unit_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus_event_template_units.id` ON DELETE CASCADE |
+| `name` | VARCHAR(100) | no |  |  |  |
+| `seat_type` | VARCHAR(20) | no |  | `general` |  |
+| `count` | INTEGER | no |  | `1` |  |
+| `note` | VARCHAR(300) | yes |  |  |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_apparatus_event_template_seats_unit` (`unit_id`)
+
+### `apparatus_event_template_units`
+
+**ApparatusEventTemplateUnit** · `app/models/apparatus_event.py`
+
+> One apparatus on a template, with its seats.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `template_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus_event_templates.id` ON DELETE CASCADE |
+| `apparatus_id` | VARCHAR(36) | no | FK |  | → `apparatus.id` ON DELETE CASCADE |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_apparatus_event_template_units_template` (`template_id`)
+
+### `apparatus_event_templates`
+
+**ApparatusEventTemplate** · `app/models/apparatus_event.py`
+
+> A reusable plan for an apparatus event, scheduled onto any number of nights. Editing a template changes nights scheduled afterwards only — a scheduled night copies the plan, so it can be adjusted on its own.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(200) | no |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `event_type` | VARCHAR(50) | no |  | `'public_education'` |  |
+| `default_start_time` | VARCHAR(5) | yes |  |  |  |
+| `duration_minutes` | INTEGER | no |  | `180` |  |
+| `location` | VARCHAR(300) | yes |  |  |  |
+| `admin_hours_category_id` | VARCHAR(36) | yes | FK |  | → `admin_hours_categories.id` ON DELETE SET NULL |
+| `evoc_mode` | VARCHAR(20) | no |  | `enforce` |  |
+| `allow_self_signup` | BOOL | no |  | `1` |  |
+| `show_on_schedule` | BOOL | no |  | `1` |  |
+| `duplicated_from_id` | VARCHAR(36) | yes | FK |  | → `apparatus_event_templates.id` ON DELETE SET NULL |
+| `is_archived` | BOOL | no |  | `0` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_apparatus_event_templates_org` (`organization_id`, `is_archived`)
+
+### `event_apparatus_plans`
+
+**EventApparatusPlan** · `app/models/apparatus_event.py`
+
+> Marks an ``Event`` as an apparatus night and carries the rules copied from its template. Its presence is what redirects the night's hour credit to ``admin_hours_category_id`` in place of the event-type mapping — see ``AdminHoursService.crew_hour_category_overrides``.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `event_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `events.id` ON DELETE CASCADE |
+| `template_id` | VARCHAR(36) | yes | FK |  | → `apparatus_event_templates.id` ON DELETE SET NULL |
+| `series_id` | VARCHAR(36) | no |  |  |  |
+| `admin_hours_category_id` | VARCHAR(36) | yes | FK |  | → `admin_hours_categories.id` ON DELETE SET NULL |
+| `evoc_mode` | VARCHAR(20) | no |  | `enforce` |  |
+| `allow_self_signup` | BOOL | no |  | `1` |  |
+| `show_on_schedule` | BOOL | no |  | `1` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_event_apparatus_plans_series` (`organization_id`, `series_id`)
+- UNIQUE `ux_event_apparatus_plans_event` (`event_id`)
+
+### `event_apparatus_seats`
+
+**EventApparatusSeat** · `app/models/apparatus_event.py`
+
+> One seat on one night's apparatus — open when ``user_id`` is NULL.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `event_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `events.id` ON DELETE CASCADE |
+| `unit_id` | VARCHAR(36) | no | FK, IDX |  | → `event_apparatus_units.id` ON DELETE CASCADE |
+| `name` | VARCHAR(100) | no |  |  |  |
+| `seat_type` | VARCHAR(20) | no |  | `general` |  |
+| `note` | VARCHAR(300) | yes |  |  |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `assignment_method` | VARCHAR(20) | yes |  |  |  |
+| `assigned_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `assigned_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- `ix_event_apparatus_seats_org_user` (`organization_id`, `user_id`)
+- `ix_event_apparatus_seats_unit` (`unit_id`)
+- UNIQUE `ux_event_apparatus_seats_event_user` (`event_id`, `user_id`)
+
+### `event_apparatus_units`
+
+**EventApparatusUnit** · `app/models/apparatus_event.py`
+
+> One apparatus committed to one night.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `plan_id` | VARCHAR(36) | no | FK |  | → `event_apparatus_plans.id` ON DELETE CASCADE |
+| `event_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `events.id` ON DELETE CASCADE |
+| `apparatus_id` | VARCHAR(36) | no | FK |  | → `apparatus.id` ON DELETE CASCADE |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_event_apparatus_units_apparatus` (`organization_id`, `apparatus_id`)
+- UNIQUE `ux_event_apparatus_units_event_app` (`event_id`, `apparatus_id`)
+
 ## Attendance Waiver Requests
 
 ### `attendance_waiver_attachments`
@@ -2867,7 +3024,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `guest_headcount_reminder`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `leave_request_for_member`, `leave_request_update`, `leave_request_reminder`, `leave_request_escalation`, `leave_ended_early`, `guest_headcount_reminder`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -2931,7 +3088,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `guest_headcount_reminder`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `leave_request_for_member`, `leave_request_update`, `leave_request_reminder`, `leave_request_escalation`, `leave_ended_early`, `guest_headcount_reminder`, `custom`) | no |  |  |  |
 | `to_emails` | TEXT | no |  |  |  |
 | `cc_emails` | TEXT | yes |  |  |  |
 | `bcc_emails` | TEXT | yes |  |  |  |
@@ -7941,6 +8098,31 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_leave_notice_send` (`organization_id`, `kind`, `key`)
 
+### `leave_request_messages`
+
+**LeaveRequestMessage** · `app/models/leave_request.py`
+
+> The conversation on a request: questions, answers and changed dates. ``body`` is encrypted at rest: a question about a leave, and its answer, can be as personal as the reason.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `request_id` | VARCHAR(36) | no | FK |  | → `leave_requests.id` ON DELETE CASCADE |
+| `author_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `kind` | ENUM(`question`, `answer`, `proposal`, `proposal_accepted`, `proposal_declined`) | no |  |  |  |
+| `body` | TEXT | yes |  |  |  |
+| `position` | INTEGER | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_leave_request_messages_org_request` (`organization_id`, `request_id`)
+
+**Constraints**
+
+- UNIQUE `uq_leave_request_message_position` (`request_id`, `position`)
+
 ### `leave_request_votes`
 
 **LeaveRequestVote** · `app/models/leave_request.py`
@@ -7953,6 +8135,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `request_id` | VARCHAR(36) | no | FK, IDX |  | → `leave_requests.id` ON DELETE CASCADE |
 | `voter_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `round` | INTEGER | no |  | `1` |  |
 | `vote` | ENUM(`approve`, `deny`) | no |  |  |  |
 | `note` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
@@ -7964,13 +8147,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Constraints**
 
-- UNIQUE `uq_leave_request_vote` (`request_id`, `voter_id`)
+- UNIQUE `uq_leave_request_vote_round` (`request_id`, `voter_id`, `round`)
 
 ### `leave_requests`
 
 **LeaveRequest** · `app/models/leave_request.py`
 
-> One member's request for a leave of absence. ``decision_rule`` is the department's rule when the request was made, kept on the row so a later change to the setting does not move the bar for a request already being voted on. ``reason`` is encrypted at rest: members explain a leave in their own words, often medical or family detail. ``leave_id`` is the leave an approval created; SET NULL so the request stays on record if that leave is later deleted.
+> One member's request for a leave of absence. ``decision_rule`` is the department's rule when the request was made, kept on the row so a later change to the setting does not move the bar for a request already being voted on. ``reason`` is encrypted at rest: members explain a leave in their own words, often medical or family detail. ``leave_id`` is the leave an approval created; SET NULL so the request stays on record if that leave is later deleted. ``extends_leave_id`` is set when the dates overlap an active leave or start the day after it ends: approving the request moves that leave's dates rather than recording a second, overlapping one. **Two things pause voting.** ``info_requested_at`` is set while an approver's question waits on the member's answer; ``proposed_at`` while an approver's changed dates wait on the member to accept or decline them (``proposed_end_date`` NULL then means no end date). Accepting moves the request onto the proposed dates and starts a new ``vote_round``: votes cast on the old dates no longer count.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -7985,6 +8168,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `decision_rule` | ENUM(`any`, `majority`, `all`) | no |  | `any` |  |
 | `decided_at` | DATETIME | yes |  |  |  |
 | `decided_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `extends_leave_id` | VARCHAR(36) | yes | FK |  | → `member_leaves_of_absence.id` ON DELETE SET NULL |
+| `info_requested_at` | DATETIME | yes |  |  |  |
+| `proposed_start_date` | DATE | yes |  |  |  |
+| `proposed_end_date` | DATE | yes |  |  |  |
+| `proposed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `proposed_at` | DATETIME | yes |  |  |  |
+| `vote_round` | INTEGER | no |  | `1` |  |
 | `leave_id` | VARCHAR(36) | yes | FK |  | → `member_leaves_of_absence.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -13389,7 +13579,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (476 references)
+### → `users` (481 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13410,6 +13600,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus_custom_fields` | `created_by` | SET NULL | yes |
 | `apparatus_documents` | `uploaded_by` | SET NULL | yes |
 | `apparatus_equipment` | `assigned_by` | SET NULL | yes |
+| `apparatus_event_templates` | `created_by` | SET NULL | yes |
 | `apparatus_fuel_logs` | `recorded_by` | SET NULL | yes |
 | `apparatus_location_history` | `created_by` | SET NULL | yes |
 | `apparatus_maintenance` | `completed_by` | SET NULL | yes |
@@ -13509,6 +13700,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `evaluations` | `created_by` | SET NULL | yes |
 | `evaluations` | `evaluator_id` | SET NULL | yes |
 | `evaluations` | `member_id` | RESTRICT | no |
+| `event_apparatus_seats` | `assigned_by` | SET NULL | yes |
+| `event_apparatus_seats` | `user_id` | SET NULL | yes |
 | `event_attendance_petitions` | `reviewed_by` | SET NULL | yes |
 | `event_attendance_petitions` | `user_id` | CASCADE | no |
 | `event_external_attendees` | `created_by` | SET NULL | yes |
@@ -13647,8 +13840,10 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `knowledge_test_attempts` | `user_id` | CASCADE | no |
 | `knowledge_tests` | `created_by` | SET NULL | yes |
 | `label_printers` | `created_by_id` | SET NULL | yes |
+| `leave_request_messages` | `author_id` | SET NULL | yes |
 | `leave_request_votes` | `voter_id` | CASCADE | no |
 | `leave_requests` | `decided_by` | SET NULL | yes |
+| `leave_requests` | `proposed_by` | SET NULL | yes |
 | `leave_requests` | `user_id` | CASCADE | no |
 | `legal_document_revisions` | `created_by` | SET NULL | yes |
 | `legal_document_revisions` | `edited_by` | SET NULL | yes |
@@ -13870,7 +14065,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (318 references)
+### → `organizations` (323 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13885,6 +14080,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus_custom_fields` | `organization_id` | CASCADE | no |
 | `apparatus_documents` | `organization_id` | CASCADE | no |
 | `apparatus_equipment` | `organization_id` | CASCADE | no |
+| `apparatus_event_templates` | `organization_id` | CASCADE | no |
 | `apparatus_fuel_logs` | `organization_id` | CASCADE | no |
 | `apparatus_location_history` | `organization_id` | CASCADE | no |
 | `apparatus_maintenance` | `organization_id` | CASCADE | no |
@@ -13951,6 +14147,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `evaluation_template_versions` | `organization_id` | CASCADE | no |
 | `evaluation_templates` | `organization_id` | CASCADE | no |
 | `evaluations` | `organization_id` | CASCADE | no |
+| `event_apparatus_plans` | `organization_id` | CASCADE | no |
+| `event_apparatus_seats` | `organization_id` | CASCADE | no |
+| `event_apparatus_units` | `organization_id` | CASCADE | no |
 | `event_attendance_petitions` | `organization_id` | CASCADE | no |
 | `event_external_attendees` | `organization_id` | CASCADE | no |
 | `event_hour_mappings` | `organization_id` | CASCADE | no |
@@ -14046,6 +14245,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `knowledge_tests` | `organization_id` | CASCADE | no |
 | `label_printers` | `organization_id` | CASCADE | no |
 | `leave_notice_sends` | `organization_id` | CASCADE | no |
+| `leave_request_messages` | `organization_id` | CASCADE | no |
 | `leave_request_votes` | `organization_id` | CASCADE | no |
 | `leave_requests` | `organization_id` | CASCADE | no |
 | `legal_document_revisions` | `organization_id` | CASCADE | no |
@@ -14220,6 +14420,55 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `return_requests` | `item_id` | CASCADE | no |
 | `store_products` | `inventory_item_id` | SET NULL | yes |
 
+### → `events` (20 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `admin_hours_entries` | `source_event_id` | SET NULL | yes |
+| `attendance_waiver_requests` | `event_id` | SET NULL | yes |
+| `course_cohort_classes` | `event_id` | SET NULL | yes |
+| `elections` | `event_id` | SET NULL | yes |
+| `event_apparatus_plans` | `event_id` | CASCADE | no |
+| `event_apparatus_seats` | `event_id` | CASCADE | no |
+| `event_apparatus_units` | `event_id` | CASCADE | no |
+| `event_attendance_petitions` | `event_id` | CASCADE | no |
+| `event_external_attendees` | `event_id` | CASCADE | no |
+| `event_requests` | `event_id` | SET NULL | yes |
+| `event_rsvps` | `event_id` | CASCADE | no |
+| `events` | `recurrence_parent_id` | RESTRICT | yes |
+| `fundraising_events` | `event_id` | SET NULL | yes |
+| `meeting_minutes` | `event_id` | SET NULL | yes |
+| `meetings` | `event_id` | SET NULL | yes |
+| `prospect_event_links` | `event_id` | CASCADE | no |
+| `rsvp_history` | `event_id` | CASCADE | no |
+| `training_approvals` | `event_id` | CASCADE | no |
+| `training_records` | `source_event_id` | SET NULL | yes |
+| `training_sessions` | `event_id` | CASCADE | no |
+
+### → `apparatus` (19 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `apparatus_component_notes` | `apparatus_id` | CASCADE | no |
+| `apparatus_components` | `apparatus_id` | CASCADE | no |
+| `apparatus_documents` | `apparatus_id` | CASCADE | no |
+| `apparatus_equipment` | `apparatus_id` | CASCADE | no |
+| `apparatus_event_template_units` | `apparatus_id` | CASCADE | no |
+| `apparatus_fuel_logs` | `apparatus_id` | CASCADE | no |
+| `apparatus_location_history` | `apparatus_id` | CASCADE | no |
+| `apparatus_maintenance` | `apparatus_id` | CASCADE | no |
+| `apparatus_nfpa_compliance` | `apparatus_id` | CASCADE | no |
+| `apparatus_operators` | `apparatus_id` | CASCADE | no |
+| `apparatus_photos` | `apparatus_id` | CASCADE | no |
+| `apparatus_status_history` | `apparatus_id` | CASCADE | no |
+| `driver_exceptions` | `apparatus_id` | CASCADE | yes |
+| `equipment_check_templates` | `apparatus_id` | CASCADE | yes |
+| `event_apparatus_units` | `apparatus_id` | CASCADE | no |
+| `purchase_requests` | `apparatus_id` | SET NULL | yes |
+| `skill_checkoffs` | `apparatus_id` | SET NULL | yes |
+| `training_records` | `apparatus_id` | SET NULL | yes |
+| `training_sessions` | `apparatus_id` | SET NULL | yes |
+
 ### → `facilities` (18 references)
 
 | From table | Column | On delete | Nullable |
@@ -14242,50 +14491,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `facility_utility_accounts` | `facility_id` | CASCADE | no |
 | `locations` | `facility_id` | SET NULL | yes |
 | `purchase_requests` | `facility_id` | SET NULL | yes |
-
-### → `apparatus` (17 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `apparatus_component_notes` | `apparatus_id` | CASCADE | no |
-| `apparatus_components` | `apparatus_id` | CASCADE | no |
-| `apparatus_documents` | `apparatus_id` | CASCADE | no |
-| `apparatus_equipment` | `apparatus_id` | CASCADE | no |
-| `apparatus_fuel_logs` | `apparatus_id` | CASCADE | no |
-| `apparatus_location_history` | `apparatus_id` | CASCADE | no |
-| `apparatus_maintenance` | `apparatus_id` | CASCADE | no |
-| `apparatus_nfpa_compliance` | `apparatus_id` | CASCADE | no |
-| `apparatus_operators` | `apparatus_id` | CASCADE | no |
-| `apparatus_photos` | `apparatus_id` | CASCADE | no |
-| `apparatus_status_history` | `apparatus_id` | CASCADE | no |
-| `driver_exceptions` | `apparatus_id` | CASCADE | yes |
-| `equipment_check_templates` | `apparatus_id` | CASCADE | yes |
-| `purchase_requests` | `apparatus_id` | SET NULL | yes |
-| `skill_checkoffs` | `apparatus_id` | SET NULL | yes |
-| `training_records` | `apparatus_id` | SET NULL | yes |
-| `training_sessions` | `apparatus_id` | SET NULL | yes |
-
-### → `events` (17 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `admin_hours_entries` | `source_event_id` | SET NULL | yes |
-| `attendance_waiver_requests` | `event_id` | SET NULL | yes |
-| `course_cohort_classes` | `event_id` | SET NULL | yes |
-| `elections` | `event_id` | SET NULL | yes |
-| `event_attendance_petitions` | `event_id` | CASCADE | no |
-| `event_external_attendees` | `event_id` | CASCADE | no |
-| `event_requests` | `event_id` | SET NULL | yes |
-| `event_rsvps` | `event_id` | CASCADE | no |
-| `events` | `recurrence_parent_id` | RESTRICT | yes |
-| `fundraising_events` | `event_id` | SET NULL | yes |
-| `meeting_minutes` | `event_id` | SET NULL | yes |
-| `meetings` | `event_id` | SET NULL | yes |
-| `prospect_event_links` | `event_id` | CASCADE | no |
-| `rsvp_history` | `event_id` | CASCADE | no |
-| `training_approvals` | `event_id` | CASCADE | no |
-| `training_records` | `source_event_id` | SET NULL | yes |
-| `training_sessions` | `event_id` | CASCADE | no |
 
 ### → `shifts` (15 references)
 
@@ -14652,6 +14857,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_status_events` | `suggestion_id` | CASCADE | no |
 | `suggestion_votes` | `suggestion_id` | CASCADE | no |
 
+### → `admin_hours_categories` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `admin_hours_entries` | `category_id` | CASCADE | no |
+| `apparatus_event_templates` | `admin_hours_category_id` | SET NULL | yes |
+| `event_apparatus_plans` | `admin_hours_category_id` | SET NULL | yes |
+| `event_hour_mappings` | `admin_hours_category_id` | CASCADE | no |
+
 ### → `attendance_waiver_requests` (4 references)
 
 | From table | Column | On delete | Nullable |
@@ -14760,6 +14974,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestions` | `box_id` | CASCADE | no |
 | `suggestions` | `routed_from_box_id` | SET NULL | yes |
 
+### → `apparatus_event_templates` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `apparatus_event_template_units` | `template_id` | CASCADE | no |
+| `apparatus_event_templates` | `duplicated_from_id` | SET NULL | yes |
+| `event_apparatus_plans` | `template_id` | SET NULL | yes |
+
 ### → `check_requests` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -14855,13 +15077,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_order_events` | `order_id` | CASCADE | no |
 | `store_order_items` | `order_id` | CASCADE | no |
 | `store_payment_events` | `matched_order_id` | SET NULL | yes |
-
-### → `admin_hours_categories` (2 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `admin_hours_entries` | `category_id` | CASCADE | no |
-| `event_hour_mappings` | `admin_hours_category_id` | CASCADE | no |
 
 ### → `apparatus_components` (2 references)
 
@@ -15010,6 +15225,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `check_item_deployed_lots` | `inventory_lot_id` | SET NULL | yes |
 | `reorder_receipts` | `inventory_lot_id` | RESTRICT | no |
 
+### → `leave_requests` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `leave_request_messages` | `request_id` | CASCADE | no |
+| `leave_request_votes` | `request_id` | CASCADE | no |
+
 ### → `mcp_oauth_clients` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -15023,6 +15245,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `dues_payments` | `member_dues_id` | CASCADE | no |
 | `zeffy_payments` | `member_dues_id` | SET NULL | yes |
+
+### → `member_leaves_of_absence` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `leave_requests` | `extends_leave_id` | SET NULL | yes |
+| `leave_requests` | `leave_id` | SET NULL | yes |
 
 ### → `org_chart_nodes` (2 references)
 
@@ -15064,6 +15293,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `check_template_items` | `equipment_id` | SET NULL | yes |
+
+### → `apparatus_event_template_units` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `apparatus_event_template_seats` | `unit_id` | CASCADE | no |
 
 ### → `apparatus_maintenance_types` (1 references)
 
@@ -15154,6 +15389,18 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `evaluation_template_versions` | `template_id` | CASCADE | no |
+
+### → `event_apparatus_plans` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_apparatus_units` | `plan_id` | CASCADE | no |
+
+### → `event_apparatus_units` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_apparatus_seats` | `unit_id` | CASCADE | no |
 
 ### → `event_requests` (1 references)
 
@@ -15299,12 +15546,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `inventory_items` | `variant_group_id` | SET NULL | yes |
 
-### → `leave_requests` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `leave_request_votes` | `request_id` | CASCADE | no |
-
 ### → `maintenance_records` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -15328,12 +15569,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `minutes_closed_sessions` | `motion_id` | SET NULL | yes |
-
-### → `member_leaves_of_absence` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `leave_requests` | `leave_id` | SET NULL | yes |
 
 ### → `minutes_action_items` (1 references)
 
@@ -15475,6 +15710,8 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 
 | Table | Scoped via |
 |---|---|
+| `apparatus_event_template_seats` | `apparatus_event_template_units` |
+| `apparatus_event_template_units` | `apparatus`, `apparatus_event_templates` |
 | `approval_chain_steps` | `approval_chains`, `email_templates` |
 | `approval_step_records` | `approval_chain_steps`, `approval_chains`, `users` |
 | `audit_chain_head` | — _(root table)_ |

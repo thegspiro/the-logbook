@@ -121,6 +121,20 @@ describe('learning path content', () => {
       ['gear.sizes', 'My Sizes', 'modules/inventory/pages/MyEquipmentPage.tsx'],
       ['gear.request', 'Request Equipment', 'modules/inventory/pages/MyEquipmentPage.tsx'],
       ['gear.request', 'My Requests', 'modules/inventory/pages/MyEquipmentPage.tsx'],
+      ['apparatus-events.take-seat', 'Sign me up', 'components/event-detail/EventApparatusCrewCard.tsx'],
+      ['apparatus-events.take-seat', 'Leave seat', 'components/event-detail/EventApparatusCrewCard.tsx'],
+      ['apparatus-events.template', 'New template', 'pages/ApparatusEventsTab.tsx'],
+      ['apparatus-events.template', 'Save template', 'pages/apparatus-events/TemplateEditor.tsx'],
+      ['apparatus-events.template', 'Driver · EVOC', 'pages/apparatus-events/TemplateEditor.tsx'],
+      ['apparatus-events.template', 'Duplicate', 'pages/ApparatusEventsTab.tsx'],
+      ['apparatus-events.schedule', 'Schedule nights', 'pages/ApparatusEventsTab.tsx'],
+      ['apparatus-events.schedule', 'Repeat weekly', 'pages/apparatus-events/ScheduleNightsForm.tsx'],
+      ['apparatus-events.schedule', 'Schedule anyway', 'pages/apparatus-events/ScheduleNightsForm.tsx'],
+      ['apparatus-events.schedule', 'Edit this night', 'components/event-detail/EventApparatusCrewCard.tsx'],
+      ['apparatus-events.request', 'Add apparatus crew', 'pages/event-requests/RequestApparatusCrewSection.tsx'],
+      ['apparatus-events.request', 'Add it anyway', 'pages/event-requests/RequestApparatusCrewSection.tsx'],
+      ['apparatus-events.confirm', 'Needs confirmation', 'pages/ApparatusEventsTab.tsx'],
+      ['apparatus-events.confirm', 'Finalize Attendance', 'pages/EventDetailPage.tsx'],
     ];
     for (const [key, label, source] of quoted) {
       const [pathId = '', stepId = ''] = key.split('.');

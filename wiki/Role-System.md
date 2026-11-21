@@ -221,6 +221,8 @@ groups the Role Management screen shows.
 |                                            | `events.delete`                      | Delete events                                                                                |
 |                                            | `events.manage`                      | Manage all events                                                                            |
 |                                            | `events.reopen_attendance`           | Reopen finalized event attendance                                                            |
+|                                            | `apparatus_events.signup`            | Sign up for crew seats on apparatus events                                                   |
+|                                            | `apparatus_events.manage`            | Manage apparatus event templates, nights and crew assignments                                |
 | Locations                                  | `locations.view`                     | View locations                                                                               |
 |                                            | `locations.create`                   | Create locations                                                                             |
 |                                            | `locations.edit`                     | Edit locations                                                                               |

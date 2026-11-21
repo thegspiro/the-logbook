@@ -4065,6 +4065,33 @@ const departmentMessageList = (request: Request, empty: boolean) => {
   return { messages: matching.slice(skip, skip + limit), total: matching.length };
 };
 
+/** Whether `request` came from a page at `path` (a worker's has no page). */
+const requestedFrom = (request: Request, path: string): boolean => {
+  try {
+    return new URL(request.frame().url()).pathname === path;
+  } catch {
+    return false;
+  }
+};
+
+/** The member's leave in progress: began a month ago, ends in two. */
+const leaveInProgress = () => ({
+  id: 'leave-current',
+  organization_id: 'org-1',
+  user_id: 'user-1',
+  leave_type: 'leave_of_absence',
+  reason: null,
+  start_date: inDays(-30).slice(0, 10),
+  end_date: inDays(60).slice(0, 10),
+  granted_by: null,
+  granted_at: null,
+  active: true,
+  exempt_from_training_waiver: false,
+  linked_training_waiver_id: null,
+  created_at: null,
+  updated_at: null,
+});
+
 /**
  * Route glob → response body. Ordered least to most specific; `mockApi`
  * registers them in order and Playwright matches the last registration first,
@@ -4929,6 +4956,7 @@ const routes = ({
       requests_enabled: true,
       request_approver_position_ids: ['pos-board'],
       request_decision_rule: 'majority',
+      request_escalation_days: 21,
       available_positions: [
         { id: 'pos-board', name: 'Board of Directors', holder_count: 0 },
         { id: 'pos-chief', name: 'Fire Chief', holder_count: 1 },
@@ -4937,8 +4965,41 @@ const routes = ({
   ],
   // A request waiting on the caller, so the vote controls render; the list
   // glob is registered first so the more specific `/me` and `/config` win.
-  ['**/api/v1/users/leave-requests?**', () => [leaveRequestFixture({ member_name: 'Alex Johnson', can_vote: true })]],
-  ['**/api/v1/users/leave-requests/me', () => [leaveRequestFixture({})]],
+  [
+    '**/api/v1/users/leave-requests?**',
+    () => [
+      leaveRequestFixture({
+        member_name: 'Alex Johnson',
+        can_vote: true,
+        can_ask: true,
+        extends_leave: { start_date: '2026-10-01', end_date: '2026-11-30' },
+      }),
+    ],
+  ],
+  // The member's own request waits on their answer, so the answer form and the
+  // conversation render.
+  [
+    '**/api/v1/users/leave-requests/me',
+    () => [
+      leaveRequestFixture({
+        awaiting: 'answer',
+        can_answer: true,
+        messages: [
+          { kind: 'question', author_name: 'Captain Lopez', body: 'Which shifts?', created_at: '2026-11-15T12:00:00Z' },
+        ],
+      }),
+    ],
+  ],
+  // On Leave Requests the member is on leave now, so "Your leave" and its
+  // early-end control render; every other page (the shift board reads this
+  // too) sees no leave, as it did before this fixture existed.
+  [
+    '**/api/v1/users/leaves-of-absence/me',
+    (request) => (requestedFrom(request, '/members/leave-requests') ? [leaveInProgress()] : []),
+  ],
+  // Nothing waiting and requests off, so the navigation every other route is
+  // measured with does not gain an entry; the page itself reads the lists.
+  ['**/api/v1/users/leave-requests/summary', () => ({ requests_enabled: false, to_decide: 0, waiting_on_me: 0 })],
   ['**/api/v1/users/leave-requests/config', () => ({ requests_enabled: true })],
 
   ['**/api/v1/admin-hours/summary**', () => ({ totalHours: 8 })],
