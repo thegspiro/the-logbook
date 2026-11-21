@@ -516,6 +516,30 @@ export interface DraftOptions {
   periods: { id: string; name: string; start_date: string; end_date: string }[];
 }
 
+/** Someone holding open work in a review period, and on how many evaluations. */
+export interface ReassignmentHolder {
+  user_id: string;
+  name: string;
+  evaluations: number;
+}
+
+/** One evaluation a reassignment moves, or skips with the reason. */
+export interface ReassignmentRow {
+  evaluation_id: string;
+  member_name: string;
+  /** The evaluator's part moves, with any draft of it. */
+  moves_evaluator: boolean;
+  /** Labels of the approval or calibration steps that name the person. */
+  steps: string[];
+  skipped_reason: string | null;
+}
+
+export interface ReassignmentPlan {
+  from_name: string;
+  to_name: string;
+  rows: ReassignmentRow[];
+}
+
 /** Who and when a template preview can be measured for. */
 export interface PreviewOptions {
   /** Whether the viewer may preview with a real member's figures (needs view_all). */
