@@ -136,7 +136,7 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
         <h2 className="text-theme-text-primary text-lg font-semibold">Training & Certifications</h2>
         <Link
           to={`/members/${userId}/training`}
-          className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+          className="touch:min-h-11 inline-flex items-center text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
           View Full History
         </Link>

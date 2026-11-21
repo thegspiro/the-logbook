@@ -27,7 +27,7 @@ import MaintenanceDueLabel from '../components/MaintenanceDueLabel';
 import MaintenanceRecordDialog from '../components/MaintenanceRecordDialog';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { formatDate, formatNumber } from '../../../utils/dateFormatting';
+import { formatCurrency, formatDate } from '../../../utils/dateFormatting';
 import { useFacilitiesAccess } from '../hooks/useFacilitiesAccess';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
@@ -111,13 +111,18 @@ export default function MaintenanceListPage() {
             className="form-input placeholder-theme-text-muted py-2.5 pr-4 pl-10"
           />
         </div>
-        <div className="border-theme-surface-border flex items-center overflow-hidden rounded-lg border">
+        <div
+          className="border-theme-surface-border flex max-w-full items-center overflow-x-auto rounded-lg border"
+          data-mobile-scroll-region
+          role="group"
+          aria-label="Filter maintenance records by status"
+        >
           {MAINTENANCE_STATUS_FILTERS.map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
               aria-pressed={statusFilter === s}
-              className={`px-3 py-2 text-xs font-medium transition-colors ${statusFilter === s ? 'bg-red-500/10 text-red-700 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+              className={`touch:min-h-11 touch:min-w-11 shrink-0 px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${statusFilter === s ? 'bg-red-500/10 text-red-900 dark:text-red-300' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               {STATUS_LABELS[s]}
             </button>
@@ -203,7 +208,8 @@ export default function MaintenanceListPage() {
                   {record.vendor && <span>{record.vendor}</span>}
                   {record.cost != null && record.cost > 0 && (
                     <span className="flex items-center gap-1">
-                      <DollarSign className="h-3 w-3" />${formatNumber(record.cost)}
+                      <DollarSign className="h-3 w-3" aria-hidden="true" />
+                      {formatCurrency(record.cost)}
                     </span>
                   )}
                   {record.workOrderNumber && <span>WO# {record.workOrderNumber}</span>}
@@ -218,7 +224,7 @@ export default function MaintenanceListPage() {
                       }}
                       title="Mark completed"
                       aria-label="Mark completed"
-                      className="rounded-lg p-1.5 text-emerald-700 transition-colors hover:bg-emerald-500/10 dark:text-emerald-600"
+                      className="touch-target-phone rounded-lg p-1.5 text-emerald-700 transition-colors hover:bg-emerald-500/10 dark:text-emerald-600"
                     >
                       <CheckCircle2 className="h-4 w-4" />
                     </button>
@@ -227,7 +233,7 @@ export default function MaintenanceListPage() {
                     onClick={() => openEdit(record)}
                     title="Edit"
                     aria-label="Edit record"
-                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
+                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-lg p-1.5 transition-colors"
                   >
                     <Wrench className="h-4 w-4" />
                   </button>
@@ -238,7 +244,7 @@ export default function MaintenanceListPage() {
                       }}
                       title="Delete"
                       aria-label="Delete record"
-                      className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                      className="text-theme-text-muted touch-target-phone rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
                     >
                       <X className="h-4 w-4" />
                     </button>

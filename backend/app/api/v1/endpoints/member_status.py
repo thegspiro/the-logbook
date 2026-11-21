@@ -1202,6 +1202,9 @@ class StatusChangeRecord(BaseModel):
     status: str
     status_changed_at: datetime | None = None
     status_change_reason: str | None = None
+    # The statuses PATCH /status will accept from this one, so the dialog
+    # offers what the server takes rather than a copy of the rules (W11-14).
+    allowed_next_statuses: list[str] = Field(default_factory=list)
 
 
 class StatusChangeReasonUpdate(BaseModel):
@@ -1213,11 +1216,14 @@ class StatusChangeReasonUpdate(BaseModel):
 
 
 def _status_change_record(member: User) -> StatusChangeRecord:
+    allowed = ALLOWED_STATUS_TRANSITIONS.get(UserStatus(member.status), frozenset())
     return StatusChangeRecord(
         user_id=str(member.id),
         status=getattr(member.status, "value", member.status),
         status_changed_at=member.status_changed_at,
         status_change_reason=member.status_change_reason,
+        # In the enum's own order, which is the order the dialog lists them.
+        allowed_next_statuses=[s.value for s in UserStatus if s in allowed],
     )
 
 

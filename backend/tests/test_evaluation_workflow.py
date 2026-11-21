@@ -3128,6 +3128,194 @@ class TestCrewSupervisor:
             assert (await client.get("/evaluations/crew")).json() == []
 
 
+async def _next_period(dept: _Dept, year: int = 2026) -> EvaluationPeriod:
+    period = EvaluationPeriod(
+        organization_id=dept.org,
+        name=f"{year} Annual {_uid()[:4]}",
+        start_date=date(year, 1, 1),
+        end_date=date(year, 12, 31),
+    )
+    dept.db.add(period)
+    await dept.db.flush()
+    return period
+
+
+class TestPreviousReview:
+    """A review shows the member's last finalized review on the same form,
+    to whoever could open that one, and to nobody else."""
+
+    async def test_the_evaluator_sees_last_years_grade(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        last_url = await _finalized(dept, make_client)
+        evaluator = await make_client(dept.evaluator)
+        last = (await evaluator.get(last_url)).json()
+        this = await _draft(
+            await make_client(dept.manager),
+            dept,
+            period_id=(await _next_period(dept)).id,
+        )
+
+        seen = (await evaluator.get(f"/evaluations/{this['id']}")).json()
+
+        previous = seen["previous_review"]
+        assert previous["evaluation_id"] == last["id"]
+        assert previous["period_name"] == dept.period.name
+        assert previous["overall"] == f"{last['weighted_overall']:g}% (weighted)"
+        # The earlier review has nothing before it.
+        assert last["previous_review"] is None
+
+    async def test_the_member_sees_their_own_last_review(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        last_url = await _finalized(dept, make_client)
+        this = await _draft(
+            await make_client(dept.manager),
+            dept,
+            period_id=(await _next_period(dept)).id,
+        )
+        member = await make_client(dept.member)
+
+        seen = (await member.get(f"/evaluations/{this['id']}")).json()
+
+        assert seen["previous_review"]["evaluation_id"] == last_url.rsplit("/", 1)[-1]
+
+    async def test_an_evaluator_who_could_not_open_last_years_sees_nothing(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        await _finalized(dept, make_client)
+        newcomer = await _user(dept.db, dept.org, ["evaluations.conduct"])
+        this = await _draft(
+            await make_client(dept.manager),
+            dept,
+            period_id=(await _next_period(dept)).id,
+            evaluator_id=newcomer.id,
+        )
+
+        seen = (
+            await (await make_client(newcomer)).get(f"/evaluations/{this['id']}")
+        ).json()
+
+        assert seen["previous_review"] is None
+
+    async def test_an_unfinished_or_other_form_review_is_not_last_years(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        manager = await make_client(dept.manager)
+        # 2025's review on this form was drafted but never finished.
+        await _draft(manager, dept)
+        # 2024's was finished, but on another form.
+        other = await _template(dept.db, dept.org, name="Other Annual")
+        older = await _draft(
+            manager,
+            dept,
+            period_id=(await _next_period(dept, 2024)).id,
+            template_id=other.id,
+        )
+        other_url = f"/evaluations/{older['id']}"
+        await _lock_evaluator(dept, make_client, other_url)
+        signed = await (await make_client(dept.member)).post(
+            f"{other_url}/sign",
+            json={
+                "signed_name": dept.member.full_name,
+                "disposition": "acknowledged",
+                "intent_confirmed": True,
+            },
+        )
+        assert signed.json()["outcome"] == "finalized"
+        this = await _draft(
+            manager,
+            dept,
+            period_id=(await _next_period(dept)).id,
+            template_id=dept.template.id,
+        )
+
+        seen = (
+            await (await make_client(dept.evaluator)).get(f"/evaluations/{this['id']}")
+        ).json()
+
+        assert seen["previous_review"] is None
+
+
+class TestPeriodResults:
+    """The conduct list's grade column and the period export: for a holder of
+    evaluations.view_all, finalized reviews only."""
+
+    async def test_view_all_sees_the_grade_of_a_finalized_review_only(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        done_url = await _finalized(dept, make_client)
+        other = await _user(dept.db, dept.org, [])
+        open_one = await _draft(await make_client(dept.manager), dept, member=other)
+        reader = await make_client(dept.reader)
+        done = (await reader.get(done_url)).json()
+
+        listed = {
+            e["id"]: e["overall_grade"]
+            for e in (
+                await reader.get(f"/evaluations?period_id={dept.period.id}")
+            ).json()
+        }
+
+        assert listed[done["id"]] == f"{done['weighted_overall']:g}% (weighted)"
+        assert listed[open_one["id"]] is None
+
+    async def test_a_conductor_or_manager_without_view_all_sees_no_grades(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        await _finalized(dept, make_client)
+        runs_it = await _user(dept.db, dept.org, ["evaluations.manage"])
+
+        for user in (dept.evaluator, runs_it):
+            listed = (await (await make_client(user)).get("/evaluations")).json()
+            assert listed
+            assert {e["overall_grade"] for e in listed} == {None}
+
+    async def test_the_export_lists_the_period_with_grades_and_is_audited(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        done_url = await _finalized(dept, make_client)
+        reader = await make_client(dept.reader)
+        done = (await reader.get(done_url)).json()
+
+        response = await reader.get(f"/evaluations/export?period_id={dept.period.id}")
+
+        assert response.status_code == 200, response.text
+        assert response.headers["content-type"].startswith("text/csv")
+        assert "attachment" in response.headers["content-disposition"]
+        lines = response.text.strip().splitlines()
+        assert lines[0] == "Member,Form,Evaluator,Status,Waiting on,Overall grade"
+        assert lines[1].startswith(dept.member.full_name + ",")
+        assert lines[1].endswith(
+            f",Finalized,,{done['weighted_overall']:g}% (weighted)"
+        )
+        logged = (
+            (
+                await dept.db.execute(
+                    select(AuditLog).where(
+                        AuditLog.event_type == "evaluation_period_exported"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert [row.event_data["period_id"] for row in logged] == [dept.period.id]
+
+    async def test_the_export_needs_view_all_and_a_period_of_this_department(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        url = f"/evaluations/export?period_id={dept.period.id}"
+        assert (await (await make_client(dept.evaluator)).get(url)).status_code == 403
+
+        other_org = await _org(dept.db)
+        elsewhere = await _period(dept.db, other_org)
+        missing = await (await make_client(dept.reader)).get(
+            f"/evaluations/export?period_id={elsewhere.id}"
+        )
+        assert missing.status_code == 404
+
+
 def _approvals(*position_ids: str) -> dict:
     """A workflow with one approval step per position id, in order."""
     # WITH_APPROVAL_STEPS' own first two and last steps: ``_step`` is

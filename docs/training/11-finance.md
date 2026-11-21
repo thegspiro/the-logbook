@@ -106,6 +106,20 @@ The **Finance** menu shows what you can use:
 **Reports**, **Dues** and **QuickBooks Export** open from the dashboard's
 **Quick Links**.
 
+> **When a setting cannot be saved** _(2026-11-16)_. The cards on **Finance >
+> Settings**, the fiscal-year and category dialogs, the approval step dialog,
+> **Who can charge**, the dues and advance exports, and the QuickBooks **Post
+> payments made on or after** date name a missing or refused value under its
+> own box. Any other reason is said inside the card or dialog, where it stays,
+> rather than in a message that disappears. A rule that is one decision (the
+> second approver for large requests, the receipt rule, who can charge a
+> category) saves all of it or none of it, so a half-changed rule is never in
+> force. Editing a category is the exception: its other settings save, the
+> refused box keeps its stored value, and the dialog says _"Saved, except the
+> field flagged below"_. Its charge rule and position list still save or fail
+> together. Nothing changes about the amounts, statuses or permissions that are
+> sent.
+
 ---
 
 ## Finance Dashboard
@@ -151,10 +165,15 @@ A fiscal year defines the accounting period for your department. All budgets, pu
 1. Open **Finance > Settings**.
 2. Select **New Fiscal Year**.
 3. Enter a **name** (for example, "FY 2026-2027").
-4. Set the **start date** and **end date**.
+4. Set the **Start Date** and **End Date**.
 5. Select **Create**.
 
 The new fiscal year is created in **Draft** status.
+
+_(2026-11-16)_ A missing name or date is named under its box before anything
+is sent, and so is an **End Date** before the **Start Date** ("The end date
+cannot be before the start date."). That order used to be accepted and stored
+as typed.
 
 ![Fiscal year settings listing fiscal years with status badges](./images/11-02-fiscal-year-settings.png)
 

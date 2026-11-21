@@ -230,7 +230,6 @@ record for you.
    for the rest.
 3. **Search courses** filters by course name. **Type** filters by training
    type. Both narrow the years and the lists together.
-
 4. A record **with no completion date** is grouped under **No completion date**,
    above the years, whatever you filter by. This includes a record still waiting
    for approval and a completed record imported without a date; each row shows
@@ -1522,6 +1521,11 @@ however short their attendance, with a reason on record.
 3. The cell then reads **Met by the Chief's override**. The real attendance
    count is still shown, and a member who met the requirement on their own is
    never labelled overridden. An override excuses no month and no other drill.
+
+The Chief cannot override their own requirement _(2026-11-15)_: the grant is
+refused with "You cannot grant an override on your own requirement". The
+Chief's own absence goes through a [training waiver](#waivers) instead, which
+someone else decides.
 
 Overrides are revoked, never deleted; grant and revoke are audited with ids and
 dates only, and the reason is stored encrypted.
@@ -2884,7 +2888,8 @@ or a training manager when the chain reaches them.
 **Training → Waiver Requests** lists the requests waiting on you and the ones
 you have decided. It appears only for members who decide requests; at the top
 of every Training page it carries the number waiting on you. The email about
-each new request links to it too.
+each new request links to it too. Training officers also reach the same list
+from **Training Admin → Records → Waiver Requests**.
 
 ### Asking a member for more information _(2026-11-13)_
 
@@ -2931,6 +2936,11 @@ it is waiting for you. A request that was **denied** is not reopened. Confirm
 is refused if you have already checked in to the session: withdraw it instead.
 See [Moving an event that members asked to be excused from](./04-events-meetings.md#moving-an-event-that-members-asked-to-be-excused-from-2026-11-13)
 for the officers' side.
+
+**When the session is cancelled** _(2026-11-16)_. Cancelling or deleting the
+session closes every request still pending for it; there is nothing left to be
+excused from. The member is told in the app and, from 2026-11-16, by email. A
+request already decided is kept as it was.
 
 ### Requests from the Chief or the President _(2026-11-13)_
 
@@ -3602,7 +3612,10 @@ types:
 department's own, added to a program with **Link existing**, is credited by
 shift evaluations the same way as the program's own. A training record no
 longer satisfies one. An evaluation that counts for several programs counts
-once toward a department requirement, and general-form evaluations count too.
+once toward a department requirement, and general-form evaluations count too. The
+compliance matrix, dashboards, reports and My Training all count it this way,
+within the requirement's own window, and a flagged evaluation's credit is taken
+back from the linked row at once.
 
 **A requirement reopens when its credit falls** _(2026-11-13)_. When credit is
 taken back and a completed requirement drops below its target, it returns to
@@ -3626,6 +3639,11 @@ the status without the scores.
   evaluation stops crediting them. The evaluation itself stays readable. Only
   a seat the member worked (Assigned or Confirmed) earns credit.
 
+Two cases still keep earlier credit until the evaluation is saved again: an
+outside shift moved to an agency that does not evaluate shifts, and a program
+dropped from a combined evaluation (its form cleared while the member stays
+enrolled).
+
 **The evaluations a department shift asks for are fixed when it ends**
 _(2026-11-15)_. Before the shift ends, the list follows the current settings.
 After it ends, each crew member's list is stored on the first look, so turning
@@ -3635,7 +3653,8 @@ evaluations are not orphaned and a close-out that passed stays passed. The
 crew is still read live: a member taken off the crew is not asked for, and a
 member added afterwards is worked out by the settings of the day. A deleted
 form drops out. A shift that ended before the upgrade is fixed from the
-settings in force the first time it is read afterwards.
+settings in force the first time it is read afterwards. Outside shifts are always
+worked out live.
 
 **A form in use cannot be deactivated** _(2026-11-15)_. Deactivating an
 evaluation form that a training program, or the department's general-form
@@ -3648,15 +3667,6 @@ other fields still save.
 **Switching forms on an evaluation** _(2026-11-16)_ closes any comment boxes
 you had opened on the old form, so the new form starts with only the comments
 it requires open.
-
-**Linked department requirements count too** _(2026-11-14)_. A department
-requirement of one of those three types, added to a program with **Link
-existing**, is now credited by the member's shift evaluations in the same way
-as the program's own. Before, evaluations never moved a linked row, and a
-training record of a matching type could mark it complete. The compliance
-matrix, dashboards, reports and My Training all count it this way, within the
-requirement's own window and with leave taken off in whole units. A flagged
-evaluation's credit is taken back from the linked row at once.
 
 ### Shifts on an outside agency's unit _(2026-11-02)_
 
@@ -4143,7 +4153,9 @@ keeps the file's own spelling on the record, but the member's **My Training**
 pages and their own training records show the library course's name instead,
 and their history search finds it by either name. Officers still see the
 record's stored name, which is what the record editor saves. A row left
-unmatched shows the name from the file.
+unmatched shows the name from the file, and counts toward no course or
+certification requirement until you link it under **Course Links** (see
+[Course Links](#course-links--records-that-name-no-course-2026-11-16)).
 
 ![The historical-import wizard on its Preview step: parsed rows, matched members, and the confirm button](./images/02-02-historical-import-preview.png)
 
@@ -4175,7 +4187,8 @@ for uploading it and marking its columns). Once a column is marked as
    **Import as written**. A mapped subject takes the course's name, code,
    training type and category, so its records count toward requirements that
    name the course. An unmapped subject is imported under its own name, as
-   continuing education. Where a subject's name closely matches a course,
+   continuing education; you can link it to a course later under **Course
+   Links**. Where a subject's name closely matches a course,
    **Use** _course_ offers it; **Accept all suggestions** maps every such
    subject at once. **Find a subject** searches the list.
 4. **Decide the training provider rows.** A row whose instructor names Target
@@ -5621,13 +5634,14 @@ have moved, been renamed or work differently.
   Curriculum, Evaluations, Program Management, Compliance Reporting, and
   Settings & Data. There is no **Setup** or **Advanced** area. Requirements,
   the Course Library and Programs are under **Curriculum**; Knowledge Tests and
-  Skill Evaluations under **Evaluations**; Integrations, Import History (then named Import
-  Past Training), Manual Entry, Practical Skills, Shift Evaluations and
-  Compliance under **Settings & Data**; Recertification,
+  Skill Evaluations under **Evaluations**; Integrations, Import History, Manual
+  Entry, Practical Skills, Session Waivers, Shift Evaluations and Compliance under
+  **Settings & Data**; Recertification,
   Competency, Instructors, Effectiveness, Multi-Agency and Reports under
   **Program Management**. Old links still open the right page.
 - **Compliance settings** are reached from **Settings & Data → Compliance
-  Settings → Open compliance settings** _(2026-11-04)_, or from **Compliance
+  → Open compliance settings** _(2026-11-04; the tab read Compliance Settings
+  until 2026-11-08)_, or from **Compliance
   Reporting → Configure**, not a "Compliance Requirements" tab.
 - **Import from Registry** sits **below** the requirements list on **Curriculum
   → Requirements**, not above it _(2026-11-04)_.
@@ -5677,6 +5691,15 @@ have moved, been renamed or work differently.
 - **Course and Certification requirements pick courses from the library.** A
   Courses requirement made long ago with typed course names showed everyone as
   incomplete. Reopen it and pick the courses.
+- **Records with a typed course name are linked from Course Links**
+  _(2026-11-15)_. Rather than editing such records one at a time, link each
+  name to a library course under **Curriculum → Course Links**; see
+  [Course Links](#course-links--records-that-name-no-course-2026-11-16).
+- **Records from Import History now read "Imported"** _(2026-11-15)_, not "The
+  Logbook". Older ones are unchanged.
+- **A shift's evaluations are fixed when it ends** _(2026-11-16)_, and a
+  requirement or crew change re-counts evaluation credit without the
+  evaluation being saved again. A form a program uses cannot be deactivated.
 - **A Certification requirement no longer credits a course just because its
   name contains the requirement's name** — not even for older records, since
   2026-11-04. An older record on an older requirement counts by name only when

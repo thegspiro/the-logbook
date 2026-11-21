@@ -21,20 +21,7 @@ import { BottomNavigation } from './BottomNavigation';
 import { HeldOfflineItemsNotice } from '../HeldOfflineItemsNotice';
 import { SystemNoticesBanner } from '../SystemNoticesBanner';
 import { MfaGraceBanner } from '../MfaGraceBanner';
-
-/** SEC: Validate logo URL protocol to prevent javascript: or data:text/html XSS.
- *  Only safe raster image data URIs are allowed — SVG can contain embedded JS. */
-function isValidLogoUrl(url: string): boolean {
-  return (
-    url.startsWith('http://') ||
-    url.startsWith('https://') ||
-    url.startsWith('/') ||
-    url.startsWith('data:image/png') ||
-    url.startsWith('data:image/jpeg') ||
-    url.startsWith('data:image/webp') ||
-    url.startsWith('data:image/gif')
-  );
-}
+import { isValidLogoUrl } from '../../utils/logoUrl';
 
 interface AppLayoutProps {
   children?: React.ReactNode;

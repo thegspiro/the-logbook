@@ -2,7 +2,247 @@
 
 **Prefix:** `AP2` · **Iteration:** B2 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-05 (pass 5)
+2026-10-05 (pass 5), 2026-11-20 (pass 6)
+
+---
+
+## Pass 6 (2026-11-20) — the sub-resources and the frontend, read for the first time
+
+**Backend:** `endpoints/apparatus.py` (3,827 L, **94** endpoints — was 3,308 L /
+88), `services/apparatus_service.py` (2,992 L), `evoc_level_service.py` (532 L)
+**Frontend:** all of `modules/apparatus/` (pages, components, store, services,
+types) — the first pass to read it
+**Docs:** `docs/APPARATUS_MODULE.md`, `wiki/Module-Apparatus.md`
+
+### Scope
+
+Pass 5 left two deferrals: the sub-resources (fuel logs, equipment,
+photos/documents, custom fields) had no depth read, and no pass had read the
+frontend at all — the correction under pass 5 records what that cost. Pass 6
+read both, plus operators and NFPA items, and the delta since pass 5 (the four
+upload/download routes, the in-use delete guard, former-member operators, the
+AP2-4 resolution, the forms rollout).
+
+Read in full: every photo, document, fuel-log, equipment, custom-field,
+operator and NFPA endpoint and service method; every frontend page, tab, modal,
+the store and the service module. Skimmed only: `ApparatusLabelPrintPage`,
+`iconMap`, `StatusBadge`, `ApparatusTypeBadge`, `useApparatusNfpaSettings`. The
+backend sub-resources and the frontend were each read by a delegated reader
+and every finding below was re-checked against the code before it was
+recorded; LOW items marked _reported_ were not re-traced line by line.
+
+### Verified good ✅
+
+- **All 94 endpoints carry an auth dependency**, enumerated mechanically. 93
+  carry a permission gate; the one authentication-only route is still
+  `GET /driver-exceptions/approvers`, deliberate and verified in pass 5. The six
+  new routes since pass 5 are the photo/document upload and file endpoints.
+- **Uploads go through `FileStorageService`**: magic-byte detection, a read-
+  limited size cap (20 MB for images), a generated storage name, the stored file
+  discarded if the link row fails. Downloads take the path from the database row
+  only, confined by `file_storage.resolve`, and only image types are served
+  inline. `file_url` withholds `javascript:` links.
+- **Fuel money is `Decimal` / `Numeric`**, never float; fuel logs are create-only
+  in both layers, and their list is paginated (max 1,000).
+- **Operator create refuses a former member** (`User.is_active`, which covers
+  probationary and deleted) — the commit since pass 5 is real.
+- **Frontend, pitfall #1 both ways:** every edit form (apparatus, equipment,
+  operator, NFPA item, maintenance) sends every field it owns with blanks as
+  `null` and holds back NOT NULL columns; every create drops blanks. No `??` on a
+  form value anywhere in the module.
+- **Frontend contract:** a scripted field-by-field comparison of every backend
+  schema against its TypeScript interface (camelCase applied) found no field the
+  frontend reads that the backend does not send. Enum values match and are
+  lowercase. The module axios client carries credentials and the CSRF header.
+- **Frontend dates and dialogs:** no banned locale call, every formatter gets
+  `tz` from `useTimezone`, deletes confirm through `ConfirmDialog`, every dialog
+  is the shared `Modal`, the list and fuel-log tables carry tiers, labels and
+  table-fit specs.
+- **The EVOC gate's algebra holds against real SQL** (AP2-12) — and exercising
+  it found something the mocked tests could not: a member has one operator row
+  per vehicle, so holding two levels means rows on two vehicles, and the gate
+  reads every current row the member has.
+
+### AP2-7 — HIGH — Deleting a vehicle's photo or document destroyed a library document it only referenced — ✅ FIXED
+
+**What:** `POST /{id}/photos` and `POST /{id}/documents` accept
+`document:<id>` to link a document already in the library, and the link needs
+only **read** access to a filed document (`_referenced_document_id`). Deleting
+the photo or document record then called `module_documents.delete_document` on
+whatever it linked — `DocumentsService.delete_document`, which deletes the
+document, its file, and every other row pointing at it (link rows cascade).
+
+**Where:** `endpoints/apparatus.py` `delete_apparatus_photo` and
+`delete_apparatus_document` (pre-fix lines 1919–1921 and 2170–2171).
+
+**Impact:** a member with `apparatus.edit` links a policy PDF from a folder they
+can only read; any `apparatus.manage` holder deleting that vehicle record then
+destroys the library document — something the library's own
+`DELETE /documents/{id}` refuses without `documents.manage` and a write on the
+folder. A History document reached the same path and answered 500
+(`ValueError` uncaught), as did a facility reference the caller may not clear
+(`PermissionError`). Facilities, the precedent, removes only its reference row.
+
+**Fix:** `_deletes_backing_document` decides. The document goes with its record
+only when the vehicle uploaded it (`source_type` `apparatus_photo` /
+`apparatus_document` and `source_id` this vehicle) **and** no other photo or
+document record still links it; otherwise only the link row is removed. The
+delete's `ValueError` / `PermissionError` now answer 400 / 403. Three tests in
+`tests/test_apparatus_files.py` (referenced photo, referenced document record,
+an upload another vehicle also links) went red on the unfixed code with the
+document gone, and pass now; the existing test that a vehicle's own upload is
+deleted with its file still passes. Both docstrings say what is kept.
+
+### AP2-8 — MED — Equipment, custom-field and operator updates answered 500 for a null on a NOT NULL column — ✅ FIXED
+
+**What:** `update_equipment`, `update_custom_field` and `update_operator`
+applied `model_dump(exclude_unset=True)` with a bare `setattr` loop. The Update
+schemas accept `null` for every field, so `{"name": null}` reached MySQL and
+failed at flush — an `IntegrityError` the endpoints do not catch.
+
+**Where:** `apparatus_service.py` (pre-fix 1106–1108, 1785–1787, 1909–1911).
+
+**Impact:** a 500 where a 400 belongs, on equipment `name`/`quantity`/
+`is_present`, custom-field `name`/`field_key`/`field_type`/flags, and operator
+`is_certified`/`license_verified`/`is_active`. `{"fieldKey": null}` also slipped
+past the duplicate-key check's truthiness test. Clearing a nullable field
+already worked and still does.
+
+**Fix:** all three use `apply_updates` with the identity and tenancy columns in
+`skip`, as the maintenance and NFPA updates already did. New
+`tests/test_apparatus_update_nulls_integration.py` (6 tests, `integration`):
+the three refusal cases went red on the unfixed code with `IntegrityError` and
+now raise `"'<field>' cannot be cleared"`; the three clearing cases pass both
+ways, guarding the half that was right.
+
+### AP2-9 — MED — The edit and detail pages showed the previously opened vehicle when a fetch failed — ✅ FIXED
+
+**What:** the store keeps the last apparatus opened, and `fetchApparatus` never
+cleared it. The edit page filled its form from `currentApparatus` without
+checking its id, and rendered an editable form whenever loading finished.
+
+**Where:** `store/apparatusStore.ts` `fetchApparatus`;
+`pages/ApparatusFormPage.tsx` populate effect and render guard;
+`pages/ApparatusDetailPage.tsx` loading and not-found guards.
+
+**Impact:** open vehicle A, then `/apparatus/B/edit` where B's fetch fails
+(deleted, 403, network): the form showed A's values with no error, and Save
+PATCHed B with A's full record. Had nothing been held, the form rendered empty
+and Save sent blanks as nulls, clearing B. The detail page showed A's header
+and overview while its tabs and buttons acted on B.
+
+**Fix:** the store drops a different apparatus at the start of a fetch (a
+re-fetch of the same one keeps it, so a refresh after saving does not flash);
+the form fills only from a record whose id matches the URL and shows "Apparatus
+Not Found" instead of a form when none loaded; the detail page waits for a
+matching record and shows not-found otherwise. Store and form tests went red on
+the unfixed code; 153 module tests pass.
+
+### AP2-10 — LOW — Tabs offered add, edit and delete the backend refuses — ✅ FIXED
+
+**What:** Maintenance (add, edit, delete), Fuel Logs (add), Equipment (add,
+edit, delete) and the photo/document deletes showed to anyone who could open
+the apparatus. The backend gates are maintenance/edit/manage for maintenance
+and fuel, edit/manage for equipment, and manage alone for every delete.
+
+**Impact:** a view-only member filled a form and was refused at the end; an
+editor was offered deletes only a manager may do. The Operators and NFPA tabs
+already gated, so this is the module catching up with itself.
+
+**Fix:** each tab reads `checkPermission` against the backend's strings, as
+`NfpaComplianceTab` does; the empty-state "Select Add …" hint shows only to
+someone who can. `components/apparatusTabGates.test.tsx` (4 tests) and a
+`DocumentsTab` case went red against the unfixed components.
+
+### AP2-11 — LOW — `docs/APPARATUS_MODULE.md` still described AP2-4 as open — ✅ FIXED
+
+The reference said an unresolvable vehicle returns **eligible**, listed AP2-4
+under Known Gaps as an open decision, and described `DELETE /{id}` as an
+unconditional hard delete with dangling shifts. The owner decided AP2-4 on
+2026-10-31 (fail closed, both vehicle tables checked) and the delete has
+refused an in-use vehicle since `b7e52361a7`. The edge-case rows, the warning,
+the troubleshooting row and Known Gaps now say what the code does.
+`docs/KNOWN_LIMITATIONS.md`'s AP2-4 entry was already right.
+
+### AP2-12 — LOW — The EVOC gate's real-database test, written — ✅ FIXED
+
+Pass 5's future-development item 5. New `tests/test_evoc_gate_integration.py`
+(9 tests, `integration`): no requirement, exact level, cumulative coverage and
+its non-cumulative refusal, every held level considered, a card good through its
+expiry day and not the day after, uncertified and inactive records, a basic
+vehicle, a vehicle in neither table (AP2-4), and another department's vehicle.
+Mutation-tested: removing the expiry filter fails only the expiry test, and
+removing the organization filter fails only the other-department test; the
+service was restored and is unchanged.
+
+### Flagged for the owner
+
+- **AP2-13 — MED — The odometer and engine hours can move backwards.** A fuel
+  log (`apparatus_service.py:1592`), a status change (`:885`) and an apparatus
+  edit (`:820`) overwrite `current_mileage` / `current_hours` with whatever was
+  entered, and stamp `*_updated_at` with now even for a backdated fill. Entering
+  last month's receipt at 48,000 on a truck reading 52,000 sets it to 48,000.
+  Only raising the reading, or refusing a lower one, is a behaviour change with
+  a real exception (an odometer replaced or corrected). In KNOWN_LIMITATIONS.
+- **AP2-14 — MED — Re-activating a former member's operator row skips the
+  current-member check.** `create_operator` refuses a former member;
+  `update_operator` accepts `{"isActive": true, "isCertified": true}` on a row
+  left from before they departed. The create comment keeps such rows editable
+  on purpose; whether re-activation is a new certification is the owner's call.
+  In KNOWN_LIMITATIONS.
+- **AP2-15 — LOW — Custom-field definitions are stored and never read.** No
+  frontend screen manages them (the four service methods have no caller), and
+  nothing on the backend enforces `is_required`, `options`, the min/max bounds
+  or `regex_pattern` against `custom_field_values`; renaming a `field_key`
+  orphans every stored value. Pitfall #19's shape. Build the reader and the UI,
+  or retire the definitions. In KNOWN_LIMITATIONS.
+
+### Open (LOW, not fixed this pass)
+
+_Reported_ by the depth read; recorded so the next pass starts from them:
+
+- NFPA item list (`list_nfpa_items`) has no limit; per apparatus, so bounded in
+  practice.
+- NFPA update stamps `last_checked_by` on any edit, a notes-only one included,
+  without touching `last_checked_date`.
+- Two concurrent uploads with `is_primary` can both end up primary (no lock);
+  deleting the primary photo promotes none.
+- A concurrent duplicate operator create hits the unique index as a 500.
+- `?tab=` is cast unchecked on the detail page, so an unknown value renders no
+  tab; back/forward changes the URL but not the tab.
+- `FuelLogModal` recomputes the total from a stale closure and overwrites a
+  typed total; price per gallon is a hard-coded `$…toFixed(3)` beside a
+  `formatCurrency` column.
+- `EquipmentModal` turns a typed quantity of 0 into 1 on create.
+- A completed maintenance record with no completed date reads "Completed N/A".
+- The NFPA required-tests table is a base `rwd-table` with no measurement or
+  table-fit spec (pitfall #39).
+
+### Dead code
+
+Not deleted this pass: frontend service methods with no caller —
+`getType`, `getArchivedApparatus`, `deleteApparatus`, `getMaintenanceRecord`,
+`createPhoto`, `createDocument`, `getLevel`, `checkEligibility`, the four
+custom-field methods (tied to AP2-15) — the unused `export default` aggregate in
+`services/api.ts`, and the store's `maintenanceDue` / `fetchMaintenanceDue` /
+`setCurrentApparatus`. Removing them changes nothing at runtime; it is a
+self-contained clean-up for the next pass, kept out of a pass that already
+changes behaviour in four places.
+
+### Completion gate (pass 6)
+
+| Check                          | Result                                                                                                                                                                                                                            |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run typecheck`            | ✅ 0 errors                                                                                                                                                                                                                       |
+| `npm run lint`                 | ✅ 0                                                                                                                                                                                                                              |
+| `flake8 app/ tests/`           | ✅ 0 (three PT011 in the new test fixed with `match=`)                                                                                                                                                                            |
+| `black --check app/ tests/`    | ✅ 2,518 files unchanged                                                                                                                                                                                                          |
+| `isort --check-only`           | ✅ changed files clean                                                                                                                                                                                                            |
+| endpoint docstring permissions | ✅ 0 errors, 0 warnings (`check_endpoint_permissions.py --strict`)                                                                                                                                                                |
+| docs link check                | ✅ 520 Markdown files, 0 broken links                                                                                                                                                                                             |
+| backend tests                  | ✅ **228 passed** — apparatus files (21, +3) · update nulls (6, new) · EVOC gate integration (9, new) · EVOC service · apparatus service · FK scoping · operators · delete-in-use · NFPA · maintenance update · shift eligibility |
+| frontend tests                 | ✅ **apparatus module 158 passed** (153 with the store and form cases, then +4 tab gates, +1 documents)                                                                                                                           |
+| marker routing (pitfall #30b)  | ✅ both new integration files collect 0 tests under the unit job's filter                                                                                                                                                         |
 
 ---
 

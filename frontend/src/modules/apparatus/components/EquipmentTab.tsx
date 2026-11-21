@@ -29,6 +29,11 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({ equipment, loadingTa
   const [deleteTarget, setDeleteTarget] = useState<ApparatusEquipment | null>(null);
   // Matches the gate on /inventory/admin/checklists.
   const canManageChecklists = useAuthStore((state) => state.checkPermission('inventory.check_manage'));
+  // The backend's gates: adding or editing takes edit or manage; removing
+  // takes manage alone.
+  const checkPermission = useAuthStore((state) => state.checkPermission);
+  const canEdit = checkPermission('apparatus.edit') || checkPermission('apparatus.manage');
+  const canRemove = checkPermission('apparatus.manage');
 
   const handleAdd = () => {
     setEditEquipment(null);
@@ -60,9 +65,11 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({ equipment, loadingTa
             <Package className="h-5 w-5" />
             Equipment
           </h2>
-          <button onClick={handleAdd} className="btn-primary text-sm">
-            Add Equipment
-          </button>
+          {canEdit && (
+            <button onClick={handleAdd} className="btn-primary text-sm">
+              Add Equipment
+            </button>
+          )}
         </div>
         {/* The two lists are separate records: nothing here feeds a checklist,
             and a newcomer reasonably assumes it does. */}
@@ -84,7 +91,7 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({ equipment, loadingTa
           </div>
         ) : equipment.length === 0 ? (
           <p className="text-theme-text-muted py-8 text-center">
-            No equipment yet. Select Add Equipment to list what this apparatus carries.
+            No equipment yet.{canEdit && ' Select Add Equipment to list what this apparatus carries.'}
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -94,20 +101,24 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({ equipment, loadingTa
                   <p className="text-theme-text-primary font-medium">{item.name}</p>
                   <div className="flex items-center gap-2">
                     <span className="text-theme-text-muted text-sm">Qty: {item.quantity}</span>
-                    <button
-                      onClick={() => handleEdit(item)}
-                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-md p-1 transition-colors"
-                      title="Edit equipment"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setDeleteTarget(item)}
-                      className="text-theme-text-muted hover:bg-theme-surface rounded-md p-1 transition-colors hover:text-red-600"
-                      title="Remove equipment"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    {canEdit && (
+                      <button
+                        onClick={() => handleEdit(item)}
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-md p-1 transition-colors"
+                        title="Edit equipment"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {canRemove && (
+                      <button
+                        onClick={() => setDeleteTarget(item)}
+                        className="text-theme-text-muted hover:bg-theme-surface rounded-md p-1 transition-colors hover:text-red-600"
+                        title="Remove equipment"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
                 {item.description && <p className="text-theme-text-muted mb-2 truncate text-sm">{item.description}</p>}

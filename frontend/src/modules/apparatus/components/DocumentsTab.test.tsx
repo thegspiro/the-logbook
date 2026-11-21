@@ -120,6 +120,24 @@ describe('DocumentsTab', () => {
     expect(screen.queryByRole('button', { name: /Download/ })).not.toBeInTheDocument();
   });
 
+  // AP2-10: deleting a photo or document takes apparatus.manage on the
+  // backend; an editor may upload but was offered deletes that 403.
+  it('offers delete only to a manager', async () => {
+    getPhotos.mockResolvedValue([photo({})]);
+    getDocuments.mockResolvedValue([doc({})]);
+    grantedPermissions = new Set(['apparatus.view', 'apparatus.edit']);
+    const { unmount } = renderWithRouter(<DocumentsTab id="a-1" />);
+    await screen.findByText('2026 Registration');
+    expect(screen.queryByRole('button', { name: 'Delete photo' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete document' })).not.toBeInTheDocument();
+    unmount();
+
+    grantedPermissions = new Set(['apparatus.view', 'apparatus.manage']);
+    renderWithRouter(<DocumentsTab id="a-1" />);
+    expect(await screen.findByRole('button', { name: 'Delete document' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete photo' })).toBeInTheDocument();
+  });
+
   it('opens a legacy HTTPS link in a new tab', async () => {
     getDocuments.mockResolvedValue([doc({ documentId: null, fileUrl: 'https://example.com/reg.pdf' })]);
     renderWithRouter(<DocumentsTab id="a-1" />);
