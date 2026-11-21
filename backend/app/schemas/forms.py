@@ -462,11 +462,6 @@ class PublicFormSubmissionResponse(UTCResponseBase):
     form_name: str
     submitted_at: datetime
     message: str = "Thank you for your submission!"
-    # For an outreach request form: the requester's status page, so they can
-    # follow the request and cancel it (owner decision, 2026-11-21). It is a
-    # bearer link, returned only here, to the person who has just submitted;
-    # it is never stored on the submission (see integration_result).
-    event_request_status_path: Optional[str] = None
 
 
 # ============================================

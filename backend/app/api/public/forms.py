@@ -12,7 +12,6 @@ Security measures:
 """
 
 import re
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
@@ -26,7 +25,6 @@ from app.core.security_middleware import (
     get_client_ip,
     public_rate_limit,
 )
-from app.models.event_request import EventRequest
 from app.models.user import Organization, User
 from app.schemas.forms import (
     EmbedPolicyResponse,
@@ -290,27 +288,4 @@ async def submit_public_form(
         form_name=form_name,
         submitted_at=result.submitted_at,
         message="Thank you for your submission!",
-        event_request_status_path=await _event_request_status_path(
-            db, str(result.id), str(result.organization_id)
-        ),
     )
-
-
-async def _event_request_status_path(
-    db: AsyncSession, submission_id: str, organization_id: str
-) -> Optional[str]:
-    """The status page of the outreach request this submission just filed.
-
-    Owner decision, 2026-11-21: the requester sees their status link on the
-    confirmation screen. Matched on the submission the server created in this
-    same request, so a caller can only ever be handed the link to their own
-    request. Nothing is written: the token stays out of
-    ``integration_result``, which forms administrators can read.
-    """
-    token = await db.scalar(
-        select(EventRequest.status_token).where(
-            EventRequest.form_submission_id == submission_id,
-            EventRequest.organization_id == organization_id,
-        )
-    )
-    return f"/event-request/status/{token}" if token else None
