@@ -13,7 +13,7 @@
  * Gated on users.view_consents, notifications.manage, members.manage, or
  * users.edit — NOT users.view, which 25 of the 30 default positions carry and
  * which would have made this a weaker gate than reading one member's consent.
- * users.view_consents is what lets the Historian and Public Outreach positions
+ * users.view_consents is what lets the Historian and Community Outreach Manager positions
  * in without widening to a grant that means something else.
  */
 

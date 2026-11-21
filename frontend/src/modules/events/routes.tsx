@@ -148,7 +148,7 @@ export const getEventsRoutes = () => {
         }
       />
 
-      {/* The Community Engagement report as a printable summary */}
+      {/* The Outreach Impact report as a printable summary */}
       <Route
         path="/events/admin/community/print"
         element={

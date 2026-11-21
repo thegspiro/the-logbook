@@ -1713,6 +1713,45 @@ fix changes a workflow some departments rely on, so the owner decides:
 | **A requirement cannot name one policy acknowledgment**                                 | ✅ Resolved (2026-10-07, owner decision: map provider courses to library courses) | A requirement graded only by training type (`training_compliance.py`) is still met by **any** record of that type. A particular policy is now required by mapping its Target Solutions Course ID to a library course (`external_course_mappings`) and linking a COURSES requirement to that course; imports set `TrainingRecord.course_id` from the mapping. Every version of a course maps to the same library course, so a reissued course never needs the requirement edited. **Residual, accepted:** members who complete a new version read as not current until an officer maps it. Training officers are emailed when a new course resembles a library course, and mapping it backfills the records already imported. See [16-integrations.md](./training/16-integrations.md). |
 | **Requirement grandfathering reads a missing hire date as the account's creation date** | Accepted (owner to note, 2026-10-03)                                              | A requirement's `new_member_cutoff_date` separates existing members from new ones by join date: `hire_date`, else the UTC date the account was created (`training_compliance.member_join_date`). A roster imported into The Logbook without hire dates therefore reads every imported member as having joined on the import day. If that day falls on or after a cutoff, veterans are graded as new members. Before relying on a cutoff, record hire dates for the existing roster, or choose a cutoff earlier than the import. Members already enrolled in a training program are governed separately, by the per-program `apply_to_current_enrollments` choice made when a requirement is added to it.                                                                              |
 
+## Outreach — Vocabulary and Community Risk Reduction Direction (Owner Decisions, 2026-11-21)
+
+The owner unified the outreach vocabulary around a community risk reduction
+(NFPA 1300) framing. Display labels only; slugs, tab ids (`?tab=requests`,
+`?tab=community`), permission strings, routes and file names are unchanged.
+
+| Concept                        | Term                       |
+| ------------------------------ | -------------------------- |
+| The admin hub area             | Community Outreach         |
+| The leader (`public_outreach`) | Community Outreach Manager |
+| The committee                  | Community Outreach Team    |
+| One request's assignee         | Coordinator                |
+| The inbox tab                  | Outreach Requests          |
+| The report tab                 | Outreach Impact            |
+
+Migration `1a5c18b46791` carries the new position names and descriptions to
+stored rows still holding the seeded wording, and the report's new name into
+stored Guest Headcount Reminder templates. The document headings titled
+"Public Outreach Request Pipeline" were kept, because other pages link to their
+anchors.
+
+Decided for later phases, not yet built:
+
+- **Outreach Overview** as the area's first page — needs attention, upcoming
+  outreach with seats filled against needed, quick actions. An outreach event
+  is one scheduled from a request or tagged with an outreach type or CRR
+  activity. The planning view offers week and month, as Shift Scheduling does.
+- **CRR activity tracking**, recordable both as an event and as a lightweight
+  log entry. A department-configurable catalogue (smoke and CO alarm installs,
+  home safety surveys, car seat inspections, extinguisher training, hands-only
+  CPR, Stop the Bleed, fall prevention, school programs), each activity tagged
+  by risk and by priority population, both lists configurable. Location starts
+  at a ZIP code that fills in city and state; an "add more detail" choice adds
+  the full address and resident contact, always encrypted at rest.
+- **Juvenile firesetter intervention** is a separate option a department
+  enables, shown as coming soon (pitfall #19: marked not yet in effect, with no
+  stored switch).
+- **CRR goals** — yearly targets per measure.
+
 ## Outreach Events — What the 2026-11-20 Changes Do Not Cover Yet
 
 The owner decisions of 2026-11-20 (staff-entered requests, calendar-date
@@ -7220,6 +7259,38 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   exclusion in every place the matrix frontend counts cells
   (`complianceMatrixModel.ts`), the print page, the exports and the `as_of`
   minimum; missing one recreates the drift of CLAUDE.md pitfall #29.
+- **My Training, requirement progress and the competency matrix graded with
+  their own rules — ✅ fixed 2026-11-21 (review findings).** Three more
+  copies of the grading rules disagreed with the compliance matrix (CLAUDE.md
+  pitfall #29). `TrainingService.evaluate_requirement_detail` (My Training,
+  the officer's member view, and through it the compliance exports and the
+  forecast) now takes met and expired from the shared grader.
+  `check_requirement_progress` (requirement progress, the user training
+  report, the MCP progress tool) is now built from that detail. The
+  competency matrix maps the shared grader's status to its cells. The
+  compliance matrix screen no longer demotes a cell the backend graded met
+  because the expiry it carries has passed. Visible changes:
+  - A certification never held reads "not met", not "Expired — renew ASAP".
+  - An hours requirement with a zero target is not met by one logged hour.
+  - A biannual hours requirement is no longer lapsed by an unrelated
+    certificate outside its window.
+  - A biannual courses requirement with a lapsed newest expiry reads expired.
+  - With the current month excluded, `days_until_due` counts from the real
+    day, so a due date that passed this month reads overdue, not upcoming.
+  - Requirement progress follows the include-current-month setting, and its
+    batch preload now carries the columns certification and category
+    matching read. It used to match no certificate by name.
+  - Competency cells part way to a target read `in_progress`, which
+    readiness does not count. They used to read `expiring_soon` and count as
+    ready. The summary adds `in_progress_count`. A certification cell's
+    `details` is now the grader's progress, not the certificate number.
+- **Competency matrix endpoint has no screen — open, owner question
+  2026-11-21.** No frontend code or MCP tool calls
+  `GET /training/competency-matrix`; the Training heat map reads the
+  skills-evaluation view (`/training/competency/department`). The endpoint
+  now grades through the shared grader rather than its own rules. Whether to
+  keep it for direct API callers or retire it, with its documentation, is not
+  decided.
 - **Profiles: admin hours choose their own profile — open, owner question
   2026-11-21.** A member's admin-hours targets come from the highest-priority
   matching profile that _carries_ admin hours (ties now resolved as grading
@@ -11208,20 +11279,23 @@ each case):
   2026-11-20** (owner decision "Hard-delete crash gap"): the files are queued
   in `pending_file_deletions` in the delete's own transaction, removed right
   after the commit, and an hourly `pending_file_deletions` sweep retries what
-  a crash or an unreachable store left. `files_not_deleted` in the
-  `user_hard_deleted` audit event now means files left queued for the sweep.
+  a crash or an unreachable store left. Files left queued for the sweep are
+  counted as `files_still_pending` in the `pending_file_deletions_completed`
+  event that follows the delete (since 2026-11-21).
 - **A queued file that never deletes is visible only in logs and the
   table.** A remote store that is gone, or a path that no longer confines to
   its department's area (a moved uploads root), keeps its row, retried every
   hour and logged as a warning after 24 failures. There is no screen listing
   them and no way to dismiss one short of a database edit.
-- **A crash after the delete commits can lose its audit record.** The
-  `user_hard_deleted` event is written after the delete's commit and committed
-  with the request, so a process killed in between keeps the delete (and now
-  the queued files) but loses the critical audit row. Writing the event
-  inside the delete's transaction would close it, but changes the event's
-  shape (the per-file counts are known only after the commit), so it awaits
-  the owner.
+- ~~**A crash after the delete commits can lose its audit record.**~~
+  **Resolved 2026-11-21** (owner decision 2026-11-21, (e)):
+  `user_hard_deleted` is written inside the delete's transaction and carries
+  `files_queued`; the file outcome follows in a
+  `pending_file_deletions_completed` event linked by
+  `user_hard_deleted_audit_id`. A delete whose audit row cannot be written is
+  refused (500, rolled back); every other audit event still never blocks. A
+  process killed after the commit now loses only the follow-up event; the
+  queued rows stay and the sweep reports them, unlinked to the member.
 - **Member deletes outside the endpoint queue nothing**:
   `historical_import_undo` and the onboarding reset delete users directly and
   leave any files their rows named.
@@ -11230,8 +11304,16 @@ each case):
 - **A relocation or remote migration running at the same moment** can rewrite
   a reference between collection and deletion. Neither path locks against the
   other.
-- **Files orphaned by permanent deletes before this fix** are not found or
-  cleaned up; there is no sweep for them.
+- ~~**Files orphaned by permanent deletes before this fix** are not found or
+  cleaned up; there is no sweep for them.~~ **Resolved 2026-11-21** (owner
+  decision 2026-11-21, (c)): `scripts/sweep_orphaned_member_files.py`, a
+  re-runnable command, dry run by default, counts only, files at least 30
+  days old (never under 1), refused while a relocation or remote migration
+  is unfinalized. **Still open:** it sweeps the uploads volume only, so
+  orphans on a remote store are not reached (a remote store has no listing);
+  a rolled-back relocation's manifest stays unfinalized and blocks the
+  command until an operator moves it off the volume; and a removed file
+  survives in backups taken before.
 - **A certificate kept for a voided record is outside the retention sweep**
   once the submission stops naming it. Removing a submission attachment, or
   deleting the submission, now keeps a file another row still names (closed
@@ -11263,11 +11345,16 @@ each case):
   `{"file_name": ...}` entry with no `file_path` (what the 2026-11-20
   migration made of the old bare strings) keeps the uploader's filename, which
   can be the member's name, on their submissions and records.
-- **A training record's own uploaded file has no removal route.** Officers
-  and members can add one (`POST /training/records/{id}/attachments`) but not
-  remove it; it leaves only with retention, anonymisation or a permanent
-  delete. A `DELETE /training/records/{id}/attachments/{index}` mirroring the
-  submission route is the shape if the owner wants one.
+- ~~**A training record's own uploaded file has no removal route.**~~
+  **Resolved 2026-11-21** (owner decision 2026-11-21, (d)):
+  `DELETE /training/records/{id}/attachments/{entry}` and a Remove button in
+  the record's Files dialog. `training.manage` may remove any file uploaded to
+  the record; the member only a file they uploaded (an entry with no
+  `uploaded_by` is an officer's to remove). A certificate an approval copied
+  onto the record, and every file on a voided record, stays. The list carries
+  a server-computed `can_remove`. Removal is by entry id (a repeat is a 204
+  no-op), audited as `training_record_attachment_removed` with ids only, and
+  the file goes through `remove_unreferenced_files` after the commit.
 
 **Closed 2026-11-20** (file-handling gaps, owner decision of that date):
 

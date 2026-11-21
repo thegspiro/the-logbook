@@ -586,6 +586,12 @@ app/api/v1/endpoints/training.py::list_requirements
 app/api/v1/endpoints/training.py::revoke_requirement_override
 
 app/api/v1/endpoints/training_enhancements.py::create_effectiveness_evaluation
+# Removing a training record's file (2026-11-21, owner decision (d)): the
+# record is loaded org-scoped by _load_record_for_attachment (404 otherwise,
+# 403 unless the record's member or training.manage), and _removal_refusal
+# then allows training.manage any record-own file and the member only a file
+# they uploaded; approval-copied certificates and voided records are refused.
+app/api/v1/endpoints/training_enhancements.py::delete_record_attachment
 app/api/v1/endpoints/training_enhancements.py::download_record_attachment
 app/api/v1/endpoints/training_enhancements.py::get_competency_matrices
 app/api/v1/endpoints/training_enhancements.py::get_effectiveness_evaluations

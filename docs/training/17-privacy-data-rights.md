@@ -226,7 +226,7 @@ roster: **Communications → Photo Use Consent**.
 Who can open it: officers who can view member privacy consent records, send
 department messages, manage member profiles, or edit user accounts. The first
 of those is a permission that opens only this page. By default the
-**Historian**, **Public Outreach** and **Communications Officer / PIO**
+**Historian**, **Community Outreach Manager** and **Communications Officer / PIO**
 positions hold it.
 
 ![Photo Use Consent, captured as the administrator (who holds users.view_consents): one member agreed, one declined and twenty not answered, with the roster showing each member's standing](./images/19-43-photo-use-consent.png)

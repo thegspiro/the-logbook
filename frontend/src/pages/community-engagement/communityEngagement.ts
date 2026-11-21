@@ -1,5 +1,5 @@
 /**
- * The Community Engagement tab's presentation rules, kept free of React so they
+ * The Outreach Impact tab's presentation rules, kept free of React so they
  * can be tested on their own. Every figure here is one the backend computed
  * (community_engagement_service.py); this file only decides how it reads.
  */

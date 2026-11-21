@@ -4771,6 +4771,20 @@ later.
 > **Hint:** You can manage attachments on **your own** records. Training
 > officers can manage attachments on any member's records.
 
+### Removing an Attachment _(2026-11-21)_
+
+Select the bin icon beside a file, then **Remove file** to confirm (or
+**Keep it** to cancel). The file is deleted; the training record stays.
+
+- A training officer can remove any file uploaded to the record.
+- A member can remove only a file they uploaded themselves.
+- A certificate that came with an approved self-report cannot be removed
+  here: the approval rests on it. It has no bin icon.
+- A voided record keeps all its files.
+
+_Screenshot: retake `02-79-training-attachments.png` to show the bin icon
+beside a removable file._
+
 ### Edge Cases
 
 - A file over 25 MB is refused with "File too large. Maximum size is 25MB."

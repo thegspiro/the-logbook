@@ -447,13 +447,10 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
+      # The install script behind the apt archive cache: this job runs ffmpeg,
+      # which ubuntu-26.04 does not ship. See the action for why.
       - name: Install system dependencies
-        # Not a bare `apt-get update`: that is unbounded, and on 2026-08-19
-        # it stalled long enough to consume a whole job budget. The script
-        # skips apt when the library is already there and bounds it when it
-        # is not — see its header for the incident.
-        run: |
-          "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
+        uses: ./.github/actions/install-system-deps
 
       - name: Install Python dependencies
         run: pip install -r requirements.txt

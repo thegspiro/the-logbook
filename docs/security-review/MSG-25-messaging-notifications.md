@@ -3268,3 +3268,186 @@ screening-reminder sender, the new member-email-opt-outs routes).
 
 Next in rotation: Feature 26 (Forms) — re-check `list_pull_requests` fresh
 rather than trusting this note.
+
+## Pass 14 (2026-11-21) — watchdog pickup, real delta (per-send CC-copy fix, three new email senders), 0 fixed, 0 new findings
+
+Scheduled watchdog check-in — the dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remained unreachable. Step 0:
+`list_pull_requests` (state `open`) found no PR with a `claude/security-review-*`
+head — PR #4507 (Feature 24, Meetings & minutes, pass 14) had just merged
+clean. Row 25 (Messaging & notifications) confirmed the next `⬜` row in
+`PROGRESS.md`'s rotation table, re-checked directly against a freshly pulled
+`main` rather than trusted from a PR note.
+
+**Baseline:** pass 13's own head, `47d68bce9` (PR #4232, merged). **This
+pass's head:** `f571296e` (the just-merged #4507). `git log --no-merges
+47d68bce9..HEAD` restricted to this feature's own declared backend files
+(`messages.py`, `message_history.py`, `notifications.py`,
+`email_templates.py`, plus the shared `email_service.py`,
+`messaging_service.py`, `message_delivery_service.py`,
+`notification_channels.py`, `email_theme.py`, `push_service.py`,
+`push_dispatch.py`, models/schemas) and the declared frontend scope
+(`frontend/src/modules/communications`, `frontend/src/modules/notifications`,
+`NotificationsPage.tsx`, `usePushNotifications.ts`,
+`devicePushSubscription.ts`, `communicationsServices.ts`) surfaced a real but
+contained delta: `email_templates.py` (+1 line), `message_history.py` (+3
+lines) and `email_service.py` (+255 lines) on the backend, and a 38-file,
++2572/−580 frontend sweep.
+
+### Reviewed in full
+
+- **The per-send CC-copy fix (defect D1, owner decision 2026-11-10),
+  `email_service.py`'s new `_with_template_copies`/`render_notice`/
+  `send_email(..., apply_template_copies=True)`.** The Email Templates editor
+  has long promised its CC/BCC/CC-position addresses are copied on every send
+  of that template; until this change only scheduled emails honoured it. Read
+  the new mechanism end to end rather than trusting the docstring:
+  - **Credential and self-copying templates are excluded by an allowlist, not
+    a denylist that could miss one.** `NO_TEMPLATE_COPY_TYPES` in
+    `email_template_service.py:4119` is `ALWAYS_SENT_TYPES` (welcome,
+    password reset, ballot link, applicant status/follow-up links — every
+    template that carries a temporary password or single-use token) unioned
+    with the six session/meeting-waiver types (which mail their own copies
+    without the approver's Approve/Deny buttons, via `AttendanceWaiverEmails`
+    calling `send_attendance_waiver_notice(..., apply_template_copies=False)`
+    directly). `template_copies_apply()` additionally excludes `CUSTOM` (many
+    rows share that type, so "the template" is not one row) and anything not
+    a valid `EmailTemplateType`. Confirmed by reading every caller of
+    `send_email` that passes `template_type`: none of the credential senders
+    (`send_welcome_email`, `send_password_reset_email`,
+    `send_it_password_notification_email`, the ballot/applicant-link senders)
+    opts back in, and `apply_template_copies` defaults `True` only on the
+    generic `send_email`, which those senders never call with a protected
+    `template_type` in a way that would add copies — verified by reading each
+    one's own call site, not inferred from the default.
+  - **The new CC-position mechanism is org-scoped on both halves of the
+    join.** `position_holder_emails` (`email_template_service.py:4367`)
+    filters both `Position.organization_id` and `User.organization_id` to the
+    caller's org, so a stored id from another department (which should be
+    impossible — see below) would simply resolve to nobody rather than
+    leaking a cross-tenant address. `template_copy_recipients` /
+    `stored_copy_recipients` additionally filter `User.status.in_(
+ACTIVE_ACCOUNT_STATUSES)` via the `is_active` hybrid, so a CC follows only
+    a **current** holder of the position (CLAUDE.md Pitfall #32), not someone
+    who held it and has since left.
+  - **The new `default_cc_position_ids` field is validated in-org on write,
+    through an allowlist.** `email_templates.py`'s `_AUDITED_TEMPLATE_FIELDS`
+    gained the field (so a change to it is audited like every other template
+    field); `EmailTemplateService`'s update path (`email_template_service.py`
+    ~4640) keeps `allowed_fields` as an explicit allowlist (so a caller
+    cannot smuggle `id`/`organization_id` through `**fields` to move a
+    template between departments — the comment at line 4640 names this
+    directly) and calls `assert_all_in_org(db, Position, ids, organization_id,
+label="CC position")` (Pitfall #14c) before storing any id. Uses
+    `apply_updates`, not a bare `if value is not None` guard, so clearing the
+    CC-positions list with an explicit empty array is honoured rather than
+    silently ignored (Pitfall #1's update-path corollary).
+  - **Fails open to the caller's own recipients, not closed to no email.** If
+    `template_copy_recipients` raises (a lookup error), `_with_template_copies`
+    logs a warning and returns the caller's original `cc_emails`/`bcc_emails`
+    unchanged — a department's copy-recipient misconfiguration cannot block
+    the actual notice from reaching its real recipient.
+  - **The message_history.py "test email" fix is the one place
+    `apply_template_copies=False` matters for an existing route, not a new
+    one.** `send_test_email` (`message_history.py:232`) now passes
+    `apply_template_copies=False` with a comment explaining why: a test send
+    goes to the admin who clicked "send test", never to the template's real
+    CC list — without this, testing a template with a CC position configured
+    would have emailed that position's current holder a message headed
+    "TEST:", which the holder has no way to know not to act on.
+  - **Covered by existing tests**, not merely asserted: `grep -rl
+"apply_template_copies\|template_copy_recipients\|NO_TEMPLATE_COPY_TYPES"
+backend/tests/` finds `test_scheduled_email_template_copies.py` and
+    `test_email_template_default_copies.py`, both pre-dating this pass
+    (the per-send extension reuses the same recipient-resolution helper the
+    scheduled-email path already tested).
+- **Three new `EmailService` senders** (`send_shift_evaluation_preceptor_link_email`,
+  `send_attendance_waiver_notice`, `send_leave_workflow_email`,
+  `send_leave_of_absence_notice_email`) are thin wrappers around the existing
+  `_render_unless_switched_off`/`send_email` pair — read each in full and
+  found no new recipient-resolution or templating logic of their own; the
+  actual "who gets told, with what" decisions live in their callers
+  (`leave_of_absence_notices.py`, `leave_workflow_notices.py`,
+  `email_templates_attendance_waivers.py`), which belong to other features'
+  own rotation rows (Users & organizations / Scheduled tasks), not this one.
+  Spot-checked the two leave-notice callers anyway since they are new callers
+  into this feature's own shared send path:
+  - `leave_of_absence_notices.py`'s `build_context` never includes
+    `leave_type` or the leave's reason — verified by reading the function
+    (only `member_name`, `change_word`, `summary`, dates, and a training-effect
+    sentence derived from a boolean + the department's leave-month rule, never
+    the raw fields), matching its own docstring's promise. `deliver_leave_notice`
+    org-scopes both the leave and member lookups and filters the officer's own
+    leave out (an officer acting on their own leave is not told, matching
+    training-record-notice precedent).
+  - `leave_workflow_notices.py`'s claim mechanism (`LeaveNoticeSend`, unique on
+    `(organization_id, kind, key)`, `_claim`/`_release` catching `IntegrityError`)
+    is a correct at-most-once idempotency guard (Pitfall #36) — a concurrent or
+    re-run send finds the row already committed and does nothing. `_officers`
+    org-scopes and current-member-filters (`User.is_active`) before permission-
+    checking each candidate.
+- **The `default_cc_position_ids` column migration**
+  (`20261111_1318_1c6632035ccd`) adds it `nullable=True` with no backfill
+  needed (existing rows read as `NULL` → `or []` → empty list in code) —
+  correct per Pitfall #35, no tightening of an existing column.
+- **Frontend sweep (38 files, `communications` module + `NotificationsPage.tsx`
+  - `communicationsServices.ts`)** — grepped the full diff for
+    `window.confirm`/`alert`/`prompt` and a bare `toHaveBeenCalledWith()`: zero
+    hits. The one new component, `CcPositionsField.tsx`, is a simple fetch-and-
+    checkbox picker over `GET /roles` with no security-relevant logic of its own
+    (the backend re-validates every id regardless, as above); its own comment
+    says so.
+
+### Re-swept, unchanged since pass 13
+
+- **Route count: 52** (13 + 2 + 20 + 17), re-enumerated by walking all four
+  endpoint files' decorators by AST from scratch — unchanged from pass 13.
+  Every route carries a `Depends(...)` in its signature.
+- `.ilike(`/`.like(` sites: unchanged, still pass `escape=LIKE_ESCAPE_CHAR`
+  with a `like_pattern()`-built pattern (SEC-1/SEC-2, guarded by
+  `tests/test_like_escaping.py`).
+- Standing findings MSG-12 (stranded/throttled delivery retry, owner-accepted
+  2026-08-31/09-06) and MSG-15 (web-push DNS-rebinding pin skipped outside
+  prod/staging, owner-accepted 2026-09-06): both re-confirmed unchanged in
+  `docs/KNOWN_LIMITATIONS.md`, neither touched by this delta.
+- MSG-3 (test-email to an arbitrary address, by design) and NOTIF2-3
+  (residual DNS-rebinding note): unchanged, re-confirmed in
+  `docs/app-review/messaging.md` / `notifications.md`.
+
+**0 new findings.** No route gained or lost a permission; no by-id query lost
+its organization filter; the one new client-settable FK
+(`default_cc_position_ids`) is validated in-org before storage; the one new
+nullable column needed no backfill; and the pass's own biggest change (the
+per-send CC-copy fix) closes a gap in favor of the department's own documented
+promise rather than opening one, with its dangerous direction (credential
+templates) closed by an allowlist and already tested.
+
+## Guard tests added (pass 14)
+
+None — the reviewed change ships with its own tests
+(`test_scheduled_email_template_copies.py`,
+`test_email_template_default_copies.py`, predating this pass but exercising
+the same shared helper), and this pass found no new finding requiring its own
+guard test.
+
+## Completion gate (pass 14)
+
+| Check                                                                                                                                                                                      | Result                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (CI's pinned 7.4.1)                                                                                                                                          | ✅ clean                                                           |
+| `black --check app/ tests/ alembic/` (CI's pinned 26.10.1)                                                                                                                                 | ✅ clean — 3,374 files unchanged                                   |
+| `isort --check-only app/ tests/ alembic/` (CI's pinned 9.0.2)                                                                                                                              | ✅ clean                                                           |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                          | ✅ PASSED — 804 revisions, single head `3daf47506e9e`              |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                      | ✅ 329 routes, 0 errors/warnings                                   |
+| `pytest tests/ -q -k "messag or notification or email_template or email_theme or push_service or push_dispatch or leave_of_absence_notice or leave_workflow or leave_notice"`              | ✅ 2,730 passed, 1 pre-existing environment-only skip (`py_vapid`) |
+| `npm run typecheck`                                                                                                                                                                        | ✅ 0 errors                                                        |
+| `npm run lint`                                                                                                                                                                             | ✅ 0 errors/warnings                                               |
+| `npx vitest run src/modules/communications src/modules/notifications src/pages/NotificationsPage.test.tsx src/hooks/usePushNotifications.test.ts src/utils/devicePushSubscription.test.ts` | ✅ 333 passed (44 files)                                           |
+
+No fix was made this pass (0 findings), so nothing beyond the normal rotation
+gate was needed to verify a change; the gate above exists to show this delta
+didn't regress anything in scope, including the other features' work it
+re-verified (the two leave-notice callers).
+
+Next in rotation: Feature 26 (Forms) — re-check `list_pull_requests` fresh
+rather than trusting this note.

@@ -195,11 +195,14 @@ export const toneOf = (cell: ComplianceMatrixCell, asOf: string): CellTone => {
   if (cell.status === 'not_applicable') return CellTone.NOT_YET_HELD;
   if (cell.status === 'expired') return CellTone.LAPSED;
   if (MET_STATUSES.has(cell.status)) {
+    // Met is the backend's decision; a lapse arrives as `expired` above. The
+    // expiry only labels a renewal coming up. On an hours or courses cell it
+    // is the latest counted record's and never lapses the requirement, so
+    // demoting a met cell on a passed date contradicted the standing and the
+    // dashboard's intervention list (CLAUDE.md pitfall #29).
     const days = daysUntilExpiry(cell, asOf);
-    if (days !== null && days <= COMPLIANCE_EXPIRING_SOON_DAYS) {
-      // Already past its date at the cutoff but still reported met — trust
-      // the date.
-      return days < 0 ? CellTone.LAPSED : CellTone.SOON;
+    if (days !== null && days >= 0 && days <= COMPLIANCE_EXPIRING_SOON_DAYS) {
+      return CellTone.SOON;
     }
     return CellTone.MET;
   }
