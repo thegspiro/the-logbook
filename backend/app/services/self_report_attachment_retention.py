@@ -137,7 +137,16 @@ class SelfReportAttachmentRetention:
                         .where(
                             TrainingSubmission.organization_id == org_id,
                             TrainingSubmission.status.in_(DECIDED_STATUSES),
-                            TrainingSubmission.reviewed_at < cutoff,
+                            # An auto-approved submission is decided as it
+                            # is submitted and never reviewed, so its
+                            # reviewed_at stays NULL; NULL < cutoff matches
+                            # nothing and its certificate would be kept for
+                            # ever. Its submission time is its decision time.
+                            func.coalesce(
+                                TrainingSubmission.reviewed_at,
+                                TrainingSubmission.submitted_at,
+                            )
+                            < cutoff,
                             func.json_length(TrainingSubmission.attachments) > 0,
                             TrainingSubmission.id > after_id,
                         )

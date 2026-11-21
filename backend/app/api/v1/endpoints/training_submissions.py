@@ -213,6 +213,18 @@ async def create_submission_with_attachment(
             # a record whose evidence was deleted out from under it is not.
             await file_storage.delete_quietly(stored["file_path"])
             raise
+        # A repeated client_request_id returns the submission the first
+        # attempt stored, with that attempt's file, and so does losing the
+        # race on its unique key. This attempt's upload then belongs to no
+        # row, and retention, anonymisation and hard delete find files only
+        # through a row, so nothing would ever remove it (pitfall #36).
+        named = {
+            entry.get("file_path")
+            for entry in (submission.attachments or [])
+            if isinstance(entry, dict)
+        }
+        if stored["file_path"] not in named:
+            await file_storage.delete_quietly(stored["file_path"])
         return submission
 
 

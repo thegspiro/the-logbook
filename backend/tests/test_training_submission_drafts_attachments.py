@@ -735,6 +735,53 @@ class TestCreateWithAttachment:
         # The row never landed, so the bytes on disk belong to nothing.
         assert os.listdir(os.path.join(str(tmp_path), "org-1", "self-reports")) == []
 
+    async def test_a_repeat_keeps_only_the_file_the_submission_names(
+        self, monkeypatch, tmp_path
+    ):
+        """A resend with the same client_request_id returns the submission
+        already stored. The resend's own upload belongs to nothing, and no
+        erasure path finds a file by anything but a row's reference, so it is
+        removed here (2026-11-21 member-files review)."""
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
+        monkeypatch.setattr(
+            file_storage_service, "detect_mime_type", lambda content: "application/pdf"
+        )
+        stored_rows: dict[str, SimpleNamespace] = {}
+
+        async def _create(**kwargs):
+            key = kwargs["client_request_id"]
+            if key not in stored_rows:
+                stored_rows[key] = _submission(
+                    status=SubmissionStatus.APPROVED,
+                    attachments=kwargs["attachments"],
+                )
+            return stored_rows[key]
+
+        monkeypatch.setattr(
+            training_submissions,
+            "TrainingSubmissionService",
+            lambda db: SimpleNamespace(create_submission=_create),
+        )
+
+        for _ in range(2):
+            submission = await training_submissions.create_submission_with_attachment(
+                payload=self._payload(client_request_id="device-attempt-1"),
+                file=SimpleNamespace(
+                    read=AsyncMock(return_value=b"%PDF-1.4"), filename="cert.pdf"
+                ),
+                db=None,
+                current_user=SimpleNamespace(id="user-1", organization_id="org-1"),
+            )
+
+        on_disk = [
+            os.path.join(directory, name)
+            for directory, _, names in os.walk(
+                os.path.join(str(tmp_path), "org-1", "self-reports")
+            )
+            for name in names
+        ]
+        assert on_disk == [submission.attachments[0]["file_path"]]
+
 
 class TestStartTime:
     def test_the_reported_start_time_reaches_the_record(self):
