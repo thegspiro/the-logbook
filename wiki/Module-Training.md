@@ -1215,7 +1215,10 @@ never sets it.
   the server-side cursor opens. PDF is available only for
   `individual`, `member_records`, and `compliance`; bulk PDFs are merged with
   `pypdf` (an empty result gets a placeholder page). An unknown `report_type`
-  returns 400.
+  returns 400. The `compliance` export's status cells come from
+  `training_compliance.grade_members`, the matrix's grader, as of the
+  department's today; `start_date` / `end_date` scope only the hours and
+  completed-record columns, whose CSV headers carry the dates _(2026-11-21)_.
 - **Personal-data exports** apply the module's result-visibility setting to
   `ShiftCompletionReport` fields: officer-only evaluation data hidden from the
   trainee in the application is also omitted from a newly generated export;

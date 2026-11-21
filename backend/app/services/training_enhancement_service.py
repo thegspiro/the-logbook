@@ -19,9 +19,10 @@ from typing import (
     NamedTuple,
     Optional,
     Sequence,
+    Tuple,
 )
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -53,7 +54,10 @@ from app.services.training_compliance import (
     ComplianceGrading,
     EvaluationCredits,
     HeldSession,
+    MemberCompliance,
+    MemberGrading,
     _load_compliance_config,
+    grade_members,
     load_credited_shift_dates,
     load_evaluation_credits,
     load_held_sessions,
@@ -66,6 +70,7 @@ from app.services.training_record_source import (
     record_sources,
 )
 from app.services.training_waiver_service import WaiverPeriod, fetch_org_waivers
+from app.utils import streamed_query
 from app.utils.csv_export import SafeCsvChunks, collect_csv
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import (
@@ -99,26 +104,33 @@ def _stringify_uuids(data: dict) -> dict:
     }
 
 
-def _detail_status(detail: Dict[str, Any]) -> str:
-    """A ``TrainingService.evaluate_requirement_detail`` dict as a status
-    ``tally_standing`` understands."""
-    if detail.get("catch_up_deadline"):
-        return CATCH_UP_STATUS
-    if detail.get("not_applicable"):
-        return NOT_YET_HELD_STATUS
-    return TrainingStatus.COMPLETED.value if detail["is_met"] else "not_met"
+def _project(
+    grading: ComplianceGrading,
+    member_grading: MemberGrading,
+    met: int,
+    total: int,
+    expiring_count: int,
+) -> Tuple[str, Optional[float]]:
+    """A member's standing and percentage with ``expiring_count`` lapsed.
 
-
-def _forecast_pct(met: int, total: int, expiring_count: int) -> Optional[float]:
-    """A member's compliance percentage with ``expiring_count`` lapsed.
-
-    Simple forecast: each expiring certification costs one requirement. None
-    when nothing grades the member — they are not applicable (TR4-4).
+    Simple forecast: each expiring certification costs one met requirement.
+    Classified by the member's own thresholds and the department's threshold
+    type, as their current standing is, so a figure and its colour come from
+    one call. ``("not_applicable", None)`` when nothing grades the member
+    (TR4-4).
     """
-    if total <= 0:
-        return None
-    current = met / total * 100
-    return round(max(0, current - (expiring_count / total * 100)), 1)
+    return grading.classify(member_grading, max(0, met - expiring_count), total)
+
+
+def _member_batches(members: Sequence[User]) -> List[Sequence[User]]:
+    """``members`` in slices of ``streamed_query.EXPORT_BATCH_SIZE``.
+
+    The size is read from the module on each call, so a test can lower it. A
+    slice never splits a member's grading: batches are of members, not
+    records.
+    """
+    size = max(1, streamed_query.EXPORT_BATCH_SIZE)
+    return [members[i : i + size] for i in range(0, len(members), size)]
 
 
 class _ComplianceRow(NamedTuple):
@@ -141,54 +153,81 @@ class _MemberRecords(NamedTuple):
 
 
 def _requirement_cells(
-    requirements,
-    user,
-    records,
-    today: date,
-    shift_dates: List[date],
-    held_sessions: Mapping[str, Sequence[HeldSession]],
-    waivers: Sequence[WaiverPeriod],
-    evaluation_credits: EvaluationCredits,
-    grading: ComplianceGrading,
+    requirements: Sequence[TrainingRequirement],
+    compliance: Optional[MemberCompliance],
 ) -> List[str]:
-    """One export cell per requirement column for ``user``.
+    """One export cell per requirement column, from a member's matrix grading.
 
-    "N/A" where the requirement does not grade this member — their compliance
-    profile does not list it, or their membership type, role, or a
-    grandfathering cutoff exempts them — so a member is not printed as failing
-    a standard that was never theirs. ``grading.for_member`` decides, as on the
-    compliance matrix (CLAUDE.md pitfall 29). "Due <date>" while an existing
-    member's catch-up period runs.
+    ``compliance`` is the member's entry from
+    ``training_compliance.grade_members``, the grader behind the compliance
+    matrix (``get_compliance_matrix``) and ``grade_org_members``, so a cell
+    reads what the matrix shows for the member today (CLAUDE.md pitfall 29,
+    owner decision 2026-11-21). "N/A" where the requirement does not grade
+    this member — their compliance profile does not list it, or their
+    membership type, role or a grandfathering cutoff exempts them — so a
+    member is not printed as failing a standard that was never theirs. "Due
+    <date>" while an existing member's catch-up period runs, and "No sessions
+    yet" for a session-attendance requirement no session of which is held.
+    ``None`` (no active requirement grades anyone) prints every column N/A.
     """
-    from app.services.training_service import TrainingService
-
-    join_date = member_join_date(user)
-    graded = {
-        str(r.id) for r in grading.for_member(user, list(requirements)).requirements
-    }
+    by_id = (
+        {str(req.id): ev for req, ev in compliance.evaluations} if compliance else {}
+    )
     cells: List[str] = []
     for req in requirements:
-        if str(req.id) not in graded:
+        ev = by_id.get(str(req.id))
+        if ev is None:
             cells.append("N/A")
-            continue
-        detail = TrainingService.evaluate_requirement_detail(
-            req,
-            records,
-            today,
-            waivers=list(waivers),
-            org_include_current_month=grading.include_current_month,
-            join_date=join_date,
-            shift_dates=shift_dates,
-            held_sessions=held_sessions,
-            evaluation_credits=evaluation_credits,
-        )
-        if detail.get("catch_up_deadline"):
-            cells.append(f"Due {detail['catch_up_deadline']}")
-        elif detail.get("not_applicable"):
+        elif ev.status == CATCH_UP_STATUS:
+            cells.append(f"Due {ev.catch_up_deadline}")
+        elif ev.status == NOT_YET_HELD_STATUS:
             cells.append("No sessions yet")
+        elif ev.status == TrainingStatus.COMPLETED.value:
+            cells.append("Met")
         else:
-            cells.append("Met" if detail["is_met"] else "Not Met")
+            cells.append("Not Met")
     return cells
+
+
+class _PeriodTotals(NamedTuple):
+    """A member's completed hours and record count inside a report period."""
+
+    hours: float
+    records: int
+
+
+async def _period_totals(
+    db: AsyncSession,
+    organization_id: str,
+    user_ids: Sequence[str],
+    start_date: date,
+    end_date: date,
+) -> Dict[str, _PeriodTotals]:
+    """Completed hours and records per member between the two dates.
+
+    The only figures in the compliance export the report period scopes; the
+    requirement cells are the current standing (owner decision 2026-11-21).
+    One grouped query for the members given, rather than one per member.
+    """
+    if not user_ids:
+        return {}
+    rows = await db.execute(
+        select(
+            TrainingRecord.user_id,
+            func.coalesce(func.sum(TrainingRecord.hours_completed), 0),
+            func.count(TrainingRecord.id),
+        )
+        .where(TrainingRecord.organization_id == organization_id)
+        .where(TrainingRecord.status == TrainingStatus.COMPLETED)
+        .where(TrainingRecord.completion_date >= start_date)
+        .where(TrainingRecord.completion_date <= end_date)
+        .where(TrainingRecord.user_id.in_([str(u) for u in user_ids]))
+        .group_by(TrainingRecord.user_id)
+    )
+    return {
+        str(user_id): _PeriodTotals(float(hours or 0), int(count))
+        for user_id, hours, count in rows.all()
+    }
 
 
 class RecertificationService:
@@ -1212,20 +1251,15 @@ class ReportExportService:
             )
         )
 
-    async def stream_compliance_csv(
-        self,
-        organization_id: str,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-    ) -> AsyncIterator[str]:
-        """Generate a compliance report as CSV string"""
-        if not end_date:
-            end_date = await resolve_org_today(self.db, organization_id)
-        if not start_date:
-            start_date = date(end_date.year, 1, 1)
+    async def _compliance_population(
+        self, organization_id: str
+    ) -> Tuple[List[User], List[TrainingRequirement]]:
+        """The members and requirements of the compliance CSV and PDF.
 
-        # Get all active, non-exempt members. positions eager-loaded for the
-        # per-member applicability check below.
+        Active, non-exempt members by last and first name, and active
+        requirements by name: the matrix's population and order. Positions are
+        loaded because a compliance profile can match on them.
+        """
         users_result = await self.db.execute(
             select(User)
             .options(selectinload(User.positions))
@@ -1233,94 +1267,116 @@ class ReportExportService:
             .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
             .where(User.compliance_exempt.is_(False))
             .where(User.deleted_at.is_(None))
+            .order_by(User.last_name, User.first_name)
         )
-        users = users_result.scalars().all()
-
-        # Get requirements
         req_result = await self.db.execute(
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == organization_id)
             .where(TrainingRequirement.active.is_(True))
+            .order_by(TrainingRequirement.name)
         )
-        requirements = req_result.scalars().all()
+        return list(users_result.scalars().all()), list(req_result.scalars().all())
 
-        # "Met" is judged as of the department's today, the same day the
-        # compliance screens use; a caller's end_date only bounds the rows.
+    async def _grade_batch(
+        self,
+        organization_id: str,
+        members: Sequence[User],
+        requirements: Sequence[TrainingRequirement],
+        today: date,
+        grading: ComplianceGrading,
+        waivers_by_user: Mapping[str, Sequence[WaiverPeriod]],
+        held_sessions: Mapping[str, Sequence[HeldSession]],
+    ) -> Dict[str, MemberCompliance]:
+        """``grade_members`` for ``members``, keyed by member id."""
+        graded = await grade_members(
+            self.db,
+            str(organization_id),
+            members,
+            requirements,
+            today,
+            grading,
+            waivers_by_user=waivers_by_user,
+            held_sessions=held_sessions,
+        )
+        return {str(c.member.id): c for c in graded}
+
+    async def stream_compliance_csv(
+        self,
+        organization_id: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> AsyncIterator[str]:
+        """The compliance report as CSV, one chunk per batch of members.
+
+        Each requirement column is the member's standing as of the
+        department's today, exactly as the Compliance Matrix shows it; the
+        period (default 1 January through today) scopes only the hours and
+        completed-record columns, whose headers carry it (owner decision
+        2026-11-21).
+        """
         today = await resolve_org_today(self.db, organization_id)
-        # Which requirements grade each member, and the department's
-        # current-month cut-off, as the compliance matrix resolves them.
+        if not end_date:
+            end_date = today
+        if not start_date:
+            start_date = date(end_date.year, 1, 1)
+
+        users, requirements = await self._compliance_population(organization_id)
         grading = ComplianceGrading.from_config(
             await _load_compliance_config(self.db, str(organization_id))
         )
-        include_current = grading.include_current_month
-        shifts_by_user = await load_credited_shift_dates(
-            self.db,
-            organization_id,
-            [u.id for u in users],
-            requirements,
-            today,
-            include_current,
-        )
-        evaluations_by_user = await load_evaluation_credits(
-            self.db,
-            organization_id,
-            [u.id for u in users],
-            requirements,
-            today,
-            include_current,
-        )
+        waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), requirements
         )
-        # The waivers, leaves, overrides and excused sessions the compliance
-        # screens grade with, so an export cannot print "Not Met" for a member
-        # the matrix shows as met (Pitfall #29).
-        waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
+        period = f"{start_date.isoformat()} to {end_date.isoformat()}"
 
-        # Written and sent one member at a time (AH-16).
+        # Streamed a batch of members at a time (AH-16). The batch size is read
+        # from the module when the export runs, so a test can lower it. Each
+        # batch's queries run between yields with no cursor open, so the
+        # server-side-cursor caveat in streamed_query does not apply.
         async def chunks() -> AsyncIterator[str]:
             writer = SafeCsvChunks()
 
-            header = ["Member Name", "Email", "Total Hours", "Completed Courses"]
+            header = [
+                "Member Name",
+                "Email",
+                f"Total Hours ({period})",
+                f"Completed Records ({period})",
+            ]
             for req in requirements:
                 header.append(f"{req.name} (Status)")
             writer.writerow(header)
             yield writer.drain()
 
-            for user in users:
-                records_result = await self.db.execute(
-                    select(TrainingRecord)
-                    .where(TrainingRecord.user_id == str(user.id))
-                    .where(TrainingRecord.organization_id == organization_id)
-                    .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-                    .where(TrainingRecord.completion_date >= start_date)
-                    .where(TrainingRecord.completion_date <= end_date)
+            for batch in _member_batches(users):
+                graded = await self._grade_batch(
+                    organization_id,
+                    batch,
+                    requirements,
+                    today,
+                    grading,
+                    waivers_by_user,
+                    held_sessions,
                 )
-                records = records_result.scalars().all()
-
-                total_hours = sum(r.hours_completed or 0 for r in records)
-                row = [
-                    f"{user.first_name} {user.last_name}",
-                    user.email,
-                    f"{total_hours:.1f}",
-                    str(len(records)),
-                ]
-
-                row.extend(
-                    _requirement_cells(
-                        requirements,
-                        user,
-                        records,
-                        today,
-                        shifts_by_user.get(str(user.id), []),
-                        held_sessions,
-                        waivers_by_user.get(str(user.id), []),
-                        evaluations_by_user.get(str(user.id), {}),
-                        grading,
+                totals = await _period_totals(
+                    self.db,
+                    organization_id,
+                    [str(u.id) for u in batch],
+                    start_date,
+                    end_date,
+                )
+                for user in batch:
+                    figures = totals.get(str(user.id), _PeriodTotals(0.0, 0))
+                    row = [
+                        f"{user.first_name} {user.last_name}",
+                        user.email,
+                        f"{figures.hours:.1f}",
+                        str(figures.records),
+                    ]
+                    row.extend(
+                        _requirement_cells(requirements, graded.get(str(user.id)))
                     )
-                )
-
-                writer.writerow(row)
+                    writer.writerow(row)
                 yield writer.drain()
 
         return chunks()
@@ -1435,7 +1491,40 @@ class ReportExportService:
     async def generate_compliance_forecast(
         self, organization_id: str
     ) -> List[Dict[str, Any]]:
-        """Generate predictive compliance forecast for all members"""
+        """Each member's compliance forecast (see ``_forecast_rows``)."""
+        rows, _ = await self._forecast_rows(organization_id)
+        return rows
+
+    async def generate_compliance_forecast_report(
+        self, organization_id: str
+    ) -> Dict[str, Any]:
+        """The members' forecasts and the department's four averages.
+
+        Each average is the mean of the graded members' figures at that
+        horizon, classified by the department's thresholds and threshold type
+        (``ComplianceGrading.classify_average``), so the screen colours it as
+        the backend decided rather than by bands of its own (CLAUDE.md
+        pitfall 29, owner direction 2026-11-21).
+        """
+        rows, grading = await self._forecast_rows(organization_id)
+        horizons = {
+            "current": ("current_compliance_percentage", "current_standing"),
+            "days_30": ("forecast_30_days", "forecast_30_standing"),
+            "days_60": ("forecast_60_days", "forecast_60_standing"),
+            "days_90": ("forecast_90_days", "forecast_90_standing"),
+        }
+        averages: Dict[str, Dict[str, Any]] = {}
+        for key, (pct_field, standing_field) in horizons.items():
+            standing, pct = grading.classify_average(
+                (row[pct_field], row[standing_field]) for row in rows
+            )
+            averages[key] = {"pct": pct, "standing": standing}
+        return {"members": rows, "averages": averages}
+
+    async def _forecast_rows(
+        self, organization_id: str
+    ) -> Tuple[List[Dict[str, Any]], ComplianceGrading]:
+        """Every graded member's forecast row, and the grading behind them."""
         today = await resolve_org_today(self.db, organization_id)
         forecasts = []
 
@@ -1491,94 +1580,148 @@ class ReportExportService:
         )
         waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
 
-        for user in users:
-            # Only what grades this member: their compliance profile's list,
-            # then type, role, and grandfathering.
-            member_grading = grading.for_member(user, list(all_requirements))
-            requirements = member_grading.requirements
-            join_date = member_join_date(user)
-            records_result = await self.db.execute(
-                select(TrainingRecord).where(
-                    TrainingRecord.user_id == str(user.id),
-                    TrainingRecord.organization_id == organization_id,
-                    TrainingRecord.status == TrainingStatus.COMPLETED,
-                )
+        # Graded a batch of members at a time by the matrix's grader, with one
+        # record query per batch rather than one per member.
+        for batch in _member_batches(users):
+            graded = await self._grade_batch(
+                organization_id,
+                batch,
+                all_requirements,
+                today,
+                grading,
+                waivers_by_user,
+                held_sessions,
             )
-            records = records_result.scalars().all()
-
-            # Current compliance
-            statuses: List[str] = []
-            at_risk = []
-            expiring: List[Dict[str, Any]] = []
-
-            for req in requirements:
-                from app.services.training_service import TrainingService
-
-                detail = TrainingService.evaluate_requirement_detail(
-                    req,
-                    records,
-                    today,
-                    waivers=waivers_by_user.get(str(user.id), []),
-                    org_include_current_month=include_current,
-                    join_date=join_date,
-                    shift_dates=shifts_by_user.get(str(user.id), []),
-                    held_sessions=held_sessions,
-                    evaluation_credits=evaluations_by_user.get(str(user.id), {}),
-                )
-                statuses.append(_detail_status(detail))
-                if (
-                    detail.get("days_until_due") is not None
-                    and 0 < detail["days_until_due"] <= 90
-                ):
-                    at_risk.append(
-                        {"name": req.name, "days_until_due": detail["days_until_due"]}
-                    )
-
-            # Check expiring certs
-            for r in records:
-                if (
-                    r.expiration_date
-                    and today < r.expiration_date <= today + timedelta(days=90)
-                ):
-                    expiring.append(
-                        {
-                            "course_name": r.course_name,
-                            "expiration_date": str(r.expiration_date),
-                            "days_remaining": (r.expiration_date - today).days,
-                        }
-                    )
-
-            # Catch-up requirements count neither way. A member nothing grades
-            # has no percentage at all — not 100%, which counted them as
-            # passing in every department average (TR4-4), and not 0%, which
-            # dividing by a substituted 1 once reported.
-            met, total = tally_standing(statuses)
-            expiring_30 = sum(1 for e in expiring if e["days_remaining"] <= 30)
-            expiring_60 = sum(1 for e in expiring if e["days_remaining"] <= 60)
-            expiring_90 = len(expiring)
-            # The current figure's standing, by the member's profile
-            # thresholds or the department's, so a screen colours it as the
-            # matrix does instead of by thresholds of its own. The projections
-            # stay plain percentages: they subtract every certificate
-            # expiring in the window, whatever grades it, so they are an
-            # estimate rather than a standing.
-            current_standing, _ = grading.classify(member_grading, met, total)
-
-            forecasts.append(
-                {
-                    "user_id": str(user.id),
-                    "user_name": f"{user.first_name} {user.last_name}",
-                    "current_compliance_percentage": _forecast_pct(met, total, 0),
-                    "current_standing": current_standing,
-                    "forecast_30_days": _forecast_pct(met, total, expiring_30),
-                    "forecast_60_days": _forecast_pct(met, total, expiring_60),
-                    "forecast_90_days": _forecast_pct(met, total, expiring_90),
-                    "at_risk_requirements": at_risk,
-                    "expiring_certifications": expiring,
-                }
+            records_by_user = await self._completed_records(
+                organization_id, [str(u.id) for u in batch]
             )
+            for user in batch:
+                forecasts.append(
+                    self._member_forecast(
+                        user,
+                        grading,
+                        grading.for_member(user, list(all_requirements)),
+                        graded.get(str(user.id)),
+                        records_by_user.get(str(user.id), []),
+                        today,
+                        include_current,
+                        shifts_by_user.get(str(user.id), []),
+                        evaluations_by_user.get(str(user.id), {}),
+                        waivers_by_user.get(str(user.id), []),
+                        held_sessions,
+                    )
+                )
 
-        return forecasts
+        return forecasts, grading
+
+    async def _completed_records(
+        self, organization_id: str, user_ids: Sequence[str]
+    ) -> Dict[str, List[TrainingRecord]]:
+        """Every completed record of the given members, by member id."""
+        if not user_ids:
+            return {}
+        result = await self.db.execute(
+            select(TrainingRecord).where(
+                TrainingRecord.organization_id == organization_id,
+                TrainingRecord.status == TrainingStatus.COMPLETED,
+                TrainingRecord.user_id.in_(list(user_ids)),
+            )
+        )
+        by_user: Dict[str, List[TrainingRecord]] = {}
+        for record in result.scalars().all():
+            by_user.setdefault(str(record.user_id), []).append(record)
+        return by_user
+
+    @staticmethod
+    def _member_forecast(
+        user: User,
+        grading: ComplianceGrading,
+        member_grading: MemberGrading,
+        compliance: Optional[MemberCompliance],
+        records: Sequence[TrainingRecord],
+        today: date,
+        include_current: bool,
+        shift_dates: Sequence[date],
+        evaluation_credits: EvaluationCredits,
+        waivers: Sequence[WaiverPeriod],
+        held_sessions: Mapping[str, Sequence[HeldSession]],
+    ) -> Dict[str, Any]:
+        """One member's forecast row.
+
+        The current figure and standing are the matrix's grading
+        (``grade_members``, CLAUDE.md pitfall 29). The at-risk list reads each
+        graded requirement's due date, which only
+        ``TrainingService.evaluate_requirement_detail`` computes; it decides
+        no status here. Each projection subtracts every certificate expiring
+        in the window, whatever grades it, and is classified by the member's
+        own thresholds like the current figure (owner direction 2026-11-21).
+        It is still an estimate: a certificate no requirement reads, or one
+        already renewed, lowers it too (docs/KNOWN_LIMITATIONS.md).
+        """
+        from app.services.training_service import TrainingService
+
+        evaluations = compliance.evaluations if compliance else ()
+        join_date = member_join_date(user)
+        at_risk = []
+        for req, _ in evaluations:
+            detail = TrainingService.evaluate_requirement_detail(
+                req,
+                list(records),
+                today,
+                waivers=list(waivers),
+                org_include_current_month=include_current,
+                join_date=join_date,
+                shift_dates=shift_dates,
+                held_sessions=held_sessions,
+                evaluation_credits=evaluation_credits,
+            )
+            days = detail.get("days_until_due")
+            if days is not None and 0 < days <= 90:
+                at_risk.append({"name": req.name, "days_until_due": days})
+
+        expiring: List[Dict[str, Any]] = []
+        for r in records:
+            if r.expiration_date and today < r.expiration_date <= today + timedelta(
+                days=90
+            ):
+                expiring.append(
+                    {
+                        "course_name": r.course_name,
+                        "expiration_date": str(r.expiration_date),
+                        "days_remaining": (r.expiration_date - today).days,
+                    }
+                )
+
+        # Catch-up requirements count neither way. A member nothing grades
+        # has no percentage at all — not 100%, which counted them as passing
+        # in every department average (TR4-4), and not 0%, which dividing by
+        # a substituted 1 once reported.
+        met, total = tally_standing(ev.status for _, ev in evaluations)
+        current_standing, current_pct = _project(grading, member_grading, met, total, 0)
+        horizons = {
+            days: _project(
+                grading,
+                member_grading,
+                met,
+                total,
+                sum(1 for e in expiring if e["days_remaining"] <= days),
+            )
+            for days in (30, 60, 90)
+        }
+        return {
+            "user_id": str(user.id),
+            "user_name": f"{user.first_name} {user.last_name}",
+            "current_compliance_percentage": current_pct,
+            "current_standing": current_standing,
+            "forecast_30_days": horizons[30][1],
+            "forecast_30_standing": horizons[30][0],
+            "forecast_60_days": horizons[60][1],
+            "forecast_60_standing": horizons[60][0],
+            "forecast_90_days": horizons[90][1],
+            "forecast_90_standing": horizons[90][0],
+            "at_risk_requirements": at_risk,
+            "expiring_certifications": expiring,
+        }
 
     async def _report_header(self, organization_id: str) -> Dict[str, Any]:
         """The department's name, logo and the generated-at stamp, in its own
@@ -1622,96 +1765,49 @@ class ReportExportService:
         from app.utils.pdf_report_kit import num as pdf_num
         from app.utils.pdf_report_kit import render_report
 
+        # Graded as of the department's today, as the matrix is; the period
+        # scopes only the hours and record counts (owner decision 2026-11-21).
+        today = await resolve_org_today(self.db, organization_id)
         if not end_date:
-            end_date = await resolve_org_today(self.db, organization_id)
+            end_date = today
         if not start_date:
             start_date = date(end_date.year, 1, 1)
 
-        users_result = await self.db.execute(
-            select(User)
-            .options(selectinload(User.positions))
-            .where(User.organization_id == organization_id)
-            .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
-            .where(User.compliance_exempt.is_(False))
-            .where(User.deleted_at.is_(None))
-            .order_by(User.last_name, User.first_name)
-        )
-        users = users_result.scalars().all()
-
-        req_result = await self.db.execute(
-            select(TrainingRequirement)
-            .where(TrainingRequirement.organization_id == organization_id)
-            .where(TrainingRequirement.active.is_(True))
-            .order_by(TrainingRequirement.name)
-        )
-        requirements = req_result.scalars().all()
-
-        # The server's date.today() is UTC in a container, which is already
-        # tomorrow for a US department every evening.
-        org_tz = await resolve_scheduling_timezone(self.db, organization_id)
-        generated_on = datetime.now(org_tz).date()
+        users, requirements = await self._compliance_population(organization_id)
         grading = ComplianceGrading.from_config(
             await _load_compliance_config(self.db, str(organization_id))
         )
-        shifts_by_user = await load_credited_shift_dates(
-            self.db,
+        # The PDF is built in memory anyway, so the whole roster is graded in
+        # one call.
+        graded = await self._grade_batch(
             organization_id,
-            [u.id for u in users],
+            users,
             requirements,
-            generated_on,
-            grading.include_current_month,
+            today,
+            grading,
+            await fetch_org_waivers(self.db, str(organization_id)),
+            await load_held_sessions(self.db, str(organization_id), requirements),
         )
-        evaluations_by_user = await load_evaluation_credits(
-            self.db,
-            organization_id,
-            [u.id for u in users],
-            requirements,
-            generated_on,
-            grading.include_current_month,
+        totals = await _period_totals(
+            self.db, organization_id, [str(u.id) for u in users], start_date, end_date
         )
-        held_sessions = await load_held_sessions(
-            self.db, str(organization_id), requirements
-        )
-        waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
-
-        # One query for the whole window, grouped here, instead of one query
-        # per member inside the layout loop.
-        records_by_user: Dict[str, List[TrainingRecord]] = {}
-        records_result = await self.db.execute(
-            select(TrainingRecord)
-            .where(TrainingRecord.organization_id == organization_id)
-            .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-            .where(TrainingRecord.completion_date >= start_date)
-            .where(TrainingRecord.completion_date <= end_date)
-        )
-        for record in records_result.scalars().all():
-            records_by_user.setdefault(str(record.user_id), []).append(record)
 
         member_rows: List[_ComplianceRow] = []
         for user in users:
-            records = records_by_user.get(str(user.id), [])
+            figures = totals.get(str(user.id), _PeriodTotals(0.0, 0))
             member_rows.append(
                 _ComplianceRow(
                     name=f"{user.first_name} {user.last_name}",
                     email=user.email or "",
-                    hours=float(sum(r.hours_completed or 0 for r in records)),
-                    records=len(records),
-                    cells=_requirement_cells(
-                        requirements,
-                        user,
-                        records,
-                        generated_on,
-                        shifts_by_user.get(str(user.id), []),
-                        held_sessions,
-                        waivers_by_user.get(str(user.id), []),
-                        evaluations_by_user.get(str(user.id), {}),
-                        grading,
-                    ),
+                    hours=figures.hours,
+                    records=figures.records,
+                    cells=_requirement_cells(requirements, graded.get(str(user.id))),
                 )
             )
         requirement_names = [req.name for req in requirements]
         # A count of the cells printed below, not a second definition of
-        # compliance (Pitfall #29): "Not Met" is _requirement_cells' verdict.
+        # compliance (Pitfall #29): "Not Met" is _requirement_cells' verdict,
+        # which follows the matrix and does not depend on the period.
         unmet = sum(row.cells.count("Not Met") for row in member_rows)
 
         header = await self._report_header(organization_id)
@@ -1722,8 +1818,8 @@ class ReportExportService:
             logo=header["logo"],
             generated_by=generated_by,
             parameters=[
-                ("Period", f"{start_date} to {end_date}"),
-                ("Graded as of", generated_on.isoformat()),
+                ("Status graded as of", today.isoformat()),
+                ("Hours and records", f"{start_date} to {end_date}"),
             ],
             subject="Training compliance",
             wide=True,
@@ -1748,7 +1844,7 @@ class ReportExportService:
                         ("Members", len(member_rows)),
                         ("Active requirements", len(requirement_names)),
                         (
-                            "Training hours",
+                            "Training hours in period",
                             f"{sum(r.hours for r in member_rows):.1f}",
                         ),
                         ("Unmet requirement cells", unmet),

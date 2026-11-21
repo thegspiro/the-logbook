@@ -7070,15 +7070,28 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   handling. Whether admin hours should follow the grading profile is not
   decided.
 - **The compliance exports grade Met / Not Met from the report period's
-  records only — open, found 2026-11-20, not confirmed by running.**
-  `ReportExportService.stream_compliance_csv` and `generate_compliance_pdf`
-  hand `_requirement_cells` only the member's records completed inside the
-  report period (Jan 1 to today by default), while the compliance matrix
-  grades each requirement from the records its own window needs
-  (`load_graded_records`). By reading the code, a certification or one-time
-  requirement completed before the period would print **Not Met** in the
-  export beside a matrix that shows it met (CLAUDE.md pitfall #29). Fixing it
-  changes what the export's period means, so it needs its own decision.
+  records only — fixed (owner decision 2026-11-21: status as of today).**
+  Confirmed by running before the fix: a certification completed on 1 March
+  of last year printed **Not Met** in both the CSV and the PDF while the
+  matrix showed it met, and so did a one-time requirement finished two years
+  ago, a 24-month rolling requirement met fifteen months ago, and an annual
+  requirement met today on an export for last calendar year. Each
+  requirement cell is now the member's standing as of the department's
+  today, from `training_compliance.grade_members` — the one grader the
+  Compliance Matrix, `grade_org_members`, the CSV, the PDF and the
+  compliance forecast all call (CLAUDE.md pitfall #29). The report period
+  sets only the hours and completed-record columns: the CSV headers read
+  `Total Hours (<start> to <end>)` and `Completed Records (<start> to
+<end>)` (they were `Total Hours` and `Completed Courses`; the count was
+  always every completed record, certifications included), and the PDF
+  header reads "Status graded as of" and "Hours and records". The CSV now
+  orders requirement columns by name and member rows by last and first name,
+  as the PDF and the matrix do, grades and writes 500 members per chunk, and
+  the forecast runs one record query per 500 members instead of one per
+  member. The forecast's at-risk list still reads each graded requirement's
+  due date from `TrainingService.evaluate_requirement_detail`, the only
+  evaluator that computes one; it decides no status. Tests:
+  `tests/test_compliance_export_period.py`.
 - **Compliance emails: a rolling requirement is in one non-compliance notice
   per member, ever — open, found 2026-11-21.** A rolling requirement's window
   ends on the grading day, which made both member emails repeat daily (the
@@ -7090,12 +7103,45 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   Telling them again needs a recorded "met again" date to key on, which the
   task does not keep. Tests: `tests/test_compliance_member_notices.py`.
 - **The Compliance Officer dashboard's forecast summary cards keep fixed
-  colour bands — open.** The department "Current" average card colours green
-  at 80% or more and yellow below, and the 30/60/90 average cards and every
-  member's 30/60/90 badge keep their 80% / 50% bands. These are averages and
-  estimates, not a member's standing, so the 2026-11-20 change colours only
-  each member's current figure by its standing; whether the averages should
-  take the department's thresholds is not decided.
+  colour bands — ✅ resolved 2026-11-21 (owner direction: follow the
+  department's and the member's thresholds).** Each member's 30/60/90-day
+  projection now carries a standing (`forecast_30_standing`, …), classified
+  by the member's own grading exactly as `current_standing` is, so a figure
+  and its colour come from one `ComplianceGrading.classify` call. The four
+  department average cards are computed server-side by
+  `ComplianceGrading.classify_average`: the mean of the graded members'
+  figures, rounded to one decimal, classified by the department's thresholds
+  and threshold type (never a profile's). Under `all_required` an average is
+  compliant only when every graded member is compliant at that horizon,
+  otherwise at risk when the mean reaches the at-risk threshold, otherwise
+  non-compliant — a default taken pending the owner's answer. Both the
+  dashboard and the Training Enhancements forecast colour with
+  `STANDING_TEXT_COLORS`. The threshold ladder is written once
+  (`_standing_for_pct`) and shared by the member and the average. The
+  entry's "80% / 50%" was 80% / 60% for the average cards. `GET
+/training/reports/compliance-forecast` now returns `{members, averages}`
+  instead of a bare list, so the D10 entry's "response shapes apart from the
+  added forecast field" no longer holds for it. A profiled member can read
+  green beside a department average that reads red: the member is measured
+  against their profile, the average against the department. Tests:
+  `TestClassifyAverage` / `TestProjectedStanding` in
+  `tests/test_training_compliance.py`, `TestForecastStandingsAndAverages` in
+  `tests/test_officer_compliance_views_profiles.py`, and the forecast cases
+  in `ComplianceOfficerDashboard.test.tsx` and
+  `TrainingEnhancementsTab.test.tsx`.
+- **The compliance forecast's projection charges every certificate expiring
+  in the window — open, owner decision pending.** The 30/60/90-day estimate
+  subtracts one met requirement for each completed record whose expiry falls
+  in the window, including a certificate no graded requirement reads and a
+  superseded record whose renewal already exists. Since 2026-11-21 that
+  estimate drives a standing colour, so on a default install (100 / 75, no
+  profiles) a fully compliant member with three graded requirements and one
+  unrelated certificate expiring in 20 days reads 66.7% non-compliant (red)
+  at 30 days; with four requirements, 75.0% at risk. The estimate's inputs
+  were deliberately not changed. The options are to keep colouring the
+  estimate as it is, to narrow it to certificates a graded requirement reads
+  (and skip superseded renewals), or to re-grade each requirement at today +
+  N days.
 - **A requirement with zero currently-applicable members renders as a
   failing 0% (CMP4-4, LOW) — ✅ fixed 2026-09-29, workflow review W29-4.**
   `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`

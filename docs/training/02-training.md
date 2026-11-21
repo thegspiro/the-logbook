@@ -2369,6 +2369,12 @@ the same rules, so their figures agree:
   matrix. Reports and CSVs show **N/A**. They are left out of the percentage
   altogether: "X of Y members current" counts only members who are graded.
   When nobody is graded, the percentage reads N/A rather than 100%.
+- **The Compliance Report export shows today's standing** _(2026-11-21)_. Each
+  requirement column in the CSV and PDF reads exactly what the matrix shows for
+  that member today — a certification earned last year reads **Met**. The
+  report's period (1 January to today unless the API is given another) sets
+  only the hours and completed-record columns, whose CSV headers carry the
+  dates, e.g. **Total Hours (2026-01-01 to 2026-11-21)**.
 - **A session-attendance requirement with no session held is not graded**
   _(2026-11-10)_. It reads **No sessions held yet** and is left out of the
   percentage until a linked session is held in the member's window, instead of
@@ -3872,8 +3878,10 @@ exports:
    training type. It suits state and yearly reporting.
 3. **Certification Report** — a CSV of all certifications marked valid,
    expiring soon or expired, for tracking renewals.
-4. **Compliance Report** — department-wide compliance for all members and
-   requirements.
+4. **Compliance Report** — each member's current standing on every
+   requirement, as the Compliance Matrix shows it, with their training hours
+   and completed records since 1 January. The period sets only those two
+   columns; the status columns are today's standing.
 
 **A Source column on the record exports** _(2026-11-19)_. The **Member
 Records** CSV and the **Certification Report** CSV end with a **Source**
@@ -4548,12 +4556,22 @@ Compliance Matrix _(2026-11-20)_. The **Current** figure is coloured by the
 member's standing there — the profile's thresholds when it sets its own,
 otherwise the department's — so the same member reads the same here, on the
 Training Enhancements forecast and on the matrix. The 30, 60 and 90-day
-figures are estimates and keep fixed colour bands. They subtract every
-certificate expiring in the window, including one no requirement grades, so
-for a member whose profile lists few requirements one expiring certificate
-moves the projection further.
+figures are coloured the same way, by that member's thresholds _(2026-11-21)_.
+They are estimates: they subtract every certificate expiring in the window,
+including one no requirement grades, so for a member whose profile lists few
+requirements one expiring certificate moves the projection further, and can
+turn it red.
+
+The four summary cards are the department's averages over the members who are
+graded, coloured by the **department's** thresholds. When the department
+requires every requirement (**All required**), an average reads compliant only
+when every graded member is compliant at that point. A member measured against
+their profile's lower bar can therefore read green while the department card
+beside them reads red; that is intended.
 
 ![Compliance forecast projecting each member's compliance over 90 days](./images/02-75-compliance-forecast.png)
+
+_The screenshot predates the 2026-11-21 colours (it shows the old fixed bands)._
 
 ### Edge Cases
 
