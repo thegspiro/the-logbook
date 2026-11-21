@@ -11059,6 +11059,11 @@ class InventoryService:
             if not reorder:
                 return None, "Reorder request not found"
 
+            # Before anything reads the payload: a null status would pass the
+            # workflow check below as falsy, and a null quantity would reach
+            # the floor comparison as None (INV2-4).
+            reject_null_for_required(reorder, data)
+
             if "quantity_received" in data:
                 return None, "Received quantity changes require the receiving workflow"
 

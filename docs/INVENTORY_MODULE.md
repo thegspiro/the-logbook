@@ -299,13 +299,15 @@ about whether a caller may read a _colleague's_ gear. Which turnout coat, radio
 or SCBA mask a named member carries, and in what condition, is quartermaster
 business.
 
-**Twelve routes are gated on authentication alone**, and every one of them is
+**Fourteen routes are gated on authentication alone**, and every one of them is
 self-scoped in code rather than by permission:
 
-- The five `users/{user_id}/…` reads go through
+- The five `users/{user_id}/…` reads, `GET /allowances/check/{user_id}/{category_id}`
+  and `GET /members/{user_id}/size-preferences` go through
   `_require_self_or_quartermaster(user_id, current_user)`: it returns early for
   self, allows `inventory.manage`, and otherwise raises **403**. No
-  fall-through — it fails closed.
+  fall-through — it fails closed. The size-preferences read runs it before the
+  lookup, so a refused caller learns nothing, not even "none saved".
 - `PATCH /checkout/{id}/extend` resolves the checkout org-scoped first, then
   applies the same own-or-manage test.
 - `GET /requests` and `GET /return-requests` **force** the requester filter to
