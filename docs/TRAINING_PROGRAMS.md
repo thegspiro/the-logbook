@@ -2812,7 +2812,7 @@ Training records now support real file attachments (previously metadata-only):
 | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `POST /api/v1/training/records/{id}/attachments`                 | Multipart upload, ≤ **25 MB**, magic-byte MIME detection (PDF/JPEG/PNG/GIF/WEBP/DOC/DOCX) |
 | `GET /api/v1/training/records/{id}/attachments`                  | Lists **sanitized metadata only** (no server file paths)                                  |
-| `GET /api/v1/training/records/{id}/attachments/{index}/download` | Streams a stored attachment by index                                                      |
+| `GET /api/v1/training/records/{id}/attachments/{entry}/download` | Streams a stored attachment by id (or a legacy index)                                     |
 
 - **Access:** the record owner manages their own attachments; everyone else
   needs `training.manage`.

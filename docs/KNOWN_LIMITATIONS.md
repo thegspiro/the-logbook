@@ -10935,10 +10935,15 @@ each case):
   so an approved submission with no record can no longer be left behind, and
   retention locks the records it rewrites. Proven by
   `tests/test_training_submission_attachment_races.py`.
-- **`DELETE /training/submissions/{id}/attachments/{index}` is not safe to
-  repeat** (pitfall #36). A retry after a lost 204 removes whichever entry has
-  moved into that index, and its file. Fixing it needs an entry identity the
-  client can name (the entries carry none) — an API change, so escalated.
+- ~~**`DELETE /training/submissions/{id}/attachments/{index}` is not safe to
+  repeat**~~ **Resolved 2026-11-21.** Every entry carries a stable `id`
+  (migration `7d6769fca85c` stamped the stored ones), the routes take
+  `{entry}`, and removing an id that is no longer there answers 204 and
+  changes nothing, under the submission row lock. This departs from the
+  event-attachment route, which answers 404 for an absent id: a retry after a
+  lost 204 must not show the member a failure. **Still open:** a legacy index
+  without `?expected_id=` keeps the old behaviour and is deprecated; the
+  shipped screens send the id whenever the entry has one.
 - **File names on path-less entries survive anonymisation.** The
   anonymisation step relabels only entries naming a stored file, so a
   `{"file_name": ...}` entry with no `file_path` (what the 2026-11-20

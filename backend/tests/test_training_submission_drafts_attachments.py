@@ -245,12 +245,13 @@ class TestAttachments:
         )
         assert rows[0] == {
             "index": 0,
+            "id": None,
             "file_name": "cert.pdf",
             "file_type": "application/pdf",
             "file_size": 12,
             "uploaded_at": "2026-03-12T00:00:00+00:00",
         }
-        assert rows[1] == {"index": 1, "file_name": "legacy-string-entry"}
+        assert rows[1] == {"index": 1, "id": None, "file_name": "legacy-string-entry"}
 
     def test_response_model_never_serializes_a_file_path(self):
         response = TrainingSubmissionResponse.model_validate(
@@ -328,7 +329,7 @@ class TestAttachments:
         with pytest.raises(HTTPException) as exc:
             await training_submissions.download_submission_attachment(
                 submission.id,
-                0,
+                "0",
                 db=None,
                 current_user=SimpleNamespace(id=submission.submitted_by),
             )
@@ -392,6 +393,7 @@ class TestAttachments:
         assert result["attachments"] == [
             {
                 "index": 0,
+                "id": submission.attachments[0]["id"],
                 "file_name": "cert.pdf",
                 "file_type": "application/pdf",
                 "file_size": len(b"%PDF-1.4"),
@@ -533,7 +535,7 @@ class TestAttachmentRoot:
         )
 
         response = await training_enhancements.download_record_attachment(
-            "rec-1", 0, db=db, current_user=member
+            "rec-1", "0", db=db, current_user=member
         )
 
         # Served (decrypted) from the record route rather than refused.
@@ -817,7 +819,8 @@ class TestRequiredEvidenceEverywhere:
         with pytest.raises(HTTPException) as exc:
             await training_submissions.delete_submission_attachment(
                 submission.id,
-                0,
+                "0",
+                expected_id=None,
                 db=None,
                 current_user=SimpleNamespace(
                     id="user-1", organization_id=submission.organization_id

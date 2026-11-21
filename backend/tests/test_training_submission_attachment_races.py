@@ -200,7 +200,8 @@ async def _remove_first(dept, after=None) -> str:
         try:
             await training_submissions.delete_submission_attachment(
                 submission_id=dept["submission"],
-                index=0,
+                entry="0",
+                expected_id=None,
                 db=db,
                 current_user=member,
             )

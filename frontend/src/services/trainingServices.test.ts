@@ -23,6 +23,8 @@ import {
   instructorService,
   effectivenessService,
   multiAgencyService,
+  trainingSubmissionService,
+  documentService,
 } from './trainingServices';
 import { TRAINING_RECORDS_PAGE_SIZE } from '../constants/config';
 
@@ -478,5 +480,38 @@ describe('trainingSessionService.getApprovalSummary', () => {
     mockGet.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'Forbidden' } } });
 
     await expect(trainingSessionService.getApprovalSummary('e1')).rejects.toBeDefined();
+  });
+});
+
+describe('attachment entries are addressed by id', () => {
+  const entryId = '0b5e8f9c-2f0b-4a8e-9b1d-6c1f0a2d3e4f';
+
+  beforeEach(() => {
+    mockDelete.mockReset();
+    mockDelete.mockResolvedValue({ data: undefined });
+  });
+
+  it('removes a submission attachment by its id, which is safe to repeat', async () => {
+    await trainingSubmissionService.deleteAttachment('s1', { index: 2, id: entryId });
+
+    expect(mockDelete).toHaveBeenCalledWith(`/training/submissions/s1/attachments/${entryId}`);
+  });
+
+  it('falls back to the index for an entry stored before ids existed', async () => {
+    await trainingSubmissionService.deleteAttachment('s1', { index: 2, id: null });
+
+    expect(mockDelete).toHaveBeenCalledWith('/training/submissions/s1/attachments/2');
+  });
+
+  it('downloads by id from both the submission and the record', () => {
+    expect(trainingSubmissionService.getAttachmentDownloadUrl('s1', { index: 0, id: entryId })).toBe(
+      `/api/v1/training/submissions/s1/attachments/${entryId}/download`
+    );
+    expect(documentService.getAttachmentDownloadUrl('r1', { index: 0, id: entryId })).toBe(
+      `/api/v1/training/records/r1/attachments/${entryId}/download`
+    );
+    expect(documentService.getAttachmentDownloadUrl('r1', { index: 1 })).toBe(
+      '/api/v1/training/records/r1/attachments/1/download'
+    );
   });
 });

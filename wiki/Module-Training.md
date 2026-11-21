@@ -396,8 +396,8 @@ forecast print N/A where a requirement does not apply.
 JPEG, PNG, GIF, WEBP, DOC or DOCX, detected by magic bytes and malware-scanned)
 through `FileStorageService` under
 `/app/uploads/<org_id>/training-records/<record_id>/<uuid><ext>`, with metadata
-in the `TrainingRecord.attachments` JSON column. `GET .../attachments/{index}/download`
-streams a stored file. Access is the record owner or `training.manage`; server
+in the `TrainingRecord.attachments` JSON column. `GET .../attachments/{entry}/download`
+streams a stored file, named by the entry's id (or, for older clients, its index). Access is the record owner or `training.manage`; server
 file paths are never returned. The record download route also accepts the
 self-reports storage area, because approving a submission copies its
 attachment entries onto the record verbatim.

@@ -38,6 +38,7 @@ from app.services.separation_of_duties import assert_different_person
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.training_attachments import with_entry_ids
 
 # In-app prompts for a submission awaiting review share this category so the
 # inbox stacks them, and carry ``submission_id`` in their metadata so a
@@ -1491,7 +1492,10 @@ class TrainingSubmissionService:
             instructor=submission.instructor,
             location=submission.location,
             notes=submission.description,
-            attachments=submission.attachments,
+            # A copy, keeping each entry's id: the record's entry and the
+            # submission's are one upload, and the two rows must not share a
+            # Python list that a later edit to either would change in both.
+            attachments=with_entry_ids(submission.attachments),
             status=TrainingStatus.COMPLETED,
             expiration_date=expiration_date,
             rank_at_completion=rank_at_completion,

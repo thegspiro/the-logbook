@@ -1931,6 +1931,8 @@ export interface SelfReportConfigUpdate {
  */
 export interface SubmissionAttachment {
   index: number;
+  /** The entry's stable id. Null only on an entry stored before ids existed. */
+  id?: string | null;
   file_name?: string | null;
   file_type?: string | null;
   file_size?: number | null;

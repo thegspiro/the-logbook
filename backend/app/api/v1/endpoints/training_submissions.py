@@ -75,6 +75,12 @@ from app.services.training_submission_service import (
 )
 from app.utils import download_names
 from app.utils.member_names import format_display_name
+from app.utils.training_attachments import (
+    EntryMoved,
+    new_entry_id,
+    parse_entry_ref,
+    resolve_entry,
+)
 
 router = APIRouter()
 
@@ -827,6 +833,7 @@ async def _store_attachment_file(
         upload_kind="self_report_certificate",
     )
     return {
+        "id": new_entry_id(),
         "file_name": stored.original_name,
         "file_path": stored.path,
         "file_type": stored.mime_type,
@@ -914,21 +921,26 @@ async def get_submission_attachments(
     }
 
 
-@router.get("/{submission_id}/attachments/{index}/download")
+@router.get("/{submission_id}/attachments/{entry}/download")
 async def download_submission_attachment(
     submission_id: str,
-    index: int,
+    entry: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Stream one stored attachment by its index."""
+    """Stream one stored attachment.
+
+    ``entry`` is the attachment's id, or, for clients written against the
+    older route, its index (a string of digits). By id, a list held across a
+    removal still downloads the file the reader clicked.
+    """
 
     submission = await _load_submission_for_attachment(db, submission_id, current_user)
-    attachments = submission.attachments or []
-    if index < 0 or index >= len(attachments):
+    found = resolve_entry(submission.attachments, entry)
+    if found is None:
         raise HTTPException(status_code=404, detail="Attachment not found")
 
-    attachment = attachments[index]
+    attachment = found[1]
     real_path = _confined_path(attachment, submission.organization_id)
     # A legacy bare-string attachment has no path to confine, so `real_path` is
     # already None for it; the isinstance narrows the type for what follows.
@@ -955,14 +967,30 @@ async def download_submission_attachment(
     )
 
 
-@router.delete("/{submission_id}/attachments/{index}", status_code=204)
+@router.delete("/{submission_id}/attachments/{entry}", status_code=204)
 async def delete_submission_attachment(
     submission_id: str,
-    index: int,
+    entry: str,
+    expected_id: str | None = Query(
+        default=None,
+        description=(
+            "With a legacy index: the id the client believes is at that "
+            "index. A mismatch answers 409 and changes nothing."
+        ),
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Remove an attachment the member added (submitter only, before a ruling)."""
+    """Remove an attachment the member added (submitter only, before a ruling).
+
+    ``entry`` is the attachment's id. Removing an id that is not there
+    answers 204 and changes nothing, so a retry after a lost response is
+    safe (pitfall #36); the row lock below is what makes that check and the
+    removal one decision. A string of digits is a legacy index, deprecated:
+    a retry by index removes whichever entry has moved into the slot, unless
+    ``expected_id`` names the entry meant, in which case a moved list answers
+    409.
+    """
     service = TrainingSubmissionService(db)
     # The evidence check below reads the department's config, and get_config
     # commits when it creates the default row. Settled before the lock, that
@@ -979,6 +1007,20 @@ async def delete_submission_attachment(
         )
 
     try:
+        found = resolve_entry(submission.attachments, entry, expected_id)
+    except EntryMoved:
+        raise HTTPException(
+            status_code=409,
+            detail="The attachment list has changed. Reload it and try again.",
+        )
+    if found is None:
+        if parse_entry_ref(entry).index is not None:
+            raise HTTPException(status_code=404, detail="Attachment not found")
+        # Before the status check: a retry arriving after the approval is
+        # still a repeat of a removal that happened, not a new request.
+        return
+
+    try:
         assert_member_may_change(submission)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
@@ -990,10 +1032,7 @@ async def delete_submission_attachment(
         )
 
     attachments = list(submission.attachments or [])
-    if index < 0 or index >= len(attachments):
-        raise HTTPException(status_code=404, detail="Attachment not found")
-
-    removed = attachments.pop(index)
+    removed = attachments.pop(found[0])
 
     # Removing the last one would leave a filed submission sitting in the
     # review queue with no evidence behind it, which is the state the

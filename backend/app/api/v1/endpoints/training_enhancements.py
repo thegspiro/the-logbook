@@ -59,6 +59,7 @@ from app.services.training_enhancement_service import (
     TrainingEffectivenessService,
     XAPIService,
 )
+from app.utils.training_attachments import new_entry_id, resolve_entry
 
 router = APIRouter()
 
@@ -859,6 +860,7 @@ async def upload_record_attachment(
         )
 
     attachment = {
+        "id": new_entry_id(),
         "file_name": stored.original_name,
         "file_path": file_path,
         "file_type": stored.mime_type,
@@ -885,10 +887,12 @@ async def upload_record_attachment(
 
 
 def _sanitize_attachments(attachments: list) -> list:
-    """Strip server file paths; expose only client-safe metadata + index."""
+    """Strip server file paths; expose only client-safe metadata, the entry's
+    id and its index."""
     return [
         {
             "index": i,
+            "id": a.get("id") if isinstance(a, dict) else None,
             "file_name": a.get("file_name") if isinstance(a, dict) else a,
             "file_type": a.get("file_type") if isinstance(a, dict) else None,
             "file_size": a.get("file_size") if isinstance(a, dict) else None,
@@ -912,20 +916,24 @@ async def get_record_attachments(
     }
 
 
-@router.get("/records/{record_id}/attachments/{index}/download")
+@router.get("/records/{record_id}/attachments/{entry}/download")
 async def download_record_attachment(
     record_id: str,
-    index: int,
+    entry: str,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Stream a stored training-record attachment by its index."""
+    """Stream a stored training-record attachment.
+
+    ``entry`` is the attachment's id, or, for clients written against the
+    older route, its index (a string of digits).
+    """
     record = await _load_record_for_attachment(db, record_id, current_user)
-    attachments = record.attachments or []
-    if index < 0 or index >= len(attachments):
+    found = resolve_entry(record.attachments, entry)
+    if found is None:
         raise HTTPException(status_code=404, detail="Attachment not found")
 
-    attachment = attachments[index]
+    attachment = found[1]
     if not isinstance(attachment, dict) or not attachment.get("file_path"):
         raise HTTPException(status_code=404, detail="Attachment file unavailable")
 
