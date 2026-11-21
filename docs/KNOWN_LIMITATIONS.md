@@ -7310,7 +7310,10 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   and threshold type (never a profile's). Under `all_required` an average is
   compliant only when every graded member is compliant at that horizon,
   otherwise at risk when the mean reaches the at-risk threshold, otherwise
-  non-compliant — a default taken pending the owner's answer. Both the
+  non-compliant (owner decision 2026-11-21, which kept the rule first
+  shipped as a default; the alternatives were a 100% bar on the rounded mean,
+  which a member at 99.96% could fake, and colouring by the share of
+  compliant members, which changes what the card measures). Both the
   dashboard and the Training Enhancements forecast colour with
   `STANDING_TEXT_COLORS`. The threshold ladder is written once
   (`_standing_for_pct`) and shared by the member and the average. The
