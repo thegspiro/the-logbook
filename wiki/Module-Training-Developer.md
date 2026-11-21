@@ -432,8 +432,8 @@ DELETE /api/v1/training/submissions/{id}                   # Delete submission (
 POST   /api/v1/training/submissions/{id}/submit            # Hand a saved draft to the department (submitter only)
 POST   /api/v1/training/submissions/{id}/attachments       # Add a certificate to a submission
 GET    /api/v1/training/submissions/{id}/attachments       # List a submission's attachments
-GET    /api/v1/training/submissions/{id}/attachments/{index}/download  # Download one attachment
-DELETE /api/v1/training/submissions/{id}/attachments/{index}  # Remove one attachment
+GET    /api/v1/training/submissions/{id}/attachments/{entry}/download  # Download one attachment ({entry}: its id, or a legacy index)
+DELETE /api/v1/training/submissions/{id}/attachments/{entry}  # Remove one attachment by id (a repeat is a 204 no-op); a legacy index takes ?expected_id=
 GET    /api/v1/training/submissions/pending                # Pending submissions (training.manage)
 GET    /api/v1/training/submissions/pending/count          # Pending count (training.manage)
 GET    /api/v1/training/submissions/all                    # All submissions (training.manage)
@@ -704,7 +704,7 @@ GET    /api/v1/training/reports/compliance-forecast         # Compliance forecas
 ```
 GET    /api/v1/training/records/{id}/attachments                       # List attachments (metadata only, no file paths)
 POST   /api/v1/training/records/{id}/attachments                       # Upload attachment (multipart, ≤25MB, magic-byte type check, malware scan)
-GET    /api/v1/training/records/{id}/attachments/{index}/download       # Download a stored attachment by index
+GET    /api/v1/training/records/{id}/attachments/{entry}/download       # Download a stored attachment by id (or a legacy index)
 ```
 
 Access is the record owner or `training.manage`.

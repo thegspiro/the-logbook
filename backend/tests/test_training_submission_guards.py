@@ -49,6 +49,14 @@ class _Session:
         self.refresh = AsyncMock()
 
 
+@pytest.fixture(autouse=True)
+def _no_member_lock(monkeypatch):
+    """The approval takes a shared lock on the member's row before reading
+    the submission; the fake session has no rows to lock. The lock itself is
+    proven in test_training_submission_attachment_races.py."""
+    monkeypatch.setattr(TrainingSubmissionService, "_lock_submitter", AsyncMock())
+
+
 class TestOfficerSelfApproval:
     async def test_officer_cannot_approve_own_submission(self):
         officer = str(uuid4())

@@ -11070,20 +11070,25 @@ each case):
   `self_report_attachment_retention` walks submissions only, so it never
   reaches that certificate again; it stays until the member is anonymised or
   permanently deleted.
-- **An approval racing an attachment removal can lose the file.** Neither
-  `delete_submission_attachment`, `delete_submission` nor the approval locks
-  the submission (`TrainingSubmissionService.get_submission` reads without
-  `FOR UPDATE`). An approval that read the list before the member's removal
-  committed copies the removed entry onto its new record; if the member's
-  post-commit reference check runs before the approval commits, it misses
-  that record and deletes the file. Closing it is pitfall #27's shape: lock
-  the submission in both delete paths and in the approval. Escalated, not
-  fixed: it changes the approval path, which this change does not otherwise
-  touch.
-- **`DELETE /training/submissions/{id}/attachments/{index}` is not safe to
-  repeat** (pitfall #36). A retry after a lost 204 removes whichever entry has
-  moved into that index, and its file. Fixing it needs an entry identity the
-  client can name (the entries carry none) — an API change, so escalated.
+- ~~**An approval racing an attachment removal can lose the file.**~~
+  **Resolved 2026-11-21.** `get_submission(..., for_update=True)` is a
+  locking read that refreshes the instance; the approval, `submit_draft`,
+  `update_submission`, `reverse_approval`, both delete paths and both upload
+  routes (re-read after storing) take it. A path that inserts a training
+  record locks the member's `users` row first (FOR SHARE): member, then
+  submission, then records. The approval is one transaction with its record,
+  so an approved submission with no record can no longer be left behind, and
+  retention locks the records it rewrites. Proven by
+  `tests/test_training_submission_attachment_races.py`.
+- ~~**`DELETE /training/submissions/{id}/attachments/{index}` is not safe to
+  repeat**~~ **Resolved 2026-11-21.** Every entry carries a stable `id`
+  (migration `7d6769fca85c` stamped the stored ones), the routes take
+  `{entry}`, and removing an id that is no longer there answers 204 and
+  changes nothing, under the submission row lock. This departs from the
+  event-attachment route, which answers 404 for an absent id: a retry after a
+  lost 204 must not show the member a failure. **Still open:** a legacy index
+  without `?expected_id=` keeps the old behaviour and is deprecated; the
+  shipped screens send the id whenever the entry has one.
 - **File names on path-less entries survive anonymisation.** The
   anonymisation step relabels only entries naming a stored file, so a
   `{"file_name": ...}` entry with no `file_path` (what the 2026-11-20
