@@ -18,7 +18,7 @@ request for somebody who did not use the public form. Pinned here:
 """
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
@@ -263,9 +263,7 @@ class TestEnteringARequest:
         response, _ = await _create(db_session, people["coordinator"])
         assert response.status == "submitted"
 
-    async def test_dates_are_the_days_the_caller_named_on_the_departments_calendar(
-        self, db_session
-    ):
+    async def test_dates_are_stored_as_the_days_the_caller_named(self, db_session):
         _org, people = await _dept(db_session)
         response, _ = await _create(
             db_session,
@@ -277,14 +275,9 @@ class TestEnteringARequest:
             ),
         )
         stored = await _stored(db_session, response.id)
-        chicago = ZoneInfo("America/Chicago")
-
-        def local_day(value):
-            aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-            return aware.astimezone(chicago).date()
-
-        assert local_day(stored.preferred_date_start) == date(2027, 1, 15)
-        assert local_day(stored.preferred_date_end) == date(2027, 1, 29)
+        assert stored.preferred_date_start == date(2027, 1, 15)
+        assert stored.preferred_date_end == date(2027, 1, 29)
+        assert response.preferred_date_start == date(2027, 1, 15)
 
     async def test_a_date_inside_the_lead_time_is_flagged_not_refused(self, db_session):
         _org, people = await _dept(db_session, {"min_lead_time_days": 21})

@@ -12,7 +12,7 @@ mistake cannot come back:
 
 import json
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -766,7 +766,10 @@ class TestNormalizedDatesAreAssignedNotJustCompared:
         # The comparison EventCreate makes must now be safe.
         assert model.event_end_date > model.event_date
 
-    def test_the_intake_schema_stores_aware_values(self):
+    def test_the_intake_schema_stores_the_days_written(self):
+        """Requested dates are calendar dates since 2026-11-20 (owner decision):
+        a naive or an aware datetime is the day written in it, so there is no
+        mixed awareness left to compare."""
         model = EventRequestCreate(
             contact_name="Dana Reyes",
             contact_email="dana@example.org",
@@ -775,8 +778,8 @@ class TestNormalizedDatesAreAssignedNotJustCompared:
             preferred_date_start="2026-10-01T10:00:00",
             preferred_date_end="2026-10-02T10:00:00Z",
         )
-        assert model.preferred_date_start.tzinfo is not None
-        assert model.preferred_date_end.tzinfo is not None
+        assert model.preferred_date_start == date(2026, 10, 1)
+        assert model.preferred_date_end == date(2026, 10, 2)
 
 
 class TestRequesterCancellationAfterTheEventStarted:
@@ -2345,8 +2348,12 @@ class TestAnAwareDatetimeIsConvertedNotJustAccepted:
 
         assert data.event_date == start
 
-    def test_the_create_schema_converts_too(self):
-        end = datetime(2026, 10, 2, 12, 0, tzinfo=timezone(timedelta(hours=-4)))
+    def test_the_create_schema_keeps_the_day_written_not_the_utc_day(self):
+        """A requested date is a calendar date (owner decision, 2026-11-20).
+        Converting 20:00 four hours west of UTC to UTC moves it to the next
+        day, which is the shift that turned a requester's 15th into the 14th
+        (or 16th) on the coordinator's screen; the day written is kept."""
+        end = datetime(2026, 10, 2, 20, 0, tzinfo=timezone(timedelta(hours=-4)))
         data = EventRequestCreate(
             contact_name="Dana Reyes",
             contact_email="dana@example.org",
@@ -2356,9 +2363,8 @@ class TestAnAwareDatetimeIsConvertedNotJustAccepted:
             preferred_date_end=end,
         )
 
-        assert data.preferred_date_end == datetime(
-            2026, 10, 2, 16, 0, tzinfo=timezone.utc
-        )
+        assert data.preferred_date_start == date(2026, 10, 1)
+        assert data.preferred_date_end == date(2026, 10, 2)
 
 
 class TestALatestOnlyRangeIsStillASpecificDate:

@@ -100,7 +100,7 @@ from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import (
     format_in_org_timezone,
-    local_day_start_utc,
+    org_today,
     scheduling_timezone,
 )
 
@@ -351,6 +351,7 @@ async def submit_public_event_request(
         pipeline,
         settled["date_flexibility"],
         data.preferred_date_start,
+        today=org_today(org),
         preferred_date_end=data.preferred_date_end,
     )
     if lead_error:
@@ -505,6 +506,7 @@ async def check_request_status(
         decline_reason=event_request.decline_reason,
         task_progress=task_progress,
         can_cancel=can_cancel,
+        timezone=scheduling_timezone(org).key if org else None,
     )
 
 
@@ -728,19 +730,8 @@ async def create_staff_event_request(
         raise HTTPException(status_code=404, detail="Organization not found")
     pipeline = get_pipeline_settings(org)
 
-    # Plain dates anchored to the department's midnight, so the board shows the
-    # day the caller named (see EventRequestStaffCreate).
-    tz = scheduling_timezone(org)
-    preferred_start = (
-        local_day_start_utc(data.preferred_date_start, tz)
-        if data.preferred_date_start
-        else None
-    )
-    preferred_end = (
-        local_day_start_utc(data.preferred_date_end, tz)
-        if data.preferred_date_end
-        else None
-    )
+    preferred_start = data.preferred_date_start
+    preferred_end = data.preferred_date_end
 
     settled = normalize_request_preferences(
         org,
@@ -757,6 +748,7 @@ async def create_staff_event_request(
         pipeline,
         settled["date_flexibility"],
         preferred_start,
+        today=org_today(org),
         preferred_date_end=preferred_end,
     )
 

@@ -14,12 +14,13 @@ requesters express preferences rather than committing to exact dates.
 import enum
 import hashlib
 import secrets
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -124,12 +125,12 @@ class EventRequest(Base):
     date_flexibility: Mapped[str] = mapped_column(
         String(30), nullable=False, default="flexible"
     )
-    preferred_date_start: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    preferred_date_end: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    # Calendar dates on the department's calendar, not instants (owner decision,
+    # 2026-11-20). They were DATETIME, and a day stored as midnight was read
+    # back as UTC midnight and shown as the evening before anywhere west of
+    # UTC — the 15th a requester picked reached the coordinator as the 14th.
+    preferred_date_start: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    preferred_date_end: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     # Free-text for fuzzy preferences like "Saturday morning next month"
     preferred_timeframe: Mapped[Optional[str]] = mapped_column(
         String(500), nullable=True

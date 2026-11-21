@@ -5,7 +5,7 @@
  */
 
 import type { EventRequestListItem, EventRequestStatus, PipelineTaskConfig } from '../../types/event';
-import { daysBetween } from '../../utils/dateFormatting';
+import { calendarDaysFromToday, daysBetween } from '../../utils/dateFormatting';
 
 export type InboxGroupKey = 'reply' | 'working' | 'scheduled' | 'postponed' | 'closed';
 
@@ -41,10 +41,10 @@ export const isOpenStatus = (status: EventRequestStatus): boolean =>
   status !== 'completed' && status !== 'declined' && status !== 'cancelled';
 
 /**
- * The date this request is for, as an instant: the confirmed date once it is
- * scheduled, otherwise the earliest date the requester named. A "general
- * timeframe" or "flexible" request names none, so it has no date to count
- * down to.
+ * The date this request is for: the confirmed date (an instant) once it is
+ * scheduled, otherwise the earliest date the requester named (a calendar date,
+ * "YYYY-MM-DD"). A "general timeframe" or "flexible" request names none, so it
+ * has no date to count down to.
  */
 export const requestDate = (req: EventRequestListItem): string | null => {
   if (req.event_date) return req.event_date;
@@ -59,6 +59,8 @@ export const requestDate = (req: EventRequestListItem): string | null => {
  */
 export const URGENT_WITHIN_DAYS = 7;
 
+const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 export interface DateUrgency {
   days: number;
   label: string;
@@ -72,8 +74,10 @@ export interface DateUrgency {
 export const dateUrgency = (req: EventRequestListItem, timezone?: string): DateUrgency | null => {
   const date = requestDate(req);
   if (!date || !isOpenStatus(req.status)) return null;
-  const days = daysBetween(date, timezone);
-  if (Number.isNaN(days)) return null;
+  // A requested date is a calendar date; parsed as an instant it is UTC
+  // midnight, which is still the day before anywhere west of UTC.
+  const days = CALENDAR_DATE.test(date) ? calendarDaysFromToday(date, timezone) : daysBetween(date, timezone);
+  if (days === null || Number.isNaN(days)) return null;
   const label =
     days === 0
       ? 'today'

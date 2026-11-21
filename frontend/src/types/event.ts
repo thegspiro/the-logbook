@@ -1081,6 +1081,7 @@ export interface EventRequest {
   outreach_type: string;
   description: string;
   date_flexibility: DateFlexibility;
+  /** Calendar dates, "YYYY-MM-DD": the days the requester named. */
   preferred_date_start?: string;
   preferred_date_end?: string;
   preferred_timeframe?: string;
@@ -1227,6 +1228,7 @@ export interface EventRequestPublicStatus {
   outreach_type: string;
   status: EventRequestStatus;
   date_flexibility: DateFlexibility;
+  /** Calendar dates, "YYYY-MM-DD". */
   preferred_date_start?: string;
   preferred_date_end?: string;
   preferred_timeframe?: string;
@@ -1236,4 +1238,6 @@ export interface EventRequestPublicStatus {
   decline_reason?: string;
   task_progress?: TaskProgressPublic;
   can_cancel: boolean;
+  /** The department's IANA timezone, which the page shows times in. */
+  timezone?: string | null;
 }

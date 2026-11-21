@@ -3336,8 +3336,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `outreach_type` | VARCHAR(100) | no |  | `'other'` |  |
 | `description` | TEXT | no |  |  |  |
 | `date_flexibility` | VARCHAR(30) | no |  | `'flexible'` |  |
-| `preferred_date_start` | DATETIME | yes |  |  |  |
-| `preferred_date_end` | DATETIME | yes |  |  |  |
+| `preferred_date_start` | DATE | yes |  |  |  |
+| `preferred_date_end` | DATE | yes |  |  |  |
 | `preferred_timeframe` | VARCHAR(500) | yes |  |  |  |
 | `preferred_time_of_day` | VARCHAR(20) | yes |  | `'flexible'` |  |
 | `audience_size` | INTEGER | yes |  |  |  |

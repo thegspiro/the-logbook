@@ -60,7 +60,7 @@ import type {
 } from '../types/event';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
-import { formatShortDateTime, localToUTC } from '../utils/dateFormatting';
+import { formatCalendarDate, formatShortDateTime, localToUTC } from '../utils/dateFormatting';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { asArray, expectArray } from '../utils/asArray';
@@ -565,7 +565,7 @@ const EventRequestsTab: React.FC = () => {
       return req.preferred_timeframe;
     }
     if (req.preferred_date_start) {
-      return formatShortDateTime(req.preferred_date_start, tz);
+      return formatCalendarDate(req.preferred_date_start);
     }
     return DATE_FLEXIBILITY_LABELS[req.date_flexibility] || 'Flexible';
   };
@@ -1416,8 +1416,8 @@ const EventRequestsTab: React.FC = () => {
                         {detail.preferred_date_start && (
                           <span className="text-theme-text-muted block">
                             {detail.preferred_date_end
-                              ? `${formatShortDateTime(detail.preferred_date_start, tz)} — ${formatShortDateTime(detail.preferred_date_end, tz)}`
-                              : `From ${formatShortDateTime(detail.preferred_date_start, tz)}`}
+                              ? `${formatCalendarDate(detail.preferred_date_start)} — ${formatCalendarDate(detail.preferred_date_end)}`
+                              : `From ${formatCalendarDate(detail.preferred_date_start)}`}
                           </span>
                         )}
                         {detail.event_date && (

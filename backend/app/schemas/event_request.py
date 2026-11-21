@@ -9,10 +9,35 @@ assignment, scheduling with room booking, and postponement.
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.models.event_request import STAFF_ENTERED_SOURCES
 from app.schemas.base import UTCResponseBase, as_utc
+
+
+def calendar_date(value: Any) -> Any:
+    """A requested date as the calendar day the requester wrote.
+
+    Requested dates are plain dates (owner decision, 2026-11-20). A client that
+    still sends a datetime — this endpoint took one until then — gets the date
+    written in it, with no timezone conversion: "2027-01-15T00:00:00Z" is the
+    15th, because converting it is what used to turn the 15th into the 14th.
+    """
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, str) and "T" in value:
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+        except ValueError:
+            return value
+    return value
 
 
 class EventRequestCreate(BaseModel):
@@ -39,8 +64,8 @@ class EventRequestCreate(BaseModel):
         default="flexible",
         description="How specific the date preference is: specific_dates, general_timeframe, or flexible",
     )
-    preferred_date_start: Optional[datetime] = None
-    preferred_date_end: Optional[datetime] = None
+    preferred_date_start: Optional[date] = None
+    preferred_date_end: Optional[date] = None
     preferred_timeframe: Optional[str] = Field(
         None,
         max_length=500,
@@ -68,6 +93,10 @@ class EventRequestCreate(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
+    _calendar_dates = field_validator(
+        "preferred_date_start", "preferred_date_end", mode="before"
+    )(calendar_date)
+
     @model_validator(mode="after")
     def _date_range_ordered(self) -> "EventRequestCreate":
         """A window that ends before it starts is not a date preference.
@@ -75,17 +104,7 @@ class EventRequestCreate(BaseModel):
         ``EventRequestSchedule`` has refused a reversed window since the room
         double-booking check was added; intake did not, so a requester could
         store one and the coordinator's board rendered "March 20 – March 3".
-
-        The normalised values are **assigned back**, not just compared. Fixing
-        only the comparison leaves a naive datetime on the model, and every
-        reader downstream — the lead-time gate, the stored column, the
-        coordinator's board — then has the same mixed-awareness problem this
-        validator was added to stop.
         """
-        if self.preferred_date_start:
-            self.preferred_date_start = as_utc(self.preferred_date_start)
-        if self.preferred_date_end:
-            self.preferred_date_end = as_utc(self.preferred_date_end)
         if (
             self.preferred_date_start
             and self.preferred_date_end
@@ -103,10 +122,7 @@ class EventRequestStaffCreate(BaseModel):
     Differs from the public ``EventRequestCreate`` where the person typing is
     not the requester: an email is optional when there is a phone number (a
     caller may give only that), the description may be short (it is the
-    coordinator's note of a conversation, not a stranger's first message), and
-    the preferred dates are plain calendar dates. The endpoint anchors those to
-    midnight in the department's timezone, so a date chosen as the 15th is
-    stored and shown as the 15th rather than the evening of the 14th.
+    coordinator's note of a conversation, not a stranger's first message).
     """
 
     source: str = Field(
@@ -125,6 +141,10 @@ class EventRequestStaffCreate(BaseModel):
     preferred_date_start: Optional[date] = None
     preferred_date_end: Optional[date] = None
     preferred_timeframe: Optional[str] = Field(None, max_length=500)
+
+    _calendar_dates = field_validator(
+        "preferred_date_start", "preferred_date_end", mode="before"
+    )(calendar_date)
     preferred_time_of_day: Optional[str] = "flexible"
 
     audience_size: Optional[int] = Field(None, ge=1, le=10000)
@@ -447,8 +467,8 @@ class EventRequestResponse(UTCResponseBase):
 
     # Flexible date preferences
     date_flexibility: str = "flexible"
-    preferred_date_start: Optional[datetime] = None
-    preferred_date_end: Optional[datetime] = None
+    preferred_date_start: Optional[date] = None
+    preferred_date_end: Optional[date] = None
     preferred_timeframe: Optional[str] = None
     preferred_time_of_day: Optional[str] = None
 
@@ -493,7 +513,7 @@ class EventRequestListItem(UTCResponseBase):
     outreach_type: str
     status: str
     date_flexibility: str = "flexible"
-    preferred_date_start: Optional[datetime] = None
+    preferred_date_start: Optional[date] = None
     preferred_timeframe: Optional[str] = None
     audience_size: Optional[int] = None
     assigned_to: Optional[str] = None
@@ -526,8 +546,8 @@ class EventRequestPublicStatus(UTCResponseBase):
     outreach_type: str
     status: str
     date_flexibility: str = "flexible"
-    preferred_date_start: Optional[datetime] = None
-    preferred_date_end: Optional[datetime] = None
+    preferred_date_start: Optional[date] = None
+    preferred_date_end: Optional[date] = None
     preferred_timeframe: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -536,3 +556,6 @@ class EventRequestPublicStatus(UTCResponseBase):
     # Optionally visible pipeline progress (configurable per department)
     task_progress: Optional[Dict[str, Any]] = None
     can_cancel: bool = True
+    # The department's IANA timezone. The requester's browser may be anywhere,
+    # and the scheduled time is the department's local time.
+    timezone: Optional[str] = None
