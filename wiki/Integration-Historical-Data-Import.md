@@ -63,6 +63,30 @@ position on purpose.
   the 24-hour cap or overlap check a member's own entry gets — those are for
   hours typed today, not for settled history.
 
+## Pairing the staffing roster with the hours
+
+_(2026-11-21)_ The staffing roster (who signed up for which seat) and the hours
+file (when each member worked, and the calls they ran) share no ID. Writing the
+roster pairs them anyway: a seat goes with the **same member's hours entry
+whose time overlaps it most, by at least 30 minutes**. Each hours entry pairs
+with one seat; when two of a member's seats overlap the same entry, the larger
+overlap takes it.
+
+- **Shift seats** are written onto the shift the hours were credited to, so the
+  member's _Shift & Call History_ shows the seat (Driver, Officer…) beside the
+  hours and calls. This works when the hours file had no unit column, when the
+  roster's activity names no unit, and across midnight. Seats with no hours of
+  their own join the shift most of their crew's hours are on.
+- **Event seats** (standbys, details, outreach) are written as before, on the
+  calendar event and its signup sheet. A paired seat whose title is a crew seat
+  (Driver, EMT, or one of your units' own seats) is also written onto the hours
+  entry; a role that is not a crew seat (Educator, Party Staff) pairs without
+  changing it.
+- **Nothing pairs?** A seat with no hours entry is written as a scheduled seat;
+  an hours entry with no seat keeps its hours and calls, with no position from
+  the roster. The roster step shows how many pair, and the first of each that
+  does not, before you write it.
+
 ## Where the imported hours show up
 
 A member's **profile** has a _Shift & Call History_ section with the same
@@ -97,7 +121,9 @@ counts what will go before anything does.
 - **Former members the import created** are removed with the step unless
   something else still refers to them.
 - **Shifts and seats the step reused** (rather than made) are left as they
-  are; a member the roster moved to another seat keeps that seat.
+  are. A member the roster moved to another seat goes back to the seat they
+  had; a roster written before 2026-11-21 did not record it, so its moved
+  members keep the roster's seat.
 
 API: `GET /integrations/historical-imports/{id}/undo` previews every step;
 `POST /integrations/historical-imports/{id}/undo/{step}` (`admin`, `training`, `drills`,
