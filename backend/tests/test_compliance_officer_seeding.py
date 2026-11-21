@@ -34,6 +34,9 @@ assert len(MATCHES) == 1, f"expected exactly one migration, found {MATCHES}"
 MIGRATION = MATCHES[0]
 
 
+_GRANTED_LATER = frozenset({"apparatus_events.signup", "apparatus_events.manage"})
+
+
 def _migration_module():
     spec = importlib.util.spec_from_file_location("seed_compliance", MIGRATION)
     module = importlib.util.module_from_spec(spec)
@@ -68,6 +71,7 @@ class TestTheRegistryEntry:
             "documents.manage",
             "forms.view",
             "events.view",
+            "apparatus_events.signup",
             "notifications.view",
         }
 
@@ -98,7 +102,13 @@ class TestTheFrozenCopies:
         live = DEFAULT_POSITIONS["compliance_officer"]
         for key in ("name", "slug", "description", "priority"):
             assert frozen[key] == live[key]
-        assert frozen["permissions"] == live["permissions"]
+        # 3f8a1c6e2b94 runs later in the chain and adds apparatus_events.signup
+        # to every seeded position holding events.view, this one included. The
+        # rows this revision inserted get it there, so it is subtracted here
+        # rather than written into the frozen copy.
+        assert frozen["permissions"] == [
+            p for p in live["permissions"] if p not in _GRANTED_LATER
+        ]
 
     def test_box_matches_the_service(self):
         frozen = _migration_module()._BOX

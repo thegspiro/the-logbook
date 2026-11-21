@@ -655,6 +655,13 @@ class CommunityTypeBucket(BaseModel):
     people_reached: int
 
 
+class CommunityMaterial(BaseModel):
+    """Something handed out at outreach events, and how many."""
+
+    item: str
+    quantity: int
+
+
 class CommunityEventReach(BaseModel):
     event_id: str
     title: str
@@ -670,6 +677,10 @@ class CommunityEventReach(BaseModel):
     reach_is_estimate: bool
     crew: int
     member_hours: float
+    # What happened, recorded when the event closed (owner decision, 2026-11-20).
+    outcome_note: str | None = None
+    materials: list[CommunityMaterial] = []
+    photos: str | None = None
 
 
 class CommunityEngagement(BaseModel):
@@ -693,6 +704,8 @@ class CommunityEngagement(BaseModel):
     granularity: Literal["month", "year"]
     by_period: list[CommunityReachBucket]
     by_type: list[CommunityTypeBucket]
+    # Everything handed out across the period, one line per item, most first.
+    materials: list[CommunityMaterial] = []
     recent_events: list[CommunityEventReach]
 
 

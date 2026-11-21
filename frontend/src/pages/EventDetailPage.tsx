@@ -85,7 +85,10 @@ import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplate
 import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
 import EventGuestsCard from '../components/event-detail/EventGuestsCard';
+import EventApparatusCrewCard from '../components/event-detail/EventApparatusCrewCard';
 import EventGuestHeadcountCard from '../components/event-detail/EventGuestHeadcountCard';
+import EventStaffingCard from '../components/event-detail/EventStaffingCard';
+import EventOutreachCloseoutCard from '../components/event-detail/EventOutreachCloseoutCard';
 import { GuestCheckInQRCard } from '../components/events/GuestCheckInQRCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
@@ -756,7 +759,7 @@ export const EventDetailPage: React.FC = () => {
     try {
       setSubmitting(true);
       const newEvent = await eventService.duplicateEvent(eventId);
-      toast.success('Event duplicated');
+      toast.success('Event duplicated as a draft');
       void navigate(`/events/${newEvent.id}/edit`);
     } catch (err) {
       toast.error(getErrorDetail(err) || 'Failed to duplicate event');
@@ -1819,6 +1822,16 @@ export const EventDetailPage: React.FC = () => {
                 business events, so this is intentionally not type-gated. */}
             <EventProspectsCard eventId={event.id} createsProspects={event.guest_check_in_creates_prospect ?? false} />
 
+            {/* The seats on an apparatus night (Santamobile, a parade). Renders
+                nothing on an ordinary event; asked only of someone who could
+                take or assign a seat. */}
+            {(checkPermission('apparatus_events.signup') || checkPermission('apparatus_events.manage')) && (
+              <EventApparatusCrewCard eventId={event.id} timezone={tz} />
+            )}
+            {/* Volunteers for an outreach event: its own signup sheet, or the
+                request's when it was scheduled from one. */}
+            {event.can_staff_event && <EventStaffingCard eventId={event.id} />}
+
             {/* The headcount for an outreach event nobody signed in at.
                 Merged rather than replaced: the save answers with a plain
                 event, which lacks the detail-only fields this page shows. */}
@@ -1827,6 +1840,27 @@ export const EventDetailPage: React.FC = () => {
                 event={event}
                 onSaved={(updated) =>
                   setEvent((prev) => (prev ? { ...prev, guest_headcount: updated.guest_headcount ?? null } : prev))
+                }
+              />
+            )}
+
+            {/* What happened, on the same rule as the headcount: an outreach
+                event that has started, for someone with events.manage. */}
+            {event.can_record_guest_headcount && (
+              <EventOutreachCloseoutCard
+                event={event}
+                onSaved={(updated) =>
+                  setEvent((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          outreach_outcome_note: updated.outreach_outcome_note ?? null,
+                          outreach_apparatus_ids: updated.outreach_apparatus_ids ?? null,
+                          outreach_materials: updated.outreach_materials ?? null,
+                          outreach_photos: updated.outreach_photos ?? null,
+                        }
+                      : prev
+                  )
                 }
               />
             )}

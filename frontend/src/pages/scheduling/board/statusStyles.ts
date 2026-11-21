@@ -84,3 +84,16 @@ export const LEGEND_ORDER: ShiftStatus[] = [
  */
 export const legendFor = (hasUnsizedShift: boolean): ShiftStatus[] =>
   hasUnsizedShift ? [...LEGEND_ORDER, ShiftStatus.UNKNOWN] : LEGEND_ORDER;
+
+/**
+ * Apparatus outreach on the calendar (a Santamobile night, a parade). Not a
+ * ShiftStatus on purpose: it is not a shift, has no staffing state the board
+ * computes, and must never read as one — hence the dashed border, which no
+ * shift chip uses.
+ */
+export const OUTREACH_STYLE: StatusStyle = {
+  chip: 'border-dashed bg-red-50 border-red-400 text-red-800 dark:bg-red-500/10 dark:border-red-400/60 dark:text-red-200',
+  bar: 'bg-red-200 dark:bg-red-400/50 outline outline-1 outline-dashed outline-red-500',
+  swatch: 'border-dashed bg-red-50 border-red-400 dark:bg-red-500/15 dark:border-red-400/60',
+  label: 'Outreach · not a shift',
+};

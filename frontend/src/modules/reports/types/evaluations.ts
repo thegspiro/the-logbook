@@ -192,6 +192,8 @@ export interface EvaluationTemplateCreate {
   member_status?: string | undefined;
   /** A starter's key: the first draft is filled from it instead of left empty. */
   starter?: string | undefined;
+  /** Rank codes that receive the starter's officer sections; only for a starter that needs them. */
+  officer_ranks?: string[] | undefined;
 }
 
 /** A ready-made form a new template can start from. */
@@ -203,6 +205,8 @@ export interface EvaluationStarter {
   member_class: string | null;
   member_status: string | null;
   section_titles: string[];
+  /** Creating from it needs the department's officer ranks. */
+  needs_officer_ranks?: boolean | undefined;
 }
 
 /** Partial update: omit to leave alone, null to clear. */

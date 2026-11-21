@@ -160,6 +160,15 @@ period ends. The workflow also sets `reminder_days_before` (default 3),
 member's acknowledgement; an interim check-in has only the self-evaluation and
 evaluator steps and no signatures.
 
+**Starters:** a new template may start from a ready-made form
+(`GET /templates/starters`, `starter` on `POST /templates`): the annual member
+evaluation, the annual evaluation with officer sections, and the probationary
+check-in. Each publishes as it stands. The officer one adds an officer-only
+Leadership and supervision section and needs `officer_ranks` on the create
+request: required for it, refused for any other, and checked against the
+department's ranks. A member without one of those ranks is graded on the other
+sections alone, which keep nearly the plain annual form's shares.
+
 **Matching:** when drafting without naming a template, the most specific
 active, published template of the kind is used (class and status beats either,
 which beats neither); two equally specific fits are refused rather than
@@ -289,7 +298,9 @@ Adding these sources changed the stored shape of no existing entry, so
    acknowledgement is done, and acknowledges receipt or refuses with a reason.
    Either finalizes it. Acknowledging is not agreement, and the PDF says so.
 6. **Finalization** freezes the PDF (`ensure_document`; built on first
-   download if building it at finalization failed).
+   download if building it at finalization failed). Since 2026-11-20 it is
+   footed "Page X of Y": `render_evaluation_pdf` lays the record out twice,
+   the first pass counting the pages. A PDF frozen earlier keeps "Page N".
 
 A signature needs the signer's name typed as on their account (case and
 spacing ignored), an intent checkbox, and step-up. The step is read under the

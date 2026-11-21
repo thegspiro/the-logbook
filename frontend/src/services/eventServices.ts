@@ -290,6 +290,30 @@ export const eventService = {
    * Record, or clear with null, how many guests were counted at an outreach
    * event — the Community Engagement report's actual figure for it.
    */
+  /** The volunteer signup sheet staffing an outreach event (events.manage). */
+  async getStaffing(eventId: string): Promise<import('../types/event').EventStaffing> {
+    const response = await api.get<import('../types/event').EventStaffing>(`/events/${eventId}/staffing`);
+    return response.data;
+  },
+
+  /** Open a signup sheet on an outreach event created directly (events.manage). */
+  async openStaffing(
+    eventId: string,
+    data: { roles: import('../types/event').StaffingRoleNeed[]; notes?: string | undefined }
+  ): Promise<import('../types/event').EventStaffing> {
+    const response = await api.post<import('../types/event').EventStaffing>(`/events/${eventId}/staffing`, data);
+    return response.data;
+  },
+
+  /** Record what happened at an outreach event (events.manage); replaces what was recorded. */
+  async setOutreachCloseout(
+    eventId: string,
+    data: import('../types/event').OutreachCloseoutUpdate
+  ): Promise<import('../types/event').Event> {
+    const response = await api.put<import('../types/event').Event>(`/events/${eventId}/outreach-closeout`, data);
+    return response.data;
+  },
+
   async setGuestHeadcount(eventId: string, guestHeadcount: number | null): Promise<import('../types/event').Event> {
     const response = await api.put<import('../types/event').Event>(`/events/${eventId}/guest-headcount`, {
       guest_headcount: guestHeadcount,
@@ -791,6 +815,13 @@ export const eventRequestService = {
     const response = await api.get<import('../types/event').EventRequestListItem[]>('/event-requests', { params });
     return response.data;
   },
+  /** Enter a request taken by phone, email or in person (events.manage). */
+  async createRequest(
+    data: import('../types/event').EventRequestStaffCreate
+  ): Promise<import('../types/event').EventRequest> {
+    const response = await api.post<import('../types/event').EventRequest>('/event-requests', data);
+    return response.data;
+  },
   async getRequest(requestId: string): Promise<import('../types/event').EventRequest> {
     const response = await api.get<import('../types/event').EventRequest>(`/event-requests/${requestId}`);
     return response.data;
@@ -953,7 +984,14 @@ export const eventRequestService = {
   },
   async sendVolunteerCall(
     requestId: string,
-    data: { message?: string | undefined; membership_types?: string[] | undefined }
+    data: {
+      message?: string | undefined;
+      /** Legacy filter on the combined field; prefer the three below. */
+      membership_types?: string[] | undefined;
+      member_classes?: string[] | undefined;
+      member_statuses?: string[] | undefined;
+      position_ids?: string[] | undefined;
+    }
   ): Promise<import('../types/event').EventRequestVolunteerCallResult> {
     const response = await api.post<import('../types/event').EventRequestVolunteerCallResult>(
       `/event-requests/${requestId}/volunteer-call`,

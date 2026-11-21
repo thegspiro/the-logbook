@@ -79,6 +79,11 @@ screenings**.
 | Add, edit or delete screening records                                     | Roles that can **manage** member medical screenings                           |
 | See **your own** screening counts on the dashboard                        | Every signed-in member                                                        |
 
+**Buttons follow the permission** _(2026-11-20)_. Without **manage**, the
+page shows no **Add Requirement**, **Add Record**, **Edit** or **Delete**
+buttons. A role that can only view reads the tabs and the roster. Before, the
+buttons appeared and the save was refused.
+
 The last row is the only part of this module a member sees without any of
 these permissions. It shows counts only. See
 [What Members See on Their Own Dashboard](#what-members-see-on-their-own-dashboard).
@@ -873,6 +878,9 @@ If you are following older notes or an SOP, these things work differently.
   when they are screened again.
 - **Waivers about to run out are listed.** The expiring list used to leave
   waived records out, even though the count above the tabs included them.
+- **View-only roles no longer see Add, Edit or Delete** _(2026-11-20)_. Those
+  buttons used to appear for every role that could view, and the save was
+  refused. Ask for the **manage** permission if you need them.
 - **Members are emailed before a screening falls due** _(2026-11-10)_. There
   were no screening reminders before; see
   [Reminder Emails](#reminder-emails-2026-11-10).

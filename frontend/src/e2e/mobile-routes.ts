@@ -185,6 +185,14 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
   // Every member reaches it; the fixture puts a request to decide on screen.
   { path: '/members/leave-requests', maxSmallTargets: 0, maxTinyText: 0 },
+  // `crew` serves the caller's crew opt-in (helpers.ts says why).
+  {
+    path: '/members/my-crew',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    fixture: { crew: true },
+    expectText: 'Maria Rodriguez-Castellanos',
+  },
   { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
   // The hub's other three tabs. Add and Import stand on `users.create` as well,
   // so without it the hub falls back to the roster and measures that instead.
@@ -282,6 +290,21 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/admin/audit-log', maxSmallTargets: 0, maxTinyText: 0, permissions: ['audit.view'] },
   { path: '/admin/security-alerts', maxSmallTargets: 0, maxTinyText: 0, permissions: ['audit.view'] },
+  // Each `expectText` is drawn only by its populated fixture (helpers.ts).
+  {
+    path: '/admin/errors',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage'],
+    expectText: 'Error Code Reference (2 codes)',
+  },
+  {
+    path: '/admin/platform-analytics',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage'],
+    expectText: 'Top Error Types',
+  },
   // The rest of Training Administration's tabs. Every one of these brought its
   // own padded page container into the hub's column and was indented twice on
   // a phone; `expectText` names something only that tab's body renders, since

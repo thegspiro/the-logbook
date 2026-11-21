@@ -53,6 +53,30 @@ _ADDED_SINCE: dict[str, set[str]] = {
 }
 
 
+#: Later revisions that add a grant to every seeded position holding some
+#: other grant, rather than to named slugs. What each adds to a position is
+#: derived from the revision's own ``_EVIDENCE_GRANTS`` so the subtraction
+#: below is exactly what that revision does.
+_LATER_EVIDENCE_GRANT_REVISIONS = (
+    "20261116_1602_3f8a1c6e2b94_apparatus_events_tables_and_grants.py",
+)
+
+
+def _evidence_grants_added_since(registry: set[str]) -> set[str]:
+    added: set[str] = set()
+    versions = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+    for index, name in enumerate(_LATER_EVIDENCE_GRANT_REVISIONS):
+        spec = importlib.util.spec_from_file_location(
+            f"_later_evidence_grant_{index}", versions / name
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for permission, evidence in module._EVIDENCE_GRANTS:
+            if registry & evidence:
+                added.add(permission)
+    return added
+
+
 def _as_frozen(permissions: set[str]) -> set[str]:
     """Spell *permissions* the way a migration older than the rename would.
 
@@ -144,7 +168,12 @@ class TestBackfillMirrorsTheRegistry:
     def test_snapshot_is_the_registry_set_minus_the_added_grants(self, slug):
         module = _load_migration()
         registry = _as_frozen(set(DEFAULT_POSITIONS[slug]["permissions"]))
-        expected = registry - set(module._GRANTS) - _ADDED_SINCE.get(slug, set())
+        expected = (
+            registry
+            - set(module._GRANTS)
+            - _ADDED_SINCE.get(slug, set())
+            - _evidence_grants_added_since(registry)
+        )
         assert module._PRIOR_DEFAULTS[slug] == expected
 
     @pytest.mark.parametrize("slug", sorted(_ADDED_SINCE))

@@ -8,21 +8,23 @@ events module. What the module does and how departments use it is on
 
 ### Member and manager pages
 
-| URL                               | Page                                                                                                                      | Permission       |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `/events`                         | Events List                                                                                                               | Authenticated    |
-| `/events/:id`                     | Event Detail                                                                                                              | Authenticated    |
-| `/events/:id/qr-code`             | Event QR Code (and NFC tag writer)                                                                                        | Authenticated    |
-| `/events/:id/check-in`            | Self Check-In                                                                                                             | Authenticated    |
-| `/events/attendance-requests`     | Attendance requests across events — pending "I was there" requests sent to the viewer; **All events** for `events.manage` | Authenticated    |
-| `/locations/:locationId/check-in` | Room check-in — where a room's NFC tag lands; forwards to the open event's `/events/:id/check-in`                         | Authenticated    |
-| `/events/:id/edit`                | Edit Event                                                                                                                | `events.manage`  |
-| `/events/:id/monitoring`          | Check-In Monitoring                                                                                                       | `events.manage`  |
-| `/events/:id/analytics`           | Per-event analytics dashboard                                                                                             | `analytics.view` |
-| `/events/analytics`               | Event Analytics Dashboard                                                                                                 | `analytics.view` |
-| `/events/templates`               | Event Templates Management                                                                                                | `events.manage`  |
-| `/events/admin`                   | Events Admin Hub (the **Manage Events** menu entry); Create/Settings deep-link here via `?tab=create` / `?tab=settings`   | `events.manage`  |
-| `/events/new`                     | Redirects to `/events/admin?tab=create`                                                                                   | `events.manage`  |
+| URL                                 | Page                                                                                                                        | Permission       |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `/events`                           | Events List                                                                                                                 | Authenticated    |
+| `/events/:id`                       | Event Detail                                                                                                                | Authenticated    |
+| `/events/:id/qr-code`               | Event QR Code (and NFC tag writer)                                                                                          | Authenticated    |
+| `/events/:id/check-in`              | Self Check-In                                                                                                               | Authenticated    |
+| `/events/attendance-requests`       | Attendance requests across events — pending "I was there" requests sent to the viewer; **All events** for `events.manage`   | Authenticated    |
+| `/locations/:locationId/check-in`   | Room check-in — where a room's NFC tag lands; forwards to the open event's `/events/:id/check-in`                           | Authenticated    |
+| `/events/:id/edit`                  | Edit Event                                                                                                                  | `events.manage`  |
+| `/events/:id/monitoring`            | Check-In Monitoring                                                                                                         | `events.manage`  |
+| `/events/:id/analytics`             | Per-event analytics dashboard                                                                                               | `analytics.view` |
+| `/events/analytics`                 | Event Analytics Dashboard                                                                                                   | `analytics.view` |
+| `/events/templates`                 | Event Templates Management                                                                                                  | `events.manage`  |
+| `/events/admin`                     | Events Admin Hub (the **Manage Events** menu entry); Create/Settings deep-link here via `?tab=create` / `?tab=settings`     | `events.manage`  |
+| `/events/new`                       | Redirects to `/events/admin?tab=create`                                                                                     | `events.manage`  |
+| `/events/admin/requests/:requestId` | One outreach request on its own page (`EventRequestPage`, which renders `EventRequestsTab` with `requestId`) _(2026-11-21)_ | `events.manage`  |
+| `/events/admin/community/print`     | Printable Community Engagement summary (`?period=`)                                                                         | `events.manage`  |
 
 The Events Admin Hub has six tabs: **Create Event**, **Past Events**,
 **Requests** (outreach requests), **QR Code Analytics**, **Community
@@ -153,6 +155,9 @@ POST   /events/{id}/check-in                     # Checks a member in (attendanc
 GET    /events/{id}/check-in-monitoring          # Live monitoring (manage)
 POST   /events/{id}/record-times                 # Record actual start/end (manage, or training.manage on Training)
 PUT    /events/{id}/guest-headcount              # Set or clear the guests counted at an outreach event (manage)
+PUT    /events/{id}/outreach-closeout            # Replace the outreach close-out: outcome note, apparatus, materials, photos (manage)
+GET    /events/{id}/staffing                     # The volunteer signup sheet staffing this event, its own or its request's (manage)
+POST   /events/{id}/staffing                     # Open a signup sheet on an outreach event with no request behind it (manage)
 POST   /events/{id}/end-event                    # End now + bulk checkout + finalize durations (manage, or training.manage on Training)
 POST   /events/{id}/finalize-attendance          # Finalize attendance (manage, or training.manage on Training)
 POST   /events/{id}/reopen-attendance            # Reopen (events.reopen_attendance, or training.manage on Training)
@@ -295,6 +300,7 @@ GET    /event-requests/status/{token}                 # Public status
 POST   /event-requests/status/{token}/cancel          # Public self-cancel
 
 GET    /event-requests                                # List (admin)
+POST   /event-requests                                # Enter a request taken by phone, email or in person (manage; no CAPTCHA or public limits)
 GET    /event-requests/outreach-roles                 # Outreach role vocabulary
 GET    /event-requests/forms                          # Connected request forms (manage)
 POST   /event-requests/generate-form                  # Generate the public form (manage)
@@ -309,12 +315,55 @@ POST   /event-requests/{id}/send-email                # Send template email
 GET    /event-requests/{id}/staffing                  # Volunteer signups (manage)
 POST   /event-requests/{id}/staffing                  # Open volunteer signup sheet (manage)
 POST   /event-requests/{id}/volunteer-call            # Email members for volunteers (manage)
+POST   /event-requests/{id}/apparatus-crew            # Put an apparatus event template's crew on the request's event (manage + apparatus_events.manage)
 
 GET    /event-requests/email-templates                # List email templates
 POST   /event-requests/email-templates                # Create
 PATCH  /event-requests/email-templates/{id}           # Update
 DELETE /event-requests/email-templates/{id}           # Delete
 ```
+
+**Outreach changes of 2026-11-21 (#4474), for whoever touches them next:**
+
+- **Staff-entered requests.** `event_requests.source` (`web`, `phone`,
+  `email`, `in_person`, `other`; existing rows `web`) and a nullable
+  `contact_email`. Every requester email is skipped when `contact_email` is
+  NULL or `notify_requester` was false; the coordinator's copy still goes, and
+  `send-email` to a request with no address is a 400. The lead time is flagged
+  (`reviewer_notes` "Short notice: …" plus a `lead_time_warning` activity), not
+  refused. `lead_time_error` now requires the department's `today` keyword.
+- **Requested dates are `DATE`** (`preferred_date_start`/`_end`), read on the
+  department's calendar; the public API still accepts a datetime and keeps the
+  date written in it. The public status response carries the department's
+  `timezone`, and the status page formats the scheduled date in it.
+- **Completion.** `PATCH /event-requests/{id}/status` to `completed` before the
+  event's date is a 400. `complete_request_for_finalized_event` runs after a
+  durable finalize (both exits), moves only a `scheduled` request, logs the
+  activity, sends `on_completed`, and never undoes the finalize on failure.
+- **Role presets.** Each `outreach_event_types` entry may carry
+  `default_roles` (`[{role, count}]`), settled on save: an unknown role is a 400,
+  at most 50 seats.
+- **Event-owned signup sheets.** `events.staffing_shift_id` (SET NULL) and
+  `events.staffing_roles`; ownership is decided once in
+  `event_staffing_service.py` — an event a request was scheduled onto is
+  staffed from the request. `update_event` and `postpone_event` move the sheet;
+  `cancel_event` and `delete_event` stand it down (`cancel_shift`, which tells
+  the crew). A series cancel does not yet. `can_staff_event` on the event
+  response gates the card.
+- **Volunteer = RSVP.** `sync_volunteer_rsvps` (called by `SchedulingService`
+  after a seat is created, edited, declined or removed has committed) makes a
+  seat-holder `going` and a member with no remaining seat `not_going`; it never
+  touches a checked-in RSVP or a cancelled or finalized event. The check-in
+  modal sorts `going` members first. `/staffing` is in
+  `UNCACHEABLE_SUBSTRINGS`.
+- **Close-out.** `events.outreach_outcome_note`, `outreach_apparatus_ids`
+  (checked in-org in either apparatus table), `outreach_materials` (one entry
+  per item, case-insensitively) and `outreach_photos` (`none`, `consented`,
+  `not_consented`). Offered on the same rule as the guest headcount. Community
+  Engagement returns `materials` totals, and each event row its close-out.
+- **Open Shifts window.** `OUTREACH_LOOKAHEAD_DAYS = 60` in
+  `endpoints/scheduling.py`: with no end date, outreach sheets are listed 60
+  days ahead and duty shifts 30.
 
 All event response schemas inherit from `UTCResponseBase`, so datetimes are
 serialized with an explicit UTC offset.

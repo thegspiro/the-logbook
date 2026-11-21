@@ -75,7 +75,9 @@ class AttendanceWaiverPolicy(BaseModel):
     ``attachment`` says now, so turning attachments off does not keep the
     files already filed. A policy stored before these fields existed reads
     them at their defaults: attachments off, a year's retention. Only the
-    training workflow takes documents today.
+    training workflow takes documents today: the meeting workflow refuses a
+    policy that asks for them and reads a stored one as off
+    (``WorkflowSpec.takes_documents``).
     """
 
     model_config = ConfigDict(extra="forbid")

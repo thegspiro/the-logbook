@@ -66,7 +66,10 @@ program enrollments, external training integrations, and compliance reporting.
   profiles. Since 2026-11-18 (D10, #4403) the card, **My Training**, the
   officer's per-member requirements view and requirement progress list only
   the requirements of the member's matching compliance profile, through
-  `ComplianceGrading.for_member`; see [Compliance](Module-Compliance)
+  `ComplianceGrading.for_member`; since 2026-11-20 (#4456) the card's colour is
+  the member's Compliance Matrix standing, and the remaining officer views
+  grade through profiles too. See [Compliance](Module-Compliance) and
+  [Compliance, member files and templates](#compliance-member-files-and-templates-2026-11-20--21)
 - **Training Waivers** — Leave of Absence auto-linking, waiver management,
   proportional requirement adjustment. Supports permanent waivers (no end date),
   a New Member waiver type, and multi-select "Applies To" (Training + Meetings +
@@ -397,11 +400,14 @@ forecast print N/A where a requirement does not apply.
 JPEG, PNG, GIF, WEBP, DOC or DOCX, detected by magic bytes and malware-scanned)
 through `FileStorageService` under
 `/app/uploads/<org_id>/training-records/<record_id>/<uuid><ext>`, with metadata
-in the `TrainingRecord.attachments` JSON column. `GET .../attachments/{index}/download`
-streams a stored file. Access is the record owner or `training.manage`; server
+in the `TrainingRecord.attachments` JSON column. `GET .../attachments/{entry}/download`
+streams a stored file, named by the entry's id (or, for older clients, its index). Access is the record owner or `training.manage`; server
 file paths are never returned. The record download route also accepts the
 self-reports storage area, because approving a submission copies its
-attachment entries onto the record verbatim.
+attachment entries onto the record verbatim (keeping each entry's `id`). A
+voided record refuses an upload (400), and the record create/update bodies
+refuse an `attachments` field (422); see
+[Member files](#compliance-member-files-and-templates-2026-11-20--21).
 
 ---
 
@@ -470,11 +476,14 @@ extension cannot survive the trip and nothing is executed server-side. Files
 are stored by `FileStorageService` in the organization's self-reports area
 (`/app/uploads/<org_id>/self-reports/...`).
 
-**Deleting or withdrawing a submission unlinks its file.** That is safe only
-because a submission is deletable in `draft`, `pending_review` and
-`revision_requested` alone — never after approval, the one state where a
-`TrainingRecord` also references the same file. **If that guard is ever
-widened, the delete must stop unlinking.** A voided record keeps its file by
+**Deleting or withdrawing a submission unlinks its file only if nothing else
+names it** _(2026-11-20, #4458)_. A submission is deletable in `draft`,
+`pending_review` and `revision_requested`, but `reverse_approval` reopens an
+approved one while the voided record it created keeps naming the same
+certificates. So the delete, and the single-attachment removal, commit first
+and then call `member_files.remove_unreferenced_files` (scoped to the
+self-reports area), which keeps any file another collected row still names
+and deletes nothing if that check fails. A voided record keeps its file by
 design.
 
 ### Malware scanning
@@ -508,7 +517,11 @@ daily `self_report_attachment_retention` task unlinks the files and removes the
 references from the submission and the member's training records; the
 submission and record rows stay. Audited per organization as
 `self_report_attachment_retention`; changes to the period as
-`self_report_attachment_retention_updated`.
+`self_report_attachment_retention_updated`. The decision date is
+`coalesce(reviewed_at, submitted_at)` _(2026-11-20, #4476)_: a submission
+auto-approved at creation has no `reviewed_at`, and before this its files
+were never deleted. The task walks submissions only, so a certificate kept
+for a voided record after the submission stopped naming it is not reached.
 
 ### Review, notifications and integrity
 
@@ -1003,8 +1016,13 @@ shared table is `EVALUATION_REQUIREMENT_TARGETS` in
   `delete_assignment` re-sync. `update_training_requirement` calls
   `sync_credit_for_requirement` when `requirement_type` or
   `evaluation_excludes_lowest_rating` changes, revoking credit when the new
-  type takes none. Open: an outside entry moved to a non-evaluating agency, and
-  a combined evaluation whose scope shrinks (`docs/KNOWN_LIMITATIONS.md`).
+  type takes none. A combined evaluation whose scope shrinks (#4376,
+  2026-11-16) has the credit it gave a dropped program revoked on its next
+  save: the credit pass reads from the ledger every row the evaluation
+  credited outside its current scope, so no record of the earlier scope is
+  needed (`tests/test_combined_scope_shrink.py`). An outside entry moved to a
+  non-evaluating agency keeps its credit by owner decision
+  (`docs/KNOWN_LIMITATIONS.md`).
 - **Forms in use** (#4302). `update_template` refuses `is_active: false` while
   a program or the general-form setting names the form; an inactive form is
   refused as a new general form or on program create/update (a program already
@@ -1398,6 +1416,145 @@ template may have left since.
 - **Headline Metrics settings** (#4426) no longer jump on a slow load: the
   placeholder and loaded screen are keyed separately, so React replaces one
   with the other instead of morphing it (a 0.35 layout shift on a phone).
+
+## Compliance, member files and templates, 2026-11-20 – 21
+
+**Monthly average on hours requirements** (#4454, owner decision 2026-11-20).
+`training_compliance.monthly_pace` is the one definition: `average` is the
+hours in the months nothing excused over the number of those months (hours
+earned on leave stay in the total but not in the average; `None` when every
+month so far was excused), and `needed` is the unadjusted `required_hours`
+over `total_months_in_period` of the whole window (72 over 12 is 6). Both
+evaluators report it — `monthly_average` / `monthly_needed` on My Training's
+requirement detail (`TrainingService.evaluate_requirement_detail`) and on each
+`GET /training/compliance-matrix` cell (measured through
+`min(window_end, today)`) — so the two screens print one figure (pitfall 29).
+`RequirementDetailCard` and the matrix detail lead with "6.9/6 hrs/mo avg"
+(`utils/requirementPace.ts`, which only formats, with an `sr-only` spoken
+form) and put the total beneath it. **The status is still graded on the
+total.** `RequirementMonthlyHours` prints the server's figure for hours; shifts
+and calls still average client-side.
+
+**The officer views grade through profiles** (#4460 via #4456, owner decision
+2026-11-20). The member period-status roster, competency matrix, compliance
+CSV/PDF cells, compliance forecast and Scheduling's Shift Compliance report
+resolve each member through `ComplianceGrading.for_member`, with one config
+load per request. The roster classifies with the profile's thresholds; the
+others have no member standing, so the profile only narrows cells (a
+requirement outside it reads `not_applicable` / N/A, or the member is not
+listed). The forecast gains `current_standing`; its 30/60/90 projections stay
+plain percentages. The exports and forecast take the department's
+`include_current_month` instead of a hard-coded `True`. The profile card's
+colour is the matrix standing too (see [Compliance](Module-Compliance)).
+
+**Profile ties and optional requirements** (#4480, owner decisions
+2026-11-21). `app/utils/compliance_profiles.py` defines the one order: higher
+`priority`, then older `created_at`, then smaller id. `_find_matching_profile`,
+`ComplianceGrading.from_config`, the admin-hours lookup and
+`ComplianceConfigResponse.profiles` use it; a tie used to go to whichever row
+MySQL returned first. `MemberGrading` gains `optional_requirements` beside
+`requirements`, so nothing that reads `.requirements` can count one. My
+Training and the officer's member view return them as
+`optional_requirements_detail`, drawn by `OptionalRequirementsGroup` with an
+**Optional** badge and no overdue state. A profile whose
+`required_requirement_ids` is null grades everything except its optional ids;
+create and update store an id sent in both lists as required only. The editor
+makes the two lists exclusive, keeps a null required list null across an
+unrelated save (it used to send `[]`, switching the profile to grading
+nothing) and warns, without refusing, when another active profile shares the
+priority.
+
+**Every-2-years certificate lapse** (#4488).
+`training_compliance.lapsed_biannual_certificate(req, counted, as_of)` is the
+one rule for a BIANNUAL hours or courses requirement: the certificate expiring
+last among the records the requirement's own branch counts in its window, if
+it expired before `as_of`, makes the requirement `expired`. The grader,
+`evaluate_requirement_detail` and `check_requirement_progress` all call it.
+My Training used to read every completed record of the training type, in or
+out of the window, for hours, and had no check for courses.
+
+**Certification card states** (#4488). A `certification` requirement's detail
+gains `expiry_date` (the graded certificate's expiration date, null when none
+is on file or it never expires). The card reads **On file** (Expires …),
+**Expired** (…) or **Not recorded** instead of 1/1 or 0/1, and a missing
+certificate's warning says no certification is on file rather than calling it
+expired.
+
+**Compliance exports grade like the matrix** (#4477) — see
+[Member & Officer Exports](#member--officer-exports).
+
+**Rolling requirements in the member compliance emails** (#4482).
+`compliance_member_notices` read a rolling requirement's `window_end` — the
+grading day — as its deadline and as part of the notice key, so both emails
+went out daily. A rolling requirement (`get_rolling_period_months`) now has no
+deadline (a catch-up deadline still counts) and its notice key is the
+requirement id alone. `_already_noticed` treats a pre-upgrade
+`id|window_end` log key for the same id as sent, so the first run after the
+upgrade does not re-notify. Known cost (`docs/KNOWN_LIMITATIONS.md`): a member
+who meets it and later falls short again is not told again by this notice.
+
+**Course Links under concurrency** (#4479). `_apply` reads the unlinked
+records with a locking read and re-reads and locks them just before each
+UPDATE, so only the records it changed are updated, counted and given undo
+rows; a link that changed nothing is not recorded. A deadlock or lock-wait
+timeout between two overlapping links (`CourseLinkBusy`) answers 409
+"Another course link was changing these records at the same time. Nothing was
+linked; try again." The undo's revert UPDATE re-checks, in its WHERE, that the
+record is still on the link's course and untouched since the link
+(`EDIT_TOLERANCE`); every record it skips is counted as kept.
+
+**Training templates keep the session's training details** (#4459, migration
+`56377b666eb3`). A Training event template carries
+`event_templates.training_details`: course (library, one-off name and code,
+or none), training type, credit hours and their source, lead instructor and
+certification settings — not requirement/program links, Counts toward
+attendance or completion settings. Picking the template on Training Admin's
+**Create Session** or Events' **Create Event** fills **Training Info**;
+`reconcileTemplateTraining` falls back to No course yet for a course no longer
+in the library and clears an instructor who is no longer a current member,
+with a note. Editing is in **Events → Event Templates** (the editor's
+**Training Details** section); **Save as Template** on a Training event saves
+its session's details. See [Events](Module-Events).
+
+**Member files** (#4458, #4483, #4476):
+
+- **Request bodies refuse `attachments`.** `TrainingRecordCreate`,
+  `TrainingRecordUpdate`, `TrainingSubmissionCreate` and
+  `TrainingSubmissionUpdate` answer 422 at `body.attachments` for any value,
+  `null` and `[]` included ("attachments cannot be set here; add a file by
+  uploading it to …"). The upload routes and the approval copy are the only
+  writers. A stored entry carries a `file_path` no client sees, so a body
+  could only replace it with bare names, orphaning the files and letting a
+  fake name satisfy the required-evidence setting. Migration `0c22a95b94b8`
+  settled the bare strings already stored as `{"file_name": s}`.
+- **Stable entry ids.** Every entry carries `id = str(uuid4())`
+  (`app/utils/training_attachments.py` is the write-side authority; the
+  approval copy keeps the submission entry's id). The submission removal and
+  both download routes take an id or a legacy index; a removal naming an
+  absent id is a 204 no-op, and a legacy index takes `?expected_id=` and
+  answers 409 when the list has moved. Migration `7d6769fca85c` stamps the
+  stored entries.
+- **Shared certificates are kept.** Removing a submission attachment or
+  deleting a submission goes through `member_files.remove_unreferenced_files`
+  after the commit, so a file a voided record (left by `reverse_approval`) or
+  any other collected row still names is kept.
+  `tests/test_file_reference_coverage_ratchet.py` ties every file-path column
+  to `upload_relocation.collect_references` or a commented allowlist.
+- **Locks.** `get_submission(for_update=True)` is taken by review, submit,
+  update, delete, reverse-approval and attachment removal; review and submit
+  lock the member's `users` row `FOR SHARE` first (member, submission,
+  records — the order anonymisation and the permanent delete take). The
+  approval commits once, with its record. Uploads store outside the lock,
+  then re-read the row locked and check again; a refused upload deletes its
+  stored file. Retention locks the records it rewrites.
+- **An upload to a voided record** is a 400 ("A voided training record can't
+  take new attachments").
+- **Retention counts auto-approved submissions from `submitted_at`**
+  (`coalesce(reviewed_at, submitted_at)`); `reviewed_at` is written only by an
+  officer's review, so an auto-approved submission's files were never deleted.
+- Still open (`docs/KNOWN_LIMITATIONS.md`): a certificate kept for a voided
+  record is outside the retention sweep, a record's own file has no removal
+  route, and file names on path-less entries survive anonymisation.
 
 ## Cross-Module Connections
 

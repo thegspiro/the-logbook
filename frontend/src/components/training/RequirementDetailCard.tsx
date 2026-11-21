@@ -59,6 +59,18 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
   // total moves to a line underneath. The total is still what decides
   // whether the requirement is met, so it stays on the card.
   const pace = monthlyPaceOf(req.monthly_average, req.monthly_needed);
+  // A certification is held or not, so it reads as a state with its date,
+  // not as 1/1 or 0/1: "On file (Expires ...)", "Expired ..." or
+  // "Not recorded". The server reports the date (expiry_date) of the
+  // certificate it graded.
+  const certState: 'on_file' | 'expired' | 'missing' | null =
+    req.requirement_type !== 'certification' || notYetHeld
+      ? null
+      : req.is_met
+        ? 'on_file'
+        : req.expiry_date
+          ? 'expired'
+          : 'missing';
 
   return (
     <div
@@ -92,7 +104,7 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
             className={`text-sm font-bold ${
               req.is_met
                 ? 'text-green-700 dark:text-green-400'
-                : isOverdue
+                : isOverdue || (certState && !optional)
                   ? 'text-red-700 dark:text-red-400'
                   : 'text-theme-text-primary'
             }`}
@@ -101,6 +113,12 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
               <span className="text-theme-text-muted font-normal">No sessions held yet</span>
             ) : nothingOwed ? (
               <>Nothing owed (on leave)</>
+            ) : certState === 'on_file' ? (
+              <>On file</>
+            ) : certState === 'expired' ? (
+              <>Expired</>
+            ) : certState === 'missing' ? (
+              <>Not recorded</>
             ) : pace ? (
               <>
                 <span className="sr-only">{paceSpoken(pace)}</span>
@@ -113,6 +131,12 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
               </>
             )}
           </span>
+          {certState === 'on_file' && req.expiry_date && (
+            <p className="text-theme-text-muted mt-0.5 text-xs">(Expires {formatCalendarDate(req.expiry_date)})</p>
+          )}
+          {certState === 'expired' && (
+            <p className="text-theme-text-muted mt-0.5 text-xs">({formatCalendarDate(req.expiry_date)})</p>
+          )}
           {pace && !notYetHeld && !nothingOwed && (
             <p className="text-theme-text-muted mt-0.5 text-xs">
               {req.completed_hours}/{req.required_hours}
@@ -139,9 +163,13 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
       {req.blocks_activity && (
         <div className="mb-2 rounded-sm border border-red-500/30 bg-red-500/10 px-2 py-1.5">
           <p className="text-xs font-medium text-red-700 dark:text-red-400">
-            {self
-              ? 'Certification expired — renew ASAP. This may prevent you from signing up for shifts.'
-              : 'Certification expired. This may prevent the member from signing up for shifts.'}
+            {certState === 'missing'
+              ? self
+                ? 'No certification on file — record one ASAP. This may prevent you from signing up for shifts.'
+                : 'No certification on file. This may prevent the member from signing up for shifts.'
+              : self
+                ? 'Certification expired — renew ASAP. This may prevent you from signing up for shifts.'
+                : 'Certification expired. This may prevent the member from signing up for shifts.'}
           </p>
         </div>
       )}
@@ -197,6 +225,8 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
             <span>Not required for compliance</span>
           ) : req.catch_up_deadline ? (
             <span>Due by {formatCalendarDate(req.catch_up_deadline)}</span>
+          ) : certState === 'missing' ? (
+            <span className="font-medium text-red-700 dark:text-red-400">Not recorded</span>
           ) : req.cert_expired ? (
             <span className="font-medium text-red-700 dark:text-red-400">Expired — Renew ASAP</span>
           ) : isOverdue ? (

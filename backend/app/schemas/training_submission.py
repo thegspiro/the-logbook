@@ -202,6 +202,9 @@ class SubmissionAttachment(BaseModel):
     """
 
     index: int
+    # The entry's stable id; None only on an entry written before ids existed
+    # and not yet reached by the backfill. Routes take it in place of index.
+    id: Optional[str] = None
     file_name: Optional[str] = None
     file_type: Optional[str] = None
     file_size: Optional[int] = None
@@ -220,6 +223,7 @@ def sanitize_attachments(attachments: Optional[list]) -> list[dict]:
             result.append(
                 {
                     "index": i,
+                    "id": a.get("id"),
                     "file_name": a.get("file_name"),
                     "file_type": a.get("file_type"),
                     "file_size": a.get("file_size"),
@@ -227,7 +231,7 @@ def sanitize_attachments(attachments: Optional[list]) -> list[dict]:
                 }
             )
         else:
-            result.append({"index": i, "file_name": str(a)})
+            result.append({"index": i, "id": None, "file_name": str(a)})
     return result
 
 

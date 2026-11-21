@@ -25,7 +25,7 @@ from sqlalchemy.orm import aliased, selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core.config import settings
-from app.models.admin_hours import EVENT_TYPES_WITHOUT_ADMIN_HOURS
+from app.models.admin_hours import EVENT_TYPES_WITHOUT_ADMIN_HOURS, AdminHoursCategory
 from app.models.attendance_waiver import (
     AttendanceWaiverRequest,
     AttendanceWaiverStatus,
@@ -394,6 +394,26 @@ def attendance_is_settled(event: Event, now: datetime) -> bool:
 
     return now >= effective_end + timedelta(
         days=max(0, settings.PIPELINE_ATTENDANCE_SETTLE_DAYS)
+    )
+
+
+def _stranded_check_ins_error(stranded: int, occurrences: int = 0) -> str:
+    """The refusal for a schedule change that would strand check-ins.
+
+    ``occurrences`` is given by the series door, which checks every open
+    occurrence a "this and all future events" save moves.
+    """
+    members = "member is" if stranded == 1 else "members are"
+    where = ""
+    if occurrences:
+        where = (
+            " in 1 occurrence" if occurrences == 1 else f" in {occurrences} occurrences"
+        )
+    return (
+        f"{stranded} {members} already checked in{where} at a time outside "
+        "the new schedule, and would be credited for the new date. "
+        "Postpone the event instead, which starts its attendance "
+        "afresh, or remove or correct those check-ins first."
     )
 
 
@@ -1129,8 +1149,10 @@ class EventService:
         if not items:
             return
 
-        mappings = await AdminHoursService(self.db).get_active_mappings_by_source(
-            str(organization_id)
+        admin_hours = AdminHoursService(self.db)
+        mappings = await admin_hours.get_active_mappings_by_source(str(organization_id))
+        crew_categories = await admin_hours.crew_hour_category_overrides(
+            str(organization_id), [str(item["event"].id) for item in items]
         )
 
         for item in items:
@@ -1140,7 +1162,7 @@ class EventService:
             item["check_in_closes_at"] = check_in_closes_at
 
             credited_hours, hour_category_label = self._resolve_credited_hours(
-                event, mappings
+                event, mappings, crew_categories.get(str(event.id))
             )
             item["credited_hours"] = credited_hours
             item["hour_category_label"] = hour_category_label
@@ -1154,15 +1176,20 @@ class EventService:
         is that same rule for a single event, so the card and the detail page
         cannot state different credits.
         """
-        mappings = await AdminHoursService(self.db).get_active_mappings_by_source(
-            str(organization_id)
-        )
-        return self._resolve_credited_hours(event, mappings)
+        admin_hours = AdminHoursService(self.db)
+        mappings = await admin_hours.get_active_mappings_by_source(str(organization_id))
+        crew_category = (
+            await admin_hours.crew_hour_category_overrides(
+                str(organization_id), [str(event.id)]
+            )
+        ).get(str(event.id))
+        return self._resolve_credited_hours(event, mappings, crew_category)
 
     @staticmethod
     def _resolve_credited_hours(
         event: Event,
         mappings: Dict[Tuple[str, str], List[Tuple[int, str]]],
+        crew_category: Optional[AdminHoursCategory] = None,
     ) -> Tuple[Optional[float], Optional[str]]:
         """Hours this event's scheduled duration would credit, and to what.
 
@@ -1182,7 +1209,12 @@ class EventService:
         # promise a credit credit_event_attendance will not make.
         if event_type in EVENT_TYPES_WITHOUT_ADMIN_HOURS:
             return None, None
-        if event_type:
+        matched: Optional[List[Tuple[int, str]]]
+        if crew_category is not None:
+            # An apparatus night credits its own category in place of the
+            # event-type mapping — AdminHoursService.crew_hour_category_overrides.
+            matched = [(100, crew_category.name)]
+        elif event_type:
             matched = mappings.get(("event_type", event_type))
         elif event.custom_category:
             matched = mappings.get(("custom_category", event.custom_category))
@@ -1328,6 +1360,7 @@ class EventService:
         was_training = self.event_credits_training(event)
         old_title = event.title
         old_start = event.start_datetime
+        old_end = event.end_datetime
         for field, value in update_data.items():
             setattr(event, field, value)
         self._forget_sent_reminders_if_moved(event, old_start)
@@ -1343,6 +1376,9 @@ class EventService:
                 updated_by,
                 previous_titles={str(event.id): old_title},
             )
+        await self._follow_event_length(
+            [(event, old_start, old_end)], training_details, organization_id
+        )
         # After the refusals above, so a refused save writes nothing here.
         waiver_notices = await self._reconfirm_waiver_requests_if_moved(
             {str(event.id): old_start}, [event], organization_id
@@ -1351,6 +1387,7 @@ class EventService:
         if updated_by:
             event.updated_by = str(updated_by)
         event.updated_at = datetime.now(dt_timezone.utc)
+        await self._move_own_staffing(event, organization_id)
 
         if defer_commit:
             await self.db.flush()
@@ -1422,10 +1459,48 @@ class EventService:
         await training.apply_session_details(plans, organization_id, updated_by)
         self.last_training_plans = plans
 
+    async def _follow_event_length(
+        self,
+        moved: List[Tuple[Event, Optional[datetime], Optional[datetime]]],
+        training_details: Optional[TrainingSessionDetailsUpdate],
+        organization_id: UUID | str,
+    ) -> None:
+        """Keep credit hours that follow each moved event's length on it.
+
+        ``moved`` pairs each event with its times before the save. A save
+        whose training details set the hours has already decided them.
+        """
+        if (
+            training_details is not None
+            and "credit_hours" in training_details.model_fields_set
+        ):
+            return
+        from app.services.training_session_service import TrainingSessionService
+
+        training = TrainingSessionService(self.db)
+        for event, old_start, old_end in moved:
+            if not self.event_credits_training(event):
+                continue
+            await training.follow_event_length(
+                event, old_start, old_end, organization_id
+            )
+
     async def _refuse_orphaning_check_ins(
         self, event: Event, update_data: Dict[str, Any]
     ) -> None:
         """Refuse a schedule change that would strand existing check-ins.
+
+        See :meth:`_count_stranded_check_ins` for the rule; this is its
+        single-event door, and ``update_future_events`` is its series one.
+        """
+        stranded = await self._count_stranded_check_ins(event, update_data)
+        if stranded:
+            raise ValueError(_stranded_check_ins_error(stranded))
+
+    async def _count_stranded_check_ins(
+        self, event: Event, update_data: Dict[str, Any]
+    ) -> int:
+        """Count the check-ins a schedule change would strand.
 
         A check-in is a timestamp, and crediting clamps an early one forward
         to the scheduled start (``_credited_check_in_time``). Moving an event
@@ -1449,7 +1524,7 @@ class EventService:
             "check_in_minutes_after",
         }
         if not window_fields.intersection(update_data):
-            return
+            return 0
 
         def proposed(name: str) -> Any:
             return update_data.get(name, getattr(event, name, None))
@@ -1468,7 +1543,7 @@ class EventService:
         )
         opens, closes = self._get_check_in_window(moved)
         if (opens, closes) == current:
-            return
+            return 0
         window_type = moved.check_in_window_type or CheckInWindowType.FLEXIBLE
         if window_type != CheckInWindowType.STRICT:
             opens -= timedelta(hours=1)
@@ -1484,14 +1559,7 @@ class EventService:
             at = self._as_utc(checked_in_at)
             if at is not None and not opens <= at <= closes:
                 stranded += 1
-        if stranded:
-            members = "member is" if stranded == 1 else "members are"
-            raise ValueError(
-                f"{stranded} {members} already checked in at a time outside "
-                "the new schedule, and would be credited for the new date. "
-                "Postpone the event instead, which starts its attendance "
-                "afresh, or remove or correct those check-ins first."
-            )
+        return stranded
 
     async def complete_deferred_writes(self, organization_id: UUID | str) -> None:
         """Run what ``defer_commit`` writes owe once their batch has committed.
@@ -1684,6 +1752,38 @@ class EventService:
                 )
             )
 
+        # The 2026-11-08 rule against stranding check-ins holds on this door
+        # too: each open occurrence is checked against its own new times (it
+        # moves by the anchor's shift) and any check-in settings sent, and the
+        # whole save is refused before anything is written. A finalized
+        # occurrence was refused above if its times change.
+        stranded = 0
+        stranded_occurrences = 0
+        for occurrence in future_events:
+            if attendance_is_finalized(occurrence):
+                continue
+            # Only settings that differ: the edit form re-sends them all.
+            proposed = {
+                key: value
+                for key, value in update_data.items()
+                if key.startswith("check_in_")
+                and value != getattr(occurrence, key, None)
+            }
+            if times_change:
+                start_wall = _wall_time(occurrence.start_datetime, tz) + shift
+                proposed["start_datetime"] = _stored_time(start_wall, tz)
+                proposed["end_datetime"] = _stored_time(start_wall + length, tz)
+            if not proposed:
+                continue
+            count = await self._count_stranded_check_ins(occurrence, proposed)
+            if count:
+                stranded += count
+                stranded_occurrences += 1
+        if stranded:
+            raise ValueError(
+                _stranded_check_ins_error(stranded, occurrences=stranded_occurrences)
+            )
+
         # XC-1 (BXC-1): update_event and create_event validate a newly-set
         # location_id in-org, but this series-wide bulk update did not — and the
         # location is eager-loaded and name-projected as location_name in the
@@ -1700,12 +1800,14 @@ class EventService:
         training_follow_ups = []
         previous_titles: Dict[str, str] = {}
         previous_starts: Dict[str, Optional[datetime]] = {}
+        previous_times: List[Tuple[Event, Optional[datetime], Optional[datetime]]] = []
         for event in future_events:
             was_training = self.event_credits_training(event)
             old_title = event.title
             previous_titles[str(event.id)] = old_title
             old_start = event.start_datetime
             previous_starts[str(event.id)] = old_start
+            previous_times.append((event, old_start, event.end_datetime))
             for field, value in update_data.items():
                 if field == "custom_fields":
                     value = self._with_own_lifecycle_markers(event, value)
@@ -1742,6 +1844,10 @@ class EventService:
                 organization_id,
                 updated_by,
                 previous_titles=previous_titles,
+            )
+        if times_change:
+            await self._follow_event_length(
+                previous_times, training_details, organization_id
             )
 
         waiver_notices = await self._reconfirm_waiver_requests_if_moved(
@@ -1822,6 +1928,11 @@ class EventService:
         await self.db.refresh(event)
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
         await self._send_waiver_notices(waiver_notices, organization_id)
+        await self._stand_down_own_staffing(
+            getattr(event, "staffing_shift_id", None),
+            organization_id,
+            "The outreach event this covered was cancelled.",
+        )
 
         # Send cancellation notifications if requested
         if send_notifications and rsvps_to_notify:
@@ -2001,10 +2112,14 @@ class EventService:
             guest.checked_in = False
             guest.checked_in_at = None
 
+        old_end = event.end_datetime
         event.start_datetime = new_start
         event.end_datetime = new_end
         event.actual_start_time = None
         event.actual_end_time = None
+        await self._follow_event_length(
+            [(event, old_start, old_end)], None, organization_id
+        )
         if event.postponed_from_start is None:
             event.postponed_from_start = old_start
         event.postponed_at = now
@@ -2033,6 +2148,8 @@ class EventService:
         waiver_notices = await self._reconfirm_waiver_requests_if_moved(
             {str(event.id): old_start}, [event], organization_id
         )
+
+        await self._move_own_staffing(event, organization_id)
 
         await self.db.commit()
         await self.db.refresh(event)
@@ -2333,6 +2450,11 @@ class EventService:
             event.updated_at = now
             cancelled_count += 1
 
+        if cancel_future_only and events:
+            await self._end_series_at_kept(
+                parent_event_id, organization_id, list(events)
+            )
+
         if cancelled_count > 0:
             await self.db.commit()
             await self._reverse_pipeline_after_commit(
@@ -2341,6 +2463,45 @@ class EventService:
             await self._send_waiver_notices(waiver_notices, organization_id)
 
         return cancelled_count
+
+    async def _end_series_at_kept(
+        self,
+        parent_event_id: UUID | str,
+        organization_id: UUID | str,
+        cancelling: List[Event],
+    ) -> None:
+        """End a series at its last kept occurrence when its future is cancelled.
+
+        The same step delete_event_series takes for a "this and future"
+        delete: the rolling-extension job continues a series from its latest
+        live occurrence, so a parent left rolling would have the cancelled
+        dates (and every date after them) back the next night. Only when the
+        parent itself is kept — a cancelled parent drops out of the job's
+        query on its own.
+        """
+        cancelling_ids = {str(e.id) for e in cancelling}
+        if str(parent_event_id) in cancelling_ids:
+            return
+        result = await self.db.execute(
+            select(Event).where(
+                Event.organization_id == str(organization_id),
+                or_(
+                    Event.id == str(parent_event_id),
+                    Event.recurrence_parent_id == str(parent_event_id),
+                ),
+            )
+        )
+        series = list(result.scalars().all())
+        parent = next((e for e in series if str(e.id) == str(parent_event_id)), None)
+        if parent is None or not parent.is_recurring:
+            return
+        kept = [
+            e for e in series if str(e.id) not in cancelling_ids and not e.is_cancelled
+        ] or [parent]
+        parent.recurrence_end_date = max(
+            (e.start_datetime for e in kept), key=_utc_instant
+        )
+        parent.rolling_recurrence = False
 
     async def duplicate_event(
         self, event_id: UUID, organization_id: UUID | str, created_by: UUID | str
@@ -2370,10 +2531,37 @@ class EventService:
             for lifecycle_key in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS:
                 custom_fields.pop(lifecycle_key, None)
 
+        # The source's organizers, rechecked: one who can no longer run an
+        # event gives way to the duplicating officer, as on create, rather
+        # than refusing the duplicate.
+        try:
+            organizers = await self._organizer_columns(
+                source_event.organizer_id,
+                source_event.alternate_organizer_id,
+                organization_id,
+                created_by,
+            )
+        except ValueError:
+            try:
+                organizers = await self._organizer_columns(
+                    source_event.organizer_id, None, organization_id, created_by
+                )
+            except ValueError:
+                organizers = await self._organizer_columns(
+                    None, None, organization_id, created_by
+                )
+
         # Fields to copy from the source event
         new_event = Event(
             organization_id=organization_id,
             created_by=created_by,
+            # Always a draft: the officer is sent straight to the copy's edit
+            # form and publishes from there. Copying the flag published a
+            # duplicate of a hidden draft at once, and a duplicate of a
+            # published event appeared on every calendar, at the source's own
+            # date and room, before the officer had changed anything.
+            is_draft=True,
+            **organizers,
             title=source_event.title,
             description=source_event.description,
             event_type=source_event.event_type,
@@ -2562,6 +2750,7 @@ class EventService:
             [event], organization_id, "deleted"
         )
 
+        sheet_id = getattr(event, "staffing_shift_id", None)
         await self.db.delete(event)
         try:
             await self.db.commit()
@@ -2580,7 +2769,41 @@ class EventService:
 
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
         await self._send_waiver_notices(waiver_notices, organization_id)
+        await self._stand_down_own_staffing(
+            sheet_id,
+            organization_id,
+            "The outreach event this covered was deleted.",
+        )
         return True
+
+    async def _move_own_staffing(
+        self, event: Event, organization_id: UUID | str
+    ) -> None:
+        """Keep an event's own signup sheet on its time (owner decision,
+        2026-11-20). Inside the event's transaction; a request-owned sheet is
+        moved by the request's own sync instead."""
+        # getattr: callers in tests hand in plain stand-ins without the column.
+        if not getattr(event, "staffing_shift_id", None):
+            return
+        from app.services.event_staffing_service import move_event_staffing
+
+        org = await self.db.scalar(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        await move_event_staffing(self.db, event, org)
+
+    async def _stand_down_own_staffing(
+        self, sheet_id: Optional[str], organization_id: UUID | str, reason: str
+    ) -> None:
+        """Cancel an event's own signup sheet and tell its crew, after the
+        event's own commit (``cancel_shift`` commits)."""
+        if not sheet_id:
+            return
+        from app.services.event_staffing_service import stand_down_event_staffing
+
+        await stand_down_event_staffing(
+            self.db, sheet_id, str(organization_id), None, reason
+        )
 
     async def delete_event_series(
         self,
@@ -4447,6 +4670,7 @@ class EventService:
                 event, organization_id, finalized_by
             )
             await self._advance_prospects_after_finalize(event)
+            await self._complete_request_after_finalize(event, finalized_by)
             return outcome
 
         updated_count = 0
@@ -4554,8 +4778,37 @@ class EventService:
                 credit, organization_id, finalized_by, can_manage_training
             )
         await self._advance_prospects_after_finalize(event)
+        await self._complete_request_after_finalize(event, finalized_by)
 
         return outcome
+
+    async def _complete_request_after_finalize(
+        self, event: Event, finalized_by: UUID | str | None
+    ) -> None:
+        """Close the outreach request this event came from (owner decision,
+        2026-11-20); see ``complete_request_for_finalized_event``.
+
+        Runs after the close is durable and swallows its own failure, as the
+        applicant advance beside it does: the attendance and credited hours
+        are what finalizing is for, and a request left scheduled is one press
+        of Mark completed away, now that its date has passed.
+        """
+        from app.services.event_request_service import (
+            complete_request_for_finalized_event,
+        )
+
+        try:
+            await complete_request_for_finalized_event(
+                self.db, event, str(finalized_by) if finalized_by else None
+            )
+        except Exception:
+            logger.exception(
+                "Could not complete the request for finalized event {}", event.id
+            )
+            try:
+                await self.db.rollback()
+            except Exception:
+                logger.exception("Rollback after that failure also failed")
 
     async def _advance_prospects_after_finalize(self, event: Event) -> None:
         """Move applicants this event's now-settled attendance clears.

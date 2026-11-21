@@ -421,7 +421,8 @@ delete the record. It stays on the **Withdrawn** tab.
 
 ## Anonymizing a Departed Member (Admin)
 
-> **Required Permission:** "Manage member profiles"
+> **Required Permission:** "Manage member profiles", and you confirm it's you
+> (**Confirm it&rsquo;s you**) before it runs.
 
 When a member leaves, the department still needs their operational history —
 training completions, attendance percentages, property they were issued. It
@@ -433,7 +434,12 @@ record of what happened.
 
 **Before you can anonymize**, the member must already have left — dropped,
 archived or deactivated. Active members are refused, and you cannot anonymize
-your own account. On a departed member's profile, the **Anonymize member** link
+your own account. Since 2026-11-20 you also cannot anonymize a member who
+still holds a permission you lack: leaving does not take away a member's
+positions, so a departed Chief can only be anonymized by someone who holds
+everything the Chief did. This is the same rule that already applied to
+deleting, archiving and changing a member's status. On a departed member's
+profile, the **Anonymize member** link
 sits under their status on the Membership card.
 
 ### What is removed
@@ -443,6 +449,14 @@ contacts, sign-in details and two-factor secrets, body measurements, medical
 screening content, free-text reasons on leaves and waivers, dietary and
 accessibility notes on event RSVPs, and the original application with its
 interview notes and uploaded documents.
+
+**The application's activity log and step notes are cleared too**
+_(2026-11-20)_. The log on the applicant's record kept the values of every
+edit (old and new name, email, phone), the names of uploaded files and the
+coordinators' notes, and each pipeline step could carry a free-text note
+about the applicant. The notes are now emptied, and each log entry keeps only
+what happened, at which step and to which kind of document, without the
+values.
 
 **Certificates uploaded with self-reported training are deleted too**
 _(2026-11-17)_. The training record and submission stay, so the completion
@@ -469,6 +483,16 @@ delete removes nothing. Since 2026-11-20 the files are recorded with the
 delete itself, so a server restart or an unreachable file store in the
 middle no longer leaves them behind: an hourly task finishes the job. Files in a member's personal Member Files folder and
 the separation letter in Documents are not touched by either action yet.
+
+**Permanently deleting a member also removes their application**
+_(2026-11-21)_. If the member joined through the membership pipeline, their
+applicant record went with them only by name before: deleting the member left
+it behind, with their ID documents, background checks and form answers, and
+nothing could remove it afterwards. Now the delete removes the application,
+its interviews and notes, its form answers and its uploaded documents. The
+confirmation dialog lists it as **Applicant record, with its documents and
+form answers**. An external-attendee check-in at an event, made before they applied, stays
+with the event's history, as it does when an application is purged.
 
 ### What is kept
 
@@ -605,6 +629,7 @@ putting her name back into it would defeat the purpose.
 | A privacy choice shows "(not answered)" even though I remember answering | The label shows the stored choice. If you answered on a different account (for example a duplicate made during onboarding), the choice is there. Ask an administrator to check for duplicates. |
 | Anonymize is refused with "Only departed members can be anonymized"      | The member is still active. Change their status to dropped or archived first, then try again.                                                                                                  |
 | Anonymize is refused with "Member is already anonymized"                 | It has already been done for this record. Anonymization is irreversible and happens only once.                                                                                                 |
+| Anonymize is refused with "You cannot anonymize a member with privileges beyond your own" | The departed member still holds a permission you do not, through a position they kept. Ask an administrator who holds every permission. _(2026-11-20)_ |
 | Anonymize says "User not found" for a member I can see                   | The member belongs to a different department on the same installation. You can only act on members of your own department.                                                                     |
 | I cannot find where to change how long records are kept                  | There is no retention screen. Your IT administrator changes the schedule. See [Records Retention](#records-retention-admin).                                                                   |
 | A retention value was refused as below the minimum                       | Each record class has a minimum (30 days for most, 90 days for form submissions and guest check-ins). Choose a value at or above it.                                                           |

@@ -543,6 +543,12 @@ class EvaluationTemplateCreate(_Matching):
     # filled from it instead of left empty. Checked by the service, which
     # owns the catalog.
     starter: Optional[str] = Field(default=None, max_length=50)
+    # Rank codes that receive a starter's officer-only sections. Required by,
+    # and only accepted with, a starter that has them; checked against the
+    # department's ranks by the service.
+    officer_ranks: Optional[
+        List[Annotated[str, Field(min_length=1, max_length=50)]]
+    ] = Field(default=None, max_length=50)
 
     @field_validator("name")
     @classmethod
@@ -582,6 +588,8 @@ class EvaluationStarterResponse(BaseModel):
     member_class: Optional[str] = None
     member_status: Optional[str] = None
     section_titles: List[str]
+    # Creating from it needs ``officer_ranks``.
+    needs_officer_ranks: bool = False
 
 
 class TemplateDraftWrite(BaseModel):
