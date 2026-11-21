@@ -198,6 +198,54 @@ class TestConfigService:
         assert out.name == "New"
         assert out.description is None
 
+    async def test_create_profile_strips_required_ids_from_optional(self):
+        """An id in both lists is stored as required only: required wins, as
+        the grader already reads it (owner decision 2026-11-21)."""
+        config = SimpleNamespace(id="cfg-1")
+        db = _db([_first(config), _all(["r1", "r2", "r3"])])
+        await ComplianceConfigService(db).create_profile(
+            "org-1",
+            {
+                "name": "Line",
+                "required_requirement_ids": ["r1", "r2"],
+                "optional_requirement_ids": ["r2", "r3"],
+            },
+        )
+        profile = db.add.call_args.args[0]
+        assert profile.required_requirement_ids == ["r1", "r2"]
+        assert profile.optional_requirement_ids == ["r3"]
+
+    async def test_partial_update_strips_against_the_stored_lists(self):
+        """A payload naming only the required list still clears the stored
+        optional list of the ids it now requires."""
+        profile = ComplianceProfile(
+            id="p1",
+            config_id="cfg-1",
+            name="Line",
+            required_requirement_ids=["r1"],
+            optional_requirement_ids=["r2", "r3"],
+        )
+        db = _db([_first(profile), _all(["r1", "r2"])])
+        out = await ComplianceConfigService(db).update_profile(
+            "p1", "org-1", {"required_requirement_ids": ["r1", "r2"]}
+        )
+        assert out.required_requirement_ids == ["r1", "r2"]
+        assert out.optional_requirement_ids == ["r3"]
+
+    async def test_update_of_optional_alone_strips_against_stored_required(self):
+        profile = ComplianceProfile(
+            id="p1",
+            config_id="cfg-1",
+            name="Line",
+            required_requirement_ids=["r1"],
+            optional_requirement_ids=None,
+        )
+        db = _db([_first(profile), _all(["r1", "r2"])])
+        out = await ComplianceConfigService(db).update_profile(
+            "p1", "org-1", {"optional_requirement_ids": ["r1", "r2"]}
+        )
+        assert out.optional_requirement_ids == ["r2"]
+
     async def test_update_profile_name_cannot_be_nulled(self):
         """`name` is NOT NULL on the model — apply_updates must reject an
         explicit null with a clean ValueError (-> 400), not a flush-time

@@ -256,3 +256,54 @@ class TestRequirementProgressArithmetic:
 
         assert results[0]["logged_hours"] == 3.0
         assert results[0]["status"] == "compliant"
+
+
+class TestEqualPriorityTieBreak:
+    """Two profiles carrying admin hours at one priority: the older applies.
+
+    Owner decision 2026-11-21, the same order grading uses
+    (``app.utils.compliance_profiles``). The newer profile is inserted first
+    and given the smaller id, so whichever order the database returns rows
+    in -- insertion or primary key -- it comes first, and only the shared
+    tie-break picks the older one.
+    """
+
+    async def test_the_older_profile_sets_the_targets(self, db_session):
+        org = await _org(db_session)
+        user, _ = await _member_with_position(db_session, org)
+        category = await _category(db_session, org)
+        config = ComplianceConfig(id=str(uuid.uuid4()), organization_id=org.id)
+        db_session.add(config)
+        await db_session.flush()
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        for id_prefix, created_at, hours in (
+            ("00000000-0000-4000-8000-", now, 30),
+            ("ffffffff-ffff-4fff-bfff-", now - timedelta(days=1), 6),
+        ):
+            db_session.add(
+                ComplianceProfile(
+                    id=id_prefix + uuid.uuid4().hex[:12],
+                    config_id=config.id,
+                    name=f"{hours}h profile",
+                    membership_types=["active"],
+                    is_active=True,
+                    priority=0,
+                    created_at=created_at,
+                    admin_hours_requirements=[
+                        {
+                            "category_id": category.id,
+                            "required_hours": hours,
+                            "frequency": "annual",
+                        }
+                    ],
+                )
+            )
+            await db_session.flush()
+        user_id = user.id
+        db_session.expunge_all()
+
+        results = await AdminHoursService(db_session).get_user_hours_compliance(
+            organization_id=org.id, user_id=user_id, year=datetime.now().year
+        )
+
+        assert [r["required_hours"] for r in results] == [6]
