@@ -6,6 +6,208 @@
 
 ---
 
+## Pass 6 (2026-11-21) — the lot ledger and the frontend, read for the first time
+
+**Backend:** `endpoints/inventory.py` (7,876 L, **150** routes — was 148),
+`services/inventory_service.py` (14,389 L), `schemas/inventory.py` (3,279 L);
+77 commits since pass 5
+**Frontend:** `modules/inventory/` — the first pass to read any of it
+**Docs:** `docs/INVENTORY_MODULE.md`
+
+### Scope — read this before reading "verified good"
+
+Pass 5 named the lots ledger as the highest-value unreviewed surface and no
+pass had read the frontend. Pass 6 read those two in depth and re-ran pass 5's
+exhaustive checks over the 77-commit delta. Both depth reads were delegated and
+every finding below was re-checked against the code before it was recorded.
+
+**Reviewed exhaustively (mechanically):** all 150 routes' auth and permission
+gates; all 14 authentication-only routes' self-scoping; every method that
+writes a quantity, whether it locks, and every call site of the two helpers
+that do not; every raw `setattr` update loop and whether it guards nulls; the
+repo-wide LIKE-escaping, log-shape, org-scoping and CSV sweeps.
+
+**Reviewed by reading:** the whole lot subsystem — `_consume_from_lots`,
+`_restore_to_lots`, `issue_from_pool`, `return_to_pool`, `add_lot`,
+`add_lots_bulk`, `update_lot`, `delete_lot`, `receive_reorder`, the recall
+methods, every lot read helper and the lot endpoints in `inventory.py` and
+`medical_supplies.py`. On the frontend: every create/edit form's submit, the
+stock-moving screens (pool issue/return, equipment-request fulfil, write-offs,
+receive, lot adjust), and the item and apparatus detail loads.
+
+**Not reviewed:** the medical-supplies import paths that call `add_lot`,
+`transfer_item_holding`, `create_write_off_request` / `review_write_off`, item
+delete/retire with lots present, `get_inventory_summary`, NFC, kiosk, labels,
+import/export, the impact planner; on the frontend, the equipment-check screens,
+NFC, kiosk, put-away, shelf audit and four modals.
+
+### Verified good ✅
+
+- **150 routes, all authenticated** — 104 `inventory.manage`, 32
+  `inventory.view`, 14 authentication-only. The two new authentication-only
+  routes since pass 5 (`GET /allowances/check/{user_id}/{category_id}`,
+  `GET /members/{user_id}/size-preferences`) both run
+  `_require_self_or_quartermaster` before any lookup; the other twelve are as
+  pass 5 recorded.
+- **Every quantity write still runs under a row lock.** The two new writers
+  (`_restore_to_lots`, `_carry_forward_column_stock`) lock directly; the two
+  unlocked helpers' three call sites all lock first — re-resolved, not assumed.
+- **The lot consume logic is right:** first-expired-first-out with no-expiry
+  lots last, expired and recalled lots excluded on the department's own date,
+  short stock refused before anything changes, partial draws across lots
+  correct, never negative. `receive_reorder` is the model the rest should
+  follow: row lock, an idempotency key backed by a unique constraint, a version
+  check, and no second credit to `quantity`.
+- **Money is `Decimal`** throughout lot cost, receipts and issuance charges.
+- **Frontend, pitfall #1:** every edit form (item, category, storage area,
+  variant group, kit, vendor, reorder, allowance, sizes) sends cleared fields as
+  `null` and leaves NOT NULL ones out, with the reason in a comment; every
+  create drops blanks. The wire is snake_case and the types match it.
+- **Frontend permissions:** item-detail management actions, the History tab
+  and lot creation are gated on `inventory.manage`; the tabs a viewer can open
+  are `inventory.view` routes. No banned date call, browser dialog or bare axios
+  instance; the three plain tables are deliberate sideways-scrolling matrices.
+
+### INV2-4 — LOW — A null on a required reorder field answered with the driver's error text — ✅ FIXED
+
+`update_reorder_request` applied `ReorderRequestUpdate` (which accepts `null`
+for every field) with a raw `setattr` loop. A null `item_name`,
+`quantity_requested`, `urgency` or `status` failed at flush; a null `status`
+first slipped past the "status changes require a workflow action" check as
+falsy. The broad `except` returned the pymysql message, which the endpoint
+sanitized into an opaque 400. `reject_null_for_required` now refuses it before
+the payload is read, as the kit and variant-group updates already did. Four
+parametrized cases in `tests/test_inventory_reorder_edit_lock.py` failed on the
+unfixed code with the raw driver message.
+
+### INV2-5 — LOW (latent) — The lot locks did not refresh a lot the session had cached — ✅ FIXED
+
+`_consume_from_lots` and `_restore_to_lots` lock lots `FOR UPDATE` without
+`populate_existing`. The session keeps objects across commits, so a lot an
+earlier call still references comes back with its cached quantity while the
+lock saw the committed one, and the decrement is written from the cached value
+— the exact trap `_get_item_locked`'s docstring documents. A two-session test
+(`test_inventory_identity_map_staleness.py`) shows it: cached 10, another
+session commits 3, an issue of 2 left the lot at **8** instead of 1.
+
+Recorded as **latent**, not HIGH: the identity map holds objects weakly, and
+`_consume_from_lots` returns lot ids rather than objects, so no current loop
+was shown to keep the reference the failure needs (the test holds it on
+purpose). Fixed anyway — the change is invisible, it brings these two locks in
+line with every other locked read in the service, and the next caller to hold a
+lot would otherwise reopen it.
+
+### INV2-6 — MED — Two officers recording the same lot recall at once both succeeded — ✅ FIXED
+
+`record_lot_recall` locks the supply row, then checks for an active recall with
+a plain SELECT. The endpoint reads the supply first, so under REPEATABLE READ
+that check answered from the pre-lock snapshot (pitfall #27's second half) and
+both requests inserted. No unique constraint backs it, so lifting one recall
+left the lot recalled — the outcome the docstring says the lock prevents. The
+check is now a locking read; `tests/test_capacity_locking.py` gains a class
+asserting both halves, which failed on the unfixed code.
+
+### INV2-7 — HIGH — The lot +/- buttons saved only the first press — ✅ FIXED
+
+`StockLotsPanel.adjustQuantity` computed the new quantity inside a `setLots`
+updater and read it straight after. React 19 runs an updater eagerly only when
+nothing else is queued, so from the second press on the value was still unset
+and the PATCH was skipped: the screen counted down, the server kept the first
+value, and a reload put it back. Crews draw replacements from these lots during
+equipment checks, so the count drifted with no error shown. The quantity now
+comes from a ref that moves with each press, and each lot's saves are chained so
+a slow request cannot land after a newer one. Two tests (three separate presses
+send 4, 3, 2; three rapid presses send 6, 7, 8 in order) failed on the unfixed
+code.
+
+### INV2-8 — MED — The Pool page's open card emptied after an issue or return — ✅ FIXED
+
+After an issue or return, `PoolItemsPage` dropped the item's cached issuances
+but left the card open, and the list only loads when a card is opened. The open
+card read "No active issuances", so the member's other issuances could not be
+returned until it was closed and reopened. It now re-fetches that item's
+issuances. The test failed on the unfixed code.
+
+### INV2-9 — MED — A blank or 0 fulfil quantity issued the request in full — ✅ FIXED
+
+`EquipmentRequestsPage` sent `Number(fulfillQuantity) || undefined`, and the
+server reads no quantity as "the requested quantity". An officer who cleared
+the box, or typed 0, issued the whole request — the opposite of what was typed;
+1.5 came back as a 422 toast. The fulfil now refuses anything but a whole
+number of at least 1, in the toast the handler already uses for a missing item.
+Three tests (blank, 0, 1.5) failed on the unfixed code.
+
+### INV2-10 — LOW — `docs/INVENTORY_MODULE.md` counted twelve authentication-only routes — ✅ FIXED
+
+There are fourteen; the section now names the two added since and notes that
+the size-preferences read checks before it looks.
+
+### Flagged for the owner
+
+- **INV2-11 — HIGH — A lot edit can undo stock drawn while the form was open.**
+  `update_lot` reads the lot without a lock or version, and the medical-supplies
+  lot editor always sends `quantity` as an absolute value. An officer opens a
+  lot at 10, a crew swaps 3 onto a truck (7), the officer corrects only the lot
+  number and saves: the lot is back at 10, three units that do not exist are
+  issuable, and nothing records either change. The fix is an expected-quantity
+  or version check answering 409, with the editor showing the conflict — a new
+  error the officer sees, so the owner's call on the wording and flow.
+- **INV2-12 — MED — Stock changes leave no movement record.** There is no
+  ledger of signed movements with before/after, actor and org: `InventoryLot.
+quantity` is the record. Lot add, edit and delete, issue consumption and
+  return crediting leave no trail; only reorder receipts and recall events do.
+  Whether to add one is a product decision with a schema behind it.
+- **INV2-13 — MED — Retried requests apply twice (pitfall #36).** `add_lot` /
+  `add_lots_bulk` (a timed-out delivery recorded again creates every lot twice),
+  `issue_from_pool`, and a partial `return_to_pool` carry no idempotency key.
+  `receive_reorder` shows the shape. An API change on both sides.
+- **INV2-14 — MED — An item's `quantity` column and its lots can drift.**
+  `update_item` accepts `quantity` on a lot-stocked item (a column nothing reads
+  — a silent no-op), and deleting the last lot returns the item to the column
+  ledger: the lot's units vanish unrecorded, and any value written earlier
+  becomes on-hand stock. Refusing either changes what an officer can do.
+- **INV2-15 — LOW — The dashboard's expiring tile and the expiring list
+  disagree** (pitfall #29): the tile counts only lots not yet expired and
+  includes recalled ones; the list it opens includes expired lots and applies
+  the shelf rule. Which rule is right is the owner's call.
+
+### Open (LOW, not fixed this pass)
+
+_Reported_ by the depth reads, recorded for the next pass:
+
+- An unserviceable return is written off with a note only: no write-off record
+  and no audit event (`_return_units_to_stock`).
+- Issuance snapshots the item's replacement cost, never the cost of the lot
+  consumed, and no report values stock by lot cost.
+- `_consume_from_lots` orders by expiry then received date with no id
+  tie-break, so undated lots are drawn first among same-expiry lots; restored
+  lots carry no `received_date` or `created_by`.
+- A deleted lot's entry stays in a closed issuance's `lot_allocations`.
+- `ApparatusDetailPage` and `ItemDetailPage` (inventory) neither clear nor
+  id-check on reload, the AP2-9 shape; LOW because nothing on either page links
+  to another record of the same kind.
+- The Pool page's allowance check can show a previous member's result if
+  responses arrive out of order, and the override carries over between members.
+- `EquipmentKitsPage` turns a typed 0 into 1; `MyEquipmentPage` submits a
+  cleared return quantity as 0 (a 422 toast).
+- `InventoryItem.category_name?` is never filled for an item.
+
+### Completion gate (pass 6)
+
+| Check                         | Result                                                                                                                                                                        |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run typecheck`           | ✅ 0                                                                                                                                                                          |
+| `npm run lint`                | ✅ 0 errors, 0 warnings (one `no-conditional-in-test` warning in the new fulfil test was fixed by splitting the case)                                                         |
+| `flake8 app/ tests/`          | ✅ 0                                                                                                                                                                          |
+| `black --check` / isort       | ✅ clean                                                                                                                                                                      |
+| frontend tests                | ✅ **inventory module 2,002 passed** (129 files), before the lint split; the split page file passes 43                                                                        |
+| backend, targeted             | ✅ reorder (55), lot ledger, identity-map staleness and capacity locking (99), capacity locking (70), the four repo-wide sweeps (31)                                          |
+| backend, `-k inventory`-wide  | first run: **2,498 passed** before stopping at `test_s3_migration`, which failed identically without this change on a stale local schema; re-run after the upgrade: see below |
+| docs link check               | ✅ 0 broken links                                                                                                                                                             |
+| marker routing (pitfall #30b) | ✅ the new staleness test is in an `integration` module; the capacity and reorder additions sit in files already routed                                                       |
+
+---
+
 ## Pass 5 (2026-10-06) — the real test baseline, and the last open item closed
 
 **Backend:** `endpoints/inventory.py` (7,387 L, **148** routes),

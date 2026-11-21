@@ -41,7 +41,7 @@ from its open list.
 | --- | -------------------------- | ------ | ------ |
 | B1  | medical-screening          | MS2    | ✅     |
 | B2  | apparatus                  | AP2    | ✅     |
-| B3  | inventory                  | INV2   | ⬜     |
+| B3  | inventory                  | INV2   | ✅     |
 | B4  | facilities                 | FAC2   | ⬜     |
 | B5  | elections                  | ELEC2  | ⬜     |
 | B6  | meetings & minutes         | MM2    | ⬜     |
@@ -3667,3 +3667,24 @@ secrets redacted for non-admins. See
   recorded as open. Gate: typecheck, lint, flake8, black, isort, the endpoint
   docstring check and the docs link check clean; 228 backend and 158 apparatus
   frontend tests pass. See apparatus.md → Pass 6. Next: B3 inventory.
+- **B3 inventory ✅ (pass 6).** Read for the first time the lot ledger and the
+  frontend module, and re-ran pass 5's exhaustive checks over the 77-commit
+  delta: 150 routes all authenticated, the 14 authentication-only ones all
+  self-scoped (two new, both behind `_require_self_or_quartermaster`), every
+  quantity write still under a row lock, money `Decimal`, every edit form
+  clearing with `null`. **7 fixes:** INV2-7 (HIGH), the lot +/- buttons saved
+  only the first press (a value read back out of a React 19 updater was unset
+  from the second on) — now a ref and per-lot ordered saves; INV2-6 (MED), two
+  officers recording the same recall both succeeded — the duplicate check is a
+  locking read; INV2-8 (MED), the Pool page's open card emptied after an issue or
+  return; INV2-9 (MED), a blank or 0 fulfil quantity issued the request in full;
+  INV2-4 (LOW), a null on a required reorder field answered with the driver's
+  text; INV2-5 (LOW, latent), the lot locks did not refresh a cached lot
+  (shown with two sessions, fixed to match every other locked read); INV2-10
+  (LOW, docs), the authentication-only route count. Every fix's test went red
+  first. **5 flagged** to KNOWN_LIMITATIONS: INV2-11 (HIGH) a lot edit can undo
+  stock drawn while the form was open; INV2-12 (MED) no stock-movement ledger;
+  INV2-13 (MED) retried stock requests apply twice; INV2-14 (MED) an item's
+  quantity and its lots can drift; INV2-15 (LOW) the expiring tile and list
+  disagree. Eight LOW items recorded as open. See inventory.md → Pass 6. Next:
+  B4 facilities.
