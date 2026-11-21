@@ -1828,7 +1828,6 @@ export const EventDetailPage: React.FC = () => {
             {(checkPermission('apparatus_events.signup') || checkPermission('apparatus_events.manage')) && (
               <EventApparatusCrewCard eventId={event.id} timezone={tz} />
             )}
-
             {/* Volunteers for an outreach event: its own signup sheet, or the
                 request's when it was scheduled from one. */}
             {event.can_staff_event && <EventStaffingCard eventId={event.id} />}

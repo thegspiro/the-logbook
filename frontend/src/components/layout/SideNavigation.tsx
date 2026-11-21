@@ -46,7 +46,7 @@ import {
   Landmark,
   Wallet,
 } from 'lucide-react';
-import { Sun, Moon, Monitor, Contrast, WifiOff, RefreshCw, Loader2 } from 'lucide-react';
+import { Sun, Moon, Monitor, Contrast, WifiOff, RefreshCw, Loader2, CalendarOff } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useScrollOverflow } from '../../hooks/useScrollOverflow';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -72,6 +72,7 @@ import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './fina
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 import { useHasAssignedApplicants } from '../../modules/prospective-members/hooks/useHasAssignedApplicants';
 import { useHasCrew } from '../../hooks/useHasCrew';
+import { leaveRequestNavLabel, useLeaveRequestNav } from '../../hooks/useLeaveRequestNav';
 import { useWaiverAttention } from '../../hooks/useWaiverAttention';
 
 interface SideNavigationProps {
@@ -171,6 +172,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     !modulesLoading && isModuleOn('prospective_members')
   );
   const hasCrew = useHasCrew(currentUser?.id);
+  const leaveRequestNav = useLeaveRequestNav(currentUser?.id);
   const waivers = useWaiverAttention(currentUser?.id, {
     training: !modulesLoading && isModuleOn('training'),
     meetings: !modulesLoading && isModuleOn('minutes'),
@@ -253,6 +255,18 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     // Offered only to a member who supervises someone today: the Reports To
     // assignment, not a permission, opens the page (pages/MyCrewPage).
     ...(hasCrew ? [{ label: 'My Crew', path: '/members/my-crew', icon: Users } as NavItem] : []),
+    // Offered when the department takes leave requests or one waits on this
+    // member: who decides is the department's approver positions, not a
+    // permission, so the backend answers (hooks/useLeaveRequestNav).
+    ...(leaveRequestNav.show
+      ? [
+          {
+            label: leaveRequestNavLabel(leaveRequestNav.waiting),
+            path: '/members/leave-requests',
+            icon: CalendarOff,
+          } as NavItem,
+        ]
+      : []),
     // The route requires `storefront.view` (modules/storefront/routes.tsx), so
     // the module toggle alone is not the gate: a member whose department was
     // seeded before the storefront module shipped holds no storefront grant
