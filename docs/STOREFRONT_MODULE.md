@@ -470,6 +470,15 @@ list of the store's outbound mail:
 All nine default to on, which is the behaviour the module had before the
 switches existed.
 
+**A member's own choices sit underneath these switches.** A switch decides
+whether the store sends a notice at all; each member then decides, on their
+notification settings, which optional groups they receive. The window notices
+and the vendor-order update are **Store announcements**. Payment reminders are
+**Your store balance** (`store_balance`), a separate group since 2026-11-22
+(W67b-17), so a member who mutes the announcements still hears what they owe.
+Both are on by default. Receipts and the order notices are **Store receipts**,
+which nobody can turn off.
+
 **Times in these emails are the department's** _(2026-09-25)_. The
 window-opened and last-call notices printed `closes_at` with
 `strftime("… %I:%M %p UTC")`; `storefront_notification_service` now renders it
@@ -494,11 +503,14 @@ address is never disclosed to the rest of the department.
 ### Previewing a notice
 
 `GET /store/settings/notifications/{notice}/preview` (permission
-`storefront.manage`) renders any of the nine against a sample order or window
+`storefront.manage`) renders any of the ten against a sample order or window
 and returns the subject, HTML and plain-text bodies, who receives it, whether
 it is currently switched on, and the other emails the same switch governs. The
 settings screen puts a **Preview** button on each row and shows the result in a
-sandboxed iframe.
+sandboxed iframe. The tenth notice, `order_cancelled`, has no switch of its
+own: **Status changes** governs it, so that row carries a second
+**Cancellation** preview button (W67b-17; before, the email had a template but
+could be neither previewed nor test-sent).
 
 Two properties are load-bearing:
 

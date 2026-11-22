@@ -866,6 +866,32 @@ install sends no email.
   - The cancellation email has a template but is missing from the preview
     catalog, so it cannot be previewed or test-sent.
 
+  ✅ **FIXED (2026-11-22).**
+  - **Payment reminders.** Owner decision 2026-11-22: payment reminders
+    are their own optional group, **Your store balance**
+    (`EmailKind.STORE_BALANCE`), as dues already has **Your dues**. It is on
+    by default for every member, with no carry-over from the
+    announcements choice, so a member who muted announcements receives
+    reminders again until they turn this off. Store announcements keeps the
+    window notices and the vendor-order update. `docs/UPGRADING.md` notes
+    the change for operators.
+  - **Cancellation preview.** The preview catalog gains `order_cancelled`,
+    governed by `send_status_updates`, rendered through the real
+    `send_order_cancelled`. The settings screen's **Status changes** row
+    gains a second **Cancellation** preview button.
+
+  **Tests:**
+  - **Backend:** three in `TestStorefrontAddressFilter`
+    (`tests/test_email_policy.py`) and one in
+    `tests/test_storefront_preview.py`. Three of these failed against the
+    old code: a reminder reaches a member who muted announcements, the new
+    choice mutes it, and the cancellation notice renders. The fourth guards
+    that the new choice leaves announcements alone.
+  - **Frontend:** in `StoreSettingsTab.notifications.test.tsx`, the
+    Cancellation button opens the `order_cancelled` preview. The
+    every-notice test now counts ten preview buttons, not nine. Both failed
+    against the old component.
+
 ## Checklist
 
 | Section                 | Result                                                                                                               |

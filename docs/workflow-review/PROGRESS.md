@@ -255,7 +255,7 @@ Open:
 
 Read from code, not driven: W67b-11 to W67b-17 (window lifecycle, vendor
 order, payment reports and notification gaps). W67b-11 to W67b-14 were fixed
-on 2026-11-21, and W67b-15 and W67b-16 on 2026-11-22:
+on 2026-11-21, and W67b-15 to W67b-17 on 2026-11-22:
 
 - W67b-11: the vendor-order notice now skips orders held back for payment.
 - W67b-12: cancelling a window cancels its open orders unless money is on
@@ -269,7 +269,10 @@ on 2026-11-21, and W67b-15 and W67b-16 on 2026-11-22:
 - W67b-15: a window set to close automatically stops taking orders at its
   closing time, not at the next 15-minute job.
 - W67b-16: such a window cannot be reopened past its closing time, and a
-  draft given an opening time is scheduled and opens. Details in
+  draft given an opening time is scheduled and opens.
+- W67b-17: store payment reminders are their own optional email group, Your
+  store balance (owner decision), and the cancellation email can be
+  previewed. Details in
   [`W67b-department-store-follow-up.md`](./W67b-department-store-follow-up.md).
 
 Gate for the W67b-3, -4 and -5 fixes: typecheck, lint, flake8, black, isort
