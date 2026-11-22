@@ -5106,6 +5106,8 @@ const routes = ({
   // measured with does not gain an entry; the page itself reads the lists.
   ['**/api/v1/users/leave-requests/summary', () => ({ requests_enabled: false, to_decide: 0, waiting_on_me: 0 })],
   ['**/api/v1/users/leave-requests/config', () => ({ requests_enabled: true })],
+  // Nobody to cover: the member is not an approver, so the section stays away.
+  ['**/api/v1/users/leave-requests/covers', () => ({ covers: [], approvers: [], stand_ins: [], today: '2026-11-21' })],
 
   ['**/api/v1/admin-hours/summary**', () => ({ totalHours: 8 })],
 

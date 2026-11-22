@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { DRIVER_NOT_QUALIFIED_CODE, SEAT_NOT_GRANTED_CODE } from '../../constants/enums';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
@@ -33,6 +33,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     getShiftHandoff: vi.fn().mockResolvedValue(null),
     getEligiblePositions: vi.fn().mockResolvedValue({ positions: ['firefighter'], is_excluded: false }),
     getUnavailableMembers: vi.fn().mockResolvedValue([]),
+    getLeaveRequestedMembers: vi.fn().mockResolvedValue([]),
     signupForShift: vi.fn().mockResolvedValue({}),
     openLateSignup: vi.fn().mockResolvedValue({}),
     closeLateSignup: vi.fn().mockResolvedValue({}),
@@ -1354,6 +1355,47 @@ describe('ShiftDetailPanel crew count while loading', () => {
 
     expect(await screen.findByText(/0 assigned/)).toBeInTheDocument();
     expect(screen.queryByText('Loading crew…')).not.toBeInTheDocument();
+  });
+});
+
+describe('ShiftDetailPanel — a member with an undecided leave request', () => {
+  // Owner decision 2026-11-21: they stay assignable (the request may be
+  // denied), and the picker says so.
+  const futureShift = {
+    ...shift,
+    shift_date: '2099-03-01',
+    start_time: '2099-03-01T08:00:00Z',
+    end_time: '2099-03-01T16:00:00Z',
+  };
+  const mockLeaveRequested = vi.mocked(schedulingService.getLeaveRequestedMembers);
+
+  beforeEach(() => {
+    mockLeaveRequested.mockReset();
+    mockLeaveRequested.mockResolvedValue(['member-9']);
+    schedulingStoreState.members = [
+      { id: 'member-9', label: 'Pat Doe' },
+      { id: 'member-7', label: 'Sam Roe' },
+    ] as never;
+  });
+
+  afterEach(() => {
+    schedulingStoreState.members = [];
+  });
+
+  it('labels them in the picker and notes it once chosen, without hiding them', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={futureShift as never} onClose={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: /Assign someone/ }));
+
+    const picker = screen.getByRole('listbox', { name: 'Select a member' });
+    expect(await within(picker).findByRole('option', { name: 'Pat Doe — leave requested' })).toBeInTheDocument();
+    expect(within(picker).getByRole('option', { name: 'Sam Roe' })).toBeInTheDocument();
+    expect(mockLeaveRequested).toHaveBeenCalledWith(futureShift.id);
+
+    await user.selectOptions(picker, 'member-9');
+    expect(screen.getByText(/has asked for leave covering this date/)).toBeInTheDocument();
+    await user.selectOptions(picker, 'member-7');
+    expect(screen.queryByText(/has asked for leave covering this date/)).not.toBeInTheDocument();
   });
 });
 

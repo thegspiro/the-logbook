@@ -1168,6 +1168,13 @@ export const schedulingService = {
     );
     return asArray(response.data?.unavailable_user_ids);
   },
+  /** Members with an undecided leave request covering the shift's date. Still assignable. */
+  async getLeaveRequestedMembers(shiftId: string): Promise<string[]> {
+    const response = await api.get<{ leave_requested_user_ids: string[] }>(
+      `/scheduling/shifts/${shiftId}/unavailable-members`
+    );
+    return asArray(response.data?.leave_requested_user_ids);
+  },
   async getShiftAssignments(shiftId: string): Promise<Assignment[]> {
     const response = await api.get<Assignment[]>(`/scheduling/shifts/${shiftId}/assignments`);
     // Normalize assignment_status → status for consistency
