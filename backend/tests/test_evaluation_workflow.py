@@ -3467,6 +3467,116 @@ class TestGoalReview:
         ]
 
 
+class TestGradeSpread:
+    """GET /evaluations/grade-spread: each evaluator's finalized reviews in a
+    period counted by grade, beside the department's, for view_all."""
+
+    async def _evaluator_rated(self, dept: _Dept) -> None:
+        version = (
+            await dept.db.execute(
+                select(EvaluationTemplateVersion).where(
+                    EvaluationTemplateVersion.template_id == dept.template.id
+                )
+            )
+        ).scalar_one()
+        version.definition = {**DEFINITION, "overall_mode": "evaluator"}
+        await dept.db.flush()
+
+    async def _finished(
+        self,
+        dept: _Dept,
+        make_client: ClientFactory,
+        evaluator: User,
+        rating: Optional[int],
+    ) -> None:
+        member_user = await _user(dept.db, dept.org, [])
+        detail = await _draft(
+            await make_client(dept.manager),
+            dept,
+            member=member_user,
+            evaluator_id=evaluator.id,
+        )
+        url = f"/evaluations/{detail['id']}"
+        member = await make_client(member_user)
+        writer = await make_client(evaluator)
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+        content = {**EVALUATOR_ANSWERS}
+        if rating is not None:
+            content["overall_rating"] = rating
+        await writer.put(f"{url}/parts/evaluator", json={"content": content})
+        submitted = await writer.post(f"{url}/parts/evaluator/submit")
+        assert submitted.status_code == 200, submitted.text
+        signed = await member.post(
+            f"{url}/sign",
+            json={
+                "signed_name": member_user.full_name,
+                "disposition": "acknowledged",
+                "intent_confirmed": True,
+            },
+        )
+        assert signed.json()["outcome"] == "finalized", signed.text
+
+    async def test_each_evaluators_finished_reviews_are_counted_by_grade(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        await self._evaluator_rated(dept)
+        second = await _user(dept.db, dept.org, ["evaluations.conduct"])
+        await self._finished(dept, make_client, dept.evaluator, 4)
+        await self._finished(dept, make_client, dept.evaluator, 4)
+        await self._finished(dept, make_client, dept.evaluator, 2)
+        await self._finished(dept, make_client, second, 5)
+        # Not counted: a review still in progress.
+        await _draft(await make_client(dept.manager), dept)
+
+        response = await (await make_client(dept.reader)).get(
+            "/evaluations/grade-spread", params={"period_id": dept.period.id}
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["levels"] == [
+            "Unsatisfactory",
+            "Needs improvement",
+            "Meets expectations",
+            "Exceeds expectations",
+            "Outstanding",
+        ]
+        by_name = {e["name"]: e for e in body["evaluators"]}
+        assert by_name[dept.evaluator.full_name]["counts"] == [0, 1, 0, 2, 0]
+        assert by_name[dept.evaluator.full_name]["total"] == 3
+        assert by_name[second.full_name]["counts"] == [0, 0, 0, 0, 1]
+        assert body["department"] == {
+            "counts": [0, 1, 0, 2, 1],
+            "other": 0,
+            "total": 4,
+        }
+
+    async def test_a_weighted_percentage_is_counted_apart_from_the_grades(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        await _finalized(dept, make_client)
+
+        body = (
+            await (await make_client(dept.reader)).get(
+                "/evaluations/grade-spread", params={"period_id": dept.period.id}
+            )
+        ).json()
+
+        assert body["department"] == {"counts": [0, 0, 0, 0, 0], "other": 1, "total": 1}
+
+    async def test_it_needs_view_all_and_a_period_of_this_department(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        url = f"/evaluations/grade-spread?period_id={dept.period.id}"
+        assert (await (await make_client(dept.evaluator)).get(url)).status_code == 403
+        elsewhere = await _period(dept.db, await _org(dept.db))
+        missing = await (await make_client(dept.reader)).get(
+            f"/evaluations/grade-spread?period_id={elsewhere.id}"
+        )
+        assert missing.status_code == 404
+
+
 class TestPeriodResults:
     """The conduct list's grade column and the period export: for a holder of
     evaluations.view_all, finalized reviews only."""

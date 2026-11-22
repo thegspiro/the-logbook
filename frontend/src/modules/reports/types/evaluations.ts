@@ -550,6 +550,25 @@ export interface DraftOptions {
   periods: { id: string; name: string; start_date: string; end_date: string }[];
 }
 
+/** Finalized reviews counted by grade: `counts` follows `GradeSpread.levels`; `other` has no place on the five grades (a weighted percentage, or no overall). */
+export interface GradeTally {
+  counts: number[];
+  other: number;
+  total: number;
+}
+
+export interface EvaluatorGradeTally extends GradeTally {
+  evaluator_id: string | null;
+  name: string;
+}
+
+/** How each evaluator's finalized reviews in a period fall across the five grades. */
+export interface GradeSpread {
+  levels: string[];
+  evaluators: EvaluatorGradeTally[];
+  department: GradeTally;
+}
+
 /** Someone holding open work in a review period, and on how many evaluations. */
 export interface ReassignmentHolder {
   user_id: string;

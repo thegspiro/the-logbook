@@ -1267,6 +1267,60 @@ class EvaluationService:
             )
         return out.getvalue()
 
+    async def grade_spread(
+        self, organization_id: str, viewer: User, period_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """How each evaluator's finalized reviews in a period are spread across
+        the five grades, beside the department's, or None when the period is
+        not this department's.
+
+        Counted from the rows and grades the conduct list and the period
+        export give a holder of ``evaluations.view_all`` (``list_evaluations``,
+        CLAUDE.md pitfall #29), so the three always agree; the caller's own
+        evaluation is left out as they leave it out. A form graded as a
+        weighted percentage, or with no overall, has no place on the five
+        grades and is counted under ``other``. The spread is shown, not
+        judged (owner decision 2026-11-22).
+        """
+        period = await self.db.scalar(
+            select(EvaluationPeriod.id).where(
+                EvaluationPeriod.id == str(period_id),
+                EvaluationPeriod.organization_id == organization_id,
+            )
+        )
+        if period is None:
+            return None
+        labels = [level.label for level in OVERALL_LEVELS]
+        rows = await self.list_evaluations(organization_id, viewer, period_id=period)
+
+        def tally() -> Dict[str, Any]:
+            return {"counts": [0] * len(labels), "other": 0, "total": 0}
+
+        department = tally()
+        by_evaluator: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            if row["status"] != EvaluationStatus.FINALIZED.value:
+                continue
+            evaluator = row["evaluator"] or {"id": "", "name": "No evaluator"}
+            entry = by_evaluator.setdefault(
+                evaluator["id"],
+                {"evaluator_id": evaluator["id"] or None, "name": evaluator["name"]}
+                | tally(),
+            )
+            for counted in (entry, department):
+                counted["total"] += 1
+                if row["overall_grade"] in labels:
+                    counted["counts"][labels.index(row["overall_grade"])] += 1
+                else:
+                    counted["other"] += 1
+        return {
+            "levels": labels,
+            "evaluators": sorted(
+                by_evaluator.values(), key=lambda e: (e["name"].casefold(), e["name"])
+            ),
+            "department": department,
+        }
+
     async def _finalized_grades(
         self, organization_id: str, evaluations: Sequence[Evaluation]
     ) -> Dict[str, str]:
