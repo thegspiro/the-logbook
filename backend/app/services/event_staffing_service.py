@@ -218,7 +218,7 @@ async def sync_volunteer_rsvps(
     shift_id: str,
     organization_id: str,
     removed_user_ids: Iterable[str] = (),
-) -> None:
+) -> Optional[str]:
     """Make the event's RSVPs agree with who holds a seat on its signup sheet.
 
     Owner decision, 2026-11-20: a member who claims a role at an outreach event
@@ -227,23 +227,30 @@ async def sync_volunteer_rsvps(
     and corrects, so running it twice, or after any seat change, settles the
     same RSVPs (pitfall #36):
 
-    * a member holding a seat has a ``going`` RSVP, created if missing;
+    * a member holding a seat has a ``going`` RSVP marked ``is_volunteer``,
+      created if missing — crew, so it takes no attendee seat (owner
+      decision, 2026-11-21);
     * a member whose seat was cancelled, declined or removed, and who holds no
-      other seat, goes from ``going`` to ``not_going``.
+      other seat, goes from ``going`` to ``not_going`` and is no longer marked.
 
     A checked-in RSVP is never touched (the member was there), and nothing
     changes on a cancelled event or one whose attendance is finalized.
     ``removed_user_ids`` names members whose assignment row was deleted, which
     leaves no row to read. The caller commits.
+
+    Returns the event's id when the sync freed attendee seats on a capped
+    event — an audience RSVP that became crew, or a volunteer's guests let go
+    with them — so the caller can promote from the waitlist once it has
+    committed (``promote_after_sync``). ``None`` otherwise.
     """
     from app.models.event import EventRSVP, RSVPStatus
     from app.models.training import ShiftAssignment
     from app.services.event_request_service import released_seat_statuses
-    from app.services.event_service import attendance_is_finalized
+    from app.services.event_service import attendance_is_finalized, rsvp_seats
 
     event = await sheet_event(db, shift_id, organization_id)
     if event is None or event.is_cancelled or attendance_is_finalized(event):
-        return
+        return None
 
     rows = await db.execute(
         select(ShiftAssignment.user_id, ShiftAssignment.assignment_status).where(
@@ -261,7 +268,7 @@ async def sync_volunteer_rsvps(
             seated.add(str(user_id))
     let_go -= seated
     if not seated and not let_go:
-        return
+        return None
 
     existing = {
         str(rsvp.user_id): rsvp
@@ -276,6 +283,7 @@ async def sync_volunteer_rsvps(
         ).scalars()
     }
     now = datetime.now(timezone.utc)
+    freed = 0
     for user_id in seated:
         rsvp = existing.get(user_id)
         if rsvp is None:
@@ -285,14 +293,53 @@ async def sync_volunteer_rsvps(
                     event_id=str(event.id),
                     user_id=user_id,
                     status=RSVPStatus.GOING,
+                    is_volunteer=True,
                     responded_at=now,
                 )
             )
-        elif rsvp.status != RSVPStatus.GOING and not rsvp.checked_in:
-            rsvp.status = RSVPStatus.GOING
-            rsvp.responded_at = now
+        elif not rsvp.checked_in:
+            before = rsvp_seats(rsvp) if rsvp.status == RSVPStatus.GOING else 0
+            if rsvp.status != RSVPStatus.GOING:
+                rsvp.status = RSVPStatus.GOING
+                rsvp.responded_at = now
+            rsvp.is_volunteer = True
+            freed += before - rsvp_seats(rsvp)
     for user_id in let_go:
         rsvp = existing.get(user_id)
-        if rsvp is not None and rsvp.status == RSVPStatus.GOING and not rsvp.checked_in:
+        if rsvp is None or rsvp.checked_in:
+            continue
+        if rsvp.status == RSVPStatus.GOING:
+            freed += rsvp_seats(rsvp)
             rsvp.status = RSVPStatus.NOT_GOING
             rsvp.responded_at = now
+        rsvp.is_volunteer = False
+    return str(event.id) if freed > 0 and event.max_attendees else None
+
+
+async def promote_after_sync(
+    db: AsyncSession, event_id: Optional[str], organization_id: str
+) -> None:
+    """Fill seats a committed ``sync_volunteer_rsvps`` freed from the waitlist.
+
+    Looped as ``create_or_update_rsvp`` loops: one release can admit several
+    parties, and ``promote_from_waitlist`` stops as soon as the head of the
+    queue no longer fits. Never raises into the caller — the seat change it
+    follows has already committed.
+    """
+    if not event_id:
+        return
+    from app.services.event_service import (
+        MAX_WAITLIST_PROMOTIONS_PER_RELEASE,
+        EventService,
+    )
+
+    service = EventService(db)
+    try:
+        for _ in range(MAX_WAITLIST_PROMOTIONS_PER_RELEASE):
+            if not await service.promote_from_waitlist(event_id, organization_id):
+                break
+    except Exception as e:
+        await db.rollback()
+        logger.warning(
+            "Could not promote from the waitlist of event {}: {}", event_id, e
+        )

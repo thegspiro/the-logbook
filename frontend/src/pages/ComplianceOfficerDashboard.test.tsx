@@ -22,6 +22,18 @@ const mockExportAnnualReport = vi.fn();
 const mockGetIncompleteRecords = vi.fn();
 const mockGetComplianceForecast = vi.fn();
 
+/** The forecast endpoint's envelope, with not-applicable averages unless given. */
+const forecastReport = (members: unknown[], averages: Record<string, unknown> = {}) => ({
+  members,
+  averages: {
+    current: { pct: null, standing: 'not_applicable' },
+    days_30: { pct: null, standing: 'not_applicable' },
+    days_60: { pct: null, standing: 'not_applicable' },
+    days_90: { pct: null, standing: 'not_applicable' },
+    ...averages,
+  },
+});
+
 vi.mock('../services/trainingServices', () => ({
   complianceOfficerService: {
     getAnnualReport: (...args: unknown[]) => mockGetAnnualReport(...args) as unknown,
@@ -143,7 +155,7 @@ describe('ComplianceOfficerDashboard', () => {
       fields: [],
     });
     mockGetAttestations.mockResolvedValue([]);
-    mockGetComplianceForecast.mockResolvedValue([]);
+    mockGetComplianceForecast.mockResolvedValue(forecastReport([]));
     // A compliance officer: the hub's training.manage plus the grant the
     // configuration page needs.
     useAuthStore.setState({ user: signedInWith(['training.manage', 'compliance.manage']) });
@@ -385,30 +397,32 @@ describe('ComplianceOfficerDashboard', () => {
       // Pitfall #28: reset before installing this block's default so a queued
       // one-shot from another block cannot leak in.
       mockGetComplianceForecast.mockReset();
-      mockGetComplianceForecast.mockResolvedValue([
-        {
-          user_id: 'u-at-risk',
-          user_name: 'Ada Risk',
-          current_compliance_percentage: 85,
-          current_standing: 'at_risk',
-          forecast_30_days: 84,
-          forecast_60_days: 83,
-          forecast_90_days: 82,
-          at_risk_requirements: [],
-          expiring_certifications: [],
-        },
-        {
-          user_id: 'u-compliant',
-          user_name: 'Cy Lowbar',
-          current_compliance_percentage: 60,
-          current_standing: 'compliant',
-          forecast_30_days: 59,
-          forecast_60_days: 58,
-          forecast_90_days: 57,
-          at_risk_requirements: [],
-          expiring_certifications: [],
-        },
-      ]);
+      mockGetComplianceForecast.mockResolvedValue(
+        forecastReport([
+          {
+            user_id: 'u-at-risk',
+            user_name: 'Ada Risk',
+            current_compliance_percentage: 85,
+            current_standing: 'at_risk',
+            forecast_30_days: 84,
+            forecast_60_days: 83,
+            forecast_90_days: 82,
+            at_risk_requirements: [],
+            expiring_certifications: [],
+          },
+          {
+            user_id: 'u-compliant',
+            user_name: 'Cy Lowbar',
+            current_compliance_percentage: 60,
+            current_standing: 'compliant',
+            forecast_30_days: 59,
+            forecast_60_days: 58,
+            forecast_90_days: 57,
+            at_risk_requirements: [],
+            expiring_certifications: [],
+          },
+        ])
+      );
     });
 
     it('is coloured by the standing the server classified', async () => {
@@ -423,6 +437,69 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText('60.0%')).toHaveClass('text-green-700');
     });
   });
+  describe('the forecast projections and averages', () => {
+    const member = {
+      user_id: 'u-1',
+      user_name: 'Ada Risk',
+      current_compliance_percentage: 85,
+      current_standing: 'at_risk',
+      forecast_30_days: 59,
+      forecast_30_standing: 'compliant',
+      forecast_60_days: 58,
+      forecast_60_standing: 'at_risk',
+      forecast_90_days: 57,
+      forecast_90_standing: 'non_compliant',
+      at_risk_requirements: [],
+      expiring_certifications: [],
+    };
+
+    beforeEach(() => {
+      // Pitfall #28: reset before this block's default.
+      mockGetComplianceForecast.mockReset();
+      mockGetComplianceForecast.mockResolvedValue(
+        forecastReport([member], {
+          // Deliberately not the mean of the rows: the screen reports the
+          // server's figure and standing, it does not compute its own.
+          current: { pct: 71.5, standing: 'at_risk' },
+          days_30: { pct: 59, standing: 'compliant' },
+          days_60: { pct: 58, standing: 'non_compliant' },
+          days_90: { pct: 88, standing: 'non_compliant' },
+        })
+      );
+    });
+
+    it("colours each member's projection by the standing the server classified", async () => {
+      // A profile bar of 50 makes 59% compliant; a fixed 80 / 50 band read it yellow.
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="forecast" />);
+
+      const table = await screen.findByRole('table');
+      expect(within(table).getByText('59.0%')).toHaveClass('text-green-700');
+      expect(within(table).getByText('58.0%')).toHaveClass('text-orange-700');
+      expect(within(table).getByText('57.0%')).toHaveClass('text-red-700');
+    });
+
+    it("shows the server's averages, coloured by the department's standing", async () => {
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="forecast" />);
+
+      const current = await screen.findByText('71.5%');
+      expect(current).toHaveClass('text-orange-700');
+      // 88% under a department bar of 100 is not compliant, whatever 80 / 60 said.
+      expect(screen.getByText('88.0%')).toHaveClass('text-red-700');
+    });
+
+    it('reads N/A, muted, for an average no member is graded at', async () => {
+      mockGetComplianceForecast.mockResolvedValue(
+        forecastReport([{ ...member, forecast_90_days: null, forecast_90_standing: 'not_applicable' }])
+      );
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="forecast" />);
+
+      await screen.findByRole('table');
+      const cards = screen.getAllByText('N/A');
+      expect(cards.length).toBeGreaterThanOrEqual(4);
+      for (const card of cards) expect(card).toHaveClass('text-theme-text-muted');
+    });
+  });
+
   // Every section reports a figure an officer acts on, so a 200 whose body is
   // not its declared shape (a captive portal's HTML page) must reach the
   // section's own error message — not crash the hub through the ErrorBoundary,
@@ -440,6 +517,9 @@ describe('ComplianceOfficerDashboard', () => {
       ],
       ['attestations', 'Failed to load attestation history', () => mockGetAttestations.mockResolvedValue({})],
       ['forecast', 'Failed to load compliance forecast', () => mockGetComplianceForecast.mockResolvedValue({})],
+      // The bare member list the endpoint returned before the averages moved
+      // server-side: a stale API must reach the error, not an empty table.
+      ['forecast', 'Failed to load compliance forecast', () => mockGetComplianceForecast.mockResolvedValue([])],
     ])('shows the %s error message', async (tab, message, malform) => {
       malform();
       renderWithRouter(<ComplianceOfficerDashboard activeTab={tab} />);

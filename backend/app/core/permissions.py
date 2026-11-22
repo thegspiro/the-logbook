@@ -2441,9 +2441,9 @@ DEFAULT_POSITIONS: dict[str, dict] = {
         ],
     },
     "public_outreach": {
-        "name": "Public Outreach",
+        "name": "Community Outreach Manager",
         "slug": "public_outreach",
-        "description": "Manages public education and outreach events",
+        "description": "Leads the department's community outreach and risk reduction work",
         "is_system": True,
         "priority": 55,
         "permissions": [
@@ -2895,9 +2895,12 @@ DEFAULT_POSITIONS: dict[str, dict] = {
     # `historian`, `fundraising_chair`, `membership_coordinator` -- are the
     # chairs, with the permissions the chair's work needs.
     "community_outreach_team": {
-        "name": "Community Education / Outreach Team",
+        "name": "Community Outreach Team",
         "slug": "community_outreach_team",
-        "description": "Members who deliver community education and public outreach events",
+        "description": (
+            "Members who deliver community outreach, education and risk reduction "
+            "events"
+        ),
         "is_system": True,
         "priority": 10,
         "kind": "committee",

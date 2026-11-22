@@ -883,6 +883,34 @@ export interface ZeffyPayment {
   memberDuesId?: string | null;
   appliedAmount: ZeffyAmount;
   updatedAt: string;
+  /** Held until a treasurer confirms whose dues it pays (ADV2-11). */
+  awaitingDuesConfirmation?: boolean | undefined;
+}
+
+/** A current member with open dues on the schedule a payment's campaign feeds. */
+export interface ZeffyDuesCandidate {
+  userId: string;
+  name: string;
+  memberDuesId: string;
+  /** What the member's oldest open dues still owe; more is an overpayment. */
+  balance: ZeffyAmount;
+}
+
+/** `GET /grants/zeffy/payments/{id}/dues-match` — `finance.manage`. */
+export interface ZeffyDuesMatch {
+  zeffyPaymentId: string;
+  netAmount: ZeffyAmount;
+  currency: string;
+  payerName?: string | null;
+  /** The member whose email the payer typed: a suggestion, not a decision. */
+  suggestedUserId?: string | null;
+  candidates: ZeffyDuesCandidate[];
+}
+
+export interface ZeffyDuesConfirmPayload {
+  userId: string;
+  /** Record what exceeds the member's balance as their donation. */
+  excessAsDonation: boolean;
 }
 
 export interface ZeffyPaymentPage {

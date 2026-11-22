@@ -1,7 +1,7 @@
 """Leave requests: an approver's own request goes to the Chief; approver cover
 
 Revision ID: a9763f96e072
-Revises: 3daf47506e9e
+Revises: c6c2a665a8fe
 Create Date: 2026-11-21 12:00:00.000000
 
 - ``leave_requests.routed_to_chief``: set on a request made by a member who
@@ -30,7 +30,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a9763f96e072"
-down_revision: Union[str, None] = "3daf47506e9e"
+down_revision: Union[str, None] = "c6c2a665a8fe"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

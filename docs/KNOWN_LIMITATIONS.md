@@ -1203,9 +1203,10 @@ as the record of what the integration leaves to the treasurer:
 - **A refund made more than 7 days after the sale arrives only by webhook.**
   Zeffy's payment list has no "changed since" filter, so the hourly sync cannot
   find it. Departments without the webhook will not see such refunds.
-- **Membership payments are matched to members by email only.** A payer who
-  used a different address than the one on their profile is left **No member
-  match** for the treasurer.
+- ~~**Membership payments are matched to members by email only.**~~
+  Superseded 2026-11-21 (ADV2-11): no membership payment is credited on the
+  payer's email. Each waits as **Awaiting confirmation** until a treasurer
+  chooses the member, and the email only pre-selects one.
 
 ## Onboarding — Two Module Switches the Setup Wizard Offers or Sets Without a Reader (2026-10-31)
 
@@ -1617,8 +1618,16 @@ fix changes a workflow some departments rely on, so the owner decides:
   self-access guard hide their file (ADV2-10).** Refusing a member's email
   covers half of it. The rest turns on whether self-detection should trust
   fields the applicant can edit.
-- **A Zeffy dues payment credits whichever member's email the payer typed
-  (ADV2-11).** Overpayment is recorded as that member's donation.
+- ~~**A Zeffy dues payment credits whichever member's email the payer typed
+  (ADV2-11).**~~ ✅ Resolved 2026-11-21 (owner: hold as unmatched until a
+  treasurer confirms). A membership payment is recorded as **Awaiting
+  confirmation**, and the payer's email only suggests a member. A
+  `finance.manage` holder chooses any current member with open dues on the
+  schedule and decides whether an overpayment is recorded as that member's
+  donation. Payments credited before the change stay as they are. An
+  unconfirmed payment is no longer credited on its own when dues are generated
+  later, so a department now confirms each one. See
+  `docs/ZEFFY_INTEGRATION.md`.
 
 ## Authentication & Security
 
@@ -1678,19 +1687,51 @@ fix changes a workflow some departments rely on, so the owner decides:
 | **A requirement cannot name one policy acknowledgment**                                 | ✅ Resolved (2026-10-07, owner decision: map provider courses to library courses) | A requirement graded only by training type (`training_compliance.py`) is still met by **any** record of that type. A particular policy is now required by mapping its Target Solutions Course ID to a library course (`external_course_mappings`) and linking a COURSES requirement to that course; imports set `TrainingRecord.course_id` from the mapping. Every version of a course maps to the same library course, so a reissued course never needs the requirement edited. **Residual, accepted:** members who complete a new version read as not current until an officer maps it. Training officers are emailed when a new course resembles a library course, and mapping it backfills the records already imported. See [16-integrations.md](./training/16-integrations.md). |
 | **Requirement grandfathering reads a missing hire date as the account's creation date** | Accepted (owner to note, 2026-10-03)                                              | A requirement's `new_member_cutoff_date` separates existing members from new ones by join date: `hire_date`, else the UTC date the account was created (`training_compliance.member_join_date`). A roster imported into The Logbook without hire dates therefore reads every imported member as having joined on the import day. If that day falls on or after a cutoff, veterans are graded as new members. Before relying on a cutoff, record hire dates for the existing roster, or choose a cutoff earlier than the import. Members already enrolled in a training program are governed separately, by the per-program `apply_to_current_enrollments` choice made when a requirement is added to it.                                                                              |
 
+## Outreach — Vocabulary and Community Risk Reduction Direction (Owner Decisions, 2026-11-21)
+
+The owner unified the outreach vocabulary around a community risk reduction
+(NFPA 1300) framing. Display labels only; slugs, tab ids (`?tab=requests`,
+`?tab=community`), permission strings, routes and file names are unchanged.
+
+| Concept                        | Term                       |
+| ------------------------------ | -------------------------- |
+| The admin hub area             | Community Outreach         |
+| The leader (`public_outreach`) | Community Outreach Manager |
+| The committee                  | Community Outreach Team    |
+| One request's assignee         | Coordinator                |
+| The inbox tab                  | Outreach Requests          |
+| The report tab                 | Outreach Impact            |
+
+Migration `1a5c18b46791` carries the new position names and descriptions to
+stored rows still holding the seeded wording, and the report's new name into
+stored Guest Headcount Reminder templates. The document headings titled
+"Public Outreach Request Pipeline" were kept, because other pages link to their
+anchors.
+
+Decided for later phases, not yet built:
+
+- **Outreach Overview** as the area's first page — needs attention, upcoming
+  outreach with seats filled against needed, quick actions. An outreach event
+  is one scheduled from a request or tagged with an outreach type or CRR
+  activity. The planning view offers week and month, as Shift Scheduling does.
+- **CRR activity tracking**, recordable both as an event and as a lightweight
+  log entry. A department-configurable catalogue (smoke and CO alarm installs,
+  home safety surveys, car seat inspections, extinguisher training, hands-only
+  CPR, Stop the Bleed, fall prevention, school programs), each activity tagged
+  by risk and by priority population, both lists configurable. Location starts
+  at a ZIP code that fills in city and state; an "add more detail" choice adds
+  the full address and resident contact, always encrypted at rest.
+- **Juvenile firesetter intervention** is a separate option a department
+  enables, shown as coming soon (pitfall #19: marked not yet in effect, with no
+  stored switch).
+- **CRR goals** — yearly targets per measure.
+
 ## Outreach Events — What the 2026-11-20 Changes Do Not Cover Yet
 
 The owner decisions of 2026-11-20 (staff-entered requests, calendar-date
 preferences, event signup sheets, volunteer RSVPs, close-out) left these edges
 for a later decision rather than guessing at them:
 
-- **A series cancel does not stand an event's own signup sheet down.**
-  Cancelling one event, or deleting it, cancels its sheet and tells the crew;
-  `cancel_event_series` cancels each occurrence with a deferred commit, and the
-  stand-down (`cancel_shift` commits on its own) is not run on that path. Only
-  an outreach event an officer created directly can own a sheet, and a
-  recurring one is unusual, but a cancelled series leaves its sheets on the
-  schedule until someone cancels them.
 - **A seat moved by a shift swap does not update the event's RSVPs.** Volunteer
   RSVPs follow a seat that is created, edited, declined or removed through
   `SchedulingService`; a swap trades the seat on another path. The next seat
@@ -1699,9 +1740,13 @@ for a later decision rather than guessing at them:
 - **An event's own signup sheet has no "Email the membership" call.** A
   request's sheet does (`send_volunteer_call`, which is written around a
   request's details). Members find an event's sheet on Open Shifts.
-- **A volunteer RSVP skips the event's capacity and waitlist.** The volunteers
-  are the crew, not the audience, so they are given a going RSVP directly. An
-  outreach event with a `max_attendees` set counts them toward it.
+
+Closed on 2026-11-21: a series cancel or delete now stands down every
+occurrence's own sheet, as a single cancel or delete does; and a volunteer's
+RSVP is marked `is_volunteer` and takes no attendee seat (owner decision,
+2026-11-21 — crew, not audience; the sheet's role counts cap the crew). Guests
+a volunteer brings still take seats, and must fit when added, because a
+volunteer is never waitlisted off the crew list.
 
 ## Outreach Requests — Two Deliberate Choices in the Public Pipeline (2026-09-09)
 
@@ -7185,6 +7230,38 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   exclusion in every place the matrix frontend counts cells
   (`complianceMatrixModel.ts`), the print page, the exports and the `as_of`
   minimum; missing one recreates the drift of CLAUDE.md pitfall #29.
+- **My Training, requirement progress and the competency matrix graded with
+  their own rules — ✅ fixed 2026-11-21 (review findings).** Three more
+  copies of the grading rules disagreed with the compliance matrix (CLAUDE.md
+  pitfall #29). `TrainingService.evaluate_requirement_detail` (My Training,
+  the officer's member view, and through it the compliance exports and the
+  forecast) now takes met and expired from the shared grader.
+  `check_requirement_progress` (requirement progress, the user training
+  report, the MCP progress tool) is now built from that detail. The
+  competency matrix maps the shared grader's status to its cells. The
+  compliance matrix screen no longer demotes a cell the backend graded met
+  because the expiry it carries has passed. Visible changes:
+  - A certification never held reads "not met", not "Expired — renew ASAP".
+  - An hours requirement with a zero target is not met by one logged hour.
+  - A biannual hours requirement is no longer lapsed by an unrelated
+    certificate outside its window.
+  - A biannual courses requirement with a lapsed newest expiry reads expired.
+  - With the current month excluded, `days_until_due` counts from the real
+    day, so a due date that passed this month reads overdue, not upcoming.
+  - Requirement progress follows the include-current-month setting, and its
+    batch preload now carries the columns certification and category
+    matching read. It used to match no certificate by name.
+  - Competency cells part way to a target read `in_progress`, which
+    readiness does not count. They used to read `expiring_soon` and count as
+    ready. The summary adds `in_progress_count`. A certification cell's
+    `details` is now the grader's progress, not the certificate number.
+- **Competency matrix endpoint has no screen — open, owner question
+  2026-11-21.** No frontend code or MCP tool calls
+  `GET /training/competency-matrix`; the Training heat map reads the
+  skills-evaluation view (`/training/competency/department`). The endpoint
+  now grades through the shared grader rather than its own rules. Whether to
+  keep it for direct API callers or retire it, with its documentation, is not
+  decided.
 - **Profiles: admin hours choose their own profile — open, owner question
   2026-11-21.** A member's admin-hours targets come from the highest-priority
   matching profile that _carries_ admin hours (ties now resolved as grading
@@ -7228,12 +7305,48 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   Telling them again needs a recorded "met again" date to key on, which the
   task does not keep. Tests: `tests/test_compliance_member_notices.py`.
 - **The Compliance Officer dashboard's forecast summary cards keep fixed
-  colour bands — open.** The department "Current" average card colours green
-  at 80% or more and yellow below, and the 30/60/90 average cards and every
-  member's 30/60/90 badge keep their 80% / 50% bands. These are averages and
-  estimates, not a member's standing, so the 2026-11-20 change colours only
-  each member's current figure by its standing; whether the averages should
-  take the department's thresholds is not decided.
+  colour bands — ✅ resolved 2026-11-21 (owner direction: follow the
+  department's and the member's thresholds).** Each member's 30/60/90-day
+  projection now carries a standing (`forecast_30_standing`, …), classified
+  by the member's own grading exactly as `current_standing` is, so a figure
+  and its colour come from one `ComplianceGrading.classify` call. The four
+  department average cards are computed server-side by
+  `ComplianceGrading.classify_average`: the mean of the graded members'
+  figures, rounded to one decimal, classified by the department's thresholds
+  and threshold type (never a profile's). Under `all_required` an average is
+  compliant only when every graded member is compliant at that horizon,
+  otherwise at risk when the mean reaches the at-risk threshold, otherwise
+  non-compliant (owner decision 2026-11-21, which kept the rule first
+  shipped as a default; the alternatives were a 100% bar on the rounded mean,
+  which a member at 99.96% could fake, and colouring by the share of
+  compliant members, which changes what the card measures). Both the
+  dashboard and the Training Enhancements forecast colour with
+  `STANDING_TEXT_COLORS`. The threshold ladder is written once
+  (`_standing_for_pct`) and shared by the member and the average. The
+  entry's "80% / 50%" was 80% / 60% for the average cards. `GET
+/training/reports/compliance-forecast` now returns `{members, averages}`
+  instead of a bare list, so the D10 entry's "response shapes apart from the
+  added forecast field" no longer holds for it. A profiled member can read
+  green beside a department average that reads red: the member is measured
+  against their profile, the average against the department. Tests:
+  `TestClassifyAverage` / `TestProjectedStanding` in
+  `tests/test_training_compliance.py`, `TestForecastStandingsAndAverages` in
+  `tests/test_officer_compliance_views_profiles.py`, and the forecast cases
+  in `ComplianceOfficerDashboard.test.tsx` and
+  `TrainingEnhancementsTab.test.tsx`.
+- **The compliance forecast's projection charges every certificate expiring
+  in the window — open, owner decision pending.** The 30/60/90-day estimate
+  subtracts one met requirement for each completed record whose expiry falls
+  in the window, including a certificate no graded requirement reads and a
+  superseded record whose renewal already exists. Since 2026-11-21 that
+  estimate drives a standing colour, so on a default install (100 / 75, no
+  profiles) a fully compliant member with three graded requirements and one
+  unrelated certificate expiring in 20 days reads 66.7% non-compliant (red)
+  at 30 days; with four requirements, 75.0% at risk. The estimate's inputs
+  were deliberately not changed. The options are to keep colouring the
+  estimate as it is, to narrow it to certificates a graded requirement reads
+  (and skip superseded renewals), or to re-grade each requirement at today +
+  N days.
 - **A requirement with zero currently-applicable members renders as a
   failing 0% (CMP4-4, LOW) — ✅ fixed 2026-09-29, workflow review W29-4.**
   `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`
@@ -11173,20 +11286,23 @@ each case):
   2026-11-20** (owner decision "Hard-delete crash gap"): the files are queued
   in `pending_file_deletions` in the delete's own transaction, removed right
   after the commit, and an hourly `pending_file_deletions` sweep retries what
-  a crash or an unreachable store left. `files_not_deleted` in the
-  `user_hard_deleted` audit event now means files left queued for the sweep.
+  a crash or an unreachable store left. Files left queued for the sweep are
+  counted as `files_still_pending` in the `pending_file_deletions_completed`
+  event that follows the delete (since 2026-11-21).
 - **A queued file that never deletes is visible only in logs and the
   table.** A remote store that is gone, or a path that no longer confines to
   its department's area (a moved uploads root), keeps its row, retried every
   hour and logged as a warning after 24 failures. There is no screen listing
   them and no way to dismiss one short of a database edit.
-- **A crash after the delete commits can lose its audit record.** The
-  `user_hard_deleted` event is written after the delete's commit and committed
-  with the request, so a process killed in between keeps the delete (and now
-  the queued files) but loses the critical audit row. Writing the event
-  inside the delete's transaction would close it, but changes the event's
-  shape (the per-file counts are known only after the commit), so it awaits
-  the owner.
+- ~~**A crash after the delete commits can lose its audit record.**~~
+  **Resolved 2026-11-21** (owner decision 2026-11-21, (e)):
+  `user_hard_deleted` is written inside the delete's transaction and carries
+  `files_queued`; the file outcome follows in a
+  `pending_file_deletions_completed` event linked by
+  `user_hard_deleted_audit_id`. A delete whose audit row cannot be written is
+  refused (500, rolled back); every other audit event still never blocks. A
+  process killed after the commit now loses only the follow-up event; the
+  queued rows stay and the sweep reports them, unlinked to the member.
 - **Member deletes outside the endpoint queue nothing**:
   `historical_import_undo` and the onboarding reset delete users directly and
   leave any files their rows named.
@@ -11195,8 +11311,16 @@ each case):
 - **A relocation or remote migration running at the same moment** can rewrite
   a reference between collection and deletion. Neither path locks against the
   other.
-- **Files orphaned by permanent deletes before this fix** are not found or
-  cleaned up; there is no sweep for them.
+- ~~**Files orphaned by permanent deletes before this fix** are not found or
+  cleaned up; there is no sweep for them.~~ **Resolved 2026-11-21** (owner
+  decision 2026-11-21, (c)): `scripts/sweep_orphaned_member_files.py`, a
+  re-runnable command, dry run by default, counts only, files at least 30
+  days old (never under 1), refused while a relocation or remote migration
+  is unfinalized. **Still open:** it sweeps the uploads volume only, so
+  orphans on a remote store are not reached (a remote store has no listing);
+  a rolled-back relocation's manifest stays unfinalized and blocks the
+  command until an operator moves it off the volume; and a removed file
+  survives in backups taken before.
 - **A certificate kept for a voided record is outside the retention sweep**
   once the submission stops naming it. Removing a submission attachment, or
   deleting the submission, now keeps a file another row still names (closed
@@ -11228,11 +11352,16 @@ each case):
   `{"file_name": ...}` entry with no `file_path` (what the 2026-11-20
   migration made of the old bare strings) keeps the uploader's filename, which
   can be the member's name, on their submissions and records.
-- **A training record's own uploaded file has no removal route.** Officers
-  and members can add one (`POST /training/records/{id}/attachments`) but not
-  remove it; it leaves only with retention, anonymisation or a permanent
-  delete. A `DELETE /training/records/{id}/attachments/{index}` mirroring the
-  submission route is the shape if the owner wants one.
+- ~~**A training record's own uploaded file has no removal route.**~~
+  **Resolved 2026-11-21** (owner decision 2026-11-21, (d)):
+  `DELETE /training/records/{id}/attachments/{entry}` and a Remove button in
+  the record's Files dialog. `training.manage` may remove any file uploaded to
+  the record; the member only a file they uploaded (an entry with no
+  `uploaded_by` is an officer's to remove). A certificate an approval copied
+  onto the record, and every file on a voided record, stays. The list carries
+  a server-computed `can_remove`. Removal is by entry id (a repeat is a 204
+  no-op), audited as `training_record_attachment_removed` with ids only, and
+  the file goes through `remove_unreferenced_files` after the commit.
 
 **Closed 2026-11-20** (file-handling gaps, owner decision of that date):
 

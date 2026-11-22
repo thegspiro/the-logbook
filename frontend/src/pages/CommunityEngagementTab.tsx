@@ -1,5 +1,5 @@
 /**
- * Community Engagement Tab (PO3)
+ * Outreach Impact Tab (PO3) — formerly Community Engagement
  *
  * What the department's public outreach reached over a period: events held,
  * people reached (signed in, or estimated from the request where nobody signed
@@ -146,7 +146,7 @@ const CommunityEngagementTab: React.FC = () => {
       <div>
         <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
           <Globe className="h-5 w-5 text-blue-700 dark:text-blue-400" aria-hidden="true" />
-          <span>Community Engagement</span>
+          <span>Outreach Impact</span>
         </h2>
         <p className="text-theme-text-muted mt-1 text-sm">How far the department&apos;s public outreach reaches.</p>
       </div>

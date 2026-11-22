@@ -1,0 +1,57 @@
+{
+  "script": "docs/youtube-scripts/08-quick-tips-and-shorts.md — SHORT 8G",
+  "title": "Turn On Two-Factor",
+  "callout": "Password + authenticator code = much safer",
+  "endCard": {
+    "headline": "Try The Logbook",
+    "sub": "Free & Open Source",
+    "url": "github.com/thegspiro/the-logbook"
+  },
+  "shots": [
+    {
+      "id": "hook",
+      "say": "Protect your account with two-factor authentication. It takes about a minute.",
+      "caption": "Turn on two-factor authentication"
+    },
+    {
+      "id": "security",
+      "say": "Open My Account, then Security.",
+      "caption": "My Account → Security"
+    },
+    {
+      "id": "enable",
+      "say": "Tap Enable two-factor authentication.",
+      "caption": "Enable two-factor authentication"
+    },
+    {
+      "id": "scan",
+      "say": "Open your authenticator app, such as Google Authenticator or One Password, and scan the QR code.",
+      "caption": "Scan it with your authenticator app"
+    },
+    {
+      "id": "verify",
+      "say": "Enter the six digit code from the app, and tap Verify and enable.",
+      "caption": "Enter the code → Verify & enable"
+    },
+    {
+      "id": "recovery",
+      "say": "Now the part people skip. These ten recovery codes are shown only once. Copy them, keep them somewhere safe, then press Done.",
+      "caption": "Save your recovery codes"
+    },
+    {
+      "id": "on",
+      "say": "From now on, signing in takes your password and a code from your app. A stolen password alone won't get anyone in.",
+      "caption": "Password + code from your app"
+    },
+    {
+      "id": "passkey",
+      "say": "Prefer Face ID or a fingerprint? Add a passkey, and use it at sign in instead of typing a code.",
+      "caption": "Or add a passkey"
+    },
+    {
+      "id": "outro",
+      "say": "One minute now keeps your account safe.",
+      "caption": "One minute, much safer"
+    }
+  ]
+}

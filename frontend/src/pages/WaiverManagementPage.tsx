@@ -502,8 +502,10 @@ export const WaiverManagementPage: React.FC = () => {
                           {formatDate(waiver.start_date, tz)} -{' '}
                           {waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}
                         </td>
-                        <td data-label="Reason" className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
-                          {waiver.reason || '-'}
+                        <td data-label="Reason" className="text-theme-text-muted px-4 py-3 text-sm">
+                          <div className="line-clamp-2 max-w-xs break-words" title={waiver.reason || undefined}>
+                            {waiver.reason || '-'}
+                          </div>
                         </td>
                         <td data-label="Actions" className="px-4 py-3 text-right whitespace-nowrap">
                           {waiver.source === 'leave' && (
@@ -882,8 +884,10 @@ export const WaiverManagementPage: React.FC = () => {
                             {formatDate(waiver.start_date, tz)} -{' '}
                             {waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}
                           </td>
-                          <td data-label="Reason" className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
-                            {waiver.reason || '-'}
+                          <td data-label="Reason" className="text-theme-text-muted px-4 py-3 text-sm">
+                            <div className="line-clamp-2 max-w-xs break-words" title={waiver.reason || undefined}>
+                              {waiver.reason || '-'}
+                            </div>
                           </td>
                           <td data-label="Actions" className="px-4 py-3 text-right">
                             {waiver.active && (

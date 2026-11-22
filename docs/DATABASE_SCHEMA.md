@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**400 tables · 6320 columns · 1335 foreign keys**
+**400 tables · 6321 columns · 1335 foreign keys**
 
 ---
 
@@ -254,7 +254,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`event_attendance_petitions`](#event_attendance_petitions) | `EventAttendancePetition` | 14 | A member's request to be recorded as present at an event that is over. |
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 18 | External (non-member) attendee at an event. |
-| [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
+| [`event_rsvps`](#event_rsvps) | `EventRSVP` | 22 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 30 | Event Template model for reusable event configurations |
 | [`events`](#events) | `Event` | 66 | Event model for managing department events |
 | [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 9 | RSVP History model for tracking RSVP status changes. |
@@ -3640,6 +3640,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
 | `status` | ENUM(`going`, `not_going`, `maybe`, `waitlisted`) | no |  | `going` |  |
 | `guest_count` | INTEGER | no |  | `0` |  |
+| `is_volunteer` | BOOL | no |  | `0` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `dietary_restrictions` | VARCHAR(500) | yes |  |  |  |
 | `accessibility_needs` | VARCHAR(500) | yes |  |  |  |

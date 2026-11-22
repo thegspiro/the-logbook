@@ -64,6 +64,13 @@ _PROGRESS_RECORD_COLUMNS = (
     TrainingRecord.hours_completed,
     TrainingRecord.certification_number,
     TrainingRecord.source_event_id,
+    # Read by hours_record_counts (category scoping) and by certification
+    # and fallback matching; without them the preload's rows never matched a
+    # certificate by name or code.
+    TrainingRecord.category_id,
+    TrainingRecord.match_key,
+    TrainingRecord.certification_key,
+    TrainingRecord.created_at,
 )
 
 
@@ -290,10 +297,14 @@ class TrainingService:
             )
             today = await resolve_org_today(self.db, organization_id)
             from app.services.training_compliance import (
+                get_org_include_current_month,
                 load_credited_shift_dates,
                 load_held_sessions,
             )
 
+            org_include_current_month = await get_org_include_current_month(
+                self.db, str(organization_id)
+            )
             shift_dates = (
                 await load_credited_shift_dates(
                     self.db,
@@ -301,7 +312,7 @@ class TrainingService:
                     [str(user_id)],
                     requirements,
                     today,
-                    True,
+                    org_include_current_month,
                     full_history=True,
                 )
             ).get(str(user_id), [])
@@ -331,6 +342,7 @@ class TrainingService:
                     join_date=join_date,
                     shift_dates=shift_dates,
                     held_sessions=held_sessions,
+                    org_include_current_month=org_include_current_month,
                 )
                 if progress.is_complete:
                     requirements_met.append(req.id)
@@ -464,125 +476,6 @@ class TrainingService:
             return bool(record.training_type == requirement.training_type)
         return record_name_matches(requirement, record)
 
-    async def _anchor_records(
-        self,
-        requirement,
-        user_id: UUID,
-        organization_id: UUID | str,
-        completed_records: Optional[Sequence[Any]],
-        today: date,
-    ) -> List[Any]:
-        """The member's completed records that satisfy ``requirement``,
-        for deriving a due-date anchor (rolling last-completion, or
-        certification-period expiration).
-
-        Deliberately unbounded by any evaluation *window* -- an overdue
-        anchor is often *older* than the window, which is exactly the case
-        a window-bounded search would miss (``_preload_window`` exempts
-        rolling and certification-period requirements for this reason,
-        when a caller passes preloaded ``completed_records``). Freshness is
-        a different axis and is still enforced: when the requirement sets
-        ``recency_days``, ``is_recent_enough`` requires a known
-        ``completion_date`` to verify it, matching the freshness filtering
-        the actual compliance calculation applies elsewhere in this file
-        (``apply_recency``) -- without it, this could anchor a due date on
-        a record the compliance result itself treats as unverifiable and
-        excludes, contradicting it on the very same response.
-
-        Does not otherwise filter on ``completion_date`` -- it's optional
-        even on a completed record, and the certification-matching logic
-        elsewhere (``r.completion_date or date.min``) deliberately still
-        considers such a record rather than dropping it when no freshness
-        window applies; each caller here applies that same convention
-        itself, since a rolling anchor genuinely cannot use a missing date
-        (nothing to add the interval to) while a certification-period
-        anchor can (it only needs the record's ``expiration_date``).
-        """
-        from app.services.training_compliance import is_recent_enough
-
-        req_type = (
-            requirement.requirement_type.value
-            if hasattr(requirement.requirement_type, "value")
-            else str(requirement.requirement_type)
-        )
-
-        if completed_records is None:
-            result = await self.db.execute(
-                select(TrainingRecord).where(
-                    TrainingRecord.user_id == str(user_id),
-                    TrainingRecord.organization_id == str(organization_id),
-                    TrainingRecord.status == TrainingStatus.COMPLETED,
-                )
-            )
-            completed_records = result.scalars().all()
-
-        return [
-            r
-            for r in completed_records
-            if self._anchor_matches(requirement, r, req_type)
-            and is_recent_enough(requirement, r, today)
-        ]
-
-    async def _rolling_due_date(
-        self,
-        requirement,
-        user_id: UUID,
-        organization_id: UUID | str,
-        completed_records: Optional[Sequence[Any]],
-        rolling_months: int,
-        today: date,
-    ) -> Optional[date]:
-        """Next due date for a rolling-due-date requirement.
-
-        Anchored to the member's most recent applicable completion plus the
-        configured interval -- not the evaluation window, which always ends
-        `today` for a rolling requirement and so cannot itself be a deadline.
-        Returns ``None`` when the member has no applicable completion yet;
-        there is no anchor to compute a deadline from.
-        """
-        from dateutil.relativedelta import relativedelta
-
-        anchors = await self._anchor_records(
-            requirement, user_id, organization_id, completed_records, today
-        )
-        # Unlike _certification_due_date, a rolling anchor genuinely cannot
-        # use a record with no completion_date -- there is no date to add
-        # the interval to -- so it's filtered out here rather than in
-        # _anchor_records, which both callers share.
-        latest = max(
-            (r.completion_date for r in anchors if r.completion_date is not None),
-            default=None,
-        )
-        return latest + relativedelta(months=rolling_months) if latest else None
-
-    async def _certification_due_date(
-        self,
-        requirement,
-        user_id: UUID,
-        organization_id: UUID | str,
-        completed_records: Optional[Sequence[Any]],
-        today: date,
-    ) -> Optional[date]:
-        """Next due date for a certification-period requirement: the
-        current matching certification's own expiration date -- i.e. when
-        it needs to be renewed. Mirrors the matching/selection
-        `check_requirement_progress`'s own CERTIFICATION branch uses
-        (latest completed matching record, by completion date -- falling
-        back to `date.min` for a matching record with an unknown
-        completion date, same as every other certification-matching site
-        in this file, rather than dropping it: it can still have a known
-        `expiration_date` worth reporting). Returns ``None`` when the
-        member holds no matching certification.
-        """
-        anchors = await self._anchor_records(
-            requirement, user_id, organization_id, completed_records, today
-        )
-        if not anchors:
-            return None
-        latest = max(anchors, key=lambda r: r.completion_date or date.min)
-        expiration: Optional[date] = latest.expiration_date
-        return expiration
-
     @staticmethod
     def evaluate_requirement_detail(
         req,
@@ -635,6 +528,7 @@ class TrainingService:
         """
         from app.models.training import RequirementType
         from app.services.training_compliance import (
+            _grade_member_requirement,
             _require_held_sessions,
             _require_shift_dates,
             apply_recency,
@@ -936,7 +830,33 @@ class TrainingService:
 
         if nothing_held:
             pct = 0.0
-        is_met = pct >= 100 and not cert_expired and not nothing_held
+        # Met and expired are the shared grader's decision, not this
+        # function's: the matrix, the profile card and the dashboard read
+        # it, and a second set of rules here disagreed with them on biannual
+        # expiries, no-target hours and never-held certificates (CLAUDE.md
+        # pitfall #29, review finding 2026-11-21). The figures above stay
+        # for display. Graded without the catch-up wrapper, which would hide
+        # a lapse behind its own status; the catch-up rule is applied below.
+        graded = _grade_member_requirement(
+            req,
+            member_records,
+            real_today,
+            waivers=_waivers,
+            org_include_current_month=org_include_current_month,
+            shift_dates=shift_dates,
+            held_sessions=held_sessions,
+            join_date=join_date,
+            evaluation_credits=evaluation_credits,
+        )
+        is_met = graded.status == TrainingStatus.COMPLETED.value
+        cert_expired = graded.status == "expired"
+        blocks_activity = cert_expired
+        if is_met:
+            pct = 100.0
+        elif cert_expired or pct >= 100:
+            # A lapse, or a count the grader does not accept (a target of
+            # zero): a full bar beside "not met" would contradict itself.
+            pct = 0.0
 
         # Effective due date
         rolling_months = get_rolling_period_months(req)
@@ -1048,8 +968,11 @@ class TrainingService:
             elif not effective_due_date:
                 effective_due_date = today
 
+        # From the real day: a due date is a calendar promise, as the
+        # catch-up deadline below is. Measured from the cut-off, a date that
+        # passed this month read as upcoming with the current month excluded.
         days_until_due = (
-            (effective_due_date - today).days if effective_due_date else None
+            (effective_due_date - real_today).days if effective_due_date else None
         )
 
         deadline = catch_up_deadline(req, join_date, real_today)
@@ -1132,12 +1055,16 @@ class TrainingService:
         shift_dates: Optional[Sequence[date]] = None,
         held_sessions: Optional[Mapping[str, Sequence["HeldSession"]]] = None,
         evaluation_credits: Optional["EvaluationCredits"] = None,
+        org_include_current_month: Optional[bool] = None,
     ) -> RequirementProgress:
         """
         Check a user's progress towards a specific requirement.
 
-        Handles all requirement types: hours, courses, certification,
-        shifts, calls, and fallback.
+        Built from :meth:`evaluate_requirement_detail`, so met, expired, the
+        window and the due date are the ones My Training and the compliance
+        matrix report. *org_include_current_month* is the department's
+        setting; a caller checking several requirements loads it once and
+        passes it, and without it the check reads it.
 
         When *waivers* is provided the required hours/shifts/calls are
         adjusted proportionally for waived months.  If *waivers* is None
@@ -1161,25 +1088,13 @@ class TrainingService:
         ``load_evaluation_credits``, is the same for a requirement counted
         from shift evaluations.
         """
-        from app.models.training import RequirementType
         from app.services.training_compliance import (
-            apply_recency,
-            catch_up_deadline,
-            certification_record_matches,
             counts_shift_attendance,
-            credited_shifts_in_window,
-            evaluation_credits_in_window,
-            evaluation_target,
-            fallback_record_matches,
-            hours_record_counts,
+            get_org_include_current_month,
             is_evaluation_credited,
             is_session_attendance,
-            lapsed_biannual_certificate,
-            latest_evaluation_credit,
             load_credited_shift_dates,
             load_evaluation_credits,
-            recency_cutoff,
-            rolling_hours_has_no_deadline,
         )
 
         if requirement is None or str(requirement.id) != str(requirement_id):
@@ -1209,6 +1124,25 @@ class TrainingService:
                 join_date,
                 held_sessions,
             )
+        if waivers is None:
+            waivers = await fetch_user_waivers(
+                self.db,
+                str(organization_id),
+                str(user_id),
+            )
+        if org_include_current_month is None:
+            org_include_current_month = await get_org_include_current_month(
+                self.db, str(organization_id)
+            )
+        if completed_records is None:
+            result = await self.db.execute(
+                select(*_PROGRESS_RECORD_COLUMNS).where(
+                    TrainingRecord.user_id == str(user_id),
+                    TrainingRecord.organization_id == str(organization_id),
+                    TrainingRecord.status == TrainingStatus.COMPLETED,
+                )
+            )
+            completed_records = list(result.all())
         if shift_dates is None and counts_shift_attendance(requirement):
             shift_dates = (
                 await load_credited_shift_dates(
@@ -1217,7 +1151,7 @@ class TrainingService:
                     [str(user_id)],
                     [requirement],
                     today,
-                    True,
+                    org_include_current_month,
                     full_history=True,
                 )
             ).get(str(user_id), [])
@@ -1229,477 +1163,40 @@ class TrainingService:
                     [str(user_id)],
                     [requirement],
                     today,
-                    True,
+                    org_include_current_month,
                     full_history=True,
                 )
             ).get(str(user_id), {})
-        start_date, end_date = self._get_date_window(requirement, today)
-        # Every RequirementProgress this method returns carries this, so
-        # consumers (the MCP `get_member_requirements_progress` tool
-        # explicitly promises "days until due, negative when overdue") don't
-        # each have to re-derive it themselves. Computed from the raw window
-        # before the recency cutoff below can overwrite end_date.
-        rolling_months = get_rolling_period_months(requirement)
-        due_date_type = self._due_date_type_str(requirement)
-        # A stale requirement.due_date can survive a switch away from
-        # "fixed_date" to *any* other type: RequirementModal.tsx seeds
-        # due_date from the existing row and only clears/edits it on the
-        # fixed_date screen, so changing the type keeps sending the old
-        # value regardless of which type it's switched to. An explicit
-        # due_date therefore only means anything for "fixed_date" (or a
-        # legacy row with no due_date_type at all) -- never
-        # calendar_period, rolling, or certification_period, all three of
-        # which compute their own deadline below.
-        honors_explicit_due_date = due_date_type in (None, "fixed_date")
-        effective_due_date: Optional[date]
-        if requirement.due_date and honors_explicit_due_date:
-            effective_due_date = requirement.due_date
-        elif rolling_months and counts_shift_attendance(requirement):
-            # Anchored on the latest shift worked, not a training record:
-            # the same evidence the count below reads.
-            from dateutil.relativedelta import relativedelta
 
-            cutoff = recency_cutoff(requirement, today)
-            latest_shift = max(
-                (d for d in shift_dates or [] if cutoff is None or d >= cutoff),
-                default=None,
-            )
-            effective_due_date = (
-                latest_shift + relativedelta(months=rolling_months)
-                if latest_shift
-                else None
-            )
-        elif rolling_months and is_evaluation_credited(requirement):
-            # Anchored on the latest evaluation counted, as a shifts-worked
-            # one is on the latest shift (latest_evaluation_credit).
-            from dateutil.relativedelta import relativedelta
-
-            latest_evaluation = latest_evaluation_credit(
-                requirement, evaluation_credits, today
-            )
-            effective_due_date = (
-                latest_evaluation + relativedelta(months=rolling_months)
-                if latest_evaluation
-                else None
-            )
-        elif rolling_months:
-            # Rolling due dates are anchored to the member's last applicable
-            # completion, not the window end: _get_date_window() always
-            # returns `today` as end_date for a rolling requirement (it's a
-            # trailing evaluation window, not a deadline), which would
-            # otherwise report every rolling requirement as due today.
-            effective_due_date = await self._rolling_due_date(
-                requirement,
-                user_id,
-                organization_id,
-                completed_records,
-                rolling_months,
-                today,
-            )
-        elif due_date_type == "certification_period":
-            # A certification-period requirement's deadline is the current
-            # matching certification's own expiration date, not a calendar
-            # window -- the requirement never "resets" on a schedule, it
-            # comes due when the certificate itself expires.
-            effective_due_date = await self._certification_due_date(
-                requirement, user_id, organization_id, completed_records, today
-            )
-        else:
-            # A calendar-period requirement (annual/quarterly/monthly) has no
-            # due_date of its own -- the window's end_date IS its deadline,
-            # the same fallback evaluate_requirement_detail() uses.
-            effective_due_date = end_date
-        if rolling_hours_has_no_deadline(requirement):
-            effective_due_date = None
-        days_until_due = (
-            (effective_due_date - today).days if effective_due_date else None
+        # A projection of the requirement detail, which takes met and
+        # expired from the shared grader (CLAUDE.md pitfall #29). This used
+        # to be a third copy of the grading rules, and it disagreed with the
+        # matrix: it graded every requirement on the real day whatever the
+        # include-current-month setting, and met a zero-hour target with any
+        # hour.
+        detail = self.evaluate_requirement_detail(
+            requirement,
+            completed_records,
+            today,
+            waivers=waivers,
+            org_include_current_month=org_include_current_month,
+            join_date=join_date,
+            shift_dates=shift_dates,
+            held_sessions=held_sessions,
+            evaluation_credits=evaluation_credits,
         )
-        # Narrow the window by the freshness cutoff up front so every query
-        # below inherits it. A one_time requirement has no frequency window at
-        # all, so recency supplies both bounds rather than tightening them.
-        cutoff = recency_cutoff(requirement, today)
-        if cutoff is not None:
-            start_date = cutoff if start_date is None else max(start_date, cutoff)
-            end_date = end_date or today
-        req_type = (
-            requirement.requirement_type.value
-            if hasattr(requirement.requirement_type, "value")
-            else str(requirement.requirement_type)
-        )
-        freq = (
-            requirement.frequency.value
-            if hasattr(requirement.frequency, "value")
-            else str(requirement.frequency)
-        )
-
-        # Fetch waivers if not pre-loaded
-        if waivers is None:
-            waivers = await fetch_user_waivers(
-                self.db,
-                str(organization_id),
-                str(user_id),
-            )
-
-        def _in_window(record: Any) -> bool:
-            if not (start_date and end_date):
-                return True
-            return (
-                record.completion_date is not None
-                and start_date <= record.completion_date <= end_date
-            )
-
-        async def _all_completed() -> List[Any]:
-            """The member's completed records, from the preloaded set or a
-            query; the frequency window is not applied here."""
-            if completed_records is not None:
-                return list(completed_records)
-            result = await self.db.execute(
-                select(TrainingRecord).where(
-                    TrainingRecord.user_id == str(user_id),
-                    TrainingRecord.organization_id == str(organization_id),
-                    TrainingRecord.status == TrainingStatus.COMPLETED,
-                )
-            )
-            return list(result.scalars().all())
-
-        async def _windowed() -> List[Any]:
-            """Completed records in the evaluation window."""
-            if completed_records is not None:
-                return [r for r in completed_records if _in_window(r)]
-            q = (
-                select(TrainingRecord)
-                .where(TrainingRecord.user_id == str(user_id))
-                .where(TrainingRecord.organization_id == str(organization_id))
-                .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-            )
-            if start_date and end_date:
-                q = q.where(
-                    TrainingRecord.completion_date >= start_date,
-                    TrainingRecord.completion_date <= end_date,
-                )
-            result = await self.db.execute(q)
-            return list(result.scalars().all())
-
-        completed_value: float = 0
-        required_value: float = 0
-        is_complete = False
-        prorated_to_zero = False
-
-        # ---- HOURS requirements ----
-        if req_type == RequirementType.HOURS.value:
-            if completed_records is None:
-                # No preload: the sum stays in SQL, so a standalone check
-                # never materializes the member's records.
-                counted_where = [
-                    TrainingRecord.user_id == str(user_id),
-                    TrainingRecord.organization_id == str(organization_id),
-                    TrainingRecord.status == TrainingStatus.COMPLETED,
-                ]
-                if start_date and end_date:
-                    counted_where += [
-                        TrainingRecord.completion_date >= start_date,
-                        TrainingRecord.completion_date <= end_date,
-                    ]
-                if requirement.training_type:
-                    counted_where.append(
-                        TrainingRecord.training_type == requirement.training_type
-                    )
-                # The filters of hours_record_counts, applied in SQL.
-                if requirement.category_ids:
-                    counted_where.append(
-                        TrainingRecord.category_id.in_(
-                            [str(c) for c in requirement.category_ids]
-                        )
-                    )
-                if requirement.required_courses:
-                    counted_where.append(
-                        TrainingRecord.course_id.in_(requirement.required_courses)
-                    )
-                hours_q = select(func.sum(TrainingRecord.hours_completed)).where(
-                    *counted_where
-                )
-                completed_value = float((await self.db.execute(hours_q)).scalar() or 0)
-                # Only the expiration dates, for the biannual check below:
-                # lapsed_biannual_certificate reads nothing else.
-                hours_records: Sequence[Any] = []
-                if freq == RequirementFrequency.BIANNUAL.value:
-                    hours_records = (
-                        await self.db.execute(
-                            select(TrainingRecord.expiration_date).where(
-                                *counted_where,
-                                TrainingRecord.expiration_date.isnot(None),
-                            )
-                        )
-                    ).all()
-            else:
-                hours_records = [
-                    r
-                    for r in completed_records
-                    if _in_window(r) and hours_record_counts(requirement, r)
-                ]
-                completed_value = float(
-                    sum(float(r.hours_completed or 0) for r in hours_records)
-                )
-            required_value = requirement.required_hours or 0
-
-            # Adjust for waivers
-            if required_value > 0 and start_date and end_date and waivers:
-                required_value, _, _ = adjust_required(
-                    required_value,
-                    start_date,
-                    end_date,
-                    waivers,
-                    str(requirement.id),
-                    period_months=get_rolling_period_months(requirement),
-                )
-
-            # Biannual: a lapsed certificate among the records the sum above
-            # counts overrides the hours.
-            if freq == RequirementFrequency.BIANNUAL.value:
-                if (
-                    lapsed_biannual_certificate(requirement, hours_records, today)
-                    is not None
-                ):
-                    # Expired cert — requirement is not met
-                    is_complete = False
-                    completed_value = 0
-                    required_value = requirement.required_hours or 0
-                    return RequirementProgress(
-                        requirement_id=requirement.id,
-                        requirement_name=requirement.name,
-                        required_hours=required_value,
-                        completed_hours=completed_value,
-                        percentage_complete=0.0,
-                        is_complete=False,
-                        due_date=effective_due_date,
-                        days_until_due=days_until_due,
-                    )
-
-            # A requirement with no positive target (required_hours unset/0) must
-            # NOT read as satisfied by default — only an actual matching
-            # completion counts. Previously "else True" showed a member compliant
-            # for, e.g., an annual renewal they had never taken.
-            is_complete = (
-                meets_required_hours(completed_value, required_value)
-                if required_value > 0
-                else completed_value > 0
-            )
-
-        # ---- COURSES requirements ----
-        elif req_type == RequirementType.COURSES.value:
-            course_ids = requirement.required_courses or []
-            if not course_ids:
-                # No courses are linked to this requirement, so there is nothing a
-                # member can complete — it can never be genuinely satisfied. Report
-                # it incomplete rather than vacuously "done" (which showed every
-                # member compliant for a misconfigured requirement).
-                return RequirementProgress(
-                    requirement_id=requirement.id,
-                    requirement_name=requirement.name,
-                    required_hours=0,
-                    completed_hours=0,
-                    percentage_complete=0.0,
-                    is_complete=False,
-                    due_date=effective_due_date,
-                    days_until_due=days_until_due,
-                )
-
-            records = await _windowed()
-            completed_course_ids = {str(r.course_id) for r in records if r.course_id}
-            matched = sum(1 for cid in course_ids if cid in completed_course_ids)
-
-            required_value = float(len(course_ids))
-            completed_value = float(matched)
-            # Biannual: a lapsed certificate overrides the count.
-            is_complete = (
-                matched >= len(course_ids)
-                and lapsed_biannual_certificate(requirement, records, today) is None
-            )
-
-        # ---- CERTIFICATION requirements ----
-        elif req_type == RequirementType.CERTIFICATION.value:
-            # The frequency window is deliberately not applied (a cert is
-            # valid until it expires, not per period), so the freshness
-            # window is applied here rather than inherited from start/end.
-            all_completed = apply_recency(requirement, await _all_completed(), today)
-
-            # Match by linked catalog course, training_type, name substring, or
-            # registry_code (see certification_record_matches)
-            matching = [
-                r for r in all_completed if certification_record_matches(requirement, r)
-            ]
-
-            if matching:
-                latest = max(matching, key=lambda r: r.completion_date or date.min)
-                if latest.expiration_date and latest.expiration_date < today:
-                    # Expired certification
-                    is_complete = False
-                    completed_value = 0
-                    required_value = 1
-                else:
-                    is_complete = True
-                    completed_value = 1
-                    required_value = 1
-            else:
-                is_complete = False
-                completed_value = 0
-                required_value = 1
-
-        # ---- SHIFTS requirements ----
-        elif req_type == RequirementType.SHIFTS.value:
-            if counts_shift_attendance(requirement):
-                completed_value = float(
-                    len(
-                        credited_shifts_in_window(requirement, shift_dates or [], today)
-                    )
-                )
-            else:
-                records = await _windowed()
-                type_matched = records
-                if requirement.training_type:
-                    type_matched = [
-                        r
-                        for r in records
-                        if r.training_type == requirement.training_type
-                    ]
-                completed_value = float(len(type_matched))
-            required_value = float(requirement.required_shifts or 0)
-
-            # Adjust for waivers
-            if required_value > 0 and start_date and end_date and waivers:
-                required_value, _, _ = adjust_required(
-                    required_value,
-                    start_date,
-                    end_date,
-                    waivers,
-                    str(requirement.id),
-                    period_months=get_rolling_period_months(requirement),
-                    whole_units=True,
-                )
-                prorated_to_zero = required_value <= 0
-
-            is_complete = (
-                completed_value >= required_value
-                if required_value > 0
-                else prorated_to_zero or completed_value > 0
-            )
-
-        # ---- Evaluated shifts, transports, refusals: visible shift
-        # evaluations (training_compliance), never records ----
-        elif is_evaluation_credited(requirement):
-            completed_value = float(
-                sum(
-                    units
-                    for _, units in evaluation_credits_in_window(
-                        requirement, evaluation_credits, today
-                    )
-                )
-            )
-            required_value = evaluation_target(requirement)
-
-            # Adjust for waivers
-            if required_value > 0 and start_date and end_date and waivers:
-                required_value, _, _ = adjust_required(
-                    required_value,
-                    start_date,
-                    end_date,
-                    waivers,
-                    str(requirement.id),
-                    period_months=get_rolling_period_months(requirement),
-                    whole_units=True,
-                )
-                prorated_to_zero = required_value <= 0
-
-            is_complete = (
-                completed_value >= required_value
-                if required_value > 0
-                else prorated_to_zero or completed_value > 0
-            )
-
-        # ---- CALLS requirements ----
-        elif req_type == RequirementType.CALLS.value:
-            records = await _windowed()
-            type_matched = records
-            if requirement.training_type:
-                type_matched = [
-                    r for r in records if r.training_type == requirement.training_type
-                ]
-
-            completed_value = float(len(type_matched))
-            required_value = float(requirement.required_calls or 0)
-
-            # Adjust for waivers
-            if required_value > 0 and start_date and end_date and waivers:
-                required_value, _, _ = adjust_required(
-                    required_value,
-                    start_date,
-                    end_date,
-                    waivers,
-                    str(requirement.id),
-                    period_months=get_rolling_period_months(requirement),
-                    whole_units=True,
-                )
-                prorated_to_zero = required_value <= 0
-
-            is_complete = (
-                completed_value >= required_value
-                if required_value > 0
-                else prorated_to_zero or completed_value > 0
-            )
-
-        # ---- Fallback (skills_evaluation, checklist, etc.) ----
-        else:
-            records = await _windowed()
-            matching = fallback_record_matches(requirement, records)
-
-            if matching:
-                latest = max(matching, key=lambda r: r.completion_date or date.min)
-                if latest.expiration_date and latest.expiration_date < today:
-                    is_complete = False
-                    completed_value = 0
-                    required_value = 1
-                else:
-                    is_complete = True
-                    completed_value = 1
-                    required_value = 1
-            else:
-                is_complete = False
-                completed_value = 0
-                required_value = 1
-
-        if required_value > 0:
-            percentage = (
-                100.0
-                if meets_required_hours(completed_value, required_value)
-                else completed_value / required_value * 100
-            )
-        elif prorated_to_zero:
-            # A shift or call target leave rounded down to nothing.
-            percentage = 100.0
-        else:
-            # No positive target: 100% only if something matching was actually
-            # completed, otherwise 0% — never a default "compliant" for a member
-            # with nothing on file.
-            percentage = 100.0 if completed_value > 0 else 0.0
-        percentage = min(percentage, 100.0)
-
-        deadline = catch_up_deadline(requirement, join_date, today)
-        if deadline is not None and not is_complete:
-            effective_due_date = deadline
-            days_until_due = (deadline - today).days
-        else:
-            deadline = None
-
+        due_date = detail["due_date"]
+        catch_up = detail["catch_up_deadline"]
         return RequirementProgress(
             requirement_id=requirement.id,
             requirement_name=requirement.name,
-            required_hours=required_value,
-            completed_hours=completed_value,
-            percentage_complete=round(percentage, 2),
-            is_complete=is_complete,
-            due_date=effective_due_date,
-            days_until_due=days_until_due,
-            catch_up_deadline=deadline,
+            required_hours=detail["required_hours"],
+            completed_hours=detail["completed_hours"],
+            percentage_complete=round(detail["progress_percentage"], 2),
+            is_complete=detail["is_met"],
+            due_date=date.fromisoformat(due_date) if due_date else None,
+            days_until_due=detail["days_until_due"],
+            catch_up_deadline=date.fromisoformat(catch_up) if catch_up else None,
         )
 
     async def _session_attendance_progress(
@@ -1817,7 +1314,12 @@ class TrainingService:
         # per check could straddle midnight and grade half the page against
         # a window the preload never read.
         today = await resolve_org_today(self.db, organization_id)
-        window = self._preload_window(requirements, today)
+        from app.services.training_compliance import get_org_include_current_month
+
+        org_include_current_month = await get_org_include_current_month(
+            self.db, str(organization_id)
+        )
+        window = self._preload_window(requirements, today, org_include_current_month)
         if window is not None:
             start, end = window
             preload = preload.where(
@@ -1844,7 +1346,7 @@ class TrainingService:
                 [str(user_id)],
                 requirements,
                 today,
-                True,
+                org_include_current_month,
                 full_history=True,
             )
         ).get(str(user_id), [])
@@ -1855,7 +1357,7 @@ class TrainingService:
                 [str(user_id)],
                 requirements,
                 today,
-                True,
+                org_include_current_month,
                 full_history=True,
             )
         ).get(str(user_id), {})
@@ -1876,22 +1378,26 @@ class TrainingService:
                 shift_dates=shift_dates,
                 held_sessions=held_sessions,
                 evaluation_credits=evaluation_credits,
+                org_include_current_month=org_include_current_month,
             )
             progress_list.append(progress)
         return progress_list
 
     @classmethod
     def _preload_window(
-        cls, requirements: List[TrainingRequirement], today: date
+        cls,
+        requirements: List[TrainingRequirement],
+        today: date,
+        org_include_current_month: bool = True,
     ) -> Optional[Tuple[date, date]]:
         """The span of completion dates any of ``requirements`` can count:
         the earliest window start to the latest window end.
 
         ``None`` when some requirement counts records regardless of the
-        frequency window — a certification, a biannual hours requirement
-        whose expired-certificate override looks at every record, or a
+        frequency window — a certification, a biannual requirement whose
+        expiry-based due date looks at every record, or a
         rolling/certification-period requirement whose due-date anchor
-        (`_rolling_due_date`/`_certification_due_date`) must see every
+        (in ``evaluate_requirement_detail``) must see every
         completion to find one older than the window (the overdue case a
         window-bounded search would otherwise miss) — or when a
         requirement's own window is open-ended.
@@ -1904,7 +1410,10 @@ class TrainingService:
         bound cases this one cannot.
         """
         from app.models.training import RequirementType
-        from app.services.training_compliance import completion_window
+        from app.services.training_compliance import (
+            completion_window,
+            requirement_as_of,
+        )
 
         starts = []
         ends = []
@@ -1913,20 +1422,21 @@ class TrainingService:
             freq = getattr(req.frequency, "value", req.frequency)
             if (
                 req_type == RequirementType.CERTIFICATION.value
-                or (
-                    req_type == RequirementType.HOURS.value
-                    and freq == RequirementFrequency.BIANNUAL.value
-                )
+                # Any biannual requirement: evaluate_requirement_detail's
+                # biannual due date reads every record with an expiry.
+                or freq == RequirementFrequency.BIANNUAL.value
                 or get_rolling_period_months(req)
                 or cls._due_date_type_str(req) == "certification_period"
             ):
                 return None
-            start, end = completion_window(req, today)
-            # Mirrors check_requirement_progress: a freshness cutoff on an
-            # open-ended window (the only way to get a start with no end)
-            # closes it at today.
+            # The window the requirement is graded over, which ends last
+            # month when the current month is excluded.
+            as_of = requirement_as_of(req, today, org_include_current_month)
+            start, end = completion_window(req, as_of)
+            # A freshness cutoff on an open-ended window (the only way to get
+            # a start with no end) closes it at the as-of date.
             if start is not None and end is None:
-                end = today
+                end = as_of
             if start is None or end is None:
                 return None
             starts.append(start)

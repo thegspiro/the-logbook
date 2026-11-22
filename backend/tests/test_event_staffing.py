@@ -10,7 +10,10 @@ Owner decision, 2026-11-20. Driven against real rows. Pinned:
   and only with the department's own roles;
 * a member's chosen role is checked against the event's roles at signup;
 * editing the event's time moves its sheet; cancelling or deleting the event
-  stands the sheet down.
+  stands the sheet down — one event, or every occurrence of a series;
+* a volunteer is crew, not audience: their RSVP takes no attendee seat, so a
+  capped event's audience is not shut out by its own crew (owner decision,
+  2026-11-21).
 """
 
 import uuid
@@ -260,6 +263,47 @@ class TestTheSheetFollowsTheEvent:
         shift = await db_session.scalar(select(Shift).where(Shift.id == sheet_id))
         assert shift.status == ShiftStatus.CANCELLED
 
+    async def _series(self, db, org, officer) -> list[str]:
+        """A two-occurrence series, each occurrence with its own sheet."""
+        parent = await _event(db, org, officer)
+        parent.is_recurring = True
+        child = await _event(db, org, officer)
+        child.recurrence_parent_id = parent.id
+        child.start_datetime = START + timedelta(days=7)
+        child.end_datetime = START + timedelta(days=7, hours=2)
+        await db.flush()
+        sheet_ids = []
+        for event in (parent, child):
+            await _open(db, officer, event, ("educator", 1))
+            sheet_ids.append((await _sheet(db, event)).id)
+        return [parent.id, *sheet_ids]
+
+    async def test_cancelling_a_series_stands_every_sheet_down(self, db_session):
+        org, officer = await _dept(db_session)
+        parent_id, *sheet_ids = await self._series(db_session, org, officer)
+
+        count = await EventService(db_session).cancel_series(
+            parent_id, org.id, "Season cancelled"
+        )
+
+        assert count == 2
+        for sheet_id in sheet_ids:
+            shift = await db_session.scalar(select(Shift).where(Shift.id == sheet_id))
+            await db_session.refresh(shift)
+            assert shift.status == ShiftStatus.CANCELLED
+
+    async def test_deleting_a_series_stands_every_sheet_down(self, db_session):
+        org, officer = await _dept(db_session)
+        parent_id, *sheet_ids = await self._series(db_session, org, officer)
+
+        count = await EventService(db_session).delete_event_series(parent_id, org.id)
+
+        assert count == 2
+        for sheet_id in sheet_ids:
+            shift = await db_session.scalar(select(Shift).where(Shift.id == sheet_id))
+            await db_session.refresh(shift)
+            assert shift.status == ShiftStatus.CANCELLED
+
 
 async def _rsvp(db, event, user):
     from app.models.event import EventRSVP
@@ -432,3 +476,113 @@ class TestVolunteersAreGoing:
         rsvp = await _rsvp(db_session, event, member)
         assert rsvp is not None
         assert rsvp.status == RSVPStatus.GOING
+
+
+class TestVolunteersAreCrew:
+    """A volunteer takes no attendee seat (owner decision, 2026-11-21): the
+    sheet's role counts cap the crew, and ``max_attendees`` caps the audience."""
+
+    async def _capped(self, db, max_attendees=1):
+        org, officer = await _dept(db)
+        event = await _event(db, org, officer)
+        event.max_attendees = max_attendees
+        event.allow_guests = True
+        await db.flush()
+        await _open(db, officer, event, ("educator", 2))
+        shift = await _sheet(db, event)
+        return org, officer, event, shift
+
+    async def _respond(self, db, org, event, user, status="going", guests=0):
+        from app.schemas.event import RSVPCreate
+
+        return await EventService(db).create_or_update_rsvp(
+            event.id,
+            user.id,
+            RSVPCreate(status=status, guest_count=guests),
+            org.id,
+        )
+
+    async def test_a_volunteer_does_not_take_the_audiences_seat(self, db_session):
+        from app.models.event import RSVPStatus
+
+        org, _officer, event, shift = await self._capped(db_session)
+        volunteer = await _member(db_session, org, "jordan")
+        await TestVolunteersAreGoing()._seat(db_session, org, shift, volunteer)
+        guest = await _member(db_session, org, "riley")
+
+        rsvp, error = await self._respond(db_session, org, event, guest)
+
+        assert error is None, error
+        assert rsvp.status == RSVPStatus.GOING
+        crew = await _rsvp(db_session, event, volunteer)
+        assert crew.status == RSVPStatus.GOING
+        assert crew.is_volunteer is True
+
+    async def test_claiming_a_role_frees_the_seat_for_the_waitlist(self, db_session):
+        from app.models.event import RSVPStatus
+
+        org, _officer, event, shift = await self._capped(db_session)
+        first = await _member(db_session, org, "jordan")
+        second = await _member(db_session, org, "riley")
+        await self._respond(db_session, org, event, first)
+        waiting, _ = await self._respond(db_session, org, event, second)
+        assert waiting.status == RSVPStatus.WAITLISTED
+
+        await TestVolunteersAreGoing()._seat(db_session, org, shift, first)
+
+        await db_session.refresh(waiting)
+        assert waiting.status == RSVPStatus.GOING
+
+    async def test_giving_the_role_up_unmarks_them(self, db_session):
+        from app.models.event import RSVPStatus
+        from app.services.scheduling_service import SchedulingService
+
+        org, _officer, event, shift = await self._capped(db_session)
+        volunteer = await _member(db_session, org, "jordan")
+        assignment = await TestVolunteersAreGoing()._seat(
+            db_session, org, shift, volunteer
+        )
+        assert (await _rsvp(db_session, event, volunteer)).is_volunteer is True
+
+        ok, error = await SchedulingService(db_session).delete_assignment(
+            uuid.UUID(assignment.id), org.id
+        )
+        assert ok, error
+
+        rsvp = await _rsvp(db_session, event, volunteer)
+        await db_session.refresh(rsvp)
+        assert rsvp.status == RSVPStatus.NOT_GOING
+        assert rsvp.is_volunteer is False
+
+    async def test_a_volunteers_guests_must_fit_and_are_never_waitlisted(
+        self, db_session
+    ):
+        from app.models.event import RSVPStatus
+
+        org, _officer, event, shift = await self._capped(db_session)
+        volunteer = await _member(db_session, org, "jordan")
+        await TestVolunteersAreGoing()._seat(db_session, org, shift, volunteer)
+        audience = await _member(db_session, org, "riley")
+        await self._respond(db_session, org, event, audience)
+
+        rsvp, error = await self._respond(db_session, org, event, volunteer, guests=1)
+
+        assert rsvp is None
+        assert error is not None
+        assert "room for 0 more guests" in error
+        crew = await _rsvp(db_session, event, volunteer)
+        await db_session.refresh(crew)
+        assert crew.status == RSVPStatus.GOING
+        assert crew.guest_count == 0
+
+    async def test_the_capacity_figure_leaves_the_crew_out(self, db_session):
+        org, _officer, event, shift = await self._capped(db_session, max_attendees=4)
+        volunteer = await _member(db_session, org, "jordan")
+        await TestVolunteersAreGoing()._seat(db_session, org, shift, volunteer)
+        audience = await _member(db_session, org, "riley")
+        await self._respond(db_session, org, event, audience)
+
+        stats = await EventService(db_session).get_event_stats(event.id, org.id)
+
+        assert stats.going_count == 2
+        assert stats.capacity_percentage == 25.0

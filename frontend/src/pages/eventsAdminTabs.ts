@@ -43,12 +43,17 @@ export const EVENTS_ADMIN_TABS: AdminHubCardTab<EventsAdminTab>[] = [
     icon: CalendarPlus,
   },
   { id: 'past_events', label: 'Past Events', description: 'Events that have already happened', icon: History },
-  { id: 'requests', label: 'Requests', description: 'Community requests for outreach events', icon: Inbox },
+  {
+    id: 'requests',
+    label: 'Outreach Requests',
+    description: 'Requests from the community for outreach events',
+    icon: Inbox,
+  },
   { id: 'analytics', label: 'QR Code Analytics', description: 'Check-ins by QR code, device and error', icon: QrCode },
   {
     id: 'community',
-    label: 'Community Engagement',
-    description: 'How far public outreach events reach',
+    label: 'Outreach Impact',
+    description: 'What community outreach reached, and what it took',
     icon: Megaphone,
   },
   {
@@ -104,7 +109,7 @@ export const EVENTS_ADMIN_AREAS: EventsAdminArea[] = [
   {
     id: 'outreach',
     label: 'Community Outreach',
-    description: 'Requests from the public, and how far outreach reaches',
+    description: 'Requests from the community, outreach events, and their impact',
     icon: Megaphone,
     destinations: [tabById('requests'), tabById('community'), tabById('apparatus_events')],
   },

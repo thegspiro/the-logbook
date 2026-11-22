@@ -114,7 +114,7 @@ describe('CommunityEngagementPrintPage', () => {
   it('heads the page with the department, the period and its dates', async () => {
     renderPage();
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Community Engagement Summary' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Outreach Impact Summary' })).toBeInTheDocument();
     expect(await screen.findByText('Oakville Fire Department')).toBeInTheDocument();
     expect(screen.getByText('This year · January 1, 2026 – November 20, 2026')).toBeInTheDocument();
     expect(getCommunityEngagement).toHaveBeenCalledWith('year');
@@ -195,7 +195,7 @@ describe('CommunityEngagementPrintPage', () => {
     getBranding.mockRejectedValue(new Error('offline'));
     renderPage();
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Community Engagement Summary' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Outreach Impact Summary' })).toBeInTheDocument();
     expect(screen.queryByText('Oakville Fire Department')).not.toBeInTheDocument();
   });
 });

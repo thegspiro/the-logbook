@@ -6327,12 +6327,16 @@ class SchedulingService:
             )
             if not is_outreach:
                 return
-            from app.services.event_staffing_service import sync_volunteer_rsvps
+            from app.services.event_staffing_service import (
+                promote_after_sync,
+                sync_volunteer_rsvps,
+            )
 
-            await sync_volunteer_rsvps(
+            freed_event_id = await sync_volunteer_rsvps(
                 self.db, str(shift_id), str(organization_id), removed_user_ids
             )
             await self.db.commit()
+            await promote_after_sync(self.db, freed_event_id, str(organization_id))
         except Exception as e:
             await self.db.rollback()
             logger.warning(

@@ -1,7 +1,7 @@
 """The morning-after reminder to record an outreach event's guest headcount.
 
 Run daily by the ``guest_headcount_reminders`` task. An outreach event — by
-the same rule the Community Engagement report counts (``outreach_event_clause``,
+the same rule the Outreach Impact report counts (``outreach_event_clause``,
 pitfall #29) — that ended before today on the department's calendar, within
 the last ``LOOKBACK_DAYS``, with no guest headcount recorded, gets one reminder:
 an email and a bell notification linking to its event page.
@@ -213,7 +213,7 @@ class GuestHeadcountReminderService:
                 subject=f"Record the guest headcount for {event.title}",
                 message=(
                     f'"{event.title}" has ended with no guest headcount. Enter '
-                    "how many people attended so the Community Engagement "
+                    "how many people attended so the Outreach Impact "
                     "report counts them."
                 ),
                 action_url=f"/events/{event.id}",

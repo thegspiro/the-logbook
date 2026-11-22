@@ -16,13 +16,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints import zeffy as endpoints
-from app.models.finance import DuesFrequency, DuesSchedule
+from app.models.finance import DuesFrequency, DuesSchedule, DuesStatus
 from app.models.grant import CampaignType, Donation, FundraisingCampaign
 from app.models.integration import Integration
 from app.models.zeffy import ZeffyLinkTarget, ZeffyPaymentState
-from app.schemas.zeffy import ZeffyLinkUpsert, ZeffyPaymentResponse
+from app.schemas.zeffy import ZeffyDuesConfirm, ZeffyLinkUpsert, ZeffyPaymentResponse
 from app.services.zeffy_sync_service import ZeffySyncService
-from tests.test_zeffy_sync_service import PAID, _org, zeffy_payment
+from tests.test_zeffy_sync_service import (
+    PAID,
+    _dues,
+    _link,
+    _member,
+    _org,
+    zeffy_payment,
+)
 
 pytestmark = [pytest.mark.integration]
 
@@ -279,3 +286,129 @@ class TestStatusAndPayments:
             state=None, limit=50, offset=0, db=db_session, current_user=user
         )
         assert listing.total == 0
+
+
+class TestConfirmDues:
+    """ADV2-11: a held membership payment, and the treasurer's confirmation."""
+
+    async def _held(self, db_session, org_id, user_id):
+        member_id = await _member(db_session, org_id, "dana@fd.test")
+        schedule, dues = await _dues(db_session, org_id, user_id, member_id)
+        await _link(db_session, org_id, ZeffyLinkTarget.DUES_SCHEDULE, schedule.id)
+        await ZeffySyncService(db_session).record_payment(
+            org_id, "pay_1", zeffy_payment(amount=15000, email="dana@fd.test")
+        )
+        return member_id, dues
+
+    async def test_the_list_marks_what_a_treasurer_can_confirm(self, db_session, scene):
+        org_id, user_id, user = scene
+        await self._held(db_session, org_id, user_id)
+        await ZeffySyncService(db_session).record_payment(
+            org_id, "pay_2", zeffy_payment("pay_2", campaign_id="camp_other")
+        )
+
+        listing = await endpoints.list_zeffy_payments(
+            state=None, limit=50, offset=0, db=db_session, current_user=user
+        )
+
+        flags = {
+            i.zeffy_payment_id: i.awaiting_dues_confirmation for i in listing.items
+        }
+        assert flags == {"pay_1": True, "pay_2": False}
+        assert listing.model_dump(by_alias=True)["items"][0].keys() >= {
+            "awaitingDuesConfirmation"
+        }
+
+    async def test_the_match_suggests_the_email_and_lists_open_dues(
+        self, db_session, scene
+    ):
+        org_id, user_id, user = scene
+        member_id, dues = await self._held(db_session, org_id, user_id)
+
+        match = await endpoints.get_zeffy_dues_match(
+            "pay_1", db=db_session, current_user=user
+        )
+
+        assert match.net_amount == Decimal("150.00")
+        assert match.suggested_user_id == member_id
+        assert [(c.user_id, c.member_dues_id, c.balance) for c in match.candidates] == [
+            (member_id, dues.id, Decimal("120.00"))
+        ]
+        assert "dana@fd.test" not in str(match.model_dump())
+
+    async def test_an_overpayment_without_the_choice_is_400_and_moves_nothing(
+        self, db_session, scene
+    ):
+        org_id, user_id, user = scene
+        member_id, dues = await self._held(db_session, org_id, user_id)
+
+        with pytest.raises(HTTPException) as caught:
+            await endpoints.confirm_zeffy_dues_payment(
+                "pay_1",
+                ZeffyDuesConfirm(user_id=member_id),
+                db=db_session,
+                current_user=user,
+            )
+
+        assert caught.value.status_code == 400
+        await db_session.refresh(dues)
+        assert dues.amount_paid == Decimal("0.00")
+
+    async def test_confirming_credits_the_dues_and_is_audited(self, db_session, scene):
+        org_id, user_id, user = scene
+        member_id, dues = await self._held(db_session, org_id, user_id)
+
+        with patch.object(endpoints, "log_audit_event") as audit:
+            response = await endpoints.confirm_zeffy_dues_payment(
+                "pay_1",
+                ZeffyDuesConfirm(user_id=member_id, excess_as_donation=True),
+                db=db_session,
+                current_user=user,
+            )
+
+        assert response.state == ZeffyPaymentState.APPLIED
+        assert response.member_dues_id == dues.id
+        await db_session.refresh(dues)
+        assert dues.status == DuesStatus.PAID
+        audit.assert_called_once()
+        kwargs = audit.call_args.kwargs
+        assert kwargs["event_type"] == "zeffy_dues_payment_confirmed"
+        assert kwargs["user_id"] == user_id
+        assert kwargs["event_data"]["target_user_id"] == member_id
+        assert kwargs["event_data"]["excess_as_donation"] is True
+
+    async def test_a_second_confirmation_is_409(self, db_session, scene):
+        org_id, user_id, user = scene
+        member_id, _ = await self._held(db_session, org_id, user_id)
+        body = ZeffyDuesConfirm(user_id=member_id, excess_as_donation=True)
+        with patch.object(endpoints, "log_audit_event"):
+            await endpoints.confirm_zeffy_dues_payment(
+                "pay_1", body, db=db_session, current_user=user
+            )
+
+            with pytest.raises(HTTPException) as caught:
+                await endpoints.confirm_zeffy_dues_payment(
+                    "pay_1", body, db=db_session, current_user=user
+                )
+
+        assert caught.value.status_code == 409
+
+    async def test_another_departments_payment_is_404(self, db_session, scene):
+        org_id, user_id, user = scene
+        other_org = await _org(db_session)
+        await ZeffySyncService(db_session).record_payment(
+            other_org, "pay_x", zeffy_payment("pay_x")
+        )
+
+        for call in (
+            endpoints.get_zeffy_dues_match("pay_x", db=db_session, current_user=user),
+            endpoints.confirm_zeffy_dues_payment(
+                "pay_x",
+                ZeffyDuesConfirm(user_id=user_id),
+                db=db_session,
+                current_user=user,
+            ),
+        ):
+            with pytest.raises(HTTPException) as caught:
+                await call
+            assert caught.value.status_code == 404

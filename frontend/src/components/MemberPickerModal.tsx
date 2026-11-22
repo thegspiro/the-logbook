@@ -37,6 +37,24 @@ function memberDisplayName(m: MemberInventorySummary): string {
   return displayNameOf(m) || m.username;
 }
 
+/**
+ * What the member holds, by kind, in the Members page's words ("1 permanent ·
+ * 2 issued"). The total adds assignments, loans and issued pool units, so
+ * calling it "items assigned" told a quartermaster that two boxes of gloves
+ * issued from a pool were two assigned items (workflow review W40-9).
+ */
+function holdingsSummary(m: MemberInventorySummary): string {
+  const parts: Array<[number, string]> = [
+    [m.permanent_count, 'permanent'],
+    [m.checkout_count, 'checked out'],
+    [m.issued_count, 'issued'],
+  ];
+  return parts
+    .filter(([count]) => count > 0)
+    .map(([count, label]) => `${count} ${label}`)
+    .join(' · ');
+}
+
 export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
   isOpen,
   onClose,
@@ -219,11 +237,7 @@ export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
                         <span className="text-theme-text-muted text-xs">#{m.membership_number}</span>
                       )}
                     </div>
-                    {m.total_items > 0 && (
-                      <p className="text-theme-text-muted text-xs">
-                        {m.total_items} item{m.total_items !== 1 ? 's' : ''} assigned
-                      </p>
-                    )}
+                    {m.total_items > 0 && <p className="text-theme-text-muted text-xs">{holdingsSummary(m)}</p>}
                   </div>
                 </button>
               ))}

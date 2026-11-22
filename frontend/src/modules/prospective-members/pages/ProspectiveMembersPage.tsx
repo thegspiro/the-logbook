@@ -1536,11 +1536,10 @@ export const ProspectiveMembersPage: React.FC = () => {
                         >
                           {applicant.withdrawn_at ? formatDate(applicant.withdrawn_at, tz) : '—'}
                         </td>
-                        <td
-                          data-label="Reason"
-                          className="text-theme-text-muted table-col-tertiary max-w-[200px] truncate p-3 text-sm"
-                        >
-                          {applicant.withdrawal_reason ?? '—'}
+                        <td data-label="Reason" className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                          <div className="max-w-[200px] truncate" title={applicant.withdrawal_reason ?? undefined}>
+                            {applicant.withdrawal_reason ?? '—'}
+                          </div>
                         </td>
                         <td data-label="Actions" className="p-3">
                           <div className="flex items-center gap-2">
