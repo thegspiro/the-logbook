@@ -1822,6 +1822,7 @@ class SecurityMonitoringMiddleware:
         "/api/v1/training/module-config/my-training/export",
         "/api/v1/training/reports/export",
         "/api/v1/training/skills-testing/tests/export/csv",
+        "/api/v1/users/leave-requests/export",
         "/api/v1/users/me/data-export",
     }
     EXPORT_ENDPOINT_TEMPLATES = (
