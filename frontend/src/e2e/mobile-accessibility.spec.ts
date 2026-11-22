@@ -319,17 +319,15 @@ test.describe('mobile accessibility', () => {
       // in measured 42.4 min (#4269, run 43444576216), so 2x is 85.
       //
       //
-      // Split into PARTS tests on 2026-11-19. The whole pass was then taking
-      // 55-72 minutes (its job on four runs that day), so a seventh is about
-      // 10 at worst. Slices are not equal in cost: cut in four and run
-      // locally, the slowest part took more than 1.1x the fastest. So the
-      // budget is 24 minutes rather than a flat 2x of 10. It is an estimate
-      // from the whole; replace it with measured per-part times once CI has
-      // produced some.
+      // Split into PARTS tests on 2026-11-19, with a 24-minute budget
+      // estimated from the whole. Measured since: 3.7-7.1 minutes a part over
+      // three CI runs of each part on 2026-11-21 and 22 (part 5 the slowest),
+      // about 36 minutes for all seven where the undivided test took 55-72.
+      // 2x the slowest is 14.2, so 15.
       //
       // The job cap in ci.yml is derived from this number; re-derive it with
       // any change here. Add a sample before narrowing either.
-      test.setTimeout(1_440_000);
+      test.setTimeout(900_000);
 
       // Contrast is measured on the settled page, not mid-animation. `EmptyState`
       // fades in over one second (`animate-fade-in`, opacity 0 -> 1) and the audit

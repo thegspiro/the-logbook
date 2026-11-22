@@ -74,9 +74,15 @@ const fingerprintOf = (m: Measurement) => `${m.textLength}:${m.totalTargets}`;
  * Changing it moves the `@sweep` test count that ci.yml's matrix is derived
  * from.
  */
-const PARTS = 2;
+const PARTS = 4;
 
 test.describe('mobile presentation', () => {
+  // No retries, as in the other two sweeps. A part that runs out its budget
+  // would otherwise run twice more, and three budgets in one leg is past the
+  // job cap: the timeout's own report was replaced by a cancelled job on
+  // 2026-11-22. A pass on a retry fails the job anyway (failOnFlakyTests).
+  test.describe.configure({ retries: 0 });
+
   for (let part = 0; part < PARTS; part++) {
     const routes = routesInPart(part, PARTS);
     // The route filter in mobile-routes.ts can leave a slice empty.
@@ -101,10 +107,16 @@ test.describe('mobile presentation', () => {
       // min on both of #4267's runs once the finance screens joined; the nine
       // grants screens add ~5% more, so ~16.2 min, and 2x that is 33.
       //
-      // Split into PARTS tests on 2026-11-19, when the whole pass was an
-      // 18-minute CI job: half is about 9 minutes, and 2x that is 18. An
-      // estimate from the whole, to be replaced by measured per-part times.
-      test.setTimeout(1_080_000);
+      // Split into PARTS tests on 2026-11-19, as two halves budgeted at 18
+      // minutes from an estimate that had this pass at 18 minutes whole. It
+      // was nearer 28: over eight CI runs of 2026-11-21 and 22 the first half
+      // took 11.1-12.9 minutes and the second 15.1-16.8, and the second then
+      // timed out at its budget twice in one job (run 44940079030), which the
+      // retries turned into a job timeout. Cut in four on 2026-11-22, so a
+      // part is about a quarter of 28, 7 minutes, and at most about 10 if the
+      // heavier half splits unevenly; 2x that is 20. Still derived from the
+      // halves: replace it with measured per-part times.
+      test.setTimeout(1_200_000);
       await page.setViewportSize(PHONE);
       // The fixture user has no permissions by default (`signIn` sets
       // `permissions: []`, overriding TEST_USER's list), so a manager-gated route
