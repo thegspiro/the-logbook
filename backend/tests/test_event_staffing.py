@@ -586,3 +586,65 @@ class TestVolunteersAreCrew:
 
         assert stats.going_count == 2
         assert stats.capacity_percentage == 25.0
+
+
+class TestTheSheetAMemberSees:
+    """Any member can sign up from the event page (2026-11-22): the detail
+    response carries the sheet's roles and the caller's own seat, and nobody
+    else's name."""
+
+    async def _view(self, db, org, event, user):
+        from app.services.event_staffing_service import member_signup_sheet
+
+        return await member_signup_sheet(db, event, org, str(user.id))
+
+    async def test_no_sheet_means_nothing_to_sign_up_for(self, db_session):
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        assert await self._view(db_session, org, event, officer) is None
+
+    async def test_a_member_sees_the_roles_and_their_own_seat(self, db_session):
+        from app.services.scheduling_service import SchedulingService
+
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        await _open(db_session, officer, event, ("educator", 2))
+        shift = await _sheet(db_session, event)
+        jordan = await _member(db_session, org, "jordan")
+        riley = await _member(db_session, org, "riley")
+
+        view = await self._view(db_session, org, event, riley)
+        assert view is not None
+        assert view["shift_id"] == str(shift.id)
+        assert [(r["role"], r["remaining"]) for r in view["roles"]] == [("educator", 2)]
+        assert view["signed_up"] is False
+
+        _, error = await SchedulingService(db_session).create_assignment(
+            org.id,
+            shift.id,
+            {
+                "user_id": jordan.id,
+                "position": "volunteer",
+                "outreach_role": "educator",
+            },
+            jordan.id,
+        )
+        assert error is None, error
+
+        riley_view = await self._view(db_session, org, event, riley)
+        assert riley_view["roles"][0]["remaining"] == 1
+        assert riley_view["signed_up"] is False
+        assert "volunteers" not in riley_view
+        assert "Jordan" not in str(riley_view)
+
+        jordan_view = await self._view(db_session, org, event, jordan)
+        assert jordan_view["signed_up"] is True
+        assert jordan_view["my_role_label"] == "Educator"
+
+    async def test_a_cancelled_event_offers_no_signup(self, db_session):
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        await _open(db_session, officer, event, ("educator", 1))
+        event.is_cancelled = True
+        await db_session.flush()
+        assert await self._view(db_session, org, event, officer) is None

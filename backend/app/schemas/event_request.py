@@ -510,6 +510,9 @@ class EventRequestResponse(UTCResponseBase):
     reviewer_notes: Optional[str] = None
     decline_reason: Optional[str] = None
     task_completions: Optional[Dict[str, Any]] = None
+    # Task id -> how it ticks itself, for each checklist task the request's
+    # state decides (AUTOMATIC_TASK_HINTS). A coordinator cannot toggle these.
+    automatic_tasks: Dict[str, str] = {}
     event_id: Optional[str] = None
     event_date: Optional[datetime] = None
     event_end_date: Optional[datetime] = None
