@@ -337,3 +337,51 @@ describe('PoolItemsPage', () => {
     expect(mockBulkIssueFromPool.mock.calls[0]?.[1]).toEqual([{ user_id: 'u-1', quantity: 1 }]);
   });
 });
+
+// INV2-8: after an issue or return the page dropped the item's cached
+// issuances but left the card open, and the list only loads when a card is
+// opened, so the open card read "No active issuances" and the member's other
+// issuances could not be returned until it was closed and opened again.
+describe('PoolItemsPage after a return', () => {
+  const issuance = (id: string, quantity: number) => ({
+    id,
+    organization_id: 'org-1',
+    item_id: 'p-1',
+    user_id: 'u-1',
+    quantity_issued: quantity,
+    issued_at: '2026-09-29T19:46:04Z',
+    is_returned: false,
+    created_at: '2026-09-29T19:46:04Z',
+    updated_at: '2026-09-29T19:46:04Z',
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetItems.mockReset();
+    mockGetItems.mockResolvedValue({ items: [poolItem()], total: 1 });
+    mockGetCategories.mockResolvedValue([category]);
+    mockGetLowStockItems.mockResolvedValue([]);
+    mockGetMembersSummary.mockResolvedValue({ members: [member], total: 1 });
+    mockGetItemIssuances.mockReset();
+    mockGetItemIssuances
+      .mockResolvedValueOnce([issuance('iss-1', 3), issuance('iss-2', 1)])
+      .mockResolvedValue([issuance('iss-2', 1)]);
+    mockReturnToPool.mockReset();
+    mockReturnToPool.mockResolvedValue({ message: 'ok' });
+  });
+
+  it('keeps the open card listing what is still issued', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<PoolItemsPage />);
+    await screen.findByText('Dept Polo');
+    await user.click(screen.getByRole('button', { name: 'Issuances of Dept Polo' }));
+    await user.click(await screen.findByRole('button', { name: 'Return 3 from Jane Doe' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Return to Pool' });
+    await user.click(within(dialog).getByRole('button', { name: 'Return' }));
+
+    await waitFor(() => expect(mockReturnToPool).toHaveBeenCalled());
+    expect(await screen.findByRole('button', { name: 'Return 1 from Jane Doe' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Return 3 from Jane Doe' })).not.toBeInTheDocument();
+  });
+});

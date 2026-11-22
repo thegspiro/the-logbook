@@ -1607,23 +1607,59 @@ class TestCheckRequirementProgressZeroTarget:
         assert progress.percentage_complete == 0.0
 
 
-class TestForecastPct:
-    """The compliance forecast's per-member percentages (TR4-4)."""
+class TestClassifyAverage:
+    """A department forecast average, by the department's thresholds and
+    threshold type (owner direction 2026-11-21)."""
 
-    def test_member_nothing_grades_has_no_percentage(self):
-        from app.services.training_enhancement_service import _forecast_pct
+    @staticmethod
+    def _grading(**kwargs):
+        from app.services.training_compliance import ComplianceGrading
 
-        # Was 100 for every horizon, which the compliance officer dashboard
-        # then averaged into the department's "current" figure.
-        assert _forecast_pct(0, 0, 0) is None
-        assert _forecast_pct(0, 0, 2) is None
+        return ComplianceGrading(**kwargs)
 
-    def test_expiring_certifications_lower_the_forecast(self):
-        from app.services.training_enhancement_service import _forecast_pct
+    def test_no_graded_member_is_not_applicable(self):
+        grading = self._grading()
+        assert grading.classify_average([]) == ("not_applicable", None)
+        assert grading.classify_average([(None, "not_applicable")]) == (
+            "not_applicable",
+            None,
+        )
 
-        assert _forecast_pct(2, 4, 0) == 50.0
-        assert _forecast_pct(2, 4, 1) == 25.0
-        assert _forecast_pct(2, 4, 3) == 0
+    def test_percentage_compares_the_mean(self):
+        grading = self._grading(compliant_threshold=100, at_risk_threshold=75)
+        assert grading.classify_average(
+            [(90.0, "at_risk"), (70.0, "non_compliant"), (None, "not_applicable")]
+        ) == ("at_risk", 80.0)
+        assert grading.classify_average([(100.0, "compliant")]) == (
+            "compliant",
+            100.0,
+        )
+        assert grading.classify_average([(50.0, "non_compliant")]) == (
+            "non_compliant",
+            50.0,
+        )
+
+    def test_the_rounded_mean_is_the_figure_compared(self):
+        # 74.95 rounds to 75.0, which is shown; a displayed 75.0 must not
+        # read non-compliant against a 75 bar.
+        grading = self._grading(compliant_threshold=100, at_risk_threshold=75)
+        assert grading.classify_average(
+            [(74.9, "non_compliant"), (75.0, "at_risk")]
+        ) == ("at_risk", 75.0)
+
+    def test_all_required_is_compliant_only_when_every_member_is(self):
+        grading = self._grading(threshold_type="all_required", at_risk_threshold=75)
+        assert grading.classify_average(
+            [(100.0, "compliant"), (100.0, "compliant")]
+        ) == ("compliant", 100.0)
+        # 2499 of 2500 rounds to 100.0 but is not every requirement met.
+        assert grading.classify_average([(100.0, "compliant"), (100.0, "at_risk")]) == (
+            "at_risk",
+            100.0,
+        )
+        assert grading.classify_average(
+            [(100.0, "compliant"), (40.0, "non_compliant")]
+        ) == ("non_compliant", 70.0)
 
 
 # =====================================================

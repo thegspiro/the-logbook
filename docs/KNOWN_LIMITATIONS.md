@@ -1238,9 +1238,10 @@ as the record of what the integration leaves to the treasurer:
 - **A refund made more than 7 days after the sale arrives only by webhook.**
   Zeffy's payment list has no "changed since" filter, so the hourly sync cannot
   find it. Departments without the webhook will not see such refunds.
-- **Membership payments are matched to members by email only.** A payer who
-  used a different address than the one on their profile is left **No member
-  match** for the treasurer.
+- ~~**Membership payments are matched to members by email only.**~~
+  Superseded 2026-11-21 (ADV2-11): no membership payment is credited on the
+  payer's email. Each waits as **Awaiting confirmation** until a treasurer
+  chooses the member, and the email only pre-selects one.
 
 ## Onboarding — Two Module Switches the Setup Wizard Offers or Sets Without a Reader (2026-10-31)
 
@@ -1652,8 +1653,16 @@ fix changes a workflow some departments rely on, so the owner decides:
   self-access guard hide their file (ADV2-10).** Refusing a member's email
   covers half of it. The rest turns on whether self-detection should trust
   fields the applicant can edit.
-- **A Zeffy dues payment credits whichever member's email the payer typed
-  (ADV2-11).** Overpayment is recorded as that member's donation.
+- ~~**A Zeffy dues payment credits whichever member's email the payer typed
+  (ADV2-11).**~~ ✅ Resolved 2026-11-21 (owner: hold as unmatched until a
+  treasurer confirms). A membership payment is recorded as **Awaiting
+  confirmation**, and the payer's email only suggests a member. A
+  `finance.manage` holder chooses any current member with open dues on the
+  schedule and decides whether an overpayment is recorded as that member's
+  donation. Payments credited before the change stay as they are. An
+  unconfirmed payment is no longer credited on its own when dues are generated
+  later, so a department now confirms each one. See
+  `docs/ZEFFY_INTEGRATION.md`.
 
 ## Authentication & Security
 
@@ -1758,13 +1767,6 @@ The owner decisions of 2026-11-20 (staff-entered requests, calendar-date
 preferences, event signup sheets, volunteer RSVPs, close-out) left these edges
 for a later decision rather than guessing at them:
 
-- **A series cancel does not stand an event's own signup sheet down.**
-  Cancelling one event, or deleting it, cancels its sheet and tells the crew;
-  `cancel_event_series` cancels each occurrence with a deferred commit, and the
-  stand-down (`cancel_shift` commits on its own) is not run on that path. Only
-  an outreach event an officer created directly can own a sheet, and a
-  recurring one is unusual, but a cancelled series leaves its sheets on the
-  schedule until someone cancels them.
 - **A seat moved by a shift swap does not update the event's RSVPs.** Volunteer
   RSVPs follow a seat that is created, edited, declined or removed through
   `SchedulingService`; a swap trades the seat on another path. The next seat
@@ -1773,9 +1775,13 @@ for a later decision rather than guessing at them:
 - **An event's own signup sheet has no "Email the membership" call.** A
   request's sheet does (`send_volunteer_call`, which is written around a
   request's details). Members find an event's sheet on Open Shifts.
-- **A volunteer RSVP skips the event's capacity and waitlist.** The volunteers
-  are the crew, not the audience, so they are given a going RSVP directly. An
-  outreach event with a `max_attendees` set counts them toward it.
+
+Closed on 2026-11-21: a series cancel or delete now stands down every
+occurrence's own sheet, as a single cancel or delete does; and a volunteer's
+RSVP is marked `is_volunteer` and takes no attendee seat (owner decision,
+2026-11-21 — crew, not audience; the sheet's role counts cap the crew). Guests
+a volunteer brings still take seats, and must fit when added, because a
+volunteer is never waitlisted off the crew list.
 
 ## Outreach Requests — Two Deliberate Choices in the Public Pipeline (2026-09-09)
 
@@ -7334,12 +7340,54 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   Telling them again needs a recorded "met again" date to key on, which the
   task does not keep. Tests: `tests/test_compliance_member_notices.py`.
 - **The Compliance Officer dashboard's forecast summary cards keep fixed
-  colour bands — open.** The department "Current" average card colours green
-  at 80% or more and yellow below, and the 30/60/90 average cards and every
-  member's 30/60/90 badge keep their 80% / 50% bands. These are averages and
-  estimates, not a member's standing, so the 2026-11-20 change colours only
-  each member's current figure by its standing; whether the averages should
-  take the department's thresholds is not decided.
+  colour bands — ✅ resolved 2026-11-21 (owner direction: follow the
+  department's and the member's thresholds).** Each member's 30/60/90-day
+  projection now carries a standing (`forecast_30_standing`, …), classified
+  by the member's own grading exactly as `current_standing` is, so a figure
+  and its colour come from one `ComplianceGrading.classify` call. The four
+  department average cards are computed server-side by
+  `ComplianceGrading.classify_average`: the mean of the graded members'
+  figures, rounded to one decimal, classified by the department's thresholds
+  and threshold type (never a profile's). Under `all_required` an average is
+  compliant only when every graded member is compliant at that horizon,
+  otherwise at risk when the mean reaches the at-risk threshold, otherwise
+  non-compliant (owner decision 2026-11-21, which kept the rule first
+  shipped as a default; the alternatives were a 100% bar on the rounded mean,
+  which a member at 99.96% could fake, and colouring by the share of
+  compliant members, which changes what the card measures). Both the
+  dashboard and the Training Enhancements forecast colour with
+  `STANDING_TEXT_COLORS`. The threshold ladder is written once
+  (`_standing_for_pct`) and shared by the member and the average. The
+  entry's "80% / 50%" was 80% / 60% for the average cards. `GET
+/training/reports/compliance-forecast` now returns `{members, averages}`
+  instead of a bare list, so the D10 entry's "response shapes apart from the
+  added forecast field" no longer holds for it. A profiled member can read
+  green beside a department average that reads red: the member is measured
+  against their profile, the average against the department. Tests:
+  `TestClassifyAverage` / `TestProjectedStanding` in
+  `tests/test_training_compliance.py`, `TestForecastStandingsAndAverages` in
+  `tests/test_officer_compliance_views_profiles.py`, and the forecast cases
+  in `ComplianceOfficerDashboard.test.tsx` and
+  `TrainingEnhancementsTab.test.tsx`.
+- **The compliance forecast's projection charges every certificate expiring
+  in the window — ✅ fixed (owner decision 2026-11-21: re-grade at today +
+  N).** The 30/60/90-day estimate subtracted one met requirement for each
+  completed record whose expiry fell in the window, including a certificate
+  no graded requirement reads and a superseded record whose renewal already
+  exists, so on a default install a fully compliant member with three
+  requirements and one unrelated certificate expiring in 20 days read 66.7%
+  non-compliant at 30 days. Each projection is now
+  `training_compliance.grade_members` — the matrix's grader — run as of
+  today + 30, 60 and 90 days on the records already logged, by the member's
+  own thresholds. Ungraded and superseded certificates cost nothing, and
+  lapses that are not certificate expiries are now charged: a rolling window
+  letting old hours fall out, a catch-up period ending, and a calendar period
+  rolling into a new one with nothing logged in it yet (viewed on 21
+  November, a member who has met this year's annual requirement reads it unmet
+  at 60 and 90 days, because those days fall in next year's period).
+  The projections assume nothing new is logged; the screens now say so. The
+  "expiring certifications" list and count are unchanged and informational.
+  Tests: `tests/test_compliance_forecast_horizons.py`.
 - **A requirement with zero currently-applicable members renders as a
   failing 0% (CMP4-4, LOW) — ✅ fixed 2026-09-29, workflow review W29-4.**
   `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`
@@ -11419,3 +11467,58 @@ being stored.
 **The decision:** build the reader (validate values on apparatus create and
 update, migrate values when a key is renamed) and a management screen, or
 retire the definitions.
+
+## Inventory — Five Decisions From App Review B3 Pass 6 (2026-11-21)
+
+Recorded rather than changed, because each alters what an officer sees or
+needs a schema. Code references and failure scenarios are in
+`docs/app-review/inventory.md` → Pass 6.
+
+### INV2-11 — A lot edit can undo stock drawn while the form was open
+
+Editing a stock lot sends its quantity as an absolute value, and the server
+applies it without checking that the lot still holds what the form loaded. An
+officer correcting only a lot number can therefore put back units a crew drew
+in the meantime, making stock that does not exist issuable.
+
+**The decision:** add an expected-quantity (or version) check that refuses a
+stale edit with a conflict the editor shows, and say how the officer resolves
+it; or send the quantity only when the officer changed it.
+
+### INV2-12 — Stock changes leave no movement record
+
+There is no ledger of stock movements (what changed, by how much, from what to
+what, by whom). A lot's quantity is the only record, so adding, editing or
+deleting a lot, an issue drawing from it and a return crediting it leave no
+trail; only reorder receipts and recalls do.
+
+**The decision:** whether to add a movement ledger, which is a new table and a
+write on every stock-changing path.
+
+### INV2-13 — Retried stock requests apply twice
+
+Recording a delivery, issuing from a pool and a partial return carry no
+idempotency key, so a client retry after a timeout applies the change a second
+time. Receiving against a reorder already does this correctly, with a key the
+database holds unique.
+
+**The decision:** give these requests the same key, which changes the API on
+both sides.
+
+### INV2-14 — An item's quantity and its lots can drift apart
+
+An item that has lots is counted from its lots, but its own quantity can still
+be edited, to no effect. Deleting its last lot switches it back to counting its
+own quantity: the lot's units disappear without a record, and whatever value
+was left in the item's quantity becomes on-hand stock.
+
+**The decision:** refuse a quantity edit on a lot-stocked item, and refuse (or
+warn before) deleting a lot that still holds units.
+
+### INV2-15 — The dashboard's expiring count and the expiring list disagree
+
+The dashboard tile counts lots that have not yet expired and includes recalled
+ones; the list it opens includes lots already expired and applies the
+shelf rule. A lot that expired yesterday is in the list but not in the count.
+
+**The decision:** which rule both should use.

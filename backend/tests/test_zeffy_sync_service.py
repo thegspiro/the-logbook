@@ -45,7 +45,14 @@ from app.models.zeffy import (
     ZeffyPaymentState,
 )
 from app.services.integration_services.zeffy_service import ZeffyRateLimited
-from app.services.zeffy_sync_service import SYNC_WINDOW, ZeffySyncService
+from app.services.zeffy_sync_service import (
+    AWAITING_NO_SUGGESTION,
+    AWAITING_SUGGESTED,
+    NOT_AWAITING,
+    SYNC_WINDOW,
+    ZeffyPaymentNotFound,
+    ZeffySyncService,
+)
 
 pytestmark = [pytest.mark.integration]
 
@@ -547,9 +554,10 @@ class TestEventTickets:
 
 
 class TestMembershipDues:
-    async def test_a_members_payment_is_credited_to_their_open_dues(
-        self, db_session, org
-    ):
+    """A membership payment is held for a treasurer, never credited on the
+    payer's typed email (ADV2-11, owner decision 2026-11-21)."""
+
+    async def test_a_members_payment_is_held_not_credited(self, db_session, org):
         org_id, officer_id = org
         member_id = await _member(db_session, org_id, "dana@fd.test")
         schedule, dues = await _dues(db_session, org_id, officer_id, member_id)
@@ -562,21 +570,33 @@ class TestMembershipDues:
             )
 
         await db_session.refresh(dues)
-        assert (dues.amount_paid, dues.status) == (Decimal("120.00"), DuesStatus.PAID)
-        payments = list(
-            (
-                await db_session.scalars(
-                    select(DuesPayment).where(DuesPayment.member_dues_id == dues.id)
-                )
-            ).all()
+        assert (dues.amount_paid, dues.status) == (
+            Decimal("0.00"),
+            DuesStatus.PENDING,
         )
-        assert [p.transaction_reference for p in payments] == ["zeffy:pay_1"]
-        assert payments[0].recorded_by is None
+        assert await _ledger(db_session, dues.id) == []
         assert row is not None
-        assert row.state == ZeffyPaymentState.APPLIED
-        assert row.member_dues_id == dues.id
+        assert row.state == ZeffyPaymentState.UNMATCHED
+        assert row.state_detail == AWAITING_SUGGESTED
+        assert row.member_dues_id is None
 
-    async def test_a_refund_after_crediting_is_flagged_not_reversed(
+    async def test_an_outsider_overpaying_in_a_members_name_moves_nothing(
+        self, db_session, org
+    ):
+        org_id, officer_id = org
+        member_id = await _member(db_session, org_id, "dana@fd.test")
+        schedule, dues = await _dues(db_session, org_id, officer_id, member_id)
+        await _link(db_session, org_id, ZeffyLinkTarget.DUES_SCHEDULE, schedule.id)
+
+        await ZeffySyncService(db_session).record_payment(
+            org_id, "pay_1", zeffy_payment(amount=500000, email="dana@fd.test")
+        )
+
+        await db_session.refresh(dues)
+        assert dues.amount_paid == Decimal("0.00")
+        assert await _donations(db_session, org_id) == []
+
+    async def test_a_refund_after_confirming_is_flagged_not_reversed(
         self, db_session, org
     ):
         org_id, officer_id = org
@@ -587,6 +607,7 @@ class TestMembershipDues:
         await service.record_payment(
             org_id, "pay_1", zeffy_payment(amount=12000, email="dana@fd.test")
         )
+        await _confirm(service, org_id, member_id, officer_id)
 
         row = await service.record_payment(
             org_id,
@@ -604,7 +625,7 @@ class TestMembershipDues:
         await db_session.refresh(dues)
         assert dues.amount_paid == Decimal("120.00")
 
-    async def test_a_payer_who_is_not_a_member_is_left_unmatched(self, db_session, org):
+    async def test_a_payer_who_is_not_a_member_has_no_suggestion(self, db_session, org):
         org_id, officer_id = org
         member_id = await _member(db_session, org_id, "dana@fd.test")
         schedule, dues = await _dues(db_session, org_id, officer_id, member_id)
@@ -616,10 +637,11 @@ class TestMembershipDues:
 
         assert row is not None
         assert row.state == ZeffyPaymentState.UNMATCHED
+        assert row.state_detail == AWAITING_NO_SUGGESTION
         await db_session.refresh(dues)
         assert dues.amount_paid == Decimal("0.00")
 
-    async def test_a_member_from_another_department_is_not_matched(
+    async def test_a_member_from_another_department_is_not_suggested(
         self, db_session, org
     ):
         org_id, officer_id = org
@@ -635,6 +657,223 @@ class TestMembershipDues:
 
         assert row is not None
         assert row.state == ZeffyPaymentState.UNMATCHED
+        assert row.state_detail == AWAITING_NO_SUGGESTION
+
+    async def test_dues_generated_later_are_not_credited_by_the_hourly_retry(
+        self, db_session, org
+    ):
+        org_id, officer_id = org
+        member_id = await _member(db_session, org_id, "dana@fd.test")
+        schedule, dues = await _dues(db_session, org_id, officer_id, member_id)
+        dues.status = DuesStatus.PAID
+        dues.amount_paid = dues.amount_due
+        await _link(db_session, org_id, ZeffyLinkTarget.DUES_SCHEDULE, schedule.id)
+        service = ZeffySyncService(db_session)
+        await service.record_payment(
+            org_id, "pay_1", zeffy_payment(amount=12000, email="dana@fd.test")
+        )
+        later = MemberDues(
+            organization_id=org_id,
+            dues_schedule_id=schedule.id,
+            user_id=member_id,
+            amount_due=Decimal("120.00"),
+            amount_paid=Decimal("0.00"),
+            status=DuesStatus.PENDING,
+            due_date=dues.due_date + timedelta(days=365),
+        )
+        db_session.add(later)
+        await db_session.flush()
+
+        assert await service.retry_unapplied(org_id) == 0
+
+        await db_session.refresh(later)
+        assert later.amount_paid == Decimal("0.00")
+
+
+async def _ledger(db: AsyncSession, dues_id: str) -> list[DuesPayment]:
+    return list(
+        (
+            await db.scalars(
+                select(DuesPayment).where(DuesPayment.member_dues_id == dues_id)
+            )
+        ).all()
+    )
+
+
+async def _confirm(
+    service: ZeffySyncService,
+    org_id: str,
+    member_id: str,
+    officer_id: str,
+    payment_id: str = "pay_1",
+    excess_as_donation: bool = False,
+) -> ZeffyPayment:
+    return await service.confirm_dues(
+        org_id,
+        payment_id,
+        member_id=member_id,
+        confirmed_by=officer_id,
+        excess_as_donation=excess_as_donation,
+    )
+
+
+class TestTreasurerConfirmsDues:
+    async def test_confirming_credits_the_chosen_members_oldest_open_dues(
+        self, db_session, org
+    ):
+        org_id, officer_id = org
+        member_id = await _member(db_session, org_id, "dana@fd.test")
+        schedule, dues = await _dues(db_session, org_id, officer_id, member_id)
+        await _link(db_session, org_id, ZeffyLinkTarget.DUES_SCHEDULE, schedule.id)
+        service = ZeffySyncService(db_session)
+        await service.record_payment(
+            org_id, "pay_1", zeffy_payment(amount=12000, email="dana@fd.test")
+        )
+
+        row = await _confirm(service, org_id, member_id, officer_id)
+
+        await db_session.refresh(dues)
+        assert (dues.amount_paid, dues.status) == (Decimal("120.00"), DuesStatus.PAID)
+        ledger = await _ledger(db_session, dues.id)
+        assert [(p.transaction_reference, p.recorded_by) for p in ledger] == [
+            ("zeffy:pay_1", officer_id)
+        ]
+        assert row.state == ZeffyPaymentState.APPLIED
+        assert row.member_dues_id == dues.id
+        assert row.applied_amount == Decimal("120.00")
+
+    async def test_the_treasurer_may_choose_a_member_other_than_the_email_match(
+        self, db_session, org
+    ):
+        org_id, officer_id = org
+        payer_id = await _member(db_session, org_id, "parent@fd.test")
+        child_id = await _member(db_session, org_id, "junior@fd.test")
+        schedule, child_dues = await _dues(db_session, org_id, officer_id, child_id)
+        await _link(db_session, org_id, ZeffyLinkTarget.DUES_SCHEDULE, schedule.id)
+        service = ZeffySyncService(db_session)
+        await service.record_payment(
+            org_id, "pay_1", zeffy_payment(amount=12000, email="parent@fd.test")
+        )
+
+        match = await service.dues_match(org_id, "pay_1")
+        assert match.suggested_user_id == payer_id
+        assert [(c.user_id, c.balance) for c in match.candidates] == [
+            (child_id, Decimal("120.00"))
+        ]
+        await _confirm(service, org_id, child_id, officer_id)
+
+        await db_session.refresh(child_dues)
+        assert child_dues.status == DuesStatus.PAID
+
+    async def test_an_overpayment_is_refused_unless_the_treasurer_accepts_it(
+        self, db_session, org
+    ):
+        org_id, officer_id = org
+        member_id = await _member(db_session, org_id, "dana@fd.test")
+        schedule, dues = await _dues(db_session, org_id, officer_id, member_id)
+        await _link(db_session, org_id, ZeffyLinkTarget.DUES_SCHEDULE, schedule.id)
+        service = ZeffySyncService(db_session)
+        await service.record_payment(
+            org_id, "pay_1", zeffy_payment(amount=15000, email="dana@fd.test")
+        )
+
+        with pytest.raises(ValueError, match="more than"):
+            await _confirm(service, org_id, member_id, officer_id)
+        await db_session.refresh(dues)
+        assert dues.amount_paid == Decimal("0.00")
+        assert await _donations(db_session, org_id) == []
+
+        row = await _confirm(
+            service, org_id, member_id, officer_id, excess_as_donation=True
+        )
+
+        await db_session.refresh(dues)
+        assert dues.status == DuesStatus.PAID
+        assert [d.amount for d in await _donations(db_session, org_id)] == [
+            Decimal("30.00")
+        ]
+        assert row.state == ZeffyPaymentState.APPLIED
+
+    async def test_a_treasurer_cannot_confirm_their_own_dues(self, db_session, org):
+        org_id, officer_id = org
+        schedule, dues = await _dues(db_session, org_id, officer_id, officer_id)
+        await _link(db_session, org_id, ZeffyLinkTarget.DUES_SCHEDULE, schedule.id)
+        service = ZeffySyncService(db_session)
+        await service.record_payment(org_id, "pay_1", zeffy_payment(amount=12000))
+
+        with pytest.raises(ValueError, match="own"):
+            await _confirm(service, org_id, officer_id, officer_id)
+        await db_session.refresh(dues)
+        assert dues.amount_paid == Decimal("0.00")
+
+    async def test_a_second_confirmation_changes_nothing(self, db_session, org):
+        org_id, officer_id = org
+        member_id = await _member(db_session, org_id, "dana@fd.test")
+        schedule, dues = await _dues(db_session, org_id, officer_id, member_id)
+        await _link(db_session, org_id, ZeffyLinkTarget.DUES_SCHEDULE, schedule.id)
+        service = ZeffySyncService(db_session)
+        await service.record_payment(
+            org_id, "pay_1", zeffy_payment(amount=6000, email="dana@fd.test")
+        )
+        await _confirm(service, org_id, member_id, officer_id)
+
+        with pytest.raises(ValueError, match=NOT_AWAITING):
+            await _confirm(service, org_id, member_id, officer_id)
+
+        assert len(await _ledger(db_session, dues.id)) == 1
+
+    async def test_a_member_of_another_department_cannot_be_chosen(
+        self, db_session, org
+    ):
+        org_id, officer_id = org
+        member_id = await _member(db_session, org_id, "dana@fd.test")
+        schedule, _ = await _dues(db_session, org_id, officer_id, member_id)
+        await _link(db_session, org_id, ZeffyLinkTarget.DUES_SCHEDULE, schedule.id)
+        other_org = await _org(db_session)
+        outsider = await _member(db_session, other_org, "outsider@fd.test")
+        service = ZeffySyncService(db_session)
+        await service.record_payment(org_id, "pay_1", zeffy_payment(amount=12000))
+
+        with pytest.raises(ValueError, match="current member"):
+            await _confirm(service, org_id, outsider, officer_id)
+
+    async def test_a_member_with_no_open_dues_cannot_be_chosen(self, db_session, org):
+        org_id, officer_id = org
+        member_id = await _member(db_session, org_id, "dana@fd.test")
+        other_id = await _member(db_session, org_id, "other@fd.test")
+        schedule, _ = await _dues(db_session, org_id, officer_id, member_id)
+        await _link(db_session, org_id, ZeffyLinkTarget.DUES_SCHEDULE, schedule.id)
+        service = ZeffySyncService(db_session)
+        await service.record_payment(org_id, "pay_1", zeffy_payment(amount=12000))
+
+        with pytest.raises(ValueError, match="no open dues"):
+            await _confirm(service, org_id, other_id, officer_id)
+
+    async def test_a_payment_not_linked_to_dues_cannot_be_confirmed(
+        self, db_session, org
+    ):
+        org_id, officer_id = org
+        member_id = await _member(db_session, org_id, "dana@fd.test")
+        await _dues(db_session, org_id, officer_id, member_id)
+        campaign = await _campaign(db_session, org_id)
+        await _link(
+            db_session, org_id, ZeffyLinkTarget.FUNDRAISING_CAMPAIGN, campaign.id
+        )
+        service = ZeffySyncService(db_session)
+        await service.record_payment(org_id, "pay_1", zeffy_payment())
+
+        with pytest.raises(ValueError, match=NOT_AWAITING):
+            await _confirm(service, org_id, member_id, officer_id)
+
+    async def test_another_departments_payment_is_not_found(self, db_session, org):
+        org_id, officer_id = org
+        other_org = await _org(db_session)
+        await ZeffySyncService(db_session).record_payment(
+            other_org, "pay_1", zeffy_payment()
+        )
+
+        with pytest.raises(ZeffyPaymentNotFound):
+            await _confirm(ZeffySyncService(db_session), org_id, officer_id, officer_id)
 
 
 # ---------------------------------------------------------------------------
@@ -1000,7 +1239,7 @@ class TestStaleSnapshots:
 
 
 class TestDuesSelection:
-    async def test_two_payments_settle_two_open_dues_rather_than_donating(
+    async def test_two_confirmations_settle_two_open_dues_rather_than_donating(
         self, db_session, org
     ):
         org_id, officer_id = org
@@ -1026,6 +1265,7 @@ class TestDuesSelection:
                 payment_id,
                 zeffy_payment(payment_id, amount=12000, email="dana@fd.test"),
             )
+            await _confirm(service, org_id, member_id, officer_id, payment_id)
 
         await db_session.refresh(first)
         await db_session.refresh(second)
@@ -1039,6 +1279,9 @@ class TestDuesSelection:
         schedule, _ = await _dues(db_session, org_id, officer_id, member_id)
         await _link(db_session, org_id, ZeffyLinkTarget.DUES_SCHEDULE, schedule.id)
         service = ZeffySyncService(db_session)
+        await service.record_payment(
+            org_id, "pay_1", zeffy_payment(amount=12000, email="dana@fd.test")
+        )
         statements = []
         real_scalar = db_session.scalar
 
@@ -1047,9 +1290,7 @@ class TestDuesSelection:
             return await real_scalar(statement, *args, **kwargs)
 
         with patch.object(db_session, "scalar", side_effect=capture):
-            await service.record_payment(
-                org_id, "pay_1", zeffy_payment(amount=12000, email="dana@fd.test")
-            )
+            await _confirm(service, org_id, member_id, officer_id)
 
         dues_reads = [
             s
@@ -1083,34 +1324,25 @@ class TestRetryFairness:
                 zeffy_payment(f"old_{i}", paid_at=PAID - timedelta(days=30)),
             )
 
-        member_id = await _member(db_session, org_id, "late@fd.test")
-        schedule, dues = await _dues(db_session, org_id, officer_id, member_id)
+        # A payment waiting on a link that was saved without its own retry,
+        # which only the hourly pass can settle.
+        waiting = await service.record_payment(
+            org_id, "pay_m", zeffy_payment("pay_m", campaign_id="camp_m")
+        )
+        assert waiting is not None
+        assert waiting.state == ZeffyPaymentState.UNLINKED
         await _link(
             db_session,
             org_id,
-            ZeffyLinkTarget.DUES_SCHEDULE,
-            schedule.id,
+            ZeffyLinkTarget.FUNDRAISING_CAMPAIGN,
+            campaign.id,
             campaign_id="camp_m",
-        )
-        waiting = await service.record_payment(
-            org_id,
-            "pay_m",
-            zeffy_payment(
-                "pay_m", campaign_id="camp_m", amount=12000, email="nobody@fd.test"
-            ),
-        )
-        assert waiting is not None
-        assert waiting.state == ZeffyPaymentState.UNMATCHED
-        await db_session.execute(
-            text("UPDATE users SET email_hash = :h WHERE id = :i"),
-            {"h": email_fingerprint("nobody@fd.test"), "i": member_id},
         )
 
         applied = await service.retry_unapplied(org_id, limit=1)
 
         assert applied == 1
-        await db_session.refresh(dues)
-        assert dues.status == DuesStatus.PAID
+        assert waiting.state == ZeffyPaymentState.APPLIED
 
     async def test_a_batch_that_stays_unmatched_rotates_to_the_back(
         self, db_session, org

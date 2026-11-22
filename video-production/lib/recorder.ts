@@ -95,11 +95,15 @@ interface TapWindow {
 export async function prepare(page: Page): Promise<void> {
   await page.addInitScript(TAP_SCRIPT);
   // A real QR code is never painted, even for the frames before decoyQr()
-  // swaps it: the app's codes encode live links a viewer could scan.
+  // swaps it: the app's codes encode live links a viewer could scan. Not every
+  // screen wraps its code in .qr-container, so the second selector catches any
+  // qrcode.react SVG by the crispEdges path that library draws its modules with.
   await page.addInitScript(() => {
     const hide = () => {
       const style = document.createElement('style');
-      style.textContent = '.qr-container svg:not([data-decoy-qr]) { visibility: hidden !important; }';
+      style.textContent =
+        '.qr-container svg:not([data-decoy-qr]), svg:has(> path[shape-rendering="crispEdges"]):not([data-decoy-qr])' +
+        ' { visibility: hidden !important; }';
       document.head.appendChild(style);
     };
     if (document.head) hide();

@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4541](https://github.com/thegspiro/the-logbook/pull/4541)**
+(branch `claude/security-review-forms-p14` — prior branch names for this
+feature already carry merged PRs, most recently pass 13's PR #4234, so this
+pass uses a `-p14` suffix per CLAUDE.md Pitfall #24): Feature 26 (Forms),
+pass 14 — watchdog pickup (the dedicated `/loop 30m /security-review`
+session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). PR #4520
+(Feature 25, Messaging & notifications, pass 14) merged (`c59bad857`) since
+the last iteration; row 25 marked ✅ below. Real delta since pass 13
+(baseline `8d4915078`, PR #4234): a date/timezone correctness fix on
+Feature 16's (Events & requests) shared `lead_time_error` helper —
+`EventRequest.preferred_date_start`/`preferred_date_end` are `Date` columns,
+and the prior code built a timezone-anchored `datetime` and assigned it into
+them, silently losing the anchoring at the DB boundary — re-verified safe at
+Forms' own call site (`forms_service.py`'s `_parse_request_date`/
+`lead_time_error` call, which now passes the new required `today=
+org_today(org)` keyword correctly), plus a cosmetic `StatGrid` swap in
+`FormResultsPanel.tsx`. **0 fixed, 0 newly flagged.** Full write-up:
+`docs/security-review/FORM-26-forms.md`'s **Pass 14** section.
+
+Row 26 → ✅ (pending this PR's merge); next is Feature 27 (Integrations) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 14, PR #4520, merged), preserved for history</summary>
+
 **PR [#4520](https://github.com/thegspiro/the-logbook/pull/4520)**
 (branch `claude/security-review-messaging-notifications` — first use of
 this branch name, no suffix needed): Feature 25 (Messaging & notifications), pass
@@ -34,8 +59,9 @@ validated in-org before storage. **0 fixed, 0 newly flagged.** Full
 write-up: `docs/security-review/MSG-25-messaging-notifications.md`'s
 **Pass 14** section.
 
-Row 25 → ✅ (pending this PR's merge); next is Feature 26 (Forms) —
-re-check `list_pull_requests` fresh rather than trusting this note.
+Row 25 → ✅ (merged as `c59bad857`); next was Feature 26 (Forms).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 21, PR #4504, merged), preserved for history</summary>
@@ -27352,7 +27378,7 @@ iteration's commit" rule.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 14)                                                                                                                                                                                                             | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (31 routes, added pass 13), `historical_staffing_*.py`                                                                                                                                                                | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ⬜     |
@@ -27421,6 +27447,60 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-21 — Feature 25 (Messaging & notifications, pass 14) merged; Feature 26 (Forms, pass 14): watchdog pickup, real delta is a date/timezone fix on a shared helper plus a cosmetic StatGrid swap, 0 fixed, 0 new findings
+
+PR #4520 merged as `c59bad857`. A fresh `list_pull_requests` (state=open)
+found no `claude/security-review-*` head, and row 26 was the next `⬜` row,
+confirmed directly against the table on a freshly pulled `main`.
+
+Baseline `8d4915078` (PR #4234, pass 13). `git diff --stat` on all six
+declared backend scope files plus the frontend forms/embed/public-form
+surface shows real content in exactly two files: `forms_service.py`
+(+15/-24) and `components/forms/FormResultsPanel.tsx` (+2/-1); every other
+declared file is byte-identical to pass 13.
+
+`forms_service.py`'s delta is this feature's own call site adapting to a
+correctness fix made in Feature 16's (Events & requests) own
+`event_request_service.py`: `lead_time_error`'s date parameters moved from
+timezone-anchored `datetime` to plain `date`, because
+`EventRequest.preferred_date_start`/`preferred_date_end` are already `Date`
+columns — the prior code built a tz-anchored `datetime` and assigned it into
+a `Date` column, silently losing the anchoring at the DB boundary. Forms'
+own `_parse_request_date` now returns `Optional[date]` and its
+`lead_time_error` call site supplies the new required `today=org_today(org)`
+keyword; `lead_time_error` is keyword-only on `today` with no default, so a
+caller that omitted it would raise `TypeError` outright — confirmed by grep
+that this is the only call site in the backend, and it supplies the keyword
+in the same hunk. A correctness fix, not a security regression (it removes a
+silent truncation rather than weakening a check). `event_request_service.py`
+itself carries a much larger delta this window, but all of it is Feature
+16's own declared scope — read only far enough to confirm Forms' own call
+site is correct against the new contract, matching pass 11's precedent for
+`follow_up_forms.py`.
+
+`FormResultsPanel.tsx` swaps a hand-rolled `grid`/`sm:grid-cols-4` wrapper
+for the shared `components/ux/StatGrid` component (the repeated repo-wide
+StatGrid sweep) — read `StatGrid.tsx` in full, a container-query layout
+helper with no data handling and no `dangerouslySetInnerHTML`. Cosmetic.
+
+**0 fixed, 0 new findings.** FORM-4 and FORM-12 (both long-flagged,
+non-security) re-confirmed unchanged. Full write-up:
+`docs/security-review/FORM-26-forms.md`'s **Pass 14** section.
+
+**Completion gate:** `flake8==7.4.1`/`black==26.10.1 --check`/
+`isort==9.0.2 --check-only` on `app/ tests/ alembic/` all clean.
+`validate_migrations.py --strict` — 805 revisions, single head
+`1a5c18b46791`. `check_route_permissions.py --strict` — 329 routes, 0
+errors/warnings (unchanged). Scoped backend pytest (`-k "form or
+applicant_field or sensitive_field or embed or event_request or
+outreach"`) — 1,689 passed, 1 pre-existing environment-only skip
+(`py_vapid`). `npm run typecheck` — 0 errors. `npm run lint` — 0 errors, 0
+warnings. `npx vitest run src/components/forms src/pages/FormsPage.*.test.tsx
+src/hooks/useRanks.test.ts` — 67 passed (13 files).
+
+Row 26 → ✅ (pending this PR's merge); next is Feature 27 (Integrations) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-21 — Feature 24 (Meetings & minutes, pass 14) merged; Feature 25 (Messaging & notifications, pass 14): watchdog pickup, real delta is the per-send CC-copy fix plus three new senders, 0 fixed, 0 new findings
 

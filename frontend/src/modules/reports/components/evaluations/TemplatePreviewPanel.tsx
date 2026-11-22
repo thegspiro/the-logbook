@@ -19,6 +19,7 @@ import { getErrorMessage } from '../../../../utils/errorHandling';
 import { evaluationTemplatesService } from '../../services/evaluationsApi';
 import {
   EvaluationPartKind,
+  type GoalsUnderReview,
   type PartContent,
   type PreviewOptions,
   type TemplateDefinition,
@@ -33,6 +34,22 @@ interface TemplatePreviewPanelProps {
 }
 
 type PreviewPart = typeof EvaluationPartKind.EVALUATOR | typeof EvaluationPartKind.SELF_EVALUATION;
+
+// A goal-review item rates the goals of the member's previous review, which a
+// preview has none of; one example goal shows the builder what is asked.
+const PREVIEW_GOALS: GoalsUnderReview = {
+  evaluation_id: 'preview',
+  period_name: 'the previous period',
+  period_start: '',
+  period_end: '',
+  goals: [
+    {
+      key: 'preview-goal',
+      label: 'Goals for the coming year',
+      text: "Example: the goals the member's previous review set appear here.",
+    },
+  ],
+};
 
 export const TemplatePreviewPanel: React.FC<TemplatePreviewPanelProps> = ({ definition }) => {
   const [options, setOptions] = useState<PreviewOptions | null>(null);
@@ -235,6 +252,7 @@ export const TemplatePreviewPanel: React.FC<TemplatePreviewPanelProps> = ({ defi
           overallLevels={preview.overall_levels}
           grades={live.grades}
           gradesError={live.error}
+          goalsUnderReview={PREVIEW_GOALS}
         />
       )}
     </div>

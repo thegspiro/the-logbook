@@ -4720,9 +4720,14 @@ program — reads **Not applicable** in the breakdown, not "0/0 — 0%".
 
 ### Compliance Forecast
 
-The forecast starts from each member's current compliance and subtracts the
-certifications that will have expired by then. It does not model training pace or
-scheduled sessions, so it shows the effect of expiries only.
+The forecast grades each member as the Compliance Matrix would 30, 60 and 90 days
+from now, using only the training already logged _(2026-11-21)_. A certification
+that will have lapsed counts against the member, and so do hours that will have
+dropped out of a rolling window, a catch-up period that will have ended, and a
+new calendar period with nothing logged in it yet. A certificate no requirement
+uses, or an old card a renewal has replaced, does not. It does not model training
+pace or scheduled sessions: it answers "where will each member stand if nothing
+new is logged?"
 
 It looks **30, 60 and 90 days** ahead: summary cards across the top, then one
 row per member showing each period alongside the certifications expiring in
@@ -4733,12 +4738,20 @@ Compliance Matrix _(2026-11-20)_. The **Current** figure is coloured by the
 member's standing there — the profile's thresholds when it sets its own,
 otherwise the department's — so the same member reads the same here, on the
 Training Enhancements forecast and on the matrix. The 30, 60 and 90-day
-figures are estimates and keep fixed colour bands. They subtract every
-certificate expiring in the window, including one no requirement grades, so
-for a member whose profile lists few requirements one expiring certificate
-moves the projection further.
+figures are coloured the same way, by that member's thresholds _(2026-11-21)_.
+The **Expiring Certs** column lists every certificate expiring within 90 days,
+for information; only the ones a requirement uses move the projections.
+
+The four summary cards are the department's averages over the members who are
+graded, coloured by the **department's** thresholds. When the department
+requires every requirement (**All required**), an average reads compliant only
+when every graded member is compliant at that point. A member measured against
+their profile's lower bar can therefore read green while the department card
+beside them reads red; that is intended.
 
 ![Compliance forecast projecting each member's compliance over 90 days](./images/02-75-compliance-forecast.png)
+
+_The screenshot predates the 2026-11-21 colours (it shows the old fixed bands)._
 
 ### Edge Cases
 

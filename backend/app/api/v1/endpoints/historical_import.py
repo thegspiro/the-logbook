@@ -890,8 +890,9 @@ async def commit_staffing(
     current_user: User = Depends(require_permission("integrations.historical_import")),
 ):
     """Write the roster: crew seats on shifts, check-ins and outreach roles at
-    calendar events. Credits no hours. Safe to run again; there is no batch
-    undo."""
+    calendar events. Each seat is paired with its member's overlapping hours
+    entry and seated on that shift. Credits no hours. Safe to run again, and
+    undone with the import's staffing undo."""
     org = str(current_user.organization_id)
     service = HistoricalStaffingCommitService(db)
     try:

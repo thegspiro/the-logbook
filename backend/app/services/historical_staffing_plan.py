@@ -36,6 +36,9 @@ EVENT_PREFIX = "staff-event:"
 SHIFT_PREFIX = "staff-shift:"
 SHEET_PREFIX = "staff-sheet:"
 SEAT_PREFIX = "staff-seat:"
+# An event sign-up's seat written onto the member's hours entry: a second
+# record for the same roster seat, beside its check-in or sheet seat.
+HOURS_SEAT_PREFIX = "staff-hours:"
 _LEDGER_KEY_MAX = 100
 
 # Why a seat is not written, for the summary.
@@ -65,6 +68,10 @@ def ledger_id(prefix: str, key: str) -> str:
 
 def seat_ledger_id(seat: engine.Seat) -> str:
     return ledger_id(SEAT_PREFIX, seat.seat_id or f"line-{seat.line_number}")
+
+
+def hours_seat_ledger_id(seat: engine.Seat) -> str:
+    return ledger_id(HOURS_SEAT_PREFIX, seat.seat_id or f"line-{seat.line_number}")
 
 
 def is_on_call(activity: str) -> bool:

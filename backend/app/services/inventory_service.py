@@ -2579,6 +2579,10 @@ class InventoryService:
                 InventoryLotRecall.lot_number_key == key,
                 InventoryLotRecall.lifted_at.is_(None),
             )
+            # A locking read, not just under the lock: the caller has already
+            # read in this transaction, so a plain SELECT would answer from the
+            # snapshot taken before a concurrent recall committed (INV2-6).
+            .with_for_update()
         )
         if existing:
             raise ValueError("This lot is already recalled")
@@ -4408,6 +4412,11 @@ class InventoryService:
                 InventoryLot.received_date,
             )
             .with_for_update()
+            # The session keeps objects across commits, so a lot an earlier
+            # call in the same session loaded would otherwise come back with
+            # its cached quantity while the lock saw the committed one, and the
+            # decrement would be written from the cached value (INV2-5).
+            .execution_options(populate_existing=True)
         )
         lots = list(result.scalars().all())
         available = sum(lot.quantity or 0 for lot in lots)
@@ -4560,6 +4569,9 @@ class InventoryService:
                     InventoryLot.organization_id == organization_id,
                 )
                 .with_for_update()
+                # As in _consume_from_lots: credit the committed count, not a
+                # copy this session cached before the lock (INV2-5).
+                .execution_options(populate_existing=True)
             )
             by_id = {str(lot.id): lot for lot in result.scalars().all()}
             for lot_id, give in repaid.items():
@@ -11058,6 +11070,11 @@ class InventoryService:
             )
             if not reorder:
                 return None, "Reorder request not found"
+
+            # Before anything reads the payload: a null status would pass the
+            # workflow check below as falsy, and a null quantity would reach
+            # the floor comparison as None (INV2-4).
+            reject_null_for_required(reorder, data)
 
             if "quantity_received" in data:
                 return None, "Received quantity changes require the receiving workflow"

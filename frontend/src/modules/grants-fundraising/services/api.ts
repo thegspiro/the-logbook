@@ -30,9 +30,12 @@ import type {
   GrantReport,
   FundraisingReport,
   ZeffyCampaign,
+  ZeffyDuesConfirmPayload,
+  ZeffyDuesMatch,
   ZeffyDuesScheduleOption,
   ZeffyLink,
   ZeffyLinkPayload,
+  ZeffyPayment,
   ZeffyPaymentPage,
   ZeffyPaymentState,
   ZeffyStatus,
@@ -498,6 +501,23 @@ export const zeffyService = {
       params: { state: params.state, limit: params.limit, offset: params.offset },
     });
     return { items: asArray(response.data.items), total: response.data.total };
+  },
+
+  /** Who a held membership payment could pay; `finance.manage`. */
+  async getDuesMatch(zeffyPaymentId: string): Promise<ZeffyDuesMatch> {
+    const response = await api.get<ZeffyDuesMatch>(
+      `/grants/zeffy/payments/${encodeURIComponent(zeffyPaymentId)}/dues-match`
+    );
+    return { ...response.data, candidates: asArray(response.data.candidates) };
+  },
+
+  /** Credit a held membership payment to the member a treasurer chose. */
+  async confirmDues(zeffyPaymentId: string, data: ZeffyDuesConfirmPayload): Promise<ZeffyPayment> {
+    const response = await api.post<ZeffyPayment>(
+      `/grants/zeffy/payments/${encodeURIComponent(zeffyPaymentId)}/confirm-dues`,
+      data
+    );
+    return response.data;
   },
 
   async syncNow(): Promise<ZeffySyncResult> {

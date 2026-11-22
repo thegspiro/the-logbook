@@ -7,12 +7,18 @@
  * the chosen level requires one, a justification where the evaluator departs
  * from the suggested rating. Whether the part is complete is decided by the
  * server on submit, which lists what is missing.
+ *
+ * A goal-review item rates each goal the member's previous review set, from
+ * the copy taken when this evaluation was drafted (`goalsUnderReview`).
  */
 import React from 'react';
 import type {
   DataEntry,
   EvaluationDataSource,
   EvaluationPartKind,
+  GoalRating,
+  GoalResult,
+  GoalsUnderReview,
   Grades,
   ItemAnswer,
   PartContent,
@@ -20,6 +26,7 @@ import type {
   TemplateDefinition,
   TemplateItem,
 } from '../../types/evaluations';
+import { GOAL_RESULT_LABELS } from '../../types/evaluations';
 import { figureDetail, formatFigure, needsJustification, withAnswer } from '../../utils/evaluationRecord';
 import { GradePanel } from './GradePanel';
 
@@ -39,7 +46,11 @@ interface EvaluationFormProps {
   grades?: Grades | null | undefined;
   /** The last recalculation failed; the grades shown may be out of date. */
   gradesError?: boolean | undefined;
+  /** The previous review's goals as copied into this evaluation, for a goal-review item. */
+  goalsUnderReview?: GoalsUnderReview | null | undefined;
 }
+
+const GOAL_RESULTS = Object.keys(GOAL_RESULT_LABELS) as GoalResult[];
 
 const MEETS_LEVELS: ScaleLevel[] = [
   { value: 1, label: 'Meets', anchor: null },
@@ -71,12 +82,92 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
   flagged = [],
   grades = null,
   gradesError = false,
+  goalsUnderReview = null,
 }) => {
   const evaluator = kind === 'evaluator';
   const flaggedKeys = new Set(evaluator ? flagged : []);
   const sourceByKey = new Map(sources.map((s) => [s.key, s]));
   const update = (key: string, patch: Partial<ItemAnswer>) => {
     if (onChange) onChange(withAnswer(content, key, patch));
+  };
+  const goals = goalsUnderReview?.goals ?? [];
+  // Only the goals copied into this evaluation are kept: a rating for a goal
+  // no longer in the copy (the figures were refreshed after last year's
+  // review was amended) would be refused by the server on save.
+  const rateGoal = (itemKey: string, goalKey: string, patch: Partial<GoalRating>) => {
+    const current = content.answers[itemKey]?.goal_ratings ?? {};
+    const next: Record<string, GoalRating> = {};
+    for (const goal of goals) {
+      const existing = current[goal.key];
+      if (goal.key === goalKey) next[goal.key] = { ...existing, ...patch };
+      else if (existing) next[goal.key] = existing;
+    }
+    update(itemKey, { goal_ratings: next });
+  };
+
+  const renderGoalReview = (item: TemplateItem, answer: ItemAnswer | undefined, id: string) => {
+    if (goals.length === 0) {
+      return (
+        <p className="text-theme-text-secondary mt-2 text-sm">
+          The member&apos;s previous review on this form set no goals, so there is nothing to rate here.
+        </p>
+      );
+    }
+    const period =
+      goalsUnderReview?.period_name ??
+      `${goalsUnderReview?.period_start ?? ''} – ${goalsUnderReview?.period_end ?? ''}`;
+    return (
+      <div className="mt-2 space-y-3">
+        <p className="text-theme-text-secondary text-sm">Goals set in the review for {period}.</p>
+        {goals.map((goal) => {
+          const rating = answer?.goal_ratings?.[goal.key];
+          const result = rating?.result ?? null;
+          return (
+            <div key={goal.key} className="card-secondary p-3">
+              <p className="text-theme-text-secondary text-xs font-medium tracking-wide uppercase">{goal.label}</p>
+              <p className="text-theme-text-primary mt-1 text-sm whitespace-pre-wrap">{goal.text}</p>
+              {readOnly ? (
+                <>
+                  <p className="text-theme-text-primary mt-2 text-sm font-medium">
+                    {result ? GOAL_RESULT_LABELS[result] : 'Not rated'}
+                  </p>
+                  <ReadOnlyText label="Comment" value={rating?.comment} />
+                </>
+              ) : (
+                <>
+                  <div
+                    role="radiogroup"
+                    aria-label={`${goal.label} result`}
+                    className="mt-2 flex flex-wrap gap-x-4 gap-y-1"
+                  >
+                    {GOAL_RESULTS.map((value) => (
+                      <label key={value} className="touch:min-h-11 flex items-center gap-2 text-sm">
+                        <input
+                          type="radio"
+                          name={`${id}-${goal.key}-result`}
+                          checked={result === value}
+                          onChange={() => rateGoal(item.key, goal.key, { result: value })}
+                        />
+                        {GOAL_RESULT_LABELS[value]}
+                      </label>
+                    ))}
+                  </div>
+                  <label htmlFor={`${id}-${goal.key}-comment`} className="form-label mt-2">
+                    Comment on {goal.label}
+                  </label>
+                  <textarea
+                    id={`${id}-${goal.key}-comment`}
+                    className="form-input"
+                    value={rating?.comment ?? ''}
+                    onChange={(e) => rateGoal(item.key, goal.key, { comment: e.target.value })}
+                  />
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   const renderItem = (item: TemplateItem) => {
@@ -182,6 +273,8 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
             </div>
           )}
 
+          {item.tool === 'goal_review' && renderGoalReview(item, answer, id)}
+
           {written &&
             (readOnly ? (
               <ReadOnlyText label="Answer" value={answer?.text} />
@@ -200,6 +293,7 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
             ))}
 
           {!written &&
+            item.tool !== 'goal_review' &&
             item.comment !== 'none' &&
             (readOnly ? (
               <ReadOnlyText label="Comment" value={answer?.comment} />

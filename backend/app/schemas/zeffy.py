@@ -106,6 +106,44 @@ class ZeffyPaymentResponse(UTCResponseBase):
     member_dues_id: Optional[str] = None
     applied_amount: Decimal
     updated_at: UTCDateTime
+    # Held for a treasurer to confirm whose dues it pays (ADV2-11). Set by the
+    # list endpoint, which knows each payment's link.
+    awaiting_dues_confirmation: bool = False
+
+
+class ZeffyDuesCandidateResponse(BaseModel):
+    """A member with open dues on the linked schedule."""
+
+    model_config = _response_config
+
+    user_id: str
+    name: str
+    member_dues_id: str
+    # What the oldest open dues still owe: more than this is an overpayment.
+    balance: Decimal
+
+
+class ZeffyDuesMatchResponse(BaseModel):
+    model_config = _response_config
+
+    zeffy_payment_id: str
+    net_amount: Decimal
+    currency: str
+    payer_name: Optional[str] = None
+    # The member whose email the payer typed. A suggestion only.
+    suggested_user_id: Optional[str] = None
+    candidates: List[ZeffyDuesCandidateResponse]
+
+
+class ZeffyDuesConfirm(BaseModel):
+    """A treasurer's decision on one held membership payment."""
+
+    model_config = _request_config
+
+    user_id: str = Field(..., min_length=1, max_length=36)
+    # What exceeds the member's balance is recorded as their donation only
+    # when this is true; otherwise an overpayment is refused.
+    excess_as_donation: bool = False
 
 
 class ZeffyPaymentListResponse(BaseModel):

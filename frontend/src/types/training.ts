@@ -3154,14 +3154,37 @@ export interface ComplianceForecast {
   /**
    * The current figure's compliance matrix standing, by the member's profile
    * thresholds or the department's. Colour the current figure by this, never
-   * by thresholds of a screen's own. The projections carry no standing.
+   * by thresholds of a screen's own. Each projection carries its own standing,
+   * classified the same way; the projections remain estimates (every
+   * certificate expiring in the window is charged, whatever grades it).
    */
   current_standing: Standing;
   forecast_30_days: number | null;
+  forecast_30_standing: Standing;
   forecast_60_days: number | null;
+  forecast_60_standing: Standing;
   forecast_90_days: number | null;
+  forecast_90_standing: Standing;
   at_risk_requirements: Array<Record<string, unknown>>;
   expiring_certifications: Array<Record<string, unknown>>;
+}
+
+/** A department forecast average, classified by the department's thresholds. */
+export interface ComplianceForecastAverage {
+  /** Null when no member is graded. */
+  pct: number | null;
+  standing: Standing;
+}
+
+/** `GET /training/reports/compliance-forecast`. */
+export interface ComplianceForecastReport {
+  members: ComplianceForecast[];
+  averages: {
+    current: ComplianceForecastAverage;
+    days_30: ComplianceForecastAverage;
+    days_60: ComplianceForecastAverage;
+    days_90: ComplianceForecastAverage;
+  };
 }
 
 export interface DepartmentComplianceTrend {
