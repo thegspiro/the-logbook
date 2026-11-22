@@ -18,6 +18,12 @@ import type { KnowledgeTest } from '../types/knowledgeTest';
 import type { ErrorCodeEntry, ErrorLogRecord } from '../services/adminServices';
 import type { PlatformAnalytics } from '../types/platformAnalytics';
 import type { CrewMember } from '../types/user';
+import type { IPException } from '../modules/ip-security/types';
+import type { StoreOrder } from '../modules/storefront/types';
+import type { AdminHoursActiveSessionAdmin, AdminHoursCategory } from '../modules/admin-hours/types';
+import type { McpOAuthConnection } from '../services/mcpOAuthService';
+import type { PermissionCategory, Role } from '../types/role';
+import type { InventoryCategory } from '../services/eventServices';
 import type { Facility, Inspection, MaintenanceRecord } from '../modules/facilities/types/facilities';
 import type {
   AlbumSummary,
@@ -1520,6 +1526,23 @@ export interface MockOptions {
    * change what each other ratcheted page measures.
    */
   crew?: boolean;
+  /**
+   * Serve three department positions at `/roles` and the permission catalogue
+   * at `/roles/permissions/by-category`.
+   *
+   * Opt-in because `/roles` feeds ten other screens — member add and import,
+   * the members admin hub, elections, minutes signers, approver and position
+   * pickers — and the document folder-access fields read the catalogue; each
+   * was measured against the catch-all's answer.
+   */
+  roles?: boolean;
+  /**
+   * Serve three medical supply categories in place of the empty list.
+   *
+   * Opt-in because Medical Supplies and two inventory panels read the same
+   * list, and every one of them was measured against it empty.
+   */
+  medicalCategories?: boolean;
   /**
    * Lengthen every display string the fixtures serve: names, titles, labels,
    * descriptions, messages.
@@ -4281,6 +4304,8 @@ const routes = ({
   memberRecord = false,
   prospectiveMembers = false,
   crew = false,
+  roles = false,
+  medicalCategories = false,
 }: MockOptions): [string, (request: Request) => unknown][] => [
   // Catch-all. Anything not listed below answers with an empty object rather
   // than reaching the dev-server proxy, which has no backend behind it.
@@ -5534,6 +5559,324 @@ const routes = ({
   ...(memberRecord ? memberRecordRoutes() : []),
   ...(prospectiveMembers ? prospectiveMemberRoutes() : []),
   ...(crew ? [['**/api/v1/users/me/crew', () => ({ members: MY_CREW })] as [string, () => unknown]] : []),
+  // Read only by their own screens (My IP Exceptions, My Orders, Claude
+  // connections, the admin-hours manage page), so served to every route. The
+  // admin-hours categories answer only the manage page's include_inactive
+  // read; the member's own admin-hours screen keeps the catch-all's answer.
+  ['**/api/v1/ip-security/exceptions/me?**', () => (empty ? [] : MY_IP_EXCEPTIONS)],
+  ['**/api/v1/store/orders/mine', () => (empty ? [] : MY_STORE_ORDERS)],
+  ['**/api/v1/mcp-oauth/connections', () => ({ connections: empty ? [] : MCP_CONNECTIONS })],
+  ['**/api/v1/admin-hours/categories?include_inactive=true', () => (empty ? [] : ADMIN_HOURS_CATEGORIES)],
+  ['**/api/v1/admin-hours/active-sessions', () => (empty ? [] : ADMIN_HOURS_ACTIVE_SESSIONS)],
+  ['**/api/v1/admin-hours/pending-count', () => ({ count: empty ? 0 : 3 })],
+  ...(roles
+    ? ([
+        ['**/api/v1/roles', () => DEPARTMENT_ROLES],
+        ['**/api/v1/roles/permissions/by-category', () => PERMISSION_CATALOGUE],
+      ] as [string, () => unknown][])
+    : []),
+  ...(medicalCategories
+    ? ([['**/api/v1/medical-supplies/categories**', () => MEDICAL_CATEGORIES]] as [string, () => unknown][])
+    : []),
+];
+
+const MY_IP_EXCEPTIONS: IPException[] = [
+  {
+    id: 'e2e-ipx-1',
+    ipAddress: '203.0.113.48',
+    exceptionType: 'allowlist',
+    reason: 'Attending the state fire instructors conference in Lisbon and need to finish shift reports remotely',
+    userId: 'e2e-user-id',
+    organizationId: 'e2e-org',
+    requestedDurationDays: 14,
+    validUntil: '2026-12-05T23:59:00Z',
+    approvalStatus: 'pending',
+    requestedBy: 'e2e-user-id',
+    requestedAt: '2026-11-19T15:12:00Z',
+    countryCode: 'PT',
+    countryName: 'Portugal',
+    useCase: 'travel',
+    createdAt: '2026-11-19T15:12:00Z',
+  },
+  {
+    id: 'e2e-ipx-2',
+    ipAddress: '198.51.100.7',
+    exceptionType: 'allowlist',
+    reason: 'Home VPN exit for after-hours records work',
+    userId: 'e2e-user-id',
+    organizationId: 'e2e-org',
+    requestedDurationDays: 90,
+    validFrom: '2026-10-01T00:00:00Z',
+    validUntil: '2026-12-30T23:59:00Z',
+    approvalStatus: 'approved',
+    requestedBy: 'e2e-user-id',
+    requestedAt: '2026-09-29T20:41:00Z',
+    approvedBy: 'Chief Dana Whitfield',
+    approvedAt: '2026-09-30T13:05:00Z',
+    approvedDurationDays: 90,
+    countryCode: 'US',
+    countryName: 'United States',
+    useCase: 'vpn',
+    lastUsedAt: '2026-11-20T02:17:00Z',
+    useCount: 41,
+    createdAt: '2026-09-29T20:41:00Z',
+  },
+];
+
+const storeOrderBase: Pick<
+  StoreOrder,
+  | 'organizationId'
+  | 'userId'
+  | 'customerName'
+  | 'customerEmail'
+  | 'taxAmount'
+  | 'shippingAmount'
+  | 'discountAmount'
+  | 'fulfillmentMethod'
+  | 'events'
+> = {
+  organizationId: 'e2e-org',
+  userId: 'e2e-user-id',
+  customerName: 'Test User',
+  customerEmail: 'test.user@example.com',
+  taxAmount: '0.00',
+  shippingAmount: '0.00',
+  discountAmount: '0.00',
+  fulfillmentMethod: 'pickup',
+  events: [],
+};
+
+const MY_STORE_ORDERS: StoreOrder[] = [
+  {
+    ...storeOrderBase,
+    id: 'e2e-order-1',
+    windowId: 'e2e-window-1',
+    windowName: 'Winter Station Wear 2026',
+    orderNumber: 'ORD-2026-0142',
+    status: 'awaiting_payment',
+    paymentStatus: 'unpaid',
+    paymentMethod: 'venmo',
+    subtotal: '86.00',
+    total: '86.00',
+    amountPaid: '0.00',
+    balanceDue: '86.00',
+    submittedAt: '2026-11-18T19:30:00Z',
+    items: [
+      {
+        id: 'e2e-order-1-a',
+        productName: 'Quarter-zip station fleece',
+        variantLabel: 'Navy / XL',
+        personalizationText: 'OKONKWO-FITZGERALD',
+        unitPrice: '58.00',
+        quantity: 1,
+        lineTotal: '58.00',
+        fulfilledQuantity: 0,
+      },
+      {
+        id: 'e2e-order-1-b',
+        productName: 'Knit beanie with reflective patch',
+        variantLabel: 'Black',
+        unitPrice: '14.00',
+        quantity: 2,
+        lineTotal: '28.00',
+        fulfilledQuantity: 0,
+      },
+    ],
+  },
+  {
+    ...storeOrderBase,
+    id: 'e2e-order-2',
+    windowName: 'Duty T-shirts',
+    orderNumber: 'ORD-2026-0097',
+    status: 'fulfilled',
+    paymentStatus: 'paid',
+    paymentMethod: 'payroll_deduction',
+    subtotal: '24.00',
+    total: '24.00',
+    amountPaid: '24.00',
+    balanceDue: '0.00',
+    paidAt: '2026-09-02T12:00:00Z',
+    submittedAt: '2026-08-27T16:04:00Z',
+    fulfilledAt: '2026-09-15T21:10:00Z',
+    items: [
+      {
+        id: 'e2e-order-2-a',
+        productName: 'Duty T-shirt',
+        variantLabel: 'Grey / L',
+        unitPrice: '12.00',
+        quantity: 2,
+        lineTotal: '24.00',
+        fulfilledQuantity: 2,
+      },
+    ],
+  },
+];
+
+const MCP_CONNECTIONS: McpOAuthConnection[] = [
+  {
+    id: 'e2e-mcp-1',
+    client_name: 'Claude',
+    client_id: 'claude-desktop',
+    scopes: ['logbook.read', 'logbook.schedule'],
+    created_at: '2026-10-12T14:20:00Z',
+    last_used_at: '2026-11-20T23:48:00Z',
+    expires_at: '2027-01-10T14:20:00Z',
+  },
+  {
+    id: 'e2e-mcp-2',
+    client_name: 'Claude on the station tablet',
+    client_id: 'claude-web',
+    scopes: ['logbook.read'],
+    created_at: '2026-11-02T09:00:00Z',
+    last_used_at: null,
+    expires_at: '2027-01-31T09:00:00Z',
+  },
+];
+
+const adminHoursCategory = (
+  id: string,
+  name: string,
+  overrides: Partial<AdminHoursCategory> = {}
+): AdminHoursCategory => ({
+  id,
+  organizationId: 'e2e-org',
+  name,
+  description: null,
+  color: '#1d4ed8',
+  requireApproval: true,
+  autoApproveUnderHours: null,
+  maxHoursPerSession: 8,
+  isActive: true,
+  sortOrder: 0,
+  createdAt: '2026-01-05T12:00:00Z',
+  updatedAt: '2026-01-05T12:00:00Z',
+  ...overrides,
+});
+
+const ADMIN_HOURS_CATEGORIES: AdminHoursCategory[] = [
+  adminHoursCategory('e2e-ahc-1', 'Station maintenance', {
+    description: 'Cleaning, apparatus bay upkeep, grounds and small repairs around the station',
+    autoApproveUnderHours: 2,
+    sortOrder: 0,
+  }),
+  adminHoursCategory('e2e-ahc-2', 'Public education and community risk reduction', {
+    description: 'School visits, smoke alarm installs and station tours',
+    color: '#15803d',
+    sortOrder: 1,
+  }),
+  adminHoursCategory('e2e-ahc-3', 'Fundraising', {
+    color: '#b45309',
+    requireApproval: false,
+    maxHoursPerSession: null,
+    isActive: false,
+    sortOrder: 2,
+  }),
+];
+
+const ADMIN_HOURS_ACTIVE_SESSIONS: AdminHoursActiveSessionAdmin[] = [
+  {
+    id: 'e2e-ahs-1',
+    categoryId: 'e2e-ahc-1',
+    categoryName: 'Station maintenance',
+    categoryColor: '#1d4ed8',
+    userId: 'crew-2',
+    userName: 'Jordan Okonkwo-Fitzgerald',
+    clockInAt: '2026-11-21T13:05:00Z',
+    elapsedMinutes: 135,
+    maxSessionMinutes: 480,
+    description: 'Re-hanging hose on Engine 2 after the hose test',
+  },
+];
+
+const roleFixture = (id: string, name: string, overrides: Partial<Role> = {}): Role => ({
+  id,
+  organization_id: 'e2e-org',
+  name,
+  slug: id,
+  permissions: [],
+  is_system: false,
+  priority: 50,
+  created_at: '2026-01-05T12:00:00Z',
+  updated_at: '2026-01-05T12:00:00Z',
+  user_count: 0,
+  kind: 'office',
+  ...overrides,
+});
+
+const DEPARTMENT_ROLES: Role[] = [
+  roleFixture('e2e-role-member', 'Member', {
+    description: 'Every member of the department',
+    permissions: ['events.view', 'training.view'],
+    is_system: true,
+    priority: 10,
+    user_count: 42,
+    kind: 'system',
+  }),
+  roleFixture('e2e-role-training-officer', 'Training Officer', {
+    description: 'Runs the training calendar, records sessions and signs off skills',
+    permissions: ['training.view', 'training.manage', 'events.view'],
+    priority: 60,
+    user_count: 2,
+  }),
+  roleFixture('e2e-role-apparatus-committee', 'Apparatus & Equipment Committee', {
+    description: 'Reviews apparatus specifications and the equipment replacement plan',
+    permissions: ['apparatus.view'],
+    priority: 30,
+    user_count: 5,
+    kind: 'committee',
+  }),
+];
+
+const PERMISSION_CATALOGUE: PermissionCategory[] = [
+  {
+    category: 'events',
+    permissions: [
+      { name: 'events.view', description: 'See the department calendar and event details', category: 'events' },
+      { name: 'events.manage', description: 'Create, edit and cancel events', category: 'events' },
+    ],
+  },
+  {
+    category: 'training',
+    permissions: [
+      { name: 'training.view', description: 'See training records and requirements', category: 'training' },
+      { name: 'training.manage', description: 'Record sessions and manage requirements', category: 'training' },
+    ],
+  },
+  {
+    category: 'apparatus',
+    permissions: [{ name: 'apparatus.view', description: 'See apparatus and their status', category: 'apparatus' }],
+  },
+];
+
+const medicalCategory = (id: string, name: string, overrides: Partial<InventoryCategory> = {}): InventoryCategory => ({
+  id,
+  organization_id: 'e2e-org',
+  name,
+  item_type: 'medical',
+  requires_assignment: false,
+  requires_serial_number: false,
+  requires_maintenance: false,
+  nfpa_tracking_enabled: false,
+  allow_self_checkout: false,
+  self_checkout_loan_days: null,
+  active: true,
+  created_at: '2026-01-05T12:00:00Z',
+  updated_at: '2026-01-05T12:00:00Z',
+  item_count: 0,
+  ...overrides,
+});
+
+const MEDICAL_CATEGORIES: InventoryCategory[] = [
+  medicalCategory('e2e-medcat-1', 'Airway management', {
+    description: 'OPAs, NPAs, BVMs, suction catheters and supraglottic airways',
+    low_stock_threshold: 4,
+    item_count: 18,
+  }),
+  medicalCategory('e2e-medcat-2', 'Trauma and bleeding control', { item_count: 11 }),
+  medicalCategory('e2e-medcat-3', 'Medications', {
+    description: 'Controlled and non-controlled medications carried on the ambulance',
+    item_count: 23,
+  }),
 ];
 
 const PROSPECT_PIPELINES: BackendPipelineListResponse[] = [
