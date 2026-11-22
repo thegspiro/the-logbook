@@ -1203,9 +1203,10 @@ as the record of what the integration leaves to the treasurer:
 - **A refund made more than 7 days after the sale arrives only by webhook.**
   Zeffy's payment list has no "changed since" filter, so the hourly sync cannot
   find it. Departments without the webhook will not see such refunds.
-- **Membership payments are matched to members by email only.** A payer who
-  used a different address than the one on their profile is left **No member
-  match** for the treasurer.
+- ~~**Membership payments are matched to members by email only.**~~
+  Superseded 2026-11-21 (ADV2-11): no membership payment is credited on the
+  payer's email. Each waits as **Awaiting confirmation** until a treasurer
+  chooses the member, and the email only pre-selects one.
 
 ## Onboarding — Two Module Switches the Setup Wizard Offers or Sets Without a Reader (2026-10-31)
 
@@ -1617,8 +1618,16 @@ fix changes a workflow some departments rely on, so the owner decides:
   self-access guard hide their file (ADV2-10).** Refusing a member's email
   covers half of it. The rest turns on whether self-detection should trust
   fields the applicant can edit.
-- **A Zeffy dues payment credits whichever member's email the payer typed
-  (ADV2-11).** Overpayment is recorded as that member's donation.
+- ~~**A Zeffy dues payment credits whichever member's email the payer typed
+  (ADV2-11).**~~ ✅ Resolved 2026-11-21 (owner: hold as unmatched until a
+  treasurer confirms). A membership payment is recorded as **Awaiting
+  confirmation**, and the payer's email only suggests a member. A
+  `finance.manage` holder chooses any current member with open dues on the
+  schedule and decides whether an overpayment is recorded as that member's
+  donation. Payments credited before the change stay as they are. An
+  unconfirmed payment is no longer credited on its own when dues are generated
+  later, so a department now confirms each one. See
+  `docs/ZEFFY_INTEGRATION.md`.
 
 ## Authentication & Security
 

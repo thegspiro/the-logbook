@@ -8,7 +8,8 @@
  *
  * `fundraising.view` reads the links and the payments. `fundraising.manage`
  * lists Zeffy's campaigns (a live call to Zeffy), links them and runs a sync;
- * linking to member dues also needs `finance.manage`.
+ * linking to member dues also needs `finance.manage`, and so does confirming
+ * whose dues a held membership payment pays (ADV2-11).
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -26,10 +27,10 @@ import type {
   ZeffyPayment,
   ZeffyStatus,
 } from '../types';
+import { ZeffyConfirmDuesDialog } from '../components/ZeffyConfirmDuesDialog';
 import { ZeffyLinkDialog } from '../components/ZeffyLinkDialog';
-import { ZEFFY_STATE_COLORS, ZEFFY_STATE_LABELS, ZEFFY_TARGET_LABELS } from '../utils/labels';
+import { ZEFFY_STATE_COLORS, ZEFFY_STATE_LABELS, ZEFFY_TARGET_LABELS, zeffyMoney as money } from '../utils/labels';
 import { formatDate, formatDateTime } from '@/utils/dateFormatting';
-import { formatCurrency } from '@/utils/currencyFormatting';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useAuthStore } from '@/stores/authStore';
@@ -46,13 +47,6 @@ const STATE_FILTERS: { value: ZeffyPaymentState | ''; label: string }[] = [
   ...Object.values(ZeffyPaymentState).map((value) => ({ value, label: ZEFFY_STATE_LABELS[value] ?? value })),
 ];
 
-/** Zeffy also takes CAD, and nothing converts it, so a non-USD amount says which. */
-const money = (amount: number | string, currency?: string | null): string => {
-  const code = (currency ?? 'USD').toUpperCase();
-  const formatted = formatCurrency(Number(amount));
-  return code === 'USD' ? formatted : `${formatted} ${code}`;
-};
-
 const amountLabel = (payment: ZeffyPayment): string => {
   const refunded = Number(payment.refundedAmount);
   const gross = money(payment.amount, payment.currency);
@@ -67,6 +61,8 @@ const ZeffyPage: React.FC = () => {
   // finance.view is what reading the schedules to choose from needs, and
   // neither implies the other.
   const canLinkDues = useAuthStore((s) => s.checkPermission('finance.manage') && s.checkPermission('finance.view'));
+  // What the backend checks to confirm a held membership payment.
+  const canConfirmDues = useAuthStore((s) => s.checkPermission('finance.manage'));
 
   const [status, setStatus] = useState<ZeffyStatus | null>(null);
   const [zeffyCampaigns, setZeffyCampaigns] = useState<ZeffyCampaign[]>([]);
@@ -84,6 +80,7 @@ const ZeffyPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [editing, setEditing] = useState<ZeffyCampaign | null>(null);
+  const [confirming, setConfirming] = useState<ZeffyPayment | null>(null);
 
   const loadPayments = useCallback(async () => {
     try {
@@ -469,17 +466,31 @@ const ZeffyPage: React.FC = () => {
                       {amountLabel(payment)}
                     </td>
                     <td data-label="Status" className="px-4 py-2">
-                      <span className={`badge ${ZEFFY_STATE_COLORS[payment.state] ?? ''}`}>
-                        {ZEFFY_STATE_LABELS[payment.state] ?? payment.state}
-                      </span>
-                      {payment.appliedTargetType && payment.state === ZeffyPaymentState.APPLIED && (
-                        <span className="text-theme-text-secondary block text-xs">
-                          {ZEFFY_TARGET_LABELS[payment.appliedTargetType]}
+                      {/* One block: in card mode a cell is a flex row, and the badge,
+                          its detail and the Confirm button must stack (Pitfall #39). */}
+                      <div className="min-w-0">
+                        <span className={`badge ${ZEFFY_STATE_COLORS[payment.state] ?? ''}`}>
+                          {ZEFFY_STATE_LABELS[payment.state] ?? payment.state}
                         </span>
-                      )}
-                      {payment.stateDetail && (
-                        <span className="text-theme-text-secondary block text-xs">{payment.stateDetail}</span>
-                      )}
+                        {payment.appliedTargetType && payment.state === ZeffyPaymentState.APPLIED && (
+                          <span className="text-theme-text-secondary block text-xs">
+                            {ZEFFY_TARGET_LABELS[payment.appliedTargetType]}
+                          </span>
+                        )}
+                        {payment.stateDetail && (
+                          <span className="text-theme-text-secondary block text-xs">{payment.stateDetail}</span>
+                        )}
+                        {payment.awaitingDuesConfirmation && canConfirmDues && (
+                          <button
+                            type="button"
+                            onClick={() => setConfirming(payment)}
+                            className="btn-secondary mt-1 text-xs"
+                            aria-label={`Confirm member dues for ${payment.payerName ?? 'this payment'}`}
+                          >
+                            Confirm member
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -491,6 +502,18 @@ const ZeffyPage: React.FC = () => {
           <Pagination currentPage={page} totalItems={totalPayments} pageSize={PAGE_SIZE} onPageChange={setPage} />
         )}
       </section>
+
+      {confirming && (
+        <ZeffyConfirmDuesDialog
+          payment={confirming}
+          onClose={() => setConfirming(null)}
+          onConfirmed={() => {
+            setConfirming(null);
+            void loadOverview();
+            void loadPayments();
+          }}
+        />
+      )}
 
       {editing && (
         <ZeffyLinkDialog

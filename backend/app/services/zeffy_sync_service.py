@@ -31,17 +31,24 @@ Effects by link target:
 * fundraising event — the payment's net adds to ``actual_revenue`` and its
   tickets to ``current_attendees``. Both stay hand-editable, which is why the
   sync adds its difference rather than overwriting them.
-* dues schedule — the payer is matched to a member by email, and the payment
-  is credited to that member's oldest open dues on the schedule through
-  ``FinanceService.record_dues_payment``. A refund after that is flagged for the
-  treasurer, never reversed automatically: the dues ledger has no reversal, and
-  undoing a payment a member has been told was received is a human decision.
+* dues schedule — held as unmatched until a treasurer confirms it
+  (``confirm_dues``; ADV2-11, owner decision 2026-11-21). The payer's email
+  only suggests a member: anyone paying a Zeffy membership form can type any
+  member's address, so crediting on that alone let an outsider choose whose
+  dues a payment settled, and turn an overpayment into a donation in that
+  member's name. The treasurer picks the member, and decides whether an
+  overpayment is recorded as their donation. Once confirmed, the payment is
+  credited to that member's oldest open dues on the schedule through
+  ``FinanceService.record_dues_payment``. A refund after that is flagged for
+  the treasurer, never reversed automatically: the dues ledger has no
+  reversal, and undoing a payment a member has been told was received is a
+  human decision.
 """
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Dict, Optional, overload
+from typing import Any, Dict, List, Optional, overload
 
 from loguru import logger
 from sqlalchemy import or_, select
@@ -61,7 +68,7 @@ from app.models.grant import (
     RecurringFrequency,
 )
 from app.models.integration import Integration
-from app.models.user import User
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 from app.models.zeffy import (
     ZeffyCampaignLink,
     ZeffyLinkTarget,
@@ -144,6 +151,41 @@ def _utc(moment: Optional[datetime]) -> Optional[datetime]:
 
 def _reference(zeffy_payment_id: str) -> str:
     return f"zeffy:{zeffy_payment_id}"
+
+
+AWAITING_SUGGESTED = (
+    "Waiting for a treasurer to confirm which member's dues it pays. "
+    "The payer's email matches a member."
+)
+AWAITING_NO_SUGGESTION = (
+    "Waiting for a treasurer to confirm which member's dues it pays. "
+    "No member has the email address the payer used."
+)
+NOT_AWAITING = "This payment is not waiting for a dues confirmation."
+
+
+class ZeffyPaymentNotFound(LookupError):
+    """No Zeffy payment with that id in the organization."""
+
+
+@dataclass(frozen=True)
+class DuesCandidate:
+    """A current member with open dues the payment could be credited to."""
+
+    user_id: str
+    name: str
+    member_dues_id: str
+    balance: Decimal
+
+
+@dataclass(frozen=True)
+class DuesMatch:
+    """What a treasurer needs to confirm one held membership payment."""
+
+    payment: ZeffyPayment
+    net_amount: Decimal
+    suggested_user_id: Optional[str]
+    candidates: List[DuesCandidate]
 
 
 class ZeffySyncService:
@@ -334,7 +376,7 @@ class ZeffySyncService:
         elif link.target_type == ZeffyLinkTarget.FUNDRAISING_EVENT:
             await self._apply_event(row, link, net, tickets)
         else:
-            await self._apply_dues(row, parsed, link, net)
+            await self._hold_dues(row, parsed)
 
     @staticmethod
     def _not_counted_reason(row: ZeffyPayment, parsed: Optional[ParsedPayment]) -> str:
@@ -514,74 +556,185 @@ class ZeffySyncService:
                 "Taken back off the event after Zeffy refunded or removed it."
             )
 
-    async def _apply_dues(
-        self,
-        row: ZeffyPayment,
-        parsed: ParsedPayment,
-        link: ZeffyCampaignLink,
-        net: Decimal,
-    ) -> None:
-        from app.services.finance_service import FinanceService
+    async def _hold_dues(self, row: ZeffyPayment, parsed: ParsedPayment) -> None:
+        """Leave a membership payment for a treasurer to confirm (ADV2-11).
 
-        fingerprints = email_fingerprints(parsed.payer_email)
-        member_id = None
-        if fingerprints:
-            member_id = await self.db.scalar(
-                select(User.id).where(
-                    User.organization_id == row.organization_id,
-                    User.email_hash.in_(fingerprints),
-                    User.deleted_at.is_(None),
+        Nothing is credited here: see the module docstring. The email match is
+        recorded only as a suggestion, and is re-read on every pass so a
+        member whose address is added later is suggested from then on.
+        """
+        suggested = await self._member_by_email(row.organization_id, parsed.payer_email)
+        row.state = ZeffyPaymentState.UNMATCHED
+        row.state_detail = AWAITING_SUGGESTED if suggested else AWAITING_NO_SUGGESTION
+
+    async def _member_by_email(
+        self, organization_id: str, email: Optional[str]
+    ) -> Optional[str]:
+        fingerprints = email_fingerprints(email)
+        if not fingerprints:
+            return None
+        member_id = await self.db.scalar(
+            select(User.id)
+            .where(
+                User.organization_id == organization_id,
+                User.email_hash.in_(fingerprints),
+                User.deleted_at.is_(None),
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+            )
+            .limit(1)
+        )
+        return str(member_id) if member_id is not None else None
+
+    # ------------------------------------------------------------------
+    # A treasurer confirming a held membership payment
+    # ------------------------------------------------------------------
+
+    async def _held_dues_payment(
+        self, row: Optional[ZeffyPayment]
+    ) -> tuple[ZeffyPayment, ZeffyCampaignLink, ParsedPayment]:
+        if row is None:
+            raise ZeffyPaymentNotFound("Zeffy payment not found")
+        if (
+            row.state != ZeffyPaymentState.UNMATCHED
+            or row.applied_target_type is not None
+            or not row.raw_payload
+        ):
+            raise ValueError(NOT_AWAITING)
+        link = await self._link_for(row)
+        if (
+            link is None
+            or link.target_type != ZeffyLinkTarget.DUES_SCHEDULE
+            or link.dues_schedule_id is None
+        ):
+            raise ValueError(NOT_AWAITING)
+        # The stored payload has had the email removed; the encrypted column
+        # still holds it.
+        parsed = replace(parse_payment(row.raw_payload), payer_email=row.payer_email)
+        if not parsed.counts or parsed.net_amount <= 0:
+            raise ValueError(NOT_AWAITING)
+        return row, link, parsed
+
+    async def dues_match(
+        self, organization_id: str, zeffy_payment_id: str
+    ) -> DuesMatch:
+        """The amount, the email suggestion and the members it could pay."""
+        row = await self.db.scalar(
+            select(ZeffyPayment).where(
+                ZeffyPayment.organization_id == organization_id,
+                ZeffyPayment.zeffy_payment_id == zeffy_payment_id,
+            )
+        )
+        row, link, parsed = await self._held_dues_payment(row)
+        result = await self.db.execute(
+            select(MemberDues, User)
+            .join(User, User.id == MemberDues.user_id)
+            .where(
+                MemberDues.organization_id == organization_id,
+                MemberDues.dues_schedule_id == link.dues_schedule_id,
+                MemberDues.status.in_(_OPEN_DUES),
+                User.organization_id == organization_id,
+                User.deleted_at.is_(None),
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+            )
+            .order_by(User.last_name, User.first_name, User.id, MemberDues.due_date)
+        )
+        candidates: List[DuesCandidate] = []
+        seen: set[str] = set()
+        for dues, user in result.all():
+            # The oldest open dues per member, which is what confirm credits.
+            if str(user.id) in seen:
+                continue
+            seen.add(str(user.id))
+            candidates.append(
+                DuesCandidate(
+                    user_id=str(user.id),
+                    name=f"{user.first_name or ''} {user.last_name or ''}".strip()
+                    or str(user.username),
+                    member_dues_id=str(dues.id),
+                    balance=max(
+                        dues.amount_due - (dues.amount_paid or Decimal("0")),
+                        Decimal("0"),
+                    ),
                 )
             )
-        if member_id is None:
-            row.state = ZeffyPaymentState.UNMATCHED
-            row.state_detail = "No member has the email address the payer used."
-            return
+        return DuesMatch(
+            payment=row,
+            net_amount=parsed.net_amount,
+            suggested_user_id=await self._member_by_email(
+                organization_id, parsed.payer_email
+            ),
+            candidates=candidates,
+        )
 
+    async def confirm_dues(
+        self,
+        organization_id: str,
+        zeffy_payment_id: str,
+        *,
+        member_id: str,
+        confirmed_by: str,
+        excess_as_donation: bool,
+    ) -> ZeffyPayment:
+        """Credit a held membership payment to the member a treasurer chose.
+
+        Runs under the payment's row lock, so it cannot cross a sync or a
+        webhook delivery for the same payment, and a second confirmation finds
+        it already applied. ``FinanceService.record_dues_payment`` keeps its
+        own rules: the treasurer may not credit their own dues, and an
+        overpayment is refused unless ``excess_as_donation`` is set.
+        """
+        from app.services.finance_service import FinanceService
+
+        row, link, parsed = await self._held_dues_payment(
+            await self._locked_row(organization_id, zeffy_payment_id)
+        )
+        member = await self.db.scalar(
+            select(User.id).where(
+                User.id == member_id,
+                User.organization_id == organization_id,
+                User.deleted_at.is_(None),
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+            )
+        )
+        if member is None:
+            raise ValueError("Choose a current member of the department.")
         dues_id = await self.db.scalar(
             select(MemberDues.id)
             .where(
-                MemberDues.organization_id == row.organization_id,
+                MemberDues.organization_id == organization_id,
                 MemberDues.dues_schedule_id == link.dues_schedule_id,
                 MemberDues.user_id == member_id,
                 MemberDues.status.in_(_OPEN_DUES),
             )
             .order_by(MemberDues.due_date)
             .limit(1)
-            # A locking read (Pitfall #27): a second payment for the same
-            # member waits for the first to settle these dues, then reads
-            # their new status and moves on to the next open dues, instead of
-            # crediting paid-off dues and turning its whole amount into a
-            # donation.
+            # A locking read (Pitfall #27): two confirmations for the same
+            # member settle two open dues, rather than both crediting the
+            # first and turning the second into a donation.
             .with_for_update()
         )
         if dues_id is None:
-            row.state = ZeffyPaymentState.UNMATCHED
-            row.state_detail = "The member has no open dues on the linked schedule."
-            return
+            raise ValueError("That member has no open dues on the linked schedule.")
 
-        try:
-            await FinanceService(self.db).record_dues_payment(
-                str(dues_id),
-                row.organization_id,
-                recorded_by=None,
-                amount_paid=net,
-                payment_method=DUES_PAYMENT_METHOD,
-                transaction_reference=_reference(parsed.zeffy_payment_id),
-                notes="Paid through Zeffy.",
-                # The department's rule for any overpayment (W66-3): what is
-                # beyond the balance is a donation from the member.
-                excess_as_donation=True,
-            )
-        except ValueError as exc:
-            row.state = ZeffyPaymentState.UNMATCHED
-            row.state_detail = str(exc)[:255]
-            return
+        net = parsed.net_amount
+        await FinanceService(self.db).record_dues_payment(
+            str(dues_id),
+            organization_id,
+            recorded_by=confirmed_by,
+            amount_paid=net,
+            payment_method=DUES_PAYMENT_METHOD,
+            transaction_reference=_reference(parsed.zeffy_payment_id),
+            notes="Paid through Zeffy; confirmed by a treasurer.",
+            excess_as_donation=excess_as_donation,
+        )
         row.applied_target_type = ZeffyLinkTarget.DUES_SCHEDULE
         row.member_dues_id = str(dues_id)
         row.applied_amount = net
         row.state = ZeffyPaymentState.APPLIED
         row.state_detail = None
+        row.last_event_at = datetime.now(timezone.utc)
+        await self.db.flush()
+        return row
 
     async def _adjust_applied(
         self,
@@ -676,12 +829,12 @@ class ZeffySyncService:
         zeffy_campaign_id: Optional[str] = None,
         limit: int = MAX_RETRIES_PER_RUN,
     ) -> int:
-        """Re-apply payments that were waiting on a link, a start date or dues.
+        """Re-apply payments that were waiting on a link or a start date.
 
         Runs after a link is saved and on every sync, so a campaign linked
-        today picks up the payments already recorded for it, and a membership
-        payment that arrived before its dues were generated is credited once
-        they are.
+        today picks up the payments already recorded for it. A membership
+        payment is never credited here (ADV2-11); re-reading it refreshes only
+        whether the payer's email now suggests a member.
         """
         if zeffy_campaign_id:
             # A link was just saved: everything waiting on this campaign,
@@ -698,9 +851,9 @@ class ZeffySyncService:
             # The hourly pass leaves out what cannot have changed since the
             # last one: a payment before its link's start date waits for the
             # link to be saved, and one whose campaign has no link waits for
-            # a link. Otherwise those would fill every batch and the
-            # payments a new member record or new dues could settle would
-            # never be reached.
+            # a link. Otherwise those would fill every batch, and a held
+            # membership payment whose payer's email now matches a member
+            # would never have that suggestion refreshed.
             linked = (
                 select(ZeffyCampaignLink.id)
                 .where(

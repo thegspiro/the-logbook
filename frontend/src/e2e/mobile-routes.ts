@@ -1514,7 +1514,9 @@ export const ALL_ROUTES: RouteCheck[] = [
     path: '/grants/zeffy',
     maxSmallTargets: 0,
     maxTinyText: 0,
-    permissions: ['fundraising.view', 'fundraising.manage'],
+    // finance.manage draws the Confirm member button on the held dues
+    // payment (ADV2-11), so it is measured with the rest.
+    permissions: ['fundraising.view', 'fundraising.manage', 'finance.manage'],
     expectText: 'D. Alvarez',
   },
   {

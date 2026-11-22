@@ -4748,7 +4748,9 @@ const routes = ({
   ['**/api/v1/grants/pledges**', () => (empty ? [] : PLEDGES)],
   ['**/api/v1/grants/fundraising-events**', () => (empty ? [] : FUNDRAISING_EVENTS)],
   // Zeffy connected, with one campaign linked and one payment of each kind a
-  // reviewer sorts: applied, and waiting on a decision.
+  // reviewer sorts: applied, waiting on a decision, and a membership payment
+  // held for a treasurer to confirm (ADV2-11), which carries the Confirm
+  // member button.
   [
     '**/api/v1/grants/zeffy/status**',
     () => ({
@@ -4756,7 +4758,7 @@ const routes = ({
       integrationId: empty ? null : 'e2e-zeffy',
       webhookConfigured: !empty,
       lastSyncAt: empty ? null : '2026-02-12T14:00:00Z',
-      stateCounts: empty ? {} : { applied: 1, needs_review: 1 },
+      stateCounts: empty ? {} : { applied: 1, needs_review: 1, unmatched: 1 },
     }),
   ],
   ['**/api/v1/grants/zeffy/campaigns**', () => []],
@@ -4800,19 +4802,26 @@ const routes = ({
         payerName,
         receiptUrl: null,
         state,
-        stateDetail: state === 'needs_review' ? 'More than one donor matches this payer' : null,
+        stateDetail:
+          state === 'needs_review'
+            ? 'More than one donor matches this payer'
+            : state === 'unmatched'
+              ? "Waiting for a treasurer to confirm which member's dues it pays. The payer's email matches a member."
+              : null,
         appliedTargetType: donationId ? 'fundraising_campaign' : null,
         donationId,
         fundraisingEventId: null,
         memberDuesId: null,
         appliedAmount: donationId ? amount : '0.00',
         updatedAt: '2026-02-12T14:00:00Z',
+        awaitingDuesConfirmation: state === 'unmatched',
       });
       const items = empty
         ? []
         : [
             payment('zpay-1', 'Margaret Okafor', '250.00', 'applied', 'e2e-don-1'),
             payment('zpay-2', 'D. Alvarez', '100.00', 'needs_review', null),
+            payment('zpay-3', 'Sam Whitfield-Narayanan', '120.00', 'unmatched', null),
           ];
       return { items, total: items.length };
     },
