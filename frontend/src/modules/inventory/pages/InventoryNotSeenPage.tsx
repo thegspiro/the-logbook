@@ -199,14 +199,16 @@ export const InventoryNotSeenPage: React.FC = () => {
                 {report.items.map((row) => (
                   <tr key={row.id}>
                     <td data-label="Item" className="py-2 pr-3">
-                      <Link to={`/inventory/items/${row.id}`} className="text-theme-text-primary font-medium">
-                        {row.name}
-                      </Link>
-                      <span className="text-theme-text-secondary block text-xs">
-                        {[row.serial_number && `S/N ${row.serial_number}`, row.category_name]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </span>
+                      <div className="min-w-0">
+                        <Link to={`/inventory/items/${row.id}`} className="text-theme-text-primary font-medium">
+                          {row.name}
+                        </Link>
+                        <span className="text-theme-text-secondary block text-xs">
+                          {[row.serial_number && `S/N ${row.serial_number}`, row.category_name]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                      </div>
                     </td>
                     <td data-label="Status" className="text-theme-text-primary py-2 pr-3">
                       {getStatusLabel(row.status)}
