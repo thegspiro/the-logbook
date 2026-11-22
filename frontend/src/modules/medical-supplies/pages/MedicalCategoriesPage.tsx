@@ -379,12 +379,12 @@ const MedicalCategoriesPage: React.FC = () => {
           }
         />
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
+        <ul className="card-grid">
           {categories.map((category) => (
             <li key={category.id} className="card p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-theme-text-primary font-medium">{category.name}</p>
+                  <p className="text-theme-text-primary font-medium break-words">{category.name}</p>
                   {category.duplicate_name && (
                     <div className="mt-1">
                       <DuplicateCategoryNameBadge />

@@ -217,9 +217,9 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-theme-text-primary text-xl font-semibold">Hour Categories</h2>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => {
               void handleCloseStaleSessions();
@@ -294,7 +294,7 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
                 <div className="flex items-center gap-2">
                   <h3 className="text-theme-text-primary font-semibold">{cat.name}</h3>
                   {!cat.isActive && (
-                    <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-800 dark:text-red-400">
+                    <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-900 dark:text-red-300">
                       Inactive
                     </span>
                   )}
