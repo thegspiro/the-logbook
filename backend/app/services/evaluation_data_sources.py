@@ -123,6 +123,14 @@ DATA_SOURCES: tuple[DataSource, ...] = (
         "beside the item rather than scored.",
     ),
     DataSource(
+        "shifts.external_hours",
+        "Hours for other agencies",
+        "hours",
+        "scheduling",
+        "Hours the member worked for other agencies that the department "
+        "counted, with how many shifts. Shift hours never include them.",
+    ),
+    DataSource(
         "calls.responses",
         "Calls responded to",
         "count",
@@ -151,6 +159,14 @@ DATA_SOURCES: tuple[DataSource, ...] = (
         "Skills tests the member passed.",
     ),
     DataSource(
+        "training.knowledge_tests_passed",
+        "Knowledge tests passed",
+        "count",
+        "training",
+        "Knowledge tests the member passed in the period, each counted once "
+        "however many attempts it took, with each test's best passing score.",
+    ),
+    DataSource(
         "certifications.current",
         "Certifications",
         "list",
@@ -165,6 +181,23 @@ DATA_SOURCES: tuple[DataSource, ...] = (
         "Qualifications held at the end of the period that expire within 90 "
         "days after it, with their expiration dates: the same window the "
         "member's training stats call expiring soon.",
+    ),
+    DataSource(
+        "apparatus.equipment_checks",
+        "Equipment checks completed",
+        "count",
+        "apparatus",
+        "Equipment checks the member signed off in the period, at the start "
+        "or end of a shift or on their own, with how many found a failed item.",
+    ),
+    DataSource(
+        "inventory.overdue_at_period_end",
+        "Property overdue at period end",
+        "count",
+        "inventory",
+        "Items the member had checked out past their due date and not yet "
+        "returned on the last day of the period, listed with each due date. "
+        "Loans with no due date are not counted.",
     ),
     DataSource(
         "positions.held",
