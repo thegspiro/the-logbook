@@ -1677,18 +1677,27 @@ member.
 #### Dues paid through Zeffy
 
 If the department sells memberships through Zeffy and that Zeffy campaign is
-linked to a dues schedule, members' payments are recorded here by themselves.
-Each is credited to the paying member's oldest open dues on the schedule,
-matched by the email they paid with, and follows the rules above: an
-overpayment becomes a donation, and the same Zeffy payment is never credited
-twice. In **Payment history** it shows the method **zeffy** and a reference
-starting `zeffy:`, with no officer as the one who entered it.
+linked to a dues schedule, members' payments come in from Zeffy but are **not
+credited by themselves** _(2026-11-21)_. Anyone paying can type any member's
+email, so each payment waits as **Awaiting confirmation** under **Grants &
+Fundraising → Zeffy** until a treasurer selects **Confirm member** and chooses
+whose dues it pays. The payer's email only suggests a member; a parent paying
+for a junior member can be credited to the junior.
 
-A payment The Logbook could not match to a member, or that Zeffy later
-refunded, is not changed here. It waits under **Grants & Fundraising → Zeffy**
-for the treasurer. Linking a campaign to dues needs both finance permissions as
-well as **Manage fundraising**. See
-[Zeffy in the Grants & Fundraising guide](./12-grants-fundraising.md#zeffy--online-donations-tickets-and-memberships).
+Once confirmed, the payment settles that member's oldest open dues on the
+schedule and follows the rules above: an overpayment is credited only if the
+treasurer ticks the box to record the extra as the member's donation, you
+cannot confirm a payment onto your own dues, and the same Zeffy payment is
+never credited twice. In **Payment history** it shows the method **zeffy**, a
+reference starting `zeffy:`, and the treasurer who confirmed it as the one who
+recorded it. Payments credited automatically before 2026-11-21 show no officer.
+
+A payment that Zeffy later refunded is not changed here either. It waits under
+**Grants & Fundraising → Zeffy** for the treasurer. Linking a campaign to dues
+needs both finance permissions as well as **Manage fundraising**; confirming a
+payment needs **Manage budgets, fiscal years, categories, and process
+payments**. See
+[Confirming a dues payment](./12-grants-fundraising.md#confirming-a-dues-payment).
 
 ### Payment History
 
@@ -1697,7 +1706,7 @@ well as **Manage fundraising**. See
 Click the history icon on a member's row to open **Payment history**: the full
 list of payments received against those dues -- amount, method, reference, notes,
 when it was received and **who recorded it** _(2026-11-06)_ ("a former member" if
-that officer's account is gone; nothing for a payment Zeffy recorded). The dues record itself shows only the running total and the most recent
+that officer's account is gone; nothing for a Zeffy payment credited before 2026-11-21, and the confirming treasurer for one since). The dues record itself shows only the running total and the most recent
 payment's detail, so the history is where you go to answer "what did they
 actually pay, and when?"
 

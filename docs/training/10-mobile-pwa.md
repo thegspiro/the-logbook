@@ -443,6 +443,10 @@ The equipment-check template builder fits a phone:
 - A row's menu opens as a titled sheet from the bottom of the screen.
 - A location's header takes two lines.
 - An empty location shows one full-width **Add items** button.
+- On a tablet with the side navigation open, **Details / Tools / Save** wrap
+  onto a second line inside the bar instead of running past the screen edge
+  _(2026-11-22)_. Where only their icons show, each icon button is a full 44
+  pixels wide as well as tall.
 
 ### The Schedule on a Phone
 

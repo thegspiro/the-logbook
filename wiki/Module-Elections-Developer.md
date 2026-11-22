@@ -333,6 +333,17 @@ Shared components (`components/`): `BallotBuilder`, `CandidateManagement`,
 `VoterOverrideManagement`, `VerifyReceipt`, and `ballot/` (`BallotItemCard`,
 `ballotChoices`, `useBallotChoices`, shared by the in-app and token ballots).
 
+`BallotBuilder`'s **Use Template** picker is placed by `placePopover` in
+`utils/popoverPlacement.ts` _(2026-11-21)_, measured from its button on open
+and on resize: it opens on the side with more room (below when neither has
+160px, since overflow below can be scrolled to and overflow above the top edge
+cannot), is capped to that room and scrolls inside, and is shifted
+horizontally to keep both edges on screen. It had been fixed above and
+right-aligned, which ran it off the top of the ballot page and off the left of
+a phone. The card raises itself (`relative z-30`) while the picker is open,
+because its `backdrop-blur` makes it a stacking context. `bottomNavInset` from the same module is now
+also what `RowActionsMenu` and `EventComposer` read for the phone tab bar.
+
 Detail-page panels and modals (`components/election-detail/`):
 `BallotPreviewModal`, `CloneElectionModal`, `DeleteElectionModal`,
 `EditDatesModal`, `ElectionCloseStamp`, `ExtendElectionModal`,

@@ -630,7 +630,7 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Skills testing / evaluations                  | [SKILLS_TESTING_FEATURE.md](./SKILLS_TESTING_FEATURE.md) and [Skills Testing Guide](./training/09-skills-testing.md)                                     |
 | Skills testing without signal                 | [SKILLS_TESTING_OFFLINE_PLAN.md](./SKILLS_TESTING_OFFLINE_PLAN.md) (scoping — not yet implemented)                                                       |
 | Cert expiration alerts                        | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-certification-expiration-alert-pipeline)                                                              |
-| Competency matrix dashboard                   | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-using-the-competency-matrix-dashboard)                                                                |
+| Competency matrix dashboard (retired)         | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-using-the-competency-matrix-dashboard)                                                                |
 | Training calendar / booking                   | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-calendar-integration--double-booking-prevention)                                                      |
 | Recruit school / multi-class course           | [TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md#multi-class-courses--cohorts) and [Training Guide](./training/02-training.md#multi-class-courses--cohorts) |
 | Cohort vs. recurring session                  | [TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md#edge-cases--things-that-surprise-people)                                                                   |
@@ -991,7 +991,7 @@ docker-compose ps
 - **Training Calendar Integration**: Training sessions now appear on the organization calendar via linked Events; new `GET /api/v1/training-sessions/calendar` endpoint returns sessions with dates, times, locations
 - **Double-Booking Prevention**: Training sessions with a `location_id` are checked against all other events — prevents scheduling conflicts across training and non-training events
 - **Hall Coordinator Filtering**: `GET /api/v1/events?exclude_event_types=training` lets hall coordinators hide training events from their view while booking prevention remains organization-wide
-- **Competency Matrix Dashboard**: `GET /api/v1/training/competency-matrix` generates a member vs. requirement heat map (current/expiring_soon/expired/not_started) with readiness percentage
+- **Competency Matrix Dashboard** _(retired 2026-11-21; use `GET /api/v1/training/compliance-matrix`)_: `GET /api/v1/training/competency-matrix` generated a member vs. requirement heat map (current/expiring_soon/expired/not_started) with readiness percentage
 - **Certification Expiration Alerts**: Tiered pipeline (90/60/30/7 days + expired escalation) with CC to training officer, compliance officer, and chief on escalating notifications
 - **Peer Skill Evaluation Sign-Offs**: Training officer can configure who signs off on each skill — role-based (`shift_leader`, `driver_trainer`) or user-specific — with permission check endpoint
 - **Meeting Quorum Enforcement**: Org-configurable quorum (count or percentage) with per-meeting override; auto-recalculates when attendees check in

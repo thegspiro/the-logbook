@@ -2452,7 +2452,6 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 
 - My Training page (member self-view)
 - Compliance Matrix (officer view)
-- Competency Matrix / Heat Map
 - Individual Training Reports
 - Per-Requirement Progress
 - Program Enrollment Progress
@@ -5732,7 +5731,7 @@ docker exec the-logbook-db-1 mysql -u root -p the_logbook \
 - **CERTIFICATION** requirements: Matches by `training_type`, name substring, or certification number
 - All evaluations use frequency-aware date windows (annual, biannual, quarterly, monthly, one-time)
 
-**Also fixed**: The competency matrix heat map (`/api/v1/training/competency-matrix`), the `check_requirement_progress()` service method, and the Training Officer Dashboard frontend compliance calculation.
+**Also fixed**: The competency matrix heat map (`/api/v1/training/competency-matrix`, retired 2026-11-21), the `check_requirement_progress()` service method, and the Training Officer Dashboard frontend compliance calculation.
 
 ---
 
@@ -7657,11 +7656,20 @@ docker exec logbook-backend alembic upgrade head
 
 **Edge Case — Multi-agency training records:** Joint training sessions with other agencies create records in both departments. If xAPI (Tin Can) integration is enabled, ensure the LRS (Learning Record Store) endpoint is reachable from your backend and the API key is valid. xAPI statements are sent asynchronously; check Celery worker logs for failures.
 
-### Problem: Competency matrix showing stale data
+### Problem: Competency heat map does not change after adding training records
 
-**Root Cause:** The competency heat-map is computed from training records and cached for performance. After adding new training records, the matrix may take up to 5 minutes to update.
+**Root Cause:** The heat map on **Training → Competency**
+(`GET /api/v1/training/competency/department`) shows each member's competency
+levels, which move when a skills evaluation or a shift report sign-off scores a
+skill. A training record does not change them. The heat map is read live; it
+is not cached, by the server or by the browser's API cache (`/training/competency/`
+is in `UNCACHEABLE_PREFIXES`). An earlier version of this entry said it was
+cached for five minutes; it never was.
 
-**Fix:** Wait for cache expiry or manually refresh. For development, clear the Redis cache: `docker exec logbook-redis redis-cli FLUSHDB`.
+**Fix:** Record the skill through a skills evaluation or a shift report
+sign-off, then reload the tab. For who meets which training requirement, use
+the Compliance Matrix instead (`GET /api/v1/training/compliance-matrix`). The
+old `GET /api/v1/training/competency-matrix` was retired on 2026-11-21.
 
 ---
 

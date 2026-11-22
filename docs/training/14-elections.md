@@ -344,7 +344,9 @@ templates". Delete one you no longer use first.
 
 ### Applying one
 
-1. On a draft election, select **Use Template**.
+1. On a draft election, select **Use Template**. The picker opens below the
+   button, or above it when there is more room there, and fits the screen
+   at any width; on a long list, scroll inside the picker _(2026-11-21)_.
 2. Your department's templates appear under **Your saved ballots**, above the
    built-in templates. Each shows its item count and the note "replaces
    current ballot".

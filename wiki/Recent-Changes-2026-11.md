@@ -5,6 +5,50 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 21 – 22, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-21--22-2026).
+
+- **History gains apparatus, events and a timeline.** The Historian can
+  catalogue past and present apparatus (starting from a fleet truck if you
+  use the Apparatus module), record events with the people, apparatus, photos
+  and documents involved, and see it all by decade on a timeline. A **Today in
+  history** card appears on the History overview and on the Dashboard. See
+  [History](Module-History).
+- **Community Outreach opens on an Overview**: what is waiting on a reply,
+  which events are short of volunteers, which need closing out, a week or
+  month calendar, and the year's figures. Outreach has one set of names: the
+  **Community Outreach Manager** leads, requests are on **Outreach Requests**,
+  and the report is **Outreach Impact**. Volunteers no longer use up an
+  event's attendee places, and cancelling a whole series stands down its
+  signup sheets. See [Events](Module-Events).
+- **Leave requests.** An approver's own request now goes to the Chief, an
+  approver who will be away can name a stand-in, decided requests show who
+  decided, and the shift assign picker marks members who have asked for
+  leave. See [Scheduling](Module-Scheduling).
+- **Training figures agree everywhere.** My Training and the officer views
+  give the Compliance Matrix's answer (a certificate never held reads **Not
+  recorded**). The Compliance Forecast re-grades each member 30, 60 and 90
+  days ahead, so a member can drop late in the year when the next period
+  starts empty. Officers, and members for their own uploads, can remove a
+  file from a training record. See [Compliance](Module-Compliance).
+- **Evaluations.** **Hand over work** moves a departed evaluator's open
+  reviews to someone else in one step, this year's review can rate last
+  year's goals, and four more figures can go on a form. See
+  [Evaluations](Module-Evaluations).
+- **Money and gear.** Zeffy dues payments now wait as **Awaiting
+  confirmation** until a treasurer confirms whose dues they pay. The
+  Department Store adds **Not received** for a payment that never arrived and
+  only marks a window fulfilled once every order is finished. Inventory →
+  Maintenance has a **Never Inspected** tab, and gear requests can no longer
+  be fulfilled with a blank quantity. See
+  [Grants & Fundraising](Module-Grants-Fundraising),
+  [Inventory](Module-Inventory).
+- **Upgrading:** the seeded outreach positions are renamed unless your
+  department renamed them, and `main` briefly carries two migration heads
+  until PR #4560 merges. See `docs/UPGRADING.md`.
+
 ## Recent changes: November 20 – 21, 2026
 
 The engineering audit is

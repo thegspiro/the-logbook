@@ -1882,7 +1882,7 @@ report, a member in this state shows as **blue** on the requirement bars.
 The same rule decides which requirements count for a member everywhere: the
 dashboard, the Compliance Matrix and its print view, the member profile's
 training card, My Training, the compliance officer report, the scheduling
-shift and hours report, the competency matrix, the forecast, and the CSV and
+shift and hours report, the forecast, and the CSV and
 PDF exports. Where a requirement does not apply to someone, the exports and
 forecast print **N/A**. Requirements limited to certain roles are respected on
 all of these screens too.
@@ -2411,6 +2411,12 @@ _"Lapsed 41 days ago"_, _"Expires in 26 days"_.
   colour and the progress bar still follow the total. My Training shows the
   same average (see
   [How a requirement card reads](#how-a-requirement-card-reads-2026-11-21)).
+- A requirement the member meets stays green even when the date shown under
+  it has passed _(2026-11-21)_. On an hours or courses requirement that date
+  is the expiry of the latest record counted, and it does not lapse the
+  requirement. A certification that has lapsed reads red **Lapsed**, because
+  the requirement itself is then expired. Before, the screen turned such a
+  cell red on its own, while the dashboard counted the member as meeting it.
 - A cell met by an override reads **Met by the Chief's override**; a Chief sees
   the **Chief override** control on a requirement that allows it (see
   [Session attendance requirements](#the-chiefs-override-of-a-session-attendance-requirement)).
@@ -2501,7 +2507,7 @@ the same rules, so their figures agree:
   green, yellow or red colour is the member's standing on the Compliance
   Matrix as well (see [Compliance Summary](#compliance-summary)).
 - **The remaining officer views use compliance profiles too** _(2026-11-20)_.
-  The monthly member status roster, the competency matrix, the Compliance
+  The monthly member status roster, the Compliance
   Report CSV and PDF, the compliance forecast and the **Shift Compliance**
   report in Scheduling now read each member's profile, as the matrix does.
   The roster colours a member with the profile's own thresholds when it sets
@@ -2526,10 +2532,21 @@ the same rules, so their figures agree:
   member the matrix showed as met; and for a courses requirement only the
   matrix checked, so My Training could read met where the matrix read
   expired.
+- **My Training gives the matrix's answer** _(2026-11-21)_. My Training, the
+  officer's view of a member and the member training report now take met,
+  short and expired from the same calculation as the Compliance Matrix,
+  instead of working it out again. You may see a few requirements change:
+  - a certification the member never held reads **Not recorded**, not
+    **Expired — Renew ASAP**;
+  - an hours requirement whose target is 0 is not met by logging an hour. A
+    target of 0 is a mistake to fix on the requirement, not a free pass;
+  - when your department leaves the current month out (see
+    [Evaluation Period](#evaluation-period-current-vs-prior-month)), a due
+    date that has already passed this month reads **Overdue**, not upcoming.
 - **A requirement limited to certain ranks applies to those ranks.** The
   **Required roles** on a requirement are **ranks**. Members of those ranks
   are graded on it on My Training, the matrix, the dashboard, the member
-  profile card, the competency matrix and the annual report. The Shift
+  profile card and the annual report. The Shift
   Compliance report also respects the requirement's member categories.
 - **A Certification requirement is credited through the course picked on it,
   the training type or the registry code.** It does not match a course just
@@ -2856,6 +2873,12 @@ requirement (**Training Admin → Curriculum → Requirements**), use the
 > and overdue checks. Certifications that are **expiring soon** are always
 > flagged using your department's actual date, whatever the Evaluation Period
 > says.
+
+Since 2026-11-21 two more places follow the setting. The member training
+report's requirement progress used to always count the current month; it now
+counts what My Training and the matrix count. And with the current month left
+out, the days until a due date are counted from today's real date, so a due
+date that passed earlier this month reads **Overdue** rather than upcoming.
 
 ---
 
@@ -4727,7 +4750,13 @@ dropped out of a rolling window, a catch-up period that will have ended, and a
 new calendar period with nothing logged in it yet. A certificate no requirement
 uses, or an old card a renewal has replaced, does not. It does not model training
 pace or scheduled sessions: it answers "where will each member stand if nothing
-new is logged?"
+new is logged?" The line under the heading says so: "Each member's standing 30,
+60 and 90 days from now if nothing new is logged".
+
+> **Why a compliant member can drop at 60 or 90 days.** Late in the year, the
+> 60 and 90-day points fall in next year's period, where nothing is logged yet.
+> A member who has met this year's annual requirement therefore reads it unmet
+> there. That is the honest answer to "if nothing new is logged", not a fault.
 
 It looks **30, 60 and 90 days** ahead: summary cards across the top, then one
 row per member showing each period alongside the certifications expiring in
@@ -4751,7 +4780,9 @@ beside them reads red; that is intended.
 
 ![Compliance forecast projecting each member's compliance over 90 days](./images/02-75-compliance-forecast.png)
 
-_The screenshot predates the 2026-11-21 colours (it shows the old fixed bands)._
+_The screenshot predates the 2026-11-21 changes: it shows the old fixed colour
+bands and the old line under the heading ("30/60/90-day compliance projections
+based on expiring certifications")._
 
 ### Edge Cases
 
@@ -5165,7 +5196,9 @@ regulatory filings, yearly reviews and member files.
 
 The printed record includes:
 
-- the member's name and the date printed, with their overall compliance status;
+- the member's name and the date printed, with their overall compliance status.
+  A member exempt from compliance prints **Exempt** in grey, as **Not
+  applicable** does, not in the at-risk amber _(2026-11-21)_;
 - a summary of Total Hours, Hours This Year, Active Certifications and Completed
   Courses;
 - how many requirements are met, and how many certifications are expiring soon
@@ -5705,6 +5738,12 @@ overall; with suggested ratings from training hours, required training and
 meeting attendance), an **Annual Evaluation with Officer Sections**
 _(2026-11-20)_ and a **Probationary Check-in**.
 Choosing a starter fills the first draft, and each publishes as it stands.
+_(2026-11-21)_ Both annual starters now open their **Development** section
+with a **Last year's goals** item, and the check-in opens its **Next steps**
+with **Since the last check-in** (see
+[Rating last year's goals](#rating-last-years-goals-2026-11-21)). Templates
+made from a starter before then are unchanged; add the item in the builder if
+you want it.
 
 **The officer starter** _(2026-11-20)_ is the annual form with a fourth,
 officer-only section, **Leadership and supervision**: crew leadership,
@@ -5811,6 +5850,45 @@ the evaluation unless they have another part in it.
 > only position holder is its own evaluator stays open until a manager names
 > someone.
 
+### Handing over open work _(2026-11-21)_
+
+When an evaluator or approver leaves the department or changes role, you no
+longer have to reassign their evaluations one at a time. An evaluations
+manager (`evaluations.manage`) hands everything they still have open in one
+review period to someone else:
+
+1. On **Evaluations I conduct** / **All evaluations**, select **Hand over
+   work**.
+2. In **Hand over open work**, choose the **Review period**, then under
+   **Hand over the work of** the person leaving. The list shows only people
+   who hold open work in that period, with how many evaluations each, and
+   includes someone who has already left the department. Under **To**,
+   choose who takes it.
+3. Select **Preview**. Nothing changes yet. Each evaluation is listed with
+   what would move (**Evaluator**, or the name of an approval or calibration
+   step), or **Skipped:** and the reason it cannot move.
+4. Select **Hand over N evaluations** and confirm your identity. The result
+   lists what moved; select **Done**.
+
+What moves, on evaluations still in progress:
+
+- **The evaluator's part**, while the evaluator has not submitted it. Any
+  draft they started stays, for the new evaluator to finish and submit as
+  their own.
+- **Approval and calibration steps not yet done that name the person** (see
+  [Naming who takes a step](#naming-who-takes-a-step-2026-11-16)). A step that
+  goes to whoever holds a position follows the position and is not moved:
+  change the position's holder instead.
+
+An evaluation moves whole or not at all. It is skipped, with the reason shown,
+when the new person is the member being evaluated, cannot conduct evaluations
+(when the evaluator's part would move), is already named on its approval or
+calibration (an evaluator never approves their own work), or is its evaluator
+or signed another approval on it (when an approval would move). The new person
+gets the usual **Evaluation Waiting on You** email for any step already open.
+The member is not emailed; they see the new name on the evaluation. Each
+evaluation moved is recorded in the audit log.
+
 ### The last review _(2026-11-20)_
 
 When a member has an earlier finalized evaluation on the same form (any
@@ -5825,6 +5903,36 @@ You see the card only if you could open that earlier review yourself. An
 evaluator who is not allowed to read last year's review (because someone else
 wrote it and they do not hold `evaluations.view_all`) does not get it. The card
 is not printed on the PDF, which records this review alone.
+
+### Rating last year's goals _(2026-11-21)_
+
+The **Last review** card lets you read last year's goals; a **Last review's
+goals** item lets you rate them, on the record. In the builder, choose
+**Last review's goals** as an item's **Evaluation tool**. A form can have one. It
+shows no figure and cannot be marked N/A as a whole, and the builder hides
+the comment and data settings it does not use.
+
+On the evaluation, the item lists each goal the member's previous review on
+the same form set ("Goals set in the review for 2025 Annual Review"), and for
+each one asks for a result: **Met**, **Partly met**, **Not met** or **No
+longer applies** (for a goal an assignment change made moot), with an
+optional **Comment**. You cannot submit your part until every goal has a
+result. If the item is in the self-evaluation, the member rates them too.
+
+- **The goals are copied into this evaluation** when it is drafted, and copied
+  again by **Update figures** until the evaluator locks their part. After
+  that, amending last year's review does not change them.
+- **Everyone who can read this evaluation sees the goals it rates**, including
+  an evaluator who cannot open last year's review (unlike the **Last review**
+  card). The department chose this so the record and its PDF carry the goals
+  they rate.
+- **The goals and results are printed on the PDF** and covered by the
+  signatures, but **do not count toward any grade**.
+- When the previous review set no goals, or there is no previous review, the
+  item reads "The member's previous review on this form set no goals, so there
+  is nothing to rate here." and asks for nothing.
+- The builder's preview shows one example goal, since a preview has no
+  previous review.
 
 ### Period results and export _(2026-11-20)_
 
@@ -5848,7 +5956,8 @@ both the list and the export.
 
 When you build a template, an item's **Data shown with this item** list is
 grouped by area: Training, Business meetings, Events, Shifts, Calls,
-Administrative hours and Membership. It now also offers **field shift
+Administrative hours, **Apparatus & equipment** and **Inventory**
+_(2026-11-21)_, and Membership. It now also offers **field shift
 evaluation scores** (an average per form, shown but never scored),
 **certifications expiring soon** (within 90 days after the period ends),
 **event attendance by type**, and the member's **waiver requests** for
@@ -5870,6 +5979,23 @@ member's reason or a decider's note).
   not its name, type or how many. Waiver attachments are deleted a set time after a request closes
   (a year by default), so this reports what was on file when the figures were
   taken. An evaluation drafted after the attachment was deleted reads no.
+- _(2026-11-21)_ Four more figures are offered, each counted the way its own
+  module already counts it:
+  - **Hours for other agencies** (Shifts): hours the member worked for other
+    agencies that the department counted, with how many shifts. **Shift
+    hours** never include them.
+  - **Knowledge tests passed** (Training): each test counted once however
+    many attempts it took, with its best passing score.
+  - **Equipment checks completed** (Apparatus & equipment): checks the member
+    signed off, at the start or end of a shift or on their own, with how many
+    found a failed item.
+  - **Property overdue at period end** (Inventory): items the member had
+    checked out past their due date and not returned on the period's last
+    day, with each due date. A loan with no due date is not counted, nor is a
+    temporary item assignment.
+
+  None of the four reads "(turned off)": turning the Apparatus or Inventory
+  module off does not stop their data, and the other two follow their groups.
 
 ### Grading by section _(2026-11-04)_
 
@@ -5929,7 +6055,12 @@ a rating or comment. A daily task sends reminders and overdue notices once each.
 > and the **Who takes "…"** dialog; the **Last review** card; the conduct list
 > with a period chosen, showing **Period results** and **Export CSV**; and the
 > **New template** dialog with the officer starter and its **Officer ranks**
-> boxes.
+> boxes. Also needed _(2026-11-21)_: `02-160-evaluation-hand-over-preview`
+> (the **Hand over open work** dialog after **Preview**, with one evaluation
+> moving and one **Skipped:**), `02-161-evaluation-goal-review` (an
+> evaluation's **Last year's goals** item with two goals, results and a
+> comment) and `02-162-evaluation-data-sources-new` (the **Data shown with this
+> item** list open on the **Apparatus & equipment** and **Inventory** groups).
 
 ---
 
@@ -6037,7 +6168,7 @@ have moved, been renamed or work differently.
 - **Dashboards and the annual report use compliance profiles and your
   thresholds**, so their figures agree with the Compliance Matrix. Since
   2026-11-20 so do the profile compliance card, the member status roster, the
-  competency matrix, the forecast, the Shift Compliance report and the
+  forecast, the Shift Compliance report and the
   Compliance Report export, which now shows today's standing.
 - **An hours requirement leads with the monthly average** _(2026-11-20)_, and
   **a certification reads On file, Expired or Not recorded** _(2026-11-21)_

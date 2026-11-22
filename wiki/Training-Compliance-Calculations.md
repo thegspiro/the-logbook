@@ -206,6 +206,22 @@ Two traps:
 - **A certificate valid today is met today**, even if it expires next week. The
   orange "due soon" marking is a renewal warning, not a failure.
 
+**Every screen takes this answer** _(2026-11-21)_. My Training, the officer's
+view of a member, requirement progress and the member training report used to
+grade with their own copies of these rules and could disagree with the
+matrix; a certification never held, for example, read "Expired — Renew ASAP"
+on My Training. They now take the status from this grader. On the matrix
+screen a requirement graded met stays met even when the expiry date shown
+beside it has passed: on an hours or courses requirement that date belongs to
+the latest record counted and does not lapse the requirement.
+
+**The forecast is this calculation run on a later day** _(2026-11-21)_. The
+Compliance Forecast's 30, 60 and 90-day figures grade each member as of today
+plus that many days, on the records already logged. Anything that changes
+with the date counts: a certificate a requirement reads lapsing, hours leaving
+a rolling window, a catch-up deadline passing, a new calendar period starting
+with nothing in it yet. A certificate no requirement reads does not.
+
 ## Waivers and leave
 
 A training waiver or a leave of absence **reduces the target** of Hours,

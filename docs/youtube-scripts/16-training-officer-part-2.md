@@ -253,6 +253,27 @@ film a pre-2026-11-04 form.]**
 > skills testing. Each category shows how many members are current versus
 > how many are overdue."
 
+**[SCREEN: Scroll to Predictive Compliance Forecast — the line under the
+heading reading "Each member's standing 30, 60 and 90 days from now if nothing
+new is logged", the four Current / 30 Days / 60 Days / 90 Days cards, and the
+member rows]**
+
+> "Further down is the **forecast**. It grades every member the way the
+> Compliance Matrix does, thirty, sixty and ninety days from now — counting
+> only training that's already logged. So it catches more than expiring cards:
+> hours dropping out of a rolling window, a catch-up deadline running out, a
+> new year starting with nothing in it yet. Each member's figure is coloured
+> by their own thresholds; the four cards on top are the department's
+> averages, coloured by the department's. Use it to see who needs a class
+> before they lapse, not as a prediction of what people will do."
+
+**[PRODUCTION NOTE — 2026-11-21. New beat, about 30 seconds; re-time
+Chapter 3. The forecast re-grades at today + 30/60/90 and takes standing
+colours as of 2026-11-21. Film it between January and September if you can:
+from early October the 90-day column, and from early November the 60-day
+column, fall in next year's period, where every annual requirement reads unmet.
+That is correct but needs explaining on camera.]**
+
 ### COMPLIANCE REQUIREMENTS CONFIGURATION (6:15 – 7:15)
 
 **[SCREEN: Training Admin → Settings & Data → Compliance, then the

@@ -471,6 +471,12 @@ dialog; the finalized PDF.]**
 > period's done, **Period results** shows how many are complete and how many
 > landed at each grade, with a CSV export."
 
+> "If an evaluator retires mid-cycle, you don't chase their reviews one by one.
+> **Hand over work** takes their open evaluations in a period, shows you what
+> moves and what can't, and hands the lot to someone else. And this year's
+> review can rate last year's goals — met, partly met, not met, or no longer
+> applies — right on the form and the PDF."
+
 > "Forms can be **Graded by section**: each rating is put on a one-to-five scale,
 > each section gets a score, and your grade ranges turn the score into a grade —
 > so a member rated Meets on every item reads as Meets, not as failing. The
@@ -488,6 +494,12 @@ Sections** chosen and its **Officer ranks** boxes; a step's **Assign** button
 and the **Who takes "…"** dialog; the conduct list with a period chosen,
 showing **Period results** and **Export CSV** (needs `evaluations.view_all`).
 Re-time this chapter.]**
+
+**[PRODUCTION NOTE — 2026-11-22. Added a third beat (about 15 seconds) on
+handing over open work and rating last year's goals. Film: **Hand over work**
+on the conduct list and the **Hand over open work** preview with a
+**Skipped:** row; an evaluation's **Last year's goals** item with its
+**Met / Partly met / Not met / No longer applies** choices.]**
 
 ### MEMBER ID CARDS (12:00 – 12:30)
 

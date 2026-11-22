@@ -34,13 +34,13 @@ evaluations you can see there are past a due date.
 
 ## Who can do what
 
-| Permission              | Lets them                                                                                                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `evaluations.configure` | build and publish the forms                                                                                                                                                           |
-| `evaluations.manage`    | open and close review periods, draft for anyone (one at a time or a whole period), choose the evaluator, amend a finalized evaluation, name who takes an approval or calibration step |
-| `evaluations.conduct`   | be the evaluator; draft an evaluation they will conduct themselves                                                                                                                    |
-| `evaluations.view_all`  | read every member's evaluations, complete calibration (never on one they wrote), see each finalized evaluation's grade on the list, and export a period's results                     |
-| `evaluations.delete`    | delete an evaluation, with a reason                                                                                                                                                   |
+| Permission              | Lets them                                                                                                                                                                                                                                 |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `evaluations.configure` | build and publish the forms                                                                                                                                                                                                               |
+| `evaluations.manage`    | open and close review periods, draft for anyone (one at a time or a whole period), choose the evaluator, amend a finalized evaluation, name who takes an approval or calibration step, hand one person's open work in a period to another |
+| `evaluations.conduct`   | be the evaluator; draft an evaluation they will conduct themselves                                                                                                                                                                        |
+| `evaluations.view_all`  | read every member's evaluations, complete calibration (never on one they wrote), see each finalized evaluation's grade on the list, and export a period's results                                                                         |
+| `evaluations.delete`    | delete an evaluation, with a reason                                                                                                                                                                                                       |
 
 - All five are given to the **Chief** on install and upgrade. Everyone else is
   granted them by position under **Administration → Organization Settings →
@@ -55,7 +55,7 @@ evaluations you can see there are past a due date.
   nobody signs two approvals on one evaluation _(2026-11-16)_. Holding the
   approving position or `view_all` does not change that. See
   [Naming who takes a step](#naming-who-takes-a-step).
-- **Signing** and **deleting** ask the person to confirm their identity again
+- **Signing**, **deleting** and **handing over work** ask the person to confirm their identity again
   (password, passkey or authenticator), as other sensitive actions do — see
   [Authentication](Security-Authentication).
 
@@ -85,7 +85,11 @@ drafting rather than during it.
   no signatures). A ready-made form publishes as it stands, but its wording,
   weights and especially its score bands are generic — change them to your
   department's expectations first. Choosing one fills in the name, the kind
-  and who it applies to; all of them stay editable.
+  and who it applies to; all of them stay editable. _(2026-11-21)_ The annual
+  forms open their Development section with **Last year's goals**, and the
+  check-in its Next steps with **Since the last check-in** (see
+  [Rating last year's goals](#rating-last-years-goals)); forms made from a
+  starter before then are unchanged.
 
   The **officer** starter adds an officer-only **Leadership and supervision**
   section (crew leadership, developing members, administrative duties). An
@@ -109,7 +113,10 @@ shown only to members of the ranks you list. Each item is answered one way:
   behaviour that earns it) or a **numbered scale**;
 - **meets / does not meet**;
 - a **checklist**;
-- **written** text, or **goals**.
+- **written** text, or **goals**;
+- **last review's goals** _(2026-11-21)_: a result for each goal the member's
+  previous review set. One per form, never N/A as a whole, no figure, and not
+  graded. See [Rating last year's goals](#rating-last-years-goals).
 
 **Data sources** _(2026-11-14)_. Besides training hours, required training,
 meeting and session attendance and call response, an item can show three more
@@ -153,6 +160,18 @@ reads "(turned off)". When the score bands leave values uncovered, the editor
 says "No rating is suggested for values …". Each figure now shows the counts
 behind it ("6 of 8 meetings attended"), on screen and in the PDF, and the
 call response rate leaves out calls during a leave or a gap in membership.
+
+_Updated 2026-11-21._ Two more groups, **Apparatus & equipment** and
+**Inventory**, and four more figures, each counted by its own module's rule:
+**Hours for other agencies** (`shifts.external_hours`; hours the department
+counted, with how many shifts — **Shift hours** never include them),
+**Knowledge tests passed** (`training.knowledge_tests_passed`; each test once,
+with its best passing score), **Equipment checks completed**
+(`apparatus.equipment_checks`; checks the member signed off, on a shift or on
+their own, with how many found a failed item) and **Property overdue at period
+end** (`inventory.overdue_at_period_end`; items checked out past their due
+date and not returned on the period's last day — loans with no due date and
+temporary assignments are not counted). None is labelled "(turned off)".
 
 _Updated 2026-11-10._ **Training session attendance** follows the
 session-attendance requirement that applies to the member: only the sessions
@@ -304,6 +323,32 @@ holder can name who takes an approval or calibration step on one evaluation:
 On upgrade, an evaluation already waiting on an approval whose only position
 holder is its evaluator stays open until a manager names someone.
 
+## Handing over open work
+
+_(2026-11-21)_ When an evaluator or approver leaves or changes role, an
+`evaluations.manage` holder moves everything they still have open in one
+review period to someone else, instead of one evaluation at a time:
+
+1. On the conduct list, **Hand over work** opens **Hand over open work**.
+2. Choose the **Review period**, whose work (**Hand over the work of** lists
+   only people with open work there, with a count each, a former member
+   included) and who takes it (**To**).
+3. **Preview** lists each evaluation with what would move, or **Skipped:** and
+   why. Nothing changes yet.
+4. **Hand over N evaluations**, then confirm your identity. The server decides
+   each evaluation again by the same rule, so it does what the preview said.
+
+What moves, on evaluations in progress: the evaluator's part while it is not
+yet submitted (a draft stays, for the new evaluator to finish as theirs), and
+approval and calibration steps not yet done that name the person. A step that
+goes to a position's holders follows the position and is not moved. An
+evaluation moves whole or not at all: it is skipped when the new person is its
+member, cannot conduct evaluations, is already named on its approval or
+calibration (when the evaluator's part moves), or is its evaluator or signed
+another approval (when an approval moves). The new person gets **Evaluation
+Waiting on You** for a step already open; the member is not emailed and sees
+the new name. Each evaluation moved is audited as `evaluation_work_reassigned`.
+
 ## The last review
 
 _(2026-11-20)_ An evaluation page shows a **Last review** card when the member
@@ -314,6 +359,23 @@ changed the calculated one), and its goals under **Goals set then**, with
 **Open the last review**. You see it only if you could open that review
 yourself, so a new evaluator without `view_all` does not see a predecessor's
 review. It is not printed on the PDF.
+
+## Rating last year's goals
+
+_(2026-11-21)_ A **Last review's goals** item turns the card's goals into a
+rated part of the record. When the evaluation is drafted, the goals set in the
+previous review (the one the card shows) are copied into it, and copied again
+by **Update figures** until the evaluator locks their part. Each goal gets
+**Met**, **Partly met**, **Not met** or **No longer applies**, and an optional
+comment; the part cannot be submitted until every goal has a result. If the
+item is in the self-evaluation, the member rates them too.
+
+Because the copy is part of this evaluation, everyone who reads its content
+sees the goals it rates — even an evaluator who cannot open last year's review
+(the department's choice, 2026-11-21, so the record carries what it rates). The
+goals and results are printed on the PDF and covered by the signatures, but do
+not count toward any grade. With no previous review, or one that set no goals,
+the item has nothing to rate and asks for nothing.
 
 ## Period results
 

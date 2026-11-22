@@ -452,11 +452,20 @@ record to open the Attachments panel]**
 
 > "On any existing record, the **Files** action opens its attachments. You can
 > upload a certificate, transcript, or completion letter — PDF, image, or Word
-> doc, up to 25 megabytes — and download it again later. Members can manage
-> files on their own records; as a training officer you can manage them on
-> anyone's."
+> doc, up to 25 megabytes — and download it again later. Uploaded the wrong
+> file? The bin icon beside it removes it, and the record stays. A member can
+> remove a file they uploaded themselves; as a training officer you can remove
+> any file uploaded to a record. The one thing nobody removes here is a
+> certificate that came in with an approved self-report — the approval rests
+> on it, so it has no bin icon."
 
-**[SCREENSHOT NEEDED]:** _The Attachments panel for a training record showing an uploaded certificate with a Download link and an Upload button._
+**[EDITOR — 2026-11-21. Re-record the end of this line (about 15 seconds of
+new narration): removing a file from a training record is new. Show the bin
+icon beside an uploaded file, select it, and the "Remove file" / "Keep it"
+confirmation. Any take that says files can only be uploaded and downloaded is
+dated.]**
+
+**[SCREENSHOT NEEDED]:** _The Attachments panel for a training record showing an uploaded certificate with a Download link, the bin icon beside it, and an Upload button._
 
 ### FINALIZING A TRAINING SESSION (9:00 – 9:30)
 

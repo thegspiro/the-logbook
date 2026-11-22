@@ -830,6 +830,44 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### History events and apparatus; outreach positions renamed; Zeffy dues wait for a treasurer (2026-11-22)
+
+Nothing blocks a restart. Recorded by the November 21 – 22 documentation
+pass for changes that merged without an entry here.
+
+- **History: events, apparatus, timeline and "Today in history"**
+  (`9cce83b31c70`, #4537). Adds twelve `history_*` tables,
+  `history_titles.show_on_timeline` (off for every existing title) and
+  optional held-from / held-to dates on `historical_member_period_titles`.
+  Existing rows get no dates; nothing is guessed from a service period, so
+  nothing reaches the timeline until the Historian dates a held title and
+  switches the title on. With the History module on, a **Today in history**
+  card appears on every member's Dashboard on a day with a matching entry.
+  **Downgrading** past this revision drops every event, historical apparatus
+  record, their links, the station and type lists, the timeline switches and
+  the title dates: take a backup first.
+- **Outreach positions are renamed** (`1a5c18b46791`, #4505). The seeded
+  **Public Outreach** position becomes **Community Outreach Manager** and
+  **Community Education / Outreach Team** becomes **Community Outreach
+  Team**, with their descriptions, and the guest headcount reminder email now
+  names the report **Outreach Impact**. Only rows still carrying the seeded
+  wording change: a position your department renamed keeps its name. Slugs
+  and permissions are unchanged.
+- **A volunteer's RSVP no longer takes an attendee seat** (`c7e1a94d2f58`,
+  #4524). Existing volunteer RSVPs on outreach signup sheets are marked, so an
+  event's free places can rise after the upgrade.
+- **Zeffy membership payments are no longer credited to dues automatically**
+  (#4519, ADV2-11). Each new dues payment waits as **Awaiting confirmation**
+  on Grants & Fundraising → Zeffy until a `finance.manage` holder confirms
+  whose dues it pays. Payments already credited are unchanged.
+- **An applicant who edited their own details** (`809893462b67`, #4542) is
+  matched to a member only by the transfer link. The migration backfills
+  this from the activity log for applications already edited.
+- **`GET /api/v1/training/reports/compliance-forecast`** (#4485) now returns
+  `{members, averages}` instead of a bare list. A script reading the list
+  must read `.members`. `GET /api/v1/training/competency-matrix` is retired
+  and answers 404 (#4540); the Compliance Matrix answers the same question.
+
 ### Leave requests: an approver's own request goes to the Chief; approver cover (2026-11-21)
 
 Nothing blocks a restart. Migration `a9763f96e072` adds a column to

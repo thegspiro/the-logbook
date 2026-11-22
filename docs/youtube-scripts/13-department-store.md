@@ -537,6 +537,19 @@ applied PayPal payment can still overpay, and the order then offers "Refund
 the $… excess" — worth a line in Chapter 7 when it is next recorded. Shipped
 orders relabel per W67b-18.]**
 
+**[SCREEN: An order reading "Reported — needs verification", the note "The
+member reported paying (ref …)" with its **Not received** button, and the
+confirmation "Mark this payment as not received?" with **Keep checking** and
+**Not received** — ADDED 2026-11-22 PASS]**
+
+> "And when somebody reports a payment that never shows up? **Not received**.
+> The order goes back to owing, the member gets an email saying it couldn't be
+> verified, and the reminders pick up again."
+
+**[PRODUCTION NOTE — 2026-11-22 PASS. New beat, about 12 seconds (W67b-14).
+Before 2026-11-21 a reported payment could only be verified, never turned
+down.]**
+
 ### BULK (15:15 – 16:00)
 
 **[SCREEN: Selecting twelve orders, clicking "Mark selected paid", then a bulk
@@ -642,8 +655,9 @@ everyone who ordered" ticked.]**
 
 > "One click does three things. It stamps the window so 'has this been ordered
 > yet?' comes off the record instead of somebody's memory. It marks every
-> eligible order **ordered**. And it emails everyone that it's gone in, with
-> the expected date."
+> eligible order **ordered**. And it emails the members whose orders went in,
+> with the expected date. If you record it again later, only the newly ordered
+> members hear about it."
 
 **[SCREEN: The result toast — "4 orders marked ordered · 1 held back,
 unpaid".]**
@@ -682,7 +696,14 @@ column visible and two rows reading "yes".]**
 **[SCREEN: Shirts arriving, bulk-setting to Ready for Pickup, then Fulfilled.]**
 
 > "Shirts arrive, bulk-set to ready for pickup, everybody gets an email. Hand
-> them out at drill, mark fulfilled, close the window out."
+> them out at drill, mark fulfilled. The window itself closes out once every
+> order in it is fulfilled or cancelled — so settle those two unpaid ones
+> first."
+
+**[PRODUCTION NOTE — 2026-11-22 PASS. Two narration lines changed, about 8
+seconds to re-record: the vendor-order email now goes only to members whose
+orders went in (W67b-11, W67b-13), and **Mark fulfilled** on a window is
+refused while any order is still open (W67b-12).]**
 
 **[B-ROLL: A quartermaster handing a folded job shirt across a table at a
 station.]**

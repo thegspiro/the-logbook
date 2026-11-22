@@ -73,15 +73,15 @@ Some modules provide enhanced functionality when used together:
 
 Each module may have its own settings page accessible after enabling:
 
-| Module      | Settings Location                                                                |
-| ----------- | -------------------------------------------------------------------------------- |
-| Training    | Training Admin > Settings                                                        |
-| Scheduling  | Scheduling > Settings tab                                                        |
-| Events      | Events Admin > Settings                                                          |
-| Inventory   | Inventory Admin > Settings                                                       |
-| Facilities  | Facilities > Settings                                                            |
-| Admin Hours | Admin Hours > Manage (categories, approval settings)                             |
-| History     | History > Titles and clearance (titles, clearance list, sources, document types) |
+| Module      | Settings Location                                                                                                               |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Training    | Training Admin > Settings                                                                                                       |
+| Scheduling  | Scheduling > Settings tab                                                                                                       |
+| Events      | Events Admin > Settings                                                                                                         |
+| Inventory   | Inventory Admin > Settings                                                                                                      |
+| Facilities  | Facilities > Settings                                                                                                           |
+| Admin Hours | Admin Hours > Manage (categories, approval settings)                                                                            |
+| History     | History > Titles, lists and clearance (titles, clearance list, sources, document types, stations, apparatus types, event types) |
 
 ---
 

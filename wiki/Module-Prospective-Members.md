@@ -245,6 +245,15 @@ A coordinator can reactivate it like any other withdrawal.
   address (see the [upgrade notes](https://github.com/thegspiro/the-logbook/blob/main/docs/UPGRADING.md)).
 - **Advancing an applicant with nowhere to go returns an error** rather than a
   false "Advanced".
+- **A member never sees their own applicant record** (it answers "not found").
+  The record is matched to a member by the conversion link, an email they own,
+  or full name with date of birth. Once the applicant changes their email,
+  name or date of birth through a follow-up form, only the conversion link
+  counts, so an applicant cannot hide their file from a coordinator by typing
+  that coordinator's details. A coordinator's correction to one of those fields
+  restores the other matches. The first public application is still matched on
+  what was typed, by owner decision (see
+  [Known Limitations](https://github.com/thegspiro/the-logbook/blob/main/docs/KNOWN_LIMITATIONS.md)).
 - More symptoms and fixes:
   [Troubleshooting](Troubleshooting#prospective-members-module-issues).
 
@@ -277,7 +286,10 @@ A coordinator can reactivate it like any other withdrawal.
   Withdrawn template), `601fdb28ab8c` (`conversion_config`), `99b16109d44c`
   (resets stale in-progress stage rows), `feecd81eef2d` (`inactive_since`, the
   auto-purge clock — set to the upgrade time for applications already inactive,
-  so nothing is purged until a full period after upgrading).
+  so nothing is purged until a full period after upgrading), `809893462b67`
+  (`identity_edited_by_applicant_at`, backfilled from the activity log; while
+  set, `app/api/prospect_privacy.py` matches the record to a member only by
+  `transferred_user_id`).
 
 ## Related
 

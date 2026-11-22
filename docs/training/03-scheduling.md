@@ -780,6 +780,19 @@ assignment is refused and the message names what is missing. For a
 department's own seat that nothing grants, see
 [Seating a member by officer override](#seating-a-member-by-officer-override-2026-11-05).
 
+**Members who have asked for leave** _(2026-11-21)_. A member with a leave
+request that is not decided yet, covering the shift's date, stays in the list
+with **— leave requested** after their name. Choose them and a note says:
+_"Leave requested: this member has asked for leave covering this date, and it
+is not decided yet. You can still assign them; if the leave is approved, the
+assignment is dropped."_ The request may still be denied, so you are not
+stopped. You are told now so the seat does not empty without warning later. See
+[Membership > Leave of Absence](./01-membership.md#leave-of-absence).
+
+_Screenshot still to make: `03-141-assign-leave-requested.png`, the **Assign
+someone** form with a member marked **— leave requested** chosen and the
+amber note under the member picker._
+
 **Drivers and EVOC.** An apparatus can require a level of Emergency Vehicle
 Operations Course ([EVOC](./GLOSSARY.md)) training for its driver. If you put
 someone in the driver's seat without it:
@@ -4612,6 +4625,7 @@ assigned, time off is approved, shifts are generated, and staffing is checked.
 | A shift has no end time                                                   | The Logbook cannot compare times, so any other shift that member holds on the same date counts as a clash                                                                                          |
 | "Member is on leave of absence for this date"                             | They have an active leave of absence on the shift's date. Only the date is checked, not the hours                                                                                                  |
 | A member with approved time off is assigned                               | Refused. Approved time off blocks assignments in those dates                                                                                                                                       |
+| A member's name in the picker ends **— leave requested**                  | They have asked for leave covering the shift's date and it is not decided yet. You can still assign them. If the leave is approved, that assignment is cancelled |
 | An officer assigns an Officer, Captain or Lieutenant to a shift with no shift officer | That member becomes the shift officer automatically, with no notification. This never happens when a member signs themselves up                                                         |
 | The shift officer is changed to someone else                              | Anyone else in the **Officer** seat is moved to **Firefighter**. Nobody is notified                                                                                                                |
 | A probationary member signs up or is assigned                             | Allowed. Probationary members count as active. To stop them signing themselves up, exclude their membership type under **Eligibility** in Scheduling Admin                                        |
@@ -4990,11 +5004,15 @@ rather than starting from zero. It needs `scheduling.manage`.
    **Positions**, **Shifts** (the shifts the import proposes, each with a
    confidence score), joined entries and duplicates, and **Rows** (edit, revert
    or exclude any row).
-   _Added 2026-11-10._ A row flagged for **overlapping times** shows its start
-   and end as boxes right in the **Times** cell, with **Save times**. An overlap
-   is nearly always one mistyped time, so you can fix it without opening the
-   row's edit dialog. Only the changed time is sent, and it is saved as an
-   ordinary row edit, so **Revert** still brings back the file's value. An
+   _Added 2026-11-10, date added 2026-11-21._ A row flagged for **overlapping
+   times** shows its date, start and end as boxes right in the **Date** and
+   **Times** cells, with one **Save** button. An overlap is nearly always one
+   mistyped value, often the date of an overnight shift typed on the same day
+   as the one before it, so you can fix it without opening the row's edit
+   dialog. Press Enter in any box, or select **Save**; only the values you
+   changed are sent, as one ordinary row edit, so **Revert** still brings back
+   the file's value. Only the fields your column mapping reads are offered (a
+   file with a date column but no time columns gets the date alone). An
    excluded row keeps its plain text.
 4. Choose **Commit**. The dialog says plainly that a commit **cannot be undone**.
    The exception _(2026-11-19)_: batches sent here by a **Historical Data

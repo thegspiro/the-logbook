@@ -1,5 +1,38 @@
 # Known Limitations & Open Decisions
 
+## Found by the November 21 – 22 Documentation Pass — Awaiting an Owner Decision (2026-11-22)
+
+None of these is a regression, and none was changed by the documentation
+pass, which records them so they are decided rather than rediscovered.
+
+- **A store window cannot be cancelled from the console.** #4513 rebuilt
+  `POST /store/windows/{id}/cancel` so cancelling a window cancels its
+  orders, but `StoreWindowsTab.tsx` has no Cancel control and
+  `storefrontService.cancelWindow`
+  (`frontend/src/modules/storefront/services/api.ts`) has no caller. The
+  training guide says nothing about cancelling a window until a control
+  exists. Decide whether the console should offer it.
+- **History's settings page has two names.** The overview card reads
+  **Titles, lists and clearance** (`HistoryHomePage.tsx`); the page it opens
+  is headed **Titles and Clearance** (`HistorySettingsPage.tsx`). The guides
+  name both. The History menu also lists only Overview, Past Members and
+  Honor Roll: **Timeline**, **Events** and **Apparatus** (#4537) are reached
+  only from the overview's cards. Probably deliberate; confirm.
+- **The Dashboard card is still titled "Community engagement"**
+  (`DashboardOrganizationWidgets.tsx`), while #4505 renamed the report it
+  summarises to **Outreach Impact**. The owner's vocabulary table does not
+  name the card, so the guides describe it as it reads.
+- **An hours target prorated to zero may read "not met".** When leave
+  prorates a shifts or calls target to zero the requirement reads met
+  ("Nothing owed"), but the shared hours grader marks met only when the
+  target is above zero (`backend/app/services/training_compliance.py`). Not
+  verified whether proration can return exactly zero hours; if it can, the
+  two kinds disagree for the same member.
+- **The goal-review item's empty text assumes a previous review.** On an
+  evaluation whose member has no earlier review on the form at all, the
+  **Last review's goals** item still reads "The member's previous review on
+  this form set no goals…" (`EvaluationForm.tsx`). Wording only.
+
 ## CI — What a Pull Request No Longer Runs (Owner Decisions, 2026-11-19)
 
 Until this date every pull request and every merge to `main` started all 22 CI
@@ -1826,8 +1859,8 @@ and — where the department has enabled `public_progress_visible` — its pipel
 checklist, plus a self-service cancel. Nothing puts that URL in front of the
 requester automatically: the acknowledgement email does not carry it, and the
 public form's confirmation response does not return the token. A coordinator
-hands it out from the **Copy status link** control on the request detail panel
-in Events → Requests.
+hands it out from the **Copy status link** control on the request's own page
+in Events → Community Outreach → Outreach Requests.
 
 That is the chosen posture, not an omission. The membership pipeline mails its
 equivalent (`/application-status/{token}`) because a prospect's application is

@@ -2023,12 +2023,12 @@ creation tab. Both are pages of **Events Administration**, which is laid out
 like Training, Scheduling and Inventory Administration: four area cards, and
 under them a strip of the chosen area's pages with a line naming the open one.
 
-| Area                   | Pages                                                                      |
-| ---------------------- | -------------------------------------------------------------------------- |
-| **Events**             | **Create Event**, **Past Events**                                          |
+| Area                   | Pages                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| **Events**             | **Create Event**, **Past Events**                                              |
 | **Community Outreach** | **Overview**, **Outreach Requests**, **Outreach Impact**, **Apparatus Events** |
-| **Check-ins**          | **QR Code Analytics**, **Card Check-ins** |
-| **Settings**           | **Settings**                              |
+| **Check-ins**          | **QR Code Analytics**, **Card Check-ins**                                      |
+| **Settings**           | **Settings**                                                                   |
 
 An area card and the page under it carry a red count when the **Needs
 attention** list has items there.
@@ -2868,8 +2868,10 @@ scheduling and communication.
      list shows each member's rank by name ("Jordan Avery — Firefighter").
      Only current members (active or probationary) are listed _(2026-11-19)_.
      A default coordinator who has since left stays selected, marked
-     "(former member)", so saving the section does not swap them out — but
-     new requests will keep going to them until you choose someone current.
+     "(former member)", so saving the section does not swap them out. New
+     requests are then left **unassigned** rather than given to someone who
+     has gone, so they still show in the queue for anyone to pick up
+     _(2026-11-21)_. Choose someone current to have them assigned again.
    - **Request Checklist** — your checklist steps, such as "Chief Approval",
      "Email Volunteer Signup" or "Prep Equipment". Use the up and down arrows
      to reorder them.
@@ -2977,7 +2979,9 @@ On the request's page you can also:
    (duty shifts, 30) _(2026-11-21)_, so a sheet booked weeks out is there to
    claim. A member who claims a role is also marked **Going** on the event,
    so the event's attendance list shows the crew and **Check In** lists them
-   first; one whose seat is cancelled or declined, with no other seat, goes
+   first. A volunteer is crew, not audience: they do not use up one of the
+   event's **Max Attendees** places, though guests they bring do
+   _(2026-11-21)_. One whose seat is cancelled or declined, with no other seat, goes
    back to **Not going**. When asking, choose who by member class, membership
    status and positions, the same way as
    [emailing members about open seats](#emailing-members-about-open-seats);
@@ -3064,7 +3068,12 @@ open the same volunteer signup sheet a request can.
 
 The card then shows how many have signed up for each role and who they are.
 Members claim a role from **Scheduling → Open Shifts**, and each one is marked
-**Going** on the event, as on a request's sheet. Unlike a request's sheet, an
+**Going** on the event, as on a request's sheet. Volunteers do not count
+against the event's **Max Attendees**: the sheet's own role counts limit the
+crew. A guest a volunteer adds does take a place, and is refused if the event
+has no room left, because a volunteer is never put on the waitlist. A member
+who was already going as audience and then claims a role gives up their place,
+and the next party on the waitlist moves in. Unlike a request's sheet, an
 event's own sheet has no **Email the Membership** button yet: tell members it
 is on Open Shifts.
 
@@ -3074,8 +3083,8 @@ is on Open Shifts.
 - **Moving the event**, by editing its time or with **Postpone**, moves its
   sheet with it. **Cancelling or deleting the
   event** stands the sheet down and tells the members who had signed up.
-  Cancelling a whole recurring series does not yet do this; check Open
-  Shifts after cancelling a series that had a sheet.
+  **Cancel Entire Series** and deleting a series do the same for every
+  occurrence that had a sheet _(2026-11-21)_.
 
 > **Screenshot needed** (`04-105-event-volunteer-staffing.png`): the
 > **Volunteer staffing** card on an outreach event with an open sheet: "3 of 5 signed up", each role's count and the names of
@@ -3105,8 +3114,9 @@ it.
     are over and whose attendance has not been finalized. Finalizing
     attendance is what closes an outreach event out.
 - **Planning calendar** — every outreach event, by **Week** or **Month**, the
-  way Shift Scheduling draws them. A day's events are listed beside the
-  calendar, with their time, place, how full their sheet and crew are, and the
+  way Shift Scheduling draws them. The arrows step back or forward a week or
+  a month, and **Today** brings you back. Select a day to list its events
+  beside the calendar, with their time, place, how full their sheet and crew are, and the
   request each came from. On a phone, the month shows how many events each day
   has, and the week is a list of days.
 - **This year at a glance** — the four Outreach Impact figures, with a link to
@@ -3115,6 +3125,16 @@ it.
 An outreach event is the same one Outreach Impact counts: a public education,
 fundraiser, ceremony or social event, or any event a request was scheduled
 onto. Drafts are shown and marked **Draft**; cancelled events are not shown.
+An apparatus night built from a template whose event type is not one of those
+(a business meeting, say) stays on **Apparatus Events** but is not on the
+Overview, so that the Overview and Outreach Impact always count the same
+events.
+
+> **Screenshot needed** (`04-108-outreach-overview.png`): **Manage Events →
+> Community Outreach → Overview** at desktop width, with one request under
+> **Waiting for a reply**, one event under **Short of people**, the planning
+> calendar on **Month** with a day selected and its events listed, and the
+> four **This year at a glance** figures.
 
 ### Measuring Outreach: Outreach Impact
 
@@ -3332,7 +3352,7 @@ setup:
 
 - **Outreach Types:** Fire Safety Demonstration, Station Tour, School Visit,
   CPR/First Aid Class
-- **Default Coordinator:** Lt. Sarah Chen (Community Outreach Officer)
+- **Default Coordinator:** Lt. Sarah Chen (Community Outreach Manager)
 - **Request Checklist:** Chief Approval → Confirm Volunteers → Prep Equipment →
   Pre-Event Email
 - **Automatic Emails:** on submitted (to the coordinator), on scheduled (to the

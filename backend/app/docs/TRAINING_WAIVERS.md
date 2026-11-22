@@ -25,8 +25,8 @@ calculations, and what members see on their end.
        adjusted_required = base_required x (active_months / total_months)
 
 5. The member's compliance percentage and met/not-met status are recalculated
-   everywhere: the member's own training page, the compliance matrix, the
-   competency matrix, training reports, and program enrollment progress.
+   everywhere: the member's own training page, the compliance matrix,
+   training reports, and program enrollment progress.
 
 ---
 

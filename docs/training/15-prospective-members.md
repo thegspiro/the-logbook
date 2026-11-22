@@ -859,6 +859,22 @@ name **together with a matching date of birth**.
 > an applicant has vanished from the board, check whether the two records share
 > a name _and_ a date of birth.
 
+**Once an applicant edits their own details, only the conversion link counts.**
+An applicant can change their email, name or date of birth through a follow-up
+form. If they do, The Logbook stops matching that record on those details and
+uses only the link made at conversion. Otherwise an applicant could type a
+coordinator's email, or their name and birth date, and hide their own file from
+that coordinator. If a coordinator corrects one of those fields on the
+applicant record, the record is matched on its details again, because the
+values are now the department's.
+
+> **The first application still matches on what was typed.** An application
+> sent through the public interest form with a coordinator's email, or their
+> name and birth date, is hidden from that coordinator from the start. That is
+> deliberate, so a member's own application stays hidden from them before they
+> join. If you suspect an applicant is missing, ask another coordinator to look:
+> they will see the record.
+
 ---
 
 ## Inactivity Timeout

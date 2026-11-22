@@ -347,6 +347,9 @@ your department uses.
   ends on a later day says "next day". The **Take a Shift** count (for example
   "2 open · 2 short-staffed") now shows on a phone too.
 - **Recent activity.** The latest things done across the department.
+- **Today in history.** _(2026-11-21)_ If your department keeps its History
+  in The Logbook, entries from this day in earlier years. The card is hidden
+  on a day with nothing.
 - **Needs you.** Anything waiting for you to act. For example, a department
   message that asks you to confirm you have read it has an **Acknowledge**
   button here. An officer who must sign off on an applicant sees _"(name) is

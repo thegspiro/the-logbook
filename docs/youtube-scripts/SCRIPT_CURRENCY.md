@@ -1,5 +1,44 @@
 # Script currency
 
+## 2026-11-22 pass
+
+**Edited:**
+
+- **04 Fire Chief, evaluations beat.** One added line on **Hand over work**
+  for a departed evaluator's open reviews (#4539) and on rating last year's
+  goals (#4514), with a production note. About 15 seconds to record.
+- **05 Training Officer, Files beat.** Covers the bin icon and who may remove
+  a training record's file (#4502). About 15 seconds to re-record.
+- **07 Secretary.** The Event Requests beat now opens on the Outreach
+  **Overview** before **Outreach Requests** (#4533, #4505); the admin hub beat
+  lists the four Community Outreach pages. About 10 seconds each.
+- **08 Quick tips, shorts 8G and 8H.** Brought in line with the recorded
+  takes (#4515). 8G's end-state line now matches the card ("Authenticator app
+  is on · 10 recovery codes left"). Nothing to re-record.
+- **13 Department Store.** A new **Not received** beat of about 12 seconds
+  after Recording Money; the vendor-order narration now says only members
+  whose orders went in are emailed, and the close settles unpaid orders before
+  **Mark fulfilled** (#4513, #4512). About 8 seconds to re-record.
+- **16 Training Officer part 2.** A new beat of about 30 seconds after the
+  Compliance Officer Dashboard on the forecast re-grading at 30/60/90 days
+  (#4525); film it between January and September, when no point falls in next
+  year. Re-time Chapter 3.
+- **Apparatus events video script.** Scenes 1 and 8 show the old page strip
+  (no **Overview**, tab named Requests); re-record the opening seconds of each,
+  about 5 seconds. "Requests tab" now reads **Outreach Requests** in three
+  places.
+
+**Flagged, not edited:**
+
+- **06 Member guide** still has no Leave Requests beat (carried from the
+  2026-11-21 pass); #4531 adds the approver's own request going to the Chief
+  and **Approver cover**, which a future beat should include.
+- **No script covers History** (#4537), Zeffy dues confirmation (#4519) or
+  the inventory **Never Inspected** tab (#4552). None is wrong; a short for
+  **Today in history** or **Never Inspected** would suit 08.
+
+See [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-21--22-2026).
+
 ## 2026-11-21 pass
 
 **Edited:**

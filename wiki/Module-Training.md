@@ -406,7 +406,11 @@ file paths are never returned. The record download route also accepts the
 self-reports storage area, because approving a submission copies its
 attachment entries onto the record verbatim (keeping each entry's `id`). A
 voided record refuses an upload (400), and the record create/update bodies
-refuse an `attachments` field (422); see
+refuse an `attachments` field (422). _(2026-11-21, #4502)_ `DELETE
+.../attachments/{entry}` removes a file uploaded to the record: `training.manage`
+any, the member only an entry whose `uploaded_by` is theirs; never an entry an
+approval copied, and nothing on a voided record. The list carries a
+server-computed `can_remove`; see
 [Member files](#compliance-member-files-and-templates-2026-11-20--21).
 
 ---
@@ -1436,14 +1440,14 @@ total.** `RequirementMonthlyHours` prints the server's figure for hours; shifts
 and calls still average client-side.
 
 **The officer views grade through profiles** (#4460 via #4456, owner decision
-2026-11-20). The member period-status roster, competency matrix, compliance
-CSV/PDF cells, compliance forecast and Scheduling's Shift Compliance report
+2026-11-20). The member period-status roster, competency matrix (retired
+2026-11-21, #4540), compliance CSV/PDF cells, compliance forecast and Scheduling's Shift Compliance report
 resolve each member through `ComplianceGrading.for_member`, with one config
 load per request. The roster classifies with the profile's thresholds; the
 others have no member standing, so the profile only narrows cells (a
 requirement outside it reads `not_applicable` / N/A, or the member is not
-listed). The forecast gains `current_standing`; its 30/60/90 projections stay
-plain percentages. The exports and forecast take the department's
+listed). The forecast gains `current_standing`; its 30/60/90 projections
+stayed plain percentages until #4485 gave them standings too (below). The exports and forecast take the department's
 `include_current_month` instead of a hard-coded `True`. The profile card's
 colour is the matrix standing too (see [Compliance](Module-Compliance)).
 
@@ -1553,8 +1557,74 @@ its session's details. See [Events](Module-Events).
   (`coalesce(reviewed_at, submitted_at)`); `reviewed_at` is written only by an
   officer's review, so an auto-approved submission's files were never deleted.
 - Still open (`docs/KNOWN_LIMITATIONS.md`): a certificate kept for a voided
-  record is outside the retention sweep, a record's own file has no removal
-  route, and file names on path-less entries survive anonymisation.
+  record is outside the retention sweep, and file names on path-less entries
+  survive anonymisation. (A record's own file gained a removal route in
+  #4502, below.)
+
+**My Training, requirement progress and the matrix screen take the grader's
+answer** (#4493). `TrainingService.evaluate_requirement_detail` (My Training,
+the officer's member view, and through it the exports and forecast) takes met
+and expired from `training_compliance`'s shared grader;
+`check_requirement_progress` (requirement progress, the user training report,
+the MCP progress tool) is projected from that detail, follows
+`include_current_month`, and its batch preload now carries the columns
+certification and category matching read. Visible: a certification never held
+reads not met (not "Expired — Renew ASAP"); an hours requirement with a zero
+target is not met by one logged hour; a BIANNUAL courses requirement whose
+newest counted certificate lapsed reads expired; with the current month
+excluded, `days_until_due` counts from the real day, so a due date already
+passed this month reads overdue. `complianceMatrixModel.toneOf` no longer
+demotes a cell the backend graded met because its `expiry` has passed: on an
+hours or courses cell that date is the latest counted record's and never
+lapses the requirement; a lapse arrives as `expired`. Tests:
+`test_requirement_detail_agrees_with_grader.py`,
+`test_my_training_agrees_with_matrix.py`.
+
+**Forecast standings and averages** (#4485, #4517, #4525). `GET
+/training/reports/compliance-forecast` now returns `{members, averages}` (was a
+bare list). Each member carries `forecast_30_standing` / `_60_` / `_90_`,
+classified by the member's own grading as `current_standing` is. The four
+averages are `ComplianceGrading.classify_average`: the mean over graded members,
+rounded to one decimal, classified by the **department's** thresholds; under
+`all_required` an average is compliant only when every graded member is
+compliant at that horizon (owner decision 2026-11-21, #4517). Both screens
+colour with `STANDING_TEXT_COLORS`; the 80/50 and 80/60 bands are gone. Since
+#4525 each projection is `training_compliance.grade_members` run as of
+today plus 30, 60 and 90 days on the records already logged, so an ungraded or
+superseded certificate costs nothing, while a rolling window shedding hours,
+a catch-up period ending and a calendar period rolling over are charged. The
+expiring-certifications list stays informational. The member training print
+page gained an `--exempt` modifier, so an exempt member prints muted rather
+than in the at-risk amber. Tests: `test_compliance_forecast_horizons.py`,
+`TestClassifyAverage` / `TestProjectedStanding`.
+
+**`GET /training/competency-matrix` retired** (#4540, owner decision
+2026-11-21). No screen or MCP tool called it. The route and
+`CompetencyMatrixService` are deleted and the path answers 404
+(`test_competency_matrix_endpoint_retired.py`). Use
+`GET /training/compliance-matrix` for who meets what. The Competency tab's
+heat map (`GET /training/competency/department`) and the per-position
+`competency_matrices` are a different feature and unchanged.
+
+**Member files: removal, orphan sweep, delete audit** (#4502, owner decisions
+2026-11-21):
+
+- `DELETE /training/records/{id}/attachments/{entry}` (see
+  [Attachments](#attachments)): by entry id, a repeat is a 204 no-op, audited
+  as `training_record_attachment_removed` with ids only; the file goes through
+  `remove_unreferenced_files` after the commit. The record's **Files** dialog
+  shows a bin icon where `can_remove` is true.
+- `scripts/sweep_orphaned_member_files.py` (`app/services/orphaned_member_files.py`)
+  finds files in the self-report, training-record and attendance-waiver areas
+  that no row names; dry run by default, counts only, files at least
+  `--min-age-days` (30) old, refused while a relocation or remote migration is
+  unfinalized, uploads volume only. Usage in
+  [`backend/scripts/README.md`](https://github.com/thegspiro/the-logbook/blob/main/backend/scripts/README.md#sweep_orphaned_member_filespy).
+- The permanent delete writes `user_hard_deleted` inside its own transaction
+  (with `files_queued`) and refuses with a 500 when that row cannot be
+  written. The file counts move to a following
+  `pending_file_deletions_completed` event linked by
+  `user_hard_deleted_audit_id`. See `docs/UPGRADING.md`.
 
 ## Cross-Module Connections
 

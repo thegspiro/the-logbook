@@ -26,9 +26,26 @@ events module. What the module does and how departments use it is on
 | `/events/admin/requests/:requestId` | One outreach request on its own page (`EventRequestPage`, which renders `EventRequestsTab` with `requestId`) _(2026-11-21)_ | `events.manage`  |
 | `/events/admin/community/print`     | Printable Outreach Impact summary (`?period=`)                                                                              | `events.manage`  |
 
-The Events Admin Hub has six tabs: **Create Event**, **Past Events**,
-**Requests** (outreach requests), **QR Code Analytics**, **Community
-Engagement** and **Settings**.
+The Events Admin Hub (`EVENTS_ADMIN_TABS` / `EVENTS_ADMIN_AREAS` in
+`pages/eventsAdminTabs.ts`) groups nine pages under four areas: **Events**
+(**Create Event**, **Past Events**), **Community Outreach** (**Overview**,
+**Outreach Requests**, **Outreach Impact**, **Apparatus Events**),
+**Check-ins** (**QR Code Analytics**, **Card Check-ins**) and **Settings**.
+The tab ids did not change with the 2026-11-21 renames (`?tab=requests`,
+`?tab=community`). An area card opens on its first destination, so
+**Community Outreach** lands on `?tab=overview` _(2026-11-21)_.
+
+**Outreach Overview** (`pages/outreach-overview/`) reads
+`GET /events/outreach-calendar` (`OutreachCalendarService`, at most 93 days
+and 500 rows). It decides nothing itself: which events count is
+`outreach_event_clause` (the Outreach Impact rule), sheet fill is
+`staffing_counts_by_request` (which now accepts events as well as requests,
+keyed by owner id), crew fill is `ApparatusEventService.crew_summary`, and
+closed out is `attendance_is_finalized`. Drafts are included and flagged;
+cancelled events are excluded. **Log a request** links to
+`?tab=requests&new=1`, which `EventRequestsTab` reads once to open the **New
+request** dialog and then strips from the URL with `replace`, so a refresh or
+Back does not reopen it.
 
 ### Public pages (no login)
 
@@ -349,19 +366,33 @@ DELETE /event-requests/email-templates/{id}           # Delete
   `event_staffing_service.py` — an event a request was scheduled onto is
   staffed from the request. `update_event` and `postpone_event` move the sheet;
   `cancel_event` and `delete_event` stand it down (`cancel_shift`, which tells
-  the crew). A series cancel does not yet. `can_staff_event` on the event
-  response gates the card.
+  the crew). `cancel_event_series` and `delete_event_series` stand down every
+  occurrence's own sheet too _(2026-11-21)_: the sheet ids are read before the
+  commit (a deleted row's columns are gone after it), and a cancel run with
+  `defer_commit=True` queues them for `complete_deferred_writes`, because
+  `cancel_shift` commits on its own. `can_staff_event` on the event response
+  gates the card.
 - **Volunteer = RSVP.** `sync_volunteer_rsvps` (called by `SchedulingService`
   after a seat is created, edited, declined or removed has committed) makes a
-  seat-holder `going` and a member with no remaining seat `not_going`; it never
-  touches a checked-in RSVP or a cancelled or finalized event. The check-in
+  seat-holder `going` with `event_rsvps.is_volunteer = true`, and a member with
+  no remaining seat `not_going` with the flag cleared; it never touches a
+  checked-in RSVP or a cancelled or finalized event.
+- **Volunteers take no attendee seat** _(2026-11-21, migration
+  `c7e1a94d2f58`)_. Every seat count goes through `rsvp_seats(rsvp)` or
+  `rsvp_seats_sql()` in `event_service.py` — 0 for a volunteer plus their
+  `guest_count`, else 1 + `guest_count` — on the RSVP path, waitlist
+  promotion, the list card, the detail page and the stats. A volunteer is
+  never waitlisted, so guests they add must fit at once (a locking read of the
+  other going seats). When a sync frees seats on a capped event (an audience
+  RSVP turned crew), it returns the event id and the caller runs
+  `promote_after_sync` after its commit. The check-in
   modal sorts `going` members first. `/staffing` is in
   `UNCACHEABLE_SUBSTRINGS`.
 - **Close-out.** `events.outreach_outcome_note`, `outreach_apparatus_ids`
   (checked in-org in either apparatus table), `outreach_materials` (one entry
   per item, case-insensitively) and `outreach_photos` (`none`, `consented`,
-  `not_consented`). Offered on the same rule as the guest headcount. Community
-  Engagement returns `materials` totals, and each event row its close-out.
+  `not_consented`). Offered on the same rule as the guest headcount. Outreach
+  Impact returns `materials` totals, and each event row its close-out.
 - **Open Shifts window.** `OUTREACH_LOOKAHEAD_DAYS = 60` in
   `endpoints/scheduling.py`: with no end date, outreach sheets are listed 60
   days ahead and duty shifts 30.
