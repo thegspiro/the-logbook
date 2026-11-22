@@ -1,7 +1,7 @@
-"""Re-apply 5a41041e328b where an installation skipped it; merge the two heads
+"""Re-apply 5a41041e328b where an installation skipped it
 
 Revision ID: c4e7a9d2f1b8
-Revises: 809893462b67, dd939b45d6c0
+Revises: 561a3e9f4165
 Create Date: 2026-11-22 13:30:00.000000
 
 ``5a41041e328b`` made ``event_requests.contact_email`` nullable and added
@@ -20,9 +20,6 @@ Existing rows (pitfall #35): every one holds an email, because the column was
 NOT NULL, and loosening a column cannot fail on them. A table only
 ``create_all`` builds (pitfall #26) is skipped; the model declares both.
 
-It also joins the two heads ``main`` carried on 2026-11-22, both merges of
-``7d2e4b81c5a3`` and ``85680aed8332``.
-
 The downgrade does nothing: the state this revision ensures is the state its
 ancestor ``5a41041e328b`` already established, and that revision's own
 downgrade is what reverses it.
@@ -35,7 +32,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "c4e7a9d2f1b8"
-down_revision: Union[str, Sequence[str], None] = ("809893462b67", "dd939b45d6c0")
+down_revision: Union[str, None] = "561a3e9f4165"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

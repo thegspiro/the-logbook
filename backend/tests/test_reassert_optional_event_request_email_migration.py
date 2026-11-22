@@ -12,7 +12,7 @@ Pinned:
 * a table that never got ``source`` gets it, reading ``web``;
 * a table ``5a41041e328b`` already upgraded is left exactly as it was;
 * an empty database is a no-op (pitfall #26);
-* it is the single head, joining the two ``main`` carried.
+* it is the single head.
 """
 
 import importlib.util
@@ -50,9 +50,8 @@ MIGRATION = _migration()
 
 
 @pytest.mark.unit
-def test_it_targets_event_requests_and_joins_both_heads():
+def test_it_targets_event_requests():
     assert MIGRATION.TABLE == "event_requests"
-    assert set(MIGRATION.down_revision) == {"809893462b67", "dd939b45d6c0"}
 
 
 @pytest.mark.unit
