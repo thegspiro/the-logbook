@@ -1592,7 +1592,7 @@ const ReportsSection: React.FC = () => {
           <div className="split-row-main">
             <h3 className="text-theme-text-primary text-sm font-medium">Compliance Forecast</h3>
             <p className="text-theme-text-muted text-xs">
-              Predictive 30/60/90 day compliance based on expiring certifications
+              Each member's standing 30, 60 and 90 days from now if nothing new is logged
             </p>
           </div>
           <button
