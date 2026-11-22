@@ -9875,17 +9875,29 @@ class Seeder:
                 "has not already covered"
             )
             return
-        target = candidates[0]
-        try:
-            self.api.post(
-                f"/scheduling/shifts/{pick(target, 'id')}/assignments",
-                {"user_id": admin_id, "position": "officer"},
+        # The administrator has to be on the crew before the task runs, or it
+        # marks the shift covered without writing them a reminder. A refused
+        # seat used to be taken for "already aboard"; when the officer seat
+        # was simply filled, the run burned the shift and the inbox stayed
+        # empty, so each seat is tried and the crew is read back.
+        # Engines first: 03-97 pictures the reminder's equipment checklists, and
+        # the seeded check templates apply to engines only, so a reminder for
+        # any other unit reads "No equipment checklists are assigned".
+        engines_first = sorted(
+            candidates[:10],
+            key=lambda s: not str(
+                pick(s, "apparatus_unit_number", "apparatusUnitNumber") or ""
+            ).startswith("E-"),
+        )
+        target = next(
+            (s for s in engines_first if self._seat_admin_on(s, admin_id)), None
+        )
+        if target is None:
+            self.blocked.append(
+                "shift reminder inbox: no seat for the administrator on the "
+                "next ten upcoming shifts"
             )
-        except ApiError as exc:
-            # Already aboard (or the seat is taken) still means the reminder
-            # will name them if they hold any assignment on the shift.
-            if exc.code not in (400, 409):
-                raise
+            return
 
         starts = str(pick(target, "start_time", "startTime"))
         start_dt = datetime.fromisoformat(starts.replace("Z", "+00:00"))
@@ -9905,6 +9917,27 @@ class Seeder:
                 "/organization/settings",
                 {"shift_reminders": {**widened, "lookahead_hours": 2}},
             )
+
+    def _seat_admin_on(self, shift: dict, admin_id: str) -> bool:
+        """Put the administrator on `shift`'s crew; True once they are on it."""
+        path = f"/scheduling/shifts/{pick(shift, 'id')}/assignments"
+
+        def aboard() -> bool:
+            return any(
+                str(pick(row, "user_id")) == admin_id
+                for row in items(self.api.get(path), "assignments")
+            )
+
+        if aboard():
+            return True
+        for position in ("officer", "firefighter", "ems", "driver"):
+            try:
+                self.api.post(path, {"user_id": admin_id, "position": position})
+                return True
+            except ApiError as exc:
+                if exc.code not in (400, 409):
+                    raise
+        return False
 
     def seed_notification_rules(self) -> list[dict]:
         """Automations for the notification rules list.

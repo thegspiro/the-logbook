@@ -2979,12 +2979,13 @@ export async function openTallDialogAtActionRow(page) {
 }
 
 /**
- * Open one member's training history and put its table at the top of the frame.
+ * Open the signed-in member's My Training → History tab, scrolled to its
+ * records table, for the table-to-cards reflow pair.
  *
- * The member is chosen by username rather than by roster position, so both
- * halves of the reflow pair land on the same records — a comparison between
- * two different members' histories would show a difference that is not the
- * one being illustrated.
+ * It used to open a member's Training History page as an administrator, whose
+ * records became a list rather than a table, so the pair had no table left to
+ * picture. The History tab still draws one (`rwd-table-wide`, cards below
+ * 64rem), and it opens with the current year expanded.
  *
  * Both halves are viewport shots rather than element clips. Clipping to the
  * table works at desktop width and does not on a phone: the element is then
@@ -2993,21 +2994,11 @@ export async function openTallDialogAtActionRow(page) {
  * across the middle of the table.
  */
 export async function openTrainingHistoryTable(page) {
-  const id = await page.evaluate(async () => {
-    const response = await fetch("/api/v1/users?limit=200", {
-      credentials: "include",
-    });
-    if (!response.ok) return null;
-    const body = await response.json();
-    const users = Array.isArray(body) ? body : body.users || body.items || [];
-    const target = users.find((u) => u.username === "whalloway");
-    return target ? target.id : null;
-  });
-  if (!id)
-    throw new Error("the demo member whose history this pair uses is missing");
-  await page.goto(`${new URL(page.url()).origin}/members/${id}/training`, {
-    waitUntil: "domcontentloaded",
-  });
+  await page
+    .locator("button[aria-pressed]")
+    .filter({ hasText: /^History$/ })
+    .first()
+    .click({ timeout: 20_000 });
   const table = page.locator("table.rwd-table").first();
   await table.waitFor({ state: "visible", timeout: 20_000 });
   await table.evaluate((el) => {
@@ -4659,6 +4650,26 @@ export const SHOTS = [
     alt: "An open shift expanded after pressing Sign Up, its position dropdown holding only the positions the member's rank qualifies for",
     auth: "member",
     route: "/dashboard",
+    // The list shows its first six rows in time order, and the seeder's
+    // events for today (the live drill, the guest open house and the rest)
+    // fill all six, so no open shift with its Sign Up was ever in it. The
+    // dashboard's events are answered empty for this shot alone; the shifts
+    // and their sign-up are the real ones.
+    beforeNavigate: async (page) => {
+      await page.route(/\/api\/v1\/events(\?.*)?$/, async (route) => {
+        if (route.request().method() !== "GET") return route.continue();
+        const response = await route.fetch();
+        const body = await response.json();
+        const empty = Array.isArray(body)
+          ? []
+          : { ...body, events: [], total: 0 };
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(empty),
+        });
+      });
+    },
     prepare: async (page) => {
       // The eligibility check happens on press, not on render — every open
       // shift shows Sign Up regardless of rank — so the dropdown this pictures
@@ -5189,7 +5200,7 @@ export const SHOTS = [
       // blank. Scoped to the dialog — the page's own search box is the first
       // input on the document and swallowed the text.
       await dialog
-        .getByRole("textbox", { name: "Name *" })
+        .getByRole("textbox", { name: "Name", exact: true })
         .fill("Uniform Polo Shirt", { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
@@ -5562,7 +5573,7 @@ export const SHOTS = [
         const list = Array.isArray(body) ? body : body.records || [];
         const withFile = list.find((x) => (x.attachments || []).length > 0);
         return withFile
-          ? { userId: withFile.user_id, title: withFile.title }
+          ? { userId: withFile.user_id, course: withFile.course_name }
           : null;
       });
       if (!owner) throw new Error("no training record carries an attachment");
@@ -5571,35 +5582,24 @@ export const SHOTS = [
         { waitUntil: "domcontentloaded" },
       );
       await page.waitForTimeout(2000);
-      // The page opens filtered to this month, which hides older records —
-      // and the seeded certificate is on one of them.
+      // The page opens on this year, which hides older records, and the
+      // seeded certificate is on one of them. The period is a dropdown now;
+      // the "All Time" button this clicked had gone, and a swallowed failure
+      // left the shot timing out on a Files button that was never drawn.
       await page
-        .getByRole("button", { name: /^All Time$/ })
-        .click({ timeout: 10_000 })
-        .catch(() => {});
+        .getByRole("combobox", { name: "Training period" })
+        .selectOption({ label: "All Time" });
       await page.waitForTimeout(1200);
-      const button = page.getByRole("button", { name: /^Files$/ }).first();
-      await button.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
+      // Named for its record ("Files for <course>") since the record list
+      // was redesigned; a bare "Files" matched nothing.
+      const button = page
+        .getByRole("button", { name: `Files for ${owner.course}`, exact: true })
+        .first();
+      await button.scrollIntoViewIfNeeded({ timeout: 10_000 });
       await button.click({ timeout: 15_000, force: true });
       await page.waitForTimeout(1200);
     },
     fullPage: false,
-  },
-  {
-    id: "02-78-my-training-toolbar",
-    doc: "02-training.md",
-    line: 70,
-    anchor: "The My Training records toolbar showing the date-range picker",
-    alt: "The My Training date-range toolbar with its helper text and the two export buttons",
-    // A member's own overview: the toolbar is about exporting *your* records.
-    auth: "member",
-    route: "/training/my-training",
-    // Clipped to the toolbar. It is one bar on a long page, and a page shot
-    // renders the helper text too small to read.
-    // Anchored on the label, with the wrapper matched by the shared `card`
-    // utility rather than the raw `rounded-lg border` it used to carry -- the
-    // same migration that moved the shift-report cards.
-    selector: "div.card:has(label:text-is('Training records date range'))",
   },
   {
     id: "02-89-my-training-upcoming-skills-test",
@@ -8888,12 +8888,26 @@ export const SHOTS = [
     alt: "Reset Password for a member with a weak password typed (masked): the Password rules list ticks the length and character rules and leaves No runs like 123 or abc unmet",
     route: "/members/admin",
     expect: "No runs like 123 or abc",
+    allowEmptyState:
+      '"No runs like 123 or abc" is one of the password rules, not an empty list.',
     prepare: async (page) => {
+      // Reset Password is in the row's More actions menu now, not a button
+      // on the row.
       const row = page.locator("tr").filter({ hasText: "Esme Caldwell" });
       await row.first().waitFor({ timeout: 15_000 });
+      // The menu closes on any scroll, and Playwright scrolls to reach an
+      // item off screen, which closed it under the click. Centred first,
+      // the whole menu opens in view.
       await row
-        .getByRole("button", { name: /Reset Password/i })
         .first()
+        .evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(300);
+      await row
+        .getByRole("button", { name: "More actions for Esme Caldwell" })
+        .first()
+        .click();
+      await page
+        .getByRole("menuitem", { name: "Reset password for Esme Caldwell" })
         .click();
       // The placeholder's own example, typed into a masked field and never
       // submitted. "1234" is the run the rules list flags.
@@ -10262,6 +10276,8 @@ export const SHOTS = [
   },
   {
     id: "05-02-items-pinned",
+    allowEmptyState:
+      '"No location" is the location card for items not yet put away.',
     doc: "05-inventory.md",
     line: 83,
     anchor: "The items list with three items pinned",
@@ -10270,6 +10286,11 @@ export const SHOTS = [
     // Pinned through the UI rather than the API: the picture should show what
     // a quartermaster does, and pinning by hand also proves the control is
     // reachable at this viewport.
+    //
+    // 1920 wide: the items table reflows to cards below its tier, which a
+    // 1440px window with the sidebar does not reach, and the pin control is in
+    // a cell the card layout leaves out.
+    viewport: { width: 1920, height: 1080 },
     prepare: async (page) => {
       await unpinEverything(page);
       for (let i = 0; i < 3; i += 1) {
@@ -10824,19 +10845,36 @@ export const SHOTS = [
       // would picture the design without the closing block the guide points at.
       await page.getByText("Shift Assignment", { exact: true }).first().click();
       await page.waitForTimeout(1_000);
-      // The preview renders beside the editor now; "Desktop preview" selects
-      // the rendering this caption is about. The old `Preview` tab is gone.
-      await clickByName(/^Desktop preview$/)(page);
-      await page.waitForTimeout(2_000);
+      // Choosing it in the long template list scrolls the page down, leaving
+      // the editor and preview above the view under the sticky save bar.
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(500);
+      // At this width the editor and the preview are Edit / Preview tabs; on
+      // a wider screen they sit side by side and there is no tab. Within the
+      // preview, "Desktop preview" is the default rendering, so it is pressed
+      // only when another one is showing.
+      const previewTab = page
+        .getByRole("tab", { name: "Preview", exact: true })
+        .or(page.getByRole("button", { name: "Preview", exact: true }));
+      if (await previewTab.first().isVisible())
+        await previewTab.first().click();
+      const desktop = page.getByRole("button", { name: "Desktop preview" });
+      if (
+        (await desktop.count()) > 0 &&
+        (await desktop.first().getAttribute("aria-pressed")) !== "true"
+      ) {
+        await desktop.first().click();
+      }
+      // The message renders into an iframe, so its text is not on the page
+      // to wait for; the frame itself is.
       await page
-        .getByText(/automated message from|Sent by/i)
-        .first()
-        .scrollIntoViewIfNeeded({ timeout: 10_000 })
-        .catch(() => {});
+        .locator("iframe[title='Email template preview']")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(2_000);
     },
-    // Not `fullPage`: the sixty-entry template list makes the page 2,700px
-    // tall, and the rendered message sits entirely in the first viewport.
-    fullPage: false,
+    // Framed on the preview card: at this width the preview sits below the
+    // sixty-entry template list, some 3,000px down the page.
+    selector: "div.card:has(> iframe[title='Email template preview'])",
   },
 
   // ── 09 Skills Testing ───────────────────────────────────────────────
@@ -11841,7 +11879,7 @@ export const SHOTS = [
       // depends on how far the seeded chains have advanced, and the expense
       // report this used to name now sits at the treasurer's own step.
       await page
-        .getByRole("button", { name: /^Approve .+ as approvals admin$/ })
+        .getByRole("button", { name: /^Approve as admin: / })
         .first()
         .click({ timeout: 15_000 });
       await page.getByText("Override reason").first().waitFor();
@@ -11922,7 +11960,9 @@ export const SHOTS = [
         new URL(`/grants/opportunities/${afg.id}/edit`, page.url()).toString(),
         { waitUntil: "domcontentloaded" },
       );
-      await page.locator("#opportunity-name").waitFor({ timeout: 20_000 });
+      await page
+        .locator("#opportunity-field-name")
+        .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(600);
     },
     fullPage: true,
@@ -13094,6 +13134,8 @@ export const SHOTS = [
   // ── Second batch: module sub-pages and detail views ────────────────
   {
     id: "05-02-inventory-dashboard",
+    allowEmptyState:
+      '"No location" is the location card for items not yet put away.',
     doc: "05-inventory.md",
     line: 580,
     anchor:
@@ -14250,8 +14292,11 @@ export const SHOTS = [
       // A field shows its move, duplicate, edit and delete buttons only under
       // the pointer, and the guide's Form Builder Features list is about those
       // buttons. Hover one on purpose rather than wherever the click left it.
+      // Hovered through a field's Required badge rather than a field name,
+      // which follows whichever form the seeder made first.
       await page
-        .getByText("Your Organization", { exact: true })
+        .getByText("Required", { exact: true })
+        .first()
         .hover({ timeout: 15_000 });
       await page.waitForTimeout(300);
     },
@@ -20486,21 +20531,27 @@ export const SHOTS = [
     // -- too thin to read as a table at all. The guide's own list of what
     // reflowed names the training table alongside documents.
     id: "10-18-training-table-phone",
+    allowEmptyState:
+      '"No completion date" is a group heading on the History tab.',
     doc: "10-mobile-pwa.md",
     line: 814,
     anchor: "one of the reflowed tables (documents or check-in) at",
-    alt: "One member's training history on a 390px phone: each row has become a stacked card, every value carrying its own column label, with nothing to scroll sideways",
-    route: "/members",
+    alt: "A member's records on the History tab of My Training on a 390px phone: each row has become a stacked card, every value carrying its own column label, with nothing to scroll sideways",
+    auth: "member",
+    route: "/training/my-training",
     viewport: { width: 390, height: 844 },
     prepare: openTrainingHistoryTable,
   },
   {
     id: "10-19-training-table-desktop",
+    allowEmptyState:
+      '"No completion date" is a group heading on the History tab.',
     doc: "10-mobile-pwa.md",
     line: 814,
     anchor: "__paired-with-10-18__",
-    alt: "The same three records at desktop width — one row each across Course, Type, Date, Hours, Expires, Status and Files",
-    route: "/members",
+    alt: "The same records at desktop width — one row each across Course, Type, Date, Hours, Source and Status",
+    auth: "member",
+    route: "/training/my-training",
     prepare: openTrainingHistoryTable,
   },
   {
