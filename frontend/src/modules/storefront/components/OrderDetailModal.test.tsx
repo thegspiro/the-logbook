@@ -10,6 +10,7 @@ const mockRecordPayment = vi.fn();
 const mockAddOrderMessage = vi.fn();
 const mockUpdateOrderStatus = vi.fn();
 const mockSetOrderNotes = vi.fn();
+const mockRejectPaymentReport = vi.fn();
 
 vi.mock('../services/api', () => ({
   storefrontService: {
@@ -20,6 +21,7 @@ vi.mock('../services/api', () => ({
     addOrderMessage: (...args: unknown[]) => mockAddOrderMessage(...args) as unknown,
     updateOrderStatus: (...args: unknown[]) => mockUpdateOrderStatus(...args) as unknown,
     setOrderNotes: (...args: unknown[]) => mockSetOrderNotes(...args) as unknown,
+    rejectPaymentReport: (...args: unknown[]) => mockRejectPaymentReport(...args) as unknown,
     markOrderPaid: vi.fn(),
     waiveOrderPayment: vi.fn(),
   },
@@ -524,5 +526,63 @@ describe('OrderDetailModal shipped-order wording', () => {
     expect(options).toContain('Shipped');
     expect(options).not.toContain('Ready for pickup');
     expect(options).not.toContain('Fulfilled');
+  });
+});
+
+describe('OrderDetailModal payment reports', () => {
+  // W67b-14: a reported payment could only be verified, never turned down.
+  const reportedOrder = {
+    ...structuredClone(shippedOrder),
+    status: 'submitted',
+    paymentStatus: 'pending_verification',
+    amountPaid: '0.00',
+    balanceDue: '68.15',
+    paymentReference: 'v-1',
+  };
+
+  beforeEach(() => {
+    mockGetOrder.mockReset();
+    mockGetOrder.mockResolvedValue(structuredClone(reportedOrder));
+    mockRejectPaymentReport.mockReset();
+    mockRejectPaymentReport.mockResolvedValue({ ...structuredClone(reportedOrder), paymentStatus: 'unpaid' });
+  });
+
+  it('marks a reported payment as not received after confirming', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const dialog = await findOrderDialog();
+    await within(dialog).findByText('Ship to the member');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Not received' }));
+    const confirmDialog = await screen.findByRole('dialog', { name: 'Mark this payment as not received?' });
+    await user.click(within(confirmDialog).getByRole('button', { name: 'Not received' }));
+
+    await waitFor(() => expect(mockRejectPaymentReport).toHaveBeenCalled());
+    expect(mockRejectPaymentReport).toHaveBeenCalledWith('o1', { notifyMember: true });
+  });
+
+  it('changes nothing when the officer keeps checking', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const dialog = await findOrderDialog();
+    await within(dialog).findByText('Ship to the member');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Not received' }));
+    const confirmDialog = await screen.findByRole('dialog', { name: 'Mark this payment as not received?' });
+    await user.click(within(confirmDialog).getByRole('button', { name: 'Keep checking' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Mark this payment as not received?' })).not.toBeInTheDocument()
+    );
+    expect(mockRejectPaymentReport).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing to turn down when no payment was reported', async () => {
+    mockGetOrder.mockResolvedValue({ ...structuredClone(reportedOrder), paymentStatus: 'unpaid' });
+    renderModal();
+    const dialog = await findOrderDialog();
+    await within(dialog).findByText('Ship to the member');
+
+    expect(within(dialog).queryByRole('button', { name: 'Not received' })).not.toBeInTheDocument();
   });
 });

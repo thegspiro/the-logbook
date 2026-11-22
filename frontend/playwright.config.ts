@@ -26,7 +26,8 @@ export default defineConfig({
      2026. See "A Test That Passed Only on Retry Has Failed" in CLAUDE.md. */
   failOnFlakyTests: !!process.env.CI,
 
-  /* Opt out of parallel tests on CI. */
+  /* One worker on CI by default. ci.yml raises it to two on the legs that
+     were trialled at two; see the `frontend-e2e` matrix there. */
   workers: process.env.CI ? 1 : undefined,
 
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */

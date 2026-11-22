@@ -25,6 +25,7 @@ from app.core.utils import generate_uuid, list_within_detail_limit, utc_isoforma
 from app.models.apparatus import Apparatus, EquipmentCheckTemplate
 from app.models.call_tracking import CallTrackingMode
 from app.models.external_shift_hours import ExternalShiftHours
+from app.models.leave_request import LeaveRequest, LeaveRequestStatus
 from app.models.notification import NotificationLog
 from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.training import (
@@ -9373,6 +9374,34 @@ class SchedulingService:
                     unavailable.add(str(uid))
 
         return sorted(unavailable)
+
+    async def get_leave_requested_user_ids(
+        self, organization_id: UUID | str, shift_id: UUID
+    ) -> List[str]:
+        """Members with a leave request still undecided that covers the shift.
+
+        Not unavailable: the request may be denied, so they stay assignable,
+        and the scheduler is told so they do not learn of the clash only when
+        an approval drops the assignment. A request with no end date covers
+        every day from its start.
+        """
+        shift = await self.get_shift_by_id(shift_id, organization_id)
+        if not shift or not shift.shift_date:
+            return []
+        result = await self.db.execute(
+            select(LeaveRequest.user_id)
+            .where(
+                LeaveRequest.organization_id == str(organization_id),
+                LeaveRequest.status == LeaveRequestStatus.PENDING,
+                LeaveRequest.start_date <= shift.shift_date,
+                or_(
+                    LeaveRequest.end_date >= shift.shift_date,
+                    LeaveRequest.end_date.is_(None),
+                ),
+            )
+            .distinct()
+        )
+        return sorted(str(uid) for uid in result.scalars().all() if uid)
 
     async def get_trade_candidates(
         self,

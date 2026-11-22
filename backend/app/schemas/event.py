@@ -2029,3 +2029,27 @@ class MyAttendancePetitionResponse(BaseModel):
     # Whether the pending request may still be taken back: false once it has
     # been withdrawn the maximum number of times, and for any decided request.
     can_withdraw: bool = False
+
+
+class OutreachCalendarItem(UTCResponseBase):
+    """One outreach event on the Outreach Overview's calendar.
+
+    The fill counts are null when the event has no live signup sheet, or no
+    apparatus crew plan, so "no sheet" is never read as "an empty sheet".
+    """
+
+    event_id: str
+    title: str
+    event_type: str
+    start_datetime: datetime
+    end_datetime: datetime
+    location: Optional[str] = None
+    is_draft: bool
+    request_id: Optional[str] = None
+    request_organization: Optional[str] = None
+    volunteers_filled: Optional[int] = None
+    volunteers_total: Optional[int] = None
+    crew_filled: Optional[int] = None
+    crew_total: Optional[int] = None
+    unit_numbers: List[str]
+    attendance_finalized: bool

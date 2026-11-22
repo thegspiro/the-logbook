@@ -28,12 +28,6 @@ Columns added to existing tables:
   (pitfall #35). Nothing is backfilled: a title's dates are never guessed
   from its service period.
 
-This revision also closes a fork on ``main``: ``c7e1a94d2f58`` (volunteer
-RSVPs) and ``1a5c18b46791`` (outreach positions) merged with the same parent,
-``3daf47506e9e``, leaving two heads. Both had merged, so neither could be
-re-pointed; this revision names both as its parents instead of adding a
-separate merge revision.
-
 Every step is skipped when its table or column already exists, so a database
 ``create_all`` built first upgrades cleanly (pitfall #26).
 
@@ -43,7 +37,7 @@ the timeline switch on titles and the dates entered on titles. Take a database
 backup (``scripts/backup.sh``) before downgrading past this revision.
 
 Revision ID: 9cce83b31c70
-Revises: c7e1a94d2f58, 1a5c18b46791
+Revises: 3250c110534f
 Create Date: 2026-11-21 12:00:00.000000
 
 """
@@ -54,7 +48,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "9cce83b31c70"
-down_revision: Union[str, Sequence[str], None] = ("c7e1a94d2f58", "1a5c18b46791")
+down_revision: Union[str, None] = "3250c110534f"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -1149,9 +1149,13 @@ async def get_staffing_state(
 async def staffing_counts_by_request(
     db: AsyncSession,
     organization_id: str,
-    requests: Iterable[EventRequest],
+    requests: Iterable[Union[EventRequest, Event]],
 ) -> dict[str, tuple[int, int]]:
     """``(filled, total)`` seats on each request's live signup sheet.
+
+    Keyed by the owner's id, so it answers as well for an outreach event that
+    opened a sheet directly (both carry ``staffing_shift_id``); the Outreach
+    Overview passes a mix of the two.
 
     The requests list shows "4 of 6 signed up" on every scheduled row, and
     calling ``get_staffing_state`` once per row would cost two queries a row.

@@ -50,6 +50,13 @@ import type {
   VictoryCondition,
 } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
+import {
+  bottomNavInset,
+  fixedHeaderInset,
+  placePopover,
+  rootFontSizePx,
+  type PopoverPlacement,
+} from '../utils/popoverPlacement';
 import { ElectionStatus, VoteType, BallotItemType, VictoryCondition as VC } from '../constants/enums';
 
 // ─── Type color/icon/label maps ─────────────────────────────────
@@ -575,6 +582,9 @@ interface BallotBuilderProps {
   eligibilityDefaults?: EligibilityDefaults | undefined;
 }
 
+/** The template picker's width where the screen allows it. */
+const TEMPLATE_POPOVER_WIDTH_REM = 28;
+
 export const BallotBuilder: React.FC<BallotBuilderProps> = ({
   electionId,
   election,
@@ -622,6 +632,8 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
   const [pendingSavedTemplateId, setPendingSavedTemplateId] = useState<string | null>(null);
   const [pendingDeleteTemplateId, setPendingDeleteTemplateId] = useState<string | null>(null);
   const templateRef = useRef<HTMLDivElement>(null);
+  const templateButtonRef = useRef<HTMLButtonElement>(null);
+  const [templatePlacement, setTemplatePlacement] = useState<PopoverPlacement | null>(null);
 
   // Custom item form
   const [showCustomForm, setShowCustomForm] = useState(false);
@@ -685,6 +697,32 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
     }
     return undefined;
   }, [showTemplatePopover]);
+
+  // Where the template picker opens, measured from its button each time it
+  // opens and again on resize. A panel fixed above and right-aligned to the
+  // button ran past the top of the screen on the election's ballot page, and
+  // off its left edge on a phone, where nothing can scroll to it; see
+  // utils/popoverPlacement.
+  const measureTemplatePlacement = useCallback(() => {
+    const button = templateButtonRef.current;
+    if (!button) return;
+    setTemplatePlacement(
+      placePopover(
+        button.getBoundingClientRect(),
+        { width: window.innerWidth, height: window.innerHeight },
+        {
+          preferredWidth: TEMPLATE_POPOVER_WIDTH_REM * rootFontSizePx(),
+          topInset: fixedHeaderInset(),
+          bottomInset: bottomNavInset(),
+        }
+      )
+    );
+  }, []);
+  useEffect(() => {
+    if (!showTemplatePopover) return undefined;
+    window.addEventListener('resize', measureTemplatePlacement);
+    return () => window.removeEventListener('resize', measureTemplatePlacement);
+  }, [showTemplatePopover, measureTemplatePlacement]);
 
   const loadTemplates = async () => {
     // Fetched independently: the saved-template endpoint is optional extra
@@ -882,7 +920,11 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
   // ── Render ────────────────────────────────────────────────────
 
   return (
-    <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
+    // The backdrop blur makes this card a stacking context, which confines the
+    // template picker's z-index to it; while the picker is open the card is
+    // raised so a panel opening downward is not painted over by the cards
+    // after it on the page.
+    <div className={`bg-theme-surface rounded-lg p-6 backdrop-blur-xs ${showTemplatePopover ? 'relative z-30' : ''}`}>
       {/* ── Header ── */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-theme-text-primary text-lg font-medium">Ballot Items ({ballotItems.length})</h3>
@@ -901,8 +943,10 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
             {/* Template button + popover */}
             <div className="relative">
               <button
+                ref={templateButtonRef}
                 type="button"
                 onClick={() => {
+                  if (!showTemplatePopover) measureTemplatePlacement();
                   setShowTemplatePopover(!showTemplatePopover);
                   setSelectedTemplate(null);
                   setShowCustomForm(false);
@@ -913,9 +957,23 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 Use Template
               </button>
 
-              {/* Template popover dropdown — opens upward so it doesn't clip */}
+              {/* Template popover — opens on whichever side of the button has room */}
               {showTemplatePopover && (
-                <div className="popover-panel absolute right-0 bottom-full z-30 mb-2 max-h-[70dvh] w-[28rem] max-w-[calc(100vw-2rem)] overflow-y-auto p-4">
+                <div
+                  data-testid="template-popover"
+                  className={`popover-panel absolute z-30 overflow-y-auto p-4 ${
+                    templatePlacement?.side === 'above' ? 'bottom-full mb-2' : 'top-full mt-2'
+                  } ${templatePlacement ? '' : 'right-0 max-h-[70dvh] w-[28rem] max-w-[calc(100vw-2rem)]'}`}
+                  style={
+                    templatePlacement
+                      ? {
+                          maxHeight: `${templatePlacement.maxHeight}px`,
+                          width: `${templatePlacement.width}px`,
+                          left: `${templatePlacement.offsetLeft}px`,
+                        }
+                      : undefined
+                  }
+                >
                   {!selectedTemplate ? (
                     <>
                       <h4 className="text-theme-text-primary mb-3 text-sm font-semibold">Select a Template</h4>
@@ -1187,6 +1245,8 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  // Opens the toolbar's picker, so its button is what is measured.
+                  measureTemplatePlacement();
                   setShowTemplatePopover(true);
                   setShowCustomForm(false);
                 }}

@@ -623,8 +623,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/grants/opportunities/new',
     source: 'src/modules/grants-fundraising/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/grants/opportunities/:id/edit',
@@ -641,8 +641,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/grants/applications/new',
     source: 'src/modules/grants-fundraising/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/grants/applications/:id',
@@ -677,8 +677,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/grants/donations/new',
     source: 'src/modules/grants-fundraising/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/grants/donations/:donationId/edit',

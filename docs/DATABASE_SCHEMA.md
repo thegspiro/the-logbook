@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**411 tables · 6441 columns · 1367 foreign keys**
+**412 tables · 6452 columns · 1372 foreign keys**
 
 ---
 
@@ -499,10 +499,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`leave_approver_covers`](#leave_approver_covers) | `LeaveApproverCover` | 8 | An approver away for a period, and the officer deciding in their place. |
 | [`leave_notice_sends`](#leave_notice_sends) | `LeaveNoticeSend` | 5 | A scheduled leave email claimed before it is sent. |
 | [`leave_request_messages`](#leave_request_messages) | `LeaveRequestMessage` | 8 | The conversation on a request: questions, answers and changed dates. |
-| [`leave_request_votes`](#leave_request_votes) | `LeaveRequestVote` | 8 | One approver's vote on one request. One per approver, by constraint. |
-| [`leave_requests`](#leave_requests) | `LeaveRequest` | 21 | One member's request for a leave of absence. |
+| [`leave_request_votes`](#leave_request_votes) | `LeaveRequestVote` | 10 | One approver's vote on one request, one per approver's seat. |
+| [`leave_requests`](#leave_requests) | `LeaveRequest` | 22 | One member's request for a leave of absence. |
 
 ### Legal
 
@@ -8415,6 +8416,28 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 ## Leave_Request
 
+### `leave_approver_covers`
+
+**LeaveApproverCover** · `app/models/leave_request.py`
+
+> An approver away for a period, and the officer deciding in their place. While the cover runs (``start_date`` to ``end_date``, calendar dates in the department's timezone) the stand-in holds the approver's seat on every request that approver may decide: they vote in the approver's place, get the reminders, and the approver cannot vote until it ends. The stand-in must manage leave (``members.manage``), checked when the cover is set and again whenever it is used, so a stand-in who loses that permission stops standing in.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `approver_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `stand_in_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `start_date` | DATE | no |  |  |  |
+| `end_date` | DATE | no |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_leave_approver_covers_org_approver` (`organization_id`, `approver_id`)
+- `ix_leave_approver_covers_org_end` (`organization_id`, `end_date`)
+
 ### `leave_notice_sends`
 
 **LeaveNoticeSend** · `app/models/leave_request.py`
@@ -8462,7 +8485,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **LeaveRequestVote** · `app/models/leave_request.py`
 
-> One approver's vote on one request. One per approver, by constraint.
+> One approver's vote on one request, one per approver's seat. ``seat_id`` is the approver whose vote this is. A stand-in covering an away approver votes in that approver's place: ``voter_id`` is the stand-in, ``seat_id`` and ``on_behalf_of`` the approver, and the vote keeps counting for that approver once the cover ends. Otherwise ``seat_id`` is the voter and ``on_behalf_of`` is empty. The constraint is on the seat, so a seat is filled once per round whoever fills it.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -8470,6 +8493,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `request_id` | VARCHAR(36) | no | FK, IDX |  | → `leave_requests.id` ON DELETE CASCADE |
 | `voter_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `seat_id` | VARCHAR(36) | no |  |  |  |
+| `on_behalf_of` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `round` | INTEGER | no |  | `1` |  |
 | `vote` | ENUM(`approve`, `deny`) | no |  |  |  |
 | `note` | TEXT | yes |  |  |  |
@@ -8482,7 +8507,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Constraints**
 
-- UNIQUE `uq_leave_request_vote_round` (`request_id`, `voter_id`, `round`)
+- UNIQUE `uq_leave_request_vote_seat_round` (`request_id`, `seat_id`, `round`)
 
 ### `leave_requests`
 
@@ -8510,6 +8535,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `proposed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `proposed_at` | DATETIME | yes |  |  |  |
 | `vote_round` | INTEGER | no |  | `1` |  |
+| `routed_to_chief` | BOOL | no |  | `0` |  |
 | `leave_id` | VARCHAR(36) | yes | FK |  | → `member_leaves_of_absence.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -13914,7 +13940,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (494 references)
+### → `users` (498 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14188,7 +14214,11 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `knowledge_test_attempts` | `user_id` | CASCADE | no |
 | `knowledge_tests` | `created_by` | SET NULL | yes |
 | `label_printers` | `created_by_id` | SET NULL | yes |
+| `leave_approver_covers` | `approver_id` | CASCADE | no |
+| `leave_approver_covers` | `created_by` | SET NULL | yes |
+| `leave_approver_covers` | `stand_in_id` | CASCADE | no |
 | `leave_request_messages` | `author_id` | SET NULL | yes |
+| `leave_request_votes` | `on_behalf_of` | SET NULL | yes |
 | `leave_request_votes` | `voter_id` | CASCADE | no |
 | `leave_requests` | `decided_by` | SET NULL | yes |
 | `leave_requests` | `proposed_by` | SET NULL | yes |
@@ -14413,7 +14443,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (329 references)
+### → `organizations` (330 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14598,6 +14628,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `knowledge_test_questions` | `organization_id` | CASCADE | no |
 | `knowledge_tests` | `organization_id` | CASCADE | no |
 | `label_printers` | `organization_id` | CASCADE | no |
+| `leave_approver_covers` | `organization_id` | CASCADE | no |
 | `leave_notice_sends` | `organization_id` | CASCADE | no |
 | `leave_request_messages` | `organization_id` | CASCADE | no |
 | `leave_request_votes` | `organization_id` | CASCADE | no |

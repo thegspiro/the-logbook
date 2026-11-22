@@ -16,6 +16,7 @@ const askQuestion = vi.fn();
 const getSummary = vi.fn();
 const endLeaveEarly = vi.fn();
 const getMyLeaves = vi.fn();
+const getCovers = vi.fn();
 
 vi.mock('../services/leaveRequestService', () => ({
   leaveRequestService: {
@@ -28,6 +29,7 @@ vi.mock('../services/leaveRequestService', () => ({
     askQuestion: (...a: unknown[]) => askQuestion(...a) as unknown,
     getSummary: (...a: unknown[]) => getSummary(...a) as unknown,
     endLeaveEarly: (...a: unknown[]) => endLeaveEarly(...a) as unknown,
+    getCovers: (...a: unknown[]) => getCovers(...a) as unknown,
   },
 }));
 vi.mock('../services/api', () => ({
@@ -105,6 +107,7 @@ describe('LeaveRequestsPage', () => {
       getSummary,
       endLeaveEarly,
       getMyLeaves,
+      getCovers,
       checkPermission,
       toastSuccess,
     ]) {
@@ -118,6 +121,58 @@ describe('LeaveRequestsPage', () => {
     vote.mockResolvedValue(request({ status: 'approved' }));
     getSummary.mockResolvedValue({ requests_enabled: true, to_decide: 0, waiting_on_me: 0 });
     getMyLeaves.mockResolvedValue([]);
+    getCovers.mockResolvedValue({ covers: [], approvers: [], stand_ins: [], today });
+  });
+
+  it('says who decided a request and when, and when one was withdrawn', async () => {
+    listMine.mockResolvedValue([
+      request({
+        id: 'a',
+        status: 'approved',
+        decided_at: '2026-11-20T15:00:00Z',
+        decided_by_name: 'Lt. Smith',
+      }),
+      request({ id: 'd', status: 'denied', decided_at: '2026-11-19T15:00:00Z', decided_by_name: 'Capt. Lee' }),
+      request({ id: 'w', status: 'withdrawn', decided_at: '2026-11-18T15:00:00Z' }),
+    ]);
+    renderWithRouter(<LeaveRequestsPage />);
+
+    const mine = await screen.findByRole('region', { name: 'Your requests' });
+    expect(await within(mine).findByText(/^Approved by Lt\. Smith on .+\.$/)).toBeInTheDocument();
+    expect(within(mine).getByText(/^Denied by Capt\. Lee on .+\.$/)).toBeInTheDocument();
+    expect(within(mine).getByText(/^Withdrawn on .+\.$/)).toBeInTheDocument();
+  });
+
+  it('names the approver a stand-in voted for', async () => {
+    listToDecide.mockResolvedValue([
+      request({
+        votes: [
+          {
+            voter_id: 'o1',
+            voter_name: 'Olive Officer',
+            on_behalf_of_name: 'Blake Board',
+            round: 1,
+            vote: 'approve',
+            note: null,
+            created_at: '2026-11-20T15:00:00Z',
+          },
+        ],
+      }),
+    ]);
+    renderWithRouter(<LeaveRequestsPage />);
+
+    const section = await screen.findByRole('region', { name: 'To decide' });
+    expect(within(section).getByText(/approved for Blake Board/)).toBeInTheDocument();
+  });
+
+  it('tells an approver their own request goes to the Chief', async () => {
+    listMine.mockResolvedValue([request({ routed_to_chief: true })]);
+    renderWithRouter(<LeaveRequestsPage />);
+
+    const mine = await screen.findByRole('region', { name: 'Your requests' });
+    expect(
+      await within(mine).findByText('As an approver yourself, your request goes to the Chief.')
+    ).toBeInTheDocument();
   });
 
   it('a member on leave ends it early from their first day back', async () => {

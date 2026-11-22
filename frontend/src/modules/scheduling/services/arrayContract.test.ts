@@ -73,4 +73,11 @@ describe('schedulingService array contract', () => {
     mockGet.mockResolvedValueOnce({ data: {} });
     await expect(schedulingService.getUnavailableMembers('shift-1')).resolves.toEqual([]);
   });
+
+  it('normalizes a missing leave_requested_user_ids field, as an older server sends', async () => {
+    mockGet.mockResolvedValueOnce({ data: { unavailable_user_ids: ['u1'] } });
+    await expect(schedulingService.getLeaveRequestedMembers('shift-1')).resolves.toEqual([]);
+    mockGet.mockResolvedValueOnce({ data: { unavailable_user_ids: [], leave_requested_user_ids: ['u2'] } });
+    await expect(schedulingService.getLeaveRequestedMembers('shift-1')).resolves.toEqual(['u2']);
+  });
 });

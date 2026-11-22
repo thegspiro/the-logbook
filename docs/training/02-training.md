@@ -312,7 +312,7 @@ filtered on screen. That is what an outside audit or a new employer wants.
 
 ![My Training's Upcoming Expirations & Due Dates list, soonest first, with a row for each kind of item, including an hours requirement reading hours to go](./images/02-124-my-training-upcoming.png)
 
-![Annual Minimum Training Hours with Show monthly hours open: a bar for each month, the month of leave marked and left out of the average](./images/02-108-monthly-hours-leave.png)
+![Annual Minimum Training Hours with Show monthly hours open: a bar for each month, the month of leave labelled Leave and keeping its hours, which count toward the total, and the average taken over the months not excused](./images/02-108-monthly-hours-leave.png)
 
 ### Checking an Hours Requirement Month by Month
 
@@ -2259,7 +2259,7 @@ type is **Training**. **Edit** on the event page changes it later.
 
 ![Approve training credit for the Ventilation Drill: course, event date and approve-by date, the roster with credited and approved minutes (one member set to 0 with a note), the approval notes and Approve and record](./images/02-117-approve-training-credit.png)
 
-![Step 3 of the Create Session form — the settings, with Require instructor confirmation among them](./images/02-91-session-confirmation-toggle.png)
+![Training completion on the training-event form's Training Info step: Counts toward certification requirements, Start an in-progress training record when members check in, and Require sign-off](./images/02-91-session-confirmation-toggle.png)
 
 > **Hint:** Leave **Require sign-off** off for routine drills
 > you want completed as soon as you finalize them. Turn it on only when a
@@ -2310,7 +2310,7 @@ Requirements & Programs**. All are optional:
   Attendance** requirements whose members are expected to attend it (see
   [Session Attendance](#session-attendance--attend-a-share-of-the-linked-drills-2026-11-04)).
 
-![Step 2 of the training-session wizard: an existing course selected, and the category, requirement and program links under a plain-language line saying what attendance will advance](./images/19-29-training-session-linkage.png)
+![The training-event form's Training Info step: From the Course Library chosen with a course and its card, the training type and credit hours it filled in, the category, requirement and program links under a line saying what attendance will advance, and the certification and Training completion settings](./images/19-29-training-session-linkage.png)
 
 - **A summary line** under the pickers says what the links will do, in plain
   words. For a program and a requirement it reads: _Attendance will advance
@@ -4041,7 +4041,7 @@ reflowed into eight label-and-value rows per course on a phone and a tablet, and
 a long list ran to many screens. Filters, the period and the exports are
 unchanged.
 
-![Member training history with the export period selector and download buttons](./images/02-40-member-training-history.png)
+![A member's Training History: the period list on This Year beside Export CSV, Export PDF and Print Record, the period's totals and requirement, and the compact list of the period's records](./images/02-40-member-training-history.png)
 
 ### Bulk and Reporting Exports (Reports Tab)
 
@@ -4958,7 +4958,7 @@ Details**; the course is on **Training Info**.
    each occurrence added later copies the training details and attendance
    links from the latest one. Add any **Exception Dates (dates to skip)**.
 
-![The recurrence block with Monthly (by weekday) chosen and its ordinal and weekday pickers](./images/02-83-session-recurrence.png)
+![The recurrence block with Monthly (by weekday) chosen: the series end date beside Rolling 12-month cycle, the 2nd Tuesday picked, and the Exception dates field](./images/02-83-session-recurrence.png)
 
 5. Set the location, then select **Next**.
 6. On **Training Info**, choose the course (see
@@ -4967,7 +4967,7 @@ Details**; the course is on **Training Info**.
    training type, credit hours, instructor, expiry and maximum attendees from
    the course and shows a card of what it took.
 
-![The course picker with an existing course chosen and its details preview card underneath](./images/02-80-session-course-autopopulate.png)
+![Training Info's course choice on From the Course Library: a course picked and its details card underneath, noting that type, hours, instructor and expiry were filled from it](./images/02-80-session-course-autopopulate.png)
 
 7. On **Settings**, set attendance, RSVP, check-in and reminders. A new
    Training event starts with RSVP off, check-in opening 60 minutes before and

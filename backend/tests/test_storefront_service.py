@@ -11,12 +11,13 @@ the schema has to exist for any of this to run.
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy import select
 
 from app.api.v1.endpoints import storefront as storefront_endpoints
+from app.core.utils import safe_error_detail
 from app.models.notification import NotificationChannel, NotificationLog
 from app.models.storefront import (
     StoreFulfillmentMethod,
@@ -34,7 +35,13 @@ from app.models.storefront import (
     StoreWindowStatus,
 )
 from app.models.user import Organization, User
-from app.schemas.storefront import StoreDashboardResponse
+from app.schemas.storefront import (
+    StoreDashboardResponse,
+    StoreOrderPaymentReportRejection,
+    StoreOrderResponse,
+    StoreVendorOrderRequest,
+    StoreVendorOrderResult,
+)
 from app.services.separation_of_duties import SeparationOfDutiesError
 from app.services.storefront_service import StorefrontService
 from app.utils.storefront_payments import build_payment_options
@@ -2814,3 +2821,387 @@ class TestShippedOrderWording:
 
         sent = service.notifications.send_order_update.await_args
         assert sent.kwargs["status_label"] == "Ready for pickup"
+
+
+class TestWindowCancelAndFulfil:
+    """W67b-12, owner decisions 2026-11-21. Cancelling a window cancels its open
+    orders, unless one has money on it. A window is marked fulfilled only once
+    closed and with every order fulfilled or cancelled."""
+
+    async def _window_with_orders(self, db_session, count=2):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org, payment_policy=StorePaymentPolicy.NONE)
+        product = await _make_product(db_session, org, price=Decimal("15.00"))
+        window = await _make_open_window(db_session, org)
+        orders = []
+        for index in range(count):
+            member = await _make_member(db_session, org, first=f"M{index}")
+            orders.append(await service.create_order(org.id, member, _cart(product.id)))
+        service.notifications.send_order_cancelled = AsyncMock()
+        return service, org, window, orders
+
+    async def test_cancelling_a_window_cancels_its_open_orders(self, db_session):
+        service, org, window, orders = await self._window_with_orders(db_session)
+
+        cancelled = await service.cancel_window(window.id, org.id, None)
+
+        assert cancelled.status == StoreWindowStatus.CANCELLED
+        for order in orders:
+            current = await service.get_order(order.id, org.id)
+            assert current.status == StoreOrderStatus.CANCELLED
+            assert current.cancellation_reason == "The order window was cancelled"
+        assert service.notifications.send_order_cancelled.await_count == len(orders)
+
+    async def test_a_window_with_money_on_an_order_is_not_cancelled(self, db_session):
+        service, org, window, orders = await self._window_with_orders(db_session)
+        paid = orders[0]
+        await service.record_payment(
+            paid.id, org.id, Decimal("5.00"), None, notify_member=False
+        )
+
+        with pytest.raises(ValueError, match=paid.order_number):
+            await service.cancel_window(window.id, org.id, None)
+
+        current_window = await service.get_window(window.id, org.id)
+        assert current_window.status == StoreWindowStatus.OPEN
+        for order in orders:
+            current = await service.get_order(order.id, org.id)
+            assert current.status != StoreOrderStatus.CANCELLED
+
+    async def test_a_long_refusal_still_reaches_the_officer(self, db_session):
+        # Joined whole, enough order numbers pushed the refusal past the detail
+        # cap, and safe_error_detail replaced it with "An unexpected error
+        # occurred", which names nothing to refund.
+        service, org, window, orders = await self._window_with_orders(
+            db_session, count=30
+        )
+        for order in orders:
+            await service.record_payment(
+                order.id, org.id, Decimal("1.00"), None, notify_member=False
+            )
+
+        with pytest.raises(ValueError, match="Refund or settle") as refused:
+            await service.cancel_window(window.id, org.id, None)
+
+        detail = safe_error_detail(refused.value)
+        assert orders[0].order_number in detail
+        assert "more" in detail
+        assert "Refund or settle them" in detail
+
+    async def test_cancelling_a_cancelled_window_again_changes_nothing(
+        self, db_session
+    ):
+        service, org, window, orders = await self._window_with_orders(db_session)
+        await service.cancel_window(window.id, org.id, None)
+        sent = service.notifications.send_order_cancelled.await_count
+
+        again = await service.cancel_window(window.id, org.id, None)
+
+        assert again.status == StoreWindowStatus.CANCELLED
+        assert service.notifications.send_order_cancelled.await_count == sent
+
+    async def test_a_fulfilled_window_cannot_be_cancelled(self, db_session):
+        service, org, window, orders = await self._window_with_orders(
+            db_session, count=0
+        )
+        window.status = StoreWindowStatus.FULFILLED
+        await db_session.flush()
+
+        with pytest.raises(ValueError, match="fulfilled"):
+            await service.cancel_window(window.id, org.id, None)
+
+    async def test_an_open_window_cannot_be_marked_fulfilled(self, db_session):
+        service, org, window, orders = await self._window_with_orders(
+            db_session, count=0
+        )
+
+        with pytest.raises(ValueError, match="closed"):
+            await service.fulfill_window(window.id, org.id)
+
+    async def test_a_window_is_fulfilled_only_once_every_order_is_done(
+        self, db_session
+    ):
+        service, org, window, orders = await self._window_with_orders(db_session)
+        window.status = StoreWindowStatus.CLOSED
+        await db_session.flush()
+
+        with pytest.raises(ValueError, match="2 orders"):
+            await service.fulfill_window(window.id, org.id)
+
+        await service.update_order_status(
+            orders[0].id, org.id, StoreOrderStatus.FULFILLED, None, notify_member=False
+        )
+        await service.cancel_order(orders[1].id, org.id, None, notify_member=False)
+
+        done = await service.fulfill_window(window.id, org.id)
+        assert done.status == StoreWindowStatus.FULFILLED
+
+    async def test_no_payment_reminder_for_an_order_in_a_cancelled_window(
+        self, db_session
+    ):
+        # A window cancelled before W67b-12 left its orders open; a member must
+        # not be chased for goods that will never be ordered.
+        service, org, window, orders = await self._window_with_orders(
+            db_session, count=1
+        )
+        await service.update_settings(
+            org.id, {"send_payment_reminders": True, "payment_reminder_days": 1}
+        )
+        order = orders[0]
+        order.submitted_at = datetime.now(timezone.utc) - timedelta(days=10)
+        window.status = StoreWindowStatus.CANCELLED
+        await db_session.flush()
+        service.notifications.send_payment_reminder = AsyncMock(return_value=True)
+
+        sent = await service.run_payment_reminders(org.id)
+
+        assert sent == 0
+        service.notifications.send_payment_reminder.assert_not_awaited()
+
+
+class TestVendorOrderRerun:
+    """W67b-13. Recording the vendor order advanced only the first page of
+    orders, moved orders already on the shelf back to Ordered, and emailed every
+    member again each time it was recorded."""
+
+    async def _window(self, db_session, count=3, policy=StorePaymentPolicy.NONE):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(
+            service, org, payment_policy=policy, send_vendor_order_updates=True
+        )
+        product = await _make_product(db_session, org, price=Decimal("15.00"))
+        window = await _make_open_window(db_session, org)
+        orders = []
+        for index in range(count):
+            member = await _make_member(db_session, org, first=f"V{index}")
+            orders.append(await service.create_order(org.id, member, _cart(product.id)))
+        await service.close_window(window.id, org.id, notify_members=False)
+        service.notifications.send_vendor_order_placed = AsyncMock(return_value=1)
+        return service, org, window, orders
+
+    async def test_every_order_is_advanced_not_only_the_first_page(self, db_session):
+        service, org, window, orders = await self._window(db_session, count=3)
+
+        with patch("app.services.storefront_service._EXPORT_PAGE_SIZE", 2):
+            result = await service.record_vendor_order(
+                window.id, org.id, None, notify_members=False
+            )
+
+        assert result["advanced"] == 3
+        for order in orders:
+            current = await service.get_order(order.id, org.id)
+            assert current.status == StoreOrderStatus.ORDERED
+
+    async def test_an_order_on_the_shelf_is_not_moved_back(self, db_session):
+        service, org, window, orders = await self._window(db_session, count=2)
+        await service.record_vendor_order(window.id, org.id, None, notify_members=False)
+        await service.update_order_status(
+            orders[0].id,
+            org.id,
+            StoreOrderStatus.READY_FOR_PICKUP,
+            None,
+            notify_member=False,
+        )
+
+        result = await service.record_vendor_order(
+            window.id, org.id, None, vendor_reference="PO-2", notify_members=False
+        )
+
+        assert result["advanced"] == 0
+        assert result["skipped"] == []
+        shelved = await service.get_order(orders[0].id, org.id)
+        assert shelved.status == StoreOrderStatus.READY_FOR_PICKUP
+
+    async def test_recording_again_emails_nobody_a_second_time(self, db_session):
+        service, org, window, orders = await self._window(db_session, count=2)
+        notices = service.notifications.send_vendor_order_placed
+
+        first = await service.record_vendor_order(window.id, org.id, None)
+        second = await service.record_vendor_order(
+            window.id, org.id, None, vendor_reference="corrected"
+        )
+
+        assert notices.await_count == 1
+        assert first["notified"] == 1
+        assert second["notified"] == 0
+
+    async def test_recording_again_emails_nobody_without_advancing(self, db_session):
+        service, org, window, _ = await self._window(db_session, count=2)
+        notices = service.notifications.send_vendor_order_placed
+
+        await service.record_vendor_order(window.id, org.id, None, advance_orders=False)
+        second = await service.record_vendor_order(
+            window.id, org.id, None, advance_orders=False
+        )
+
+        assert notices.await_count == 1
+        assert second["notified"] == 0
+
+    async def test_a_late_payer_is_ordered_and_told_on_the_next_recording(
+        self, db_session
+    ):
+        service, org, window, orders = await self._window(
+            db_session, count=2, policy=StorePaymentPolicy.BEFORE_VENDOR_ORDER
+        )
+        early, late = orders
+        notices = service.notifications.send_vendor_order_placed
+        await service.record_payment(early.id, org.id, None, None, notify_member=False)
+        await service.record_vendor_order(window.id, org.id, None)
+        await service.record_payment(late.id, org.id, None, None, notify_member=False)
+
+        result = await service.record_vendor_order(window.id, org.id, None)
+
+        assert result["advanced"] == 1
+        assert notices.await_count == 2
+        assert notices.await_args.args[2] == [late.customer_email]
+        current = await service.get_order(late.id, org.id)
+        assert current.status == StoreOrderStatus.ORDERED
+
+    async def test_the_endpoint_response_serializes_after_advancing(self, db_session):
+        # Advancing commits once per order, which expired the window the
+        # response is built from; its offerings then lazy-loaded outside the
+        # session's greenlet and the request failed with a 500.
+        service, org, window, _ = await self._window(db_session, count=2)
+        admin = await _make_member(db_session, org, first="Quartermaster")
+
+        payload = await storefront_endpoints.record_vendor_order(
+            window.id,
+            StoreVendorOrderRequest(vendor_name="Galls", notify_members=False),
+            db=db_session,
+            current_user=admin,
+        )
+        result = StoreVendorOrderResult.model_validate(payload)
+
+        assert result.advanced == 2
+        assert result.window.vendor_name == "Galls"
+
+
+class TestRejectPaymentReport:
+    """W67b-14. A member's "I've sent payment" could only be verified. If the
+    money never came, the order sat in pending verification for good: no
+    reminders, and the member could not change the payment method."""
+
+    async def _reported(self, db_session, accepted=("venmo", "cash")):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(
+            service,
+            org,
+            accepted_payment_methods=list(accepted),
+            payment_policy=StorePaymentPolicy.NONE,
+        )
+        product = await _make_product(db_session, org, price=Decimal("40.00"))
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+        service.notifications.send_order_update = AsyncMock(return_value=1)
+        return service, org, member, order
+
+    async def _report(self, service, org, member, order):
+        return await service.report_payment(
+            order.id, org.id, str(member.id), StorePaymentMethod.VENMO, reference="v-1"
+        )
+
+    async def test_rejecting_returns_the_order_to_owing(self, db_session):
+        service, org, member, order = await self._reported(db_session)
+        await self._report(service, org, member, order)
+
+        rejected = await service.reject_payment_report(
+            order.id, org.id, None, reason="Nothing arrived in Venmo"
+        )
+
+        assert rejected.payment_status == StorePaymentStatus.UNPAID
+        assert rejected.payment_reported_at is None
+        assert rejected.payment_reference is None
+        assert rejected.amount_paid == Decimal("0.00")
+        assert any(
+            e.is_member_visible and "Nothing arrived in Venmo" in e.message
+            for e in rejected.events
+        )
+        service.notifications.send_order_update.assert_awaited_once()
+
+    async def test_money_already_recorded_leaves_it_part_paid(self, db_session):
+        service, org, member, order = await self._reported(db_session)
+        await service.record_payment(
+            order.id, org.id, Decimal("10.00"), None, notify_member=False
+        )
+        await self._report(service, org, member, order)
+
+        rejected = await service.reject_payment_report(order.id, org.id, None)
+
+        assert rejected.payment_status == StorePaymentStatus.PARTIAL
+        assert rejected.amount_paid == Decimal("10.00")
+
+    async def test_the_member_can_change_the_method_afterwards(self, db_session):
+        service, org, member, order = await self._reported(db_session)
+        await self._report(service, org, member, order)
+        await service.reject_payment_report(order.id, org.id, None)
+
+        changed = await service.update_member_payment_method(
+            order.id, org.id, str(member.id), StorePaymentMethod.CASH
+        )
+
+        assert changed.payment_method == StorePaymentMethod.CASH
+
+    async def test_reminders_resume_after_a_rejection(self, db_session):
+        service, org, member, order = await self._reported(db_session)
+        await self._report(service, org, member, order)
+        stored = await service.get_order(order.id, org.id)
+        stored.submitted_at = datetime.now(timezone.utc) - timedelta(days=30)
+        await db_session.flush()
+        service.notifications.send_payment_reminder = AsyncMock(return_value=1)
+        assert await service.run_payment_reminders(org.id) == 0
+
+        await service.reject_payment_report(order.id, org.id, None)
+
+        assert await service.run_payment_reminders(org.id) == 1
+
+    async def test_only_a_pending_report_can_be_rejected(self, db_session):
+        service, org, _, order = await self._reported(db_session)
+
+        with pytest.raises(ValueError, match="no payment report"):
+            await service.reject_payment_report(order.id, org.id, None)
+
+    async def test_a_second_rejection_changes_nothing(self, db_session):
+        service, org, member, order = await self._reported(db_session)
+        await self._report(service, org, member, order)
+        await service.reject_payment_report(order.id, org.id, None)
+
+        with pytest.raises(ValueError, match="no payment report"):
+            await service.reject_payment_report(order.id, org.id, None)
+        service.notifications.send_order_update.assert_awaited_once()
+
+    async def test_without_notice_the_member_is_not_emailed(self, db_session):
+        service, org, member, order = await self._reported(db_session)
+        await self._report(service, org, member, order)
+
+        await service.reject_payment_report(order.id, org.id, None, notify_member=False)
+
+        service.notifications.send_order_update.assert_not_awaited()
+
+    async def test_another_organization_cannot_reject_it(self, db_session):
+        service, org, member, order = await self._reported(db_session)
+        await self._report(service, org, member, order)
+        other = await _make_org(db_session, "Other FD")
+
+        with pytest.raises(ValueError, match="not found"):
+            await service.reject_payment_report(order.id, other.id, None)
+        current = await service.get_order(order.id, org.id)
+        assert current.payment_status == StorePaymentStatus.PENDING_VERIFICATION
+
+    async def test_the_endpoint_returns_the_order_owing_again(self, db_session):
+        service, org, member, order = await self._reported(db_session)
+        await self._report(service, org, member, order)
+
+        payload = await storefront_endpoints.reject_payment_report(
+            order.id,
+            StoreOrderPaymentReportRejection(reason="No transfer found"),
+            db=db_session,
+            current_user=member,
+        )
+        response = StoreOrderResponse.model_validate(payload)
+
+        assert response.payment_status == StorePaymentStatus.UNPAID
+        assert response.payment_reported_at is None
