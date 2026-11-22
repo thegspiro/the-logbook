@@ -1,6 +1,8 @@
 /**
- * The module's two department-wide lists: historical titles, and the
- * clearance list a record passes before it is published to the public.
+ * The module's department-wide lists: historical titles (and which of them
+ * reach the timeline), the clearance list a record passes before it is
+ * published to the public, and the managed lists of sources, document types,
+ * stations, apparatus types and event types.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
@@ -13,6 +15,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { historyService } from '../services/api';
 import type { ClearanceStep, HistoryTitle } from '../types';
 import { DocumentTypeListEditor } from '../components/DocumentTypeListEditor';
+import { ApparatusTypeListEditor, EventTypeListEditor, StationListEditor } from '../components/HistoryListEditors';
 import { SourceListEditor } from '../components/SourceListEditor';
 
 interface DraftStep {
@@ -70,6 +73,15 @@ export const HistorySettingsPage: React.FC = () => {
   const toggleRetired = async (title: HistoryTitle) => {
     try {
       await historyService.updateTitle(title.id, { is_retired: !title.is_retired });
+      await load();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not update the title'));
+    }
+  };
+
+  const toggleTimeline = async (title: HistoryTitle) => {
+    try {
+      await historyService.updateTitle(title.id, { show_on_timeline: !title.show_on_timeline });
       await load();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not update the title'));
@@ -267,6 +279,11 @@ export const HistorySettingsPage: React.FC = () => {
           Renaming a title corrects it on every record. A retired title stays on the records that carry it but is no
           longer offered. A title in use is merged into another rather than deleted.
         </p>
+        <p className="text-theme-text-secondary text-sm">
+          &ldquo;On the timeline&rdquo; puts the start of that title — a chief&apos;s term, say — on the department
+          timeline, for each person whose record gives the date they took it. It is off for every title until you turn
+          it on, so the timeline is not crowded.
+        </p>
         {canEditTitles && (
           <div className="flex flex-wrap items-end gap-2">
             <label className="min-w-0 flex-1">
@@ -293,7 +310,10 @@ export const HistorySettingsPage: React.FC = () => {
                   aria-label={`Rename ${title.name}`}
                   maxLength={150}
                   onBlur={(e) => void rename(title, e.target.value)}
-                  className="form-input min-w-0 flex-1"
+                  // A 12rem basis wraps the row on a phone: with the timeline
+                  // switch beside it, flex-1's 0% basis squeezed the box under
+                  // the 44px touch minimum at 390px.
+                  className="form-input min-w-0 flex-[1_1_12rem]"
                 />
               ) : (
                 <span className="text-theme-text-primary flex-1">{title.name}</span>
@@ -302,6 +322,19 @@ export const HistorySettingsPage: React.FC = () => {
                 {title.usage_count} {title.usage_count === 1 ? 'record' : 'records'}
                 {title.is_retired ? ' · retired' : ''}
               </span>
+              {canEditTitles ? (
+                <label className="touch-target-phone flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={Boolean(title.show_on_timeline)}
+                    onChange={() => void toggleTimeline(title)}
+                  />
+                  <span className="text-theme-text-primary">On the timeline</span>
+                </label>
+              ) : (
+                title.show_on_timeline && <span className="text-theme-text-secondary text-sm">On the timeline</span>
+              )}
               {canEditTitles && (
                 <button
                   type="button"
@@ -354,6 +387,9 @@ export const HistorySettingsPage: React.FC = () => {
 
       <SourceListEditor />
       <DocumentTypeListEditor />
+      <StationListEditor />
+      <ApparatusTypeListEditor />
+      <EventTypeListEditor />
     </div>
   );
 };
