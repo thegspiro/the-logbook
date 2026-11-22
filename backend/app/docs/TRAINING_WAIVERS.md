@@ -167,7 +167,6 @@ The waiver adjustment is applied consistently across all compliance views:
 | ---------------------------------------------------------------------- | --------------------------------------------------- |
 | **My Training** (`GET /training/module-config/my-training`)            | Member's personal training dashboard.               |
 | **Compliance Matrix** (`GET /training/compliance-matrix`)              | Officer view: all members x all requirements.       |
-| **Competency Matrix** (`GET /training/competency-matrix`)              | Department heat-map / readiness view.               |
 | **Training Report** (`GET /training/reports/user/{id}`)                | Individual member training report.                  |
 | **Requirements Progress** (`GET /training/requirements/progress/{id}`) | Per-user, per-requirement progress.                 |
 | **Program Enrollment Progress**                                        | Stored progress percentages in program enrollments. |

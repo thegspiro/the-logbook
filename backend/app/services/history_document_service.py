@@ -43,6 +43,7 @@ from app.models.history import (
     HistoryAlbumDocument,
     HistoryClearanceRequest,
     HistoryDocument,
+    HistoryDocumentApparatusTag,
     HistoryDocumentFile,
     HistoryDocumentTag,
     HistoryDocumentType,
@@ -57,6 +58,11 @@ from app.services import history_document_files as document_files
 from app.services.documents_service import DocumentsService
 from app.services.file_storage_service import FileStorageService, StorageArea
 from app.services.history_media_service import default_title
+from app.services.history_records import (
+    apparatus_tag_views,
+    public_apparatus_names,
+    validated_apparatus_ids,
+)
 from app.services.history_service import (
     HistoryService,
     Viewer,
@@ -184,6 +190,9 @@ class HistoryDocumentService:
             selectinload(HistoryDocument.source),
             selectinload(HistoryDocument.document_type),
             selectinload(HistoryDocument.document),
+            selectinload(HistoryDocument.apparatus_tags).selectinload(
+                HistoryDocumentApparatusTag.apparatus
+            ),
         )
 
     async def get_document(
@@ -222,6 +231,7 @@ class HistoryDocumentService:
         decade: Optional[int] = None,
         album_id: Optional[str] = None,
         member_id: Optional[str] = None,
+        apparatus_id: Optional[str] = None,
         level: Optional[PublicationLevel] = None,
         limit: int = 60,
         offset: int = 0,
@@ -266,6 +276,16 @@ class HistoryDocumentService:
                     select(HistoryDocumentTag.document_id).where(
                         HistoryDocumentTag.document_id == HistoryDocument.document_id,
                         HistoryDocumentTag.member_id == str(member_id),
+                    )
+                )
+            )
+        if apparatus_id:
+            conditions.append(
+                exists(
+                    select(HistoryDocumentApparatusTag.document_id).where(
+                        HistoryDocumentApparatusTag.document_id
+                        == HistoryDocument.document_id,
+                        HistoryDocumentApparatusTag.apparatus_id == str(apparatus_id),
                     )
                 )
             )
@@ -356,6 +376,9 @@ class HistoryDocumentService:
             for tag in sorted(item.tags, key=lambda t: t.member.last_name)
             if self.history.can_read(viewer, tag.member)
         ]
+        view["apparatus"] = apparatus_tag_views(
+            viewer.can_view_archive, (tag.apparatus for tag in item.apparatus_tags)
+        )
         return view
 
     def full_view(
@@ -384,6 +407,9 @@ class HistoryDocumentService:
                     }
                     for tag in sorted(item.tags, key=lambda t: t.member.last_name)
                 ],
+                "apparatus": apparatus_tag_views(
+                    True, (tag.apparatus for tag in item.apparatus_tags)
+                ),
                 "published_at": item.published_at,
                 "revision_number": item.revision_number,
                 "public_revision_number": item.public_revision_number,
@@ -419,6 +445,9 @@ class HistoryDocumentService:
             )
         data["kind"] = _enum_value(item.kind)
         data["tag_member_ids"] = sorted(tag.member_id for tag in item.tags)
+        data["tag_apparatus_ids"] = sorted(
+            tag.apparatus_id for tag in item.apparatus_tags
+        )
         display = self.file_of(item, MediaFileRole.DISPLAY)
         data["display_sha256"] = display.sha256 if display else None
         return data
@@ -434,6 +463,7 @@ class HistoryDocumentService:
                 not in (
                     "research_notes",
                     "tag_member_ids",
+                    "tag_apparatus_ids",
                     "source_id",
                     "document_type_id",
                 )
@@ -447,6 +477,9 @@ class HistoryDocumentService:
             display_name(tag.member)
             for tag in item.tags
             if tag.member.publication_level == PublicationLevel.PUBLIC
+        )
+        snapshot["apparatus"] = public_apparatus_names(
+            tag.apparatus for tag in item.apparatus_tags
         )
         return snapshot
 
@@ -809,6 +842,43 @@ class HistoryDocumentService:
         if reloaded is None:
             raise ValueError("This document could not be read back")
         return await self._after_edit(reloaded, True, "Tags changed", actor_id)
+
+    async def replace_apparatus_tags(
+        self, item: HistoryDocument, apparatus_ids: list[str], actor_id: str
+    ) -> HistoryDocument:
+        """Set the apparatus a document concerns. A change is substantial, as
+        a change of people is."""
+        wanted = await validated_apparatus_ids(
+            self.db, item.organization_id, apparatus_ids
+        )
+        current = {tag.apparatus_id for tag in item.apparatus_tags}
+        if set(wanted) == current:
+            return item
+        stale = [apparatus_id for apparatus_id in current if apparatus_id not in wanted]
+        if stale:
+            await self.db.execute(
+                delete(HistoryDocumentApparatusTag).where(
+                    HistoryDocumentApparatusTag.document_id == item.document_id,
+                    HistoryDocumentApparatusTag.apparatus_id.in_(stale),
+                )
+            )
+        for apparatus_id in wanted:
+            if apparatus_id not in current:
+                self.db.add(
+                    HistoryDocumentApparatusTag(
+                        document_id=item.document_id,
+                        apparatus_id=apparatus_id,
+                        created_by=actor_id,
+                    )
+                )
+        item.updated_by = actor_id
+        await self.db.flush()
+        reloaded = await self.get_document(item.organization_id, item.document_id)
+        if reloaded is None:
+            raise ValueError("This document could not be read back")
+        return await self._after_edit(
+            reloaded, True, "Apparatus tags changed", actor_id
+        )
 
     async def delete(self, item: HistoryDocument) -> list[str]:
         """Remove a draft document, its Documents row and its records.

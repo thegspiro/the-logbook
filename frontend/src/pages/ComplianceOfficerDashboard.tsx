@@ -1089,7 +1089,7 @@ const ForecastSection: React.FC = () => {
           Predictive Compliance Forecast
         </h2>
         <p className="text-theme-text-muted mt-1 text-sm">
-          30/60/90-day compliance projections based on expiring certifications
+          Each member's standing 30, 60 and 90 days from now if nothing new is logged
         </p>
       </div>
 

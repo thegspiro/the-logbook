@@ -23,7 +23,7 @@ and the member's leave notice email (sent by the endpoint after commit).
 """
 
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Sequence, Set
 
@@ -36,6 +36,7 @@ from app.api.dependencies import user_has_permission
 from app.core.audit import log_audit_event
 from app.core.constants import CHIEF_POSITION_SLUGS
 from app.models.leave_request import (
+    LeaveApproverCover,
     LeaveDecisionRule,
     LeaveMessageKind,
     LeaveRequest,
@@ -52,7 +53,11 @@ from app.models.user import (
     user_positions,
 )
 from app.schemas.leave_of_absence import (
+    LeaveApproverCoverBoard,
+    LeaveApproverCoverCreate,
+    LeaveApproverCoverResponse,
     LeaveApproverPosition,
+    LeaveCoverPerson,
     LeaveDates,
     LeaveOfAbsenceSettings,
     LeaveProposalResponse,
@@ -161,19 +166,80 @@ def rule_sentence(rule: LeaveDecisionRule, approver_count: int) -> str:
 
 @dataclass
 class _Pool:
-    """Who may decide in a department, worked out once per call."""
+    """Who may decide in a department, worked out once per call.
+
+    ``covers`` maps an approver away today to the officer standing in for
+    them, already checked to manage leave.
+    """
 
     configured: Set[str]
     chiefs: Set[str]
     managers: Set[str]
+    covers: Dict[str, str] = field(default_factory=dict)
 
-    def approvers_for(self, requester_id: str) -> Set[str]:
+    def approvers_for(
+        self, requester_id: str, routed_to_chief: bool = False
+    ) -> Set[str]:
+        """The approvers whose votes count on a request: its seats.
+
+        A request routed to the Chief skips the approver positions. The
+        requester never decides their own request.
+        """
         requester = str(requester_id)
-        for step in (self.configured, self.chiefs, self.managers):
+        steps = (
+            (self.chiefs, self.managers)
+            if routed_to_chief
+            else (self.configured, self.chiefs, self.managers)
+        )
+        for step in steps:
             ids = step - {requester}
             if ids:
                 return ids
         return set()
+
+    def deciders(self, request: LeaveRequest) -> "_Deciders":
+        seats = self.approvers_for(request.user_id, bool(request.routed_to_chief))
+        requester = str(request.user_id)
+        holder = {}
+        for seat in seats:
+            stand_in = self.covers.get(seat)
+            # A stand-in never decides their own request; the seat stays
+            # with the approver.
+            holder[seat] = stand_in if stand_in and stand_in != requester else seat
+        return _Deciders(seats=seats, holder=holder)
+
+
+@dataclass
+class _Deciders:
+    """A request's seats, and who holds each today.
+
+    A seat is an approver whose vote counts. Its holder is the approver, or
+    the officer standing in for them while they are away; the holder casts
+    the seat's vote.
+    """
+
+    seats: Set[str]
+    holder: Dict[str, str]
+
+    @property
+    def actors(self) -> Set[str]:
+        return set(self.holder.values())
+
+    def seats_of(self, user_id: str) -> Set[str]:
+        uid = str(user_id)
+        return {seat for seat, held_by in self.holder.items() if held_by == uid}
+
+    def counted(self, votes: Sequence) -> List:
+        return [v for v in votes if str(v.seat_id) in self.seats]
+
+    def open_seats_of(self, user_id: str, votes: Sequence) -> Set[str]:
+        filled = {str(v.seat_id) for v in votes}
+        return self.seats_of(user_id) - filled
+
+    def waiting_on(self, votes: Sequence) -> Set[str]:
+        """Who holds a seat not yet filled this round."""
+        filled = {str(v.seat_id) for v in votes}
+        return {self.holder[s] for s in self.seats if s not in filled}
 
 
 def _display_name(user: Optional[User], fallback: str = "A member") -> str:
@@ -309,13 +375,273 @@ class LeaveRequestService:
         managers = {
             str(u.id) for u in members if user_has_permission(u, MANAGE_PERMISSION)
         }
-        return _Pool(configured=configured, chiefs=chiefs, managers=managers)
+        today = await resolve_org_today(self.db, org_id)
+        covers: Dict[str, str] = {}
+        for cover in (
+            await self.db.execute(
+                select(LeaveApproverCover).where(
+                    LeaveApproverCover.organization_id == org_id,
+                    LeaveApproverCover.start_date <= today,
+                    LeaveApproverCover.end_date >= today,
+                )
+            )
+        ).scalars():
+            # Checked when used, not only when set: a stand-in who no longer
+            # manages leave (or has left) stops standing in, and the seat
+            # returns to the approver.
+            if str(cover.stand_in_id) in managers:
+                covers[str(cover.approver_id)] = str(cover.stand_in_id)
+        return _Pool(
+            configured=configured, chiefs=chiefs, managers=managers, covers=covers
+        )
 
-    async def approvers_for(self, organization_id: str, requester_id: str) -> Set[str]:
-        """The members who may decide a request from ``requester_id`` today."""
+    async def deciders_for(
+        self, organization_id: str, request: LeaveRequest
+    ) -> _Deciders:
+        """Who decides ``request`` today: its seats and their holders."""
         org_id = str(organization_id)
         pool = await self._pool(org_id, await self.get_settings(org_id))
-        return pool.approvers_for(requester_id)
+        return pool.deciders(request)
+
+    # ------------------------------------------------------------------
+    # Approver cover
+    # ------------------------------------------------------------------
+
+    # The longest cover one entry may set. A department that needs longer
+    # sets another when this one ends, which keeps an officer looking at it.
+    MAX_COVER_DAYS = 366
+
+    def _cover_approvers(self, pool: _Pool) -> Set[str]:
+        """Members who sit as approvers in their own right, and so may be
+        covered: the approver positions' holders and the Chief, or, where
+        neither exists, those who manage leave."""
+        return (pool.configured | pool.chiefs) or set(pool.managers)
+
+    async def _users_by_id(self, org_id: str, ids: Set[str]) -> Dict[str, User]:
+        if not ids:
+            return {}
+        return {
+            str(u.id): u
+            for u in (
+                await self.db.execute(
+                    select(User).where(
+                        User.id.in_(list(ids)), User.organization_id == org_id
+                    )
+                )
+            ).scalars()
+        }
+
+    async def cover_board(
+        self, organization_id: str, viewer: User
+    ) -> LeaveApproverCoverBoard:
+        """Current and upcoming covers the viewer may see, and the choices
+        for setting one. Those who manage leave see every cover; anyone else
+        sees the covers naming them, as approver or stand-in."""
+        org_id = str(organization_id)
+        today = await resolve_org_today(self.db, org_id)
+        pool = await self._pool(org_id, await self.get_settings(org_id))
+        viewer_id = str(viewer.id)
+        is_manager = user_has_permission(viewer, MANAGE_PERMISSION)
+        query = select(LeaveApproverCover).where(
+            LeaveApproverCover.organization_id == org_id,
+            LeaveApproverCover.end_date >= today,
+        )
+        if not is_manager:
+            query = query.where(
+                or_(
+                    LeaveApproverCover.approver_id == viewer_id,
+                    LeaveApproverCover.stand_in_id == viewer_id,
+                )
+            )
+        covers = list(
+            (
+                await self.db.execute(
+                    query.order_by(LeaveApproverCover.start_date, LeaveApproverCover.id)
+                )
+            ).scalars()
+        )
+        approver_ids = self._cover_approvers(pool)
+        settable = (
+            approver_ids
+            if is_manager
+            else ({viewer_id} if viewer_id in approver_ids else set())
+        )
+        users = await self._users_by_id(
+            org_id,
+            {str(c.approver_id) for c in covers}
+            | {str(c.stand_in_id) for c in covers}
+            | settable
+            | (pool.managers if settable else set()),
+        )
+
+        def person(uid: str) -> LeaveCoverPerson:
+            return LeaveCoverPerson(id=uid, name=_display_name(users.get(uid)))
+
+        def by_name(ids: Set[str]) -> List[LeaveCoverPerson]:
+            return sorted(
+                (person(uid) for uid in ids if uid in users),
+                key=lambda p: (p.name.lower(), p.id),
+            )
+
+        return LeaveApproverCoverBoard(
+            covers=[
+                LeaveApproverCoverResponse(
+                    id=str(c.id),
+                    approver_id=str(c.approver_id),
+                    approver_name=_display_name(users.get(str(c.approver_id))),
+                    stand_in_id=str(c.stand_in_id),
+                    stand_in_name=_display_name(users.get(str(c.stand_in_id))),
+                    start_date=c.start_date,
+                    end_date=c.end_date,
+                    active=c.start_date <= today <= c.end_date,
+                    can_clear=is_manager or str(c.approver_id) == viewer_id,
+                )
+                for c in covers
+            ],
+            approvers=by_name(settable),
+            stand_ins=by_name(pool.managers) if settable else [],
+            today=today,
+        )
+
+    async def set_cover(
+        self, organization_id: str, actor: User, data: LeaveApproverCoverCreate
+    ) -> LeaveApproverCover:
+        """Name a stand-in for an approver's away period.
+
+        The approver sets their own; those who manage leave may set anyone's.
+        The stand-in must manage leave, so naming them shows a request's
+        reason to nobody who could not already read it.
+        """
+        org_id = str(organization_id)
+        settings = await self.get_settings(org_id)
+        if not settings.requests_enabled:
+            raise LeaveRequestForbidden(
+                "Your department does not take leave requests here, so there is "
+                "nothing for a stand-in to decide."
+            )
+        actor_id = str(actor.id)
+        approver_id = str(data.approver_id)
+        if approver_id != actor_id and not user_has_permission(
+            actor, MANAGE_PERMISSION
+        ):
+            raise LeaveRequestForbidden(
+                "Only an officer who manages leave can set another approver's " "cover."
+            )
+        # Locked so two covers for one approver, set at once, are checked for
+        # overlap one after the other (pitfall #27). The lock is also the
+        # in-department check on the approver.
+        approver = (
+            await self.db.execute(
+                select(User)
+                .where(User.id == approver_id, User.organization_id == org_id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if approver is None:
+            raise ValueError("That approver is not a member of your department.")
+        pool = await self._pool(org_id, settings)
+        if approver_id not in self._cover_approvers(pool):
+            raise ValueError(
+                "That member is not an approver, so there is nothing to cover."
+            )
+        stand_in_id = str(data.stand_in_id)
+        if stand_in_id not in pool.managers:
+            raise ValueError("The stand-in must be a current member who manages leave.")
+        today = await resolve_org_today(self.db, org_id)
+        if data.start_date < today:
+            raise ValueError("A cover cannot start before today.")
+        if (data.end_date - data.start_date).days >= self.MAX_COVER_DAYS:
+            raise ValueError(
+                f"A cover can run for at most {self.MAX_COVER_DAYS} days; set "
+                "another when this one ends."
+            )
+        clash = (
+            await self.db.execute(
+                select(LeaveApproverCover.id).where(
+                    LeaveApproverCover.organization_id == org_id,
+                    LeaveApproverCover.approver_id == approver_id,
+                    LeaveApproverCover.start_date <= data.end_date,
+                    LeaveApproverCover.end_date >= data.start_date,
+                )
+            )
+        ).first()
+        if clash is not None:
+            raise LeaveRequestForbidden(
+                "This approver already has a cover for some of these days. "
+                "Clear it first."
+            )
+        cover = LeaveApproverCover(
+            organization_id=org_id,
+            approver_id=approver_id,
+            stand_in_id=stand_in_id,
+            start_date=data.start_date,
+            end_date=data.end_date,
+            created_by=actor_id,
+        )
+        self.db.add(cover)
+        await self.db.flush()
+        await log_audit_event(
+            db=self.db,
+            event_type="leave_approver_cover_set",
+            event_category="user_management",
+            severity="info",
+            event_data={
+                "cover_id": str(cover.id),
+                "approver_id": approver_id,
+                "stand_in_id": stand_in_id,
+                "start_date": data.start_date.isoformat(),
+                "end_date": data.end_date.isoformat(),
+            },
+            user_id=actor_id,
+            username=actor.username,
+        )
+        await self.db.commit()
+        await self.db.refresh(cover)
+        return cover
+
+    async def clear_cover(
+        self, organization_id: str, actor: User, cover_id: str
+    ) -> None:
+        """End a cover now. Votes a stand-in already cast keep counting."""
+        org_id = str(organization_id)
+        cover = (
+            await self.db.execute(
+                select(LeaveApproverCover)
+                .where(
+                    LeaveApproverCover.id == str(cover_id),
+                    LeaveApproverCover.organization_id == org_id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        actor_id = str(actor.id)
+        is_manager = user_has_permission(actor, MANAGE_PERMISSION)
+        if cover is None or not (
+            is_manager or actor_id in (str(cover.approver_id), str(cover.stand_in_id))
+        ):
+            raise LeaveRequestNotFound("Cover not found")
+        if not is_manager and actor_id != str(cover.approver_id):
+            raise LeaveRequestForbidden(
+                "Only the approver or an officer who manages leave can clear "
+                "this cover."
+            )
+        await log_audit_event(
+            db=self.db,
+            event_type="leave_approver_cover_cleared",
+            event_category="user_management",
+            severity="info",
+            event_data={
+                "cover_id": str(cover.id),
+                "approver_id": str(cover.approver_id),
+                "stand_in_id": str(cover.stand_in_id),
+                "start_date": cover.start_date.isoformat(),
+                "end_date": cover.end_date.isoformat(),
+            },
+            user_id=actor_id,
+            username=actor.username,
+        )
+        await self.db.delete(cover)
+        await self.db.commit()
 
     # ------------------------------------------------------------------
     # Requests
@@ -409,6 +735,8 @@ class LeaveRequestService:
         extends = await self._extension_target(
             org_id, str(member.id), data.start_date, data.end_date
         )
+        pool = await self._pool(org_id, settings)
+        routed_to_chief = str(member.id) in pool.configured
         request = LeaveRequest(
             organization_id=org_id,
             user_id=str(member.id),
@@ -419,6 +747,7 @@ class LeaveRequestService:
             status=LeaveRequestStatus.PENDING,
             decision_rule=settings.request_decision_rule,
             extends_leave_id=str(extends.id) if extends else None,
+            routed_to_chief=routed_to_chief,
         )
         self.db.add(request)
         await self.db.flush()
@@ -433,6 +762,7 @@ class LeaveRequestService:
                 "end_date": data.end_date.isoformat() if data.end_date else None,
                 "decision_rule": settings.request_decision_rule.value,
                 "extends_leave_id": str(extends.id) if extends else None,
+                "routed_to_chief": routed_to_chief,
             },
             user_id=str(member.id),
             username=member.username,
@@ -488,7 +818,8 @@ class LeaveRequestService:
             viewer, MANAGE_PERMISSION
         ):
             return request
-        if str(viewer.id) in await self.approvers_for(org_id, request.user_id):
+        deciders = await self.deciders_for(org_id, request)
+        if str(viewer.id) in deciders.seats | deciders.actors:
             return request
         raise LeaveRequestNotFound("Leave request not found")
 
@@ -525,7 +856,15 @@ class LeaveRequestService:
             return rows
         pool = await self._pool(org_id, await self.get_settings(org_id))
         viewer_id = str(viewer.id)
-        return [r for r in rows if viewer_id in pool.approvers_for(r.user_id)]
+        return [
+            r
+            for r in rows
+            if viewer_id in pool.deciders(r).actors
+            or (
+                r.status != LeaveRequestStatus.PENDING
+                and viewer_id in pool.deciders(r).seats
+            )
+        ]
 
     async def withdraw(
         self, organization_id: str, request_id: str, member: User
@@ -564,16 +903,22 @@ class LeaveRequestService:
 
     async def _as_approver(
         self, org_id: str, request: LeaveRequest, user: User
-    ) -> Set[str]:
-        """The request's approvers, after checking ``user`` is one of them.
+    ) -> _Deciders:
+        """The request's deciders, after checking ``user`` holds a seat today.
 
-        Anyone who is not is told the request does not exist, except the
-        member and those who manage leave, who can see it and are told why
-        they cannot act on it.
+        Anyone who does not is told the request does not exist, except the
+        member, those who manage leave, and an approver whose seat a stand-in
+        holds while they are away, who can see it and are told why they
+        cannot act on it.
         """
-        approvers = await self.approvers_for(org_id, request.user_id)
+        deciders = await self.deciders_for(org_id, request)
         uid = str(user.id)
-        if uid not in approvers:
+        if not deciders.seats_of(uid):
+            if uid in deciders.seats:
+                raise LeaveRequestForbidden(
+                    "Someone is standing in for you as an approver until your "
+                    "cover ends; they decide this request in your place."
+                )
             if str(request.user_id) == uid or user_has_permission(
                 user, MANAGE_PERMISSION
             ):
@@ -583,7 +928,7 @@ class LeaveRequestService:
             raise LeaveRequestNotFound("Leave request not found")
         if request.status != LeaveRequestStatus.PENDING:
             raise LeaveRequestForbidden("This request has already been decided.")
-        return approvers
+        return deciders
 
     def _current_votes(self, request: LeaveRequest, votes: Sequence) -> List:
         return [v for v in votes if v.round == request.vote_round]
@@ -628,7 +973,7 @@ class LeaveRequestService:
         """
         org_id = str(organization_id)
         request = await self._get(org_id, request_id, lock=True)
-        approvers = await self._as_approver(org_id, request, voter)
+        deciders = await self._as_approver(org_id, request, voter)
         if self._awaiting_member(request):
             raise LeaveRequestForbidden(
                 "This request is waiting on the member. Voting resumes once they "
@@ -639,28 +984,39 @@ class LeaveRequestService:
             request,
             (await self._votes([str(request.id)], lock=True)).get(str(request.id), []),
         )
-        if any(str(v.voter_id) == voter_id for v in existing):
+        # A stand-in who is also an approver in their own right holds two
+        # seats, and one decision fills both: they decide in the away
+        # approver's place as well as their own.
+        seats = deciders.open_seats_of(voter_id, existing)
+        if not seats:
             raise LeaveRequestForbidden("You have already voted on this request.")
 
-        self.db.add(
-            LeaveRequestVote(
-                organization_id=org_id,
-                request_id=str(request.id),
-                voter_id=voter_id,
-                round=request.vote_round,
-                vote=vote,
-                note=note,
+        for seat in sorted(seats):
+            self.db.add(
+                LeaveRequestVote(
+                    organization_id=org_id,
+                    request_id=str(request.id),
+                    voter_id=voter_id,
+                    seat_id=seat,
+                    on_behalf_of=seat if seat != voter_id else None,
+                    round=request.vote_round,
+                    vote=vote,
+                    note=note,
+                )
             )
-        )
-        counted = [v for v in existing if str(v.voter_id) in approvers]
+        counted = deciders.counted(existing)
         approvals = sum(v.vote == LeaveVote.APPROVE for v in counted) + (
-            vote == LeaveVote.APPROVE
+            len(seats) if vote == LeaveVote.APPROVE else 0
         )
         denials = sum(v.vote == LeaveVote.DENY for v in counted) + (
-            vote == LeaveVote.DENY
+            len(seats) if vote == LeaveVote.DENY else 0
         )
         outcome = settle(
-            request.decision_rule, len(approvers), approvals, denials, latest=vote
+            request.decision_rule,
+            len(deciders.seats),
+            approvals,
+            denials,
+            latest=vote,
         )
         await self._audit(
             "leave_request_vote",
@@ -670,6 +1026,7 @@ class LeaveRequestService:
             vote=vote.value,
             round=request.vote_round,
             outcome=outcome.value if outcome else None,
+            on_behalf_of=sorted(s for s in seats if s != voter_id) or None,
         )
         return await self._finish(org_id, request, outcome, voter_id, voter.username)
 
@@ -957,25 +1314,34 @@ class LeaveRequestService:
             end_date=end.isoformat() if end else None,
             round=request.vote_round,
         )
-        approvers = await self.approvers_for(org_id, request.user_id)
-        if proposer_id is None or proposer_id not in approvers:
-            # The proposer no longer decides requests: the new round starts
-            # with no votes, and the remaining approvers decide it.
+        deciders = await self.deciders_for(org_id, request)
+        proposer_seats = deciders.seats_of(proposer_id) if proposer_id else set()
+        if proposer_id is None or not proposer_seats:
+            # The proposer no longer decides requests (or a stand-in now holds
+            # their seat): the new round starts with no votes, and whoever
+            # holds the seats decides it.
             await self.db.commit()
             await self.db.refresh(request)
             return request
-        self.db.add(
-            LeaveRequestVote(
-                organization_id=org_id,
-                request_id=str(request.id),
-                voter_id=proposer_id,
-                round=request.vote_round,
-                vote=LeaveVote.APPROVE,
-                note=None,
+        for seat in sorted(proposer_seats):
+            self.db.add(
+                LeaveRequestVote(
+                    organization_id=org_id,
+                    request_id=str(request.id),
+                    voter_id=proposer_id,
+                    seat_id=seat,
+                    on_behalf_of=seat if seat != proposer_id else None,
+                    round=request.vote_round,
+                    vote=LeaveVote.APPROVE,
+                    note=None,
+                )
             )
-        )
         outcome = settle(
-            request.decision_rule, len(approvers), 1, 0, latest=LeaveVote.APPROVE
+            request.decision_rule,
+            len(deciders.seats),
+            len(proposer_seats),
+            0,
+            latest=LeaveVote.APPROVE,
         )
         proposer = await self.db.get(User, proposer_id)
         return await self._finish(
@@ -1024,17 +1390,17 @@ class LeaveRequestService:
             ):
                 await self.db.rollback()
                 continue
-            approvers = await self.approvers_for(org_id, request.user_id)
+            deciders = await self.deciders_for(org_id, request)
             votes = self._current_votes(
                 request,
                 (await self._votes([str(request.id)], lock=True)).get(
                     str(request.id), []
                 ),
             )
-            counted = [v for v in votes if str(v.voter_id) in approvers]
+            counted = deciders.counted(votes)
             outcome = settle(
                 request.decision_rule,
-                len(approvers),
+                len(deciders.seats),
                 sum(v.vote == LeaveVote.APPROVE for v in counted),
                 sum(v.vote == LeaveVote.DENY for v in counted),
             )
@@ -1048,7 +1414,7 @@ class LeaveRequestService:
                 str(last.voter_id),
                 None,
                 outcome=outcome.value,
-                approver_count=len(approvers),
+                approver_count=len(deciders.seats),
             )
             try:
                 settled.append(
@@ -1137,6 +1503,7 @@ class LeaveRequestService:
         user_ids |= {str(r.proposed_by) for r in requests if r.proposed_by}
         for request_votes in votes.values():
             user_ids |= {str(v.voter_id) for v in request_votes}
+            user_ids |= {str(v.on_behalf_of) for v in request_votes if v.on_behalf_of}
         for request_messages in messages.values():
             user_ids |= {str(m.author_id) for m in request_messages if m.author_id}
         users = {
@@ -1156,18 +1523,25 @@ class LeaveRequestService:
         is_manager = user_has_permission(viewer, MANAGE_PERMISSION)
         out: List[LeaveRequestResponse] = []
         for r in requests:
-            approvers = pool.approvers_for(r.user_id)
+            deciders = pool.deciders(r)
             request_votes = votes.get(str(r.id), [])
             current = self._current_votes(r, request_votes)
-            counted = [v for v in current if str(v.voter_id) in approvers]
+            counted = deciders.counted(current)
             my_vote = next(
                 (v.vote for v in current if str(v.voter_id) == viewer_id), None
             )
             is_member = str(r.user_id) == viewer_id
-            may_see_private = is_member or viewer_id in approvers or is_manager
+            may_see_private = (
+                is_member
+                or viewer_id in deciders.seats
+                or viewer_id in deciders.actors
+                or is_manager
+            )
             pending = r.status == LeaveRequestStatus.PENDING
             awaiting = self._awaiting_member(r) if pending else None
-            can_act = pending and viewer_id in approvers and awaiting is None
+            can_act = (
+                pending and bool(deciders.seats_of(viewer_id)) and awaiting is None
+            )
             leave = (
                 extended.get(str(r.extends_leave_id)) if r.extends_leave_id else None
             )
@@ -1230,6 +1604,13 @@ class LeaveRequestService:
                         LeaveRequestVoteResponse(
                             voter_id=str(v.voter_id),
                             voter_name=_display_name(users.get(str(v.voter_id))),
+                            on_behalf_of_name=(
+                                _display_name(
+                                    users.get(str(v.on_behalf_of)), "A former member"
+                                )
+                                if v.on_behalf_of
+                                else None
+                            ),
                             round=v.round,
                             vote=v.vote,
                             note=v.note,
@@ -1239,9 +1620,13 @@ class LeaveRequestService:
                     ],
                     approvals=sum(v.vote == LeaveVote.APPROVE for v in counted),
                     denials=sum(v.vote == LeaveVote.DENY for v in counted),
-                    approver_count=len(approvers),
-                    approvals_needed=approvals_needed(r.decision_rule, len(approvers)),
-                    can_vote=can_act and my_vote is None,
+                    approver_count=len(deciders.seats),
+                    approvals_needed=approvals_needed(
+                        r.decision_rule, len(deciders.seats)
+                    ),
+                    routed_to_chief=bool(r.routed_to_chief),
+                    can_vote=can_act
+                    and bool(deciders.open_seats_of(viewer_id, current)),
                     can_ask=can_act,
                     can_answer=is_member and awaiting == "answer",
                     can_respond_to_changes=is_member and awaiting == "proposal",
@@ -1281,17 +1666,13 @@ class LeaveRequestService:
         to_decide = 0
         if others:
             pool = await self._pool(org_id, settings)
-            mine_to_vote = [
-                r for r in others if viewer_id in pool.approvers_for(r.user_id)
-            ]
+            mine_to_vote = [r for r in others if pool.deciders(r).seats_of(viewer_id)]
             if mine_to_vote:
                 votes = await self._votes([str(r.id) for r in mine_to_vote])
                 for r in mine_to_vote:
-                    voted = any(
-                        str(v.voter_id) == viewer_id
-                        for v in self._current_votes(r, votes.get(str(r.id), []))
-                    )
-                    to_decide += 0 if voted else 1
+                    current = self._current_votes(r, votes.get(str(r.id), []))
+                    open_seats = pool.deciders(r).open_seats_of(viewer_id, current)
+                    to_decide += 1 if open_seats else 0
         return LeaveRequestSummary(
             requests_enabled=settings.requests_enabled,
             to_decide=to_decide,
@@ -1398,7 +1779,7 @@ class LeaveRequestService:
         org_id = str(organization_id)
         pool = await self._pool(org_id, await self.get_settings(org_id))
         requester = str(request.user_id)
-        approvers = pool.approvers_for(requester)
+        approvers = pool.deciders(request).actors
         ids = (pool.chiefs & (pool.managers | approvers)) - {requester}
         if not ids:
             ids = pool.managers - {requester}
@@ -1423,9 +1804,15 @@ class LeaveRequestService:
     async def requester_and_approvers(
         self, organization_id: str, request: LeaveRequest
     ) -> tuple:
-        """The requesting member and the members who may decide, for email."""
+        """The requesting member and the members who may decide, for email.
+
+        The deciders are the seats' holders today, so a stand-in is emailed
+        in place of the approver they cover. The count is the seats', which
+        the decision rule is measured against.
+        """
         org_id = str(organization_id)
-        ids = await self.approvers_for(org_id, request.user_id)
+        deciders = await self.deciders_for(org_id, request)
+        ids = deciders.actors
         users = (
             (
                 await self.db.execute(
@@ -1443,4 +1830,14 @@ class LeaveRequestService:
         )
         member = next((u for u in users if str(u.id) == str(request.user_id)), None)
         approvers = [u for u in users if str(u.id) in ids]
-        return member, approvers, len(ids)
+        return member, approvers, len(deciders.seats)
+
+    async def waiting_on_ids(
+        self, organization_id: str, request: LeaveRequest
+    ) -> Set[str]:
+        """Who holds a seat on ``request`` not yet filled this round."""
+        deciders = await self.deciders_for(str(organization_id), request)
+        votes = self._current_votes(
+            request, (await self._votes([str(request.id)])).get(str(request.id), [])
+        )
+        return deciders.waiting_on(votes)

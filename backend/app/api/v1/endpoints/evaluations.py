@@ -76,6 +76,9 @@ from app.schemas.evaluation import (
     PartWrite,
     PreviewOptions,
     PublishResult,
+    ReassignmentHolder,
+    ReassignmentPlan,
+    ReassignmentRequest,
     ResponseWrite,
     ReviewHistoryEntry,
     SignatureWrite,
@@ -475,6 +478,98 @@ async def delete_period(
     await _audit(
         db, current_user, "evaluation_period_deleted", {"period_id": period_id}
     )
+
+
+@router.get(
+    "/periods/{period_id}/reassign-options",
+    response_model=List[ReassignmentHolder],
+)
+async def list_reassignment_holders(
+    period_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.manage")),
+):
+    """Everyone holding open work in the period that a reassignment moves --
+    an evaluator who has not submitted, or a name on an approval or
+    calibration step not yet done -- with how many evaluations each.
+
+    **Permissions required:** evaluations.manage
+    """
+    return ensure_found(
+        await EvaluationService(db).reassignment_options(
+            current_user.organization_id, period_id
+        ),
+        "Review period",
+    )
+
+
+@router.get("/periods/{period_id}/reassign-preview", response_model=ReassignmentPlan)
+async def preview_reassignment(
+    period_id: str,
+    from_user_id: str = Query(min_length=1, max_length=36),
+    to_user_id: str = Query(min_length=1, max_length=36),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.manage")),
+):
+    """What handing one person's open work in the period to another would
+    move, and what it would skip and why. Changes nothing.
+
+    **Permissions required:** evaluations.manage
+    """
+    async with handle_service_errors("Failed to preview the reassignment"):
+        plan = await EvaluationService(db).reassignment_plan(
+            current_user.organization_id, period_id, from_user_id, to_user_id
+        )
+    return ensure_found(plan, "Review period")
+
+
+@router.post("/periods/{period_id}/reassign", response_model=ReassignmentPlan)
+async def reassign_period_work(
+    period_id: str,
+    data: ReassignmentRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.manage")),
+    _stepup: User = Depends(require_stepup),
+):
+    """Hand one person's open work in the period to another: evaluations
+    they have not yet submitted as evaluator (their draft stays for the new
+    evaluator), and approval and calibration steps naming them. An
+    evaluation the new person may not take over is skipped with the reason.
+
+    Choosing who writes and signs personnel records needs a recently
+    re-verified session, as assigning one step does. Each evaluation moved
+    is audited at ``warning`` with both people.
+
+    **Permissions required:** evaluations.manage
+    """
+    async with handle_service_errors("Failed to reassign"):
+        plan = ensure_found(
+            await EvaluationService(db).reassignment_plan(
+                current_user.organization_id,
+                period_id,
+                data.from_user_id,
+                data.to_user_id,
+                apply=True,
+            ),
+            "Review period",
+        )
+    for row in plan["rows"]:
+        if row["skipped_reason"] is None:
+            await _audit(
+                db,
+                current_user,
+                "evaluation_work_reassigned",
+                {
+                    "evaluation_id": row["evaluation_id"],
+                    "period_id": period_id,
+                    "from_user_id": data.from_user_id,
+                    "to_user_id": data.to_user_id,
+                    "evaluator_moved": row["moves_evaluator"],
+                    "steps_moved": row["steps"],
+                },
+                severity="warning",
+            )
+    return plan
 
 
 # ---------------------------------------------------------------- evaluations

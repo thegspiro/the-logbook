@@ -506,7 +506,15 @@ class TestColumnConstraints:
         performed_at, blocked_at, etc.
         """
         # Association / join tables and kit-composition child tables
-        exempt = {"user_roles", "equipment_kit_items"}
+        exempt = {
+            "user_roles",
+            "equipment_kit_items",
+            # A title held in a service period. Its date columns are the
+            # title's own held-from/held-to dates, not an audit stamp; the
+            # period carries created_at, and a period's titles are rewritten
+            # as a set on every save, so a separate stamp would equal it.
+            "historical_member_period_titles",
+        }
         # Common timestamp column names
         timestamp_names = {
             "created_at",

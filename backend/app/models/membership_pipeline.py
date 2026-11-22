@@ -298,6 +298,15 @@ class MembershipPipelineStep(Base):
         return f"<MembershipPipelineStep(name={self.name}, type={self.step_type})>"
 
 
+# The applicant-record fields the self-access guard matches a member on
+# (app/api/prospect_privacy.py). An applicant who changes one of them through a
+# follow-up form stamps identity_edited_by_applicant_at, and the guard then
+# trusts only the transfer back-link for that record (ADV2-10).
+PROSPECT_IDENTITY_FIELDS = frozenset(
+    {"email", "first_name", "last_name", "date_of_birth"}
+)
+
+
 class ProspectiveMember(Base):
     """
     Prospective member record, kept separate from the users table.
@@ -409,6 +418,17 @@ class ProspectiveMember(Base):
         nullable=True,
     )
     transferred_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    # When the applicant last changed their email, name or date of birth
+    # through a follow-up form (ADV2-10, owner decision 2026-11-21). While set,
+    # the self-access guard matches this record to a member only by
+    # transferred_user_id: an applicant who types a coordinator's details
+    # would otherwise hide their own file from that coordinator. A
+    # coordinator's change to one of those fields clears it, since the values
+    # are then the department's own.
+    identity_edited_by_applicant_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Lifecycle stamps. `status` says where an application stands now; these
     # say when it got there and what was given as the reason, which is what

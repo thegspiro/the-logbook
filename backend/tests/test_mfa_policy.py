@@ -426,6 +426,10 @@ STEPUP_HANDLERS = {
     # person who takes an approval or calibration step decides whose signature
     # a personnel record carries, so it re-verifies as signing does.
     ("evaluations.py", "assign_evaluation_step"),
+    # Handing one person's open work in a period to another (owner decision
+    # 2026-11-21): it decides who writes and signs many personnel records at
+    # once, so it re-verifies as assigning one step does.
+    ("evaluations.py", "reassign_period_work"),
 }
 
 

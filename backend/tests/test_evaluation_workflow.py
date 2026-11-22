@@ -3546,6 +3546,190 @@ class TestPeriodResults:
         assert missing.status_code == 404
 
 
+class TestReassigningAPeriod:
+    """Handing one person's open work in a period to another: evaluations
+    they have not submitted as evaluator, and steps that name them."""
+
+    async def _period_url(self, dept: _Dept) -> str:
+        return f"/evaluations/periods/{dept.period.id}"
+
+    async def test_preview_changes_nothing_and_apply_moves_the_evaluators_drafts(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        manager = await make_client(dept.manager)
+        first = await _draft(manager, dept)
+        second = await _draft(manager, dept, member=await _user(dept.db, dept.org, []))
+        old = await make_client(dept.evaluator)
+        await old.put(
+            f"/evaluations/{first['id']}/parts/evaluator",
+            json={"content": EVALUATOR_ANSWERS},
+        )
+        successor = await _user(dept.db, dept.org, ["evaluations.conduct"])
+        base = await self._period_url(dept)
+
+        options = (await manager.get(f"{base}/reassign-options")).json()
+        assert {o["user_id"]: o["evaluations"] for o in options} == {
+            dept.evaluator.id: 2
+        }
+        preview = await manager.get(
+            f"{base}/reassign-preview",
+            params={"from_user_id": dept.evaluator.id, "to_user_id": successor.id},
+        )
+        assert preview.status_code == 200, preview.text
+        assert sorted(r["evaluation_id"] for r in preview.json()["rows"]) == sorted(
+            [first["id"], second["id"]]
+        )
+        assert all(
+            r["moves_evaluator"] and r["skipped_reason"] is None
+            for r in preview.json()["rows"]
+        )
+        assert (await old.get(f"/evaluations/{first['id']}")).status_code == 200
+
+        outbox.clear()
+        applied = await manager.post(
+            f"{base}/reassign",
+            json={"from_user_id": dept.evaluator.id, "to_user_id": successor.id},
+        )
+
+        assert applied.status_code == 200, applied.text
+        assert applied.json()["rows"] == preview.json()["rows"]
+        new = await make_client(successor)
+        seen = (await new.get(f"/evaluations/{first['id']}")).json()
+        assert seen["evaluator"]["id"] == successor.id
+        assert seen["viewer"]["can_edit_evaluation"] is True
+        # The draft stays for the new evaluator to finish.
+        evaluator_part = next(p for p in seen["parts"] if p["kind"] == "evaluator")
+        assert evaluator_part["content"]["answers"]["meetings"]["text"] == (
+            "Steady attendance."
+        )
+        assert (await old.get(f"/evaluations/{first['id']}")).status_code == 404
+        assert len(outbox.to(successor, WAITING)) == 2
+        audited = (
+            (
+                await dept.db.execute(
+                    select(AuditLog).where(
+                        AuditLog.event_type == "evaluation_work_reassigned"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert sorted(a.event_data["evaluation_id"] for a in audited) == sorted(
+            [first["id"], second["id"]]
+        )
+
+    async def test_a_submitted_evaluation_stays_with_its_evaluator(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        await _lock_evaluator(dept, make_client, f"/evaluations/{detail['id']}")
+        successor = await _user(dept.db, dept.org, ["evaluations.conduct"])
+
+        applied = await (await make_client(dept.manager)).post(
+            f"{await self._period_url(dept)}/reassign",
+            json={"from_user_id": dept.evaluator.id, "to_user_id": successor.id},
+        )
+
+        assert applied.json()["rows"] == []
+        evaluation = await dept.db.get(Evaluation, detail["id"])
+        await dept.db.refresh(evaluation)
+        assert evaluation.evaluator_id == dept.evaluator.id
+
+    async def test_someone_who_cannot_conduct_evaluations_is_skipped(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        bystander = await _user(dept.db, dept.org, [])
+
+        applied = await (await make_client(dept.manager)).post(
+            f"{await self._period_url(dept)}/reassign",
+            json={"from_user_id": dept.evaluator.id, "to_user_id": bystander.id},
+        )
+
+        rows = applied.json()["rows"]
+        assert [r["evaluation_id"] for r in rows] == [detail["id"]]
+        assert "not able to conduct evaluations" in rows[0]["skipped_reason"]
+        evaluation = await dept.db.get(Evaluation, detail["id"])
+        await dept.db.refresh(evaluation)
+        assert evaluation.evaluator_id == dept.evaluator.id
+
+    async def test_a_named_approval_moves_but_never_to_the_evaluator(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        chief = await _user(dept.db, dept.org, [], position_name="Chief")
+        template = await _template(
+            dept.db,
+            dept.org,
+            name=f"Approved {_uid()[:4]}",
+            workflow=_approvals(chief.positions[0].id),
+            member_class="operational",
+        )
+        manager = await make_client(dept.manager)
+        detail = await _draft(manager, dept, template_id=template.id)
+        url = f"/evaluations/{detail['id']}"
+        deputy = await _user(dept.db, dept.org, [])
+        named = await manager.put(
+            f"{url}/steps/approval_1/assignee", json={"assignee_id": deputy.id}
+        )
+        assert named.status_code == 200, named.text
+        base = await self._period_url(dept)
+
+        onto_evaluator = await manager.post(
+            f"{base}/reassign",
+            json={"from_user_id": deputy.id, "to_user_id": dept.evaluator.id},
+        )
+        assert onto_evaluator.json()["rows"][0]["skipped_reason"] is not None
+        assert (await _step(dept, detail["id"], "approval_1")).assignee_id == (
+            deputy.id
+        )
+
+        successor = await _user(dept.db, dept.org, [])
+        moved = await manager.post(
+            f"{base}/reassign",
+            json={"from_user_id": deputy.id, "to_user_id": successor.id},
+        )
+        assert moved.json()["rows"] == [
+            {
+                "evaluation_id": detail["id"],
+                "member_name": dept.member.full_name,
+                "moves_evaluator": False,
+                "steps": ["Approval 1"],
+                "skipped_reason": None,
+            }
+        ]
+        step = await _step(dept, detail["id"], "approval_1")
+        await dept.db.refresh(step)
+        assert step.assignee_id == successor.id
+
+    async def test_it_needs_manage_and_a_period_of_this_department(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        await _draft(await make_client(dept.manager), dept)
+        body = {"from_user_id": dept.evaluator.id, "to_user_id": dept.manager.id}
+        base = await self._period_url(dept)
+        conductor = await make_client(dept.evaluator)
+        assert (await conductor.post(f"{base}/reassign", json=body)).status_code == 403
+        assert (await conductor.get(f"{base}/reassign-options")).status_code == 403
+
+        elsewhere = await _period(dept.db, await _org(dept.db))
+        missing = await (await make_client(dept.manager)).post(
+            f"/evaluations/periods/{elsewhere.id}/reassign", json=body
+        )
+        assert missing.status_code == 404
+
+    @pytest.mark.real_stepup
+    async def test_reassigning_requires_a_recent_re_verification(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        response = await (await make_client(dept.manager)).post(
+            f"{await self._period_url(dept)}/reassign",
+            json={"from_user_id": dept.evaluator.id, "to_user_id": dept.manager.id},
+        )
+        assert response.status_code == 403
+        assert response.headers.get("x-stepup-required") == "true"
+
+
 class TestReviewHistory:
     """GET /evaluations/{id}/history: the member's other finalized reviews,
     newest first, with the grade that stood, for evaluations.view_all."""

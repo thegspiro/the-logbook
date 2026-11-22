@@ -29,7 +29,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set,
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -43,10 +43,20 @@ from app.models.attendance_waiver import (
 )
 from app.models.call_tracking import CallTrackingMode
 from app.models.event import Event, EventRSVP, EventType
+from app.models.inventory import CheckOutRecord, InventoryItem
+from app.models.knowledge_test import (
+    KnowledgeAttemptStatus,
+    KnowledgeTest,
+    KnowledgeTestAttempt,
+)
 from app.models.meeting import Meeting, MeetingAttendee, MeetingType
 from app.models.member_position_term import MemberPositionTerm
 from app.models.skills_testing import SkillTest, SkillTestResult, SkillTestStatus
-from app.models.training import TrainingRecord, TrainingRequirement
+from app.models.training import (
+    ShiftEquipmentCheck,
+    TrainingRecord,
+    TrainingRequirement,
+)
 from app.models.user import (
     MemberLeaveOfAbsence,
     MemberServicePeriod,
@@ -107,7 +117,9 @@ SNAPSHOT_VERSION = 2
 #: Sources answered from the member's monthly shift totals over the whole
 #: coverage. ``calls.response_pct`` reads them too, but only for the days the
 #: member was expected to respond, so it loads its own.
-_SHIFT_SOURCES = frozenset({"shifts.hours", "shifts.count", "calls.responses"})
+_SHIFT_SOURCES = frozenset(
+    {"shifts.hours", "shifts.count", "shifts.external_hours", "calls.responses"}
+)
 
 #: Kinds of position an evaluation lists. ``system`` positions are the
 #: platform's own (the baseline member position, the rank mirrors) and say
@@ -467,6 +479,12 @@ class EvaluationDataService:
             return await self._admin_hours(org_id, member, coverage, tz)
         if key == "skills.tests_passed":
             return await self._skills_passed(org_id, member, coverage, tz)
+        if key == "training.knowledge_tests_passed":
+            return await self._knowledge_tests_passed(org_id, member, coverage, tz)
+        if key == "apparatus.equipment_checks":
+            return await self._equipment_checks(org_id, member, coverage, tz)
+        if key == "inventory.overdue_at_period_end":
+            return await self._overdue_at_period_end(org_id, member, coverage, tz)
         if key == "certifications.current":
             return await self._certifications(org_id, member, coverage)
         if key == "certifications.expiring_soon":
@@ -482,6 +500,12 @@ class EvaluationDataService:
         if key == "shifts.count":
             return _value(
                 int(totals["shifts"]), external_shifts=int(totals["external_shifts"])
+            )
+        if key == "shifts.external_hours":
+            shifts = int(totals["external_shifts"])
+            return _value(
+                totals["external_hours"],
+                breakdown=f"{shifts} {'shift' if shifts == 1 else 'shifts'}",
             )
         return _value(int(totals["calls"]))
 
@@ -971,6 +995,115 @@ class EvaluationDataService:
             )
         )
         return _value(int(count or 0))
+
+    async def _knowledge_tests_passed(
+        self, org_id: str, member: User, coverage: Coverage, tz: ZoneInfo
+    ) -> Dict[str, Any]:
+        """Passed means a submitted attempt marked passed, the rule program
+        milestones use (``program_milestones``). A test passed twice counts
+        once, at its best score."""
+        start_utc, end_utc = local_range_utc(coverage.start, coverage.end, tz)
+        rows = (
+            await self.db.execute(
+                select(KnowledgeTest.name, func.max(KnowledgeTestAttempt.score))
+                .join(KnowledgeTest, KnowledgeTest.id == KnowledgeTestAttempt.test_id)
+                .where(
+                    KnowledgeTestAttempt.organization_id == org_id,
+                    KnowledgeTest.organization_id == org_id,
+                    KnowledgeTestAttempt.user_id == member.id,
+                    KnowledgeTestAttempt.status
+                    == KnowledgeAttemptStatus.SUBMITTED.value,
+                    KnowledgeTestAttempt.passed.is_(True),
+                    KnowledgeTestAttempt.submitted_at >= start_utc,
+                    KnowledgeTestAttempt.submitted_at < end_utc,
+                )
+                .group_by(KnowledgeTest.id, KnowledgeTest.name)
+                .order_by(KnowledgeTest.name)
+            )
+        ).all()
+        return _value(
+            len(rows),
+            breakdown="; ".join(
+                f"{name} ({best:g}%)" if best is not None else name
+                for name, best in rows
+            ),
+        )
+
+    async def _equipment_checks(
+        self, org_id: str, member: User, coverage: Coverage, tz: ZoneInfo
+    ) -> Dict[str, Any]:
+        """Checks the member signed off (``checked_by``), whether on a shift
+        or standalone."""
+        start_utc, end_utc = local_range_utc(coverage.start, coverage.end, tz)
+        done, failed = (
+            await self.db.execute(
+                select(
+                    func.count(ShiftEquipmentCheck.id),
+                    func.coalesce(
+                        func.sum(
+                            case((ShiftEquipmentCheck.failed_items > 0, 1), else_=0)
+                        ),
+                        0,
+                    ),
+                ).where(
+                    ShiftEquipmentCheck.organization_id == org_id,
+                    ShiftEquipmentCheck.checked_by == member.id,
+                    ShiftEquipmentCheck.checked_at >= start_utc,
+                    ShiftEquipmentCheck.checked_at < end_utc,
+                )
+            )
+        ).one()
+        failed = int(failed or 0)
+        return _value(
+            int(done or 0),
+            breakdown=(
+                (
+                    f"{failed} found a failed item"
+                    if failed
+                    else "None found a failed item"
+                )
+                if done
+                else None
+            ),
+        )
+
+    async def _overdue_at_period_end(
+        self, org_id: str, member: User, coverage: Coverage, tz: ZoneInfo
+    ) -> Dict[str, Any]:
+        """Inventory's overdue rule (``overdue_checkout_clause``, DASH-37)
+        asked as of the end of the period rather than now: checked out by
+        then, due before then, and not checked back in by then. That rule's
+        fallback to the stored flag for a loan with no due date describes the
+        present moment only, so such loans are not counted here."""
+        _start, end_utc = local_range_utc(coverage.start, coverage.end, tz)
+        rows = (
+            await self.db.execute(
+                select(InventoryItem.name, CheckOutRecord.expected_return_at)
+                .join(InventoryItem, InventoryItem.id == CheckOutRecord.item_id)
+                .where(
+                    CheckOutRecord.organization_id == org_id,
+                    CheckOutRecord.user_id == member.id,
+                    CheckOutRecord.checked_out_at < end_utc,
+                    CheckOutRecord.expected_return_at.isnot(None),
+                    CheckOutRecord.expected_return_at < end_utc,
+                    or_(
+                        CheckOutRecord.checked_in_at.is_(None),
+                        CheckOutRecord.checked_in_at >= end_utc,
+                    ),
+                )
+                .order_by(CheckOutRecord.expected_return_at, InventoryItem.name)
+            )
+        ).all()
+        lines = []
+        for name, due in rows:
+            if due is None:
+                continue
+            if due.tzinfo is None:
+                # MySQL hands back naive datetimes; every stored value is UTC.
+                due = due.replace(tzinfo=timezone.utc)
+            day = due.astimezone(tz).date()
+            lines.append(f"{name}, due {day:%b} {day.day}, {day.year}")
+        return _value(len(lines), breakdown="; ".join(lines) or None)
 
     async def _held_certifications(
         self, org_id: str, member: User, coverage: Coverage

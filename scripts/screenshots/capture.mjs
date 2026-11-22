@@ -18,7 +18,7 @@
 import { chromium } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -777,6 +777,12 @@ async function main() {
   );
   for (const shot of shots) {
     const target = resolve(OUTPUT_DIR, `${shot.id}.png`);
+    // The capture is written beside the image, and moved over it only once
+    // every check below has passed. Writing straight to `target` meant a shot
+    // rejected for an out-of-frame subject, an error page or a crash had
+    // already replaced the committed image with the very frame it rejected,
+    // and a whole run left dozens of those behind with nothing to say so.
+    const pending = resolve(OUTPUT_DIR, `${shot.id}.capturing.png`);
 
     // Some states cannot exist in a seeded department — a first-run prompt is
     // gone the moment the thing it prompts for is seeded, and an empty-state
@@ -909,7 +915,7 @@ async function main() {
         ? await page.locator(shot.selector).first()
         : null;
       if (clip) {
-        await clip.screenshot({ path: target });
+        await clip.screenshot({ path: pending });
       } else {
         if (shot.fullPage) {
           // Return to the top first. A prepare step that clicks something far
@@ -921,11 +927,11 @@ async function main() {
           await page.waitForTimeout(250);
         }
         await page.screenshot({
-          path: target,
+          path: pending,
           fullPage: Boolean(shot.fullPage),
         });
       }
-      await optimize(target);
+      await optimize(pending);
       const outOfFrame = await detectSubjectOutOfFrame(page, shot);
       if (outOfFrame) {
         throw new Error(
@@ -948,6 +954,15 @@ async function main() {
         throw new Error(`page rendered an error: "${pageError}"`);
       }
       const overflow = await detectHorizontalOverflow(page);
+      // An empty state is recorded as captured but never applied, so it may
+      // fill a placeholder that has no image yet. It must not replace one that
+      // exists: that image was taken against richer data than this run had.
+      const keptExisting = Boolean(emptyState) && existsSync(target);
+      if (keptExisting) {
+        await rm(pending, { force: true });
+      } else {
+        await rename(pending, target);
+      }
       results.push({
         id: shot.id,
         status: "ok",
@@ -957,11 +972,12 @@ async function main() {
         anchor: shot.anchor,
         alt: shot.alt,
         ...(emptyState ? { emptyState } : {}),
+        ...(keptExisting ? { keptExisting: true } : {}),
         ...(overflow ? { horizontalOverflow: overflow } : {}),
         ...(shot.holdBack ? { holdBack: shot.holdBack } : {}),
       });
       console.log(
-        `  ${emptyState ? "~" : "+"} ${shot.id}${emptyState ? ` (empty: "${emptyState}")` : ""}`,
+        `  ${emptyState ? "~" : "+"} ${shot.id}${emptyState ? ` (empty: "${emptyState}"${keptExisting ? "; existing image kept" : ""})` : ""}`,
       );
       if (overflow) {
         console.log(
@@ -972,6 +988,7 @@ async function main() {
         );
       }
     } catch (error) {
+      await rm(pending, { force: true });
       results.push({
         id: shot.id,
         status: "failed",

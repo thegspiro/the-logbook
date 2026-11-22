@@ -1076,6 +1076,41 @@ Phase 4, documents (2026-11-14), ships with these:
 - **New dependency: pypdfium2** (PDFium bindings, 5.15.2) draws the first
   page; pypdf was already installed.
 
+Phase 5, events, apparatus and timelines (2026-11-21), ships with these:
+
+- **Stations are names, not records yet (owner decision 12).** Events and
+  unit numbers pick a station from a managed list, which is renamed, retired
+  and merged like sources, so a misspelling is fixed in one place. A station
+  has no address, dates or photos of its own until full station records
+  arrive; the list becomes them then.
+- **A truck from the fleet is copied once.** Its descriptive details are
+  copied when the History record is started and nothing syncs afterwards. No
+  price, VIN, plate, financing, insurance or maintenance figure is ever
+  copied. Its type and station are matched to History's lists by name only,
+  and its disposal is read from the disposal method's wording; a word it does
+  not recognize (donated, say) reads as "not known" for the Historian to set.
+- **No apparatus or event merge.** A duplicate apparatus or event is deleted
+  while it is a draft, or returned to draft and deleted. A person merge does
+  carry event links.
+- **A title reaches the timeline only with its own date.** Titles held
+  before phase 5 have no dates: the Historian adds a "held from" date on the
+  person's record, and switches the title on in settings, before a chief's
+  term appears. A title is never placed by its service period's start. On a
+  person's own page every dated title shows, switched on or not.
+- **"Today in history" is inside the app.** It is on the History home and the
+  Dashboard; the public website widget arrives with the public feed in phase 7.
+  Only entries dated to the day match; a 29 February entry shows on 28 February
+  in other years.
+- **The event-type filter narrows events only.** Milestones have no event type;
+  the timeline's milestone switches narrow those.
+- **The decade counts are computed each time.** The timeline reads every dated
+  record of the department to count its decades. Fine for a department's
+  archive; a collection in the tens of thousands of dated records would want a
+  stored count.
+- **No civilian fields (owner decision 7).** A civilian named in an event goes
+  in the description, which the clearance list checks before anything is
+  public, or in the encrypted research notes.
+
 ## Department Store — Decisions for the Owner (2026-11-13)
 
 From the department store follow-up
@@ -1575,7 +1610,7 @@ the owner, because closing them changes how members get into their accounts:
   is; the email change itself is now ceiling-bound, step-up gated, audited and
   reported to the previous address.
 
-## Separation of Duties — Two Decisions Left Open (ADV-02, 2026-11-14)
+## Separation of Duties — One Decision Left Open (ADV-02, 2026-11-14)
 
 The adversarial pass over the month to 2026-11-14 found these items. Its
 findings are in `docs/security-review/ADV-02-adversarial-last-month.md`. Each
@@ -1614,10 +1649,22 @@ fix changes a workflow some departments rely on, so the owner decides:
   another officer decides. Not changed by the documentation pass, because
   whether a Chief with no other officer may excuse their own training is the
   owner's call.
-- **An applicant's edited email or name and birth date can make a coordinator's
-  self-access guard hide their file (ADV2-10).** Refusing a member's email
-  covers half of it. The rest turns on whether self-detection should trust
-  fields the applicant can edit.
+- ~~**An applicant's edited email or name and birth date can make a coordinator's
+  self-access guard hide their file (ADV2-10).**~~ ✅ Resolved 2026-11-21
+  (owner: trust only `transferred_user_id` once the applicant edits). An
+  applicant who changes their email, name or date of birth through a follow-up
+  form stamps `identity_edited_by_applicant_at`, and the guard then matches
+  that record to a member only by the transfer back-link. A coordinator's
+  change to one of those fields clears the stamp. Applications already edited
+  were stamped from the activity log on upgrade.
+- **The first public application is still matched on what the applicant typed
+  (found 2026-11-21 with ADV2-10; left as is by owner decision).** Someone
+  applying through the public interest form with a coordinator's email, or
+  their name and birth date, is hidden from that coordinator from the start,
+  because the stamp marks only later follow-up edits. The owner chose this so
+  that a member's own application stays hidden from them before transfer. A
+  coordinator who suspects a missing applicant can ask another coordinator,
+  who sees the record.
 - ~~**A Zeffy dues payment credits whichever member's email the payer typed
   (ADV2-11).**~~ ✅ Resolved 2026-11-21 (owner: hold as unmatched until a
   treasurer confirms). A membership payment is recorded as **Awaiting
@@ -1708,12 +1755,31 @@ stored Guest Headcount Reminder templates. The document headings titled
 "Public Outreach Request Pipeline" were kept, because other pages link to their
 anchors.
 
+**Outreach Overview — built (2026-11-21).** The area's first page: needs
+attention (requests waiting for a reply, events short of people, events waiting
+to be closed out), a week and month planning calendar, quick actions and the
+year at a glance, read from `GET /events/outreach-calendar`. Boundaries drawn
+without a ruling:
+
+- **Which events show is `outreach_event_clause`, unchanged** — the rule
+  Outreach Impact counts by, so the two pages cannot disagree (pitfall #29). An
+  apparatus night whose template uses a non-public type (business meeting,
+  other) is therefore not on the Overview, though it stays on Apparatus Events.
+  Widening the rule would change Outreach Impact's counts too. "Tagged with a
+  CRR activity" joins the rule when Phase 3 adds activities.
+- **"Closed out" is attendance finalized**, per the 2026-11-20 decision
+  (completion on finalize). An event with a headcount but no finalize still
+  shows as waiting; a draft never does.
+- **"Short of people" counts open volunteer and crew seats together**, for
+  events not yet started in the next 60 days.
+- **New outreach event opens the ordinary event form** without a type preset;
+  the form takes a template, not a type, from its address.
+
 Decided for later phases, not yet built:
 
-- **Outreach Overview** as the area's first page — needs attention, upcoming
-  outreach with seats filled against needed, quick actions. An outreach event
-  is one scheduled from a request or tagged with an outreach type or CRR
-  activity. The planning view offers week and month, as Shift Scheduling does.
+- **Location data for CRR activities comes from a ZIP list bundled with the
+  app** (owner decision, 2026-11-21) — offline, so it works on Unraid and
+  air-gapped installs, and no ZIP code leaves the server.
 - **CRR activity tracking**, recordable both as an event and as a lightweight
   log entry. A department-configurable catalogue (smoke and CO alarm installs,
   home safety surveys, car seat inspections, extinguisher training, hands-only
@@ -7255,13 +7321,16 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
     readiness does not count. They used to read `expiring_soon` and count as
     ready. The summary adds `in_progress_count`. A certification cell's
     `details` is now the grader's progress, not the certificate number.
-- **Competency matrix endpoint has no screen — open, owner question
-  2026-11-21.** No frontend code or MCP tool calls
-  `GET /training/competency-matrix`; the Training heat map reads the
-  skills-evaluation view (`/training/competency/department`). The endpoint
-  now grades through the shared grader rather than its own rules. Whether to
-  keep it for direct API callers or retire it, with its documentation, is not
-  decided.
+- **Competency matrix endpoint has no screen — ✅ retired by owner decision
+  2026-11-21.** No frontend code or MCP tool called
+  `GET /training/competency-matrix`. The Training heat map reads the
+  skills-evaluation view (`/training/competency/department`). The route and
+  `CompetencyMatrixService` are removed, so a direct API caller now gets
+  `404`. The compliance matrix (`GET /training/compliance-matrix`) answers the
+  same question with the shared grader. The per-position skill matrices of
+  the training-enhancements module, the `competency_matrices` table and its
+  endpoints, are a different feature and are unchanged. Test:
+  `tests/test_competency_matrix_endpoint_retired.py`.
 - **Profiles: admin hours choose their own profile — open, owner question
   2026-11-21.** A member's admin-hours targets come from the highest-priority
   matching profile that _carries_ admin hours (ties now resolved as grading
@@ -7335,18 +7404,24 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   in `ComplianceOfficerDashboard.test.tsx` and
   `TrainingEnhancementsTab.test.tsx`.
 - **The compliance forecast's projection charges every certificate expiring
-  in the window — open, owner decision pending.** The 30/60/90-day estimate
-  subtracts one met requirement for each completed record whose expiry falls
-  in the window, including a certificate no graded requirement reads and a
-  superseded record whose renewal already exists. Since 2026-11-21 that
-  estimate drives a standing colour, so on a default install (100 / 75, no
-  profiles) a fully compliant member with three graded requirements and one
-  unrelated certificate expiring in 20 days reads 66.7% non-compliant (red)
-  at 30 days; with four requirements, 75.0% at risk. The estimate's inputs
-  were deliberately not changed. The options are to keep colouring the
-  estimate as it is, to narrow it to certificates a graded requirement reads
-  (and skip superseded renewals), or to re-grade each requirement at today +
-  N days.
+  in the window — ✅ fixed (owner decision 2026-11-21: re-grade at today +
+  N).** The 30/60/90-day estimate subtracted one met requirement for each
+  completed record whose expiry fell in the window, including a certificate
+  no graded requirement reads and a superseded record whose renewal already
+  exists, so on a default install a fully compliant member with three
+  requirements and one unrelated certificate expiring in 20 days read 66.7%
+  non-compliant at 30 days. Each projection is now
+  `training_compliance.grade_members` — the matrix's grader — run as of
+  today + 30, 60 and 90 days on the records already logged, by the member's
+  own thresholds. Ungraded and superseded certificates cost nothing, and
+  lapses that are not certificate expiries are now charged: a rolling window
+  letting old hours fall out, a catch-up period ending, and a calendar period
+  rolling into a new one with nothing logged in it yet (viewed on 21
+  November, a member who has met this year's annual requirement reads it unmet
+  at 60 and 90 days, because those days fall in next year's period).
+  The projections assume nothing new is logged; the screens now say so. The
+  "expiring certifications" list and count are unchanged and informational.
+  Tests: `tests/test_compliance_forecast_horizons.py`.
 - **A requirement with zero currently-applicable members renders as a
   failing 0% (CMP4-4, LOW) — ✅ fixed 2026-09-29, workflow review W29-4.**
   `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`

@@ -16,6 +16,115 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (branch `claude/friendly-babbage-v1mcno`)**: Feature 29 (Reports &
+analytics), pass 16 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). This session's own environment restricts pushes to its
+assigned branch, so the PR is opened from `claude/friendly-babbage-v1mcno`
+rather than a `claude/security-review-reports-analytics-pNN` name — recorded
+here so the next iteration's Step 0 finds it.
+
+PR #4547 (Feature 28, Security, audit & IP, pass 14) had already merged
+(`78809b873`) before this iteration started; row 28 marked ✅ below. Real
+delta since pass 15's merge (`413ab36e6`, PR #4238): a new server-side
+`POST /reports/export` (PDF/CSV, audited), a new
+`GET /dashboard/community-engagement/events` backing the same report's
+export, leave periods now surfaced on the Annual Training and Program
+Requirement Progress reports (RPT5-29-1's follow-through), and voting
+eligibility on the attendance dashboard now reusing the election gate's own
+rule instead of re-deriving it. **0 fixed, 0 new findings** — every new
+surface traced and found already using the safe patterns (`SafeCsvWriter`,
+escaped PDF cells, org-scoped by-id checks, in-org FK validation, row
+locking). A pre-existing, unrelated forked Alembic chain was found but left
+to the open PR (#4549) already fixing it, to avoid adding a third fork.
+37→38 routes. See `docs/security-review/RPT6-29-reports-analytics.md`'s
+**Pass 16** section for the full trace.
+
+Row 29 → ✅ (pending this PR's merge); next is Feature 30 (Onboarding) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 14, PR #4547, merged), preserved for history</summary>
+
+**PR [#4547](https://github.com/thegspiro/the-logbook/pull/4547)**
+(branch `claude/security-review-security-audit-ip`): Feature 28 (Security,
+audit & IP), pass 14 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). All nine backend scope files byte-identical to pass 12/13's
+baseline. `core/security_middleware.py` carries only a benign 2-line
+addition to the shared `EXPORT_ENDPOINTS` allowlist beyond what pass 13
+already read (another feature's own export route, same shape pass 7
+accepted); the rest of that file's diff (sign-in rate limiting) is
+unchanged from pass 13's out-of-scope ruling. Three frontend files carry
+small cosmetic diffs (`StatGrid` adoption, AAA-contrast token sweep,
+`rwd-table` reflow) with no query/permission/data-flow change. 37 routes
+re-enumerated by AST, unchanged, all auth-gated. **0 fixed, 0 new security
+findings.** Both open items (SEC2-28-6, dead detector code) re-verified
+unchanged. Also fixed, unrelated to this feature: a forked Alembic chain
+(two heads landed separately since pass 13) — resolved with an empty merge
+revision. Full write-up: `docs/security-review/SEC2-28-security-audit-ip.md`'s
+**Pass 14** section.
+
+Row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
+analytics) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 14, PR #4543, merged as `0af595b72`), preserved for history</summary>
+
+**PR [#4543](https://github.com/thegspiro/the-logbook/pull/4543)**
+(branch `claude/security-review-integrations-p14`): Feature 27
+(Integrations), pass 14 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). PR #4541 (Feature 26, Forms, pass 14) merged (`2d97d8402`)
+since the last iteration; row 26 marked ✅ below. Real delta since pass 13:
+a new Historical Data Import undo sub-feature (`historical_import_undo.py`,
+1144 lines, two new routes), three small security-positive correctness
+fixes on the Salesforce/PayPal connect paths, and a new public
+PayPal.Me/email pair read end to end including its out-of-feature
+Storefront consumer. **0 fixed, 0 new security findings, 1 flagged
+(test-coverage only).** Also fixed, unrelated to this feature: a forked
+Alembic chain that had silently left the sandbox's database missing a real
+column, cascading into 321 unrelated test failures — resolved with an empty
+merge revision. Full write-up:
+`docs/security-review/INT-27-integrations.md`'s **Pass 14** section.
+
+Row 27 → ✅ (merged as `0af595b72`); next is Feature 28 (Security, audit &
+IP).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 26, Forms, pass 14, PR #4541, merged), preserved for history</summary>
+
+**PR [#4541](https://github.com/thegspiro/the-logbook/pull/4541)**
+(branch `claude/security-review-forms-p14` — prior branch names for this
+feature already carry merged PRs, most recently pass 13's PR #4234, so this
+pass uses a `-p14` suffix per CLAUDE.md Pitfall #24): Feature 26 (Forms),
+pass 14 — watchdog pickup (the dedicated `/loop 30m /security-review`
+session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). PR #4520
+(Feature 25, Messaging & notifications, pass 14) merged (`c59bad857`) since
+the last iteration; row 25 marked ✅ below. Real delta since pass 13
+(baseline `8d4915078`, PR #4234): a date/timezone correctness fix on
+Feature 16's (Events & requests) shared `lead_time_error` helper —
+`EventRequest.preferred_date_start`/`preferred_date_end` are `Date` columns,
+and the prior code built a timezone-anchored `datetime` and assigned it into
+them, silently losing the anchoring at the DB boundary — re-verified safe at
+Forms' own call site (`forms_service.py`'s `_parse_request_date`/
+`lead_time_error` call, which now passes the new required `today=
+org_today(org)` keyword correctly), plus a cosmetic `StatGrid` swap in
+`FormResultsPanel.tsx`. **0 fixed, 0 newly flagged.** Full write-up:
+`docs/security-review/FORM-26-forms.md`'s **Pass 14** section.
+
+Row 26 → ✅ (merged as `2d97d8402`); next was Feature 27 (Integrations).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 14, PR #4520, merged), preserved for history</summary>
+
 **PR [#4520](https://github.com/thegspiro/the-logbook/pull/4520)**
 (branch `claude/security-review-messaging-notifications` — first use of
 this branch name, no suffix needed): Feature 25 (Messaging & notifications), pass
@@ -34,8 +143,9 @@ validated in-org before storage. **0 fixed, 0 newly flagged.** Full
 write-up: `docs/security-review/MSG-25-messaging-notifications.md`'s
 **Pass 14** section.
 
-Row 25 → ✅ (pending this PR's merge); next is Feature 26 (Forms) —
-re-check `list_pull_requests` fresh rather than trusting this note.
+Row 25 → ✅ (merged as `c59bad857`); next was Feature 26 (Forms).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 21, PR #4504, merged), preserved for history</summary>
@@ -27352,10 +27462,10 @@ iteration's commit" rule.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 14)                                                                                                                                                                                                             | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ⬜     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (31 routes, added pass 13), `historical_staffing_*.py`                                                                                                                                                                | ⬜     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ⬜     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ✅     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (33 routes incl. undo, added pass 14), `historical_staffing_*.py`, `historical_import_undo.py` (added pass 14)                                                                                                        | ✅     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ✅     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ⬜     |
@@ -27421,6 +27531,129 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-22 — Feature 26 (Forms, pass 14) merged; Feature 27 (Integrations, pass 14): watchdog pickup, undo for Historical Data Import read in full, 0 fixed, 0 new security findings (1 flagged, test-coverage only)
+
+PR #4541 merged as `2d97d8402`. A fresh `list_pull_requests` (state=open)
+found no `claude/security-review-*` head, and row 27 was the next `⬜` row,
+confirmed directly against the table on a freshly pulled `main`.
+
+Baseline: PR #4235's head `7d1fe1518dc4` (pass 13's merge; this repo's
+shallow clone no longer carries the merge commit itself, so the PR's own
+head — tree-identical to the merge — was fetched directly and diffed
+against). Across eleven days of otherwise very heavy, unrelated repo
+activity (141 new migrations), real content in six files: `historical_import.py`
+(two new routes, +84/-5), a brand-new `historical_import_undo.py` (1144
+lines, new), `historical_staffing_commit.py`/`historical_staffing_plan.py`
+(a separate, already-merged feature PR, #4534), `integrations.py` (+56) and
+`schemas/integration.py` (+30), and `IntegrationsPage.tsx` (+204/-38). Every
+other declared file is byte-identical to pass 13.
+
+**Historical Data Import gets an undo**, one committed step at a time (owner
+decision 2026-11-16): `GET /{import_id}/undo` and `POST /{import_id}/undo/{step}`,
+both gated by the same `integrations.historical_import` permission as every
+other route in the file. Read the new 1144-line service in full: every query
+and delete filters `organization_id` (confirmed by name, not sampled); the
+one dynamically-built query (`count_shift_references`, a reflection-based
+`UNION ALL` over every table with a FK to `shifts.id`) and the one
+seemingly-bare `db.get(Shift, ...)` (in the separately-merged staffing-commit
+feature) both resolve from an already org-scoped `shift_id`, so neither is a
+cross-tenant gap; both use SQLAlchemy Core, not string-built SQL. JSON-column
+mutation on `record.results` goes through `copy.deepcopy` + reassignment
+throughout (Pitfall #12), dependent-step ordering is enforced
+(`_DEPENDENTS`), and former-member deletion is reference-counted first.
+Three small, independent, security-positive fixes on `integrations.py`
+(discard a stale Salesforce access token when its grant changes; require
+both new PayPal credentials together on a sandbox↔live environment switch)
+and a new public (non-secret, correctly excluded from redaction, HTML-escaped
+at every render site) PayPal.Me/email pair read end to end, including the
+out-of-feature consumer (Storefront's connected-PayPal button) that reads
+them. One LOW item flagged, test-coverage only: the new undo service has no
+explicit cross-org test, though every query it runs was traced by hand and
+found already scoped. Full write-up:
+`docs/security-review/INT-27-integrations.md`'s **Pass 14** section.
+
+**Also fixed, unrelated to this feature:** `validate_migrations.py --strict`
+found a forked Alembic chain (two heads landed separately in the pass-13→14
+window, neither touching a table the other writes) — blocking CI's
+Migration Chain job for every pull request. Worse than cosmetic: this
+sandbox's test database had been stamped at only one of the two heads, so
+`event_rsvps.is_volunteer` did not exist, cascading into 321 failures across
+unrelated suites on this pass's first scoped-suite run. Resolved with an
+empty `alembic merge` revision (`3f93727e84ba`); re-running `alembic upgrade
+head` applied the missing branch and the previously-failing files went green
+with no code change. Per CLAUDE.md's "no acceptable pre-existing errors"
+rule.
+
+**Completion gate:** `flake8==7.4.1`/`black==26.10.1 --check`/
+`isort==9.0.2 --check-only` on `app/ tests/ alembic/` all clean (verified
+under both the repo-root and backend-venv Python). `validate_migrations.py
+--strict` — 807 revisions, single head `3f93727e84ba` (after the merge-revision
+fix). `check_route_permissions.py --strict` — 329 routes, 0 errors/warnings
+(72 this feature's own, up from pass 13's 70). `generate_schema_docs.py
+--check` — up to date. `npm run typecheck` — 0 errors. `npm run lint` — exit 0. `npx vitest run src/pages/IntegrationsPage.test.tsx
+src/pages/historicalImport src/pages/scheduling/admin/historyImport` — 156
+passed (4 files, up from pass 13's 135). Scoped backend pytest (after
+`alembic upgrade head` applied the merge revision) — 12,923 passed, 24
+environment-only skips, 0 failed (the 321 failures the first run reported
+were the missing-column symptom above, not a code defect).
+
+Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit &
+IP) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-21 — Feature 25 (Messaging & notifications, pass 14) merged; Feature 26 (Forms, pass 14): watchdog pickup, real delta is a date/timezone fix on a shared helper plus a cosmetic StatGrid swap, 0 fixed, 0 new findings
+
+PR #4520 merged as `c59bad857`. A fresh `list_pull_requests` (state=open)
+found no `claude/security-review-*` head, and row 26 was the next `⬜` row,
+confirmed directly against the table on a freshly pulled `main`.
+
+Baseline `8d4915078` (PR #4234, pass 13). `git diff --stat` on all six
+declared backend scope files plus the frontend forms/embed/public-form
+surface shows real content in exactly two files: `forms_service.py`
+(+15/-24) and `components/forms/FormResultsPanel.tsx` (+2/-1); every other
+declared file is byte-identical to pass 13.
+
+`forms_service.py`'s delta is this feature's own call site adapting to a
+correctness fix made in Feature 16's (Events & requests) own
+`event_request_service.py`: `lead_time_error`'s date parameters moved from
+timezone-anchored `datetime` to plain `date`, because
+`EventRequest.preferred_date_start`/`preferred_date_end` are already `Date`
+columns — the prior code built a tz-anchored `datetime` and assigned it into
+a `Date` column, silently losing the anchoring at the DB boundary. Forms'
+own `_parse_request_date` now returns `Optional[date]` and its
+`lead_time_error` call site supplies the new required `today=org_today(org)`
+keyword; `lead_time_error` is keyword-only on `today` with no default, so a
+caller that omitted it would raise `TypeError` outright — confirmed by grep
+that this is the only call site in the backend, and it supplies the keyword
+in the same hunk. A correctness fix, not a security regression (it removes a
+silent truncation rather than weakening a check). `event_request_service.py`
+itself carries a much larger delta this window, but all of it is Feature
+16's own declared scope — read only far enough to confirm Forms' own call
+site is correct against the new contract, matching pass 11's precedent for
+`follow_up_forms.py`.
+
+`FormResultsPanel.tsx` swaps a hand-rolled `grid`/`sm:grid-cols-4` wrapper
+for the shared `components/ux/StatGrid` component (the repeated repo-wide
+StatGrid sweep) — read `StatGrid.tsx` in full, a container-query layout
+helper with no data handling and no `dangerouslySetInnerHTML`. Cosmetic.
+
+**0 fixed, 0 new findings.** FORM-4 and FORM-12 (both long-flagged,
+non-security) re-confirmed unchanged. Full write-up:
+`docs/security-review/FORM-26-forms.md`'s **Pass 14** section.
+
+**Completion gate:** `flake8==7.4.1`/`black==26.10.1 --check`/
+`isort==9.0.2 --check-only` on `app/ tests/ alembic/` all clean.
+`validate_migrations.py --strict` — 805 revisions, single head
+`1a5c18b46791`. `check_route_permissions.py --strict` — 329 routes, 0
+errors/warnings (unchanged). Scoped backend pytest (`-k "form or
+applicant_field or sensitive_field or embed or event_request or
+outreach"`) — 1,689 passed, 1 pre-existing environment-only skip
+(`py_vapid`). `npm run typecheck` — 0 errors. `npm run lint` — 0 errors, 0
+warnings. `npx vitest run src/components/forms src/pages/FormsPage.*.test.tsx
+src/hooks/useRanks.test.ts` — 67 passed (13 files).
+
+Row 26 → ✅ (pending this PR's merge); next is Feature 27 (Integrations) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-21 — Feature 24 (Meetings & minutes, pass 14) merged; Feature 25 (Messaging & notifications, pass 14): watchdog pickup, real delta is the per-send CC-copy fix plus three new senders, 0 fixed, 0 new findings
 

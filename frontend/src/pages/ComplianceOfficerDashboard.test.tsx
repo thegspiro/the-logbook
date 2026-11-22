@@ -468,6 +468,17 @@ describe('ComplianceOfficerDashboard', () => {
       );
     });
 
+    it("says the projections are each member's standing on that day", async () => {
+      // Graded as the matrix would grade them 30, 60 and 90 days out, not by
+      // subtracting expiring certificates (owner decision 2026-11-21).
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="forecast" />);
+
+      expect(
+        await screen.findByText(/standing 30, 60 and 90 days from now if nothing new is logged/)
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/based on expiring certifications/)).not.toBeInTheDocument();
+    });
+
     it("colours each member's projection by the standing the server classified", async () => {
       // A profile bar of 50 makes 59% compliant; a fixed 80 / 50 band read it yellow.
       renderWithRouter(<ComplianceOfficerDashboard activeTab="forecast" />);

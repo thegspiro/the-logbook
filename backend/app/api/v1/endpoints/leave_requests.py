@@ -19,6 +19,9 @@ POST /users/leave-requests/{id}/changes/respond - The member accepts or declines
 GET  /users/leave-requests/summary          - Counts for the navigation
 POST /users/leave-requests/my-leaves/{leave_id}/end-early - A member ends
      their own leave in progress
+GET    /users/leave-requests/covers         - Approver covers, and the choices
+POST   /users/leave-requests/covers         - Name a stand-in for an approver
+DELETE /users/leave-requests/covers/{id}    - End a cover now
 
 Who may decide is not a permission: it is the department's chosen approver
 positions, with the Chief and then everyone who can record leave as the
@@ -39,6 +42,8 @@ from app.core.utils import safe_error_detail
 from app.models.leave_request import LeaveRequestStatus
 from app.models.user import User
 from app.schemas.leave_of_absence import (
+    LeaveApproverCoverBoard,
+    LeaveApproverCoverCreate,
     LeaveChangesCreate,
     LeaveChangesResponse,
     LeaveEndEarlyCreate,
@@ -218,6 +223,75 @@ async def list_leave_requests_to_decide(
         )
         await db.commit()
     return await service.to_responses(_org(current_user), rows, current_user)
+
+
+# ==================== Approver cover ====================
+# Declared before ``/leave-requests/{request_id}``, which would otherwise take
+# ``covers`` for a request id.
+
+
+@router.get("/leave-requests/covers", response_model=LeaveApproverCoverBoard)
+async def get_leave_approver_covers(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Current and upcoming approver covers the caller may see, with the
+    approvers they may set a cover for and who may stand in. Those who manage
+    leave see every cover; anyone else, the covers naming them.
+
+    **Authentication required**
+    """
+    return await LeaveRequestService(db).cover_board(_org(current_user), current_user)
+
+
+@router.post(
+    "/leave-requests/covers", response_model=LeaveApproverCoverBoard, status_code=201
+)
+async def set_leave_approver_cover(
+    data: LeaveApproverCoverCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Name an officer who manages leave to decide leave requests in an
+    approver's place for a period. An approver sets their own; those who
+    manage leave may set anyone's. Returns the updated board.
+
+    **Authentication required**
+    """
+    service = LeaveRequestService(db)
+    try:
+        await service.set_cover(_org(current_user), current_user, data)
+    except LeaveRequestForbidden as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    return await service.cover_board(_org(current_user), current_user)
+
+
+@router.delete(
+    "/leave-requests/covers/{cover_id}", response_model=LeaveApproverCoverBoard
+)
+async def clear_leave_approver_cover(
+    cover_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    End an approver's cover now. Votes the stand-in already cast keep
+    counting. The approver or an officer who manages leave may clear it.
+
+    **Authentication required**
+    """
+    service = LeaveRequestService(db)
+    try:
+        await service.clear_cover(_org(current_user), current_user, cover_id)
+    except LeaveRequestNotFound:
+        raise HTTPException(status_code=404, detail="Cover not found")
+    except LeaveRequestForbidden as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    return await service.cover_board(_org(current_user), current_user)
 
 
 @router.get("/leave-requests/{request_id}", response_model=LeaveRequestResponse)

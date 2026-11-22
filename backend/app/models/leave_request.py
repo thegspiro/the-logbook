@@ -16,6 +16,7 @@ from datetime import date, datetime
 from typing import Optional
 
 from sqlalchemy import (
+    Boolean,
     Date,
     DateTime,
     Enum,
@@ -140,6 +141,14 @@ class LeaveRequest(Base):
     vote_round: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default="1"
     )
+    # Set when the member held an approver position when they asked: their
+    # request skips the approver positions and goes to the Chief (owner
+    # decision 2026-11-21). Kept on the row, like ``decision_rule``, so the
+    # rule a request was made under does not move under it; requests made
+    # before the rule existed stay with their fellow approvers.
+    routed_to_chief: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     leave_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("member_leaves_of_absence.id", ondelete="SET NULL"),
@@ -159,7 +168,15 @@ class LeaveRequest(Base):
 
 
 class LeaveRequestVote(Base):
-    """One approver's vote on one request. One per approver, by constraint."""
+    """One approver's vote on one request, one per approver's seat.
+
+    ``seat_id`` is the approver whose vote this is. A stand-in covering an
+    away approver votes in that approver's place: ``voter_id`` is the
+    stand-in, ``seat_id`` and ``on_behalf_of`` the approver, and the vote
+    keeps counting for that approver once the cover ends. Otherwise
+    ``seat_id`` is the voter and ``on_behalf_of`` is empty. The constraint is
+    on the seat, so a seat is filled once per round whoever fills it.
+    """
 
     __tablename__ = "leave_request_votes"
 
@@ -175,6 +192,12 @@ class LeaveRequestVote(Base):
     )
     voter_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    # Not a foreign key: it must outlive a deleted approver's account, or a
+    # stand-in's vote would lose the seat it filled.
+    seat_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    on_behalf_of: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     # The request's vote_round when this vote was cast; only the current
     # round's votes count.
@@ -193,9 +216,50 @@ class LeaveRequestVote(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "request_id", "voter_id", "round", name="uq_leave_request_vote_round"
+            "request_id", "seat_id", "round", name="uq_leave_request_vote_seat_round"
         ),
         Index("ix_leave_request_votes_org_request", "organization_id", "request_id"),
+    )
+
+
+class LeaveApproverCover(Base):
+    """An approver away for a period, and the officer deciding in their place.
+
+    While the cover runs (``start_date`` to ``end_date``, calendar dates in
+    the department's timezone) the stand-in holds the approver's seat on
+    every request that approver may decide: they vote in the approver's
+    place, get the reminders, and the approver cannot vote until it ends.
+    The stand-in must manage leave (``members.manage``), checked when the
+    cover is set and again whenever it is used, so a stand-in who loses that
+    permission stops standing in.
+    """
+
+    __tablename__ = "leave_approver_covers"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    approver_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    stand_in_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_leave_approver_covers_org_approver", "organization_id", "approver_id"
+        ),
+        Index("ix_leave_approver_covers_org_end", "organization_id", "end_date"),
     )
 
 

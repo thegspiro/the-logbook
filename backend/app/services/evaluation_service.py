@@ -2702,6 +2702,251 @@ class EvaluationService:
             )
         return {"previous": previous, "assignee": step.assignee_id}
 
+    # ---------------------------------------------------- bulk reassigning
+
+    async def _period_in_org(
+        self, organization_id: str, period_id: str
+    ) -> Optional[EvaluationPeriod]:
+        return (
+            await self.db.execute(
+                select(EvaluationPeriod).where(
+                    EvaluationPeriod.id == period_id,
+                    EvaluationPeriod.organization_id == organization_id,
+                )
+            )
+        ).scalar_one_or_none()
+
+    def _open_work_of(
+        self, evaluation: Evaluation, steps: Sequence[EvaluationStep], user_id: str
+    ) -> Tuple[bool, List[EvaluationStep]]:
+        """What ``user_id`` holds on ``evaluation`` that a reassignment moves:
+        its evaluator's part, while the evaluator has not submitted, and the
+        approval and calibration steps not yet done that name them. A step
+        that goes to a position's holders follows the position, so it is
+        never moved here (owner decision 2026-11-21)."""
+        evaluator_step = next((s for s in steps if s.step_type == _EVALUATOR), None)
+        holds_evaluator = (
+            str(evaluation.evaluator_id or "") == str(user_id)
+            and evaluator_step is not None
+            and evaluator_step.status not in _DONE
+        )
+        named = [
+            s
+            for s in steps
+            if s.step_type in self._ASSIGNABLE
+            and str(s.assignee_id or "") == str(user_id)
+            and s.status
+            in (EvaluationStepStatus.PENDING.value, EvaluationStepStatus.OPEN.value)
+        ]
+        return holds_evaluator, named
+
+    def _reassignment_problem(
+        self,
+        evaluation: Evaluation,
+        steps: Sequence[EvaluationStep],
+        to_user: User,
+        moves_evaluator: bool,
+        moved_steps: Sequence[EvaluationStep],
+    ) -> Optional[str]:
+        """Why ``to_user`` may not take over this evaluation's open work, by
+        the rules ``create`` and ``assign_step`` already apply; None when
+        they may. The whole evaluation moves or none of it does."""
+        if str(to_user.id) == str(evaluation.member_id):
+            return "They are the member being evaluated."
+        if moves_evaluator:
+            if not user_has_permission(to_user, "evaluations.conduct"):
+                return f"{to_user.full_name} is not able to conduct evaluations."
+            if any(
+                str(s.assignee_id or "") == str(to_user.id)
+                for s in steps
+                if s.step_type in self._ASSIGNABLE and s not in moved_steps
+            ):
+                return (
+                    "They are named on this evaluation's approval or calibration, "
+                    "and an evaluator never approves or calibrates their own work."
+                )
+        evaluator_after = to_user.id if moves_evaluator else evaluation.evaluator_id
+        for step in moved_steps:
+            excluded = self._excluded_from(evaluation, steps, step) - {
+                str(evaluation.evaluator_id or "")
+            }
+            excluded.add(str(evaluator_after or ""))
+            if str(to_user.id) in excluded:
+                return (
+                    "The member, the evaluator, and anyone who signed another "
+                    "approval on this evaluation cannot act on its steps."
+                )
+        return None
+
+    async def _reassignment_inputs(
+        self,
+        organization_id: str,
+        period_id: str,
+        from_user_id: str,
+        to_user_id: Optional[str],
+    ) -> Optional[Tuple[EvaluationPeriod, User, Optional[User]]]:
+        period = await self._period_in_org(organization_id, period_id)
+        if period is None:
+            return None
+        # The person handing over may have left the department: their work is
+        # exactly what needs moving, so any account of this department will do.
+        from_user = await self.db.scalar(
+            select(User).where(
+                User.id == str(from_user_id), User.organization_id == organization_id
+            )
+        )
+        if from_user is None:
+            raise ValueError("Choose whose work to hand over.")
+        to_user: Optional[User] = None
+        if to_user_id is not None:
+            if str(to_user_id) == str(from_user_id):
+                raise ValueError("Choose someone else to take the work over.")
+            to_user = await self._member(
+                organization_id, to_user_id, with_positions=True
+            )
+            if to_user is None or to_user.status not in ACTIVE_ACCOUNT_STATUSES:
+                raise ValueError("Name a current member of the department.")
+        return period, from_user, to_user
+
+    async def _period_evaluations(
+        self, organization_id: str, period_id: str, *, for_update: bool
+    ) -> List[Evaluation]:
+        query = (
+            select(Evaluation)
+            .options(
+                selectinload(Evaluation.template_version).selectinload(
+                    EvaluationTemplateVersion.template
+                ),
+                selectinload(Evaluation.period),
+            )
+            .where(
+                Evaluation.organization_id == organization_id,
+                Evaluation.period_id == period_id,
+                Evaluation.status == EvaluationStatus.IN_PROGRESS.value,
+            )
+            .order_by(Evaluation.id)
+        )
+        if for_update:
+            query = query.with_for_update()
+        return list((await self.db.execute(query)).scalars().all())
+
+    async def reassignment_options(
+        self, organization_id: str, period_id: str
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Everyone holding open work in the period that a reassignment
+        could move, with how many evaluations they hold it on. None when the
+        period is not this department's."""
+        if await self._period_in_org(organization_id, period_id) is None:
+            return None
+        counts: Dict[str, int] = {}
+        for evaluation in await self._period_evaluations(
+            organization_id, period_id, for_update=False
+        ):
+            steps = await self._steps(evaluation)
+            holders = {str(evaluation.evaluator_id or "")} | {
+                str(s.assignee_id) for s in steps if s.assignee_id
+            }
+            for holder in holders - {""}:
+                evaluator, named = self._open_work_of(evaluation, steps, holder)
+                if evaluator or named:
+                    counts[holder] = counts.get(holder, 0) + 1
+        people = await self._people(organization_id, list(counts))
+        options = [
+            {
+                "user_id": user_id,
+                "name": (
+                    people[user_id].full_name if user_id in people else "Former member"
+                ),
+                "evaluations": count,
+            }
+            for user_id, count in counts.items()
+        ]
+        return sorted(options, key=lambda o: (o["name"].casefold(), o["user_id"]))
+
+    async def reassignment_plan(
+        self,
+        organization_id: str,
+        period_id: str,
+        from_user_id: str,
+        to_user_id: str,
+        *,
+        apply: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        """Hand ``from_user_id``'s open work in a period to ``to_user_id``,
+        or, without ``apply``, say what doing so would move and skip.
+
+        The preview and the change are one computation, so a row the preview
+        offers is one the change makes. Applying locks the period's
+        evaluations in progress and decides each again under the lock. An
+        evaluator's draft stays with the evaluation for the new evaluator to
+        finish (owner decision 2026-11-21); the new evaluator, or a step's new
+        assignee, is told by the usual email when their step is already open.
+        None when the period is not this department's.
+        """
+        inputs = await self._reassignment_inputs(
+            organization_id, period_id, from_user_id, to_user_id
+        )
+        if inputs is None:
+            return None
+        _period, from_user, to_user = inputs
+        if to_user is None:
+            raise ValueError("Name a current member of the department.")
+        evaluations = await self._period_evaluations(
+            organization_id, period_id, for_update=apply
+        )
+        people = await self._people(organization_id, [e.member_id for e in evaluations])
+        rows: List[Dict[str, Any]] = []
+        announce: List[Tuple[str, List[str]]] = []
+        for evaluation in evaluations:
+            steps = await self._steps(evaluation, for_update=apply)
+            moves_evaluator, moved = self._open_work_of(evaluation, steps, from_user.id)
+            if not moves_evaluator and not moved:
+                continue
+            labels = {s.key: s.label for s in self._workflow(evaluation).steps}
+            member = people.get(evaluation.member_id)
+            problem = self._reassignment_problem(
+                evaluation, steps, to_user, moves_evaluator, moved
+            )
+            rows.append(
+                {
+                    "evaluation_id": evaluation.id,
+                    "member_name": member.full_name if member else "Former member",
+                    "moves_evaluator": moves_evaluator,
+                    "steps": [labels.get(s.step_key, s.step_key) for s in moved],
+                    "skipped_reason": problem,
+                }
+            )
+            if not apply or problem is not None:
+                continue
+            opened: List[str] = []
+            if moves_evaluator:
+                evaluation.evaluator_id = to_user.id
+                part = (await self._parts(evaluation, for_update=True)).get(
+                    EvaluationPartKind.EVALUATOR.value
+                )
+                if part is not None:
+                    part.author_id = to_user.id
+                evaluator_step = next(s for s in steps if s.step_type == _EVALUATOR)
+                if evaluator_step.status == EvaluationStepStatus.OPEN.value:
+                    opened.append(evaluator_step.step_key)
+            for step in moved:
+                step.assignee_id = to_user.id
+                if step.status == EvaluationStepStatus.OPEN.value:
+                    opened.append(step.step_key)
+            if opened:
+                announce.append((evaluation.id, opened))
+        if apply:
+            await self.db.commit()
+            notices = EvaluationNoticeService(self.db)
+            for evaluation_id, keys in announce:
+                await notices.steps_opened(organization_id, evaluation_id, keys)
+        rows.sort(key=lambda r: (r["member_name"].casefold(), r["evaluation_id"]))
+        return {
+            "from_name": from_user.full_name,
+            "to_name": to_user.full_name,
+            "rows": rows,
+        }
+
     # ------------------------------------------------------- bulk drafting
 
     async def _open_period(

@@ -38,6 +38,8 @@ import type {
   TemplateDefinition,
   TemplatePreview,
   TemplateWorkflow,
+  ReassignmentHolder,
+  ReassignmentPlan,
   ReviewHistoryEntry,
 } from '../types/evaluations';
 
@@ -293,6 +295,32 @@ export const evaluationsService = {
       { assignee_id: assigneeId }
     );
     return response.data;
+  },
+
+  /** Who holds open work in a review period that a reassignment moves. */
+  async reassignmentHolders(periodId: string): Promise<ReassignmentHolder[]> {
+    const response = await api.get<ReassignmentHolder[]>(
+      `/evaluations/periods/${encodeURIComponent(periodId)}/reassign-options`
+    );
+    return asArray(response.data);
+  },
+
+  /** What handing one person's open work to another would move and skip. Changes nothing. */
+  async reassignmentPreview(periodId: string, fromUserId: string, toUserId: string): Promise<ReassignmentPlan> {
+    const response = await api.get<ReassignmentPlan>(
+      `/evaluations/periods/${encodeURIComponent(periodId)}/reassign-preview`,
+      { params: { from_user_id: fromUserId, to_user_id: toUserId } }
+    );
+    return { ...response.data, rows: asArray(response.data.rows) };
+  },
+
+  /** Hand one person's open work in a review period to another. */
+  async reassign(periodId: string, fromUserId: string, toUserId: string): Promise<ReassignmentPlan> {
+    const response = await api.post<ReassignmentPlan>(`/evaluations/periods/${encodeURIComponent(periodId)}/reassign`, {
+      from_user_id: fromUserId,
+      to_user_id: toUserId,
+    });
+    return { ...response.data, rows: asArray(response.data.rows) };
   },
 
   async bulkPreview(periodId: string, kind: EvaluationTemplateKind): Promise<BulkDraftPreview> {

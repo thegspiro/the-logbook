@@ -201,18 +201,43 @@ that code (pitfall #29).
 | `events.attended_by_type`          | department events checked in to, one line per event type                            |
 | `shifts.hours`                     | hours on shifts worked                                                              |
 | `shifts.count`                     | shifts worked                                                                       |
+| `shifts.external_hours`            | hours worked for other agencies that the department counted, with how many shifts   |
 | `shifts.performance_rating_avg`    | average 1–5 rating on shift completion reports                                      |
 | `shifts.field_evaluation_averages` | average rating per field shift evaluation form, one line each (shown, never scored) |
 | `calls.responses`                  | calls responded to                                                                  |
 | `calls.response_pct`               | calls responded to out of all calls (hidden when call tracking is off)              |
 | `admin_hours.hours`                | approved administrative hours                                                       |
 | `skills.tests_passed`              | skills tests passed                                                                 |
+| `training.knowledge_tests_passed`  | knowledge tests passed, each once, with its best score                              |
+| `apparatus.equipment_checks`       | equipment checks the member signed off, with how many found a failed item           |
+| `inventory.overdue_at_period_end`  | items checked out past their due date and not returned on the period's last day     |
 | `certifications.current`           | qualifications held at the period's end, with expiry dates                          |
 | `certifications.expiring_soon`     | qualifications held at period end that expire within 90 days after it               |
 | `positions.held`                   | offices and committee seats held at any time during the period                      |
 
 A figure that cannot honestly be given is reported unavailable with a note,
 never as zero or 100%.
+
+**Four sources added on 2026-11-21**, each reusing the rule the owning module
+already applies:
+
+- `shifts.external_hours` reads the same month totals as `shifts.hours`, whose
+  detail line has reported these hours as "not included" since 2026-11-01;
+  only hours the department counted are included, as everywhere else.
+- `training.knowledge_tests_passed` counts a submitted attempt marked passed,
+  the program-milestone rule. A test passed twice counts once.
+- `apparatus.equipment_checks` counts checks whose `checked_by` is the member,
+  on a shift or standalone, by `checked_at`.
+- `inventory.overdue_at_period_end` asks inventory's overdue rule
+  (`overdue_checkout_clause`) as of the end of the period instead of now:
+  checked out and due before then, and not checked in by then. That rule falls
+  back to the stored overdue flag for a loan with no due date, which only
+  describes today, so such loans are not counted. Temporary item assignments
+  are not loans and are not counted either.
+
+Their detail is the stored `breakdown`. None is marked turned off in the
+builder: the Apparatus and Inventory modules are not switches that certainly
+stop the data, and the training and scheduling ones follow their groups.
 
 `calls.response_pct` _(2026-11-13)_ divides over `Coverage.included()`, the
 stretches no exclusion touches: calls during a leave or a gap in membership
@@ -313,6 +338,32 @@ A signature needs the signer's name typed as on their account (case and
 spacing ignored), an intent checkbox, and step-up. The step is read under the
 evaluation's row lock, and the unique key on (evaluation, revision, step) backs
 that up.
+
+## Handing over open work
+
+When an evaluator or approver leaves or changes role, a holder of
+`evaluations.manage` hands their open work in one review period to someone
+else (owner decision 2026-11-21) from the conduct list's **Hand over work**:
+
+- `GET /periods/{id}/reassign-options` lists who holds open work in the period,
+  a former member included, with how many evaluations each.
+- `GET /periods/{id}/reassign-preview?from_user_id=&to_user_id=` says what
+  would move and what would be skipped and why, and changes nothing.
+- `POST /periods/{id}/reassign` (step-up) does it, deciding each evaluation
+  again under its row lock by the same rule, so it does what the preview said.
+
+What moves, on evaluations still in progress: the evaluator's part while the
+evaluator has not submitted (their draft stays, for the new evaluator to
+finish and submit as theirs), and approval and calibration steps not yet done
+that name the person. A step that goes to a position's holders follows the
+position and is not moved. An evaluation moves whole or not at all: it is
+skipped when the new person is its member, cannot conduct evaluations (for the
+evaluator's part), is named on its approval or calibration (for the
+evaluator's part), or is the evaluator or signed another approval (for an
+approval). The new evaluator or assignee gets the usual "Evaluation waiting on
+you" email for a step already open; the member is not emailed and sees the new
+name. Each evaluation moved is audited as `evaluation_work_reassigned` at
+`warning` with both people and what moved.
 
 ## After finalization
 
@@ -451,6 +502,8 @@ All under `/api/v1/evaluations`.
 | `GET ""`                                                                                                                      | `conduct`, `view_all` or `manage`                                                             |
 | `GET /draft-options`, `POST ""`                                                                                               | `conduct` or `manage`                                                                         |
 | `GET /bulk-preview`, `POST /bulk`                                                                                             | `manage`                                                                                      |
+| `GET /periods/{id}/reassign-options`, `GET /periods/{id}/reassign-preview`                                                    | `manage`                                                                                      |
+| `POST /periods/{id}/reassign`                                                                                                 | `manage`, with step-up                                                                        |
 | `GET /removed`                                                                                                                | `view_all`, `manage` or `delete`                                                              |
 | `GET /export?period_id=`                                                                                                      | `view_all`                                                                                    |
 | `GET /{id}/history`                                                                                                           | `view_all`; each review as the caller could open it                                           |

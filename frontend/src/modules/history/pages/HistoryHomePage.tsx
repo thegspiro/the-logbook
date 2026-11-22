@@ -4,13 +4,27 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { BookOpen, ClipboardCheck, FileText, FileUp, Images, Landmark, Medal, Settings, Users } from 'lucide-react';
+import {
+  BookOpen,
+  Calendar,
+  ClipboardCheck,
+  FileText,
+  FileUp,
+  History,
+  Images,
+  Landmark,
+  Medal,
+  Settings,
+  Truck,
+  Users,
+} from 'lucide-react';
 import { Breadcrumbs } from '../../../components/ux/Breadcrumbs';
 import { SkeletonPage } from '../../../components/ux/Skeleton';
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { historyService } from '../services/api';
 import { PublicationBadge } from '../components/PublicationBadge';
+import { TodayInHistoryCard } from '../components/TodayInHistoryCard';
 import type { ClearanceRequest, HistoricalMemberSummary } from '../types';
 
 export const HistoryHomePage: React.FC = () => {
@@ -79,6 +93,18 @@ export const HistoryHomePage: React.FC = () => {
           <FileText className="h-5 w-5 shrink-0" aria-hidden="true" />
           <span className="text-theme-text-primary font-medium">Documents</span>
         </Link>
+        <Link to="/history/timeline" className="card card-hover flex items-center gap-3 p-4">
+          <History className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span className="text-theme-text-primary font-medium">Timeline</span>
+        </Link>
+        <Link to="/history/events" className="card card-hover flex items-center gap-3 p-4">
+          <Calendar className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span className="text-theme-text-primary font-medium">Events</span>
+        </Link>
+        <Link to="/history/apparatus" className="card card-hover flex items-center gap-3 p-4">
+          <Truck className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span className="text-theme-text-primary font-medium">Apparatus</span>
+        </Link>
         <Link to="/history/honor-roll" className="card card-hover flex items-center gap-3 p-4">
           <Medal className="h-5 w-5 shrink-0" aria-hidden="true" />
           <span className="text-theme-text-primary font-medium">Honor Roll</span>
@@ -92,10 +118,14 @@ export const HistoryHomePage: React.FC = () => {
         {canConfigure && (
           <Link to="/history/settings" className="card card-hover flex items-center gap-3 p-4">
             <Settings className="h-5 w-5 shrink-0" aria-hidden="true" />
-            <span className="text-theme-text-primary font-medium">Titles and clearance</span>
+            <span className="text-theme-text-primary font-medium">Titles, lists and clearance</span>
           </Link>
         )}
       </nav>
+
+      <div className="mb-6">
+        <TodayInHistoryCard />
+      </div>
 
       {queue.length > 0 && (
         <section aria-labelledby="awaiting-heading" className="card mb-6 p-4">

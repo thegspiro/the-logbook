@@ -324,6 +324,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   });
   const [memberSearch, setMemberSearch] = useState('');
   const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set());
+  // Members whose leave request covering this date is still undecided. They
+  // stay assignable (it may be denied); the picker says so.
+  const [leaveRequestedIds, setLeaveRequestedIds] = useState<Set<string>>(new Set());
 
   // Cancel-shift state
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -455,6 +458,15 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       }
     };
     void loadUnavailable();
+    const loadLeaveRequested = async () => {
+      try {
+        setLeaveRequestedIds(new Set(await schedulingService.getLeaveRequestedMembers(shift.id)));
+      } catch {
+        // Non-critical — the picker just carries no leave-request note.
+        setLeaveRequestedIds(new Set());
+      }
+    };
+    void loadLeaveRequested();
   }, [showAssignForm, isEditing, shift.id, setPendingFlag, loadMembers]);
 
   // Load apparatus list when editing
@@ -2547,9 +2559,16 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                             {filteredMembers.map((m) => (
                               <option key={m.id} value={m.id}>
                                 {m.label}
+                                {leaveRequestedIds.has(m.id) ? ' — leave requested' : ''}
                               </option>
                             ))}
                           </select>
+                        )}
+                        {assignForm.user_id && leaveRequestedIds.has(assignForm.user_id) && (
+                          <p className="text-theme-alert-warning-text mt-1 text-xs" role="status">
+                            Leave requested: this member has asked for leave covering this date, and it is not decided
+                            yet. You can still assign them; if the leave is approved, the assignment is dropped.
+                          </p>
                         )}
                       </div>
                       {/* Step 3: Training slot (optional) */}

@@ -1,6 +1,284 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-11-11 (pass 13, this PR), 2026-11-03 (pass 12, PR #3996, merged), 2026-10-30 (pass 11, PR merged as `9ae9e594`), 2026-10-27 (pass 10, PR #3782), 2026-10-24 (pass 9, PR #3641), 2026-10-20 (pass 8, PR #3467), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 13); #3996 (pass 12, merged `3bd09ed02`); pass 11 (merged, `9ae9e594`); #3782 (pass 10, merged); #3641 (pass 9, merged); #3467 (pass 8, merged); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-11-22 (pass 14, this PR), 2026-11-11 (pass 13, PR #4235, merged), 2026-11-03 (pass 12, PR #3996, merged), 2026-10-30 (pass 11, PR merged as `9ae9e594`), 2026-10-27 (pass 10, PR #3782), 2026-10-24 (pass 9, PR #3641), 2026-10-20 (pass 8, PR #3467), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 14); #4235 (pass 13, merged, head `7d1fe151`); #3996 (pass 12, merged `3bd09ed02`); pass 11 (merged, `9ae9e594`); #3782 (pass 10, merged); #3641 (pass 9, merged); #3467 (pass 8, merged); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+
+---
+
+## Pass 14 (2026-11-22) — undo for Historical Data Import, PayPal/Salesforce credential guards, Store's connected-PayPal button; 0 fixed, 0 new findings (watchdog pickup)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (`ListAgents`, "No
+reachable agents"). PR #4541 (Feature 26, Forms, pass 14) had already merged
+clean; a fresh `list_pull_requests` (state `open`) found no PR with a
+`claude/security-review-*` head, and row 27 was the next pending feature,
+confirmed on a freshly fetched `main`.
+
+**Baseline: PR #4235's head, `7d1fe1518dc4615d534b163d7c4f624197819869`**
+(pass 13; this repo's shallow clone no longer carries the merge commit
+itself, so the PR's own head — tree-identical to the merge — was fetched
+directly and diffed against). A per-file content diff across this feature's
+full declared scope (all ten route files, `historical_import.py`, every
+`historical_staffing_*.py` and `historical_import_*.py` service file,
+`services/integration_services/`, both models/schemas directories, and the
+frontend module) over eleven days of otherwise very heavy repo activity (141
+new migrations, hundreds of commits) found real content in six files, all
+read in full below.
+
+### `historical_import_undo.py` — new, 1144 lines, read in full; two new routes
+
+**Historical Data Import gets an undo**, one committed step at a time
+(owner decision 2026-11-16): `GET /{import_id}/undo` (a preview of what each
+step would remove and keep) and `POST /{import_id}/undo/{step}` (the undo
+itself), both added to `historical_import.py`. Route count by AST: 33 in this
+file (was 31), **72 app-wide for this feature** (was 70);
+`check_route_permissions.py --strict` agrees (329 routes app-wide, 0
+errors/warnings).
+
+- **Checklist §1/§2 (auth/permission).** Both new routes carry
+  `Depends(require_permission("integrations.historical_import"))` — the same
+  gate as every other route in this file, verified by direct read, not
+  sampled.
+- **Checklist §3 (tenant isolation).** `undo_step` resolves the import through
+  `HistoricalImportService.get(organization_id, import_id, for_update=True)`
+  before calling into the undo service (the existing org-scoped, row-locked
+  pattern this feature's pass 13 already credited). Inside
+  `HistoricalImportUndoService`, every one of its ~20 queries and deletes
+  filters `organization_id` explicitly — `_ledger`, `_load`, `_delete_ids`
+  (the shared delete helper every step's removal goes through),
+  `_remove_unused_members`, `_created_members`, `_batches` — read each one by
+  name to confirm the filter is present, not assumed from the class's
+  docstring. Two things that look like bare by-id operations are not:
+  - `count_shift_references` (a `UNION ALL` built by reflection over every
+    table with a FK to `shifts.id`, to find rows in tables this feature does
+    not otherwise know about) filters by `shift_id` alone, with no
+    `organization_id` in the generated query — but `shift_id` is always a
+    value already resolved from an org-scoped `Shift` lookup earlier in the
+    same call chain, and `Shift.id` is a globally-unique generated UUID
+    primary key, so there is no value another org's row could share to leak
+    through. The `UNION ALL` itself is built with SQLAlchemy Core
+    (`select(...).select_from(...).where(column == shift_id)`) — parameterized,
+    not string-interpolated — so this is not a raw-SQL injection surface
+    either, despite the dynamic table reflection.
+  - `_write_shift`'s hours-matched shift fallback
+    (`shift = await self.db.get(Shift, best)`, in `historical_staffing_commit.py`,
+    reviewed below) looks like an unscoped `Model.get` by id, but `best` is a
+    `shift_id` drawn from `pairing.matched`, itself built only from
+    `_hours_entries(record.organization_id, ...)` — an org-filtered query —
+    so the id cannot name another org's shift.
+- **Checklist §4 (injection).** No raw SQL string interpolation anywhere in
+  the file; the one place that builds a query from runtime-chosen
+  tables/columns (`count_shift_references`) does so via SQLAlchemy Core
+  metadata objects, not string formatting.
+- **Checklist §6 (abuse resistance).** Every list this file touches is
+  chunked (`_CHUNK = 500`, the `_chunks()` helper) before an `IN` clause or a
+  cross-table loop — no unbounded `IN (...)` on an org's full ledger.
+- **Correctness, not security, but worth naming:** the "edited since" rule
+  (`changed_since` against `EDIT_TOLERANCE`) is what keeps an officer's manual
+  correction from being silently deleted by an undo — read `edit_window.py`'s
+  `changed_since`/`EDIT_TOLERANCE` to confirm the comparison is the row's own
+  `updated_at` against the ledger entry's `created_at`, not wall-clock "now".
+  `_delete_training` reverses `RequirementProgressCredit` and re-syncs
+  `QualificationService` so a removed training record cannot leave a stale
+  qualification or progress credit behind; `_delete_drills` detaches rather
+  than deletes a kept training record's `source_event_id` and restores its
+  pre-drill `updated_at` (set explicitly, bypassing the ORM's `onupdate`, so
+  the detach itself does not register as a later edit) so an officer can undo
+  training afterward without the drill's own undo masking the record's true
+  edit history; `_remove_unused_members` only deletes a former member the
+  import created when `count_user_references` (the same shared helper the
+  rest of the app's member-deletion path uses) finds nothing left referring
+  to them, and routes any import decision that had mapped onto a removed
+  member back to "create" (`_forget_created_members`) so a recommit does not
+  fail on a dangling reference.
+- **Idempotency/ordering (Pitfall #36, checklist §7 n/a — no migration).** The
+  undo route holds the import row locked for its own duration (`for_update=True`)
+  and mutates `record.results` via `copy.deepcopy` + reassignment, never an
+  in-place mutation of the JSON column (Pitfall #12 correctly applied — grep
+  confirms every `record.results = ...` in this file assigns a fresh
+  `copy.deepcopy`d dict). `_DEPENDENTS` refuses to undo a step a later one
+  still depends on (training before drills, shifts before staffing) rather
+  than leaving a dangling reference.
+- **Guard test:** `backend/tests/test_historical_import_undo.py` (788 lines,
+  read for structure and sampled for content) exercises the edit-preservation
+  rule, qualification reversal, the staffing re-seat/restore path, and the
+  blocked/not-committed 400s through the actual endpoint function
+  (`TestEndpoint`). It does not carry an explicit cross-org case the way
+  `test_capacity_locking.py`-style guards do elsewhere in this feature, but
+  every query this pass traced by hand is already filtered — flagged below as
+  a test-coverage gap, not a vulnerability, since no unscoped query exists to
+  exploit.
+
+### `historical_staffing_commit.py` (+370/-10ish) / `historical_staffing_plan.py` (+7) — the roster now pairs each seat with the member's overlapping hours entry
+
+Landed on `main` as its own feature PR (#4534, "Staffing roster: pair each
+seat with its member's overlapping hours entry"), not through this rotation —
+reviewed here as this feature's own scope per the usual rule. `_hours_entries`
+(the hours side of the pairing) filters `Shift.organization_id ==
+str(organization_id)`; the new `_place_on_hours`/`_write_shift`/`_write_event`
+paths all write `ShiftAssignment` rows with `organization_id=record.organization_id`
+explicit on construction, same as the pre-existing write paths this feature's
+earlier passes already reviewed. The one non-obviously-scoped read
+(`self.db.get(Shift, best)`) is addressed above. No new route; this is
+service-layer logic reached only through the existing, already-gated
+`commit_staffing`/preview endpoints.
+
+### `integrations.py` (+56) / `schemas/integration.py` (+30) — PayPal environment-switch guard, stale Salesforce token discard, public PayPal.Me/email fields
+
+Three small, independent, security-positive correctness additions, all on
+the already-org-scoped `integration` object `connect_integration`/
+`update_integration` resolve before calling any of these helpers (confirmed
+by re-reading both routes' existing by-id-and-org query, unchanged):
+
+- `_discard_stale_salesforce_token`: saving a new `refresh_token`/`client_id`/
+  `client_secret` for a Salesforce integration now clears the cached
+  `access_token` too, so a changed grant cannot keep acting under the
+  previous one's token until it expires.
+- `_require_credentials_for_environment_change`: switching a PayPal
+  integration's `environment` (sandbox ↔ live) with a credential already
+  stored now requires both a new Client ID and Client Secret in the same
+  save (422 otherwise) — closes a cross-environment credential-confusion gap
+  the same way pass 11's `_CREDENTIALS_REQUIRED_TO_CONNECT` closed the
+  blank-credential-connect one. A first connection (nothing stored yet) is
+  unaffected.
+- `PayPalConfig.paypal_me_url`/`account_email`: new, explicitly documented as
+  **public, not secrets** — both are shown to every member on the store's Pay
+  button. Confirmed neither name matches `_SECRET_KEY_PATTERN`
+  (`token|secret|key|password|api_key|auth|webhook_url|refresh_token|client_secret`,
+  re-read against both field names), so `_sanitize_config` correctly never
+  redacts them. `paypal_me_url`'s validator rejects anything that is not a
+  `paypal.me` slug or URL (reuses `normalize_paypal_me`, which this feature's
+  earlier passes already reviewed as a security-relevant input: a
+  non-paypal.me host is rejected). `account_email`'s validator only checks for
+  an `@` and no whitespace — weak as an email-format check, but every render
+  site that echoes it (below) HTML-escapes it, so there is no unescaped-output
+  path for a crafted value to reach.
+
+### Consumer outside this feature, reviewed as a consumer only: the store's connected-PayPal button
+
+`backend/app/services/storefront_service.py` (Feature 4, Storefront &
+payments — not this feature's own file, read only far enough to verify its
+read of `Integration` is correct, per Pitfall #29) adds
+`load_connected_paypal_account(db, organization_id)`, querying `Integration`
+filtered on `organization_id == str(organization_id)` (the function's own
+parameter, traced to `current_user.organization_id` at its only caller,
+`get_settings`) **and** `integration_type == "paypal"` **and** `status ==
+"connected"` **and** `enabled.is_(True)` — cannot return a disconnected or
+another org's integration. The two new config fields it reads
+(`paypal_me_url`, `account_email`) are rendered in the Pay-with-PayPal email
+button through `storefront_notification_service.py`'s `_payment_option_detail`/
+`_payment_block`, both of which pass every interpolated value through
+`html.escape()` (confirmed by direct read of both functions) before building
+the HTML string — so the weak `account_email` validator noted above has no
+reachable XSS path. The new migration in this window belongs to this
+consumer, not to this feature: `053d3e96b4fa` adds
+`store_settings.paypal_use_connected` (`NOT NULL`, `server_default="0"`,
+guarded by `_has_table`/`_has_column` — Pitfall #26/#35 correctly applied,
+existing stores keep their own PayPal link/email unchanged), reviewed here
+only to confirm it does not touch an Integration table.
+
+### `IntegrationsPage.tsx` (+204/-38) — UI for all of the above, cosmetic beyond that
+
+A `Settings` gear is now offered on Zeffy/PayPal/Cal.com/Documenso/Salesforce
+cards (previously disconnect-and-reconnect only), matching the backend's new
+edit-in-place paths; Salesforce's instance URL and environment render
+`readOnly`/`disabled` once connected (owner decision 2026-11-16 — moving
+Salesforce orgs needs a disconnect, since the stored refresh token belongs to
+one org); new paired-credential client-side checks
+(`salesforceCredentialsMismatched`, the `baseUrlCredential` check in
+`handleSaveSettings`) mirror the backend's new server-side requirements with
+`toast.error`, so a caller gets the readable message before the round trip
+rather than only the 422. No `window.confirm`/`alert`/`prompt`, no
+`dangerouslySetInnerHTML`, both new PayPal inputs are plain controlled text/
+email fields rendered as JSX text (React-escaped). One unrelated cosmetic
+change (`bg-indigo-600` → `bg-indigo-700`, a contrast-sweep fix matching
+CLAUDE.md's AA/AAA palette rule) in the same file.
+
+### Infrastructure fix, unrelated to this feature, found and fixed in the same pass
+
+`python3 scripts/validate_migrations.py --strict` failed on a forked Alembic
+chain — two heads (`1a5c18b46791`, the outreach-vocabulary rename, and
+`c7e1a94d2f58`, volunteer RSVPs as crew), both revising `3daf47506e9e`,
+merged to `main` separately in the eleven days since this feature's pass 13
+baseline. Neither migration touches a table the other writes. This was not
+only a CI-job-naming problem: `alembic current` on this sandbox's own test
+database showed it had been stamped at `1a5c18b46791` alone — whatever ran
+`alembic upgrade head` while the chain was forked picked one branch and
+silently never applied `c7e1a94d2f58`, so `event_rsvps.is_volunteer` did not
+exist. That produced 321 failures across unrelated suites in this pass's
+first scoped-suite run (`test_event_lifecycle.py`, `test_event_series_delete.py`,
+`test_event_attendance_petitions.py`, and this feature's own
+`test_historical_staffing_commit.py::TestPairingWithTheHours`, among others)
+— a real, silent, data-bearing defect, not a cosmetic gate failure. Fixed in
+this PR with `alembic merge` (`3f93727e84ba`, empty `upgrade`/`downgrade`,
+the same shape as the repo's existing merge revisions, e.g. `bc58d756a179`,
+`e2b7d94c1a63`); running `alembic upgrade head` afterward applied the missing
+branch, and re-running the four previously-failing files (62 tests) went
+green with no code change (CLAUDE.md Pitfall #37 — the regression was seen to
+fail, then seen to pass, from the schema fix alone).
+
+## Verified good ✅ (re-confirmed, not re-derived)
+
+Every item under this heading in pass 13 — INT-1 through INT-5, the
+Salesforce OAuth flow, SOQL injection defense, instance-URL domain pinning,
+tenant isolation across all ten route files, no secret exposure, the
+Historical Data Import org-scoping and idempotency this feature's own pass 13
+established — re-checked against the current tree. All ten pre-existing
+route files are byte-identical to the pass-13 baseline except
+`integrations.py` (reviewed above); every mechanism pass 13 credited is
+therefore unregressed, not re-derived.
+
+## Confirmed still open — nothing needing a product decision
+
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` chat-webhook allowlist) —
+  unchanged, still an explicit owner behavior decision.
+
+## Flagged (non-security, test coverage)
+
+- **INT-28 (LOW, test coverage).** `test_historical_import_undo.py` has no
+  explicit cross-organization case proving `HistoricalImportUndoService`'s
+  queries cannot act on another org's rows (the style
+  `test_capacity_locking.py` and similar guard suites use elsewhere in this
+  repo). This pass traced every query in `historical_import_undo.py` by hand
+  and found each one already `organization_id`-filtered (detailed above), so
+  there is no known unscoped query for such a test to catch today — it would
+  guard the invariant against a future edit, not fix a present gap. Left for
+  a future pass or the feature's own author rather than implemented here,
+  per this rotation's "flag, don't guess" rule for anything beyond a
+  narrow, verifiable fix.
+
+## Findings
+
+**0 fixed, 0 new security findings; 1 flagged (test-coverage only, INT-28).**
+The pass's substantive work was a 1144-line new undo service for Historical
+Data Import, read in full against all seven checklist dimensions (every
+query organization-scoped, deletes chunked, JSON-column mutation via
+`copy.deepcopy`, dependent-step ordering enforced, former-member cleanup
+reference-counted before deleting); three small, independent,
+security-positive correctness fixes on the existing Salesforce/PayPal connect
+paths; a new public (non-secret) PayPal.Me/email pair correctly excluded from
+secret redaction and HTML-escaped at every render site; and an out-of-feature
+consumer (the store's connected-PayPal button) read only far enough to
+confirm its own `Integration` query is org- and status-scoped. An unrelated
+forked Alembic chain — which had silently left this sandbox's database
+missing a real column and cascaded into 321 unrelated test failures — was
+found and fixed in the same pass.
+
+## Completion gate
+
+| Check                                                                                                                                                                                                                                                                                                     | Result                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (CI's pinned 7.4.1)                                                                                                                                                                                                                                                         | ✅ 0 violations                                                                                                                                                                                   |
+| `black --check app/ tests/ alembic/` (CI's pinned 26.10.1)                                                                                                                                                                                                                                                | ✅ 3391 files unchanged                                                                                                                                                                           |
+| `isort --check-only app/ tests/ alembic/` (CI's pinned 9.0.2)                                                                                                                                                                                                                                             | ✅ clean                                                                                                                                                                                          |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                      | ✅ 807 revisions, single head `3f93727e84ba` (after the merge-revision fix above)                                                                                                                 |
+| `python3.13 scripts/check_route_permissions.py --strict`                                                                                                                                                                                                                                                  | ✅ 329 routes, 0 errors/warnings (72 this feature's own, up from pass 13's 70)                                                                                                                    |
+| `python3.13 scripts/generate_schema_docs.py --check`                                                                                                                                                                                                                                                      | ✅ up to date                                                                                                                                                                                     |
+| backend scoped suite (`-k "integration or salesforce or calcom or documenso or paypal or webhook or connector or mcp_key or google_calendar or google_workspace or ical or calendar or outlook or directory_account or microsoft_365 or directory or zeffy or historical_import or historical_staffing"`) | ✅ 12,923 passed, 24 environment-only skips, 0 failed (after `alembic upgrade head` applied the merge revision — the first run's 321 failures were the missing-column symptom, not a code defect) |
+| `npm run typecheck`                                                                                                                                                                                                                                                                                       | ✅ 0 errors                                                                                                                                                                                       |
+| `npm run lint`                                                                                                                                                                                                                                                                                            | ✅ exit 0, under max-warnings                                                                                                                                                                     |
+| `npx vitest run src/pages/IntegrationsPage.test.tsx src/pages/historicalImport src/pages/scheduling/admin/historyImport`                                                                                                                                                                                  | ✅ 156 passed (4 files, up from pass 13's 135)                                                                                                                                                    |
+
+Next in rotation: Feature 28 (Security, audit & IP).
 
 ---
 

@@ -73,7 +73,6 @@ const UNCACHEABLE_PREFIXES = [
   '/training/instructors/qualifications', // per-member instructor credentials
   '/training/instructors/validate/', // GET /validate/{user_id}/{course_id}: a named member's qualification verdict
   '/training/compliance-matrix', // org-wide per-member compliance rollup (names + status)
-  '/training/competency-matrix', // org-wide per-member competency heat map (names + status) — same shape as compliance-matrix above
   '/training/dashboard-summary', // dashboard widgets: per-member names on at-risk/needs-intervention lists
   '/training/sessions/approve/', // approval-token roster: attendee names + emails (GET /sessions/approve/{token})
   // An event's session and approval summary: the summary can carry the approval
