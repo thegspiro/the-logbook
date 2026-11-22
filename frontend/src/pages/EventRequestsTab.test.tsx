@@ -9,6 +9,7 @@ const postponeRequest = vi.fn();
 const assignRequest = vi.fn();
 const updateRequestStatus = vi.fn();
 const createRequest = vi.fn();
+const scheduleRequest = vi.fn();
 const getOutreachTypeLabels = vi.fn(() => Promise.resolve({}));
 const toastError = vi.fn();
 const sendVolunteerCall = vi.fn();
@@ -30,6 +31,7 @@ vi.mock('../services/api', () => ({
     assignRequest: (...args: unknown[]) => assignRequest(...args) as unknown,
     updateRequestStatus: (...args: unknown[]) => updateRequestStatus(...args) as unknown,
     createRequest: (...args: unknown[]) => createRequest(...args) as unknown,
+    scheduleRequest: (...args: unknown[]) => scheduleRequest(...args) as unknown,
     getOutreachTypeLabels: () => getOutreachTypeLabels(),
     listEmailTemplates: () => Promise.resolve([]),
     getOutreachRoles: () => Promise.resolve([]),
@@ -785,5 +787,70 @@ describe('EventRequestsTab volunteer call', () => {
         message: undefined,
       })
     );
+  });
+});
+
+describe('EventRequestsTab scheduling a request', () => {
+  beforeEach(() => {
+    listRequests.mockReset();
+    getRequest.mockReset();
+    scheduleRequest.mockReset();
+    listRequests.mockResolvedValue([request]);
+    getRequest.mockResolvedValue({ ...request, activity_log: [] });
+    scheduleRequest.mockResolvedValue({ ...request, status: 'scheduled' });
+  });
+
+  const openScheduleForm = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderBoard();
+    await user.click(await screen.findByRole('button', { name: /Pat Requester/ }));
+    const page = await screen.findByRole('article', { name: /Pat Requester/ });
+    await user.click(within(page).getByRole('button', { name: 'Schedule event' }));
+    return page;
+  };
+
+  it("offers the event form's quick durations once there is a start", async () => {
+    const user = userEvent.setup();
+    const page = await openScheduleForm(user);
+    const durations = within(page).getByRole('group', { name: 'Quick Duration' });
+    const names = within(durations)
+      .getAllByRole('button')
+      .map((b) => b.textContent);
+    expect(names).toEqual(['1 hour', '2 hours', '4 hours', '8 hours']);
+    for (const button of within(durations).getAllByRole('button')) expect(button).toBeDisabled();
+
+    await user.type(within(page).getByLabelText('Start Date & Time *'), '2026-11-25');
+    expect(within(durations).getByRole('button', { name: '2 hours' })).toBeEnabled();
+  });
+
+  it("sets the end from the start, in the department's time zone, and sends it", async () => {
+    const user = userEvent.setup();
+    const page = await openScheduleForm(user);
+
+    // The date picker defaults the time to 9:00 AM.
+    await user.type(within(page).getByLabelText('Start Date & Time *'), '2026-11-25');
+    await user.click(within(page).getByRole('button', { name: '2 hours' }));
+
+    expect(within(page).getByLabelText('End Date & Time')).toHaveValue('2026-11-25');
+    await user.click(within(page).getByRole('button', { name: 'Confirm & Create Calendar Event' }));
+
+    await waitFor(() => expect(scheduleRequest).toHaveBeenCalled());
+    // 9:00 and 11:00 America/New_York are 14:00 and 16:00 UTC in November.
+    expect(scheduleRequest).toHaveBeenCalledWith(
+      'req-1',
+      expect.objectContaining({
+        event_date: '2026-11-25T14:00:00.000Z',
+        event_end_date: '2026-11-25T16:00:00.000Z',
+      })
+    );
+  });
+
+  it('crosses midnight when the duration runs past it', async () => {
+    const user = userEvent.setup();
+    const page = await openScheduleForm(user);
+    await user.type(within(page).getByLabelText('Start Date & Time *'), '2026-11-25');
+    await user.selectOptions(within(page).getByRole('combobox', { name: /Start time hour/ }), '8');
+    await user.selectOptions(within(page).getByRole('combobox', { name: /Start time AM\/PM|Start time period/ }), 'PM');
+    await user.click(within(page).getByRole('button', { name: '8 hours' }));
+    expect(within(page).getByLabelText('End Date & Time')).toHaveValue('2026-11-26');
   });
 });

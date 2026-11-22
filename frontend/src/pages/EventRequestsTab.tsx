@@ -63,7 +63,7 @@ import type {
 import { initialRoleNeeds } from '../utils/outreachRoles';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
-import { formatCalendarDate, formatShortDateTime, localToUTC } from '../utils/dateFormatting';
+import { formatCalendarDate, formatForDateTimeInput, formatShortDateTime, localToUTC } from '../utils/dateFormatting';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { asArray, expectArray } from '../utils/asArray';
@@ -177,6 +177,15 @@ interface EventRequestsTabProps {
    * left with the back button, which the side panel it replaced could not.
    */
   requestId?: string | undefined;
+}
+
+/** The event form's quick durations (ScheduleSection), offered when scheduling a request. */
+const SCHEDULE_DURATION_HOURS = [1, 2, 4, 8] as const;
+
+/** The end a quick duration sets: the naive local start plus whole hours, in the department's zone. */
+function endAfterHours(start: string, hours: number, tz: string): string {
+  const startMs = new Date(localToUTC(start, tz)).getTime();
+  return formatForDateTimeInput(new Date(startMs + hours * 60 * 60 * 1000), tz);
 }
 
 const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
@@ -963,23 +972,60 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
                     <h3 className="text-sm font-semibold text-purple-700 dark:text-purple-400">Schedule Event</h3>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div>
-                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                        <label
+                          htmlFor="schedule-start"
+                          className="text-theme-text-muted mb-1 block text-xs font-medium"
+                        >
                           Start Date & Time *
                         </label>
                         <DateTimeQuarterHour
+                          id="schedule-start"
+                          timeLabel="Start time"
+                          timezone={tz}
                           value={scheduleDate}
                           onChange={(val) => setScheduleDate(val)}
                           className="form-input text-sm"
                         />
                       </div>
                       <div>
-                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">End Date & Time</label>
+                        <label htmlFor="schedule-end" className="text-theme-text-muted mb-1 block text-xs font-medium">
+                          End Date & Time
+                        </label>
                         <DateTimeQuarterHour
+                          id="schedule-end"
+                          timeLabel="End time"
+                          timezone={tz}
                           value={scheduleEndDate}
                           onChange={(val) => setScheduleEndDate(val)}
                           className="form-input text-sm"
                         />
                       </div>
+                    </div>
+                    {/* The event form's quick durations, so an end is one tap here too. */}
+                    <div role="group" aria-labelledby="schedule-quick-duration-label">
+                      <span
+                        id="schedule-quick-duration-label"
+                        className="text-theme-text-muted mb-1 block text-xs font-medium"
+                      >
+                        Quick Duration
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {SCHEDULE_DURATION_HOURS.map((h) => (
+                          <button
+                            key={h}
+                            type="button"
+                            onClick={() => setScheduleEndDate(endAfterHours(scheduleDate, h, tz))}
+                            disabled={!scheduleDate}
+                            aria-describedby="schedule-quick-duration-hint"
+                            className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary focus:ring-theme-focus-ring touch-target-phone rounded-lg border px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {h} {h === 1 ? 'hour' : 'hours'}
+                          </button>
+                        ))}
+                      </div>
+                      <p id="schedule-quick-duration-hint" className="text-theme-text-muted mt-1 text-xs">
+                        {scheduleDate ? 'Sets the end from the start.' : 'Set a start date and time to use these.'}
+                      </p>
                     </div>
                     <div>
                       <label
