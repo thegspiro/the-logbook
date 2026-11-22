@@ -2644,12 +2644,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `activity_id` | VARCHAR(36) | no | PK, FK |  | → `crr_activities.id` ON DELETE CASCADE |
 | `measure_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `crr_activity_measures.id` ON DELETE RESTRICT |
-| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `quantity` | INTEGER | no |  |  |  |
 
 **Indexes**
 
 - `ix_crr_activity_counts_measure` (`measure_id`)
+- `ix_crr_activity_counts_org` (`organization_id`)
 
 **Constraints**
 
@@ -2690,11 +2691,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `activity_id` | VARCHAR(36) | no | PK, FK |  | → `crr_activities.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `users.id` ON DELETE CASCADE |
-| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `minutes` | INTEGER | no |  |  |  |
 
 **Indexes**
 
+- `ix_crr_activity_members_org` (`organization_id`)
 - `ix_crr_activity_members_user` (`user_id`)
 
 **Constraints**
@@ -2711,10 +2713,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `activity_id` | VARCHAR(36) | no | PK, FK |  | → `crr_activities.id` ON DELETE CASCADE |
 | `tag_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `crr_tags.id` ON DELETE RESTRICT |
-| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 
 **Indexes**
 
+- `ix_crr_activity_tags_org` (`organization_id`)
 - `ix_crr_activity_tags_tag` (`tag_id`)
 
 ### `crr_activity_type_tags`
