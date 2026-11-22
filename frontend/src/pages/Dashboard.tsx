@@ -17,7 +17,7 @@ import ChiefOperationsDashboard from '../components/dashboard/ChiefOperationsDas
 import { canViewChiefDashboard } from '../components/dashboard/chiefWidgetRegistry';
 import OrganizationSetupWidget from '../components/dashboard/OrganizationSetupWidget';
 import WeatherAlertBanner from '../components/dashboard/WeatherAlertBanner';
-import { lazyWithRetry } from '../utils/lazyWithRetry';
+import { lazyOptional } from '../utils/lazyOptional';
 import { READINESS_WINDOW_DAYS, currentCredentials } from '../utils/readiness';
 import type { ReadinessCert } from '../utils/readiness';
 import { LinkifiedText } from '../components/ux';
@@ -106,7 +106,9 @@ import {
 // Lazy: the Dashboard is in the first load, and the card brings the History
 // module's client and formatting (DOMPurify among it) with it, which took the
 // first load over its budget. A department without History never downloads it.
-const TodayInHistoryCard = lazyWithRetry(() => import('../modules/history/components/TodayInHistoryCard'));
+// Optional, not lazyWithRetry: a card that will not load (offline, a dropped
+// signal) is left out rather than reloading the Dashboard around it.
+const TodayInHistoryCard = lazyOptional(() => import('../modules/history/components/TodayInHistoryCard'));
 
 /**
  * Main Dashboard Component — "station board"
