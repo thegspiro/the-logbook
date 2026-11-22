@@ -11426,3 +11426,58 @@ being stored.
 **The decision:** build the reader (validate values on apparatus create and
 update, migrate values when a key is renamed) and a management screen, or
 retire the definitions.
+
+## Inventory — Five Decisions From App Review B3 Pass 6 (2026-11-21)
+
+Recorded rather than changed, because each alters what an officer sees or
+needs a schema. Code references and failure scenarios are in
+`docs/app-review/inventory.md` → Pass 6.
+
+### INV2-11 — A lot edit can undo stock drawn while the form was open
+
+Editing a stock lot sends its quantity as an absolute value, and the server
+applies it without checking that the lot still holds what the form loaded. An
+officer correcting only a lot number can therefore put back units a crew drew
+in the meantime, making stock that does not exist issuable.
+
+**The decision:** add an expected-quantity (or version) check that refuses a
+stale edit with a conflict the editor shows, and say how the officer resolves
+it; or send the quantity only when the officer changed it.
+
+### INV2-12 — Stock changes leave no movement record
+
+There is no ledger of stock movements (what changed, by how much, from what to
+what, by whom). A lot's quantity is the only record, so adding, editing or
+deleting a lot, an issue drawing from it and a return crediting it leave no
+trail; only reorder receipts and recalls do.
+
+**The decision:** whether to add a movement ledger, which is a new table and a
+write on every stock-changing path.
+
+### INV2-13 — Retried stock requests apply twice
+
+Recording a delivery, issuing from a pool and a partial return carry no
+idempotency key, so a client retry after a timeout applies the change a second
+time. Receiving against a reorder already does this correctly, with a key the
+database holds unique.
+
+**The decision:** give these requests the same key, which changes the API on
+both sides.
+
+### INV2-14 — An item's quantity and its lots can drift apart
+
+An item that has lots is counted from its lots, but its own quantity can still
+be edited, to no effect. Deleting its last lot switches it back to counting its
+own quantity: the lot's units disappear without a record, and whatever value
+was left in the item's quantity becomes on-hand stock.
+
+**The decision:** refuse a quantity edit on a lot-stocked item, and refuse (or
+warn before) deleting a lot that still holds units.
+
+### INV2-15 — The dashboard's expiring count and the expiring list disagree
+
+The dashboard tile counts lots that have not yet expired and includes recalled
+ones; the list it opens includes lots already expired and applies the
+shelf rule. A lot that expired yesterday is in the list but not in the count.
+
+**The decision:** which rule both should use.
