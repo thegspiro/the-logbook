@@ -6,7 +6,7 @@
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ClipboardList, Download, Plus, Users } from 'lucide-react';
+import { ClipboardList, Download, Plus, UserRoundCog, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { EmptyState } from '../../../components/ux/EmptyState';
@@ -17,6 +17,7 @@ import { saveBlob } from '../../../utils/saveBlob';
 import { conductListLabel } from '../../../components/layout/evaluationsNavigation';
 import { EvaluationsPageHeader } from '../components/evaluations/EvaluationsPageHeader';
 import { BulkDraftDialog } from '../components/evaluations/BulkDraftDialog';
+import { ReassignWorkDialog } from '../components/evaluations/ReassignWorkDialog';
 import { DeletionRecordList } from '../components/evaluations/DeletionRecordList';
 import { evaluationsService } from '../services/evaluationsApi';
 import { gradeCounts } from '../utils/evaluationRecord';
@@ -55,6 +56,7 @@ const EvaluationListPage: React.FC = () => {
   const [options, setOptions] = useState<DraftOptions | null>(null);
   const [saving, setSaving] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [reassignOpen, setReassignOpen] = useState(false);
   const canSeeRemoved = useAuthStore(
     (state) =>
       state.checkPermission('evaluations.view_all') ||
@@ -164,6 +166,16 @@ const EvaluationListPage: React.FC = () => {
                 >
                   <Users className="h-4 w-4" aria-hidden="true" />
                   Draft a review period
+                </button>
+              )}
+              {canManage && (
+                <button
+                  type="button"
+                  className="btn-secondary inline-flex items-center gap-2 text-sm"
+                  onClick={() => setReassignOpen(true)}
+                >
+                  <UserRoundCog className="h-4 w-4" aria-hidden="true" />
+                  Hand over work
                 </button>
               )}
               {canDraft && (
@@ -348,6 +360,11 @@ const EvaluationListPage: React.FC = () => {
       </div>
 
       <BulkDraftDialog isOpen={bulkOpen} onClose={() => setBulkOpen(false)} onDrafted={() => void load()} />
+      <ReassignWorkDialog
+        isOpen={reassignOpen}
+        onClose={() => setReassignOpen(false)}
+        onReassigned={() => void load()}
+      />
 
       <Modal
         isOpen={draft !== null}

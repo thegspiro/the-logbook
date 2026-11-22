@@ -12,6 +12,8 @@ const mockUpdateItem = vi.fn();
 const mockGetItem = vi.fn();
 const mockGetOpenMaintenanceRecords = vi.fn();
 const mockUpdateMaintenanceRecord = vi.fn();
+const mockGetNeverInspectedItems = vi.fn();
+const mockGetCategories = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -23,6 +25,8 @@ vi.mock('../../../services/api', () => ({
     getItem: (...a: unknown[]) => mockGetItem(...a) as unknown,
     getOpenMaintenanceRecords: (...a: unknown[]) => mockGetOpenMaintenanceRecords(...a) as unknown,
     updateMaintenanceRecord: (...a: unknown[]) => mockUpdateMaintenanceRecord(...a) as unknown,
+    getNeverInspectedItems: (...a: unknown[]) => mockGetNeverInspectedItems(...a) as unknown,
+    getCategories: (...a: unknown[]) => mockGetCategories(...a) as unknown,
   },
 }));
 
@@ -91,6 +95,15 @@ const makeRecord = (overrides: Partial<MaintenanceRecord> = {}): MaintenanceReco
   created_at: '2026-02-01T00:00:00Z',
   updated_at: '2026-02-01T00:00:00Z',
   ...overrides,
+});
+
+// The never-inspected list and the categories load beside every block's own
+// data; each block starts from none of either (CLAUDE.md pitfall #28).
+beforeEach(() => {
+  mockGetNeverInspectedItems.mockReset();
+  mockGetNeverInspectedItems.mockResolvedValue([]);
+  mockGetCategories.mockReset();
+  mockGetCategories.mockResolvedValue([]);
 });
 
 // Due items render in both a desktop table and mobile cards.
@@ -596,5 +609,76 @@ describe('InventoryMaintenancePage — recording a scheduled inspection', () => 
     expect(await screen.findByText(/scheduled inspections could not be loaded/)).toBeInTheDocument();
     expect(mockToastError).toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Save Record' })).toBeDisabled();
+  });
+});
+
+// W42-6: an item that needs inspecting but has never had one has no due date,
+// so the Due Items list never showed it.
+// makeItem gives every item a due date; a never-inspected one has none.
+const neverInspected = (overrides: Partial<InventoryItem>): InventoryItem => {
+  const item = makeItem(overrides);
+  delete item.next_inspection_due;
+  return item;
+};
+
+describe('InventoryMaintenancePage — items never inspected', () => {
+  const turnout = { id: 'cat-1', name: 'Turnout Gear', requires_maintenance: true };
+
+  beforeEach(() => {
+    mockGetMaintenanceDueItems.mockReset();
+    mockGetMaintenanceDueItems.mockResolvedValue([]);
+    mockGetItems.mockReset();
+    mockGetItems.mockResolvedValue({ items: [], total: 0 });
+    mockToastError.mockReset();
+    mockGetCategories.mockResolvedValue([turnout]);
+    mockGetNeverInspectedItems.mockResolvedValue([
+      neverInspected({ id: 'coat', name: 'Structural Coat', category_id: 'cat-1' }),
+      neverInspected({ id: 'meter', name: 'Gas Meter', inspection_interval_days: 90 }),
+    ]);
+  });
+
+  it('lists them on their own tab, saying why each needs inspecting', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryMaintenancePage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Never Inspected (2)' }));
+
+    const coat = screen.getByRole('row', { name: /Structural Coat/ });
+    const meter = screen.getByRole('row', { name: /Gas Meter/ });
+    expect(within(coat).getByText('Turnout Gear')).toBeInTheDocument();
+    expect(within(coat).getByText('Turnout Gear requires maintenance')).toBeInTheDocument();
+    expect(within(meter).getByText('Every 90 days')).toBeInTheDocument();
+    // What counts as due is unchanged: the Due Items tab still has nothing.
+    expect(screen.getByRole('button', { name: 'Due Items (0)' })).toBeInTheDocument();
+  });
+
+  it('opens the maintenance form for a never-inspected item', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryMaintenancePage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Never Inspected (2)' }));
+    const coat = screen.getByRole('row', { name: /Structural Coat/ });
+    await user.click(within(coat).getByRole('button', { name: 'Log Maintenance' }));
+
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Structural Coat');
+  });
+
+  it('keeps the due list when the never-inspected list fails to load', async () => {
+    mockGetMaintenanceDueItems.mockResolvedValue([makeItem()]);
+    mockGetNeverInspectedItems.mockRejectedValue(new Error('offline'));
+    renderWithRouter(<InventoryMaintenancePage />);
+
+    expect((await screen.findAllByText('Helmet')).length).toBeGreaterThan(0);
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: 'Never Inspected (0)' })).toBeInTheDocument();
+  });
+
+  it("names a due item's category rather than its station", async () => {
+    mockGetMaintenanceDueItems.mockResolvedValue([makeItem({ category_id: 'cat-1', station: 'Station 1' })]);
+    renderWithRouter(<InventoryMaintenancePage />);
+
+    const row = await screen.findByRole('row', { name: /Helmet/ });
+    await waitFor(() => expect(within(row).getByText('Turnout Gear')).toBeInTheDocument());
+    expect(within(row).queryByText('Station 1')).not.toBeInTheDocument();
   });
 });

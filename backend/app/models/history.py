@@ -38,6 +38,7 @@ from app.core.encrypted_types import EncryptedDate, EncryptedJSON, EncryptedText
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
+    from app.models.apparatus import Apparatus
     from app.models.document import Document
     from app.models.user import User
 
@@ -173,6 +174,19 @@ class AlbumLevel(str, enum.Enum):
     MEMBERS = "members"
 
 
+class ApparatusDisposition(str, enum.Enum):
+    """What became of a historical apparatus. ``in_service`` is for a record
+    made from a fleet truck that is still running."""
+
+    IN_SERVICE = "in_service"
+    SOLD = "sold"
+    TRADED = "traded"
+    SCRAPPED = "scrapped"
+    PRESERVED = "preserved"
+    MUSEUM = "museum"
+    UNKNOWN = "unknown"
+
+
 class HistoryTitleAction(str, enum.Enum):
     """What an import does with a title it does not recognize."""
 
@@ -211,6 +225,12 @@ class HistoryTitle(Base):
     # merge, which is also why a department's list is pre-filled exactly once —
     # an organization with no rows at all has never been seeded.
     is_retired: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    # Opt-in, off by default (owner decision, phase 5): a title reaches the
+    # department timeline only when the Historian asks for it, so the
+    # timeline is not cluttered with every rank anyone ever held.
+    show_on_timeline: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
     created_by: Mapped[Optional[str]] = mapped_column(
@@ -434,7 +454,13 @@ class HistoricalMemberServicePeriod(Base):
 
 
 class HistoricalMemberPeriodTitle(Base):
-    """A title held during one service period."""
+    """A title held during one service period.
+
+    The held-from and held-to dates are optional (phase 5): a period of
+    service often spans several titles, so the period's own start says
+    nothing about when this one began. The timeline places a title only by
+    its own held-from date, never by guessing from the period.
+    """
 
     __tablename__ = "historical_member_period_titles"
 
@@ -448,6 +474,26 @@ class HistoricalMemberPeriodTitle(Base):
         String(36),
         ForeignKey("history_titles.id", ondelete="RESTRICT"),
         primary_key=True,
+    )
+    held_from_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    held_from_precision: Mapped[DatePrecision] = mapped_column(
+        _enum(DatePrecision),
+        nullable=False,
+        default=DatePrecision.YEAR,
+        server_default=DatePrecision.YEAR.value,
+    )
+    held_from_circa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    held_to_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    held_to_precision: Mapped[DatePrecision] = mapped_column(
+        _enum(DatePrecision),
+        nullable=False,
+        default=DatePrecision.YEAR,
+        server_default=DatePrecision.YEAR.value,
+    )
+    held_to_circa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
     )
 
     period: Mapped["HistoricalMemberServicePeriod"] = relationship(
@@ -1000,6 +1046,9 @@ class HistoryMedia(Base):
     tags: Mapped[list["HistoryMediaTag"]] = relationship(
         "HistoryMediaTag", back_populates="media", cascade="all, delete-orphan"
     )
+    apparatus_tags: Mapped[list["HistoryMediaApparatusTag"]] = relationship(
+        "HistoryMediaApparatusTag", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_history_media_org_level", "organization_id", "publication_level"),
@@ -1290,6 +1339,9 @@ class HistoryDocument(Base):
         back_populates="history_document",
         cascade="all, delete-orphan",
     )
+    apparatus_tags: Mapped[list["HistoryDocumentApparatusTag"]] = relationship(
+        "HistoryDocumentApparatusTag", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_history_documents_org_level", "organization_id", "publication_level"),
@@ -1386,3 +1438,594 @@ class HistoryAlbumDocument(Base):
     )
 
     __table_args__ = (Index("ix_history_album_documents_document", "document_id"),)
+
+
+# --- Phase 5: managed lists for apparatus and events ---
+
+
+class HistoryStation(Base):
+    """One entry in a department's managed list of station names.
+
+    Not yet a station record of its own (owner decision, phase 5: full
+    station records come later). Events and designation periods point at an
+    entry rather than repeating free text, so a misspelling is corrected in
+    one place and two names for one firehouse can be merged. When station
+    records arrive, this list becomes them.
+    """
+
+    __tablename__ = "history_stations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    name_key: Mapped[str] = mapped_column(String(150), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_retired: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name_key", name="uq_history_station_key"),
+    )
+
+
+class HistoryApparatusType(Base):
+    """One entry in a department's managed list of apparatus types (engine,
+    ladder, tanker, ...). Managed like sources: retired or merged, never
+    deleted."""
+
+    __tablename__ = "history_apparatus_types"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    name_key: Mapped[str] = mapped_column(String(150), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_retired: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "name_key", name="uq_history_apparatus_type_key"
+        ),
+    )
+
+
+class HistoryEventType(Base):
+    """One entry in a department's managed list of event types (fire or
+    incident, station, ceremony, ...). Managed like sources."""
+
+    __tablename__ = "history_event_types"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    name_key: Mapped[str] = mapped_column(String(150), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_retired: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "name_key", name="uq_history_event_type_key"
+        ),
+    )
+
+
+# --- Phase 5: historical apparatus ---
+
+
+class HistoryApparatus(Base):
+    """A truck, wagon or engine in the department's history.
+
+    History's own record (owner decision 1, phase 5), so the archive works
+    with the Apparatus module off and keeps a truck after the fleet deletes
+    it. A record made from a fleet truck copies its descriptive details once
+    and keeps ``fleet_apparatus_id`` only to say so and to stop a second
+    record being made from the same truck; nothing syncs afterwards. No
+    price, VIN, plate, financing or maintenance figure is ever copied.
+
+    Published like a person or photo, under ``record_type = "apparatus"``.
+    """
+
+    __tablename__ = "history_apparatus"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    apparatus_type_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("history_apparatus_types.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    make: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    body_builder: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # US units, as the Apparatus module stores them.
+    pump_gpm: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    tank_gallons: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    ladder_feet: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    in_service_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    in_service_precision: Mapped[DatePrecision] = mapped_column(
+        _enum(DatePrecision), nullable=False, default=DatePrecision.YEAR
+    )
+    in_service_circa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    out_of_service_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    out_of_service_precision: Mapped[DatePrecision] = mapped_column(
+        _enum(DatePrecision), nullable=False, default=DatePrecision.YEAR
+    )
+    out_of_service_circa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    disposition: Mapped[ApparatusDisposition] = mapped_column(
+        _enum(ApparatusDisposition),
+        nullable=False,
+        default=ApparatusDisposition.UNKNOWN,
+        server_default=ApparatusDisposition.UNKNOWN.value,
+    )
+    current_location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    research_notes: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    source_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("history_sources.id", ondelete="SET NULL"), nullable=True
+    )
+    accession_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    fleet_apparatus_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("apparatus.id", ondelete="SET NULL"), nullable=True
+    )
+
+    publication_level: Mapped[PublicationLevel] = mapped_column(
+        _enum(PublicationLevel), nullable=False, default=PublicationLevel.DRAFT
+    )
+    published_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    published_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    public_snapshot: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+    public_revision_number: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    substantial_revision_number: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    revision_number: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    apparatus_type: Mapped[Optional["HistoryApparatusType"]] = relationship(
+        "HistoryApparatusType"
+    )
+    source: Mapped[Optional["HistorySource"]] = relationship("HistorySource")
+    fleet_apparatus: Mapped[Optional["Apparatus"]] = relationship("Apparatus")
+    designations: Mapped[list["HistoryApparatusDesignation"]] = relationship(
+        "HistoryApparatusDesignation",
+        back_populates="apparatus",
+        cascade="all, delete-orphan",
+        order_by="HistoryApparatusDesignation.sort_order",
+    )
+
+    __table_args__ = (
+        Index("ix_history_apparatus_org_level", "organization_id", "publication_level"),
+        Index("ix_history_apparatus_org_type", "organization_id", "apparatus_type_id"),
+        Index(
+            "ix_history_apparatus_org_in_service", "organization_id", "in_service_date"
+        ),
+        Index("ix_history_apparatus_source", "source_id"),
+        # One History record per fleet truck. NULLs do not collide, so any
+        # number of records entered from scratch are allowed.
+        UniqueConstraint(
+            "organization_id", "fleet_apparatus_id", name="uq_history_apparatus_fleet"
+        ),
+    )
+
+
+class HistoryApparatusDesignation(Base):
+    """One period under one unit number: Engine 1 from 1924, Engine 3 from
+    1951, Reserve Engine from 1968. A station is optional.
+
+    No ``organization_id``: reached only through its apparatus, which is.
+    """
+
+    __tablename__ = "history_apparatus_designations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    apparatus_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_apparatus.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    designation: Mapped[str] = mapped_column(String(100), nullable=False)
+    station_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("history_stations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    start_precision: Mapped[DatePrecision] = mapped_column(
+        _enum(DatePrecision), nullable=False, default=DatePrecision.YEAR
+    )
+    start_circa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    end_precision: Mapped[DatePrecision] = mapped_column(
+        _enum(DatePrecision), nullable=False, default=DatePrecision.YEAR
+    )
+    end_circa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    apparatus: Mapped["HistoryApparatus"] = relationship(
+        "HistoryApparatus", back_populates="designations"
+    )
+    station: Mapped[Optional["HistoryStation"]] = relationship("HistoryStation")
+
+    __table_args__ = (
+        Index("ix_history_designations_apparatus", "apparatus_id"),
+        Index("ix_history_designations_station", "station_id"),
+    )
+
+
+# --- Phase 5: events ---
+
+
+class HistoryEvent(Base):
+    """Something that happened: a fire, a station opening, a parade, a
+    line-of-duty death. Dated by a start date (required, so it can be placed
+    on the timeline) and an optional end date for an event that ran over
+    days or years, both partial and "circa".
+
+    No civilian fields (owner decision 7): a civilian's name goes in the
+    description, checked by the clearance list before anything is public, or
+    in the encrypted research notes.
+
+    Published like a person or photo, under ``record_type = "event"``.
+    """
+
+    __tablename__ = "history_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    start_precision: Mapped[DatePrecision] = mapped_column(
+        _enum(DatePrecision), nullable=False, default=DatePrecision.YEAR
+    )
+    start_circa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    end_precision: Mapped[DatePrecision] = mapped_column(
+        _enum(DatePrecision), nullable=False, default=DatePrecision.YEAR
+    )
+    end_circa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    place: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    station_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("history_stations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    event_type_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("history_event_types.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    research_notes: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    source_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("history_sources.id", ondelete="SET NULL"), nullable=True
+    )
+
+    publication_level: Mapped[PublicationLevel] = mapped_column(
+        _enum(PublicationLevel), nullable=False, default=PublicationLevel.DRAFT
+    )
+    published_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    published_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    public_snapshot: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+    public_revision_number: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    substantial_revision_number: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    revision_number: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    event_type: Mapped[Optional["HistoryEventType"]] = relationship("HistoryEventType")
+    station: Mapped[Optional["HistoryStation"]] = relationship("HistoryStation")
+    source: Mapped[Optional["HistorySource"]] = relationship("HistorySource")
+    members: Mapped[list["HistoryEventMember"]] = relationship(
+        "HistoryEventMember", back_populates="event", cascade="all, delete-orphan"
+    )
+    apparatus_links: Mapped[list["HistoryEventApparatus"]] = relationship(
+        "HistoryEventApparatus", back_populates="event", cascade="all, delete-orphan"
+    )
+    media_links: Mapped[list["HistoryEventMedia"]] = relationship(
+        "HistoryEventMedia",
+        back_populates="event",
+        cascade="all, delete-orphan",
+        order_by="HistoryEventMedia.position",
+    )
+    document_links: Mapped[list["HistoryEventDocument"]] = relationship(
+        "HistoryEventDocument",
+        back_populates="event",
+        cascade="all, delete-orphan",
+        order_by="HistoryEventDocument.position",
+    )
+
+    __table_args__ = (
+        Index("ix_history_events_org_level", "organization_id", "publication_level"),
+        Index("ix_history_events_org_start", "organization_id", "start_date"),
+        Index("ix_history_events_org_type", "organization_id", "event_type_id"),
+        Index("ix_history_events_station", "station_id"),
+        Index("ix_history_events_source", "source_id"),
+    )
+
+
+class HistoryEventMember(Base):
+    """A past member's part in an event, with an optional role in their own
+    words ("commanded", "injured")."""
+
+    __tablename__ = "history_event_members"
+
+    event_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_events.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    member_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("historical_members.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    event: Mapped["HistoryEvent"] = relationship(
+        "HistoryEvent", back_populates="members"
+    )
+    member: Mapped["HistoricalMember"] = relationship("HistoricalMember")
+
+    __table_args__ = (Index("ix_history_event_members_member", "member_id"),)
+
+
+class HistoryEventApparatus(Base):
+    """An apparatus that took part in an event."""
+
+    __tablename__ = "history_event_apparatus"
+
+    event_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_events.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    apparatus_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_apparatus.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    event: Mapped["HistoryEvent"] = relationship(
+        "HistoryEvent", back_populates="apparatus_links"
+    )
+    apparatus: Mapped["HistoryApparatus"] = relationship("HistoryApparatus")
+
+    __table_args__ = (Index("ix_history_event_apparatus_apparatus", "apparatus_id"),)
+
+
+class HistoryEventMedia(Base):
+    """A photo, recording or film of an event, in the event's order."""
+
+    __tablename__ = "history_event_media"
+
+    event_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_events.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    media_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("history_media.id", ondelete="CASCADE"), primary_key=True
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    event: Mapped["HistoryEvent"] = relationship(
+        "HistoryEvent", back_populates="media_links"
+    )
+    media: Mapped["HistoryMedia"] = relationship("HistoryMedia")
+
+    __table_args__ = (Index("ix_history_event_media_media", "media_id"),)
+
+
+class HistoryEventDocument(Base):
+    """A document about an event, in the event's order."""
+
+    __tablename__ = "history_event_documents"
+
+    event_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_events.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    document_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_documents.document_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    event: Mapped["HistoryEvent"] = relationship(
+        "HistoryEvent", back_populates="document_links"
+    )
+    history_document: Mapped["HistoryDocument"] = relationship("HistoryDocument")
+
+    __table_args__ = (Index("ix_history_event_documents_document", "document_id"),)
+
+
+# --- Phase 5: apparatus tags on photos and documents ---
+
+
+class HistoryMediaApparatusTag(Base):
+    """An apparatus shown or heard in a media item. No consent warning: a
+    truck has no say."""
+
+    __tablename__ = "history_media_apparatus_tags"
+
+    media_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("history_media.id", ondelete="CASCADE"), primary_key=True
+    )
+    apparatus_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_apparatus.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    apparatus: Mapped["HistoryApparatus"] = relationship("HistoryApparatus")
+
+    __table_args__ = (Index("ix_history_media_apparatus_apparatus", "apparatus_id"),)
+
+
+class HistoryDocumentApparatusTag(Base):
+    """An apparatus a document concerns."""
+
+    __tablename__ = "history_document_apparatus_tags"
+
+    document_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_documents.document_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    apparatus_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_apparatus.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    apparatus: Mapped["HistoryApparatus"] = relationship("HistoryApparatus")
+
+    __table_args__ = (Index("ix_history_document_apparatus_apparatus", "apparatus_id"),)
