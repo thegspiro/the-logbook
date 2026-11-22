@@ -814,16 +814,83 @@ install sends no email.
 - **W67b-15 — LOW — Orders are accepted for up to 15 minutes after a window's
   closing time.** `create_order` checks the status, not `closes_at`. Only the
   15-minute lifecycle job closes a window.
+
+  ✅ **FIXED (2026-11-22).** `get_open_windows(taking_orders=True)` leaves
+  out a window set to close automatically whose closing time has passed.
+  The member storefront and `create_order` use it, so the store stops
+  offering the window at its time and an order against it is refused. The
+  admin dashboard still lists the window until the job closes it, and
+  sends the closing notice. A window with "close automatically" off is
+  closed by an officer, so it keeps taking orders until then; its closing
+  time is only what members were told.
+
 - **W67b-16 — LOW — Two window lifecycle gaps.**
   - Reopening a window whose deadline has passed sends "ordering is open",
     then a second "ordering has closed".
   - A draft window given an `opens_at` later never opens on its own.
+
+  ✅ **FIXED (2026-11-22).**
+  - `open_window` refuses a window set to close automatically whose closing
+    time has passed: "Move the closing time later, or turn off closing
+    automatically, before opening it." The lifecycle job also no longer
+    opens a scheduled window whose closing time passed while it waited (for
+    example while the job was down); the window stays scheduled for an
+    officer.
+  - `update_window` moves a draft to scheduled when it is given an opening
+    time, and a scheduled window back to draft when the time is cleared,
+    as `create_window` decides it. Open and closed windows keep their
+    status.
+
+  **Tests:** eleven in `TestWindowDeadlines`
+  (`tests/test_storefront_service.py`). Six failed against the old code: no
+  order after the closing time, the store not offering the window, reopening
+  refused, the job not opening a missed window, and a draft scheduling and
+  returning to draft. Five guard what must not change: orders still taken
+  with closing by hand, the dashboard still listing the window, reopening
+  after moving the time, reopening with closing by hand, and an open window
+  keeping its status.
+
+  **Re-driven:**
+  1. An open window had its closing time moved one minute into the past.
+     The member store offered no window, and an order against it was
+     refused with "There is no open order window". The admin dashboard
+     still listed it.
+  2. After closing it, **Open ordering** in the windows tab showed "This
+     window's closing time has passed…", and the window stayed closed.
+  3. A draft given an opening time read Scheduled.
+
 - **W67b-17 — LOW — Two notification gaps.**
   - Payment reminders are classed as store announcements. A member who mutes
     announcements stops hearing about money they owe. Whether that is
     intended is unverified.
   - The cancellation email has a template but is missing from the preview
     catalog, so it cannot be previewed or test-sent.
+
+  ✅ **FIXED (2026-11-22).**
+  - **Payment reminders.** Owner decision 2026-11-22: payment reminders
+    are their own optional group, **Your store balance**
+    (`EmailKind.STORE_BALANCE`), as dues already has **Your dues**. It is on
+    by default for every member, with no carry-over from the
+    announcements choice, so a member who muted announcements receives
+    reminders again until they turn this off. Store announcements keeps the
+    window notices and the vendor-order update. `docs/UPGRADING.md` notes
+    the change for operators.
+  - **Cancellation preview.** The preview catalog gains `order_cancelled`,
+    governed by `send_status_updates`, rendered through the real
+    `send_order_cancelled`. The settings screen's **Status changes** row
+    gains a second **Cancellation** preview button.
+
+  **Tests:**
+  - **Backend:** three in `TestStorefrontAddressFilter`
+    (`tests/test_email_policy.py`) and one in
+    `tests/test_storefront_preview.py`. Three of these failed against the
+    old code: a reminder reaches a member who muted announcements, the new
+    choice mutes it, and the cancellation notice renders. The fourth guards
+    that the new choice leaves announcements alone.
+  - **Frontend:** in `StoreSettingsTab.notifications.test.tsx`, the
+    Cancellation button opens the `order_cancelled` preview. The
+    every-notice test now counts ten preview buttons, not nine. Both failed
+    against the old component.
 
 ## Checklist
 

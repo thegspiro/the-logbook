@@ -503,15 +503,22 @@ class TestPipelineTasks:
         event_request = _request_row(status=EventRequestStatus.SUBMITTED)
         db = _seq_db([_result(event_request), _result(org)])
 
+        # Plan Content: Review Request ticks itself (owner decision 2026-11-22)
+        # and cannot be toggled by hand.
         result = await update_task_completion(
             request_id=REQUEST_ID,
-            update=TaskCompletionUpdate(task_id="review_request", completed=True),
+            update=TaskCompletionUpdate(task_id="plan_content", completed=True),
             db=db,
             current_user=SimpleNamespace(id=USER_ID, organization_id=ORG_ID),
         )
 
-        assert result["task_completions"]["review_request"]["completed"] is True
+        assert result["task_completions"]["plan_content"]["completed"] is True
         assert result["status"] == EventRequestStatus.IN_PROGRESS.value
+        # Work has started, so Review Request now reads as done.
+        assert result["task_completions"]["review_request"] == {
+            "completed": True,
+            "automatic": True,
+        }
 
     @pytest.mark.asyncio
     async def test_clearing_a_stale_task_id_is_still_allowed(self):

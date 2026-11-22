@@ -39,7 +39,15 @@ DRILL_ID = "drill-1"
 
 
 class FakeApi:
-    """The slice of the events API the slide touches, with its two refusals."""
+    """The slice of the events API the slide touches, with its refusals.
+
+    A finalized event refuses removing an attendee as well as moving, as the
+    real API does ("Attendance for this event has been finalized, so removing
+    an attendee is no longer available"). An earlier version of this fake
+    refused only the move, so it passed a seeder that removed check-ins before
+    reopening, which the real API refused on every run after a capture had
+    finalized the drill.
+    """
 
     def __init__(self, *, finalized: bool = False) -> None:
         stale_start = seed.NOW - timedelta(days=8)
@@ -84,6 +92,13 @@ class FakeApi:
             return self.events
         if path == f"/events/{DRILL_ID}/rsvps":
             return list(self.rsvps.values())
+        if path == f"/events/{DRILL_ID}":
+            return {
+                **self.events[0],
+                "attendance_finalized_at": (
+                    seed.iso(seed.NOW - timedelta(days=7)) if self.finalized else None
+                ),
+            }
         raise AssertionError(f"unexpected GET {path}")
 
     def patch(self, path: str, payload: dict):
@@ -116,6 +131,14 @@ class FakeApi:
         self.calls.append(("DELETE", path))
         prefix = f"/events/{DRILL_ID}/rsvps/"
         assert path.startswith(prefix), path
+        if self.finalized:
+            raise seed.ApiError(
+                "DELETE",
+                path,
+                409,
+                "Attendance for this event has been finalized, so removing an "
+                "attendee is no longer available.",
+            )
         self.rsvps.pop(path[len(prefix) :])
         return None
 

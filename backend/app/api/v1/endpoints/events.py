@@ -138,6 +138,7 @@ from app.services.event_service import (
 )
 from app.services.event_staffing_service import (
     get_event_staffing,
+    member_signup_sheet,
     open_event_staffing,
 )
 from app.services.file_storage_service import (
@@ -1727,6 +1728,9 @@ async def get_event(
             and await is_outreach_event(db, current_user.organization_id, event.id)
         ),
         can_record_crr=await crr_recording_offered(db, event, current_user),
+        volunteer_signup=await member_signup_sheet(
+            db, event, organization, str(current_user.id)
+        ),
         user_attended=user_attended,
         credited_hours=credited_hours,
         hour_category_label=hour_category_label,
