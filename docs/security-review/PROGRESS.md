@@ -16,10 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #4541 (Feature 26, Forms, pass 14) merged (`2d97d8402`) since
-the last iteration; row 26 is marked ✅ below. Next is Feature 27
-(Integrations) — re-check `list_pull_requests` fresh rather than trusting
-this note.
+**PR [#4543](https://github.com/thegspiro/the-logbook/pull/4543)**
+(branch `claude/security-review-integrations-p14`): Feature 27
+(Integrations), pass 14 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). PR #4541 (Feature 26, Forms, pass 14) merged (`2d97d8402`)
+since the last iteration; row 26 marked ✅ below. Real delta since pass 13:
+a new Historical Data Import undo sub-feature (`historical_import_undo.py`,
+1144 lines, two new routes), three small security-positive correctness
+fixes on the Salesforce/PayPal connect paths, and a new public
+PayPal.Me/email pair read end to end including its out-of-feature
+Storefront consumer. **0 fixed, 0 new security findings, 1 flagged
+(test-coverage only).** Also fixed, unrelated to this feature: a forked
+Alembic chain that had silently left the sandbox's database missing a real
+column, cascading into 321 unrelated test failures — resolved with an empty
+merge revision. Full write-up:
+`docs/security-review/INT-27-integrations.md`'s **Pass 14** section.
+
+Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit &
+IP) — re-check `list_pull_requests` fresh rather than trusting this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 26, Forms, pass 14, PR #4541, merged), preserved for history</summary>
