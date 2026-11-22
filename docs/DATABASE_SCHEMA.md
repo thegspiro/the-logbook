@@ -2727,10 +2727,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `activity_type_id` | VARCHAR(36) | no | PK, FK |  | → `crr_activity_types.id` ON DELETE CASCADE |
 | `tag_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `crr_tags.id` ON DELETE CASCADE |
-| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 
 **Indexes**
 
+- `ix_crr_activity_type_tags_org` (`organization_id`)
 - `ix_crr_activity_type_tags_tag` (`tag_id`)
 
 ### `crr_activity_types`
