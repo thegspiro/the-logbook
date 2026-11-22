@@ -1,7 +1,7 @@
 """Record when an applicant changed their own identifying details
 
 Revision ID: 809893462b67
-Revises: 7d2e4b81c5a3
+Revises: 7d2e4b81c5a3, 85680aed8332
 Create Date: 2026-11-21 19:00:00.000000
 
 ``prospective_members`` gains ``identity_edited_by_applicant_at``
@@ -39,7 +39,13 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "809893462b67"
-down_revision: Union[str, None] = "7d2e4b81c5a3"
+# Also joins main's two heads, so ``alembic upgrade head`` runs again:
+# 7d2e4b81c5a3 and 85680aed8332, two merges of the same pair (1ba6979f9408
+# and fc5584a22199) that landed independently on 2026-11-22. Kept on one line
+# for the migration-chain validators, which read it line by line.
+# fmt: off
+down_revision: Union[str, Sequence[str], None] = ("7d2e4b81c5a3", "85680aed8332")
+# fmt: on
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

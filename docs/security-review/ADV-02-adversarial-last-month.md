@@ -177,6 +177,8 @@ backfilled.
   `prospect_updated` naming one clears it.
 - Left as is: the first public application is still matched on what the
   applicant typed (`docs/KNOWN_LIMITATIONS.md`).
+- The migration also joins `main`'s two heads, `7d2e4b81c5a3` and
+  `85680aed8332`.
 - Tests: `tests/test_prospect_applicant_edited_identity.py` (four of its seven
   failed before the fix) and `tests/test_prospect_identity_edited_migration.py`.
 
