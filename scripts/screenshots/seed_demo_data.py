@@ -2583,25 +2583,36 @@ class Seeder:
         which is write-once.
 
         A capture can finalize the drill once it has ended (19-32 finalizes
-        an event the post-event check names), and a finalized event's times
-        cannot move, so that is reopened first, as the other live fixtures do.
+        an event the post-event check names). A finalized event refuses both
+        steps, removing an attendee (409) and moving its times, so it is
+        reopened before either, as the other live fixtures do.
         """
         start = (NOW - timedelta(hours=2)).replace(minute=0, second=0, microsecond=0)
         window = {
             "start_datetime": iso(start),
             "end_datetime": iso(start + timedelta(hours=4)),
         }
+        self._clear_member_check_ins(event_id)
+        self.api.patch(f"/events/{event_id}", window)
+
+    def _clear_member_check_ins(self, event_id: str) -> None:
+        """Make a live fixture's old window movable again: reopen, then uncheck.
+
+        The API refuses to move an event that a member is checked in at outside
+        the new schedule (400), and a check-in stamp is write-once, so the
+        member's RSVP is deleted, which is the refusal's own remedy. A finalized
+        event refuses that deletion too (409), so it is reopened first.
+        Captures do both to these fixtures: they check members in, and `19-32`
+        finalizes an event the post-event check names. The run that re-dates
+        the event rebuilds whatever attendance it pictures.
+        """
+        event = self.api.get(f"/events/{event_id}")
+        if pick(event, "attendance_finalized_at", "attendanceFinalizedAt"):
+            self.api.post(f"/events/{event_id}/reopen-attendance", {})
         for rsvp in items(self.api.get(f"/events/{event_id}/rsvps"), "rsvps"):
             user_id = pick(rsvp, "user_id", "userId")
             if user_id and pick(rsvp, "checked_in", "checkedIn"):
                 self.api.delete(f"/events/{event_id}/rsvps/{user_id}")
-        try:
-            self.api.patch(f"/events/{event_id}", window)
-        except ApiError as exc:
-            if exc.code != 409 or "finalized" not in exc.detail.lower():
-                raise
-            self.api.post(f"/events/{event_id}/reopen-attendance", {})
-            self.api.patch(f"/events/{event_id}", window)
 
     RECURRING_SERIES_TITLE = "Monthly Officers Meeting"
 
@@ -2714,6 +2725,9 @@ class Seeder:
             updates = dict(guest_settings)
             if ends and ends < iso(NOW):
                 updates.update(window)
+                # A capture checks members in; moving the window would credit
+                # them for the new date, which the API refuses.
+                self._clear_member_check_ins(pick(existing, "id"))
             self.api.patch(f"/events/{pick(existing, 'id')}", updates)
             self._sign_a_guest_in(
                 pick(existing, "id"), pick(room, "display_code", "displayCode")
@@ -3042,19 +3056,19 @@ class Seeder:
             # to do it; the fixture has to survive it, because the seeder must
             # be re-runnable against a database a capture has already touched.
             #
-            # Driven off the refusal rather than off a field: the events *list*
-            # carries no finalized marker at all -- only the detail endpoint
-            # does -- so a guard reading one from `existing` can never fire,
-            # which is exactly how the first attempt at this failed.
-            try:
-                event = self.api.patch(f"/events/{event_id}", window)
-            except ApiError as exc:
-                if exc.code != 409 or "finalized" not in exc.detail.lower():
-                    raise
+            # Read from the detail endpoint: the events *list* carries no
+            # finalized marker at all, so a guard reading one from `existing`
+            # can never fire, which is how the first attempt at this failed.
+            #
+            # The member's check-in goes before the re-date, not after: the API
+            # refuses to move an event a member is checked in at outside the
+            # new schedule (400), and a finalized event refuses removing that
+            # check-in (409), so the order is reopen, clear, then move.
+            detail = self.api.get(f"/events/{event_id}")
+            if pick(detail, "attendance_finalized_at", "attendanceFinalizedAt"):
                 self.api.post(f"/events/{event_id}/reopen-attendance", {})
-                event = self.api.patch(f"/events/{event_id}", window)
             self._clear_early_checkin_rsvp(event_id)
-            return event
+            return self.api.patch(f"/events/{event_id}", window)
         return self.api.post(
             "/events",
             {
@@ -7949,6 +7963,18 @@ class Seeder:
             for c in existing
         ):
             return
+        # A finished check left by an earlier run stays; only the part-answered
+        # one is still owed. Submitting another finished one first spent the
+        # member's only free engine shift on it, and left nothing for the check
+        # this step exists to make.
+        # The list is camelCase and carries no completion flag: an unanswered
+        # check reads "not_started", a part-answered one "in_progress", and a
+        # finished one its overall result ("pass", "fail", ...).
+        has_finished = any(
+            str(pick(c, "status") or "not_started")
+            not in {"not_started", "in_progress", "incomplete"}
+            for c in existing
+        )
 
         untouched = [
             s
@@ -7958,8 +7984,6 @@ class Seeder:
                 "checks",
             )
         ]
-        if len(untouched) < 2:
-            return
 
         detail = self.api.get(f"/equipment-checks/templates/{template_id}")
         rows = self._checkable_rows(detail)
@@ -7992,31 +8016,102 @@ class Seeder:
 
         # Tried against each free shift in turn rather than the first two: this
         # template is engine-only, and a shift on any other apparatus is
-        # refused with "Template is not applicable to this shift".
-        wanted = [rows, part_rows]
-        for shift in untouched:
-            if not wanted:
-                break
-            try:
-                member.post(
-                    f"/equipment-checks/shifts/{pick(shift, 'id')}/checks",
-                    {
-                        "template_id": template_id,
-                        "check_timing": "start_of_shift",
-                        "items": wanted[0],
-                    },
-                )
-            except ApiError as exc:
-                if exc.code == 400:
-                    continue
-                self.blocked.append(f"member checklist states: {exc}")
-                return
-            wanted.pop(0)
+        # refused with "Template is not applicable to this shift". Only once
+        # the member's own shifts are used up is the member seated on more,
+        # because which of them are engines is known only by trying.
+        wanted = [part_rows] if has_finished else [rows, part_rows]
+
+        def submit_into(candidates: list[dict]) -> bool:
+            """Fill `wanted` from these shifts; False once a refusal blocks."""
+            for shift in candidates:
+                if not wanted:
+                    break
+                try:
+                    member.post(
+                        f"/equipment-checks/shifts/{pick(shift, 'id')}/checks",
+                        {
+                            "template_id": template_id,
+                            "check_timing": "start_of_shift",
+                            "items": wanted[0],
+                        },
+                    )
+                except ApiError as exc:
+                    if exc.code == 400:
+                        continue
+                    self.blocked.append(f"member checklist states: {exc}")
+                    return False
+                wanted.pop(0)
+            return True
+
+        if not submit_into(untouched):
+            return
+        if wanted and not submit_into(
+            self._seat_member_on_engine_shifts(member, shifts, len(wanted))
+        ):
+            return
         if wanted:
             self.blocked.append(
                 "member checklist states: no engine shift free for a "
                 "part-answered check"
             )
+
+    def _seat_member_on_engine_shifts(
+        self, member: "Api", their_shifts: list[dict], wanted: int
+    ) -> list[dict]:
+        """Seat the demo member on up to `wanted` more upcoming engine shifts.
+
+        The member checklist states need engine shifts with no check on them,
+        because the seeded template applies to engines only, and the rotation
+        decides how many the member has: on some days one, which left the
+        part-answered check with nowhere to go. Seated as a firefighter by the
+        administrator; a shift the member cannot take that day (already on
+        duty, or the seat is filled) is skipped, as the other seat-fillers do.
+        Returns the shifts as the member's own list reports them.
+        """
+        member_id = next(
+            (
+                str(pick(u, "id"))
+                for u in items(self.api.get("/users?limit=200"), "users")
+                if pick(u, "username") == DEMO_MEMBER_USERNAME
+            ),
+            "",
+        )
+        if not member_id:
+            return []
+        taken = {pick(s, "id") for s in their_shifts}
+        engines = sorted(
+            (
+                s
+                for s in items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+                if pick(s, "id") not in taken
+                and str(pick(s, "shift_date", "shiftDate") or "") > str(TODAY)
+                and str(
+                    pick(s, "apparatus_unit_number", "apparatusUnitNumber")
+                    or pick(s, "apparatus_name", "apparatusName")
+                    or ""
+                ).startswith(("E-", "Engine"))
+            ),
+            key=lambda s: str(pick(s, "shift_date", "shiftDate") or ""),
+        )
+        seated: set[str] = set()
+        for shift in engines:
+            if len(seated) >= wanted:
+                break
+            try:
+                self.api.post(
+                    f"/scheduling/shifts/{pick(shift, 'id')}/assignments",
+                    {"user_id": member_id, "position": "firefighter"},
+                )
+            except ApiError as exc:
+                if not is_expected_seat_refusal(exc):
+                    raise
+                continue
+            seated.add(str(pick(shift, "id")))
+        return [
+            s
+            for s in items(member.get("/scheduling/my-shifts?limit=50"), "shifts")
+            if str(pick(s, "id")) in seated
+        ]
 
     # -- scheduling: count-only call tracking ------------------------
 
@@ -18069,13 +18164,7 @@ class Seeder:
         follow_up = self._backlog15_applicant(
             self.BACKLOG15_FOLLOW_UP_APPLICANT, pipeline_id
         )
-        if follow_up.get("current_step_name") != self.BACKLOG15_FOLLOW_UP_STAGE:
-            self.api.post(
-                f"/prospective-members/prospects/{pick(follow_up, 'id')}/advance", {}
-            )
-            follow_up = self._backlog15_applicant(
-                self.BACKLOG15_FOLLOW_UP_APPLICANT, pipeline_id
-            )
+        follow_up = self._backlog15_walk_to_follow_up(follow_up, pipeline_id)
         if follow_up.get("current_step_name") != self.BACKLOG15_FOLLOW_UP_STAGE:
             self.blocked.append(
                 "guide 15 backlog: "
@@ -18100,6 +18189,39 @@ class Seeder:
             }
             if (user_id, role) not in held:
                 self.api.post(path, {"user_id": user_id, "role": role})
+
+    def _backlog15_walk_to_follow_up(self, prospect: dict, pipeline_id: str) -> dict:
+        """Move the follow-up applicant to the follow-up stage, from either side.
+
+        A new applicant starts one stage short of it, so one advance used to
+        be enough. A capture can move them past it, though: `15-09` runs a real
+        bulk advance on the newest applicants, and this one ended on the final
+        stage, where a further advance is refused (409) and the shots of the
+        follow-up stage had no applicant on it. So the walk goes back with
+        `regress` when they are past it, and forward with `advance` when short.
+        """
+        steps = sorted(
+            items(
+                self.api.get(f"/prospective-members/pipelines/{pipeline_id}"), "steps"
+            ),
+            key=lambda step: step.get("sort_order") or 0,
+        )
+        names = [step.get("name") for step in steps]
+        if self.BACKLOG15_FOLLOW_UP_STAGE not in names:
+            return prospect
+        target = names.index(self.BACKLOG15_FOLLOW_UP_STAGE)
+        for _ in range(len(names)):
+            current = prospect.get("current_step_name")
+            if current == self.BACKLOG15_FOLLOW_UP_STAGE or current not in names:
+                break
+            verb = "regress" if names.index(current) > target else "advance"
+            self.api.post(
+                f"/prospective-members/prospects/{pick(prospect, 'id')}/{verb}", {}
+            )
+            prospect = self._backlog15_applicant(
+                self.BACKLOG15_FOLLOW_UP_APPLICANT, pipeline_id
+            )
+        return prospect
 
     BACKLOG15_INTEREST = {
         "interest_reason": "My older brother volunteers here and I want to "
