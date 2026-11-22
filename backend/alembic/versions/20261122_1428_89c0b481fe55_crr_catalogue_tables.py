@@ -12,7 +12,7 @@ built from the models by ``create_all`` upgrades cleanly (pitfall #26). The
 downgrade drops the four tables and every catalogue row in them.
 
 Revision ID: 89c0b481fe55
-Revises: dd939b45d6c0
+Revises: 561a3e9f4165
 Create Date: 2026-11-22 14:28:00.000000
 """
 
@@ -22,7 +22,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "89c0b481fe55"
-down_revision: Union[str, Sequence[str], None] = "dd939b45d6c0"
+down_revision: Union[str, Sequence[str], None] = "561a3e9f4165"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
