@@ -27533,8 +27533,10 @@ fix). `check_route_permissions.py --strict` — 329 routes, 0 errors/warnings
 (72 this feature's own, up from pass 13's 70). `generate_schema_docs.py
 --check` — up to date. `npm run typecheck` — 0 errors. `npm run lint` — exit 0. `npx vitest run src/pages/IntegrationsPage.test.tsx
 src/pages/historicalImport src/pages/scheduling/admin/historyImport` — 156
-passed (4 files, up from pass 13's 135). Scoped backend pytest — see the PR
-for the final count (still running as this entry was written).
+passed (4 files, up from pass 13's 135). Scoped backend pytest (after
+`alembic upgrade head` applied the merge revision) — 12,923 passed, 24
+environment-only skips, 0 failed (the 321 failures the first run reported
+were the missing-column symptom above, not a code defect).
 
 Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit &
 IP) — re-check `list_pull_requests` fresh rather than trusting this note.
