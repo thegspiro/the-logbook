@@ -1205,25 +1205,29 @@ jobs:
         #
         # Splitting the tag out gives the sweeps runners of their own and
         # leaves the other tests to share two. Each sweep is cut into parts of
-        # about ten minutes (`routesInPart` in e2e/mobile-routes.ts): seven
-        # of mobile-accessibility, three of mobile-dialogs, two of
-        # mobile-presentation. Because the twelve tests are about equal,
-        # `--shard`'s balance by count is a balance by time, and `--shard=i/4`
-        # gives each leg three of them, about 30 minutes. More legs would
-        # shorten that for the same runner time and more queued jobs; fewer
+        # about ten minutes or less (`routesInPart` in e2e/mobile-routes.ts):
+        # seven of mobile-accessibility, three of mobile-dialogs, five of
+        # mobile-presentation. Because the fifteen tests are of similar
+        # length, `--shard`'s balance by count is close to a balance by time,
+        # and `--shard=i/5` gives each leg three of them. The fifth leg came
+        # with presentation's third to fifth parts (2026-11-22), so a leg still
+        # runs three tests and the cap above still holds. More legs would
+        # shorten a leg for the same runner time and more queued jobs; fewer
         # would lengthen it. After changing a part count or the leg count,
         # list the deal with `npx playwright test --project=chromium --grep
-        # @sweep --shard=i/4 --list` and re-derive the cap above.
+        # @sweep --shard=i/5 --list` and re-derive the cap above.
         # e2eSweepTagIntegrity.test.ts fails if a long test forgets the tag.
         leg:
-          - name: sweep 1/4
-            select: --grep @sweep --shard=1/4
-          - name: sweep 2/4
-            select: --grep @sweep --shard=2/4
-          - name: sweep 3/4
-            select: --grep @sweep --shard=3/4
-          - name: sweep 4/4
-            select: --grep @sweep --shard=4/4
+          - name: sweep 1/5
+            select: --grep @sweep --shard=1/5
+          - name: sweep 2/5
+            select: --grep @sweep --shard=2/5
+          - name: sweep 3/5
+            select: --grep @sweep --shard=3/5
+          - name: sweep 4/5
+            select: --grep @sweep --shard=4/5
+          - name: sweep 5/5
+            select: --grep @sweep --shard=5/5
           # Two workers on the `rest` legs only. playwright.config.ts runs CI
           # at one worker, which left three of a runner's four cores idle for
           # the 21-23 minutes each of these legs took. Before this was turned

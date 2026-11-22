@@ -6109,7 +6109,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       type="button"
       onClick={() => setDrawerOpen(true)}
       aria-label="Details"
-      className="btn-secondary touch:min-h-11 flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
+      className="btn-secondary touch:min-h-11 touch:min-w-11 flex min-h-10 items-center justify-center gap-2 px-3 text-sm font-medium"
     >
       <SlidersHorizontal className="h-4 w-4" />
       <span className="hidden sm:inline">Details</span>
@@ -6216,7 +6216,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         onClick={() => void handleSave(false)}
         disabled={saving}
         aria-label={saving ? 'Saving draft' : 'Save draft'}
-        className="btn-secondary touch:min-h-11 flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
+        className="btn-secondary touch:min-h-11 touch:min-w-11 flex min-h-10 items-center justify-center gap-2 px-3 text-sm font-medium"
       >
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
         <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save draft'}</span>
@@ -6323,6 +6323,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   return (
     <div style={actionBarHeight > 0 ? { paddingBottom: actionBarHeight } : undefined}>
+      {/* The editable name in the bar is the visible title; an input cannot be
+          the page's heading, so the heading is for assistive technology only. */}
+      <h1 className="sr-only">{templateId ? 'Edit equipment check template' : 'New equipment check template'}</h1>
       {/* Sticky top bar. Bleeds past the page gutters so it reads as a bar
           rather than a card, and sits below the fixed mobile header. On a
           phone only the name and Publish stay pinned: the full bar wrapped to
@@ -6346,7 +6349,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               {statusPill}
               {autoSaveIndicator}
               <div className="flex-1" />
-              <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+              {/* Shrinkable so the group wraps inside the bar: with flex-shrink-0
+                  it kept its one-line width and ran past the screen edge at
+                  768px, where the side navigation leaves the bar ~520px. */}
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 {detailsButton}
                 {toolsMenu}
                 {saveDraftButton}
