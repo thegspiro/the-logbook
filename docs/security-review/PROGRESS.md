@@ -16,15 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #4558 (Feature 30, Onboarding, pass 14) merged (`2248da3bf4`)
-before this iteration started — confirmed via `pull_request_read` (state
-`closed`, `merged: true`, merge commit `2248da3bf4`), not from this file.
-Row 30 → ✅. A fresh `list_pull_requests` (state `open`) at the start of this
-iteration returned no PR with a head branch starting
-`claude/security-review-`, so this iteration proceeds to review the next
-pending feature per Step 1. This is a docs-only housekeeping edit (CLAUDE.md
-/ Step 0 rule): it rides along, uncommitted, in the next feature's own PR
-rather than getting a PR of its own.
+**PR [#4566](https://github.com/thegspiro/the-logbook/pull/4566) (branch
+`claude/security-review-scheduled-tasks-p14`)**: Feature 31 (Scheduled
+tasks), pass 14 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). This session's own environment did **not** restrict pushes
+this time — `git push -u origin claude/security-review-scheduled-tasks-p14`
+succeeded directly, so the branch matches the rotation's own naming
+convention and the next iteration's Step 0 can find it either by name or by
+the general open-PR search.
+
+PR #4558 (Feature 30, Onboarding, pass 14) had already merged (`2248da3bf4`)
+before this iteration started; row 30 marked ✅ below. Real delta since pass
+13's merge (`079b82fb9`): 7 new delegate tasks (`guest_headcount_reminders`,
+`leave_ending_reminders`, `open_ended_leave_digest`, `leave_request_upkeep`,
+`attendance_waiver_expiry`, `pending_file_deletions`,
+`history_import_expiry`), all verified for idempotency and org-scoping, plus
+a real idempotency fix to `run_rolling_recurrence_extend` landed by the
+Events feature's own commit (verified here, not applied by this review).
+**0 fixed, 0 new findings.** Registry re-verified by AST: 88/88/87+1, up
+from 80/80/79+1. A pre-existing, out-of-scope 2-head Alembic fork was found
+and left to the already-open PR #4560, which carries its join revision.
+Route inventory unchanged (2 routes). See
+`docs/security-review/CRON14-31-scheduled-tasks.md`'s **Pass 14** section
+for the full trace.
+
+Row 31 → ✅ (pending this PR's merge); next is Feature 32 (Locations &
+kiosk) — re-check `list_pull_requests` fresh rather than trusting this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 14, PR #4558, merged), preserved for history</summary>
