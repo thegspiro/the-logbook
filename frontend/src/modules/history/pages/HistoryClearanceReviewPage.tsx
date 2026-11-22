@@ -12,11 +12,19 @@ import { EmptyState } from '../../../components/ux/EmptyState';
 import { SkeletonPage } from '../../../components/ux/Skeleton';
 import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { historyService } from '../services/api';
+import { ApparatusDetails } from '../components/ApparatusDetails';
 import { ClearanceSteps } from '../components/ClearanceSteps';
+import { EventDetails } from '../components/EventDetails';
 import { DocumentDetails } from '../components/DocumentDetails';
 import { MediaDetails } from '../components/MediaDetails';
 import { PersonDetails } from '../components/PersonDetails';
-import { isDocumentRecord, type ClearanceDecisionKind, type ClearanceReview } from '../types';
+import {
+  isApparatusRecord,
+  isDocumentRecord,
+  isEventRecord,
+  type ClearanceDecisionKind,
+  type ClearanceReview,
+} from '../types';
 
 export const HistoryClearanceReviewPage: React.FC = () => {
   const { requestId = '' } = useParams();
@@ -79,7 +87,11 @@ export const HistoryClearanceReviewPage: React.FC = () => {
         <div className="card p-4">
           <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">{review.request.record_label}</h2>
           <p className="text-theme-text-secondary mb-4 text-sm">As members would read it.</p>
-          {isDocumentRecord(review.record) ? (
+          {isEventRecord(review.record) ? (
+            <EventDetails item={review.record} />
+          ) : isApparatusRecord(review.record) ? (
+            <ApparatusDetails item={review.record} />
+          ) : isDocumentRecord(review.record) ? (
             <DocumentDetails item={review.record} />
           ) : 'kind' in review.record ? (
             <MediaDetails item={review.record} />

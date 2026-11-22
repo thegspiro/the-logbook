@@ -31,10 +31,12 @@ from app.models.history import (
     ClearancePurpose,
     ClearanceStatus,
     HistoricalMember,
+    HistoryApparatus,
     HistoryClearanceDecision,
     HistoryClearanceRequest,
     HistoryClearanceStep,
     HistoryDocument,
+    HistoryEvent,
     HistoryMedia,
     HistoryRevision,
     RevisionKind,
@@ -45,6 +47,8 @@ RECORD_PATHS = {
     "member": "/history/people/{id}",
     "media": "/history/media/{id}",
     "document": "/history/documents/{id}",
+    "apparatus": "/history/apparatus/{id}",
+    "event": "/history/events/{id}",
 }
 REVIEW_PATH = "/history/clearance/{id}"
 
@@ -262,16 +266,26 @@ class HistoryClearanceService:
 
     async def submit(
         self,
-        person: Union[HistoricalMember, HistoryMedia, HistoryDocument],
+        person: Union[
+            HistoricalMember,
+            HistoryMedia,
+            HistoryDocument,
+            HistoryApparatus,
+            HistoryEvent,
+        ],
         purpose: ClearancePurpose,
         actor_id: str,
     ) -> tuple[HistoryClearanceRequest, list[str]]:
         """Open a request for the record's current revision: a person, a
-        photo or media item, or a document.
+        photo or media item, a document, an apparatus or an event.
 
         Returns the request and the members to tell it is their turn.
         """
-        if isinstance(person, HistoryDocument):
+        if isinstance(person, HistoryEvent):
+            record_type = "event"
+        elif isinstance(person, HistoryApparatus):
+            record_type = "apparatus"
+        elif isinstance(person, HistoryDocument):
             record_type = "document"
         elif isinstance(person, HistoryMedia):
             record_type = "media"

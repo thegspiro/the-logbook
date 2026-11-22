@@ -30,6 +30,13 @@ const HistoryDocumentsPage = lazyWithRetry(() => import('./pages/HistoryDocument
 const HistoryDocumentUploadPage = lazyWithRetry(() => import('./pages/HistoryDocumentUploadPage'));
 const HistoryDocumentPage = lazyWithRetry(() => import('./pages/HistoryDocumentPage'));
 const HistoryDocumentEditPage = lazyWithRetry(() => import('./pages/HistoryDocumentEditPage'));
+const HistoryTimelinePage = lazyWithRetry(() => import('./pages/HistoryTimelinePage'));
+const HistoryEventsPage = lazyWithRetry(() => import('./pages/HistoryEventsPage'));
+const HistoryEventPage = lazyWithRetry(() => import('./pages/HistoryEventPage'));
+const HistoryEventFormPage = lazyWithRetry(() => import('./pages/HistoryEventFormPage'));
+const HistoryApparatusListPage = lazyWithRetry(() => import('./pages/HistoryApparatusListPage'));
+const HistoryApparatusPage = lazyWithRetry(() => import('./pages/HistoryApparatusPage'));
+const HistoryApparatusFormPage = lazyWithRetry(() => import('./pages/HistoryApparatusFormPage'));
 
 export function getHistoryRoutes() {
   return (
@@ -143,6 +150,78 @@ export function getHistoryRoutes() {
         element={
           <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
             <HistoryDocumentEditPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/timeline"
+        element={
+          <ProtectedRoute requiredModule="history" moduleLabel="History">
+            <HistoryTimelinePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/events"
+        element={
+          <ProtectedRoute requiredModule="history" moduleLabel="History">
+            <HistoryEventsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/events/new"
+        element={
+          <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
+            <HistoryEventFormPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/events/:eventId"
+        element={
+          <ProtectedRoute requiredModule="history" moduleLabel="History">
+            <HistoryEventPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/events/:eventId/edit"
+        element={
+          <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
+            <HistoryEventFormPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/apparatus"
+        element={
+          <ProtectedRoute requiredModule="history" moduleLabel="History">
+            <HistoryApparatusListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/apparatus/new"
+        element={
+          <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
+            <HistoryApparatusFormPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/apparatus/:apparatusId"
+        element={
+          <ProtectedRoute requiredModule="history" moduleLabel="History">
+            <HistoryApparatusPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/apparatus/:apparatusId/edit"
+        element={
+          <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
+            <HistoryApparatusFormPage />
           </ProtectedRoute>
         }
       />
