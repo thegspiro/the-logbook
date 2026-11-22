@@ -437,7 +437,13 @@ const PurchaseRequestFormPage: React.FC = () => {
 
           <FormField id="pr-fiscalYearId" label="Fiscal Year" required error={errors.fiscalYearId?.message}>
             {(field) => (
-              <select {...field} className={selectClass} {...register('fiscalYearId')}>
+              // Controlled, like the budget picker below: see the note there.
+              <select
+                {...field}
+                className={selectClass}
+                {...register('fiscalYearId')}
+                value={formValues.fiscalYearId ?? ''}
+              >
                 <option value="">Select fiscal year</option>
                 {fiscalYears.map((fy) => (
                   <option key={fy.id} value={fy.id}>
@@ -450,7 +456,11 @@ const PurchaseRequestFormPage: React.FC = () => {
 
           <FormField className="sm:col-span-2" id="pr-budgetId" label="Budget" error={errors.budgetId?.message}>
             {(field) => (
-              <select {...field} className={selectClass} {...register('budgetId')}>
+              // Controlled, because its options arrive after the request: on
+              // edit, reset() wrote the saved line into a select that held only
+              // "No budget linked", the browser fell back to that, and nothing
+              // wrote it again once the lines loaded.
+              <select {...field} className={selectClass} {...register('budgetId')} value={formValues.budgetId ?? ''}>
                 <option value="">No budget linked</option>
                 {selectableBudgetOptions(budgetOptions, isEdit ? selectedPurchaseRequest?.budgetId : undefined).map(
                   (option) => (
