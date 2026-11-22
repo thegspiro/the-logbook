@@ -1497,6 +1497,27 @@ export const ALL_ROUTES: RouteCheck[] = [
     expectText: 'Oakville Hardware & Supply',
   },
   {
+    path: '/grants/opportunities/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Add Grant Opportunity',
+  },
+  {
+    path: '/grants/applications/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'New Grant Application',
+  },
+  {
+    path: '/grants/donations/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Record Donation',
+  },
+  {
     path: '/grants/pledges',
     maxSmallTargets: 0,
     maxTinyText: 0,
