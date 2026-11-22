@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**412 tables · 6452 columns · 1372 foreign keys**
+**412 tables · 6453 columns · 1372 foreign keys**
 
 ---
 
@@ -609,7 +609,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospect_form_requests`](#prospect_form_requests) | `ProspectFormRequest` | 21 | A follow-up form sent to one applicant from one Follow-up Form stage. |
 | [`prospect_interviews`](#prospect_interviews) | `ProspectInterview` | 13 | Interview record for a prospective member. |
 | [`prospect_step_progress`](#prospect_step_progress) | `ProspectStepProgress` | 10 | Tracks a prospect's progress on each pipeline step. |
-| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 38 | Prospective member record, kept separate from the users table. |
+| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 39 | Prospective member record, kept separate from the users table. |
 
 ### Nfc_Tag
 
@@ -9649,6 +9649,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status_token_created_at` | DATETIME | yes |  |  |  |
 | `transferred_user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `transferred_at` | DATETIME | yes |  |  |  |
+| `identity_edited_by_applicant_at` | DATETIME | yes |  |  |  |
 | `deactivated_at` | DATETIME | yes |  |  |  |
 | `deactivated_reason` | TEXT | yes |  |  |  |
 | `reactivated_at` | DATETIME | yes |  |  |  |

@@ -1610,7 +1610,7 @@ the owner, because closing them changes how members get into their accounts:
   is; the email change itself is now ceiling-bound, step-up gated, audited and
   reported to the previous address.
 
-## Separation of Duties — Two Decisions Left Open (ADV-02, 2026-11-14)
+## Separation of Duties — One Decision Left Open (ADV-02, 2026-11-14)
 
 The adversarial pass over the month to 2026-11-14 found these items. Its
 findings are in `docs/security-review/ADV-02-adversarial-last-month.md`. Each
@@ -1649,10 +1649,22 @@ fix changes a workflow some departments rely on, so the owner decides:
   another officer decides. Not changed by the documentation pass, because
   whether a Chief with no other officer may excuse their own training is the
   owner's call.
-- **An applicant's edited email or name and birth date can make a coordinator's
-  self-access guard hide their file (ADV2-10).** Refusing a member's email
-  covers half of it. The rest turns on whether self-detection should trust
-  fields the applicant can edit.
+- ~~**An applicant's edited email or name and birth date can make a coordinator's
+  self-access guard hide their file (ADV2-10).**~~ ✅ Resolved 2026-11-21
+  (owner: trust only `transferred_user_id` once the applicant edits). An
+  applicant who changes their email, name or date of birth through a follow-up
+  form stamps `identity_edited_by_applicant_at`, and the guard then matches
+  that record to a member only by the transfer back-link. A coordinator's
+  change to one of those fields clears the stamp. Applications already edited
+  were stamped from the activity log on upgrade.
+- **The first public application is still matched on what the applicant typed
+  (found 2026-11-21 with ADV2-10; left as is by owner decision).** Someone
+  applying through the public interest form with a coordinator's email, or
+  their name and birth date, is hidden from that coordinator from the start,
+  because the stamp marks only later follow-up edits. The owner chose this so
+  that a member's own application stays hidden from them before transfer. A
+  coordinator who suspects a missing applicant can ask another coordinator,
+  who sees the record.
 - ~~**A Zeffy dues payment credits whichever member's email the payer typed
   (ADV2-11).**~~ ✅ Resolved 2026-11-21 (owner: hold as unmatched until a
   treasurer confirms). A membership payment is recorded as **Awaiting
