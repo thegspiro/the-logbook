@@ -3205,3 +3205,199 @@ class TestRejectPaymentReport:
 
         assert response.payment_status == StorePaymentStatus.UNPAID
         assert response.payment_reported_at is None
+
+
+class TestWindowDeadlines:
+    """W67b-15 and W67b-16. A window's closing time was enforced only by the
+    15-minute lifecycle job, a reopened window past its deadline was announced
+    and then closed again, and a draft given an opening time never opened."""
+
+    async def _store(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org)
+        service.notifications.send_window_opened = AsyncMock(return_value=1)
+        service.notifications.send_window_closed = AsyncMock(return_value=1)
+        return org, member, service, product
+
+    def _past(self):
+        return datetime.now(timezone.utc) - timedelta(minutes=5)
+
+    def _future(self):
+        return datetime.now(timezone.utc) + timedelta(days=3)
+
+    # -- W67b-15 -------------------------------------------------------------
+
+    async def test_no_order_is_taken_after_the_closing_time(self, db_session):
+        org, member, service, product = await self._store(db_session)
+        await _make_open_window(
+            db_session, org, closes_at=self._past(), auto_close=True
+        )
+
+        with pytest.raises(ValueError, match="no open order window"):
+            await service.create_order(org.id, member, _cart(product.id))
+
+    async def test_the_store_stops_offering_a_window_past_its_closing_time(
+        self, db_session
+    ):
+        org, member, service, _ = await self._store(db_session)
+        await _make_open_window(
+            db_session, org, closes_at=self._past(), auto_close=True
+        )
+
+        storefront = await service.get_storefront(org.id, str(member.id))
+
+        assert storefront["window"] is None
+
+    async def test_a_window_closed_by_hand_keeps_taking_orders_until_it_is(
+        self, db_session
+    ):
+        # Turning off "close automatically" means the officer closes it; the
+        # closing time is then only what members were told.
+        org, member, service, product = await self._store(db_session)
+        await _make_open_window(
+            db_session, org, closes_at=self._past(), auto_close=False
+        )
+
+        order = await service.create_order(org.id, member, _cart(product.id))
+
+        assert order.order_number
+
+    async def test_the_dashboard_still_shows_it_until_it_is_closed(self, db_session):
+        org, _, service, _ = await self._store(db_session)
+        window = await _make_open_window(
+            db_session, org, closes_at=self._past(), auto_close=True
+        )
+
+        dashboard = await service.get_dashboard(org.id)
+
+        assert dashboard["active_window"].id == window.id
+
+    # -- W67b-16: reopening past the deadline --------------------------------
+
+    async def test_reopening_past_the_closing_time_is_refused(self, db_session):
+        org, _, service, _ = await self._store(db_session)
+        window = await _make_open_window(
+            db_session,
+            org,
+            status=StoreWindowStatus.CLOSED,
+            closes_at=self._past(),
+            auto_close=True,
+            notify_on_open=True,
+        )
+
+        with pytest.raises(ValueError, match="closing time has passed"):
+            await service.open_window(window.id, org.id)
+
+        current = await service.get_window(window.id, org.id)
+        assert current.status == StoreWindowStatus.CLOSED
+        service.notifications.send_window_opened.assert_not_awaited()
+
+    async def test_moving_the_closing_time_later_lets_it_reopen(self, db_session):
+        org, _, service, _ = await self._store(db_session)
+        window = await _make_open_window(
+            db_session,
+            org,
+            status=StoreWindowStatus.CLOSED,
+            closes_at=self._past(),
+            auto_close=True,
+        )
+        await service.update_window(window.id, org.id, {"closes_at": self._future()})
+
+        reopened = await service.open_window(window.id, org.id, notify_members=False)
+        await service.run_window_lifecycle(org.id)
+
+        assert reopened.status == StoreWindowStatus.OPEN
+        current = await service.get_window(window.id, org.id)
+        assert current.status == StoreWindowStatus.OPEN
+        service.notifications.send_window_closed.assert_not_awaited()
+
+    async def test_a_window_closed_by_hand_can_reopen_past_its_time(self, db_session):
+        org, _, service, _ = await self._store(db_session)
+        window = await _make_open_window(
+            db_session,
+            org,
+            status=StoreWindowStatus.CLOSED,
+            closes_at=self._past(),
+            auto_close=False,
+        )
+
+        reopened = await service.open_window(window.id, org.id, notify_members=False)
+
+        assert reopened.status == StoreWindowStatus.OPEN
+
+    async def test_the_scheduler_does_not_open_a_window_already_past_closing(
+        self, db_session
+    ):
+        org, _, service, _ = await self._store(db_session)
+        missed = await _make_open_window(
+            db_session,
+            org,
+            name="Missed",
+            status=StoreWindowStatus.SCHEDULED,
+            opens_at=self._past() - timedelta(days=2),
+            closes_at=self._past(),
+            auto_open=True,
+            auto_close=True,
+        )
+        due = await _make_open_window(
+            db_session,
+            org,
+            name="Due",
+            status=StoreWindowStatus.SCHEDULED,
+            opens_at=self._past(),
+            closes_at=self._future(),
+            auto_open=True,
+        )
+
+        await service.run_window_lifecycle(org.id)
+
+        assert (await service.get_window(missed.id, org.id)).status == (
+            StoreWindowStatus.SCHEDULED
+        )
+        assert (await service.get_window(due.id, org.id)).status == (
+            StoreWindowStatus.OPEN
+        )
+
+    # -- W67b-16: a draft given an opening time ------------------------------
+
+    async def test_a_draft_given_an_opening_time_is_scheduled_and_opens(
+        self, db_session
+    ):
+        org, _, service, _ = await self._store(db_session)
+        window = await _make_open_window(
+            db_session, org, status=StoreWindowStatus.DRAFT, auto_open=True
+        )
+
+        updated = await service.update_window(
+            window.id, org.id, {"opens_at": self._past()}
+        )
+        assert updated.status == StoreWindowStatus.SCHEDULED
+
+        await service.run_window_lifecycle(org.id)
+
+        current = await service.get_window(window.id, org.id)
+        assert current.status == StoreWindowStatus.OPEN
+
+    async def test_clearing_the_opening_time_returns_it_to_draft(self, db_session):
+        org, _, service, _ = await self._store(db_session)
+        window = await _make_open_window(
+            db_session,
+            org,
+            status=StoreWindowStatus.SCHEDULED,
+            opens_at=self._future(),
+        )
+
+        updated = await service.update_window(window.id, org.id, {"opens_at": None})
+
+        assert updated.status == StoreWindowStatus.DRAFT
+
+    async def test_editing_an_open_window_leaves_its_status_alone(self, db_session):
+        org, _, service, _ = await self._store(db_session)
+        window = await _make_open_window(db_session, org, opens_at=self._past())
+
+        updated = await service.update_window(window.id, org.id, {"opens_at": None})
+
+        assert updated.status == StoreWindowStatus.OPEN

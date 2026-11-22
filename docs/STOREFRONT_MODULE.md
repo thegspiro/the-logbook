@@ -110,6 +110,29 @@ out in the same second get distinct numbers rather than one of them getting a 50
 A window is an ordering period. Statuses: `draft` → `scheduled` → `open` →
 `closed` → `fulfilled`, plus `cancelled`.
 
+**Opening and closing times.** A window with an opening time is `scheduled`;
+one without is a `draft`. Setting or clearing the opening time on an edit
+moves a window between those two, as creating it does. An open or closed
+window keeps its status whatever is edited (W67b-16). With "open
+automatically" and "close automatically" on (`auto_open`, `auto_close`), a
+job checks every 15 minutes and moves the window at its times.
+
+The closing time of a window set to close automatically is also checked
+wherever ordering is offered, so the 15-minute job is not a grace period
+(W67b-15):
+
+- The member storefront stops offering the window at its closing time, and an
+  order placed against it is refused.
+- The admin dashboard keeps showing it until the job closes it.
+- Such a window cannot be opened again while its closing time is in the past.
+  Opened, it would be closed again within 15 minutes, and members would be
+  told ordering opened and then closed. Move the closing time later first.
+- The job does not open a scheduled window whose closing time has already
+  passed; it stays scheduled for an officer to reschedule.
+
+With "close automatically" off, an officer closes the window, and until then
+its closing time is only what members were told: orders are still taken.
+
 More than one window can be open at once. The member storefront opens on the
 one closing soonest (undated windows sort last) and offers a switcher for the
 rest, so a department can run "Fall Apparel" and "Class B Uniforms"
