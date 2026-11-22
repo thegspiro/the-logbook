@@ -14,7 +14,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.models.training import RequirementFrequency, TrainingStatus
-from app.services.competency_matrix_service import CompetencyMatrixService
 from app.services.scheduling_service import SchedulingService
 from app.services.training_compliance import (
     biannual_window,
@@ -74,9 +73,6 @@ class TestOneDefinition:
         expected = biannual_window(req, TODAY)
         assert get_requirement_date_window(req, TODAY) == expected
         assert TrainingService._get_date_window(req, TODAY) == expected
-        # The competency matrix grades through the shared grader since
-        # 2026-11-21, so it has no window of its own left to drift.
-        assert not hasattr(CompetencyMatrixService, "_get_date_window")
         assert (
             SchedulingService(MagicMock())._compute_period_bounds(req, TODAY)
             == expected

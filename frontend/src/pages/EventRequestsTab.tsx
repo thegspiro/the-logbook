@@ -12,7 +12,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { PromptDialog } from '../components/ux/PromptDialog';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import {
@@ -196,8 +196,19 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
   const [showMore, setShowMore] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
   const [showDecline, setShowDecline] = useState(false);
-  const [showNewRequest, setShowNewRequest] = useState(false);
+  // The Outreach Overview's "Log a request" lands here with ?new=1, so request
+  // entry stays in the one dialog that owns it rather than being copied there.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [showNewRequest, setShowNewRequest] = useState(() => !requestId && searchParams.get('new') === '1');
   const [outreachLabels, setOutreachLabels] = useState<Record<string, string>>({});
+
+  // Drop ?new=1 once read, so a refresh or the back button does not reopen it.
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('new');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
   const [pipelineTasks, setPipelineTasks] = useState<PipelineTaskConfig[]>([]);
 
   // Assignment

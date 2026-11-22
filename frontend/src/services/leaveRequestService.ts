@@ -4,8 +4,10 @@
  */
 
 import api from './apiClient';
-import { expectArray } from '../utils/asArray';
+import { asArray, expectArray } from '../utils/asArray';
 import type {
+  LeaveApproverCoverBoard,
+  LeaveApproverCoverCreate,
   LeaveEndedEarly,
   LeaveRequest,
   LeaveRequestCreate,
@@ -14,6 +16,15 @@ import type {
   LeaveSettingsResponse,
   LeaveVote,
 } from '../types/leaveRequest';
+
+/** The board with its lists verified: a body without them shows no cover
+ * section rather than taking the page down. */
+const coverBoard = (data: LeaveApproverCoverBoard): LeaveApproverCoverBoard => ({
+  covers: asArray(data?.covers),
+  approvers: asArray(data?.approvers),
+  stand_ins: asArray(data?.stand_ins),
+  today: data?.today ?? '',
+});
 
 export const leaveRequestService = {
   async getSettings(): Promise<LeaveSettingsResponse> {
@@ -97,5 +108,20 @@ export const leaveRequestService = {
       note: note?.trim() || undefined,
     });
     return response.data;
+  },
+
+  async getCovers(): Promise<LeaveApproverCoverBoard> {
+    const response = await api.get<LeaveApproverCoverBoard>('/users/leave-requests/covers');
+    return coverBoard(response.data);
+  },
+
+  async setCover(data: LeaveApproverCoverCreate): Promise<LeaveApproverCoverBoard> {
+    const response = await api.post<LeaveApproverCoverBoard>('/users/leave-requests/covers', data);
+    return coverBoard(response.data);
+  },
+
+  async clearCover(id: string): Promise<LeaveApproverCoverBoard> {
+    const response = await api.delete<LeaveApproverCoverBoard>(`/users/leave-requests/covers/${id}`);
+    return coverBoard(response.data);
   },
 };

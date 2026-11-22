@@ -194,11 +194,13 @@ describe('EventComposer hand-off to the training form', () => {
   // A browser scrolls a focused control only as far as the viewport's edge,
   // which on a phone is under the fixed bottom nav; the swap brings the
   // picker clear of it, as the training form keeps its controls clear.
-  describe('the picker focused after a swap, on a phone', () => {
+  // Both units: the app sets the bar as 3.5rem, and a bare parseFloat read
+  // that as 3.5px, which only a 56px value in the test had been hiding.
+  describe.each(['56px', '3.5rem'])('the picker focused after a swap, on a phone (bar %s)', (barHeight) => {
     const rectAt = (top: number) => ({ top, bottom: top + 48, left: 0, right: 300, width: 300, height: 48 }) as DOMRect;
 
     beforeEach(() => {
-      document.documentElement.style.setProperty('--bottom-nav-height', '56px');
+      document.documentElement.style.setProperty('--bottom-nav-height', barHeight);
       vi.mocked(Element.prototype.scrollIntoView).mockClear();
     });
     afterEach(() => {

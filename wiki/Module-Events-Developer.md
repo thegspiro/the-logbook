@@ -158,6 +158,7 @@ PUT    /events/{id}/guest-headcount              # Set or clear the guests count
 PUT    /events/{id}/outreach-closeout            # Replace the outreach close-out: outcome note, apparatus, materials, photos (manage)
 GET    /events/{id}/staffing                     # The volunteer signup sheet staffing this event, its own or its request's (manage)
 POST   /events/{id}/staffing                     # Open a signup sheet on an outreach event with no request behind it (manage)
+GET    /events/outreach-calendar?start=&end=     # Outreach events in a range (<= 93 days) with sheet and crew fill, for the Outreach Overview (manage)
 POST   /events/{id}/end-event                    # End now + bulk checkout + finalize durations (manage, or training.manage on Training)
 POST   /events/{id}/finalize-attendance          # Finalize attendance (manage, or training.manage on Training)
 POST   /events/{id}/reopen-attendance            # Reopen (events.reopen_attendance, or training.manage on Training)

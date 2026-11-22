@@ -578,6 +578,15 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: ['events.manage'],
     expectText: 'Event Details',
   },
+  // The Community Outreach Manager's home: attention cards, the planning
+  // calendar (a compact month grid and a day list on a phone) and the year.
+  {
+    path: '/events/admin?tab=overview',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+    expectText: 'Planning calendar',
+  },
   {
     path: '/events/admin?tab=requests',
     maxSmallTargets: 0,

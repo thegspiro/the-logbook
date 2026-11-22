@@ -2815,50 +2815,6 @@ async def get_expiring_certifications(
 
 
 # ============================================
-# Competency Matrix / Heat Map
-# ============================================
-
-
-@router.get("/competency-matrix")
-async def get_competency_matrix(
-    requirement_ids: str | None = Query(
-        None, description="Comma-separated requirement IDs to filter"
-    ),
-    user_ids: str | None = Query(
-        None, description="Comma-separated user IDs to filter"
-    ),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
-):
-    """
-    Generate a competency matrix / heat map for the department.
-
-    Shows all active members vs. all active training requirements,
-    color-coded by status:
-    - **current** (green): completed and not expiring soon
-    - **expiring_soon** (yellow): expiring within 90 days
-    - **expired** (red): past expiration date
-    - **not_started** (gray): no record on file
-
-    The `summary` block provides aggregate readiness metrics.
-
-    Requires `training.manage` permission.
-    """
-    from app.services.competency_matrix_service import CompetencyMatrixService
-
-    service = CompetencyMatrixService(db)
-    req_ids = requirement_ids.split(",") if requirement_ids else None
-    u_ids = user_ids.split(",") if user_ids else None
-
-    matrix = await service.get_competency_matrix(
-        organization_id=current_user.organization_id,
-        requirement_ids=req_ids,
-        user_ids=u_ids,
-    )
-    return matrix
-
-
-# ============================================
 # Certification Expiration Alert Processing
 # ============================================
 

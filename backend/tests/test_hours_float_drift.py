@@ -16,7 +16,6 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.competency_matrix_service import CompetencyMatrixService
 from app.services.compliance_officer_service import ISOReadinessService
 from app.services.training_compliance import _grade_member_requirement
 from app.services.training_service import TrainingService
@@ -134,13 +133,6 @@ class TestEveryGradingPathAgrees:
         )
         assert progress.is_complete is True
         assert progress.percentage_complete == 100.0
-
-    def test_competency_matrix(self):
-        req = _make_requirement(required_hours=5.0)
-        cell = CompetencyMatrixService(MagicMock())._evaluate_requirement_status(
-            req, _records(DRIFTING_PARTS), TODAY, TODAY
-        )
-        assert cell["status"] == "current"
 
     async def test_iso_readiness(self):
         member_id = str(uuid4())

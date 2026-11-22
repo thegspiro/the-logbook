@@ -688,22 +688,129 @@ install sends no email.
 - **W67b-11 — HIGH — "Placed with the vendor" is emailed to members whose
   unpaid orders were held back.** `record_vendor_order` skips unpaid orders
   under pay-before-vendor-order. It then mails `_window_customer_emails`,
-  which is every non-cancelled order in the window.
+  which is every non-cancelled order in the window. ✅ **FIXED
+  (2026-11-21).** Under that policy the notice goes only to members whose
+  orders are settled. "Settled" is decided by the same `_is_settled` rule
+  that holds an order back, so the two cannot disagree. Other policies are
+  unchanged. Two tests in `TestVendorOrderNoticeRecipients`
+  (`tests/test_storefront_notifications.py`); the held-member case failed
+  against the old code. Not driven in the browser, since this install sends
+  no email.
 - **W67b-12 — MED — Cancelling or fulfilling a window has no transition guard
   and leaves its orders open.** Payment reminders then keep chasing members
   for goods that will never be ordered. Where: `set_window_status`;
-  `run_payment_reminders` filters on order status only.
+  `run_payment_reminders` filters on order status only. ✅ **FIXED
+  (2026-11-21).** Owner decisions:
+  - **Cancelling a window** (`cancel_window`) cancels each order still open
+    in it, through `cancel_order`. Each gets its date, the reason "The order
+    window was cancelled", a timeline entry and the member's notice. It is
+    refused while any of those orders has money recorded or a payment report
+    waiting, naming them, so no money is left on cancelled orders (W67b-2).
+    A fulfilled window cannot be cancelled. Cancelling again changes
+    nothing, and nobody is emailed twice.
+  - **Marking a window fulfilled** (`fulfill_window`) is allowed only for a
+    closed window, and only once every order in it is fulfilled or
+    cancelled. Otherwise it is refused with the number still outstanding.
+  - **Payment reminders** skip orders in a cancelled window, which covers
+    windows cancelled before this fix. Orders whose window was deleted are
+    still reminded.
+  - `set_window_status` is removed; its only two callers were these
+    endpoints.
+
+  **Tests:** seven in `TestWindowCancelAndFulfil`
+  (`tests/test_storefront_service.py`). Six exercise the two new methods, so
+  against the old code they fail because the methods do not exist; the
+  reminder case failed on the behaviour itself.
+
+  **Re-driven:**
+  1. Cancelling a window holding a $5 payment was refused, naming
+     ORD-2026-0013.
+  2. After the refund, the window cancelled, and both of its orders read
+     "The order window was cancelled".
+  3. Cancelling it again changed nothing.
+  4. In the windows tab, "Mark fulfilled" on a closed window with three open
+     orders showed "3 orders are not fulfilled or cancelled yet…", and the
+     window stayed closed.
+
 - **W67b-13 — MED — `record_vendor_order` has three faults.**
   - It advances only the first 200 orders.
   - It moves Ready for pickup orders back to Ordered.
   - Run again, it re-sends the vendor email to everyone, with no idempotency
     key (pitfall #36).
+
+  ✅ **FIXED (2026-11-21).**
+  - It now selects every order in the window still before Ordered
+    (submitted, awaiting payment, paid), with no page limit. Ready and
+    fulfilled orders are never selected, so they stay where they are.
+  - Who is emailed depends on what the call did. The members whose orders
+    this call advanced are told. On the first recording only, everyone
+    `_window_customer_emails` names is told as well, which covers orders
+    an officer had already moved to Ordered by hand. A later recording,
+    such as correcting the vendor reference, emails nobody. A member who
+    paid after the first recording is ordered and told on the next one.
+    The order status itself is the idempotency key: an order already
+    Ordered is not selected again.
+  - Two recordings submitted in the same instant can both pass the
+    status check before either commits. Each order is moved once, but its
+    member could be emailed twice. Closing that needs the window row held
+    across the per-order commits, which `update_order_status` does not
+    allow, so it is left as a residual.
+
+  - **Found while re-driving it: recording a vendor order that advanced
+    any order returned a 500.** The orders were advanced and the members
+    emailed, then serializing the response failed: each order's commit
+    expired the window, and its offerings lazy-loaded outside the session
+    (MissingGreenlet). The officer saw an error for a recording that had
+    worked, which invited recording it again and the duplicate emails
+    above. The window is now re-read before the response is built. The old
+    code fails the same way.
+
+  **Tests:** five in `TestVendorOrderRerun`
+  (`tests/test_storefront_service.py`), all seen to fail against the old
+  code: every order past the page size, an order on the shelf left there,
+  no second email with or without advancing, and the late payer ordered
+  and told. A sixth calls the endpoint and validates its response; it
+  failed with MissingGreenlet against both the old and the unfixed new
+  code.
+
+  **Re-driven:** two orders in a closed window, recorded twice. The first
+  returned 200 with 2 advanced, the second 200 with 0 advanced and the
+  corrected reference. Before the window re-read, the first returned 500.
+
 - **W67b-14 — MED — A member's "I've sent payment" cannot be rejected.**
   Nothing returns `pending_verification` to unpaid. If the money never
   arrives:
   - the order stays pending for good;
   - reminders stop;
   - the member cannot change the payment method.
+
+  ✅ **FIXED (2026-11-21).**
+  - New `POST /store/orders/{id}/reject-payment-report` (needs
+    `storefront.manage`) calls `reject_payment_report`. It locks the
+    order and returns it to Unpaid, or to Part paid if money was already
+    recorded. `amount_paid` is untouched, because a report never moved it.
+    It clears the reported reference and time, adds a timeline entry the
+    member sees, emails the member (unless `notifyMember` is false), and
+    writes an audit event. An order with no report waiting is refused.
+  - Reminders pick the order up again, and the member can change the
+    payment method.
+  - The order dialog shows **Not received** in the "member reported
+    paying" notice, behind a confirm that says what the member will be
+    told.
+  - The member's error when changing method on a pending order now says to
+    ask staff to mark the payment not received, which is now possible.
+
+  **Tests:** nine in `TestRejectPaymentReport`, including the endpoint and
+  another organization being refused, and three in `OrderDetailModal.test.tsx`.
+  The dialog tests failed against the old component.
+
+  **Re-driven:** a member reported paying ORD-2026-0014 in cash. In the
+  order dialog, **Not received** opened the confirm naming the member;
+  confirming showed "Payment marked as not received", and the button went
+  away. The order read Unpaid with no reference. The member's timeline
+  showed "The payment you reported could not be verified…", and the member
+  could then change the payment method (200).
+
 - **W67b-15 — LOW — Orders are accepted for up to 15 minutes after a window's
   closing time.** `create_order` checks the status, not `closes_at`. Only the
   15-minute lifecycle job closes a window.

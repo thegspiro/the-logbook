@@ -830,6 +830,28 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Leave requests: an approver's own request goes to the Chief; approver cover (2026-11-21)
+
+Nothing blocks a restart. Migration `a9763f96e072` adds a column to
+`leave_requests`, two to `leave_request_votes`, and the table
+`leave_approver_covers`.
+
+- **An approver's own request goes to the Chief.** A request made by a member
+  who holds one of the department's approver positions is now decided by the
+  Chief, not by the other approvers (or by the officers who manage leave when
+  the member is the Chief). Only requests made after the upgrade; one already
+  waiting keeps the approvers it had.
+- **Votes are stored per approver's seat.** Every existing vote is backfilled
+  as the voter's own seat, so the tally of a waiting request does not change.
+- **Approver cover** appears on **Leave Requests** for approvers and the
+  officers who manage leave. Nothing is covered until someone sets a cover.
+- **The shift assignment picker** marks members with an undecided leave
+  request on the shift's date as **leave requested**. They can still be
+  assigned.
+- **Downgrading** deletes every vote a stand-in cast in an approver's place,
+  and the covers. A request those votes had not yet settled waits for those
+  approvers again.
+
 ### A command to clear orphaned member files; removing a training record's file (2026-11-21)
 
 Nothing blocks a restart, and nothing runs by itself. Owner decisions

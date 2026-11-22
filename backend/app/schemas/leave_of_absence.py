@@ -157,6 +157,9 @@ class LeaveRequestVoteResponse(BaseModel):
     # The voting round it was cast in; only the request's current round counts.
     round: int = 1
     vote: LeaveVote
+    # The away approver a stand-in voted in place of; empty for a vote an
+    # approver cast for themselves.
+    on_behalf_of_name: Optional[str] = None
     # The approver's note; shown to the member and to approvers.
     note: Optional[str] = None
     created_at: datetime
@@ -219,6 +222,9 @@ class LeaveRequestResponse(BaseModel):
     denials: int = 0
     approver_count: int = 0
     approvals_needed: int = 0
+    # The member held an approver position when they asked, so the Chief
+    # decides it rather than their fellow approvers.
+    routed_to_chief: bool = False
     # The caller may vote on it now.
     can_vote: bool = False
     # The caller may ask a question or propose changed dates now.
@@ -242,3 +248,50 @@ class LeaveEndedEarlyResponse(BaseModel):
     end_date: date
     previous_end_date: Optional[date] = None
     first_day_back: date
+
+
+class LeaveApproverCoverCreate(BaseModel):
+    """An approver's away period and the officer standing in for them."""
+
+    approver_id: str = Field(..., min_length=1, max_length=36)
+    stand_in_id: str = Field(..., min_length=1, max_length=36)
+    start_date: date
+    end_date: date
+
+    @model_validator(mode="after")
+    def _dates(self) -> "LeaveApproverCoverCreate":
+        if self.end_date < self.start_date:
+            raise ValueError("The cover must end on or after the day it starts.")
+        if self.stand_in_id == self.approver_id:
+            raise ValueError("An approver cannot stand in for themself.")
+        return self
+
+
+class LeaveApproverCoverResponse(BaseModel):
+    id: str
+    approver_id: str
+    approver_name: str
+    stand_in_id: str
+    stand_in_name: str
+    start_date: date
+    end_date: date
+    # Running today, in the department's timezone.
+    active: bool
+    can_clear: bool
+
+
+class LeaveCoverPerson(BaseModel):
+    id: str
+    name: str
+
+
+class LeaveApproverCoverBoard(BaseModel):
+    """The covers the caller may see, and whom they may set one for."""
+
+    covers: List[LeaveApproverCoverResponse] = Field(default_factory=list)
+    # Approvers the caller may set a cover for: themself if they are one,
+    # every approver for those who manage leave.
+    approvers: List[LeaveCoverPerson] = Field(default_factory=list)
+    # Who may stand in: the members who manage leave.
+    stand_ins: List[LeaveCoverPerson] = Field(default_factory=list)
+    today: date
