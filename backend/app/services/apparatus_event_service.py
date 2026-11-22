@@ -1416,26 +1416,17 @@ class ApparatusEventService:
     # Lists
     # ------------------------------------------------------------------
 
-    async def _night_rows(
-        self, organization_id: str, *conditions: Any, order_desc: bool = False
-    ) -> List[Dict[str, Any]]:
-        order = Event.start_datetime.desc() if order_desc else Event.start_datetime
-        result = await self.db.execute(
-            select(Event, EventApparatusPlan)
-            .join(EventApparatusPlan, EventApparatusPlan.event_id == Event.id)
-            .where(
-                Event.organization_id == str(organization_id),
-                EventApparatusPlan.organization_id == str(organization_id),
-                *conditions,
-            )
-            .order_by(order)
-            .limit(200)
-        )
-        rows = result.all()
-        if not rows:
-            return []
-        event_ids = [str(event.id) for event, _plan in rows]
+    async def crew_summary(
+        self, organization_id: str, event_ids: List[str]
+    ) -> Tuple[Dict[str, Tuple[int, int]], Dict[str, List[str]]]:
+        """``(filled, total)`` crew seats, and the unit numbers in order, per event.
 
+        The nights lists and the Outreach Overview both report a crew's fill,
+        so both read it here. An event with no seats is absent from the first
+        map and one with no units from the second.
+        """
+        if not event_ids:
+            return {}, {}
         seat_counts = {
             str(event_id): (int(filled), int(total))
             for event_id, filled, total in (
@@ -1466,6 +1457,28 @@ class ApparatusEventService:
             )
         ).all():
             units.setdefault(str(event_id), []).append(unit_number)
+        return seat_counts, units
+
+    async def _night_rows(
+        self, organization_id: str, *conditions: Any, order_desc: bool = False
+    ) -> List[Dict[str, Any]]:
+        order = Event.start_datetime.desc() if order_desc else Event.start_datetime
+        result = await self.db.execute(
+            select(Event, EventApparatusPlan)
+            .join(EventApparatusPlan, EventApparatusPlan.event_id == Event.id)
+            .where(
+                Event.organization_id == str(organization_id),
+                EventApparatusPlan.organization_id == str(organization_id),
+                *conditions,
+            )
+            .order_by(order)
+            .limit(200)
+        )
+        rows = result.all()
+        if not rows:
+            return []
+        event_ids = [str(event.id) for event, _plan in rows]
+        seat_counts, units = await self.crew_summary(organization_id, event_ids)
         checked_in = {
             str(event_id): int(count)
             for event_id, count in (
