@@ -120,13 +120,27 @@ yet Issue was enabled. Pressing it sent the request, and the server refused it
 **Fix:** Issue waits for Override when the quantity exceeds the allowance.
 Covered by a new case in `PoolItemsPage.test.tsx`.
 
-### W42-6 — NIT — An item never inspected is never "due" — OPEN
+### W42-6 — NIT — An item never inspected is never "due" — ✅ FIXED
 
 The maintenance page lists items by next due date. An item whose category
 requires maintenance, but which has no inspection yet, has none, so it never
 appears. Its history is reachable only from a due item. The coat was reached
 from its own Inspections tab. Left: whether a never-inspected item counts as
 due now is a scheduling choice.
+**Decision (owner, 2026-11-22):** list these items on their own rather than
+count them as due. What "due" means, and the dashboard counts built on it, are
+unchanged.
+**Fix:** `GET /inventory/maintenance/never-inspected` (`inventory.view`) returns
+active items with no inspection on record and no due date whose category
+requires maintenance or which carry their own interval. The Maintenance page
+shows them on a **Never Inspected** tab, naming the reason for each ("Every 365
+days" or "Turnout Gear requires maintenance"), with Log Maintenance and the
+item's history one click away. The same change fixes the Due Items tab's
+Category column, which printed the item's station. Covered by
+`tests/test_inventory_never_inspected.py`, four new cases in
+`InventoryMaintenancePage.test.tsx` (all fail against the old page), and a
+table-fit spec in `table-fit-inventory.spec.ts`, which failed at iPad portrait
+before the table got its card-width reflow.
 
 ### W42-7 — NIT — 422 messages show the raw field name — ✅ FIXED
 
@@ -145,7 +159,7 @@ amount: Value is out of the allowed range." Covered by `errorHandling.test.ts`.
 | 5. Coming back to it    | ✅ inspection dates and the cleared phone survive reload; fixed W42-1              |
 | 6. On a phone           | ✅ refusals at 390×844                                                             |
 | 7. Everyone can use it  | Fixed W42-3, W42-4                                                                 |
-| 8. What happens around  | Fixed W42-2, W42-7; W42-6 open                                                     |
+| 8. What happens around  | Fixed W42-2, W42-6, W42-7                                                          |
 
 ## Completion gate
 

@@ -101,6 +101,9 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/history/media': {},
   '/history/albums': {},
   '/history/documents': {},
+  '/history/timeline': {},
+  '/history/events': {},
+  '/history/apparatus': {},
   '/integrations': { permissions: ['settings.manage'] },
   // Registered for its label: the segment is "historical-import".
   '/integrations/historical-import': {

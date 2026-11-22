@@ -44,6 +44,7 @@ from app.models.history import (
 )
 from app.models.user import User
 from app.schemas.history import (
+    ApparatusTagsReplace,
     DocumentFullView,
     DocumentList,
     DocumentMemberView,
@@ -52,6 +53,7 @@ from app.schemas.history import (
     DocumentUpdate,
     DocumentUploadFields,
     DocumentView,
+    EventSummary,
     HistoryDocumentTypeCreate,
     HistoryDocumentTypeMerge,
     HistoryDocumentTypeResponse,
@@ -70,6 +72,7 @@ from app.services.history_document_service import (
     RECORD_DOCUMENT,
     HistoryDocumentService,
 )
+from app.services.history_event_service import HistoryEventService
 from app.services.history_service import HistoryService, Viewer
 from app.utils.upload_limits import read_upload_limited
 
@@ -129,8 +132,19 @@ async def _full_view(
                 item.document_id,
                 item.substantial_revision_number,
             ),
-        )
+        ),
+        events=await _events_of(db, viewer, item),
     )
+
+
+async def _events_of(
+    db: AsyncSession, viewer: Viewer, item: HistoryDocument
+) -> list[EventSummary]:
+    service = HistoryEventService(db)
+    return [
+        EventSummary(**service.summary(event))
+        for event in await service.related(viewer, document_id=item.document_id)
+    ]
 
 
 async def _document_view(
@@ -138,7 +152,10 @@ async def _document_view(
 ) -> DocumentView:
     if viewer.can_view_archive:
         return await _full_view(db, viewer, item)
-    return DocumentMemberView(**HistoryDocumentService(db).member_view(viewer, item))
+    return DocumentMemberView(
+        **HistoryDocumentService(db).member_view(viewer, item),
+        events=await _events_of(db, viewer, item),
+    )
 
 
 async def _reloaded_full(
@@ -163,6 +180,7 @@ async def list_documents(
     decade: Optional[int] = Query(None, ge=1700, le=2100),
     album_id: Optional[str] = Query(None, max_length=36),
     member_id: Optional[str] = Query(None, max_length=36),
+    apparatus_id: Optional[str] = Query(None, max_length=36),
     level: Optional[PublicationLevel] = None,
     limit: int = Query(60, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -170,7 +188,8 @@ async def list_documents(
     current_user: User = Depends(get_current_user),
 ):
     """
-    The archive's documents. Search covers the title, description, place,
+    The archive's documents. ``apparatus_id`` lists what an apparatus is
+    tagged in. Search covers the title, description, place,
     author, recipient, accession number, transcription and the text a PDF
     carries. Members see what is published to members or the public; the
     archive's keepers also see drafts and may filter by publication level.
@@ -187,6 +206,7 @@ async def list_documents(
         decade=decade,
         album_id=album_id,
         member_id=member_id,
+        apparatus_id=apparatus_id,
         level=level,
         limit=limit,
         offset=offset,
@@ -442,6 +462,36 @@ async def replace_document_tags(
         current_user,
         "history_document_tagged",
         {"document_id": document_id, "member_ids": sorted(set(payload.member_ids))},
+    )
+    return await _reloaded_full(db, current_user, document_id)
+
+
+@router.put("/documents/{document_id}/apparatus", response_model=DocumentFullView)
+async def replace_document_apparatus(
+    document_id: str,
+    payload: ApparatusTagsReplace,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("history.manage")),
+):
+    """
+    Set the apparatus the document concerns.
+
+    **Requires permission: history.manage**
+    """
+    item = await _managed_document(db, current_user, document_id)
+    async with handle_service_errors("Could not save these apparatus tags"):
+        await HistoryDocumentService(db).replace_apparatus_tags(
+            item, payload.apparatus_ids, str(current_user.id)
+        )
+    await db.commit()
+    await _audit(
+        db,
+        current_user,
+        "history_document_apparatus_tagged",
+        {
+            "document_id": document_id,
+            "apparatus_ids": sorted(set(payload.apparatus_ids)),
+        },
     )
     return await _reloaded_full(db, current_user, document_id)
 

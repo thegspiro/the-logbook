@@ -1336,6 +1336,37 @@ class ResponseWrite(BaseModel):
 # ------------------------------------------------------- step assignment
 
 
+class ReassignmentRequest(BaseModel):
+    """Hand one person's open work in a review period to another."""
+
+    from_user_id: str = Field(min_length=1, max_length=36)
+    to_user_id: str = Field(min_length=1, max_length=36)
+
+
+class ReassignmentHolder(BaseModel):
+    """Someone holding open work in a period, and on how many evaluations."""
+
+    user_id: str
+    name: str
+    evaluations: int
+
+
+class ReassignmentRow(BaseModel):
+    """One evaluation a reassignment moves, or skips with the reason."""
+
+    evaluation_id: str
+    member_name: str
+    moves_evaluator: bool
+    steps: List[str] = Field(default_factory=list)
+    skipped_reason: Optional[str] = None
+
+
+class ReassignmentPlan(BaseModel):
+    from_name: str
+    to_name: str
+    rows: List[ReassignmentRow] = Field(default_factory=list)
+
+
 class StepAssignment(BaseModel):
     """Who acts on an approval or calibration step. None hands the step back
     to the workflow's actor: the position's holders, or the view_all holders

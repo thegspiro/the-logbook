@@ -44,6 +44,7 @@ from app.models.election import Election, ElectionStatus
 from app.models.email_template import EmailTemplate, EmailTemplateType
 from app.models.event import Event, EventExternalAttendee
 from app.models.membership_pipeline import (
+    PROSPECT_IDENTITY_FIELDS,
     ActionType,
     InterviewRecommendation,
     MembershipPipeline,
@@ -2073,6 +2074,7 @@ class MembershipPipelineService:
             "current_step_id",
             "transferred_user_id",
             "transferred_at",
+            "identity_edited_by_applicant_at",
             "form_submission_id",
             "created_at",
             "updated_at",
@@ -2228,6 +2230,12 @@ class MembershipPipelineService:
                     changes[key] = {"changed": True}
                 else:
                     changes[key] = {"from": str(old_value), "to": str(new_value)}
+
+        # A coordinator's correction makes these the department's values
+        # again, so the self-access guard may trust them (ADV2-10, owner
+        # decision 2026-11-21).
+        if PROSPECT_IDENTITY_FIELDS.intersection(changes):
+            prospect.identity_edited_by_applicant_at = None
 
         if changes:
             await self._log_activity(

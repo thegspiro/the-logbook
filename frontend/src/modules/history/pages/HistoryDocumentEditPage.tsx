@@ -13,10 +13,11 @@ import { Breadcrumbs } from '../../../components/ux/Breadcrumbs';
 import { SkeletonPage } from '../../../components/ux/Skeleton';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { DocumentCatalogueFields } from '../components/DocumentCatalogueFields';
+import { ApparatusPicker } from '../components/ApparatusPicker';
 import { EditKindChoice } from '../components/EditKindChoice';
 import { PersonTagPicker, type PickedPerson } from '../components/PersonTagPicker';
 import { historyDocumentService, historyMediaService } from '../services/api';
-import type { DocumentFullView, EditKind, HistoryDocumentType, HistorySource } from '../types';
+import type { ApparatusTag, DocumentFullView, EditKind, HistoryDocumentType, HistorySource } from '../types';
 import {
   documentCatalogueForUpdate,
   documentCatalogueFrom,
@@ -29,6 +30,7 @@ export const HistoryDocumentEditPage: React.FC = () => {
   const [item, setItem] = useState<DocumentFullView | null>(null);
   const [form, setForm] = useState<DocumentCatalogueForm | null>(null);
   const [people, setPeople] = useState<PickedPerson[]>([]);
+  const [apparatus, setApparatus] = useState<ApparatusTag[]>([]);
   const [sources, setSources] = useState<HistorySource[]>([]);
   const [types, setTypes] = useState<HistoryDocumentType[]>([]);
   const [editKind, setEditKind] = useState<EditKind>('minor');
@@ -47,6 +49,7 @@ export const HistoryDocumentEditPage: React.FC = () => {
         setItem(loaded);
         setForm(documentCatalogueFrom(loaded));
         setPeople(loaded.tags);
+        setApparatus(loaded.apparatus);
       })
       .catch((err: unknown) => setError(getErrorMessage(err, 'Unable to load this document.')));
     void historyMediaService
@@ -71,6 +74,8 @@ export const HistoryDocumentEditPage: React.FC = () => {
   if (!item || !form) return <SkeletonPage />;
 
   const tagsChanged = people.map((p) => p.member_id).join(',') !== item.tags.map((t) => t.member_id).join(',');
+  const apparatusChanged =
+    apparatus.map((a) => a.apparatus_id).join(',') !== item.apparatus.map((a) => a.apparatus_id).join(',');
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,6 +94,12 @@ export const HistoryDocumentEditPage: React.FC = () => {
         await historyDocumentService.replaceTags(
           item.id,
           people.map((p) => p.member_id)
+        );
+      }
+      if (apparatusChanged) {
+        await historyDocumentService.replaceApparatus(
+          item.id,
+          apparatus.map((a) => a.apparatus_id)
         );
       }
       toast.success('Saved');
@@ -129,6 +140,17 @@ export const HistoryDocumentEditPage: React.FC = () => {
           <PersonTagPicker value={people} onChange={setPeople} disabled={saving} />
           {tagsChanged && (
             <p className="text-theme-text-secondary mt-2 text-xs">Changing who is tagged is a substantial change.</p>
+          )}
+        </section>
+        <section className="card p-4 sm:p-5" aria-labelledby="edit-document-apparatus-heading">
+          <h2 id="edit-document-apparatus-heading" className="text-theme-text-primary mb-2 text-lg font-semibold">
+            Apparatus
+          </h2>
+          <ApparatusPicker value={apparatus} onChange={setApparatus} disabled={saving} />
+          {apparatusChanged && (
+            <p className="text-theme-text-secondary mt-2 text-xs">
+              Changing the apparatus tagged is a substantial change.
+            </p>
           )}
         </section>
         <section>

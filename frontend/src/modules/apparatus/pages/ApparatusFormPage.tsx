@@ -1049,16 +1049,19 @@ export const ApparatusFormPage: React.FC = () => {
 
             {/* Financing */}
             <div className="border-theme-surface-border mt-6 border-t pt-6">
-              <div className="mb-4 flex items-center">
-                <input
-                  type="checkbox"
-                  id="isFinanced"
-                  name="isFinanced"
-                  checked={formData.isFinanced}
-                  onChange={handleChange}
-                  className="form-checkbox"
-                />
-                <label htmlFor="isFinanced" className="text-theme-text-secondary ml-2">
+              <div className="mb-4">
+                <label
+                  htmlFor="isFinanced"
+                  className="text-theme-text-secondary touch:min-h-11 flex items-center gap-2"
+                >
+                  <input
+                    type="checkbox"
+                    id="isFinanced"
+                    name="isFinanced"
+                    checked={formData.isFinanced}
+                    onChange={handleChange}
+                    className="form-checkbox"
+                  />
                   This vehicle is financed
                 </label>
               </div>
@@ -1090,16 +1093,19 @@ export const ApparatusFormPage: React.FC = () => {
             <div className="card p-6">
               <h2 className="text-theme-text-primary mb-6 font-bold">Settings</h2>
               <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="nfpaTrackingEnabled"
-                  name="nfpaTrackingEnabled"
-                  checked={formData.nfpaTrackingEnabled}
-                  onChange={handleChange}
-                  aria-describedby="nfpaTrackingEnabled-help"
-                  className="form-checkbox"
-                />
-                <label htmlFor="nfpaTrackingEnabled" className="text-theme-text-secondary ml-2">
+                <label
+                  htmlFor="nfpaTrackingEnabled"
+                  className="text-theme-text-secondary touch:min-h-11 flex items-center gap-2"
+                >
+                  <input
+                    type="checkbox"
+                    id="nfpaTrackingEnabled"
+                    name="nfpaTrackingEnabled"
+                    checked={formData.nfpaTrackingEnabled}
+                    onChange={handleChange}
+                    aria-describedby="nfpaTrackingEnabled-help"
+                    className="form-checkbox"
+                  />
                   Enable NFPA compliance tracking
                 </label>
               </div>

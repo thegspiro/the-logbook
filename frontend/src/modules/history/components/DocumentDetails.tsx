@@ -11,6 +11,8 @@
  */
 import React from 'react';
 import { Link } from 'react-router';
+import { ApparatusLinks } from './ApparatusDetails';
+import { LinkedEventsList } from './LinkedEventsList';
 import { ExternalLink, FileImage, FileText } from 'lucide-react';
 import { documentFileUrl } from '../services/api';
 import type { DocumentKind, DocumentMemberView, DocumentSummary, DocumentView } from '../types';
@@ -148,6 +150,15 @@ export const DocumentDetails: React.FC<{ item: DocumentView | DocumentMemberView
               </li>
             ))}
           </ul>
+        </section>
+      )}
+      <ApparatusLinks apparatus={item.apparatus} headingId="document-apparatus-heading" />
+      {item.events.length > 0 && (
+        <section aria-labelledby="document-events-heading">
+          <h2 id="document-events-heading" className="text-theme-text-primary mb-1 text-base font-semibold">
+            Events
+          </h2>
+          <LinkedEventsList events={item.events} />
         </section>
       )}
     </div>
