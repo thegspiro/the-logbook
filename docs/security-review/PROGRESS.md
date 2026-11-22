@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (recorded after open, branch `claude/security-review-core-infra-p15`)**:
+**PR [#4580](https://github.com/thegspiro/the-logbook/pull/4580) (branch
+`claude/security-review-core-infra-p15`)**:
 Feature 33 (Core infrastructure), pass 15 — watchdog pickup (the dedicated
 `/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
 remains unreachable). PR #4576 (Feature 32, Locations & kiosk, pass 14) had
