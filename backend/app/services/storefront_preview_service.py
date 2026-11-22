@@ -141,6 +141,14 @@ class StorefrontPreviewService:
             "audience": "The member who ordered",
             "also_governs": ["The cancellation notice"],
         },
+        # Governed by the status-changes switch, as also_governs above says;
+        # listed so it can be previewed and test-sent like the rest (W67b-17).
+        "order_cancelled": {
+            "label": "Order cancelled",
+            "setting": "send_status_updates",
+            "audience": "The member who ordered",
+            "also_governs": [],
+        },
         "payment_receipt": {
             "label": "Payment receipt",
             "setting": "send_payment_receipts",
@@ -338,6 +346,13 @@ class StorefrontPreviewService:
                 settings,
                 organization,
                 status_label="Ready for pickup",
+            )
+        elif notice == "order_cancelled":
+            await notifier.send_order_cancelled(
+                _sample_order(settings, status=StoreOrderStatus.CANCELLED),
+                "The vendor discontinued this item.",
+                settings,
+                organization,
             )
         elif notice == "payment_receipt":
             await notifier.send_payment_received(
