@@ -5,10 +5,10 @@ Manages leave of absence / waiver periods for training requirements.
 When a member has an active waiver for a month, that month is excluded
 from rolling-period requirement calculations.
 
-POST   /training/waivers          - Create a waiver (training officers)
+POST   /training/waivers          - Create a waiver (training officers; not for oneself)
 GET    /training/waivers          - List waivers (training officers)
 GET    /training/waivers/me       - Get current user's waivers
-PATCH  /training/waivers/{id}     - Update a waiver (training officers)
+PATCH  /training/waivers/{id}     - Update a waiver (training officers; not one's own)
 DELETE /training/waivers/{id}     - Deactivate a waiver (training officers)
 """
 
@@ -29,6 +29,16 @@ from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org
 
 router = APIRouter()
+
+# Owner decision 2026-11-22: nobody grants or extends their own training
+# waiver, which would excuse their own requirements. It closes what ADV2-9 left
+# open, after which a leave of absence for oneself was refused but a
+# training-only waiver here was not (MemberLeaveService.create_leave and
+# RequirementOverrideService.grant refuse the same self case).
+_OWN_WAIVER = (
+    "You cannot grant or change your own training waiver. Ask another "
+    "training officer, or submit a leave request."
+)
 
 
 # ==================== Schemas ====================
@@ -81,7 +91,12 @@ async def create_training_waiver(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
-    """Create a training waiver / leave of absence for a member."""
+    """Create a training waiver / leave of absence for a member.
+
+    Not for oneself (400): see ``_OWN_WAIVER``.
+    """
+    if str(data.user_id) == str(current_user.id):
+        raise HTTPException(status_code=400, detail=_OWN_WAIVER)
     if data.end_date and data.end_date < data.start_date:
         raise HTTPException(status_code=400, detail="End date must be after start date")
 
@@ -197,7 +212,12 @@ async def update_training_waiver(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
-    """Update a training waiver."""
+    """Update a training waiver.
+
+    Not one's own (403): extending it, widening its requirements or turning it
+    back on excuses requirements as granting one does. Deactivating one's own
+    waiver goes through the delete route, which stays open: it excuses nothing.
+    """
     result = await db.execute(
         select(TrainingWaiver).where(
             TrainingWaiver.id == waiver_id,
@@ -205,6 +225,8 @@ async def update_training_waiver(
         )
     )
     waiver = ensure_found(result.scalar_one_or_none(), "Waiver")
+    if str(waiver.user_id) == str(current_user.id):
+        raise HTTPException(status_code=403, detail=_OWN_WAIVER)
 
     updates = data.model_dump(exclude_unset=True)
     if "waiver_type" in updates:
