@@ -22,6 +22,7 @@ import { ArrowLeftRight } from 'lucide-react';
 import type { EventCreate, EventType, EventUpdate, RecurringEventCreate } from '../../types/event';
 import { EventType as EventTypeEnum } from '../../constants/enums';
 import { getEventTypeLabel } from '../../utils/eventHelpers';
+import { bottomNavInset } from '../../utils/popoverPlacement';
 import { TrainingEventWizard } from '../training-event/TrainingEventWizard';
 import {
   DEFAULT_TRAINING_DETAILS,
@@ -205,8 +206,7 @@ export const EventComposer: React.FC<EventComposerProps> = ({
     // on, after WebKit's own focus scroll, which waits for a rendering update.
     requestAnimationFrame(() => {
       if (document.activeElement !== picker) return;
-      const navHeight =
-        parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bottom-nav-height')) || 0;
+      const navHeight = bottomNavInset();
       if (picker.getBoundingClientRect().bottom > window.innerHeight - navHeight) {
         picker.scrollIntoView({ block: 'center' });
       }
