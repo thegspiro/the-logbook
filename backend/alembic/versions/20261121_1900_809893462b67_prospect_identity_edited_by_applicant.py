@@ -1,7 +1,7 @@
 """Record when an applicant changed their own identifying details
 
 Revision ID: 809893462b67
-Revises: a9763f96e072, 3f93727e84ba, 6a94645761c1
+Revises: 67f75ff116ae, 6a94645761c1
 Create Date: 2026-11-21 19:00:00.000000
 
 ``prospective_members`` gains ``identity_edited_by_applicant_at``
@@ -39,13 +39,12 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "809893462b67"
-# Also joins main's three heads, so ``alembic upgrade head`` runs again:
-# a9763f96e072 (leave approver routing) and 3f93727e84ba and 6a94645761c1, two
-# separate merges of the outreach rename and volunteer RSVP heads that landed
-# on 2026-11-22. Kept on one line for the migration-chain validators, which
-# read it line by line.
+# Also joins main's two heads, so ``alembic upgrade head`` runs again:
+# 67f75ff116ae (a merge of leave approver routing with one of the outreach
+# merges) and 6a94645761c1 (the other outreach merge). Kept on one line for
+# the migration-chain validators, which read it line by line.
 # fmt: off
-down_revision: Union[str, Sequence[str], None] = ("a9763f96e072", "3f93727e84ba", "6a94645761c1")
+down_revision: Union[str, Sequence[str], None] = ("67f75ff116ae", "6a94645761c1")
 # fmt: on
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
