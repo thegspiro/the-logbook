@@ -51,11 +51,14 @@ const CopyHandle: React.FC<{ value: string; label: string }> = ({ value, label }
     <button
       type="button"
       onClick={copy}
-      className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1 self-start font-mono text-xs underline decoration-dotted"
+      className="text-theme-text-secondary hover:text-theme-text-primary inline-flex max-w-full items-center gap-1 self-start text-left font-mono text-xs underline decoration-dotted"
       aria-label={`Copy ${label} handle ${value}`}
     >
-      {value}
-      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      {/* A handle is one unbroken token, often a long email on the
+          department's own domain, so it may break anywhere rather than run
+          past its card. */}
+      <span className="min-w-0 break-all">{value}</span>
+      {copied ? <Check className="h-3 w-3 shrink-0" /> : <Copy className="h-3 w-3 shrink-0" />}
     </button>
   );
 };

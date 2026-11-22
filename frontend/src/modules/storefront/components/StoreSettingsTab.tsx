@@ -132,7 +132,14 @@ type NoticeKey =
 interface NoticeGroup {
   title: string;
   /** `notice` is the backend preview key for this switch. */
-  notices: { key: NoticeKey; notice: string; label: string; detail: string }[];
+  notices: {
+    key: NoticeKey;
+    notice: string;
+    label: string;
+    detail: string;
+    /** Other emails the same switch governs, each previewable on its own row. */
+    alsoPreview?: { notice: string; label: string; buttonText: string }[];
+  }[];
 }
 
 /**
@@ -155,6 +162,7 @@ const NOTICE_GROUPS: NoticeGroup[] = [
         notice: 'status_change',
         label: 'Status changes',
         detail: 'To the member when their order becomes ordered, ready for pickup, picked up, or cancelled.',
+        alsoPreview: [{ notice: 'order_cancelled', label: 'Order cancelled', buttonText: 'Cancellation' }],
       },
       {
         key: 'sendPaymentReceipts',
@@ -874,20 +882,34 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
                         <span className="text-theme-text-secondary block text-xs">{notice.detail}</span>
                       </span>
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewNotice(notice.notice)}
-                      /* Every row's visible label is just "Preview", so the notice
-                       has to be named for screen readers. It must be aria-label,
-                       not an sr-only span: accessible-name computation trims each
-                       child's text before concatenating, so a span opening with a
-                       space announces as "Previewthe Order placed with…". */
-                      aria-label={`Preview the ${notice.label} email`}
-                      className="text-theme-text-secondary hover:text-theme-text-primary mobile-touch-target flex shrink-0 items-center gap-1 text-xs"
-                    >
-                      <Eye className="h-4 w-4" aria-hidden="true" />
-                      Preview
-                    </button>
+                    <div className="flex shrink-0 flex-col items-end">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewNotice(notice.notice)}
+                        /* Every row's visible label is just "Preview", so the notice
+                         has to be named for screen readers. It must be aria-label,
+                         not an sr-only span: accessible-name computation trims each
+                         child's text before concatenating, so a span opening with a
+                         space announces as "Previewthe Order placed with…". */
+                        aria-label={`Preview the ${notice.label} email`}
+                        className="text-theme-text-secondary hover:text-theme-text-primary mobile-touch-target flex items-center gap-1 text-xs"
+                      >
+                        <Eye className="h-4 w-4" aria-hidden="true" />
+                        Preview
+                      </button>
+                      {notice.alsoPreview?.map((extra) => (
+                        <button
+                          key={extra.notice}
+                          type="button"
+                          onClick={() => setPreviewNotice(extra.notice)}
+                          aria-label={`Preview the ${extra.label} email`}
+                          className="text-theme-text-secondary hover:text-theme-text-primary mobile-touch-target flex items-center gap-1 text-xs"
+                        >
+                          <Eye className="h-4 w-4" aria-hidden="true" />
+                          {extra.buttonText}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </fieldset>

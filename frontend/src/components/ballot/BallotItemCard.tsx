@@ -23,6 +23,11 @@ interface BallotItemCardProps {
   onRank: (itemId: string, candidateId: string, rank: number | null) => void;
   /** Replaces the options, e.g. "You have already voted on this item". */
   closedNote?: React.ReactNode;
+  /**
+   * The item title's level under the host's own heading: h2 on the emailed
+   * ballot, which has only its h1 above; h3 under the in-app "Cast Your Vote".
+   */
+  headingLevel?: 'h2' | 'h3';
 }
 
 const CandidateText: React.FC<{ candidate: Candidate }> = ({ candidate }) => (
@@ -43,6 +48,7 @@ export const BallotItemCard: React.FC<BallotItemCardProps> = ({
   onToggleCandidate,
   onRank,
   closedNote,
+  headingLevel: Heading = 'h3',
 }) => {
   const { isApprovalType, isRanked, isMultiSelect, selectionCap, allowsWriteIn } = itemForm(item, settings);
   const atCap = isMultiSelect && selectionCap !== null && (choice?.candidate_ids.length ?? 0) >= selectionCap;
@@ -55,7 +61,7 @@ export const BallotItemCard: React.FC<BallotItemCardProps> = ({
             {index + 1}
           </span>
           <div>
-            <h3 className="text-theme-text-primary font-semibold">{item.title}</h3>
+            <Heading className="text-theme-text-primary font-semibold">{item.title}</Heading>
             {item.description && <p className="text-theme-text-muted mt-1 text-sm">{item.description}</p>}
           </div>
         </div>

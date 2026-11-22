@@ -589,6 +589,26 @@ class UserRSVPSummary(UTCResponseBase):
     model_config = _response_config
 
 
+class EventVolunteerRole(BaseModel):
+    """One role on an outreach signup sheet and how full it is."""
+
+    role: str
+    label: str
+    total: int
+    filled: int
+    remaining: int
+
+
+class EventVolunteerSignup(BaseModel):
+    """An outreach event's signup sheet, as a member signing up sees it."""
+
+    shift_id: str
+    roles: List[EventVolunteerRole]
+    # The caller's own role when they hold a seat on the sheet.
+    signed_up: bool = False
+    my_role_label: Optional[str] = None
+
+
 class EventResponse(EventBase, UTCResponseBase):
     """Schema for event response"""
 
@@ -664,6 +684,11 @@ class EventResponse(EventBase, UTCResponseBase):
     # events.manage, on an outreach event that is not cancelled. Detail
     # endpoint only (owner decision, 2026-11-20).
     can_staff_event: bool = False
+    # The event's live volunteer signup sheet as any member sees it, so they
+    # can sign up from the event page. Detail endpoint only; None when there is
+    # no sheet. Carries no other volunteer's name: that list stays behind
+    # events.manage on GET /events/{id}/staffing.
+    volunteer_signup: Optional[EventVolunteerSignup] = None
     updated_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime

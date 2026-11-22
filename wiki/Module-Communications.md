@@ -586,6 +586,7 @@ each email to a member's account as **required** (account and security,
 election ballots, department messages, leaving the department, store receipts,
 skills test results, overdue equipment) or **optional** (event and training
 reminders, shift notices, equipment and inventory updates, store announcements,
+your store balance,
 volunteer calls, election notices, suggestion box, and officer duty emails).
 Senders ask the policy instead of reading preferences themselves, so **Email
 Notifications** off now stops every optional email — before, it stopped some
