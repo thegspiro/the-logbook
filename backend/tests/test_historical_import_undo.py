@@ -465,7 +465,9 @@ class TestStaffingRoster:
 
         # The hours shift and Alice's seat on it were used, not made.
         assert preview["steps"]["staffing"]["reused"] == 2
+        assert preview["steps"]["staffing"]["positions_restored"] == 1
         assert counts["kept"] == 0
+        assert counts["positions_restored"] == 1
         remaining = (
             (
                 await db_session.execute(
@@ -477,7 +479,9 @@ class TestStaffingRoster:
             .scalars()
             .all()
         )
-        assert remaining == ["driver"]  # Alice keeps the roster's seat
+        # Alice goes back to the seat the hours import gave her: the commit
+        # recorded it when the roster re-seated her as driver.
+        assert remaining == ["firefighter"]
         assert await db_session.get(Shift, hours_shift.id) is not None
         assert await _count(db_session, Shift, org) == 1
         assert await _count(db_session, Event, org) == 0

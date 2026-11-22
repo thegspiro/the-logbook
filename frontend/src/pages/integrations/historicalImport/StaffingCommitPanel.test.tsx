@@ -40,6 +40,13 @@ const preview = (overrides: Partial<StaffingCommitPreview> = {}): StaffingCommit
     outreach_seats: 94,
     assigned_unfilled: 0,
   },
+  hours_match: {
+    matched: 0,
+    signups_without_hours: 0,
+    hours_without_signup: 0,
+    signups_without_hours_examples: [],
+    hours_without_signup_examples: [],
+  },
   skipped: { no_event: 12663, title_undecided: 15876, unfilled: 3128, activity_left_out: 0 },
   unfilled_seats: 3128,
   include_unstaffed: true,
@@ -92,6 +99,41 @@ describe('StaffingCommitPanel', () => {
     expect(screen.getByText('3,128 seats are unfilled with nobody assigned')).toBeInTheDocument();
     expect(screen.queryByText(/activity you left out/)).not.toBeInTheDocument();
     expect(mockUnfilled).toHaveBeenCalledWith('hist-1', { offset: 0, limit: 25 });
+  });
+
+  it('shows how the seats pair with the hours, and what pairs with nothing', async () => {
+    mockPreview.mockResolvedValue(
+      preview({
+        hours_match: {
+          matched: 2140,
+          signups_without_hours: 37,
+          hours_without_signup: 12,
+          signups_without_hours_examples: [
+            { date: '2016-05-03', activity: 'A106E NS', title: 'Driver', member: 'Alice Ng' },
+          ],
+          hours_without_signup_examples: [
+            {
+              date: '2016-05-03',
+              start: '2016-05-03T12:00:00+00:00',
+              end: '2016-05-03T18:00:00+00:00',
+              member: 'Bob Diaz',
+            },
+          ],
+        },
+      })
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<StaffingCommitPanel importId="hist-1" />);
+
+    const section = await screen.findByRole('region', { name: 'Paired with the hours already imported' });
+    expect(section).toHaveTextContent('2,140 seats paired with hours.');
+    expect(section).toHaveTextContent('37 seats with no hours entry');
+    expect(section).toHaveTextContent("12 hours entries on the roster's days with no seat");
+
+    await user.click(within(section).getByRole('button', { name: /Seats with no hours \(first 1\)/ }));
+    expect(section).toHaveTextContent('Alice Ng · Driver');
+    await user.click(within(section).getByRole('button', { name: /Hours with no seat \(first 1\)/ }));
+    expect(section).toHaveTextContent('Bob Diaz');
   });
 
   it('assigns a member to an unfilled seat', async () => {

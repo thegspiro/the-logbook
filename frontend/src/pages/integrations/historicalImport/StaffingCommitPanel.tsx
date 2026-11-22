@@ -7,21 +7,27 @@
  * with no seats become calendar events. Writing fills the hours import's
  * shifts where they exist, checks members in at calendar events and seats them
  * on outreach sheets. It credits no hours and is safe to run again.
+ *
+ * The roster and the hours share no id, so each seat is paired with the hours
+ * entry of the same member whose time overlaps it most; the seat is written
+ * onto that shift. The preview shows how many pair, and the first of each side
+ * that pairs with nothing, so a reviewer can check before writing.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Pagination } from '../../../components/ux';
+import { Collapsible, Pagination } from '../../../components/ux';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { historicalImportService } from '../../../modules/integrations/services/historicalImportApi';
 import type {
   AdminMemberMapping,
   StaffingCommitPreview,
+  StaffingHoursMatch,
   StaffingUnfilledView,
 } from '../../../modules/integrations/types/historicalImport';
 import { HistoricalUndoStep } from '../../../modules/integrations/types/historicalImport';
-import { formatDate, formatNumber } from '../../../utils/dateFormatting';
+import { formatDate, formatNumber, formatTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import MembersToDecide from './MembersToDecide';
 import StepUndo from './StepUndo';
@@ -41,7 +47,9 @@ const SKIP_REASONS: Record<string, string> = {
 
 const RESULT_LABELS: Record<string, string> = {
   shifts_filled: 'existing shifts filled',
+  shifts_filled_by_hours: "shifts found through members' hours",
   shifts_created: 'shifts created',
+  seats_matched_to_hours: 'seats paired with hours',
   seats_added: 'crew seats added',
   seats_updated: 'members re-seated',
   events_created: 'calendar events created',
@@ -128,7 +136,9 @@ const StaffingCommitPanel: React.FC<StaffingCommitPanelProps> = ({ importId }) =
         c.events ?? 0
       )} calendar events with ${formatNumber(c.check_ins ?? 0)} check-ins and ${formatNumber(
         c.outreach_seats ?? 0
-      )} outreach roles. No hours are credited. Running it again writes nothing twice, and you can undo it afterwards.`,
+      )} outreach roles. ${formatNumber(
+        preview.hours_match.matched
+      )} seats are paired with the hours their members already recorded and written onto those shifts. No hours are credited. Running it again writes nothing twice, and you can undo it afterwards.`,
       confirmLabel: 'Write the roster',
       cancelLabel: 'Not yet',
       variant: 'info',
@@ -184,6 +194,8 @@ const StaffingCommitPanel: React.FC<StaffingCommitPanelProps> = ({ importId }) =
           {formatNumber(counts.check_ins ?? 0)} check-ins and {formatNumber(counts.outreach_seats ?? 0)} outreach roles.
         </li>
       </ul>
+
+      <HoursMatchSummary match={preview.hours_match} tz={tz} />
 
       {skipped.length > 0 && (
         <div className="text-theme-text-secondary text-sm">
@@ -277,5 +289,63 @@ const StaffingCommitPanel: React.FC<StaffingCommitPanelProps> = ({ importId }) =
     </div>
   );
 };
+
+interface HoursMatchSummaryProps {
+  match: StaffingHoursMatch;
+  tz: string;
+}
+
+/** How the roster pairs with the hours already imported. */
+const HoursMatchSummary: React.FC<HoursMatchSummaryProps> = ({ match, tz }) => (
+  <section aria-labelledby="staffing-hours-match" className="space-y-2">
+    <h4 id="staffing-hours-match" className="text-theme-text-primary text-sm font-semibold">
+      Paired with the hours already imported
+    </h4>
+    <p className="text-theme-text-secondary text-xs">
+      A seat pairs with the same member&apos;s hours entry whose time overlaps it by at least 30 minutes. A shift seat
+      is written onto that shift, beside the hours and calls; an event seat is written there only when its title is a
+      crew seat.
+    </p>
+    <ul className="text-theme-text-secondary list-disc space-y-1 pl-5 text-sm">
+      <li>{formatNumber(match.matched)} seats paired with hours.</li>
+      <li>{formatNumber(match.signups_without_hours)} seats with no hours entry: written as scheduled seats.</li>
+      <li>
+        {formatNumber(match.hours_without_signup)} hours entries on the roster&apos;s days with no seat: they keep their
+        hours and calls, with no position from the roster.
+      </li>
+    </ul>
+    {match.signups_without_hours_examples.length > 0 && (
+      <Collapsible title={`Seats with no hours (first ${formatNumber(match.signups_without_hours_examples.length)})`}>
+        <ul className="divide-theme-surface-border divide-y text-sm">
+          {match.signups_without_hours_examples.map((seat, index) => (
+            <li key={`${seat.date ?? ''}-${seat.title}-${seat.member}-${index}`} className="py-1.5">
+              <span className="text-theme-text-primary">{seat.member || 'Member to be created'}</span>
+              <span className="text-theme-text-muted">
+                {' '}
+                · {seat.title || 'Untitled seat'} · {seat.date ? formatDate(seat.date, tz) : 'No date'} ·{' '}
+                {seat.activity}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Collapsible>
+    )}
+    {match.hours_without_signup_examples.length > 0 && (
+      <Collapsible title={`Hours with no seat (first ${formatNumber(match.hours_without_signup_examples.length)})`}>
+        <ul className="divide-theme-surface-border divide-y text-sm">
+          {match.hours_without_signup_examples.map((entry, index) => (
+            <li key={`${entry.start}-${entry.member}-${index}`} className="py-1.5">
+              <span className="text-theme-text-primary">{entry.member}</span>
+              <span className="text-theme-text-muted">
+                {' '}
+                · {formatDate(entry.start, tz)}, {formatTime(entry.start, tz)} to {formatTime(entry.end, tz)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Collapsible>
+    )}
+  </section>
+);
 
 export default StaffingCommitPanel;
