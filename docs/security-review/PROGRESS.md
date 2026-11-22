@@ -16,7 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_To be filled in by this pass's Step 8 (Feature 28, Security, audit & IP)._
+**PR [#4547](https://github.com/thegspiro/the-logbook/pull/4547)**
+(branch `claude/security-review-security-audit-ip`): Feature 28 (Security,
+audit & IP), pass 14 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). All nine backend scope files byte-identical to pass 12/13's
+baseline. `core/security_middleware.py` carries only a benign 2-line
+addition to the shared `EXPORT_ENDPOINTS` allowlist beyond what pass 13
+already read (another feature's own export route, same shape pass 7
+accepted); the rest of that file's diff (sign-in rate limiting) is
+unchanged from pass 13's out-of-scope ruling. Three frontend files carry
+small cosmetic diffs (`StatGrid` adoption, AAA-contrast token sweep,
+`rwd-table` reflow) with no query/permission/data-flow change. 37 routes
+re-enumerated by AST, unchanged, all auth-gated. **0 fixed, 0 new security
+findings.** Both open items (SEC2-28-6, dead detector code) re-verified
+unchanged. Also fixed, unrelated to this feature: a forked Alembic chain
+(two heads landed separately since pass 13) — resolved with an empty merge
+revision. Full write-up: `docs/security-review/SEC2-28-security-audit-ip.md`'s
+**Pass 14** section.
+
+Row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
+analytics) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 14, PR #4543, merged as `0af595b72`), preserved for history</summary>
