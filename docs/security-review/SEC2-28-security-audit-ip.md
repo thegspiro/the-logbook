@@ -2344,3 +2344,146 @@ and it is out of this feature's scope.
 
 Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
 `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).
+
+## Pass 14 (2026-11-22) — watchdog pickup, true zero-delta in scope, 0 new findings
+
+Before starting: `list_pull_requests` (state=open) found no
+`claude/security-review-*` head on a freshly fetched `main` — PR #4543
+(Feature 27, Integrations, pass 14) had already merged (`0af595b7`, the
+tip of `main` at review time); row 27 was already ✅ in `PROGRESS.md`
+(that PR marked it itself). Row 28 was confirmed as the next `⬜` row
+directly against the table. The dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per
+`ListAgents`, so this is a watchdog pickup.
+
+Separately, before this review, the watchdog also fixed an unrelated
+Alembic fork discovered while confirming the local sandbox DB builds
+clean: PR #4519 (`a9763f96e072`, Feature 07's leave-approver-cover work)
+had revised `c6c2a665a8fe` — itself already a merge-point in the
+outreach-rename/volunteer-RSVP fork — at the same time PR #4543 added its
+own merge revision (`3f93727e84ba`) for that same fork, so two independent
+merge revisions landed with no shared parent, forking `main` again. Fixed
+with a second empty merge revision (`0753a0faad26`) joining the two;
+verified by running the full chain against a fresh database start to
+finish. This fix rides on branch `claude/friendly-babbage-wdepg1`
+(PR #4546), not this pass's own doc update — unrelated to Feature 28's
+scope, and already its own PR by the time this review started. (This
+iteration's branch restriction kept all of its work, including this doc
+update, on that same single branch — see the PR for detail.)
+
+### Baseline and diff method
+
+Pass 13 merged as `116679d3e0cdd3da2a7037106f33d604b4fc12e1` (PR #4236,
+`merged_at` 2026-11-11T09:52:42Z — the PR's own head commit, present in
+this shallow clone, is tree-identical to the merge per the history-quirk
+workaround earlier passes document). Diffed each of this doc's nine
+backend files, plus the three frontend surfaces, directly against that
+commit by content (`git diff --stat <sha>..HEAD -- <file>`).
+
+**All nine backend scope files are byte-identical to pass 13**:
+`security_monitoring.py` (endpoint + service), `ip_security.py` (endpoint),
+`ip_security_service.py`, `audit_logs.py`, `error_logs.py`, `core/audit.py`,
+`core/geoip.py`, `audit_ship_service.py` — the service file is
+`app/services/security_monitoring.py` (confirmed against the real path;
+an initial diff against a nonexistent `security_monitoring_service.py`
+would have silently reported "no diff" for the wrong reason). **Only
+`core/security_middleware.py` carries a diff**, 2 lines, entirely inside
+this doc's declared slice (`SecurityMonitoringMiddleware`): two new
+entries in `EXPORT_ENDPOINTS` (`/api/v1/evaluations/export`,
+`/api/v1/reports/export`), added by other features' own PRs to keep
+`TestExportEndpointsCoverage::test_every_non_parameterized_export_route_is_covered`
+green (SEC2-28-7's guard test) as they added their own export routes — not
+a gap; the guard working exactly as designed. Re-ran that test class
+directly: 3 passed, confirming the set is currently both complete (no
+export route missing) and non-stale (no listed route removed).
+
+Of the frontend scope, all three surfaces carry small, cosmetic diffs, read
+in full: `BlockedCountriesTable.tsx` wraps the free-text `reason` cell in a
+`min-w-0` div (Pitfall #39 table-reflow fix — `{c.reason}` is still a plain
+React text node, still auto-escaped, no `dangerouslySetInnerHTML`
+introduced); `AuditLogPage.tsx` and `ErrorMonitoringPage.tsx` both adopt the
+shared `StatGrid` component in place of a hand-rolled grid div, plus
+`ErrorMonitoringPage.tsx` also swaps `blue-700`/`red-700` for `blue-900`/
+`red-900` (the 2026-09-07 contrast-ratchet sweep) and adds `rwd-table`/
+`data-label` responsive-reflow markup to its error-codes table. No query,
+permission, route, or data-flow change in any of the three.
+
+### Route inventory — re-enumerated, 37 routes, unchanged from pass 13
+
+`grep -c '^@router\.\(get\|post\|put\|patch\|delete\)'` against each of the
+four endpoint files directly (not trusted from pass 13's count): 16
+(`security_monitoring.py`) + 12 (`ip_security.py`) + 3 (`audit_logs.py`) + 6
+(`error_logs.py`) = **37**, identical to pass 13 — consistent with all four
+files being byte-identical. Permission strings unchanged for the same
+reason (no diff to re-check).
+
+### Re-verified — every open finding re-checked against current code
+
+- **SEC2-28-6** (LOW, flagged — TOCTOU race in the IP-exception
+  duplicate-request check) — still open, unchanged. Re-read
+  `request_ip_exception` at `ip_security_service.py:103-119`: still a plain
+  `select()` with no `.with_for_update()` and no DB-level unique
+  constraint, immediately followed by an `INSERT`. Still not a security
+  bypass — approval is still required — and still proportionate to leave
+  as an admin-UX nicety rather than fix.
+- **Dead detector code** (pass 3, flagged) — re-grepped `analyze_request`,
+  `_check_rate_limit`, `_check_injection_patterns` across all of
+  `backend/app` outside `services/security_monitoring.py`: zero production
+  callers, unchanged.
+- **All previously-FIXED/RESOLVED items** (SEC-1 through SEC-9, SEC2-28-1
+  through SEC2-28-11, and pass 11's IP-exception approval locking):
+  unchanged, since the files carrying their mechanisms are byte-identical
+  to pass 13.
+
+### Checklist dimensions re-checked directly against current code
+
+1. **Auth coverage** — all 37 routes carry a `Depends`-bearing auth
+   dependency; unchanged (byte-identical files).
+2. **Authorization & role fit** — permission strings unchanged.
+3. **Tenant isolation** — unchanged; every by-id query in scope still
+   filters `organization_id`, as documented in pass 13.
+4. **Injection & untrusted output** — unchanged; `audit_logs.py`'s search
+   still uses `like_pattern(search)` with `escape=LIKE_ESCAPE_CHAR`.
+5. **Data exposure** — `/security/`, `/audit-logs`, `/ip-security/` and
+   `/errors` remain in `UNCACHEABLE_PREFIXES`.
+6. **Abuse resistance** — n/a change this pass.
+7. **Schema & migration integrity** — no migration in this feature's scope
+   this pass. (The unrelated Alembic-fork fix above touches
+   `leave_requests`/`leave_request_votes`/`leave_approver_covers` and the
+   outreach/RSVP tables, none of which this feature owns.)
+
+### No new findings this pass
+
+**0 fixes applied, 0 new findings.** SEC2-28-6 and the dead-detector-code
+note remain open, unchanged, still awaiting their respective owner/product
+decision. No `KNOWN_LIMITATIONS.md` change needed.
+
+**Sandbox note, not a feature finding:** the scoped suite first failed 14
+tests, all unrelated to this feature (`event_rsvps`/training/reports audit
+assertions), with `Unknown column 'event_rsvps.dietary_restrictions'` —
+this sandbox's database had been built with `alembic upgrade head` alone,
+skipping the `create_all` + `_add_missing_model_columns` step
+(`backend/scripts/repair_schema.py`) that a real deployment's startup
+always runs and that two of those columns rely on entirely (no migration
+adds them). Running `repair_schema.py` and re-running the suite cleared all
+14 failures with no code change — an environment-setup gap, not a
+regression, consistent with why CI's own jobs run this step explicitly.
+
+### Completion gate (Pass 14)
+
+| Check                                                                                    | Result                                             |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`)                                          | clean                                              |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`)                                  | clean, 3396 files unchanged                        |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`)                               | clean                                              |
+| `python3 scripts/validate_migrations.py --strict`                                        | PASSED — 810 revisions, single head `0753a0faad26` |
+| `python3 scripts/generate_schema_docs.py --check`                                        | up to date                                         |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                        | 329 routes, 0 errors/warnings                      |
+| `TestExportEndpointsCoverage` (full class, this pass's own re-check)                     | 3 passed                                           |
+| backend tests, scope (same `-k` filter as pass 11/12/13)                                 | 928 passed, 1 pre-existing skip (`pywebpush`)      |
+| frontend `npm run typecheck`                                                             | 0 errors                                           |
+| frontend `npm run lint`                                                                  | 0 errors/warnings                                  |
+| frontend scoped suite (`src/modules/ip-security`, `AuditLogPage`, `ErrorMonitoringPage`) | 65 passed (5 files)                                |
+
+Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
+`analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).

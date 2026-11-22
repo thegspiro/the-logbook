@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4546](https://github.com/thegspiro/the-logbook/pull/4546)**
+(branch `claude/friendly-babbage-wdepg1` — a watchdog's own assigned branch,
+not a dedicated `claude/security-review-*` branch, per this session's
+branch policy): opened for an unrelated Alembic-fork fix (a second,
+independent fork of the chain Integrations' pass-14 PR #4543 had just
+reconciled), and this watchdog's Feature 28 (Security, audit & IP) pass 14
+— a true zero-delta review, 0 fixed, 0 new findings — rides on it as a
+second commit rather than opening its own branch. **Do not merge until both
+commits are green** — the migration fix and the Feature 28 doc update are
+independent but share this one PR. Row 28 → ✅ above (pending this PR's
+merge); next is Feature 29 (Reports & analytics) — re-check
+`list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 14, PR #4543, merged), preserved for history</summary>
+
 **PR [#4543](https://github.com/thegspiro/the-logbook/pull/4543)**
 (branch `claude/security-review-integrations-p14`): Feature 27
 (Integrations), pass 14 — watchdog pickup (the dedicated `/loop 30m
@@ -35,6 +51,8 @@ merge revision. Full write-up:
 
 Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit &
 IP) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 26, Forms, pass 14, PR #4541, merged), preserved for history</summary>
@@ -27404,7 +27422,7 @@ iteration's commit" rule.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (33 routes incl. undo, added pass 14), `historical_staffing_*.py`, `historical_import_undo.py` (added pass 14)                                                                                                        | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ⬜     |
@@ -27471,6 +27489,58 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-22 — Feature 27 (Integrations, pass 14) merged; Feature 28 (Security, audit & IP, pass 14): watchdog pickup, true zero-delta, 0 new findings; also fixed a second Alembic fork
+
+PR #4543 merged as `0af595b7`. A fresh `list_pull_requests` (state=open)
+found no `claude/security-review-*` head, and row 28 was the next `⬜` row,
+confirmed directly against the table on a freshly pulled `main`. The
+dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per `ListAgents`.
+
+Before this review started, the session-start hook reported `alembic
+upgrade head` failing with "Multiple head revisions" — a **second**,
+independent fork of the chain pass 14's own Integrations PR had just fixed:
+PR #4519 (Feature 07's leave-approver-cover/chief-routing work,
+`a9763f96e072`) revised `c6c2a665a8fe`, itself already a merge-point in the
+outreach-rename/volunteer-RSVP fork, at the same time `3f93727e84ba`
+(PR #4543's own merge revision) reconciled that same fork from its other
+side — two independent merge revisions, no shared parent, forking `main`
+again. Fixed with a second empty merge revision (`0753a0faad26`); verified
+by running the full 810-revision chain against a freshly created,
+empty database start to finish, and by the migration guard test suite (79
+passed, 1 pre-existing skip). This fix is unrelated to Feature 28 and rides
+on its own small PR, **[#4546](https://github.com/thegspiro/the-logbook/pull/4546)**,
+opened on this watchdog's assigned branch (`claude/friendly-babbage-wdepg1`)
+rather than a fresh `claude/security-review-*` branch — this session's
+branch policy permits pushing only to that one branch, so this Feature 28
+review's own doc update rides on the same PR as a second commit rather than
+opening the usual dedicated feature branch. See #4546 for the full
+migration write-up.
+
+Baseline for Feature 28: pass 13's PR #4236 head (`116679d3e0cdd3da2a7037106f33d604b4fc12e1`,
+tree-identical to its merge, per the shallow-clone workaround earlier
+passes document). All nine declared backend scope files are byte-identical
+to pass 13. Only `core/security_middleware.py` carries a diff — 2 lines,
+inside this doc's own tracked slice — two new entries in
+`SecurityMonitoringMiddleware.EXPORT_ENDPOINTS` that other features' own
+PRs added to keep the `TestExportEndpointsCoverage` guard test green as
+they shipped new export routes; re-ran that test class directly (3 passed)
+to confirm the set is still complete and non-stale. Route surface
+re-enumerated directly (not trusted from pass 13's count): still 37 routes
+across the four endpoint files, unchanged. Three frontend surfaces carry
+small, cosmetic diffs (a table-reflow wrap, `StatGrid` adoption, a
+contrast-ratchet colour swap) — read in full, no query/permission/route/
+data-flow change. Both open findings (SEC2-28-6, the IP-exception TOCTOU;
+the dead-detector-code note) re-verified unchanged.
+
+**0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/SEC2-28-security-audit-ip.md`'s **Pass 14** section.
+
+Row 28 → ✅ (pending PR #4546's merge — this feature's own doc update, not
+a dedicated PR, per the branch-policy note above); next is Feature 29
+(Reports & analytics) — re-check `list_pull_requests` fresh rather than
+trusting this note.
 
 ### 2026-11-22 — Feature 26 (Forms, pass 14) merged; Feature 27 (Integrations, pass 14): watchdog pickup, undo for Historical Data Import read in full, 0 fixed, 0 new security findings (1 flagged, test-coverage only)
 
