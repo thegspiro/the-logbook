@@ -830,6 +830,29 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Leave: stand-in notices, a cover prompt, a calendar and an export (2026-11-22)
+
+Nothing blocks a restart. Migration `b6e3d1f47a29` adds three email template
+types (`leave_cover_named`, `leave_cover_cleared`, `leave_cover_ended`) to
+`email_templates.template_type` and `scheduled_emails.template_type`, and
+changes no other table. It builds on the merge revision `561a3e9f4165`, which
+rejoins two heads `main` carried and changes nothing.
+
+- **Stand-ins are told.** The officer named to cover an approver gets an
+  email and an in-app notice when named, when the cover is cleared, and the
+  day after it ends. The first daily run after the upgrade tells the
+  stand-ins of covers that ended in the past seven days, once; older covers
+  are never told.
+- **Approvers going on leave are asked to name a stand-in.** An approver's
+  approval email gains one sentence asking them to, and **Leave Requests**
+  offers the dates. The sentence is part of the email's summary, so a
+  department that edited the Leave of Absence Notice template still gets it.
+- **Calendar** and **Export leave records** appear on **Leave Requests** for
+  the officers who manage leave. Each view of the calendar and each export
+  is written to the audit log. The export has no reasons.
+- **Downgrading** deletes any template or scheduled email of the three new
+  types before narrowing the column.
+
 ### Leave requests: an approver's own request goes to the Chief; approver cover (2026-11-21)
 
 Nothing blocks a restart. Migration `a9763f96e072` adds a column to

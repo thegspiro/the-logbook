@@ -6,14 +6,18 @@
  * themself, or an officer who manages leave, for anyone), or who is named in
  * one. The server decides who is an approver and who may stand in; this lists
  * what it returns (CLAUDE.md pitfall #29).
+ *
+ * An approver with a leave of their own that no cover spans yet is asked to
+ * name a stand-in, and can fill the form with that leave's dates. The server
+ * decides which leaves still want one (`suggested`).
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { leaveRequestService } from '../../services/leaveRequestService';
 import { useAuthStore } from '../../stores/authStore';
-import type { LeaveApproverCover, LeaveApproverCoverBoard } from '../../types/leaveRequest';
+import type { LeaveApproverCover, LeaveApproverCoverBoard, LeaveCoverSuggestion } from '../../types/leaveRequest';
 import { formatCalendarDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 
@@ -24,12 +28,18 @@ const period = (c: LeaveApproverCover): string =>
 
 const emptyForm = { approver_id: '', stand_in_id: '', start_date: '', end_date: '' };
 
+const leavePeriod = (s: LeaveCoverSuggestion): string =>
+  s.end_date
+    ? `from ${formatCalendarDate(s.start_date)} to ${formatCalendarDate(s.end_date)}`
+    : `from ${formatCalendarDate(s.start_date)}, with no end date set`;
+
 const ApproverCover: React.FC = () => {
   const { confirm } = useConfirm();
   const userId = useAuthStore((state) => state.user?.id);
   const [board, setBoard] = useState<LeaveApproverCoverBoard | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState(false);
+  const standInRef = useRef<HTMLSelectElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -50,6 +60,17 @@ const ApproverCover: React.FC = () => {
   const onlySelf = board.approvers.length === 1 && board.approvers[0]?.id === userId ? board.approvers[0] : undefined;
   const approverId = onlySelf?.id ?? form.approver_id;
   const standIns = board.stand_ins.filter((p) => p.id !== approverId);
+  const suggestion = board.suggested[0];
+
+  const applySuggestion = (s: LeaveCoverSuggestion) => {
+    setForm({
+      approver_id: onlySelf ? form.approver_id : (userId ?? ''),
+      stand_in_id: form.stand_in_id,
+      start_date: s.start_date,
+      end_date: s.end_date ?? '',
+    });
+    standInRef.current?.focus();
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,6 +122,18 @@ const ApproverCover: React.FC = () => {
         While an approver is away, an officer who manages leave can decide requests in their place. The approver cannot
         vote until the cover ends.
       </p>
+
+      {suggestion && (
+        <div className="alert-info mb-4 flex flex-wrap items-center justify-between gap-3" role="status">
+          <p className="text-sm">
+            You decide leave requests and you are on leave {leavePeriod(suggestion)}. Name an officer to decide them in
+            your place.
+          </p>
+          <button type="button" className="btn-secondary" onClick={() => applySuggestion(suggestion)}>
+            Use these dates
+          </button>
+        </div>
+      )}
 
       {board.covers.length > 0 && (
         <ul className="mb-4 space-y-2">
@@ -163,6 +196,7 @@ const ApproverCover: React.FC = () => {
               </label>
               <select
                 id="cover-stand-in"
+                ref={standInRef}
                 className="form-input"
                 required
                 aria-describedby="cover-stand-in-help"
