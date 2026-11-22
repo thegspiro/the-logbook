@@ -295,6 +295,12 @@ def _annual_definition() -> TemplateDefinition:
                     "title": "Development",
                     "items": [
                         _written(
+                            "last_goals",
+                            "Last year's goals",
+                            "Whether each goal the last review set was met.",
+                            tool="goal_review",
+                        ),
+                        _written(
                             "strengths",
                             "Strengths",
                             "What the member does especially well.",
@@ -477,6 +483,12 @@ def _check_in_definition() -> TemplateDefinition:
                     "key": "next_steps",
                     "title": "Next steps",
                     "items": [
+                        _written(
+                            "last_check_in_goals",
+                            "Since the last check-in",
+                            "Whether each thing the last check-in asked for was done.",
+                            tool="goal_review",
+                        ),
                         _written(
                             "going_well",
                             "What is going well",
