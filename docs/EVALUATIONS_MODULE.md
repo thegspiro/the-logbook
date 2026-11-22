@@ -481,6 +481,22 @@ CSV, one row per evaluation with its grade, written with `SafeCsvWriter`. Each
 export is audited as `evaluation_period_exported`. The caller's own evaluation
 is left out of both, as the list leaves it out.
 
+### Signed PDFs for a period
+
+Beside Export CSV, **Download signed PDFs** (`GET /evaluations/export-pdfs?period_id=`)
+gives a holder of `evaluations.view_all` one zip holding the signed PDF of every
+finalized evaluation in the period: the copy the signatures attest to, without
+any response the member added later (owner decision 2026-11-22). The
+evaluations are those the conduct list and the export give the caller, so their
+own is left out; a PDF never built is built first. It needs a recently
+re-verified session, since it hands over a period's personnel records at once,
+is audited as `evaluation_period_pdfs_exported` with the count, and is watched
+by `SecurityMonitoringMiddleware` as a bulk export. Each file is named
+"Member - Form - period end.pdf", reduced to letters, digits, spaces and
+`.()-_` so no entry can point outside the folder it unpacks into. A PDF missing
+from storage is listed in `NOT INCLUDED.txt` inside the zip, and logged, rather
+than failing the download or silently dropping out.
+
 ## Emails
 
 All seven are editable templates under Communications → Email Templates →
@@ -519,6 +535,7 @@ All under `/api/v1/evaluations`.
 | `GET /periods/{id}/reassign-options`, `GET /periods/{id}/reassign-preview`                                                    | `manage`                                                                                      |
 | `POST /periods/{id}/reassign`                                                                                                 | `manage`, with step-up                                                                        |
 | `GET /removed`                                                                                                                | `view_all`, `manage` or `delete`                                                              |
+| `GET /export-pdfs?period_id=`                                                                                                 | `view_all`, with step-up                                                                      |
 | `GET /export?period_id=`                                                                                                      | `view_all`                                                                                    |
 | `GET /mine`, `/mine/live-data`, `/mine/removed`                                                                               | sign-in                                                                                       |
 | `GET /crew`                                                                                                                   | sign-in; lists only the evaluations of members the caller supervises today                    |
