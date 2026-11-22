@@ -1067,6 +1067,55 @@ export async function openBylawDraft(page) {
   )(page);
 }
 
+/** The election details card on an election's Overview, Voting Method in it. */
+const BYLAW_DETAILS_CARD =
+  "div.rounded-lg.p-6:has(div:text-is('Voting Method'))";
+
+/**
+ * Go to a section of the election page that is open, by path: since #4297
+ * each section is a route, `/elections/:id/<section>`, and "" is the Overview.
+ */
+async function openBylawSection(page, section) {
+  const election = new URL(page.url()).pathname
+    .split("/")
+    .slice(0, 3)
+    .join("/");
+  await page.goto(
+    new URL(
+      section ? `${election}/${section}` : election,
+      page.url(),
+    ).toString(),
+  );
+}
+
+/**
+ * Apply the saved "Annual officer election" ballot to the open bylaw draft
+ * through the Use Template picker, as a secretary would, and wait the apply
+ * out. Leaves the page on the draft's Ballot section.
+ */
+async function applySavedOfficerBallot(page) {
+  await openBylawSection(page, "ballot");
+  const use = page.getByRole("button", { name: /^Use Template$/ });
+  await use.waitFor({ timeout: 20_000 });
+  await use.click();
+  const popover = page.locator("div:has(> h4:text-is('Select a Template'))");
+  const saved = popover
+    .getByRole("button", { name: /Annual officer election/ })
+    .first();
+  await saved.waitFor({ timeout: 10_000 });
+  await saved.click();
+  await popover.getByRole("button", { name: /^Replace$/ }).click();
+  // Two toasts fire on a successful apply ("Ballot items saved", then
+  // "Applied ..."), and a toast cannot be removed from the DOM. Waited out
+  // instead: react-hot-toast's default is four seconds.
+  await page
+    .getByText(/^Applied "Annual officer election"$/)
+    .waitFor({ timeout: 20_000 });
+  await page
+    .getByText(/^Applied "Annual officer election"$/)
+    .waitFor({ state: "detached", timeout: 20_000 });
+}
+
 export function setCallTracking(mode) {
   return async (page) => {
     await page.evaluate(async (wanted) => {
@@ -1728,6 +1777,25 @@ function openReinstatementApplicantIn(pipeline, name) {
 
 /** A same-origin API call from the signed-in page, with its CSRF header. */
 async function apiFromPage(page, method, path, body) {
+  const result = await rawApiFromPage(page, method, path, body);
+  if (path !== "/auth/step-up" && isStepUpRefusal(result)) {
+    await adminStepUp(page);
+    return await rawApiFromPage(page, method, path, body);
+  }
+  return result;
+}
+
+/**
+ * Whether an answer is the server asking the administrator to confirm their
+ * identity first (403 LB-AUTH-013). Granting positions, creating members,
+ * roles and ranks, and connecting integrations all came to need one, and a
+ * shot that made the call bare failed with the refusal in its error.
+ */
+function isStepUpRefusal(result) {
+  return result.status === 403 && result.body?.code === "LB-AUTH-013";
+}
+
+async function rawApiFromPage(page, method, path, body) {
   return await page.evaluate(
     async ({ method, path, body }) => {
       const csrf =
@@ -3386,22 +3454,11 @@ async function mcpIntegrationId(page) {
 }
 
 async function postIntegration(page, path, body) {
-  const status = await page.evaluate(
-    async ({ path, body }) => {
-      const csrf =
-        document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
-      const response = await fetch(`/api/v1/integrations/${path}`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRF-Token": decodeURIComponent(csrf),
-        },
-        body: body === undefined ? undefined : JSON.stringify(body),
-      });
-      return response.status;
-    },
-    { path, body },
+  const { status } = await apiFromPage(
+    page,
+    "POST",
+    `/integrations/${path}`,
+    body,
   );
   if (status !== 200) {
     throw new Error(`POST /integrations/${path} returned ${status}`);
@@ -4154,31 +4211,19 @@ function isoDaysFromToday(days) {
 // Shots below that have to write to the database undo it in `cleanup`, so
 // a `--only` run leaves the demo as the seeder made it.
 
-/** A JSON call against /api/v1 from the signed-in page, with its CSRF token. */
+/**
+ * A JSON call against /api/v1 from the signed-in page, with its CSRF token.
+ * Throws on any error answer, after confirming the administrator's identity
+ * once if the server asks for that first (see isStepUpRefusal).
+ */
 async function guide08Api(page, method, path, body) {
-  return page.evaluate(
-    async ({ method, path, body }) => {
-      const csrf =
-        document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
-      const response = await fetch(`/api/v1${path}`, {
-        method,
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRF-Token": decodeURIComponent(csrf),
-        },
-        body: body === undefined ? undefined : JSON.stringify(body),
-      });
-      const text = await response.text();
-      if (!response.ok) {
-        throw new Error(
-          `${method} ${path} -> ${response.status}: ${text.slice(0, 200)}`,
-        );
-      }
-      return text ? JSON.parse(text) : null;
-    },
-    { method, path, body },
-  );
+  const result = await apiFromPage(page, method, path, body);
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(
+      `${method} ${path} -> ${result.status}: ${JSON.stringify(result.body).slice(0, 200)}`,
+    );
+  }
+  return result.body;
 }
 
 /**
@@ -6078,7 +6123,9 @@ export const SHOTS = [
       await centre(page.locator(PIPELINE_CARD));
       await page.waitForTimeout(500);
     },
-    expect: "View full progress",
+    // Scoped to the card: the member's other program cards carry the same
+    // link, and the first on the page is not this one.
+    expect: { selector: `${PIPELINE_CARD} :text("View full progress")` },
     selector: PIPELINE_CARD,
   },
   {
@@ -6718,7 +6765,8 @@ export const SHOTS = [
     anchor: "Screenshot of the analysis results showing the four summary cards",
     alt: "Impact planner results with its summary cards, size breakdown and cost estimate",
     route: "/inventory/admin/impact-planner",
-    expect: "Back to Admin",
+    // A summary card, drawn only once an analysis has run.
+    expect: "Members matched",
     prepare: async (page) => {
       await runImpactAnalysis(page);
       // Analysing scrolls the results into view; the summary cards and the
@@ -10952,7 +11000,7 @@ export const SHOTS = [
       await release.first().scrollIntoViewIfNeeded();
       await release.first().evaluate((button) => {
         button
-          .closest("div[role='button']")
+          .closest("div[role='group']")
           ?.setAttribute("data-shot-subject", "");
       });
       await page.waitForTimeout(400);
@@ -11024,8 +11072,10 @@ export const SHOTS = [
       }
       // Drafts can be cancelled too, and one candidate can hold both, so the
       // row is picked by its template as well as its candidate.
+      // A record card is a role="group" named for its test and candidate
+      // since the training sweeps; it was a role="button" div before.
       const cancel = page
-        .locator("div[role='button']")
+        .locator("div[role='group']")
         .filter({ hasText: open.candidate })
         .filter({ hasText: open.template })
         .getByRole("button", {
@@ -11109,8 +11159,10 @@ export const SHOTS = [
       if (!draft) {
         throw new Error("no draft test to cancel");
       }
+      // A record card is a role="group" named for its test and candidate
+      // since the training sweeps; it was a role="button" div before.
       const cancel = page
-        .locator("div[role='button']")
+        .locator("div[role='group']")
         .filter({ hasText: draft.candidate })
         .filter({ hasText: draft.template })
         .getByRole("button", {
@@ -11156,8 +11208,10 @@ export const SHOTS = [
       if (!open) {
         throw new Error("no in-progress test to cancel");
       }
+      // A record card is a role="group" named for its test and candidate
+      // since the training sweeps; it was a role="button" div before.
       const cancel = page
-        .locator("div[role='button']")
+        .locator("div[role='group']")
         .filter({ hasText: open.candidate })
         .filter({ hasText: open.template })
         .getByRole("button", {
@@ -11203,8 +11257,10 @@ export const SHOTS = [
       if (!open) {
         throw new Error("no in-progress test to cancel");
       }
+      // A record card is a role="group" named for its test and candidate
+      // since the training sweeps; it was a role="button" div before.
       const cancel = page
-        .locator("div[role='button']")
+        .locator("div[role='group']")
         .filter({ hasText: open.candidate })
         .filter({ hasText: open.template })
         .getByRole("button", {
@@ -11766,6 +11822,8 @@ export const SHOTS = [
     route: "/finance/approvals",
     auth: "treasurer",
     expect: "Not assigned to you",
+    // The first request not assigned to the administrator is near 1,500px.
+    viewport: { width: 1440, height: 1600 },
   },
   {
     id: "11-22-approvals-admin-override",
@@ -13135,6 +13193,8 @@ export const SHOTS = [
     // The status filter's closed <option> carries the same word, so the badge
     // is found inside the table.
     expect: { selector: 'tbody :text-is("Ordered")' },
+    // The Ordered row sits near 1,100px under the page's header and filters.
+    viewport: { width: 1440, height: 1250 },
   },
   {
     id: "05-24-member-inventory",
@@ -13446,7 +13506,7 @@ export const SHOTS = [
       "Screenshot of the Impact Planner page showing the filter panel on the",
     alt: "Inventory impact planner with its filter panel and member analysis",
     route: "/inventory/admin/impact-planner",
-    expect: "Back to Admin",
+    expect: "Who fits the category?",
     fullPage: true,
   },
   {
@@ -21093,26 +21153,44 @@ export const SHOTS = [
     fullPage: true,
   },
   {
-    // The first half of the pair the marker asks for. Framed on the whole page
-    // rather than the ballot alone, because the two facts that change sit in
-    // different places: the item count inside the builder, and the voting
-    // method in the details card above it. "Simple Majority" here is the
-    // create form's "Supermajority Required (2/3)" -- one control that sets
-    // the method and the victory condition, and only the method is on display.
+    // The ballot half of the "before" pair. The two facts that change sit on
+    // different pages since #4297, the item count on Ballot and the voting
+    // method on Overview, so each state is two shots: this one and 19-44.
     id: "19-25-ballot-template-settings-before",
     doc: "19-august-2026-release-changes.md",
     line: 33,
     anchor: "Ballot Builder → Your saved ballots, showing the visible template",
-    alt: "The bylaw draft before a template is applied: one ballot item, and a details card reading Voting Method — Simple Majority",
+    alt: "The bylaw draft's Ballot page before a template is applied: Ballot Items (1), the Article VII Amendment",
     route: "/elections",
     prepare: async (page) => {
       await openBylawDraft(page);
-      const tab = page.locator("#tab-ballot");
-      await tab.waitFor({ timeout: 20_000 });
-      await tab.click({ timeout: 10_000 });
+      await openBylawSection(page, "ballot");
+      await page.getByText("Ballot Items (1)").waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
+    expect: "Ballot Items (1)",
     fullPage: true,
+  },
+  {
+    // The method half of the "before" pair. "One choice per voter" is the
+    // create form's "Supermajority Required (2/3)": one control sets the
+    // method and the winning rule, and only the method is on this card.
+    id: "19-44-voting-method-before",
+    doc: "19-august-2026-release-changes.md",
+    line: 33,
+    anchor: "__paired-with-19-25__",
+    alt: "The same draft's Overview before the template: the details card reading Voting Method — One choice per voter",
+    route: "/elections",
+    prepare: async (page) => {
+      await openBylawDraft(page);
+      await page
+        .getByText("Voting Method")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: BYLAW_DETAILS_CARD,
+    expect: "One choice per voter",
   },
   {
     id: "19-42-message-detail",
@@ -21145,54 +21223,52 @@ export const SHOTS = [
     allowEmptyState: true,
   },
   {
-    // Applied through the picker rather than the API: the point of the pair is
-    // that nothing in the confirmation says the voting method is about to
+    // Applied through the picker rather than the API: the point of the pairs
+    // is that nothing in the confirmation says the voting method is about to
     // change, so the change has to arrive by the route a secretary takes.
     //
-    // Must stay the last shot of guide 19 -- it leaves the draft holding the
-    // template's four officer seats under ranked choice. `openBylawDraft` puts
-    // it back for the shots that need it seeded, including the one above.
-    // `doc` stays on the guide-19 index although the image is embedded in
-    // 14-elections.md: 14-24-ballot-send-skipped and 19-26 both mutate the
-    // seeded data, and the invariant at the foot of this file allows one
-    // mutating shot per doc. Capture order, which is what the invariant
-    // protects, is unchanged.
+    // Self-contained: `cleanup` puts the draft back, so this leaves nothing
+    // changed for later shots and needs no `mutatesSeedData` flag. It used to
+    // be flagged and kept last in its guide, which ruled out a second "after"
+    // shot (19-45) once the ballot and the method moved to separate pages.
     id: "19-26-ballot-template-settings-after",
     doc: "19-august-2026-release-changes.md",
     line: 33,
     anchor: "__paired-with-19-25__",
-    alt: "The same draft immediately after applying the saved officer ballot: four items replacing the one, and the details card now reading Ranked Choice",
+    alt: "The same draft's Ballot page immediately after applying the saved officer ballot: Ballot Items (4), the template's officer seats replacing the one item",
     route: "/elections",
     prepare: async (page) => {
       await openBylawDraft(page);
-      const tab = page.locator("#tab-ballot");
-      await tab.waitFor({ timeout: 20_000 });
-      await tab.click({ timeout: 10_000 });
-      const use = page.getByRole("button", { name: /^Use Template$/ });
-      await use.waitFor({ timeout: 20_000 });
-      await use.click();
-      const popover = page.locator(
-        "div:has(> h4:text-is('Select a Template'))",
-      );
-      const saved = popover
-        .getByRole("button", { name: /Annual officer election/ })
-        .first();
-      await saved.waitFor({ timeout: 10_000 });
-      await saved.click();
-      await popover.getByRole("button", { name: /^Replace$/ }).click();
-      // Two toasts fire on a successful apply ("Ballot items saved", then
-      // "Applied ..."), and a toast cannot be removed from the DOM. Waited out
-      // instead: react-hot-toast's default is four seconds.
-      await page
-        .getByText(/^Applied "Annual officer election"$/)
-        .waitFor({ timeout: 20_000 });
-      await page
-        .getByText(/^Applied "Annual officer election"$/)
-        .waitFor({ state: "detached", timeout: 20_000 });
+      await applySavedOfficerBallot(page);
+      await page.getByText("Ballot Items (4)").waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
+    cleanup: resetBylawDraft,
+    expect: "Ballot Items (4)",
     fullPage: true,
-    mutatesSeedData: true,
+  },
+  {
+    // The method half of the "after" pair, applied the same way as 19-26 and
+    // put back the same way.
+    id: "19-45-voting-method-after",
+    doc: "19-august-2026-release-changes.md",
+    line: 33,
+    anchor: "__paired-with-19-25__",
+    alt: "The same draft's Overview after the template: the details card now reading Voting Method — Ranked choice",
+    route: "/elections",
+    prepare: async (page) => {
+      await openBylawDraft(page);
+      await applySavedOfficerBallot(page);
+      await openBylawSection(page, "");
+      await page
+        .getByText("Ranked choice", { exact: true })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: resetBylawDraft,
+    selector: BYLAW_DETAILS_CARD,
+    expect: "Ranked choice",
   },
   {
     // 375 wide, not the 390 the rest of the mobile shots use: the marker names
@@ -23019,7 +23095,7 @@ export const SHOTS = [
     expect: "Previous version (before the redesign)",
     // Tall enough to hold the panel, which sits in the editor column under
     // the template's description, with the old wording opened.
-    viewport: { width: 1440, height: 1500 },
+    viewport: { width: 1440, height: 2650 },
     // A backup is written only by the redesign migration, to templates a
     // department had edited before it, and the demo's templates were never
     // edited. The backup list is therefore served from a fixture; the rest of
@@ -23404,7 +23480,7 @@ export const SHOTS = [
     alt: "Catalog Links after Link matches automatically: the list of names it linked, each with its catalog item and the checklists it landed on, BVM marked check this because it matched an also-called name, an Undo on each, and the lines it skipped still listed below",
     route: "/inventory/admin/checklists/catalog-links",
     expect: { selector: 'section[aria-labelledby="auto-linked"]' },
-    viewport: { width: 1440, height: 1200 },
+    viewport: { width: 1440, height: 1300 },
     // Runs a real automatic pass, so it changes the data it pictures. The
     // cleanup undoes every link the pass made, and `seed_medical_supplies`
     // also unlinks the Rescue 7 lines on the next seed should a run die
@@ -24041,7 +24117,7 @@ export const SHOTS = [
     alt: "Catalog Links before anything is applied: unlinked checklist lines grouped by name under Likely matches, the exact matches already chosen in their pickers, the others left on Don't link for you to confirm, and Link 5 positions counting what is chosen",
     route: "/inventory/admin/checklists/catalog-links",
     expect: { selector: 'section[aria-labelledby="likely-matches"]' },
-    viewport: { width: 1440, height: 1300 },
+    viewport: { width: 1440, height: 1450 },
   },
   {
     id: "05-110-nfc-put-away",
@@ -26270,7 +26346,7 @@ export const SHOTS = [
     doc: "02-training.md",
     line: 2805,
     anchor: "A member's shift evaluation page part-way through",
-    alt: "Priya Raman's EMT Field Internship Evaluation in progress: the three interns on the shift across the top, the Shift (A, B, C) choice, shift statistics, the rating key, and each Clinical Performance item with its rating buttons, a required comment open under a rating of 2, and Save draft and Submit evaluation along the bottom",
+    alt: "An EMT Field Internship Evaluation in progress: the shift's interns with an evaluation begun across the top, the Shift (A, B, C) choice, shift statistics, the rating key, and each Clinical Performance item with its rating buttons, a required comment open under a rating of 2, and Save draft and Submit evaluation along the bottom",
     route: "/scheduling?tab=shift-reports",
     // The draft the seeder left. Viewing it saves nothing: autosave fires only
     // on a change.
@@ -26480,7 +26556,7 @@ export const SHOTS = [
       await page.waitForTimeout(600);
     },
     expect: "Completed by hand:",
-    viewport: { width: 1440, height: 1100 },
+    viewport: { width: 1440, height: 1300 },
   },
   {
     id: "02-141-no-active-requirements",

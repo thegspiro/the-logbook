@@ -17588,14 +17588,38 @@ class Seeder:
                 f"/training/programs/programs/{pick(rope, 'id')}", {"active": False}
             )
 
-    def _backlog02_internship_shift(self, member_ids: set[str]) -> dict | None:
-        """A past, open shift with at least three pool members on its crew.
+    def _backlog02_internship_shift(
+        self, member_ids: set[str], enrolled_on: dict[str, date]
+    ) -> dict | None:
+        """An open shift with at least three pool members on its crew, each
+        enrolled in the internship by the shift's date.
 
-        Neither the oldest past shift (closed out by seed_finalized_shift) nor
-        the newest (every shift-detail shot reaches for it), and not the first
-        Ladder 4 shift seed_batch_report_trainee crews a recruit onto.
+        A shift counts only toward a program the member had joined by then
+        (`_Scope.as_of` in the shift evaluation service), and the API records
+        an enrollment as made today. Picking any past shift, as this used to,
+        chose one dated before the enrollment, whose roster then listed no
+        internship requirement: the evaluations were never written, and the
+        four guide 02 shots that read them failed with "no internship
+        evaluation is on file". `enrolled_on` gives each pool member's
+        enrollment date; a member not yet enrolled will be, today.
+
+        Past shifts are tried newest first, then today's: a member enrolled
+        on an earlier run is eligible for the shifts since, and a fresh
+        enrollment only for today's. Eligible pool members are seated onto
+        the shift to make up three. Neither the oldest past shift (closed out
+        by seed_finalized_shift) nor the newest (every shift-detail shot
+        reaches for it), and not the first Ladder 4 shift
+        seed_batch_report_trainee crews a recruit onto.
         """
         shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        today = [
+            s
+            for s in shifts
+            if pick(s, "id")
+            and str(pick(s, "shift_date", "shiftDate") or "") == str(TODAY)
+            and not pick(s, "is_finalized", "isFinalized")
+            and not pick(s, "is_cancelled", "isCancelled")
+        ]
         past = sorted(
             (
                 s
@@ -17615,36 +17639,115 @@ class Seeder:
             ),
             None,
         )
-        # The rotation crews two or three members a rig, so a shift already
-        # carrying two pool members is topped up to three with a third.
-        for shift in reversed(past[1:-1]):
-            if ladder and pick(shift, "id") == pick(ladder, "id"):
-                continue
-            shift_id = pick(shift, "id")
-            crew = items(self.api.get(f"/training/shift-reports/shift-crew/{shift_id}"))
-            mine = [c for c in crew if str(c.get("user_id")) in member_ids]
-            if len(mine) < 2:
-                continue
-            aboard = {str(c.get("user_id")) for c in crew}
-            for user_id in member_ids - aboard:
-                if len(mine) >= 3:
-                    break
+        candidates = [
+            s
+            for s in [*reversed(past[1:-1]), *today]
+            if not (ladder and pick(s, "id") == pick(ladder, "id"))
+        ]
+        for shift in candidates:
+            found = self._backlog02_crew_three(shift, member_ids, enrolled_on)
+            if found:
+                return found
+        # The rotation books the pool tightly: on a re-run the members
+        # enrolled on an earlier day may share no shift since, and every seat
+        # near them can be taken. A short shift of the seeder's own, early
+        # today, is free of both.
+        fixture = self._backlog02_fixture_shift()
+        if fixture:
+            return self._backlog02_crew_three(fixture, member_ids, enrolled_on)
+        return None
+
+    BACKLOG02_FIXTURE_NOTE = "EMT Field Internship ride-along (screenshot fixture)"
+
+    def _backlog02_fixture_shift(self) -> dict | None:
+        """The seeder's own two-hour ride-along shift, created once.
+
+        Found again by its note, so a re-run reuses it instead of adding
+        another. On the close-out fixture's non-engine unit, so no engine
+        equipment check applies, from midnight to 02:00 in the department's
+        time zone, where the rotation's day crews are off duty.
+        """
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        existing = next(
+            (s for s in shifts if pick(s, "notes") == self.BACKLOG02_FIXTURE_NOTE),
+            None,
+        )
+        if existing:
+            return existing
+        unit = self._closeout_apparatus()
+        if not unit:
+            return None
+        start_at = datetime.combine(TODAY, time(hour=0), tzinfo=ORG_TIMEZONE)
+        try:
+            return self.api.post(
+                "/scheduling/shifts",
+                {
+                    "shift_date": str(TODAY),
+                    "start_time": iso(start_at.astimezone(timezone.utc)),
+                    "end_time": iso(
+                        (start_at + timedelta(hours=2)).astimezone(timezone.utc)
+                    ),
+                    "apparatus_id": pick(unit, "id"),
+                    "min_staffing": 3,
+                    "positions": ["firefighter", "firefighter", "ems"],
+                    "notes": self.BACKLOG02_FIXTURE_NOTE,
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"shift evaluations: fixture shift: {exc}")
+            return None
+
+    def _backlog02_crew_three(
+        self, shift: dict, member_ids: set[str], enrolled_on: dict[str, date]
+    ) -> dict | None:
+        """Make up three eligible pool members on `shift`'s crew, or None.
+
+        On the seeder's own ride-along fixture, and only there, a crew member
+        who is not an eligible intern gives up their seat: the fixture has
+        three, and one held by an intern whose enrollment ended would leave no
+        room for the replacement.
+        """
+        shift_id = pick(shift, "id")
+        if pick(shift, "notes") == self.BACKLOG02_FIXTURE_NOTE:
+            for row in items(
+                self.api.get(f"/scheduling/shifts/{shift_id}/assignments"),
+                "assignments",
+            ):
+                if str(pick(row, "user_id")) not in member_ids:
+                    self.api.delete(f"/scheduling/assignments/{pick(row, 'id')}")
+        shift_date = date.fromisoformat(
+            str(pick(shift, "shift_date", "shiftDate"))[:10]
+        )
+        eligible = {
+            user_id
+            for user_id in member_ids
+            if enrolled_on.get(user_id, TODAY) <= shift_date
+        }
+        crew = items(self.api.get(f"/training/shift-reports/shift-crew/{shift_id}"))
+        mine = [c for c in crew if str(c.get("user_id")) in eligible]
+        if len(eligible) < 3:
+            return None
+        aboard = {str(c.get("user_id")) for c in crew}
+        for user_id in eligible - aboard:
+            if len(mine) >= 3:
+                break
+            # A crew position with no seat left is refused like a member
+            # already on another rig that day, so each seat a pool member
+            # can take without a qualification is tried in turn.
+            for position in ("firefighter", "ems"):
                 try:
                     self.api.post(
                         f"/scheduling/shifts/{shift_id}/assignments",
-                        {"user_id": user_id, "position": "firefighter"},
+                        {"user_id": user_id, "position": position},
                     )
+                    break
                 except ApiError as exc:
-                    # Refused when already on another rig that day.
                     if exc.code not in (400, 409):
                         raise
-                    continue
-                crew = items(
-                    self.api.get(f"/training/shift-reports/shift-crew/{shift_id}")
-                )
-                mine = [c for c in crew if str(c.get("user_id")) in member_ids]
-            if len(mine) >= 3:
-                return {"shift": shift, "crew": mine[:3]}
+            crew = items(self.api.get(f"/training/shift-reports/shift-crew/{shift_id}"))
+            mine = [c for c in crew if str(c.get("user_id")) in eligible]
+        if len(mine) >= 3:
+            return {"shift": shift, "crew": mine[:3]}
         return None
 
     def _backlog02_answers(self, template: dict, rated: int | None) -> dict:
@@ -17726,13 +17829,41 @@ class Seeder:
                     break
             if shift_id:
                 break
+        # Only an active enrollment makes a member eligible. A capture can end
+        # one (02-140 completes an enrollment by hand), and an ended one counts
+        # toward no new shift, so its member is left out rather than re-seated.
+        enrollments = items(
+            self.api.get(f"/training/programs/programs/{program_id}/enrollments"),
+            "enrollments",
+        )
+        enrolled_on = {
+            str(pick(e, "user_id")): date.fromisoformat(
+                str(pick(e, "enrolled_at"))[:10]
+            )
+            for e in enrollments
+            if pick(e, "enrolled_at") and pick(e, "status") == "active"
+        }
+        ended = {
+            str(pick(e, "user_id"))
+            for e in enrollments
+            if pick(e, "status") and pick(e, "status") != "active"
+        }
+        eligible = set(pool_ids) - ended
         if shift_id is None:
-            chosen = self._backlog02_internship_shift(set(pool_ids))
+            chosen = self._backlog02_internship_shift(eligible, enrolled_on)
             if chosen is None:
                 self.blocked.append(
-                    "shift evaluations: no past shift with three pool members"
+                    "shift evaluations: no shift with three pool members enrolled "
+                    "by its date, and no ride-along fixture shift"
                 )
                 return
+        else:
+            # The evaluated shift stays, but an intern on it whose enrollment
+            # has since ended no longer counts, so the crew is made up again.
+            chosen = self._backlog02_crew_three(
+                self.api.get(f"/scheduling/shifts/{shift_id}"), eligible, enrolled_on
+            )
+        if chosen:
             shift_id = str(pick(chosen["shift"], "id"))
             self._backlog02_enroll(
                 program_id, [pool_ids[str(c["user_id"])] for c in chosen["crew"]]

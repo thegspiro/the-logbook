@@ -402,8 +402,6 @@
 19-21-candidates-as-member
 19-22-admin-hours-summary-year
 19-23-apparatus-crew-seats
-19-25-ballot-template-settings-before
-19-26-ballot-template-settings-after
 19-27-paper-ballot-over-roster
 19-28-station-board-messages
 19-29-training-session-linkage
