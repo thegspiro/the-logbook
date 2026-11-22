@@ -45,6 +45,8 @@ from app.models.user import Organization, User
 from app.schemas.evaluation import (
     OVERALL_LEVELS,
     EvaluationTool,
+    GoalResult,
+    ItemAnswer,
     PartContent,
     TemplateItem,
 )
@@ -55,6 +57,7 @@ from app.services.evaluation_service import (
     EvaluationService,
     content_hash,
     form_items,
+    goals_under_review,
     weighted_overall,
 )
 from app.services.file_storage_service import (
@@ -182,10 +185,53 @@ def figure_detail(key: str, entry: Optional[Dict[str, Any]]) -> Optional[str]:
     return None
 
 
+_GOAL_RESULTS = {
+    GoalResult.MET.value: "Met",
+    GoalResult.PARTLY_MET.value: "Partly met",
+    GoalResult.NOT_MET.value: "Not met",
+    GoalResult.NOT_APPLICABLE.value: "No longer applies",
+}
+
+
+def _goal_review_answer(
+    answer: Optional[ItemAnswer], frozen: Optional[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """A goal-review item as printed: each goal the previous review set, in
+    that review's words, with the result given and any comment."""
+    if frozen is None:
+        return {"answer": "The previous review set no goals.", "notes": []}
+    period = frozen.get("period_name") or (
+        f"{_iso_day(frozen.get('period_start'))} – {_iso_day(frozen.get('period_end'))}"
+    )
+    goals = frozen.get("goals") or []
+    notes: List[Tuple[str, str]] = []
+    rated = answer.goal_ratings if answer is not None else {}
+    for goal in goals:
+        rating = rated.get(goal["key"])
+        result = (
+            _GOAL_RESULTS.get(rating.result.value, rating.result.value)
+            if rating is not None and rating.result is not None
+            else "Not rated"
+        )
+        lines = [goal["text"], f"Result: {result}"]
+        if rating is not None and rating.comment:
+            lines.append(f"Comment: {rating.comment}")
+        notes.append((goal["label"], "\n".join(lines)))
+    return {
+        "answer": f"{_plural(len(goals), 'goal', 'goals')} set in the review for {period}",
+        "notes": notes,
+    }
+
+
 def _answer(
-    item: TemplateItem, content: PartContent, evaluator: bool
+    item: TemplateItem,
+    content: PartContent,
+    evaluator: bool,
+    frozen_goals: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     answer = content.answers.get(item.key)
+    if item.tool == EvaluationTool.GOAL_REVIEW:
+        return _goal_review_answer(answer, frozen_goals)
     if answer is None:
         return None
     notes: List[Tuple[str, str]] = []
@@ -355,6 +401,7 @@ class EvaluationDocumentService:
 
         grades = grade_content(definition, evaluator_content)
         grade_by_key = {g["key"]: g for g in (grades or {}).get("sections", [])}
+        frozen_goals = goals_under_review(evaluation)
         sections = []
         for block in definition.sections:
             items = []
@@ -362,9 +409,11 @@ class EvaluationDocumentService:
                 items.append(
                     {
                         "label": item.label,
-                        "evaluator": _answer(item, evaluator_content, True),
+                        "evaluator": _answer(
+                            item, evaluator_content, True, frozen_goals
+                        ),
                         "self": (
-                            _answer(item, self_content, False)
+                            _answer(item, self_content, False, frozen_goals)
                             if self_content is not None and item.key in self_keys
                             else None
                         ),

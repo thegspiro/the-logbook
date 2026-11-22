@@ -333,6 +333,13 @@ describe('TrainingEnhancementsTab compliance forecast', () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to load forecast'));
   });
 
+  it("says the projections are each member's standing on that day", () => {
+    renderWithRouter(<TrainingEnhancementsTab activeTab="reports" />);
+
+    expect(screen.getByText(/standing 30, 60 and 90 days from now if nothing new is logged/)).toBeInTheDocument();
+    expect(screen.queryByText(/based on expiring certifications/)).not.toBeInTheDocument();
+  });
+
   it('colours the current figure by the standing the server classified', async () => {
     // The department's (or the profile's) thresholds decide, not a fixed
     // 80 / 50: 85% can be at risk under a 100% bar, 60% compliant under 50%.

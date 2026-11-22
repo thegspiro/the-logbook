@@ -47,7 +47,11 @@ def main(short_dir: Path, build_dir: Path, voice_path: Path) -> None:
         best_heard = ""
         for n in range(1, MAX_TAKES + 1):
             with wave.open(str(take), "wb") as w:
-                voice.synthesize_wav(shot["say"], w, syn_config=SYNTHESIS)
+                # "speak", when given, is what the voice reads: a respelling of
+                # a word it garbles. The take is still scored against "say".
+                voice.synthesize_wav(
+                    shot.get("speak", shot["say"]), w, syn_config=SYNTHESIS
+                )
             segments, _ = model.transcribe(decode(str(take)))
             heard = " ".join(s.text.strip() for s in segments)
             score = match(shot["say"], heard)

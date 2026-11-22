@@ -216,6 +216,9 @@ def _window_payload(
         "auto_close": window.auto_close,
         "expected_delivery_date": window.expected_delivery_date,
         "pickup_instructions": window.pickup_instructions,
+        "vendor_name": window.vendor_name,
+        "vendor_reference": window.vendor_reference,
+        "vendor_ordered_at": window.vendor_ordered_at,
         "include_all_products": window.include_all_products,
         "notify_on_open": window.notify_on_open,
         "opened_at": window.opened_at,
@@ -1104,6 +1107,21 @@ async def record_vendor_order(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+    # Serialized like every other window response: product names and the
+    # order counters are not model attributes, so the bare ORM window the
+    # service hands back would report them as null and zero. Re-read after
+    # the orders were advanced, so the counters include that change.
+    organization_id = str(current_user.organization_id)
+    summary = await service.get_window_summary(window_id, organization_id)
+    window = await service.get_window(window_id, organization_id, reload=True)
+    if window is None:
+        raise HTTPException(status_code=404, detail="Order window not found")
+    result["window"] = _window_payload(
+        window,
+        order_count=summary["order_count"],
+        total_sales=summary["gross_sales"],
+        outstanding=summary["outstanding"],
     )
     return result
 

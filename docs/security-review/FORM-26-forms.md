@@ -1,10 +1,133 @@
 # Security Review — Forms
 
-**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27 (pass 10), 2026-10-30 (pass 11), 2026-11-03 (pass 12), 2026-11-11 (pass 13) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27 (pass 10), 2026-10-30 (pass 11), 2026-11-03 (pass 12), 2026-11-11 (pass 13), 2026-11-21 (pass 14) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
 
 ---
 
-## Pass 13 (2026-11-11) — a correctness fix that removes an escaping layer, verified safe at every consumer; 0 fixed, 0 new findings (watchdog pickup)
+## Pass 14 (2026-11-21) — a date/timezone correctness fix on a shared helper, re-verified at Forms' own call site; a cosmetic StatGrid swap; 0 fixed, 0 new findings (watchdog pickup)
+
+**Watchdog pickup:** the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (`ListAgents`, "No
+reachable agents"). A fresh `list_pull_requests` (state=open) against
+`thegspiro/the-logbook` found no `claude/security-review-*` head — PR #4520
+(Feature 25, Messaging & notifications, pass 14) had already merged
+(`c59bad857`) — and row 26 (Forms) was confirmed the next pending feature
+directly against `PROGRESS.md`'s rotation table on a freshly fetched `main`.
+
+**Scope:** loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md` — no open `🚩`/`OPEN`/`FLAGGED` items,
+`docs/app-review/forms.md` — only FORM-4, already tracked below, and this
+file's passes 1-13) before touching code.
+
+**Baseline:** pass 13's merge, PR #4234 (`8d4915078`). `git diff --stat
+8d4915078..origin/main` restricted to all six declared backend scope files
+(`endpoints/forms.py`, `api/public/forms.py`, `forms_service.py`,
+`models/forms.py`, `schemas/forms.py`, `utils/embed_origins.py`) plus the
+frontend forms/embed/public-form surface (`modules/forms/`,
+`components/forms/`, `pages/PublicFormPage.tsx`, `pages/FormsPage.tsx`) shows
+real content in exactly two files: `forms_service.py` (+15/-24) and
+`components/forms/FormResultsPanel.tsx` (+2/-1). Every other declared file is
+byte-identical to pass 13.
+
+- **`forms_service.py`'s `_create_event_request_from_submission` — a
+  date/timezone correctness fix (owner decision, 2026-11-20), not this
+  feature's own commit.** The real change is in Feature 16's (Events &
+  requests) own `event_request_service.py` — `lead_time_error`'s
+  `preferred_date_start`/`preferred_date_end` parameters and its `now`
+  parameter (renamed `today`, now a required keyword) moved from
+  timezone-aware `datetime` to plain `date`, because `EventRequest.
+preferred_date_start`/`preferred_date_end` are already `Date` columns
+  (`models/event_request.py:132-133`) — the prior code built a
+  timezone-anchored `datetime`, assigned it into a `Date` column, and the
+  DB-level truncation silently dropped the anchoring the comment above it
+  described, which is exactly the class of date bug CLAUDE.md's banned
+  `.toLocaleDateString()`/raw-UTC-slice patterns exist to catch on the
+  frontend side.
+  - Forms' own file is a caller of that function, not its owner: `_parse_request_date`
+    (`forms_service.py:3365-3372`) now returns `Optional[date]` (via
+    `datetime.fromisoformat(...).date()`) instead of a tz-anchored
+    `datetime`, and the `lead_time_error` call site
+    (`forms_service.py:3444-3450`) now passes the new required
+    `today=org_today(org)` keyword. Read `org_today`
+    (`app/utils/org_timezone.py:132`) — it takes the already-org-scoped
+    `org` object resolved earlier in the same function and returns
+    `date.today()` in that organization's own timezone; no new
+    client-supplied id, no new query, nothing cross-tenant.
+  - Confirmed the new contract is satisfied at every caller, not assumed from
+    the diff: `lead_time_error` is keyword-only on `today` with no default
+    (`event_request_service.py:378-385`), so a caller that omitted it would
+    raise `TypeError` outright rather than silently misbehave — `grep -n
+"lead_time_error("` across `backend/app/` finds exactly the one call
+    site this diff touches, and it supplies `today=` in the same hunk.
+  - This is a correctness fix to a date-handling bug, the inverse direction
+    of a security regression (it removes a timezone-dependent silent
+    truncation, it does not weaken a check) — no finding, same disposition
+    as pass 13's escaping-layer fix.
+  - `event_request_service.py` itself carries a much larger delta this
+    window (new `create_outreach_shift`/`complete_request_for_finalized_event`
+    helpers, an `AudienceFilter`-based `send_volunteer_call` rewrite, a
+    request-vs-event polymorphic `get_staffing_state`/
+    `resolve_outreach_signup_role`) — all of it is Feature 16's (Events &
+    requests) own declared scope, not Forms', so it is read only far enough
+    to confirm Forms' own call site is correct against the new contract
+    (above), matching pass 11's precedent for `follow_up_forms.py` ("Feature
+    08's own future pass will own this file's full review").
+- **`FormResultsPanel.tsx` (+2/-1)** — the repeated repo-wide `StatGrid`
+  sweep (already documented via other features' passes) replaces a
+  hand-rolled `grid grid-cols-2 gap-3 sm:grid-cols-4` wrapper around the
+  number-field summary's three stat tiles with the shared
+  `components/ux/StatGrid` component. Read `StatGrid.tsx` in full: a
+  container-query layout helper with no data handling, no
+  `dangerouslySetInnerHTML`, no new prop surface beyond `columns`/`gap`/
+  `role`/`aria-label` — purely cosmetic, same class as pass 9's
+  `text-yellow-700`→`-800` contrast fix and pass 12's `page-header`/
+  `split-row` sweep. No finding.
+
+### Route inventory (re-enumerated by AST, not diffed)
+
+Re-ran the AST walk rather than trusting the empty diffstat on both endpoint
+files: **22** routes in `endpoints/forms.py` + **3** in `api/public/forms.py`
+= **25 total**, same count as pass 13. Both files are byte-identical to pass
+13 (confirmed by `git diff --stat`, empty for both), so every route's
+permission dependency is unchanged: `forms.view` ×3, `forms.manage` ×17, bare
+`get_current_user` ×2 (`member_lookup`, `submit_form`); the three public
+routes (`GET /{slug}`, `GET /{slug}/embed-policy`, `POST /{slug}/submit`)
+unchanged.
+
+### Re-verified this pass (unchanged, all hold)
+
+- **FORM-4** (form-definition text stored unescaped, flagged defense-in-depth
+  by design) — re-grepped `dangerouslySetInnerHTML` under
+  `frontend/src/components/forms/`, `pages/PublicFormPage.tsx`,
+  `modules/forms/`: zero matches, unchanged.
+- **FORM-12** (three submission endpoints ignore the `form_id` path segment)
+  — correctness-only API-shape gap, not a security boundary; unchanged.
+- BXC-1, sensitive-field sealing/row-locking, the embed `allow_embed`/
+  origin-allowlist machinery, the member-lookup contact-policy gate, LIKE
+  escaping (`FormsService.search_members`), and the admin CSV export (still
+  a frontend `Blob` download with its own `escapeCsvCell`, not a backend
+  `csv.writer` — n/a for Pitfall #15) — none of this pass's two real changes
+  touch any file these findings concern; nothing regressed.
+
+No new route, no permission string changed, no by-id query added without an
+org filter, no LIKE call added without `escape=LIKE_ESCAPE_CHAR`, no new
+migration on this feature's own scope files.
+
+### Completion gate (pass 14)
+
+| Check                                                                                                    | Result                                                            |
+| -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `flake8==7.4.1` on `app/ tests/ alembic/`                                                                | ✅ 0 violations                                                   |
+| `black==26.10.1 --check app/ tests/ alembic/`                                                            | ✅ clean, 3382 files unchanged                                    |
+| `isort==9.0.2 --check-only app/ tests/ alembic/`                                                         | ✅ clean                                                          |
+| `python3 scripts/validate_migrations.py --strict`                                                        | ✅ 805 revisions, single head `1a5c18b46791`                      |
+| `python3 scripts/check_route_permissions.py --strict`                                                    | ✅ 329 routes, 0 errors, 0 warnings                               |
+| `pytest tests/ -q -k "form or applicant_field or sensitive_field or embed or event_request or outreach"` | ✅ 1689 passed, 1 pre-existing environment-only skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                                                       | ✅ 0 errors                                                       |
+| `cd frontend && npm run lint`                                                                            | ✅ exit 0, 0 warnings                                             |
+| `npx vitest run src/components/forms src/pages/FormsPage.*.test.tsx src/hooks/useRanks.test.ts`          | ✅ 13 files, 67 tests passed                                      |
+
+---
 
 **Watchdog pickup:** the dedicated `/loop 30m /security-review` session
 (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents`, "No

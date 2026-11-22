@@ -480,15 +480,18 @@ async def apply_default_assignee(
         select(User.id).where(
             User.id == default_assignee,
             User.organization_id == str(event_request.organization_id),
+            User.is_active,
         )
     ):
-        # The coordinator left the department (or the setting predates their
-        # transfer). Leave the request unassigned rather than pointing it at
-        # somebody who is no longer there — an unassigned request is visible
-        # in the queue, one assigned to a departed member is not.
+        # The coordinator left the department: their account is now former
+        # (archived, retired, dropped, inactive), deleted, or belongs to
+        # another organization. Leave the request unassigned rather than
+        # pointing it at somebody who is no longer there — an unassigned
+        # request is visible in the queue, one assigned to a departed member
+        # is not.
         logger.warning(
-            "Default event-request coordinator {} is not in org {}; "
-            "leaving request unassigned",
+            "Default event-request coordinator {} is not a current member of "
+            "org {}; leaving request unassigned",
             default_assignee,
             event_request.organization_id,
         )

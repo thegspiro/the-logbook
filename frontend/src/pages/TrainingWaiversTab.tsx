@@ -332,8 +332,10 @@ const TrainingWaiversTab: React.FC = () => {
                         ? `${waiver.requirement_ids.length} requirement${waiver.requirement_ids.length !== 1 ? 's' : ''}`
                         : 'All requirements'}
                     </td>
-                    <td data-label="Reason" className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
-                      {waiver.reason || '-'}
+                    <td data-label="Reason" className="text-theme-text-muted px-4 py-3 text-sm">
+                      <div className="line-clamp-2 max-w-xs break-words" title={waiver.reason || undefined}>
+                        {waiver.reason || '-'}
+                      </div>
                     </td>
                     <td data-label="Source" className="px-4 py-3">
                       <span

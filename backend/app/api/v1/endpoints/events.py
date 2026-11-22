@@ -134,6 +134,7 @@ from app.services.event_service import (
     SeriesPhaseGateWarning,
     attendance_lock_reason,
     resolve_attendee_visibility,
+    rsvp_seats,
 )
 from app.services.event_staffing_service import (
     get_event_staffing,
@@ -1639,9 +1640,7 @@ async def get_event(
     # Seats, not members: the cap counts 1 + guest_count per going RSVP, so the
     # capacity bar has to as well or it reports room the RSVP path will refuse.
     occupied_seats = sum(
-        1 + (r.guest_count or 0)
-        for r in (event.rsvps or [])
-        if r.status == RSVPStatus.GOING
+        rsvp_seats(r) for r in (event.rsvps or []) if r.status == RSVPStatus.GOING
     )
     user_waitlist_position = next(
         (

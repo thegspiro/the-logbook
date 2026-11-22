@@ -36,6 +36,7 @@ from app.services.historical_import_service import (
     HistoricalImportNotReady,
     HistoricalImportService,
 )
+from app.services.historical_import_undo import HistoricalImportUndoService
 from app.services.historical_staffing_commit import HistoricalStaffingCommitService
 from app.services.historical_staffing_service import HistoricalStaffingService
 from tests.clock_support import reread_each_test
@@ -473,3 +474,190 @@ def test_a_member_to_create_is_shown_by_the_name_they_will_get():
         shift_engine.FORMER_MEMBER_FIRST_NAME,
         "2013",
     )
+
+
+async def _hours_entry(
+    db_session, org, user_id, start, end, *, position="firefighter", calls=3
+):
+    """An hours entry the department already has: a shift with no unit (an
+    hours file without a vehicle column), the member's seat and attendance."""
+    shift = Shift(
+        id=_uid(),
+        organization_id=org,
+        shift_date=start.date(),
+        start_time=start,
+        end_time=end,
+        is_finalized=True,
+    )
+    db_session.add(shift)
+    db_session.add(
+        ShiftAssignment(
+            id=_uid(),
+            organization_id=org,
+            shift_id=shift.id,
+            user_id=user_id,
+            position=position,
+        )
+    )
+    db_session.add(
+        ShiftAttendance(
+            id=_uid(),
+            shift_id=shift.id,
+            user_id=user_id,
+            checked_in_at=start,
+            checked_out_at=end,
+            duration_minutes=int((end - start).total_seconds() // 60),
+            call_count=calls,
+        )
+    )
+    await db_session.commit()
+    return shift
+
+
+async def _seats_on(db_session, shift_id):
+    return dict(
+        (
+            await db_session.execute(
+                select(ShiftAssignment.user_id, ShiftAssignment.position).where(
+                    ShiftAssignment.shift_id == shift_id
+                )
+            )
+        ).all()
+    )
+
+
+def _utc(day: int, hour: int) -> datetime:
+    return datetime(2016, 5, day, hour, tzinfo=timezone.utc)
+
+
+@pytest.mark.integration
+class TestPairingWithTheHours:
+    """A seat and an hours entry are one duty when they are the same member
+    and their times overlap (owner decision 2026-11-21)."""
+
+    async def test_a_shift_seat_goes_onto_the_shift_its_hours_were_on(self, db_session):
+        org, admin, import_id = await _setup(db_session)
+        alice = await _user(db_session, org, "101")
+        bob = await _user(db_session, org, "102")
+        # LA106 Day Staff on 2 May, 08:00 to 18:00 in New York, logged with no
+        # unit: the date-and-unit match cannot find it.
+        alice_hours = await _hours_entry(
+            db_session, org, alice, _utc(2, 12), _utc(2, 22)
+        )
+        bob_hours = await _hours_entry(db_session, org, bob, _utc(2, 12), _utc(2, 21))
+        service = HistoricalStaffingCommitService(db_session)
+
+        counts = await service.commit(org, import_id, admin)
+
+        assert await _seats_on(db_session, alice_hours.id) == {alice: "driver"}
+        assert await _seats_on(db_session, bob_hours.id) == {bob: "ems"}
+        assert counts["seats_matched_to_hours"] == 2
+        # No roster shift for LA106: every filled seat paired. A106E on the 3rd
+        # has no hours, so it is made as before.
+        assert counts["shifts_created"] == 1
+        assert "shifts_filled" not in counts
+
+        again = await service.commit(org, import_id, admin)
+        assert "seats_matched_to_hours" not in again
+        assert await _seats_on(db_session, alice_hours.id) == {alice: "driver"}
+
+    async def test_an_event_title_that_is_a_crew_seat_is_written_and_a_role_is_not(
+        self, db_session
+    ):
+        org, admin = await _world(db_session)
+        record = await HistoricalImportService(db_session).create(
+            org, admin, "hours.csv", CSV, "FCVFD Hours DB", None
+        )
+        staffing = HistoricalStaffingService(db_session)
+        seats = "\n".join(
+            [
+                "EventID,PositionID,Title,VID,Name,MinimumStaffing",
+                "600,1,Driver,101,Alice Ng,1",
+                "600,2,Party Staff,102,Bob Diaz,1",
+            ]
+        )
+        events = "\n".join(
+            [
+                "EventID,eDate,StartTime,EndTime,Location,Activity",
+                "600,2016-05-07,1000,1300,Meeting Hall,Birthday Party",
+            ]
+        )
+        await staffing.upload(org, record.id, "seats", "s.csv", seats, admin)
+        await staffing.upload(org, record.id, "events", "e.csv", events, admin)
+        for name, updates in {
+            m.ACTIVITIES: {m.activity_key("Birthday Party"): m.EVENT},
+            m.EVENT_TITLES: {"driver": "greeter", "party staff": "greeter"},
+        }.items():
+            await staffing.update_decisions(org, record.id, name, updates)
+        alice = await _user(db_session, org, "101")
+        bob = await _user(db_session, org, "102")
+        alice_hours = await _hours_entry(
+            db_session, org, alice, _utc(7, 14), _utc(7, 17)
+        )
+        bob_hours = await _hours_entry(db_session, org, bob, _utc(7, 14), _utc(7, 17))
+
+        counts = await HistoricalStaffingCommitService(db_session).commit(
+            org, record.id, admin
+        )
+
+        assert await _seats_on(db_session, alice_hours.id) == {alice: "driver"}
+        assert await _seats_on(db_session, bob_hours.id) == {bob: "firefighter"}
+        assert counts["seats_matched_to_hours"] == 2
+        assert counts["matched_role_not_a_seat"] == 1
+        # The event and its sheet are written as before.
+        assert counts["events_created"] == 1
+        assert counts["outreach_seats"] == 2
+
+    async def test_undo_puts_a_paired_seat_back(self, db_session):
+        org, admin, import_id = await _setup(db_session)
+        alice = await _user(db_session, org, "101")
+        bob = await _user(db_session, org, "102")
+        alice_hours = await _hours_entry(
+            db_session, org, alice, _utc(2, 12), _utc(2, 22)
+        )
+        await HistoricalStaffingCommitService(db_session).commit(org, import_id, admin)
+        # Bob has no hours of his own: his seat joins the shift Alice's hours
+        # are on, the crew's shift.
+        assert await _seats_on(db_session, alice_hours.id) == {
+            alice: "driver",
+            bob: "ems",
+        }
+
+        record = await HistoricalImportService(db_session).get(
+            org, import_id, for_update=True
+        )
+        counts = await HistoricalImportUndoService(db_session).undo(
+            record, "staffing", admin
+        )
+        await db_session.commit()
+
+        # Alice back in the seat the hours gave her; Bob's roster seat gone.
+        assert counts["positions_restored"] == 1
+        assert await _seats_on(db_session, alice_hours.id) == {alice: "firefighter"}
+        assert await db_session.get(Shift, alice_hours.id) is not None
+
+    async def test_the_preview_counts_both_sides_and_names_what_is_unpaired(
+        self, db_session
+    ):
+        org, admin, import_id = await _setup(db_session)
+        alice = await _user(db_session, org, "101")
+        bob = await _user(db_session, org, "102")
+        await _hours_entry(db_session, org, alice, _utc(2, 12), _utc(2, 22))
+        # Bob logged hours on the 3rd, a day the roster covers, with no seat.
+        await _hours_entry(db_session, org, bob, _utc(3, 12), _utc(3, 18))
+
+        view = (
+            await HistoricalStaffingCommitService(db_session).preview(org, import_id)
+        )["hours_match"]
+
+        assert view["matched"] == 1
+        # Bob's LA106 seat on the 2nd, Alice's A106E seat on the 3rd, and both
+        # Birthday Party seats; the Santamobile next year is upcoming.
+        assert view["signups_without_hours"] == 4
+        assert view["hours_without_signup"] == 1
+        assert view["hours_without_signup_examples"][0]["member"] == "Bob Diaz"
+        titles = {
+            (e["member"], e["title"]) for e in view["signups_without_hours_examples"]
+        }
+        assert ("Alice Ng", "Driver") in titles
+        assert ("Bob Diaz", "Lead Technician") in titles

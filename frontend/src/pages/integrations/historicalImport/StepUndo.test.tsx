@@ -100,6 +100,24 @@ describe('StepUndo', () => {
     );
   });
 
+  it('says the roster puts the members it moved back in their seats', async () => {
+    mockPreview.mockResolvedValue({
+      steps: { staffing: step({ reused: 3, positions_restored: 2, kept_total: 0, kept: [] }) },
+      members_created: 0,
+    });
+    const user = userEvent.setup();
+    renderWithRouter(
+      <StepUndo importId="hist-1" step="staffing" noun="roster's shifts, seats and events" onUndone={onUndone} />
+    );
+    await user.click(await screen.findByRole('button', { name: 'Undo this step' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent(
+      '3 shifts and seats it used but did not make are left as they are. 2 members it moved to another seat go back to the seat they had.'
+    );
+    expect(dialog).not.toHaveTextContent('keeps that seat');
+  });
+
   it("shows the server's reason when the step must wait", async () => {
     mockPreview.mockResolvedValue({
       steps: {

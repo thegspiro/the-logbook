@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '@/test/utils';
-import type { ZeffyCampaign, ZeffyPayment, ZeffyStatus } from '../types';
+import type { ZeffyCampaign, ZeffyDuesMatch, ZeffyPayment, ZeffyStatus } from '../types';
 
 const toastError = vi.fn();
 const toastSuccess = vi.fn();
@@ -40,6 +40,8 @@ const syncNow = vi.fn();
 const listDuesSchedules = vi.fn();
 const listCampaigns = vi.fn();
 const listEvents = vi.fn();
+const getDuesMatch = vi.fn();
+const confirmDues = vi.fn();
 vi.mock('../services/api', () => ({
   zeffyService: {
     getStatus: (...args: unknown[]) => getStatus(...args) as unknown,
@@ -50,6 +52,8 @@ vi.mock('../services/api', () => ({
     listPayments: (...args: unknown[]) => listPayments(...args) as unknown,
     syncNow: (...args: unknown[]) => syncNow(...args) as unknown,
     listDuesSchedules: (...args: unknown[]) => listDuesSchedules(...args) as unknown,
+    getDuesMatch: (...args: unknown[]) => getDuesMatch(...args) as unknown,
+    confirmDues: (...args: unknown[]) => confirmDues(...args) as unknown,
   },
   fundraisingService: {
     listCampaigns: (...args: unknown[]) => listCampaigns(...args) as unknown,
@@ -108,6 +112,30 @@ const payment = (overrides: Partial<ZeffyPayment> = {}): ZeffyPayment => ({
   ...overrides,
 });
 
+const heldDues = (overrides: Partial<ZeffyPayment> = {}): ZeffyPayment =>
+  payment({
+    zeffyPaymentId: 'pay_m',
+    campaignTitle: 'Membership 2027',
+    payerName: 'Dana Parent',
+    amount: '120.00',
+    stateDetail: 'Waiting for a treasurer to confirm which member’s dues it pays.',
+    awaitingDuesConfirmation: true,
+    ...overrides,
+  });
+
+const duesMatch = (overrides: Partial<ZeffyDuesMatch> = {}): ZeffyDuesMatch => ({
+  zeffyPaymentId: 'pay_m',
+  netAmount: '120.00',
+  currency: 'USD',
+  payerName: 'Dana Parent',
+  suggestedUserId: 'u-dana',
+  candidates: [
+    { userId: 'u-dana', name: 'Dana Member', memberDuesId: 'md-1', balance: '120.00' },
+    { userId: 'u-junior', name: 'Jo Junior', memberDuesId: 'md-2', balance: '60.00' },
+  ],
+  ...overrides,
+});
+
 const resetMocks = () => {
   for (const mock of [
     getStatus,
@@ -120,6 +148,8 @@ const resetMocks = () => {
     listDuesSchedules,
     listCampaigns,
     listEvents,
+    getDuesMatch,
+    confirmDues,
     toastError,
     toastSuccess,
   ]) {
@@ -135,6 +165,8 @@ const resetMocks = () => {
   listDuesSchedules.mockResolvedValue([{ id: 'ds-1', name: 'Annual dues', isActive: true }]);
   listCampaigns.mockResolvedValue([{ id: 'fc-1', name: 'Engine fund' }]);
   listEvents.mockResolvedValue([{ id: 'fe-1', name: 'Pancake breakfast' }]);
+  getDuesMatch.mockResolvedValue(duesMatch());
+  confirmDues.mockResolvedValue(payment({ state: 'applied' }));
 };
 
 describe('ZeffyPage — a fundraising manager', () => {
@@ -451,7 +483,7 @@ describe('ZeffyPage — a member who can only view fundraising', () => {
     expect(screen.getByText(/Fundraising campaign: Engine fund/)).toBeInTheDocument();
     expect(await screen.findByText('Pat Donor')).toBeInTheDocument();
     const table = screen.getByRole('table');
-    expect(within(table).getByText('No member match')).toBeInTheDocument();
+    expect(within(table).getByText('Awaiting confirmation')).toBeInTheDocument();
     expect(within(table).getByText('No member has the email address the payer used.')).toBeInTheDocument();
     expect(listZeffyCampaigns).not.toHaveBeenCalled();
     expect(listCampaigns).not.toHaveBeenCalled();
@@ -466,5 +498,100 @@ describe('ZeffyPage — a member who can only view fundraising', () => {
     await user.click(screen.getByRole('button', { name: 'Needs review' }));
 
     await waitFor(() => expect(listPayments).toHaveBeenLastCalledWith({ state: 'needs_review', limit: 50, offset: 0 }));
+  });
+});
+
+describe('ZeffyPage — confirming a held membership payment (ADV2-11)', () => {
+  beforeEach(() => {
+    resetMocks();
+    granted = new Set(['fundraising.view', 'finance.manage']);
+    listPayments.mockResolvedValue({ items: [heldDues(), payment({ id: 'row-2', payerName: 'Pat Donor' })], total: 2 });
+  });
+
+  const openDialog = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderWithRouter(<ZeffyPage />);
+    await user.click(await screen.findByRole('button', { name: 'Confirm member dues for Dana Parent' }));
+    return screen.findByRole('dialog', { name: 'Confirm member dues' });
+  };
+
+  it('offers Confirm only on a payment held for dues', async () => {
+    renderWithRouter(<ZeffyPage />);
+    await screen.findByText('Pat Donor');
+
+    expect(screen.getAllByRole('button', { name: /^Confirm member dues for/ })).toHaveLength(1);
+  });
+
+  it('is not offered without finance.manage', async () => {
+    granted = new Set(['fundraising.view']);
+    renderWithRouter(<ZeffyPage />);
+    await screen.findByText('Dana Parent');
+
+    expect(screen.queryByRole('button', { name: /^Confirm member dues for/ })).not.toBeInTheDocument();
+  });
+
+  it('pre-selects the email match and credits that member', async () => {
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+
+    expect(await within(dialog).findByRole('combobox', { name: /Member/ })).toHaveValue('u-dana');
+    expect(getDuesMatch).toHaveBeenCalledWith('pay_m');
+    await user.click(within(dialog).getByRole('button', { name: 'Credit dues' }));
+
+    await waitFor(() =>
+      expect(confirmDues).toHaveBeenCalledWith('pay_m', { userId: 'u-dana', excessAsDonation: false })
+    );
+    expect(toastSuccess).toHaveBeenCalledWith('Payment credited to member dues');
+    await waitFor(() => expect(listPayments).toHaveBeenCalledTimes(2));
+  });
+
+  it('holds an overpayment until the treasurer records the extra as a donation', async () => {
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+    await user.selectOptions(await within(dialog).findByRole('combobox', { name: /Member/ }), 'u-junior');
+
+    expect(within(dialog).getByText(/more than the \$60\.00 Jo Junior still owes/)).toBeInTheDocument();
+    const credit = within(dialog).getByRole('button', { name: 'Credit dues' });
+    expect(credit).toBeDisabled();
+    await user.click(within(dialog).getByRole('checkbox', { name: /Record the extra \$60\.00 as a donation/ }));
+    expect(credit).toBeEnabled();
+    await user.click(credit);
+
+    await waitFor(() =>
+      expect(confirmDues).toHaveBeenCalledWith('pay_m', { userId: 'u-junior', excessAsDonation: true })
+    );
+  });
+
+  it('pre-selects nobody when the email matches no member with open dues', async () => {
+    getDuesMatch.mockResolvedValue(duesMatch({ suggestedUserId: null }));
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+
+    expect(await within(dialog).findByRole('combobox', { name: /Member/ })).toHaveValue('');
+    await user.click(within(dialog).getByRole('button', { name: 'Credit dues' }));
+
+    expect(await within(dialog).findByText('Choose the member whose dues this payment pays.')).toBeInTheDocument();
+    expect(confirmDues).not.toHaveBeenCalled();
+  });
+
+  it('says so when nobody has open dues to credit', async () => {
+    getDuesMatch.mockResolvedValue(duesMatch({ candidates: [] }));
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+
+    expect(await within(dialog).findByText(/No current member has open dues/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Credit dues' })).toBeDisabled();
+    expect(within(dialog).queryByRole('combobox')).not.toBeInTheDocument();
+  });
+
+  it('shows a refusal in the dialog and keeps it open', async () => {
+    confirmDues.mockRejectedValue(new Error('You cannot record a payment on your own dues.'));
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+    await within(dialog).findByRole('combobox', { name: /Member/ });
+
+    await user.click(within(dialog).getByRole('button', { name: 'Credit dues' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('You cannot record a payment on your own dues.');
+    expect(toastSuccess).not.toHaveBeenCalled();
   });
 });

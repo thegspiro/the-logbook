@@ -76,7 +76,10 @@ const StepUndo: React.FC<StepUndoProps> = ({ importId, step, noun, onUndone }) =
       preview.reused
         ? `${plural(preview.reused, 'shift or seat it used but did not make is', 'shifts and seats it used but did not make are')} left as ${
             preview.reused === 1 ? 'it is' : 'they are'
-          }; a member it moved to another seat keeps that seat.`
+          }${preview.positions_restored ? '.' : '; a member it moved to another seat keeps that seat.'}`
+        : '',
+      preview.positions_restored
+        ? `${plural(preview.positions_restored, 'member it moved to another seat goes', 'members it moved to another seat go')} back to the seat they had.`
         : '',
       membersCreated > 0
         ? 'Former members this import created are removed too, unless something else still refers to them.'
