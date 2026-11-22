@@ -4154,16 +4154,22 @@ class TrainingProgramService:
         progress.updated_at = datetime.now(timezone.utc)
         await self.db.commit()
         await self.db.refresh(progress)
+        enrollment_id = progress.enrollment_id
 
         # Recalculate enrollment progress
         await self._recalculate_enrollment_progress(
-            progress.enrollment_id, completion_credit_id=completion_credit_id
+            enrollment_id, completion_credit_id=completion_credit_id
         )
 
         # Auto-advance phases whose requirements are now complete (no-op for
         # non-phased programs and phases flagged for manual advancement)
-        await self._maybe_auto_advance_phase(progress.enrollment_id)
+        await self._maybe_auto_advance_phase(enrollment_id)
 
+        # Re-read before returning: the recalculation rolls back when its
+        # best-effort milestone step fails, which expires this row, and the
+        # endpoint serializes it straight after (MissingGreenlet, a 500 on a
+        # change that was already saved).
+        await self.db.refresh(progress)
         return progress, None
 
     async def _update_linked_row(
@@ -5770,6 +5776,11 @@ class TrainingProgramService:
             except Exception as e:
                 logger.error("Failed to process milestones: {}", e)
                 await self.db.rollback()
+                # Rolling back the request's transaction expires every object
+                # in the session, and an expired attribute read on an async
+                # session raises MissingGreenlet. The completion steps below
+                # read the enrollment; callers re-read what they return.
+                await self.db.refresh(enrollment)
 
         if newly_completed:
             await self._after_enrollment_completed(enrollment, completion_credit_id)

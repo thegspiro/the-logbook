@@ -21,6 +21,7 @@ export const EvaluationTool = {
   CHECKLIST: 'checklist',
   NARRATIVE: 'narrative',
   GOALS: 'goals',
+  GOAL_REVIEW: 'goal_review',
 } as const;
 export type EvaluationTool = (typeof EvaluationTool)[keyof typeof EvaluationTool];
 
@@ -31,6 +32,7 @@ export const EVALUATION_TOOL_LABELS: Record<EvaluationTool, string> = {
   checklist: 'Checklist',
   narrative: 'Narrative only',
   goals: 'Goals',
+  goal_review: "Last review's goals",
 };
 
 /** Tools that produce a number, and so can be weighted. */
@@ -290,6 +292,28 @@ export interface ItemAnswer {
   comment?: string | null | undefined;
   example?: string | null | undefined;
   justification?: string | null | undefined;
+  /** A goal-review item's result for each goal the previous review set, keyed by that review's goals item. */
+  goal_ratings?: Record<string, GoalRating> | undefined;
+}
+
+export const GoalResult = {
+  MET: 'met',
+  PARTLY_MET: 'partly_met',
+  NOT_MET: 'not_met',
+  NOT_APPLICABLE: 'not_applicable',
+} as const;
+export type GoalResult = (typeof GoalResult)[keyof typeof GoalResult];
+
+export const GOAL_RESULT_LABELS: Record<GoalResult, string> = {
+  met: 'Met',
+  partly_met: 'Partly met',
+  not_met: 'Not met',
+  not_applicable: 'No longer applies',
+};
+
+export interface GoalRating {
+  result?: GoalResult | null | undefined;
+  comment?: string | null | undefined;
 }
 
 /** An evaluator's grade for a section in place of the calculated one. */
@@ -484,7 +508,17 @@ export interface EvaluationDetail extends EvaluationSummary {
   calibration_flags?: string[] | undefined;
   /** The member's last finalized review on the same form, when the caller may read it. */
   previous_review?: PreviousReview | null | undefined;
+  /** The previous review's goals as copied into this one for its goal-review item. Part of this record. */
+  goals_under_review?: GoalsUnderReview | null | undefined;
   viewer: EvaluationViewer;
+}
+
+export interface GoalsUnderReview {
+  evaluation_id: string;
+  period_name: string | null;
+  period_start: string;
+  period_end: string;
+  goals: { key: string; label: string; text: string }[];
 }
 
 export interface PreviousReview {

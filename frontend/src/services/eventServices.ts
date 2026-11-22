@@ -288,7 +288,7 @@ export const eventService = {
 
   /**
    * Record, or clear with null, how many guests were counted at an outreach
-   * event — the Community Engagement report's actual figure for it.
+   * event — the Outreach Impact report's actual figure for it.
    */
   /** The volunteer signup sheet staffing an outreach event (events.manage). */
   async getStaffing(eventId: string): Promise<import('../types/event').EventStaffing> {

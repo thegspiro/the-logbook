@@ -37,6 +37,8 @@ const CALL_VOLUME = [0, 1, 2, 3].map((i) => ({
     'Structure Fire': 148,
     'Emergency Medical Service': 842,
     'Motor Vehicle Accident with Entrapment': 96,
+    // One unbroken word: an imported incident type can be up to 100 characters.
+    HAZMAT_TIER_2_CHEMICAL_RELEASE_WITH_DECONTAMINATION_AND_EVACUATION_PROTOCOL: 3,
     'Hazardous Materials': 24,
   },
   avg_response_seconds: 384,

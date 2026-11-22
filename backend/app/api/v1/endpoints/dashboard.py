@@ -684,7 +684,7 @@ class CommunityEventReach(BaseModel):
 
 
 class CommunityEngagement(BaseModel):
-    """Community engagement metrics for Public Outreach.
+    """Outreach Impact metrics for the Community Outreach Manager.
 
     The first four fields are all-time and unchanged from before the report
     was added; everything after them follows ``period``.
@@ -1971,7 +1971,7 @@ async def get_community_engagement(
     current_user: User = Depends(require_permission("events.manage")),
 ) -> CommunityEngagement:
     """
-    Community engagement metrics for Public Outreach Coordinators.
+    Outreach Impact metrics for the Community Outreach Manager.
     Aggregates public event data and attendee counts.
     """
     org_id = current_user.organization_id

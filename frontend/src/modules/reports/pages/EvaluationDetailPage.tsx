@@ -453,6 +453,7 @@ const EvaluationDetailPage: React.FC = () => {
                   flagged={detail.calibration_flags}
                   grades={live.grades}
                   gradesError={live.error}
+                  goalsUnderReview={detail.goals_under_review}
                 />
                 <div className="action-bar-safe flex flex-wrap justify-end gap-2">
                   <button type="button" className="btn-secondary" disabled={busy || !dirty} onClick={() => void save()}>
@@ -489,6 +490,7 @@ const EvaluationDetailPage: React.FC = () => {
                   overallLevels={detail.overall_levels}
                   flagged={detail.calibration_flags}
                   grades={part.kind === 'evaluator' ? detail.grades : null}
+                  goalsUnderReview={detail.goals_under_review}
                 />
               </section>
             ))}

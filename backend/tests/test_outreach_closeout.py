@@ -8,7 +8,7 @@ Driven against real rows. Pinned:
 * the close-out record (how it went, apparatus, materials, photos) is saved in
   one canonical shape, refused where a headcount would be, and checks every
   apparatus id belongs to the department;
-* the Community Engagement report totals what was handed out and carries each
+* the Outreach Impact report totals what was handed out and carries each
   event's close-out to its rows.
 """
 

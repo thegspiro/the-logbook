@@ -5,9 +5,10 @@ The department connects Zeffy on the Integrations page; these endpoints are
 where it decides what each Zeffy campaign feeds and watches what arrived.
 Mounted under ``/grants/zeffy`` behind the grants module gate.
 
-Linking a campaign to a dues schedule credits members' dues — a finance
-action — so it also needs ``finance.manage``, the permission that records a
-dues payment by hand.
+Linking a campaign to a dues schedule routes membership payments to members'
+dues — a finance action — so it also needs ``finance.manage``, the permission
+that records a dues payment by hand. A membership payment is then held until a
+holder of that permission confirms whose dues it pays (ADV2-11).
 """
 
 from datetime import datetime, timezone
@@ -34,6 +35,9 @@ from app.models.zeffy import (
 )
 from app.schemas.zeffy import (
     ZeffyCampaignResponse,
+    ZeffyDuesCandidateResponse,
+    ZeffyDuesConfirm,
+    ZeffyDuesMatchResponse,
     ZeffyLinkResponse,
     ZeffyLinkUpsert,
     ZeffyPaymentListResponse,
@@ -48,7 +52,11 @@ from app.services.integration_services.zeffy_service import (
     cents,
     webhook_secret_from_integration,
 )
-from app.services.zeffy_sync_service import ZeffySyncService
+from app.services.zeffy_sync_service import (
+    NOT_AWAITING,
+    ZeffyPaymentNotFound,
+    ZeffySyncService,
+)
 
 router = APIRouter()
 
@@ -385,10 +393,163 @@ async def list_zeffy_payments(
             .offset(offset)
         )
     ).all()
-    return ZeffyPaymentListResponse(
-        items=[ZeffyPaymentResponse.model_validate(row) for row in rows],
-        total=int(total or 0),
+    awaiting = await _awaiting_dues_confirmation(db, organization_id, rows)
+    items = []
+    for row in rows:
+        item = ZeffyPaymentResponse.model_validate(row)
+        item.awaiting_dues_confirmation = row.id in awaiting
+        items.append(item)
+    return ZeffyPaymentListResponse(items=items, total=int(total or 0))
+
+
+async def _awaiting_dues_confirmation(
+    db: AsyncSession, organization_id: str, rows: Any
+) -> set[str]:
+    """Ids of the rows a treasurer can confirm: held, and linked to dues.
+
+    Resolved as ``ZeffySyncService._link_for`` does: the payment's own
+    campaign's link first, else its peer-to-peer main page's.
+    """
+    held = [
+        row
+        for row in rows
+        if row.state == ZeffyPaymentState.UNMATCHED and row.applied_target_type is None
+    ]
+    campaign_ids = {
+        campaign_id
+        for row in held
+        for campaign_id in (row.zeffy_campaign_id, row.zeffy_parent_campaign_id)
+        if campaign_id
+    }
+    if not campaign_ids:
+        return set()
+    links = {
+        link.zeffy_campaign_id: link
+        for link in (
+            await db.scalars(
+                select(ZeffyCampaignLink).where(
+                    ZeffyCampaignLink.organization_id == organization_id,
+                    ZeffyCampaignLink.zeffy_campaign_id.in_(campaign_ids),
+                )
+            )
+        ).all()
+    }
+    awaiting: set[str] = set()
+    for row in held:
+        link = links.get(row.zeffy_campaign_id or "") or links.get(
+            row.zeffy_parent_campaign_id or ""
+        )
+        if (
+            link is not None
+            and link.target_type == ZeffyLinkTarget.DUES_SCHEDULE
+            and link.dues_schedule_id is not None
+        ):
+            awaiting.add(row.id)
+    return awaiting
+
+
+@router.get(
+    "/payments/{zeffy_payment_id}/dues-match", response_model=ZeffyDuesMatchResponse
+)
+async def get_zeffy_dues_match(
+    zeffy_payment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """What a treasurer needs to confirm a held membership payment (ADV2-11).
+
+    The payment's net amount, the member whose email the payer typed (a
+    suggestion only), and every current member with open dues on the linked
+    schedule, with what their oldest open dues still owe. Requires
+    ``finance.manage``. 404 for a payment not in the department; 409 for one
+    not waiting for a dues confirmation.
+    """
+    organization_id = str(current_user.organization_id)
+    try:
+        match = await ZeffySyncService(db).dues_match(organization_id, zeffy_payment_id)
+    except ZeffyPaymentNotFound:
+        raise HTTPException(status_code=404, detail="Zeffy payment not found")
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
+    return ZeffyDuesMatchResponse(
+        zeffy_payment_id=match.payment.zeffy_payment_id,
+        net_amount=match.net_amount,
+        currency=match.payment.currency,
+        payer_name=match.payment.payer_name,
+        suggested_user_id=match.suggested_user_id,
+        candidates=[
+            ZeffyDuesCandidateResponse(
+                user_id=c.user_id,
+                name=c.name,
+                member_dues_id=c.member_dues_id,
+                balance=c.balance,
+            )
+            for c in match.candidates
+        ],
     )
+
+
+@router.post(
+    "/payments/{zeffy_payment_id}/confirm-dues", response_model=ZeffyPaymentResponse
+)
+async def confirm_zeffy_dues_payment(
+    zeffy_payment_id: str,
+    data: ZeffyDuesConfirm,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Credit a held membership payment to the member a treasurer chose.
+
+    ADV2-11, owner decision 2026-11-21: a Zeffy membership payment is never
+    credited on the payer's typed email alone. Requires ``finance.manage``,
+    like recording a dues payment by hand. The member may be anyone current
+    with open dues on the linked schedule; the email match is only a
+    suggestion. An overpayment is refused (400) unless ``excessAsDonation``,
+    and the treasurer may not credit their own dues (400). 404 for a payment
+    not in the department; 409 for one not waiting for a dues confirmation.
+    """
+    organization_id = str(current_user.organization_id)
+    service = ZeffySyncService(db)
+    try:
+        row = await service.confirm_dues(
+            organization_id,
+            zeffy_payment_id,
+            member_id=data.user_id,
+            confirmed_by=str(current_user.id),
+            excess_as_donation=data.excess_as_donation,
+        )
+    except ZeffyPaymentNotFound:
+        raise HTTPException(status_code=404, detail="Zeffy payment not found")
+    except ValueError as e:
+        # Nothing was written before the refusal: the service checks first,
+        # and record_dues_payment refuses before it appends to the ledger.
+        code = (
+            status.HTTP_409_CONFLICT
+            if str(e) == NOT_AWAITING
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=code, detail=safe_error_detail(e))
+    await db.commit()
+    await db.refresh(row)
+    await log_audit_event(
+        db=db,
+        event_type="zeffy_dues_payment_confirmed",
+        event_category="finance",
+        severity="warning",
+        event_data={
+            "organization_id": organization_id,
+            "zeffy_payment_id": zeffy_payment_id,
+            "target_user_id": data.user_id,
+            "member_dues_id": row.member_dues_id,
+            "amount": str(row.applied_amount),
+            "excess_as_donation": data.excess_as_donation,
+        },
+        user_id=str(current_user.id),
+        organization_id=organization_id,
+    )
+    return ZeffyPaymentResponse.model_validate(row)
 
 
 @router.post("/sync", response_model=ZeffySyncResponse)

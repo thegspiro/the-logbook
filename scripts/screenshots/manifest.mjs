@@ -22473,6 +22473,47 @@ export const SHOTS = [
     },
   },
   {
+    id: "03-140-history-import-units",
+    doc: "03-scheduling.md",
+    line: 5046,
+    anchor: "A draft import's Units tab: POV and Other EMS sent to Catch-all",
+    alt: "A draft import's Units tab: POV and Other EMS both recorded on the catch-all Other unit, and Medic 7 open on Add as an outside agency's unit with Lakeside Volunteer Rescue picked from the Agency list, Medic 7 in the Unit box, and the note that a unit added here starts hidden from members",
+    route: "/scheduling/admin/history-import",
+    fullPage: true,
+    expect: "starts hidden from members",
+    // POV and Other EMS are names the import could not place until the
+    // catch-all is chosen, which is the state the paragraph describes.
+    allowEmptyState: true,
+    prepare: async (page) => {
+      await page
+        .getByRole("link", { name: /^Review$/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("tab", { name: /^Units/ })
+        .click({ timeout: 20_000 });
+      // Saved to the draft, like any reviewer's decision; choosing it again on
+      // a later run changes nothing. The draft is never committed.
+      for (const name of ["POV", "Other EMS"]) {
+        const picker = page.getByLabel(`Which unit is ${name}?`);
+        await picker.selectOption({ label: "Catch-all: Other" });
+        await page
+          .getByText(/recorded on Other \(Other, new\)/)
+          .first()
+          .waitFor({ timeout: 20_000 });
+      }
+      // Opening the form is local to the screen and sends nothing; its agency
+      // is picked from the list because the file names Lakeside already.
+      await page
+        .getByLabel("Which unit is Medic 7 (Lakeside Volunteer Rescue)?")
+        .selectOption({ label: "Add as an outside agency's unit…" });
+      await page
+        .getByText("starts hidden from members")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+  },
+  {
     id: "05-86-gear-request-products",
     doc: "05-inventory.md",
     line: 2736,

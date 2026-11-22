@@ -27,7 +27,6 @@ from tests.test_training_compliance import (
     _make_requirement,
     _MockSession,
     _one,
-    _scalar,
 )
 
 pytestmark = pytest.mark.unit
@@ -110,17 +109,26 @@ class TestEveryGradingPathAgrees:
             completed_records=_records(DRIFTING_PARTS),
             today=TODAY,
             shift_dates=[],
+            org_include_current_month=True,
         )
         assert progress.is_complete is True
         assert progress.percentage_complete == 100.0
 
-    async def test_requirement_progress_from_a_sql_sum(self, monkeypatch):
+    async def test_requirement_progress_loading_its_own_records(self, monkeypatch):
+        # The check no longer sums hours in SQL: it loads the member's records
+        # and builds its answer from the requirement detail. Queries, in
+        # order: the requirement, the department's compliance config (none),
+        # the member's completed records.
         monkeypatch.setattr(
             "app.services.training_service.resolve_org_today",
             AsyncMock(return_value=TODAY),
         )
-        req = _make_requirement(id=str(uuid4()), required_hours=7.0)
-        db = _MockSession([_one(req), _scalar(6.9999998807907104)])
+        req = _make_requirement(id=str(uuid4()), required_hours=5.0)
+        no_config = MagicMock()
+        no_config.scalars.return_value.first.return_value = None
+        rows = MagicMock()
+        rows.all.return_value = _records(DRIFTING_PARTS)
+        db = _MockSession([_one(req), no_config, rows])
         progress = await TrainingService(db).check_requirement_progress(
             user_id="u1", requirement_id=req.id, organization_id="org-1", waivers=[]
         )

@@ -500,9 +500,10 @@ class TestEvaluateRequirementDetailHours:
         assert result["is_met"] is False
         assert result["progress_percentage"] == 0.0
 
-    def test_hours_zero_required_with_a_completion_is_met(self):
-        # Once the member actually completes matching training, a no-minimum
-        # requirement is satisfied.
+    def test_hours_zero_required_with_a_completion_is_not_met(self):
+        # The shared grader leaves a requirement with no hours target in
+        # progress whatever is logged, as the requirement form warns ("members
+        # won't earn credit"); the detail used to call one hour enough.
         req = _make_requirement(required_hours=0)
         records = [
             _make_record(hours_completed=2.0, completion_date=date(2026, 3, 1)),
@@ -510,8 +511,8 @@ class TestEvaluateRequirementDetailHours:
         result = TrainingService.evaluate_requirement_detail(
             req, records, date(2026, 6, 15)
         )
-        assert result["is_met"] is True
-        assert result["progress_percentage"] == 100.0
+        assert result["is_met"] is False
+        assert result["progress_percentage"] == 0.0
 
     def test_hours_filtered_by_training_type(self):
         from app.models.training import TrainingType
@@ -784,7 +785,10 @@ class TestEvaluateRequirementDetailCertification:
         )
         result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
         assert result["is_met"] is False
-        assert result["cert_expired"] is True
+        # Never held is not expired: the shared grader reads it not_started,
+        # and the card says "not met" rather than "Expired - renew ASAP".
+        assert result["cert_expired"] is False
+        assert result["blocks_activity"] is False
 
     def test_certification_matched_by_registry_code(self):
         req = _make_requirement(
@@ -1185,13 +1189,32 @@ class TestBiannualRequirements:
             frequency=SimpleNamespace(value="biannual"),
             required_hours=10.0,
         )
-        # Inside the 2025-2026 window: the override reads only the records the
-        # requirement counts, as the compliance matrix does. An out-of-window
-        # certificate is covered by test_biannual_lapse_parity.py.
         records = [
             _make_record(
                 hours_completed=12.0,
-                completion_date=date(2025, 6, 1),
+                completion_date=date(2024, 6, 1),
+                expiration_date=date(2026, 1, 1),
+            ),
+        ]
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 6, 15)
+        )
+        # The record predates the 2025-2026 window, so it counts for nothing;
+        # the shared grader's expiry override reads the window's records only,
+        # so this is unmet rather than expired.
+        assert result["is_met"] is False
+        assert result["cert_expired"] is False
+        assert result["progress_percentage"] == 0.0
+
+    def test_biannual_hours_with_a_lapsed_card_in_the_window(self):
+        req = _make_requirement(
+            frequency=SimpleNamespace(value="biannual"),
+            required_hours=10.0,
+        )
+        records = [
+            _make_record(
+                hours_completed=12.0,
+                completion_date=date(2025, 3, 1),
                 expiration_date=date(2026, 1, 1),
             ),
         ]
@@ -1503,10 +1526,18 @@ def _one(obj):
     return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
 
 
-def _scalar(val):
+def _first(obj):
     from unittest.mock import MagicMock
 
-    return MagicMock(scalar=MagicMock(return_value=val))
+    result = MagicMock()
+    result.scalars.return_value.first.return_value = obj
+    return result
+
+
+def _rows(rows):
+    from unittest.mock import MagicMock
+
+    return MagicMock(all=MagicMock(return_value=list(rows)))
 
 
 class TestCheckRequirementProgressZeroTarget:
@@ -1526,7 +1557,8 @@ class TestCheckRequirementProgressZeroTarget:
         from uuid import uuid4
 
         req = _make_requirement(id=str(uuid4()), required_hours=0)
-        db = _MockSession([_one(req), _scalar(0)])  # requirement, then hours sum
+        # The requirement, the department's config (none), the records (none).
+        db = _MockSession([_one(req), _first(None), _rows([])])
         svc = TrainingService(db)
 
         progress = await svc.check_requirement_progress(
@@ -1536,19 +1568,24 @@ class TestCheckRequirementProgressZeroTarget:
         assert progress.is_complete is False
         assert progress.percentage_complete == 0.0
 
-    async def test_hours_no_target_with_a_completion_is_complete(self):
+    async def test_hours_no_target_with_a_completion_is_not_complete(self):
+        # The shared grader leaves a zero target in progress whatever is
+        # logged, as the requirement form warns; this check used to call
+        # three hours enough and disagreed with the matrix (2026-11-21).
         from uuid import uuid4
 
         req = _make_requirement(id=str(uuid4()), required_hours=0)
-        db = _MockSession([_one(req), _scalar(3.0)])  # 3 matching hours on file
+        db = _MockSession(
+            [_one(req), _first(None), _rows([_make_record(hours_completed=3.0)])]
+        )
         svc = TrainingService(db)
 
         progress = await svc.check_requirement_progress(
             user_id="u1", requirement_id="req-1", organization_id="org-1", waivers=[]
         )
 
-        assert progress.is_complete is True
-        assert progress.percentage_complete == 100.0
+        assert progress.is_complete is False
+        assert progress.percentage_complete == 0.0
 
     async def test_courses_with_no_courses_linked_is_not_complete(self):
         from uuid import uuid4
@@ -1570,23 +1607,94 @@ class TestCheckRequirementProgressZeroTarget:
         assert progress.percentage_complete == 0.0
 
 
-class TestForecastPct:
-    """The compliance forecast's per-member percentages (TR4-4)."""
+class TestProjectedStanding:
+    """The compliance forecast's per-member figures and standings (TR4-4).
+
+    Formerly ``_forecast_pct``; the figures are the same, now taken from the
+    member's own classification so each comes with its standing (owner
+    direction 2026-11-21).
+    """
+
+    @staticmethod
+    def _project(met, total, expiring, compliant=100.0, at_risk=75.0):
+        from app.services.training_compliance import ComplianceGrading, MemberGrading
+        from app.services.training_enhancement_service import _project
+
+        grading = ComplianceGrading()
+        member = MemberGrading(
+            requirements=[], compliant_threshold=compliant, at_risk_threshold=at_risk
+        )
+        return _project(grading, member, met, total, expiring)
 
     def test_member_nothing_grades_has_no_percentage(self):
-        from app.services.training_enhancement_service import _forecast_pct
-
         # Was 100 for every horizon, which the compliance officer dashboard
         # then averaged into the department's "current" figure.
-        assert _forecast_pct(0, 0, 0) is None
-        assert _forecast_pct(0, 0, 2) is None
+        assert self._project(0, 0, 0) == ("not_applicable", None)
+        assert self._project(0, 0, 2) == ("not_applicable", None)
 
     def test_expiring_certifications_lower_the_forecast(self):
-        from app.services.training_enhancement_service import _forecast_pct
+        assert self._project(2, 4, 0) == ("non_compliant", 50.0)
+        assert self._project(2, 4, 1) == ("non_compliant", 25.0)
+        assert self._project(2, 4, 3) == ("non_compliant", 0.0)
 
-        assert _forecast_pct(2, 4, 0) == 50.0
-        assert _forecast_pct(2, 4, 1) == 25.0
-        assert _forecast_pct(2, 4, 3) == 0
+    def test_standing_uses_the_members_thresholds(self):
+        assert self._project(3, 4, 0) == ("at_risk", 75.0)
+        assert self._project(2, 4, 0, compliant=50, at_risk=25) == ("compliant", 50.0)
+
+
+class TestClassifyAverage:
+    """A department forecast average, by the department's thresholds and
+    threshold type (owner direction 2026-11-21)."""
+
+    @staticmethod
+    def _grading(**kwargs):
+        from app.services.training_compliance import ComplianceGrading
+
+        return ComplianceGrading(**kwargs)
+
+    def test_no_graded_member_is_not_applicable(self):
+        grading = self._grading()
+        assert grading.classify_average([]) == ("not_applicable", None)
+        assert grading.classify_average([(None, "not_applicable")]) == (
+            "not_applicable",
+            None,
+        )
+
+    def test_percentage_compares_the_mean(self):
+        grading = self._grading(compliant_threshold=100, at_risk_threshold=75)
+        assert grading.classify_average(
+            [(90.0, "at_risk"), (70.0, "non_compliant"), (None, "not_applicable")]
+        ) == ("at_risk", 80.0)
+        assert grading.classify_average([(100.0, "compliant")]) == (
+            "compliant",
+            100.0,
+        )
+        assert grading.classify_average([(50.0, "non_compliant")]) == (
+            "non_compliant",
+            50.0,
+        )
+
+    def test_the_rounded_mean_is_the_figure_compared(self):
+        # 74.95 rounds to 75.0, which is shown; a displayed 75.0 must not
+        # read non-compliant against a 75 bar.
+        grading = self._grading(compliant_threshold=100, at_risk_threshold=75)
+        assert grading.classify_average(
+            [(74.9, "non_compliant"), (75.0, "at_risk")]
+        ) == ("at_risk", 75.0)
+
+    def test_all_required_is_compliant_only_when_every_member_is(self):
+        grading = self._grading(threshold_type="all_required", at_risk_threshold=75)
+        assert grading.classify_average(
+            [(100.0, "compliant"), (100.0, "compliant")]
+        ) == ("compliant", 100.0)
+        # 2499 of 2500 rounds to 100.0 but is not every requirement met.
+        assert grading.classify_average([(100.0, "compliant"), (100.0, "at_risk")]) == (
+            "at_risk",
+            100.0,
+        )
+        assert grading.classify_average(
+            [(100.0, "compliant"), (40.0, "non_compliant")]
+        ) == ("non_compliant", 70.0)
 
 
 # =====================================================

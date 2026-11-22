@@ -78,10 +78,12 @@ describe('toneOf', () => {
     expect(toneOf(cell({ status: 'completed', expiry_date: dateOffset(200) }), AS_OF)).toBe(CellTone.MET);
   });
 
-  it('trusts the date over the status when a "completed" cert is already past it', () => {
-    // The backend can report completed with a stale expiry; a member holding a
-    // lapsed card is not met, whatever the row says.
-    expect(toneOf(cell({ status: 'completed', expiry_date: dateOffset(-5) }), AS_OF)).toBe(CellTone.LAPSED);
+  it('keeps a backend-completed cell met when the expiry it carries has passed', () => {
+    // The backend decides lapsed (it reports `expired`). On an hours or
+    // courses cell the expiry is the latest counted record's, which never
+    // lapses the requirement; demoting it put an open item beside a
+    // standing the backend called compliant (CLAUDE.md pitfall #29).
+    expect(toneOf(cell({ status: 'completed', expiry_date: dateOffset(-5) }), AS_OF)).toBe(CellTone.MET);
   });
 
   it('maps expired, in_progress and not_started', () => {
@@ -353,11 +355,27 @@ describe('a certification expiring soon', () => {
     expect(result.open).toBe(1);
   });
 
-  it('does not count a lapsed certification, however it was reported', () => {
+  it('counts met what the backend graded met, whatever expiry the cell carries', () => {
+    // The finding's case: an annual 24-hour requirement met with 28 hours,
+    // one of whose records carries an expiry that has since passed.
     const result = evaluateMember(
       member({
-        requirements: [cell({ status: 'completed', expiry_date: dateOffset(-5) })],
+        standing: 'compliant',
+        requirements_met: 1,
+        requirements: [
+          cell({ status: 'completed', progress_current: 28, progress_required: 24, expiry_date: dateOffset(-143) }),
+        ],
       }),
+      reqs,
+      AS_OF
+    );
+    expect(result.met).toBe(1);
+    expect(result.open).toBe(0);
+  });
+
+  it('does not count a certification the backend reports expired', () => {
+    const result = evaluateMember(
+      member({ requirements: [cell({ status: 'expired', expiry_date: dateOffset(-5) })] }),
       reqs,
       AS_OF
     );
@@ -455,9 +473,11 @@ describe('the evaluation cutoff', () => {
     const cutoff = '2026-08-31';
     const lapsedAfterCutoff = cell({ status: 'completed', expiry_date: '2026-09-03' });
 
-    expect(toneOf(lapsedAfterCutoff, cutoff)).not.toBe(CellTone.LAPSED);
-    // Measured from a later basis, the same cell has genuinely lapsed.
-    expect(toneOf(lapsedAfterCutoff, '2026-09-30')).toBe(CellTone.LAPSED);
+    // Three days out from the cutoff: a renewal coming up, still met.
+    expect(toneOf(lapsedAfterCutoff, cutoff)).toBe(CellTone.SOON);
+    // From a later basis the date has passed, but met stays the backend's
+    // call: only `expired` reads lapsed.
+    expect(toneOf(lapsedAfterCutoff, '2026-09-30')).toBe(CellTone.MET);
   });
 
   it('keeps the member tally consistent with the backend standing', () => {

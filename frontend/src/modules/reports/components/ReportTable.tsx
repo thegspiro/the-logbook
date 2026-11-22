@@ -25,14 +25,14 @@ interface ReportTableProps {
   emptyMessage?: string;
   maxHeight?: string;
   /**
-   * Where the rows turn into stacked cards. The report dialog's body is at
-   * most 974px (~61rem) at any screen width and 688px at 768px, where the
-   * base reflow stops. A table needing more than that 688px with long data
-   * (WebKit's ~4% included) would overflow somewhere from 768px up, and the
-   * next tier, 64rem, is wider than the dialog ever gets — so `wide`, the
-   * default, shows cards at every width; the nine- and ten-column reports
-   * measured 917-958px. A renderer whose table measures under 688px passes
-   * `phone` and stays a table from 768px.
+   * Where the rows turn into stacked cards. `phone`, the default, reflows
+   * below 768px only; from there up the rows are a table, and one wider than
+   * the dialog scrolls sideways inside it. That is deliberate: sorting lives
+   * in the column headers, which card mode hides, so a report that went to
+   * cards on a desktop could not be sorted at all. The nine- and ten-column
+   * reports measure 917-958px against a dialog body of at most 974px (~61rem),
+   * and the next container tier, 64rem, is wider than the dialog ever gets.
+   * `wide` shows cards at every width, for a caller that wants that trade.
    */
   reflow?: 'phone' | 'wide';
 }
@@ -43,7 +43,7 @@ export const ReportTable: React.FC<ReportTableProps> = ({
   pageSize = 25,
   emptyMessage = 'No data found.',
   maxHeight = '50vh',
-  reflow = 'wide',
+  reflow = 'phone',
 }) => {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -91,7 +91,15 @@ export const ReportTable: React.FC<ReportTableProps> = ({
 
   return (
     <div>
-      <div className="rwd-table-container overflow-x-auto overflow-y-auto" style={{ maxHeight }}>
+      {/* Focusable because nothing inside the table is: a keyboard otherwise
+          has no way to scroll to the columns past the dialog's edge. */}
+      <div
+        className="rwd-table-container overflow-x-auto overflow-y-auto"
+        style={{ maxHeight }}
+        tabIndex={0}
+        role="region"
+        aria-label="Report results"
+      >
         <table className={`rwd-table ${reflow === 'wide' ? 'rwd-table-wide' : ''} w-full text-left text-sm`}>
           <thead className="text-theme-text-muted surface-secondary-opaque sticky top-0 z-10 text-xs uppercase">
             <tr>

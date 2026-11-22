@@ -18,7 +18,7 @@ request for somebody who did not use the public form. Pinned here:
 """
 
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
@@ -346,6 +346,27 @@ class TestTheCoordinator:
 
         assert response.assigned_to == people["other"].id
         assert "auto_assigned" in await _activity(db_session, response.id)
+
+    @pytest.mark.parametrize("deleted", [False, True], ids=["former", "deleted"])
+    async def test_a_default_coordinator_who_has_left_leaves_it_unassigned(
+        self, db_session, deleted
+    ):
+        """An unassigned request shows in the queue; one handed to a member who
+        has left (or been deleted) waits on somebody who will never pick it up."""
+        _org, people = await _dept(db_session)
+        gone = people["other"] if deleted else people["former"]
+        if deleted:
+            gone.deleted_at = datetime.now(timezone.utc)
+        org = await db_session.get(Organization, people["coordinator"].organization_id)
+        org.settings = {
+            "events": {"request_pipeline": {"default_assignee_id": gone.id}}
+        }
+        await db_session.flush()
+
+        response, _ = await _create(db_session, people["coordinator"])
+
+        assert response.assigned_to is None
+        assert "auto_assigned" not in await _activity(db_session, response.id)
 
     async def test_a_coordinator_from_another_department_is_refused(self, db_session):
         _org, people = await _dept(db_session)

@@ -521,12 +521,39 @@ class StaffingMappingView(BaseModel):
     role_choices: List[StaffingChoice]
 
 
+class StaffingSignupWithoutHours(BaseModel):
+    date: Optional[str] = None
+    activity: str
+    title: str
+    member: str
+
+
+class StaffingHoursWithoutSignup(BaseModel):
+    date: Optional[str] = None
+    start: str
+    end: str
+    member: str
+
+
+class StaffingHoursMatch(BaseModel):
+    """How the roster's seats pair with the hours already imported: by member
+    and overlapping time, since the two files share no id."""
+
+    matched: int
+    signups_without_hours: int
+    hours_without_signup: int
+    # The first of each, for the reviewer to check; the counts are whole.
+    signups_without_hours_examples: List[StaffingSignupWithoutHours]
+    hours_without_signup_examples: List[StaffingHoursWithoutSignup]
+
+
 class StaffingCommitPreview(BaseModel):
     """What writing the roster would do, and what it leaves out."""
 
     # shifts, shift_seats, events, upcoming_events, check_ins, outreach_seats,
     # assigned_unfilled
     counts: Dict[str, int]
+    hours_match: StaffingHoursMatch
     # Seats left out, by reason (no_event, undated, outside_usual_range,
     # activity_left_out, activity_undecided, title_left_out, title_undecided,
     # unfilled).
@@ -603,6 +630,9 @@ class UndoStepPreview(BaseModel):
     already_gone: int
     # Shifts and seats the step used but did not make: left as they are.
     reused: int = 0
+    # Staffing only: re-seated members whose earlier position the undo puts
+    # back.
+    positions_restored: int = 0
 
 
 class UndoPreview(BaseModel):
@@ -616,4 +646,5 @@ class UndoResult(BaseModel):
     kept: int
     members_removed: int
     members_kept: int
+    positions_restored: int = 0
     preview: UndoPreview

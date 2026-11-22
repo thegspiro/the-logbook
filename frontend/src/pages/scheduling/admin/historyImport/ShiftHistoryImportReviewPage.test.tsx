@@ -803,15 +803,27 @@ describe('ShiftHistoryImportReviewPage', () => {
     });
 
     describe('fixing an overlap inline', () => {
-      const timed = (rowList: HistoryImportRow[], issues: HistoryImportIssue[]): HistoryImportDetail => ({
-        ...rowsDraft(rowList, issues),
-        fields: ['member_name', 'unit', 'start_time', 'end_time'],
+      const timed = (
+        rowList: HistoryImportRow[],
+        issues: HistoryImportIssue[],
+        fields = ['member_name', 'unit', 'date', 'start_time', 'end_time']
+      ): HistoryImportDetail => ({ ...rowsDraft(rowList, issues), fields });
+      const when = (start_time: string, end_time: string) => ({
+        member_name: 'Member 4',
+        unit: 'A106E',
+        date: '2024-03-02',
+        start_time,
+        end_time,
       });
       const timedRows = [
         fileRow('r3', 3),
-        fileRow('r4', 4, { values: { member_name: 'Member 4', unit: 'A106E', start_time: '2330', end_time: '0115' } }),
-        fileRow('r5', 5, { values: { member_name: 'Member 4', unit: 'A106E', start_time: '2330', end_time: '0000' } }),
+        fileRow('r4', 4, { values: when('2330', '0115') }),
+        fileRow('r5', 5, { values: when('2330', '0000') }),
       ];
+      const saveFor = (line: number) =>
+        within(screen.getByRole('form', { name: `Date and times for line ${line}` })).getByRole('button', {
+          name: 'Save',
+        });
 
       it('saves only the time that changed', async () => {
         mockGet.mockResolvedValue(timed(timedRows, [overlap, probable]));
@@ -822,38 +834,80 @@ describe('ShiftHistoryImportReviewPage', () => {
         const start = screen.getByRole('textbox', { name: 'Start time, line 5' });
         await user.clear(start);
         await user.type(start, '0115');
-        await user.click(within(screen.getByRole('form', { name: 'Times for line 5' })).getByRole('button'));
+        await user.click(saveFor(5));
 
         expect(mockRow).toHaveBeenCalledWith('imp-1', 'r5', { edits: { start_time: '0115' } });
       });
 
-      it('offers nothing to save until a time changes', async () => {
+      it('saves only the date that changed', async () => {
         mockGet.mockResolvedValue(timed(timedRows, [overlap, probable]));
         const user = userEvent.setup();
         renderPage();
         await openRows(user);
 
-        const form = screen.getByRole('form', { name: 'Times for line 4' });
-        expect(within(form).getByRole('button', { name: 'Save times' })).toBeDisabled();
+        const date = screen.getByRole('textbox', { name: 'Date, line 5' });
+        await user.clear(date);
+        await user.type(date, '2024-03-03');
+        await user.click(saveFor(5));
+
+        expect(mockRow).toHaveBeenCalledWith('imp-1', 'r5', { edits: { date: '2024-03-03' } });
       });
 
-      it('leaves times as text on a row that does not overlap', async () => {
+      it('saves a date and a time changed together in one edit', async () => {
         mockGet.mockResolvedValue(timed(timedRows, [overlap, probable]));
         const user = userEvent.setup();
         renderPage();
         await openRows(user);
 
-        expect(screen.queryByRole('form', { name: 'Times for line 3' })).not.toBeInTheDocument();
+        const date = screen.getByRole('textbox', { name: 'Date, line 4' });
+        await user.clear(date);
+        await user.type(date, '2024-03-01');
+        const end = screen.getByRole('textbox', { name: 'End time, line 4' });
+        await user.clear(end);
+        await user.type(end, '2330');
+        // Enter in the date box, which sits in its own cell, submits the row's form.
+        await user.type(date, '{Enter}');
+
+        expect(mockRow).toHaveBeenCalledWith('imp-1', 'r4', { edits: { date: '2024-03-01', end_time: '2330' } });
+      });
+
+      it('offers nothing to save until a value changes', async () => {
+        mockGet.mockResolvedValue(timed(timedRows, [overlap, probable]));
+        const user = userEvent.setup();
+        renderPage();
+        await openRows(user);
+
+        expect(saveFor(4)).toBeDisabled();
+      });
+
+      it('leaves the date and times as text on a row that does not overlap', async () => {
+        mockGet.mockResolvedValue(timed(timedRows, [overlap, probable]));
+        const user = userEvent.setup();
+        renderPage();
+        await openRows(user);
+
+        expect(screen.queryByRole('form', { name: 'Date and times for line 3' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('textbox', { name: 'Date, line 3' })).not.toBeInTheDocument();
         expect(screen.getAllByRole('form')).toHaveLength(2);
       });
 
-      it('offers no inputs when the file maps no time columns', async () => {
+      it('offers the date alone when the file maps no time columns', async () => {
+        mockGet.mockResolvedValue(timed(timedRows, [overlap, probable], ['member_name', 'unit', 'date']));
+        const user = userEvent.setup();
+        renderPage();
+        await openRows(user);
+
+        expect(screen.getByRole('textbox', { name: 'Date, line 5' })).toBeInTheDocument();
+        expect(screen.queryByRole('textbox', { name: 'Start time, line 5' })).not.toBeInTheDocument();
+      });
+
+      it('offers no inputs when the file maps no date or time columns', async () => {
         mockGet.mockResolvedValue(rowsDraft(rows, [overlap]));
         const user = userEvent.setup();
         renderPage();
         await openRows(user);
 
-        expect(screen.queryByRole('form', { name: /Times for line/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('form', { name: /times for line/ })).not.toBeInTheDocument();
       });
     });
 

@@ -31,7 +31,7 @@ rotation's own open pull request.
 | ADV2-8  | Officer       | Low      | A shift officer without `scheduling.manage` can write their own close-out hours (predates the window)                                                              | Fixed  |
 | ADV2-9  | Officer       | Low      | An officer with `members.manage` + `scheduling.assign` can grant themselves a leave, which creates their own training waiver (predates the window)                 | Fixed  |
 | ADV2-10 | Applicant     | Low      | An applicant can set their own follow-up-form email (or name and birth date) to a coordinator's, so the coordinator's self-access guard hides the file from them   | Owner  |
-| ADV2-11 | Outsider      | Info     | A Zeffy dues payment credits whichever member's email the payer typed, and overpayment becomes a donation in that member's name                                    | Owner  |
+| ADV2-11 | Outsider      | Info     | A Zeffy dues payment credits whichever member's email the payer typed, and overpayment becomes a donation in that member's name                                    | Fixed  |
 
 ## Fixes
 
@@ -128,6 +128,35 @@ Owner decision: block it. Nobody grants or extends their own leave of absence.
 - Tests: `tests/test_member_leave_self_grant.py` (five tests; the three
   refusals failed before the fix).
 
+## ADV2-11 fix (2026-11-21)
+
+Owner decisions: hold a Zeffy dues payment as unmatched until a treasurer
+confirms it; the treasurer chooses whether an overpayment becomes the member's
+donation; any current member with open dues may be chosen, not only the email
+match; `finance.manage` confirms, with no step-up, as for a dues payment
+recorded by hand; payments already credited stay as they are.
+
+- `ZeffySyncService` no longer credits dues. A payment to a campaign linked to
+  a dues schedule is recorded `unmatched`, with a detail saying whether the
+  payer's email matches a current member. The hourly retry re-reads that
+  suggestion and never credits.
+- `GET /grants/zeffy/payments/{id}/dues-match` (`finance.manage`) returns the
+  net amount, the suggested member, and every current member with open dues
+  on the schedule with what their oldest open dues still owe.
+- `POST /grants/zeffy/payments/{id}/confirm-dues` (`finance.manage`) credits
+  the chosen member's oldest open dues under the payment's row lock, with the
+  open dues chosen by a locking read. An overpayment is refused unless
+  `excessAsDonation`; the treasurer may not credit their own dues; a second
+  confirmation answers 409. Audited at `warning` as
+  `zeffy_dues_payment_confirmed`.
+- The Zeffy page shows **Confirm member** on a held payment to a
+  `finance.manage` holder, and the status reads **Awaiting confirmation**.
+- Tests: `TestMembershipDues`, `TestTreasurerConfirmsDues` and
+  `TestDuesSelection` in `tests/test_zeffy_sync_service.py` (each failed
+  against the old service), `TestConfirmDues` in
+  `tests/test_zeffy_endpoints.py`, and the confirmation cases in
+  `ZeffyPage.test.tsx`.
+
 ## Awaiting an owner decision
 
 - **ADV2-4**: resolved 2026-11-16, owner's option 2 (refuse, and add a
@@ -139,8 +168,7 @@ Owner decision: block it. Nobody grants or extends their own leave of absence.
   decision on whether self-detection should trust applicant-editable fields at
   all (for example, only `transferred_user_id` once the applicant has edited
   them).
-- **ADV2-11**: Accept the current behaviour, or record dues credits from Zeffy as
-  unmatched until a treasurer confirms them.
+- **ADV2-11**: resolved 2026-11-21. See "ADV2-11 fix" above.
 
 ## Checked and clean
 

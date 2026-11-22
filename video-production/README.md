@@ -105,10 +105,13 @@ popup a recording never shows.
 
 **Never show a scannable QR code.** The app's codes encode live links, and a
 viewer can scan one straight off the video. `prepare()` hides every QR code
-from its first paint, and a shot that shows one calls `decoyQr` to swap in a
-pattern that looks like a code and decodes to nothing, as 8D does. For 8D,
-two decoders (OpenCV and zbar) read a real code of the same size and found
-nothing in any of the capture's frames.
+from its first paint (anything in a `.qr-container`, and any qrcode.react SVG
+wherever it sits), and a shot that shows one calls `decoyQr` on the code's
+parent element to swap in a pattern that looks like a code and decodes to
+nothing, as 8D and 8G do. A setup key or link printed beside the code should
+be invalid as well: 8G's is not base32, so no authenticator accepts it. For
+8D and 8G, two decoders (OpenCV and zbar) read a real code of the same size
+and found nothing in any frame sampled while the decoy was on screen.
 
 Two things that cost time on 8B:
 
@@ -125,6 +128,12 @@ Two things that cost time on 8B:
 Write narration for the ear. The voice slurs some pairings whatever the take:
 "Tap Submit" reliably became "tax submit", so 8B says "Tap the Submit Training
 button". If a line warns, reword it.
+
+A word the voice cannot say at all, in any wording, gets a respelling. Put the
+line as it should be heard in `say`, which captions nothing but is what the
+check scores against, and the respelt line in `speak`, which is what the voice
+reads. "Schedule" is the one so far: across five takes each, "Schedule" was
+heard right once and "Sked-yool" four times, so 8H's line speaks the second.
 
 To see what a capture sends while it runs, set `VIDEO_DEBUG=1`: the 8E
 capture logs each request that changes something and each console error.

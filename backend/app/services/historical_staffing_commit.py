@@ -15,12 +15,21 @@ reviewer assign members to unfilled seats, and writes:
   in; role seats go on the event's outreach signup sheet in that role. An
   upcoming event is written as scheduled, with nobody checked in.
 
+The roster and the hours file share no id, so each seat is also paired with
+the hours entry of the same member whose time it overlaps most
+(``historical_hours_match``). A shift seat goes onto that entry's shift, so the
+member's history shows the seat beside the hours and the calls. An event seat
+writes its title there only when the title is a crew seat (owner decision
+2026-11-21). A position the commit changes on an existing seat is recorded in
+the import's results, so undoing the step puts it back.
+
 Every record is entered in the ``imported_source_records`` ledger under the
 import's source system, so a second commit writes nothing twice (pitfall #36).
 """
 
+import copy
 import html
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
@@ -41,8 +50,10 @@ from app.models.training import (
     BasicApparatus,
     Shift,
     ShiftAssignment,
+    ShiftAttendance,
     ShiftStatus,
 )
+from app.services import historical_hours_match as hours_match
 from app.services import historical_staffing_engine as engine
 from app.services import historical_staffing_mapping as mapping_rules
 from app.services import historical_staffing_plan as plan_rules
@@ -59,6 +70,9 @@ _FLUSH_EVERY = 200
 # An outreach seat's crew position; the role says what the member did.
 _OUTREACH_SEAT = "volunteer"
 _TITLE_MAX = 200
+# How many sign-ups and hours entries that pair with nothing the preview names;
+# the counts are always whole.
+_MATCH_EXAMPLES = 25
 _LOCATION_MAX = 300
 
 
@@ -143,6 +157,7 @@ class HistoricalStaffingCommitService:
         counts = plan.counts()
         return {
             "counts": counts,
+            "hours_match": await self._hours_match_view(record, plan, resolutions),
             "skipped": dict(plan.skipped),
             "unfilled_seats": len(plan.unfilled),
             "include_unstaffed": decisions.include_unstaffed,
@@ -152,6 +167,68 @@ class HistoricalStaffingCommitService:
             ),
             "can_commit": bool(plan.events) and not undecided,
             "result": (record.results or {}).get("staffing"),
+        }
+
+    async def _hours_match_view(
+        self,
+        record: HistoricalImport,
+        plan: plan_rules.Plan,
+        resolutions: Mapping[str, shift_engine.MemberResolution],
+    ) -> Dict[str, Any]:
+        """How the roster pairs with the hours already imported, and the first
+        of each side that pairs with nothing, for the reviewer to check."""
+
+        def member_of(seat: plan_rules.PlannedSeat) -> Optional[str]:
+            if seat.assigned_user_id:
+                return seat.assigned_user_id
+            identity = shift_engine.identity_from_values(seat.seat.member)
+            resolution = resolutions.get(identity.key)
+            ref = resolution.ref if resolution is not None else None
+            # A member the commit would create has no hours yet.
+            return ref if ref and not ref.startswith("new:") else None
+
+        pairing, event_of = await self._pair_with_hours(record, plan, member_of)
+        directory = {
+            m.id: m.display_name
+            for m in await self.imports.shift_imports.member_directory(
+                record.organization_id, include_removed=True
+            )
+        }
+        seats = {
+            plan_rules.seat_ledger_id(seat.seat): seat
+            for planned in plan.events
+            for seat in planned.seats
+        }
+        missing: List[Dict[str, Any]] = []
+        for key in pairing.unmatched_signups[:_MATCH_EXAMPLES]:
+            planned = event_of[key]
+            seat = seats[key]
+            user_id = member_of(seat)
+            missing.append(
+                {
+                    "date": (
+                        planned.event.day.isoformat() if planned.event.day else None
+                    ),
+                    "activity": html.unescape(planned.event.activity),
+                    "title": seat.seat.title,
+                    "member": directory.get(user_id or "", ""),
+                }
+            )
+        unclaimed = [
+            {
+                "date": e.day.isoformat() if e.day else None,
+                "start": e.start.isoformat(),
+                "end": e.end.isoformat(),
+                "member": directory.get(e.user_id, ""),
+            }
+            for e in pairing.unmatched_hours[:_MATCH_EXAMPLES]
+        ]
+        return {
+            "matched": len(pairing.matched),
+            "signups_without_hours": len(pairing.unmatched_signups),
+            "hours_without_signup": len(pairing.unmatched_hours),
+            "signups_without_hours_examples": missing,
+            "hours_without_signup_examples": unclaimed,
         }
 
     # ------------------------------------------------------------------
@@ -337,6 +414,174 @@ class HistoricalStaffingCommitService:
         )
         return {str(a.user_id): a for a in rows.scalars().all()}
 
+    # ------------------------------------------------------------------
+    # Pairing the roster with the hours
+    # ------------------------------------------------------------------
+
+    async def _hours_entries(
+        self, organization_id: str, start: datetime, end: datetime
+    ) -> List[hours_match.HoursEntry]:
+        """Every member's attendance on the department's duty shifts that
+        starts within this span: the hours side of the pairing."""
+        rows = await self.db.execute(
+            select(
+                ShiftAttendance.id,
+                ShiftAttendance.shift_id,
+                ShiftAttendance.user_id,
+                ShiftAttendance.checked_in_at,
+                ShiftAttendance.checked_out_at,
+                ShiftAttendance.duration_minutes,
+                Shift.shift_date,
+            )
+            .join(Shift, Shift.id == ShiftAttendance.shift_id)
+            .where(
+                Shift.organization_id == str(organization_id),
+                Shift.is_outreach.is_(False),
+                ShiftAttendance.checked_in_at.isnot(None),
+                ShiftAttendance.checked_in_at >= start,
+                ShiftAttendance.checked_in_at < end,
+            )
+        )
+        entries: List[hours_match.HoursEntry] = []
+        for att_id, shift_id, user_id, clock_in, clock_out, minutes, day in rows:
+            if clock_in is None:
+                continue
+            began = _aware(clock_in)
+            if clock_out is not None:
+                ended = _aware(clock_out)
+            elif minutes:
+                ended = began + timedelta(minutes=int(minutes))
+            else:
+                continue
+            if ended <= began:
+                continue
+            entries.append(
+                hours_match.HoursEntry(
+                    attendance_id=str(att_id),
+                    shift_id=str(shift_id),
+                    user_id=str(user_id),
+                    start=began,
+                    end=ended,
+                    day=day,
+                )
+            )
+        return entries
+
+    async def _pair_with_hours(
+        self,
+        record: HistoricalImport,
+        plan: plan_rules.Plan,
+        member_of: Any,
+    ) -> Tuple[hours_match.HoursMatch, Dict[str, plan_rules.PlannedEvent]]:
+        """Pair every dated seat whose member is known with that member's
+        hours. Returns the pairing and each sign-up's event, by seat key."""
+        tz = ZoneInfo(record.timezone)
+        signups: List[hours_match.SignUp] = []
+        event_of: Dict[str, plan_rules.PlannedEvent] = {}
+        spans: List[Tuple[datetime, datetime]] = []
+        days: set[date] = set()
+        for planned in plan.events:
+            if planned.event.day is None or planned.upcoming:
+                continue
+            days.add(planned.event.day)
+            start, end = self._span(planned.event, tz)
+            spans.append((start, end))
+            for seat in planned.seats:
+                user_id = member_of(seat)
+                if not user_id:
+                    continue
+                key = plan_rules.seat_ledger_id(seat.seat)
+                signups.append(hours_match.SignUp(key, user_id, start, end))
+                event_of[key] = planned
+        if not spans:
+            return hours_match.match([], []), event_of
+        # A day either side: an hours entry clocked in before the roster's
+        # start, or an overnight that ran past its last day, still counts.
+        window_start = min(s for s, _ in spans) - timedelta(days=1)
+        window_end = max(e for _, e in spans) + timedelta(days=1)
+        entries = await self._hours_entries(
+            record.organization_id, window_start, window_end
+        )
+        pairing = hours_match.match(signups, entries)
+        # Only a day the roster covers can be missing a sign-up; the window's
+        # margin would otherwise count the days either side of it.
+        pairing.unmatched_hours = [e for e in pairing.unmatched_hours if e.day in days]
+        return pairing, event_of
+
+    async def _department_seats(self, organization_id: str) -> List[str]:
+        units = await self.imports.shift_imports._own_units(organization_id)
+        return sorted({seat for unit in units for seat in unit.seats})
+
+    @staticmethod
+    def _reseat(
+        assignment: ShiftAssignment,
+        value: str,
+        reseated: Dict[str, Dict[str, Optional[str]]],
+        counts: Dict[str, int],
+    ) -> None:
+        """Put an existing seat in the roster's position, remembering the one
+        it had so an undo can put that back."""
+        current = getattr(assignment.position, "value", assignment.position)
+        if current == value:
+            counts["already_on_shift"] += 1
+            return
+        entry = reseated.setdefault(str(assignment.id), {"from": current})
+        entry["to"] = value
+        assignment.position = value
+        counts["seats_updated"] += 1
+
+    async def _place_on_hours(
+        self,
+        record: HistoricalImport,
+        entry: hours_match.HoursEntry,
+        user_id: str,
+        value: Optional[str],
+        ledger: Dict[str, str],
+        ledger_key: str,
+        committed_by: str,
+        now: datetime,
+        note: str,
+        held_by_shift: Dict[str, Dict[str, ShiftAssignment]],
+        reseated: Dict[str, Dict[str, Optional[str]]],
+        counts: Dict[str, int],
+    ) -> None:
+        """Seat the member on the shift their hours were credited to. With no
+        ``value`` the pairing is only counted: the sign-up named no crew
+        seat."""
+        counts["seats_matched_to_hours"] += 1
+        if value is None:
+            counts["matched_role_not_a_seat"] += 1
+            return
+        held = held_by_shift.get(entry.shift_id)
+        if held is None:
+            held = await self._assignments(entry.shift_id)
+            held_by_shift[entry.shift_id] = held
+        assignment = held.get(user_id)
+        if assignment is None:
+            assignment = ShiftAssignment(
+                id=generate_uuid(),
+                organization_id=record.organization_id,
+                shift_id=entry.shift_id,
+                user_id=user_id,
+                position=value,
+                assignment_status=AssignmentStatus.CONFIRMED,
+                assigned_by=str(committed_by),
+                confirmed_at=now,
+                notes=note,
+            )
+            self.db.add(assignment)
+            held[user_id] = assignment
+            counts["seats_added"] += 1
+        else:
+            self._reseat(assignment, value, reseated, counts)
+        self._enter(
+            record,
+            ledger,
+            ledger_key,
+            ImportedRecordKind.SHIFT_ASSIGNMENT,
+            assignment.id,
+        )
+
     async def commit(
         self, organization_id: str, import_id: str, committed_by: str
     ) -> Dict[str, int]:
@@ -395,6 +640,16 @@ class HistoricalStaffingCommitService:
             identity = shift_engine.identity_from_values(seat.seat.member)
             return user_by_key.get(identity.key)
 
+        pairing, _ = await self._pair_with_hours(record, plan, member_of)
+        department_seats = await self._department_seats(org_id)
+        held_by_shift: Dict[str, Dict[str, ShiftAssignment]] = {}
+        # Positions changed on seats that were already there, kept across a
+        # second commit so the first position recorded is the one restored.
+        previous = (record.results or {}).get("staffing") or {}
+        reseated: Dict[str, Dict[str, Optional[str]]] = copy.deepcopy(
+            previous.get("reseated") or {}
+        )
+
         for index, planned in enumerate(plan.events):
             start, end = self._span(planned.event, tz)
             if planned.kind == mapping_rules.SHIFT:
@@ -412,6 +667,9 @@ class HistoricalStaffingCommitService:
                     now,
                     note,
                     counts,
+                    pairing.matched,
+                    held_by_shift,
+                    reseated,
                 )
             else:
                 await self._write_event(
@@ -426,14 +684,21 @@ class HistoricalStaffingCommitService:
                     now,
                     note,
                     counts,
+                    pairing.matched,
+                    department_seats,
+                    held_by_shift,
+                    reseated,
                 )
             if index % _FLUSH_EVERY == _FLUSH_EVERY - 1:
                 await self.imports._flush_ledgered()
         await self.imports._flush_ledgered()
 
-        results = dict(record.results or {})
+        counts["signups_without_hours"] = len(pairing.unmatched_signups)
+        counts["hours_without_signup"] = len(pairing.unmatched_hours)
+        results = copy.deepcopy(record.results or {})
         results["staffing"] = {
             **dict(counts),
+            "reseated": reseated,
             "committed_at": now.isoformat(),
             "committed_by": str(committed_by),
         }
@@ -461,10 +726,26 @@ class HistoricalStaffingCommitService:
         now: datetime,
         note: str,
         counts: Dict[str, int],
+        matches: Mapping[str, hours_match.HoursEntry],
+        held_by_shift: Dict[str, Dict[str, ShiftAssignment]],
+        reseated: Dict[str, Dict[str, Optional[str]]],
     ) -> None:
         event = planned.event
         org_id = record.organization_id
         shift_key = plan_rules.ledger_id(plan_rules.SHIFT_PREFIX, event.key)
+        paired = {
+            key: matches[key]
+            for key in (plan_rules.seat_ledger_id(s.seat) for s in planned.seats)
+            if key in matches
+        }
+        # Seats with nowhere to go but a roster shift: no hours entry of
+        # their own. When every seat paired, no roster shift is needed.
+        unpaired = [
+            s
+            for s in planned.seats
+            if plan_rules.seat_ledger_id(s.seat) not in paired
+            and plan_rules.seat_ledger_id(s.seat) not in ledger
+        ]
         shift: Optional[Shift] = None
         if shift_key in ledger:
             shift = await self.db.get(Shift, ledger[shift_key])
@@ -489,6 +770,16 @@ class HistoricalStaffingCommitService:
                 counts["shifts_filled"] += 1
                 if len(candidates) > 1:
                     counts["shifts_matched_nearest"] += 1
+            elif paired and unpaired:
+                # No shift for this date and unit, but the crew's hours were
+                # credited to one: the seats with no hours of their own join
+                # the shift most of the crew worked.
+                tally = Counter(e.shift_id for e in paired.values())
+                best = min(tally, key=lambda sid: (-tally[sid], sid))
+                shift = await self.db.get(Shift, best)
+                counts["shifts_filled_by_hours"] += 1
+            elif not unpaired:
+                shift = None
             else:
                 shift = Shift(
                     id=generate_uuid(),
@@ -516,9 +807,11 @@ class HistoricalStaffingCommitService:
                 self.db.add(shift)
                 await self.db.flush()
                 counts["shifts_created"] += 1
-            self._enter(record, ledger, shift_key, ImportedRecordKind.SHIFT, shift.id)
+            if shift is not None:
+                self._enter(
+                    record, ledger, shift_key, ImportedRecordKind.SHIFT, shift.id
+                )
 
-        held = await self._assignments(shift.id)
         for seat in planned.seats:
             seat_key = plan_rules.seat_ledger_id(seat.seat)
             if seat_key in ledger:
@@ -528,15 +821,36 @@ class HistoricalStaffingCommitService:
             if not user_id or user_id not in members:
                 counts["member_missing"] += 1
                 continue
+            entry = paired.get(seat_key)
+            if entry is not None:
+                # Seated where the hours were credited, beside the calls.
+                await self._place_on_hours(
+                    record,
+                    entry,
+                    user_id,
+                    seat.value,
+                    ledger,
+                    seat_key,
+                    committed_by,
+                    now,
+                    note,
+                    held_by_shift,
+                    reseated,
+                    counts,
+                )
+                continue
+            if shift is None:
+                counts["shifts_deleted_since"] += 1
+                continue
+            held = held_by_shift.get(str(shift.id))
+            if held is None:
+                held = await self._assignments(shift.id)
+                held_by_shift[str(shift.id)] = held
             assignment = held.get(user_id)
             if assignment is not None:
                 # On the shift already (the hours import put them there):
                 # re-seated in the seat the roster names.
-                if assignment.position != seat.value:
-                    assignment.position = seat.value
-                    counts["seats_updated"] += 1
-                else:
-                    counts["already_on_shift"] += 1
+                self._reseat(assignment, seat.value, reseated, counts)
             else:
                 assignment = ShiftAssignment(
                     id=generate_uuid(),
@@ -577,6 +891,10 @@ class HistoricalStaffingCommitService:
         now: datetime,
         note: str,
         counts: Dict[str, int],
+        matches: Mapping[str, hours_match.HoursEntry],
+        department_seats: Sequence[str],
+        held_by_shift: Dict[str, Dict[str, ShiftAssignment]],
+        reseated: Dict[str, Dict[str, Optional[str]]],
     ) -> None:
         event = planned.event
         org_id = record.organization_id
@@ -645,6 +963,40 @@ class HistoricalStaffingCommitService:
                 committed_by,
                 now,
                 note,
+                counts,
+            )
+
+        # The hours the members recorded for this event sit on a duty shift
+        # of their own. A seat whose title is a crew seat takes that position
+        # there; a role that is not a seat (an educator, a tour guide) pairs
+        # without changing it.
+        for seat in planned.seats:
+            entry = matches.get(plan_rules.seat_ledger_id(seat.seat))
+            if entry is None:
+                continue
+            hours_key = plan_rules.hours_seat_ledger_id(seat.seat)
+            if hours_key in ledger:
+                continue
+            user_id = member_of(seat)
+            if not user_id or user_id not in members:
+                continue
+            if seat.attendance:
+                # Checked in, not seated: paired, and nothing to write.
+                counts["seats_matched_to_hours"] += 1
+                continue
+            value = hours_match.crew_seat_for(seat.seat.title, department_seats)
+            await self._place_on_hours(
+                record,
+                entry,
+                user_id,
+                value,
+                ledger,
+                hours_key,
+                committed_by,
+                now,
+                note,
+                held_by_shift,
+                reseated,
                 counts,
             )
 

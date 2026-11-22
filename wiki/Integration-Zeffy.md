@@ -19,8 +19,8 @@ The full operator reference is
 - **Three kinds of record.** A Zeffy campaign is linked to a fundraising
   campaign (each payment becomes a **donation**), a fundraising event (each
   payment adds to **revenue**, and each ticket to **attendance**) or a dues
-  schedule (each payment is credited to the paying member's oldest open
-  **dues**, matched by email).
+  schedule (each payment waits until a treasurer confirms which member's
+  oldest open **dues** it pays; the payer's email only suggests a member).
 - **Webhook and hourly sync.** With the signed webhook, payments and refunds
   arrive within seconds. The hourly sync records anything the webhook missed.
 - **One payment, one effect.** A payment is recorded once however many times
@@ -43,7 +43,9 @@ The full operator reference is
 
 Linking, unlinking and **Sync now** on `/grants/zeffy` need
 `fundraising.manage`. A link to a dues schedule also needs `finance.manage`
-**and** `finance.view`.
+**and** `finance.view`. **Confirm member** on a held dues payment needs
+`finance.manage`; an overpayment is confirmed only when the treasurer chooses
+to record the extra as the member's donation.
 
 ---
 
@@ -130,16 +132,16 @@ encrypted and is not returned by the payments list.
 
 ## Payment Statuses
 
-| Status              | Meaning                                                                                |
-| ------------------- | -------------------------------------------------------------------------------------- |
-| Applied             | Recorded on the linked record                                                          |
-| Processing          | Zeffy has not finished the payment                                                     |
-| Campaign not linked | Its campaign has no link, or the linked record was deleted                             |
-| Before link start   | Made before the link's start date                                                      |
-| No member match     | A dues payment whose payer's email matches no member, or whose member has no open dues |
-| Not counted         | Failed, deleted, or refunded before it was applied                                     |
-| Reversed            | Applied, then refunded, deleted or lost to a dispute, and taken back                   |
-| Needs review        | Changed in Zeffy after it was applied in a way The Logbook will not undo by itself     |
+| Status                | Meaning                                                                            |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| Applied               | Recorded on the linked record                                                      |
+| Processing            | Zeffy has not finished the payment                                                 |
+| Campaign not linked   | Its campaign has no link, or the linked record was deleted                         |
+| Before link start     | Made before the link's start date                                                  |
+| Awaiting confirmation | A dues payment waiting for a treasurer to confirm whose dues it pays               |
+| Not counted           | Failed, deleted, or refunded before it was applied                                 |
+| Reversed              | Applied, then refunded, deleted or lost to a dispute, and taken back               |
+| Needs review          | Changed in Zeffy after it was applied in a way The Logbook will not undo by itself |
 
 ---
 

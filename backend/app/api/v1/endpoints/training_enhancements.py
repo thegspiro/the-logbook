@@ -45,6 +45,7 @@ from app.schemas.training_enhancements import (
     XAPIStatementResponse,
 )
 from app.services import file_storage_service as file_storage
+from app.services import member_files
 from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
@@ -742,13 +743,17 @@ async def get_compliance_forecast(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_permission("training.manage")),
 ):
-    """Get predictive compliance forecast for all members"""
+    """Each member's compliance forecast and the department's averages.
+
+    ``{"members": [...], "averages": {current, days_30, days_60, days_90}}``,
+    each average ``{"pct", "standing"}`` classified by the department's
+    thresholds (``ComplianceForecastReport``).
+    """
     try:
         service = ReportExportService(db)
-        forecasts = await service.generate_compliance_forecast(
+        return await service.generate_compliance_forecast_report(
             current_user.organization_id
         )
-        return forecasts
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
@@ -882,13 +887,52 @@ async def upload_record_attachment(
 
     return {
         "record_id": record_id,
-        "attachments": _sanitize_attachments(record.attachments or []),
+        "attachments": _sanitize_attachments(record, current_user),
     }
 
 
-def _sanitize_attachments(attachments: list) -> list:
+def _holds_training_manage(user) -> bool:
+    from app.api.dependencies import _collect_user_permissions, _has_permission
+
+    return _has_permission("training.manage", _collect_user_permissions(user))
+
+
+def _removal_refusal(record, entry, user) -> tuple[int, str] | None:
+    """Why *user* may not remove *entry* from *record*, or None if they may.
+
+    Owner decision 2026-11-21 (d), the one definition both the removal route
+    and the list's ``can_remove`` read (pitfall #29):
+
+    * a voided record keeps its files, as an upload to one is refused;
+    * a certificate an approval copied onto the record is the evidence the
+      approval rests on: it leaves with the submission's retention, or with
+      anonymisation or a permanent delete, never from here. Checked first,
+      because the self-reports tree is nested in the legacy records tree;
+    * ``training.manage`` may remove any other file uploaded to the record;
+    * the record's member may remove a file they uploaded themselves. An entry
+      that predates ``uploaded_by`` is an officer's to remove.
+    """
+    if record.voided_at is not None:
+        return 400, "A voided training record keeps its attachments."
+    if member_files.confined_attachment_path(
+        entry, record.organization_id, StorageArea.SELF_REPORTS
+    ):
+        return (
+            400,
+            "This certificate came with an approved self-report, and stays on "
+            "the record with that approval.",
+        )
+    uploaded_by = entry.get("uploaded_by") if isinstance(entry, dict) else None
+    if str(record.user_id) == str(user.id) and uploaded_by == str(user.id):
+        return None
+    if _holds_training_manage(user):
+        return None
+    return 403, "You can only remove a file you uploaded yourself."
+
+
+def _sanitize_attachments(record, user) -> list:
     """Strip server file paths; expose only client-safe metadata, the entry's
-    id and its index."""
+    id, its index, and whether this caller may remove it."""
     return [
         {
             "index": i,
@@ -897,8 +941,13 @@ def _sanitize_attachments(attachments: list) -> list:
             "file_type": a.get("file_type") if isinstance(a, dict) else None,
             "file_size": a.get("file_size") if isinstance(a, dict) else None,
             "uploaded_at": a.get("uploaded_at") if isinstance(a, dict) else None,
+            "can_remove": bool(
+                isinstance(a, dict)
+                and a.get("id")
+                and _removal_refusal(record, a, user) is None
+            ),
         }
-        for i, a in enumerate(attachments)
+        for i, a in enumerate(record.attachments or [])
     ]
 
 
@@ -912,7 +961,7 @@ async def get_record_attachments(
     record = await _load_record_for_attachment(db, record_id, current_user)
     return {
         "record_id": record_id,
-        "attachments": _sanitize_attachments(record.attachments or []),
+        "attachments": _sanitize_attachments(record, current_user),
     }
 
 
@@ -972,3 +1021,94 @@ async def download_record_attachment(
         media_type=attachment.get("file_type") or "application/octet-stream",
         filename=filename,
     )
+
+
+@router.delete("/records/{record_id}/attachments/{entry}", status_code=204)
+async def delete_record_attachment(
+    record_id: str,
+    entry: str,
+    expected_id: Optional[str] = Query(
+        default=None,
+        description=(
+            "With a legacy index: the id the client believes is at that "
+            "index. A mismatch answers 409 and changes nothing."
+        ),
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Remove a file uploaded to a training record.
+
+    Owner decision 2026-11-21: an officer holding training.manage may remove
+    any file uploaded to the record, and the record's member a file they
+    uploaded themselves. A certificate an approval copied onto the record, and
+    any file on a voided record, stays. ``entry`` is the attachment's id;
+    removing one that is no longer there answers 204 and changes nothing, so a
+    retry is safe. A string of digits is a legacy index, which takes
+    ``expected_id``. The file itself goes after the commit, and only if no
+    other row still names it.
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from app.services.upload_relocation import areas_for
+    from app.utils.training_attachments import (
+        EntryMoved,
+        parse_entry_ref,
+        resolve_entry,
+    )
+
+    # Locked, so the read and the write below are one decision against an
+    # upload, a void or a retention sweep committed meanwhile (pitfall #27).
+    record = await _load_record_for_attachment(
+        db, record_id, current_user, for_update=True
+    )
+    try:
+        found = resolve_entry(record.attachments, entry, expected_id)
+    except EntryMoved:
+        raise HTTPException(
+            status_code=409,
+            detail="The attachment list has changed. Reload it and try again.",
+        )
+    if found is None:
+        if parse_entry_ref(entry).index is not None:
+            raise HTTPException(status_code=404, detail="Attachment not found")
+        return None
+
+    index, removed = found
+    refusal = _removal_refusal(record, removed, current_user)
+    if refusal is not None:
+        raise HTTPException(status_code=refusal[0], detail=refusal[1])
+
+    attachments = list(record.attachments or [])
+    attachments.pop(index)
+    record.attachments = attachments
+    flag_modified(record, "attachments")
+    await db.flush()
+    # Ids only: a file name is the uploader's text and can name the member.
+    await log_audit_event(
+        db=db,
+        event_type="training_record_attachment_removed",
+        event_category="training",
+        severity="info",
+        event_data={
+            "record_id": str(record.id),
+            "entry_id": removed.get("id") if isinstance(removed, dict) else None,
+            "target_user_id": str(record.user_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+
+    removed_path = member_files.confined_attachment_path(
+        removed, record.organization_id, StorageArea.TRAINING_RECORDS
+    )
+    if removed_path:
+        await member_files.remove_unreferenced_files(
+            db,
+            str(record.organization_id),
+            {removed_path},
+            subject_id=f"training record {record_id}",
+            areas=areas_for(StorageArea.TRAINING_RECORDS),
+        )
+    return None

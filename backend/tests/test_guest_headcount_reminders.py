@@ -1,6 +1,6 @@
 """The morning-after reminder to record an outreach event's guest headcount.
 
-An outreach event that ended with no headcount leaves the Community Engagement
+An outreach event that ended with no headcount leaves the Outreach Impact
 report on the requester's estimate, or on nothing. These tests pin who is
 reminded, that it happens once, and every event that must be left alone,
 against real rows.

@@ -131,14 +131,15 @@ A template version holds a **definition** and a **workflow**.
 `officer_only`, shown only to members whose rank is in `officer_ranks`. Each
 item has a tool:
 
-| Tool            | Answer                            | Scored |
-| --------------- | --------------------------------- | ------ |
-| `labeled_scale` | one of the item's labelled levels | yes    |
-| `numeric_scale` | one of the item's numbered levels | yes    |
-| `meets`         | meets or does not meet            | yes    |
-| `checklist`     | the options ticked                | no     |
-| `narrative`     | free text                         | no     |
-| `goals`         | free text for goals               | no     |
+| Tool            | Answer                                       | Scored |
+| --------------- | -------------------------------------------- | ------ |
+| `labeled_scale` | one of the item's labelled levels            | yes    |
+| `numeric_scale` | one of the item's numbered levels            | yes    |
+| `meets`         | meets or does not meet                       | yes    |
+| `checklist`     | the options ticked                           | no     |
+| `narrative`     | free text                                    | no     |
+| `goals`         | free text for goals                          | no     |
+| `goal_review`   | a result for each of the last review's goals | no     |
 
 Items can allow N/A, require an example for given levels, require or forbid a
 comment, be left out of the self-evaluation, carry a weight, and carry a
@@ -160,10 +161,16 @@ period ends. The workflow also sets `reminder_days_before` (default 3),
 member's acknowledgement; an interim check-in has only the self-evaluation and
 evaluator steps and no signatures.
 
+A form may have one `goal_review` item (see "Last year's goals" below). It
+takes no data block and cannot be marked N/A as a whole.
+
 **Starters:** a new template may start from a ready-made form
 (`GET /templates/starters`, `starter` on `POST /templates`): the annual member
 evaluation, the annual evaluation with officer sections, and the probationary
-check-in. Each publishes as it stands. The officer one adds an officer-only
+check-in. Each publishes as it stands. Since 2026-11-21 the annual forms open
+their Development section with a "Last year's goals" item, and the check-in its
+Next steps with "Since the last check-in"; templates made from a starter before
+then are unchanged. The officer one adds an officer-only
 Leadership and supervision section and needs `officer_ranks` on the create
 request: required for it, refused for any other, and checked against the
 department's ranks. A member without one of those ranks is graded on the other
@@ -345,6 +352,40 @@ see none of it. An evaluator who could not open last year's review (a different
 evaluator without `evaluations.view_all`) gets nothing. It is shown on the
 screen beside the form and is not printed on the PDF: the PDF is the record of
 this review alone.
+
+## Last year's goals
+
+A `goal_review` item rates each goal the member's previous review set. The
+previous review is the one the last-review panel shows: the most recent
+finalized evaluation on the same template, whatever its version, whose period
+ended before this one began. Its goals are the text of each answered `goals`
+item in its evaluator's part.
+
+**The goals are copied into the evaluation** when it is drafted, under
+`data_snapshot.previous_goals`, and copied again when the figures are
+refreshed, which is allowed until the evaluator locks their part. A review
+amended later does not change the copy once locked. Because the copy is part of
+the record:
+
+- it is read without regard to who is looking, unlike the last-review panel:
+  everyone who reads this evaluation's content (the member, the evaluator,
+  approvers, calibration and `view_all`) sees the goals it rates, even an
+  evaluator who could not open last year's review. A manager without
+  `view_all` does not, as with the rest of the content. The department chose
+  this on 2026-11-21 so the record and its PDF can carry the goals they rate;
+- it is in the record hash, so a signature attests to the goals as rated. The
+  hash includes the copy only when there is one, so evaluations signed before
+  goal reviews existed still verify;
+- it is printed on the PDF beside each result.
+
+Each goal gets a result, `met`, `partly_met`, `not_met` or `not_applicable`
+("No longer applies", for a goal an assignment change made moot), and an
+optional comment, stored in the item's answer as `goal_ratings` keyed by the
+previous review's goals item. Submitting needs a result for every copied goal;
+a rating for a goal not in the copy is refused. When the previous review set no
+goals, or there is none, the item has nothing to rate and asks for nothing. If
+the item is in the self-evaluation, the member rates them too. The results are
+recorded and printed but do not count toward any grade.
 
 ## Review history
 

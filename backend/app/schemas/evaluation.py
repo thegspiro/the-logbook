@@ -54,6 +54,9 @@ class EvaluationTool(str, Enum):
     CHECKLIST = "checklist"
     NARRATIVE = "narrative"
     GOALS = "goals"
+    # Rates each goal the member's previous review set. The goals are copied
+    # into the evaluation when it is drafted, so the record carries them.
+    GOAL_REVIEW = "goal_review"
 
 
 #: Tools that produce a number, and so can be weighted and scored.
@@ -184,6 +187,15 @@ class TemplateItem(BaseModel):
             raise ValueError(f"'{self.label}': only a rated item can carry weight")
         if self.tool != EvaluationTool.CHECKLIST and self.checklist_options:
             raise ValueError(f"'{self.label}': only a checklist has options")
+        if self.tool == EvaluationTool.GOAL_REVIEW:
+            if self.data_block is not None:
+                raise ValueError(
+                    f"'{self.label}' rates last review's goals and takes no figures"
+                )
+            if self.allow_na:
+                raise ValueError(
+                    f"'{self.label}': each goal is marked not applicable on its own"
+                )
         if not set(self.require_example_for) <= set(values):
             raise ValueError(
                 f"'{self.label}': examples can only be required at levels the "
@@ -269,6 +281,14 @@ class TemplateDefinition(BaseModel):
         item_keys = [i.key for s in self.sections for i in s.items]
         if len(set(item_keys)) != len(item_keys):
             raise ValueError("Item keys must be unique across the template")
+        goal_reviews = [
+            i
+            for s in self.sections
+            for i in s.items
+            if i.tool == EvaluationTool.GOAL_REVIEW
+        ]
+        if len(goal_reviews) > 1:
+            raise ValueError("Only one item can rate the last review's goals")
         self.officer_ranks = list(dict.fromkeys(self.officer_ranks))
         bands = sorted(self.grade_bands, key=lambda b: b.level)
         if [b.level for b in bands] != list(GRADE_LEVELS):
@@ -747,6 +767,29 @@ def _blank_to_none(v: Optional[str]) -> Optional[str]:
     return v or None
 
 
+class GoalResult(str, Enum):
+    """How far a goal from the previous review was met."""
+
+    MET = "met"
+    PARTLY_MET = "partly_met"
+    NOT_MET = "not_met"
+    # The goal no longer applies (an assignment changed, say), so it is not
+    # counted as missed.
+    NOT_APPLICABLE = "not_applicable"
+
+
+class GoalRating(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    result: Optional[GoalResult] = None
+    comment: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+
+    @field_validator("comment")
+    @classmethod
+    def _blank(cls, v: Optional[str]) -> Optional[str]:
+        return _blank_to_none(v)
+
+
 class ItemAnswer(BaseModel):
     """One item's answer in an evaluator's part or a self-evaluation.
 
@@ -754,8 +797,10 @@ class ItemAnswer(BaseModel):
     (CLAUDE.md pitfall #20): ``rating`` is the scale level given (``1`` /
     ``0`` for meets / does not meet), ``text`` the answer to a narrative or
     goals item, ``comment`` the remark beside a rated one, ``example`` the
-    specific instance a level requires, and ``justification`` the evaluator's
-    reason for departing from the score the data suggested.
+    specific instance a level requires, ``justification`` the evaluator's
+    reason for departing from the score the data suggested, and
+    ``goal_ratings`` a goal-review item's result for each goal the previous
+    review set, keyed by that review's goals item.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -767,6 +812,9 @@ class ItemAnswer(BaseModel):
     comment: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
     example: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
     justification: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+    goal_ratings: dict[str, GoalRating] = Field(
+        default_factory=dict, max_length=MAX_SECTIONS * MAX_ITEMS_PER_SECTION
+    )
 
     @field_validator("text", "comment", "example", "justification")
     @classmethod
@@ -1019,6 +1067,17 @@ class PreviousGoal(BaseModel):
     text: str
 
 
+class GoalsUnderReview(BaseModel):
+    """The previous review's goals as they were copied into this evaluation
+    when it was drafted, for its goal-review item to rate."""
+
+    evaluation_id: str
+    period_name: Optional[str] = None
+    period_start: date
+    period_end: date
+    goals: List[PreviousGoal] = Field(default_factory=list)
+
+
 class PreviousReview(BaseModel):
     """The member's last finalized review on the same form, as the caller may
     see it: the grade that stood, each section's grade, the goals it set."""
@@ -1080,6 +1139,9 @@ class EvaluationDetail(EvaluationSummary):
     calibration_flags: List[str] = Field(default_factory=list)
     # The member's last review on the same form, when the caller may read it.
     previous_review: Optional[PreviousReview] = None
+    # The previous review's goals as copied into this one for its
+    # goal-review item; part of this record, unlike ``previous_review``.
+    goals_under_review: Optional[GoalsUnderReview] = None
     viewer: EvaluationViewer
 
 

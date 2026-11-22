@@ -304,6 +304,23 @@ const PoolItemsPage: React.FC = () => {
     [issuancesMap]
   );
 
+  // After an issue or return, fetch the item's issuances again rather than
+  // dropping them: loadIssuances only runs when a card is opened, so an open
+  // card left with nothing cached listed no issuances at all (INV2-8).
+  const refreshIssuances = useCallback(async (itemId: string) => {
+    try {
+      const data = await inventoryService.getItemIssuances(itemId, true);
+      setIssuancesMap((prev) => ({ ...prev, [itemId]: data }));
+    } catch (err: unknown) {
+      setIssuancesMap((prev) => {
+        const n = { ...prev };
+        delete n[itemId];
+        return n;
+      });
+      toast.error(getErrorMessage(err, 'Failed to load issuances'));
+    }
+  }, []);
+
   /* Filtering */
   const filtered = items.filter((item) => {
     if (searchQuery && !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -356,12 +373,7 @@ const PoolItemsPage: React.FC = () => {
       );
       toast.success(`Issued ${issueQty} ${issueItem.name}`);
       setIssueModalOpen(false);
-      // Clear cached issuances for this item so they reload
-      setIssuancesMap((prev) => {
-        const n = { ...prev };
-        delete n[issueItem.id];
-        return n;
-      });
+      void refreshIssuances(issueItem.id);
       void loadData();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Issue failed'));
@@ -406,11 +418,7 @@ const PoolItemsPage: React.FC = () => {
       await inventoryService.returnToPool(returnIssuance.id, returnOpts);
       toast.success('Item returned to pool');
       setReturnModalOpen(false);
-      setIssuancesMap((prev) => {
-        const n = { ...prev };
-        delete n[returnIssuance.item_id];
-        return n;
-      });
+      void refreshIssuances(returnIssuance.item_id);
       void loadData();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Return failed'));

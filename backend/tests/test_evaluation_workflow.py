@@ -3237,6 +3237,236 @@ class TestPreviousReview:
         assert seen["previous_review"] is None
 
 
+GOAL_SECTION = {
+    "key": "development",
+    "title": "Development",
+    "items": [
+        {
+            "key": "last_goals",
+            "label": "Last year's goals",
+            "tool": "goal_review",
+            "include_in_self_evaluation": False,
+        },
+        {
+            "key": "goals",
+            "label": "Goals for the coming year",
+            "tool": "goals",
+            "include_in_self_evaluation": False,
+        },
+    ],
+}
+
+
+async def _with_goal_review(dept: _Dept) -> None:
+    """Gives the department's form a goals item and a goal-review item."""
+    version = (
+        await dept.db.execute(
+            select(EvaluationTemplateVersion).where(
+                EvaluationTemplateVersion.template_id == dept.template.id
+            )
+        )
+    ).scalar_one()
+    version.definition = {
+        **DEFINITION,
+        "sections": [*DEFINITION["sections"], GOAL_SECTION],
+    }
+    await dept.db.flush()
+
+
+async def _finish(
+    dept: _Dept, make_client: ClientFactory, url: str, evaluator_content: dict
+) -> None:
+    member = await make_client(dept.member)
+    evaluator = await make_client(dept.evaluator)
+    await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+    await member.post(f"{url}/parts/self_evaluation/submit")
+    saved = await evaluator.put(
+        f"{url}/parts/evaluator", json={"content": evaluator_content}
+    )
+    assert saved.status_code == 200, saved.text
+    submitted = await evaluator.post(f"{url}/parts/evaluator/submit")
+    assert submitted.status_code == 200, submitted.text
+    signed = await member.post(
+        f"{url}/sign",
+        json={
+            "signed_name": dept.member.full_name,
+            "disposition": "acknowledged",
+            "intent_confirmed": True,
+        },
+    )
+    assert signed.json()["outcome"] == "finalized", signed.text
+
+
+def _answers(**extra: dict) -> dict:
+    return {"answers": {**EVALUATOR_ANSWERS["answers"], **extra}}
+
+
+class TestGoalReview:
+    """This year's review rates each goal last year's set, from a copy taken
+    when it was drafted, so the goals and their results are on its record."""
+
+    async def _last_year(self, dept: _Dept, make_client: ClientFactory) -> str:
+        await _with_goal_review(dept)
+        last = await _draft(await make_client(dept.manager), dept)
+        url = f"/evaluations/{last['id']}"
+        # The first review has no goals before it, so there is nothing to rate.
+        assert last["goals_under_review"] is None
+        await _finish(
+            dept, make_client, url, _answers(goals={"text": "Lead two drills."})
+        )
+        return last["id"]
+
+    async def test_last_years_goals_are_copied_and_must_be_rated(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        last_id = await self._last_year(dept, make_client)
+        this = await _draft(
+            await make_client(dept.manager),
+            dept,
+            period_id=(await _next_period(dept)).id,
+        )
+        url = f"/evaluations/{this['id']}"
+        evaluator = await make_client(dept.evaluator)
+        member = await make_client(dept.member)
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+
+        copied = this["goals_under_review"]
+        assert copied["evaluation_id"] == last_id
+        assert copied["goals"] == [
+            {
+                "key": "goals",
+                "label": "Goals for the coming year",
+                "text": "Lead two drills.",
+            }
+        ]
+
+        unrated = _answers(goals={"text": "Earn Officer I."})
+        await evaluator.put(f"{url}/parts/evaluator", json={"content": unrated})
+        refused = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert refused.status_code == 400
+        assert "rate each of the last review's goals" in refused.text
+
+        rated = _answers(
+            goals={"text": "Earn Officer I."},
+            last_goals={
+                "goal_ratings": {"goals": {"result": "met", "comment": "Led three."}}
+            },
+        )
+        saved = await evaluator.put(f"{url}/parts/evaluator", json={"content": rated})
+        assert saved.status_code == 200, saved.text
+        submitted = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert submitted.status_code == 200, submitted.text
+
+    async def test_a_goal_last_year_did_not_set_cannot_be_rated(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        await self._last_year(dept, make_client)
+        this = await _draft(
+            await make_client(dept.manager),
+            dept,
+            period_id=(await _next_period(dept)).id,
+        )
+
+        response = await (await make_client(dept.evaluator)).put(
+            f"/evaluations/{this['id']}/parts/evaluator",
+            json={
+                "content": _answers(
+                    last_goals={"goal_ratings": {"invented": {"result": "met"}}}
+                )
+            },
+        )
+
+        assert response.status_code == 400
+        assert "not among the last review's goals" in response.text
+
+    async def test_an_evaluator_who_could_not_open_last_years_still_sees_its_goals(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        # The department's decision of 2026-11-21: whoever takes part in this
+        # review sees the goals it rates, though not the rest of last year's.
+        await self._last_year(dept, make_client)
+        newcomer = await _user(dept.db, dept.org, ["evaluations.conduct"])
+        this = await _draft(
+            await make_client(dept.manager),
+            dept,
+            period_id=(await _next_period(dept)).id,
+            evaluator_id=newcomer.id,
+        )
+
+        seen = (
+            await (await make_client(newcomer)).get(f"/evaluations/{this['id']}")
+        ).json()
+
+        assert seen["previous_review"] is None
+        assert [g["text"] for g in seen["goals_under_review"]["goals"]] == [
+            "Lead two drills."
+        ]
+
+    async def test_a_manager_without_view_all_does_not_read_the_goals(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        await self._last_year(dept, make_client)
+        this = await _draft(
+            await make_client(dept.manager),
+            dept,
+            period_id=(await _next_period(dept)).id,
+        )
+        manager_only = await _user(dept.db, dept.org, ["evaluations.manage"])
+
+        seen = (
+            await (await make_client(manager_only)).get(f"/evaluations/{this['id']}")
+        ).json()
+
+        assert seen["goals_under_review"] is None
+
+    async def test_the_signed_record_prints_each_goal_and_its_result(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        from app.services.evaluation_document_service import (
+            EvaluationDocumentService,
+        )
+
+        await self._last_year(dept, make_client)
+        this = await _draft(
+            await make_client(dept.manager),
+            dept,
+            period_id=(await _next_period(dept)).id,
+        )
+        await _finish(
+            dept,
+            make_client,
+            f"/evaluations/{this['id']}",
+            _answers(
+                goals={"text": "Earn Officer I."},
+                last_goals={
+                    "goal_ratings": {
+                        "goals": {"result": "partly_met", "comment": "Led one."}
+                    }
+                },
+            ),
+        )
+        documents = EvaluationDocumentService(dept.db)
+        evaluation = await documents.evaluations._evaluation(dept.org, this["id"])
+        assert evaluation is not None
+        record = await documents._record(
+            evaluation, await documents.evaluations._parts(evaluation)
+        )
+
+        item = next(
+            i
+            for section in record["sections"]
+            for i in section["items"]
+            if i["label"] == "Last year's goals"
+        )
+        assert item["evaluator"]["notes"] == [
+            (
+                "Goals for the coming year",
+                "Lead two drills.\nResult: Partly met\nComment: Led one.",
+            )
+        ]
+
+
 class TestPeriodResults:
     """The conduct list's grade column and the period export: for a holder of
     evaluations.view_all, finalized reviews only."""

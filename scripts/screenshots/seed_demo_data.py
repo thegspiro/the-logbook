@@ -9056,6 +9056,13 @@ class Seeder:
         member no longer on the roster, and a shift on another department's
         unit. Committing would write past shifts into every hours figure other
         guides photograph, so the draft stays a draft.
+
+        Three unit names match nothing, as an old system's free-text unit
+        column does: a personal vehicle and a vague "Other EMS" for the Units
+        tab's catch-all, and a unit of an outside department the list already
+        has but under a name it does not, for adding a unit under a picked
+        department. Each is on a member already in the file, so the Members
+        tab is unchanged.
         """
         drafts = items(self.api.get("/scheduling/history-import"), "imports")
         if any(
@@ -9146,6 +9153,36 @@ class Seeder:
                 "07:00",
                 "19:00",
                 "4",
+            ),
+            (
+                "Marcus Bell",
+                "POV",
+                "",
+                "Firefighter",
+                "2026-08-10",
+                "09:00",
+                "13:00",
+                "1",
+            ),
+            (
+                "Priya Raman",
+                "Other EMS",
+                "",
+                "Firefighter",
+                "2026-08-11",
+                "18:00",
+                "23:00",
+                "2",
+            ),
+            (
+                "Emeka Adeyemi",
+                "Medic 7",
+                "Lakeside Volunteer Rescue",
+                "Firefighter",
+                "2026-08-12",
+                "07:00",
+                "19:00",
+                "2",
             ),
         ]
         text = "".join(",".join(f'"{cell}"' for cell in row) + "\r\n" for row in rows)
@@ -14372,7 +14409,7 @@ class Seeder:
                 {"reason": "The library is closed for renovation until spring."},
             )
 
-    # Outreach already delivered this year, for the Community Engagement tab.
+    # Outreach already delivered this year, for the Outreach Impact tab.
     # Each reaches its figure a different way, because each draws a different
     # cell: an estimate from the request, sign-ins against an expectation, a
     # coordinator's headcount, and department events no request asked for.
@@ -14450,7 +14487,7 @@ class Seeder:
     ]
 
     def seed_outreach_history(self) -> None:
-        """Past outreach events with real reach, for Community Engagement.
+        """Past outreach events with real reach, for Outreach Impact.
 
         Every other outreach event the demo holds is in the future, so the
         report read "0 events held" and guide 04's picture of it showed empty

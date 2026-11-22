@@ -347,12 +347,19 @@ const EquipmentRequestsPage: React.FC = () => {
       toast.error('Document a reason for the substitution override');
       return;
     }
+    // A blank or 0 used to be sent as no quantity, which the server reads as
+    // "the full requested quantity" (INV2-9).
+    const quantity = Number(fulfillQuantity);
+    if (!fulfillQuantity.trim() || !Number.isInteger(quantity) || quantity < 1) {
+      toast.error('Enter a whole quantity of at least 1');
+      return;
+    }
     setSubmitting(true);
     try {
       await inventoryService.fulfillEquipmentRequest(fulfillModal.request.id, {
         fulfillment_type: fulfillmentType,
         item_id: fulfillItemId.trim() || undefined,
-        quantity: Number(fulfillQuantity) || undefined,
+        quantity,
         // A return-by date is due at the end of that day in the department's
         // zone, as the checkout extend dialogs send it. The bare date was
         // stored as midnight UTC, the previous evening west of Greenwich.
