@@ -905,3 +905,214 @@ DEFAULT_TEMPLATE_DEFS.extend(
         },
     ]
 )
+
+# ----------------------------------------------------------------------
+# An approver's stand-in (2026-11-22): named, cleared, and ended. Sent to the
+# stand-in only. None carries any request, reason or type.
+# ----------------------------------------------------------------------
+
+COVER_NAMED_SUBJECT = "You are covering leave requests for {{approver_name}}"
+
+COVER_NAMED_HTML = build_shell(
+    "You Are Covering Leave Requests",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{set_by_name}} named you to decide leave requests in
+        {{approver_name}}'s place while they are away.</p>
+"""
+    + facts(
+        [[fact("From", "{{start_date}}"), fact("To", "{{end_date}}")]],
+        panel=True,
+    )
+    + """        <p>While the cover runs you vote on the requests
+        {{approver_name}} would decide, and you get their reminders. A vote
+        you cast keeps counting after the cover ends.</p>
+"""
+    + action("{{requests_url}}", "Open leave requests"),
+    accent=ACCENT_BLUE,
+    chip=_CHIP,
+)
+
+COVER_NAMED_TEXT = """You Are Covering Leave Requests
+
+Hello {{recipient_name}},
+
+{{set_by_name}} named you to decide leave requests in {{approver_name}}'s
+place while they are away.
+
+From: {{start_date}}
+To: {{end_date}}
+
+While the cover runs you vote on the requests {{approver_name}} would decide,
+and you get their reminders. A vote you cast keeps counting after the cover
+ends.
+
+Open leave requests: {{requests_url}}
+
+{{footer_text}}"""
+
+COVER_CLEARED_SUBJECT = "Your cover for {{approver_name}} was cleared"
+
+COVER_CLEARED_HTML = build_shell(
+    "Your Cover Was Cleared",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{cleared_by_name}} cleared your cover for {{approver_name}}, which
+        was to run from {{start_date}} to {{end_date}}.</p>
+        <p>You no longer decide leave requests in their place. Votes you
+        already cast keep counting.</p>
+""" + action("{{requests_url}}", "Open leave requests"),
+    accent=ACCENT_BLUE,
+    chip=_CHIP,
+)
+
+COVER_CLEARED_TEXT = """Your Cover Was Cleared
+
+Hello {{recipient_name}},
+
+{{cleared_by_name}} cleared your cover for {{approver_name}}, which was to run
+from {{start_date}} to {{end_date}}.
+
+You no longer decide leave requests in their place. Votes you already cast
+keep counting.
+
+Open leave requests: {{requests_url}}
+
+{{footer_text}}"""
+
+COVER_ENDED_SUBJECT = "Your cover for {{approver_name}} has ended"
+
+COVER_ENDED_HTML = build_shell(
+    "Your Cover Has Ended",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>Your cover for {{approver_name}} ended on {{end_date}}.
+        {{approver_name}} decides their leave requests again.</p>
+        <p>Votes you cast while covering keep counting.</p>
+""" + action("{{requests_url}}", "Open leave requests"),
+    accent=ACCENT_BLUE,
+    chip=_CHIP,
+)
+
+COVER_ENDED_TEXT = """Your Cover Has Ended
+
+Hello {{recipient_name}},
+
+Your cover for {{approver_name}} ended on {{end_date}}. {{approver_name}}
+decides their leave requests again.
+
+Votes you cast while covering keep counting.
+
+Open leave requests: {{requests_url}}
+
+{{footer_text}}"""
+
+_COVER_BASE_VARIABLES = [
+    {"name": "recipient_name", "description": "The stand-in it is sent to"},
+    {"name": "approver_name", "description": "The approver being covered"},
+    {"name": "start_date", "description": "The cover's first day"},
+    {"name": "end_date", "description": "The cover's last day"},
+    {"name": "requests_url", "description": "Link to Leave Requests"},
+]
+
+TEMPLATE_VARIABLES.update(
+    {
+        _T.LEAVE_COVER_NAMED.value: _COVER_BASE_VARIABLES
+        + [{"name": "set_by_name", "description": "Who named the stand-in"}],
+        _T.LEAVE_COVER_CLEARED.value: _COVER_BASE_VARIABLES
+        + [{"name": "cleared_by_name", "description": "Who cleared the cover"}],
+        _T.LEAVE_COVER_ENDED.value: list(_COVER_BASE_VARIABLES),
+    }
+)
+
+_COVER_SAMPLE = {
+    "recipient_name": "Lieutenant Sam Park",
+    "approver_name": "Captain Maria Lopez",
+    "start_date": "December 01, 2026",
+    "end_date": "December 14, 2026",
+    "requests_url": "https://example.org/members/leave-requests",
+}
+
+SAMPLE_CONTEXT.update(
+    {
+        _T.LEAVE_COVER_NAMED.value: {
+            **_COVER_SAMPLE,
+            "set_by_name": "Captain Maria Lopez",
+        },
+        _T.LEAVE_COVER_CLEARED.value: {
+            **_COVER_SAMPLE,
+            "cleared_by_name": "Captain Maria Lopez",
+        },
+        _T.LEAVE_COVER_ENDED.value: dict(_COVER_SAMPLE),
+    }
+)
+
+TEST_RECIPIENT_FIELDS.update(
+    {
+        _T.LEAVE_COVER_NAMED.value: {"recipient_name": "full"},
+        _T.LEAVE_COVER_CLEARED.value: {"recipient_name": "full"},
+        _T.LEAVE_COVER_ENDED.value: {"recipient_name": "full"},
+    }
+)
+
+SAMPLE_DAYS.update(
+    {
+        _T.LEAVE_COVER_NAMED.value: {"start_date": 7, "end_date": 21},
+        _T.LEAVE_COVER_CLEARED.value: {"start_date": 7, "end_date": 21},
+        _T.LEAVE_COVER_ENDED.value: {"start_date": -15, "end_date": -1},
+    }
+)
+
+DEFAULTS.update(
+    {
+        _T.LEAVE_COVER_NAMED.value: (
+            COVER_NAMED_SUBJECT,
+            COVER_NAMED_HTML,
+            COVER_NAMED_TEXT,
+        ),
+        _T.LEAVE_COVER_CLEARED.value: (
+            COVER_CLEARED_SUBJECT,
+            COVER_CLEARED_HTML,
+            COVER_CLEARED_TEXT,
+        ),
+        _T.LEAVE_COVER_ENDED.value: (
+            COVER_ENDED_SUBJECT,
+            COVER_ENDED_HTML,
+            COVER_ENDED_TEXT,
+        ),
+    }
+)
+
+DEFAULT_TEMPLATE_DEFS.extend(
+    [
+        {
+            "type": _T.LEAVE_COVER_NAMED,
+            "name": "Leave Cover: Stand-in Named",
+            "subject": COVER_NAMED_SUBJECT,
+            "html": COVER_NAMED_HTML,
+            "text": COVER_NAMED_TEXT,
+            "description": (
+                "Sent to an officer when they are named to decide leave "
+                "requests in an approver's place for a period."
+            ),
+        },
+        {
+            "type": _T.LEAVE_COVER_CLEARED,
+            "name": "Leave Cover: Cleared",
+            "subject": COVER_CLEARED_SUBJECT,
+            "html": COVER_CLEARED_HTML,
+            "text": COVER_CLEARED_TEXT,
+            "description": (
+                "Sent to the stand-in when an approver's cover is cleared "
+                "before it ends."
+            ),
+        },
+        {
+            "type": _T.LEAVE_COVER_ENDED,
+            "name": "Leave Cover: Ended",
+            "subject": COVER_ENDED_SUBJECT,
+            "html": COVER_ENDED_HTML,
+            "text": COVER_ENDED_TEXT,
+            "description": (
+                "Sent to the stand-in the day after an approver's cover ends."
+            ),
+        },
+    ]
+)
