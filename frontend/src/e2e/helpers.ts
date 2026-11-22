@@ -23,6 +23,7 @@ import type { StoreOrder } from '../modules/storefront/types';
 import type { AdminHoursActiveSessionAdmin, AdminHoursCategory } from '../modules/admin-hours/types';
 import type { McpOAuthConnection } from '../services/mcpOAuthService';
 import type { PermissionCategory, Role } from '../types/role';
+import type { BallotLookupResponse, Candidate } from '../types/election';
 import type { InventoryCategory } from '../services/eventServices';
 import type { Facility, Inspection, MaintenanceRecord } from '../modules/facilities/types/facilities';
 import type {
@@ -5576,6 +5577,8 @@ const routes = ({
   // nothing signed in reads either answer.
   ['**/api/v1/auth/validate-reset-token', () => ({ valid: true, email: 'test.user@example.com' })],
   ['**/api/public/v1/minutes', () => PUBLIC_MINUTES_LIST(empty)],
+  // The emailed ballot is reached with a token, never a session.
+  ['**/api/v1/elections/ballot/lookup', () => BALLOT_LOOKUP],
   ...(roles
     ? ([
         ['**/api/v1/roles', () => DEPARTMENT_ROLES],
@@ -5586,6 +5589,92 @@ const routes = ({
     ? ([['**/api/v1/medical-supplies/categories**', () => MEDICAL_CATEGORIES]] as [string, () => unknown][])
     : []),
 ];
+
+const ballotCandidate = (
+  id: string,
+  name: string,
+  position: string,
+  displayOrder: number,
+  statement?: string
+): Candidate => ({
+  id,
+  election_id: 'e2e-election-annual',
+  name,
+  position,
+  ...(statement ? { statement } : {}),
+  nomination_date: '2026-10-15T14:00:00Z',
+  accepted: true,
+  is_write_in: false,
+  display_order: displayOrder,
+  created_at: '2026-10-15T14:00:00Z',
+  updated_at: '2026-10-15T14:00:00Z',
+});
+
+// One of each item a member meets on an emailed ballot: a contested officer
+// race with statements and a write-in, a membership approval, a multi-seat
+// race, and a general motion.
+const BALLOT_LOOKUP: BallotLookupResponse = {
+  election: {
+    id: 'e2e-election-annual',
+    title: '2027 Annual Officer Election and Membership Votes',
+    description: 'Polls close at 21:00 on the night of the annual meeting. One ballot per member.',
+    election_type: 'officer',
+    meeting_date: '2026-12-01T00:00:00Z',
+    start_date: '2026-11-20T12:00:00Z',
+    end_date: '2026-12-02T02:00:00Z',
+    status: 'open',
+    allow_write_ins: true,
+    voting_method: 'simple_majority',
+    max_votes_per_position: 1,
+    ballot_items: [
+      {
+        id: 'e2e-item-chief',
+        type: 'officer_election',
+        title: 'Chief of Department',
+        position: 'Chief of Department',
+        eligible_voter_types: ['operational'],
+        vote_type: 'candidate_selection',
+      },
+      {
+        id: 'e2e-item-membership',
+        type: 'membership_approval',
+        title: 'Admit Alexandra Montgomery-Fitzgerald to full membership',
+        description: 'Completed her probationary year, Firefighter I and the station orientation in October.',
+        eligible_voter_types: ['all'],
+        vote_type: 'approval',
+      },
+      {
+        id: 'e2e-item-board',
+        type: 'officer_election',
+        title: 'Board of Directors (two seats)',
+        position: 'Board of Directors',
+        eligible_voter_types: ['all'],
+        vote_type: 'candidate_selection',
+        voting_method: 'approval',
+      },
+      {
+        id: 'e2e-item-bylaws',
+        type: 'general_vote',
+        title: 'Amend Article IV to allow ballots to be cast by email',
+        eligible_voter_types: ['regular'],
+        vote_type: 'approval',
+      },
+    ],
+  },
+  candidates: [
+    ballotCandidate(
+      'e2e-cand-chief-1',
+      'Deputy Chief Maria Hernandez-Okonkwo',
+      'Chief of Department',
+      1,
+      'Twenty-two years in the department, eight as deputy. I will finish the Engine 2 replacement and put a second paid driver on weekday days.'
+    ),
+    ballotCandidate('e2e-cand-chief-2', 'Captain Robert Lindqvist', 'Chief of Department', 2),
+    ballotCandidate('e2e-cand-board-1', 'Patricia Nakamura', 'Board of Directors', 1),
+    ballotCandidate('e2e-cand-board-2', 'Samuel Adeyemi', 'Board of Directors', 2),
+    ballotCandidate('e2e-cand-board-3', 'Eleanor Vasquez-Whitfield', 'Board of Directors', 3),
+  ],
+};
 
 // PublicMinutesPage declares its response types locally, so this is shaped to
 // the page's PublicList rather than an imported interface.

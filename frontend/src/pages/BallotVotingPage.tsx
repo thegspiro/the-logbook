@@ -376,15 +376,15 @@ export const BallotVotingPage: React.FC = () => {
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br">
       {/* Header */}
-      <div className="bg-red-700 text-white">
+      <header className="bg-red-800 text-white">
         <div className="mx-auto max-w-2xl px-4 py-8 text-center">
           <h1 className="text-2xl font-bold">{election.title}</h1>
-          {election.description && <p className="mt-2 text-red-100">{election.description}</p>}
+          {election.description && <p className="mt-2">{election.description}</p>}
           {election.meeting_date && (
-            <p className="mt-1 text-sm text-red-200">Meeting Date: {formatDate(election.meeting_date, tz)}</p>
+            <p className="mt-1 text-sm">Meeting Date: {formatDate(election.meeting_date, tz)}</p>
           )}
         </div>
-      </div>
+      </header>
 
       {/* Ballot Content */}
       <main id="main-content" className="mx-auto max-w-2xl px-4 py-8">
@@ -419,6 +419,7 @@ export const BallotVotingPage: React.FC = () => {
               onWriteInName={updateWriteInName}
               onToggleCandidate={toggleCandidate}
               onRank={setCandidateRank}
+              headingLevel="h2"
             />
           ))}
         </div>
@@ -430,7 +431,7 @@ export const BallotVotingPage: React.FC = () => {
             onClick={handleSubmitBallot}
             disabled={hasNoItems || unanswered.length > 0}
             aria-describedby="ballot-submit-help"
-            className="rounded-lg bg-red-700 px-8 py-3 text-lg font-semibold text-white shadow-lg transition-colors hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-red-800 px-8 py-3 text-lg font-semibold text-white shadow-lg transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Submit Ballot
           </button>
@@ -534,7 +535,7 @@ export const BallotVotingPage: React.FC = () => {
                   void handleConfirmSubmit();
                 }}
                 disabled={submitting}
-                className="mobile-touch-target rounded-md bg-red-700 px-6 py-2 font-semibold text-white hover:bg-red-800 disabled:opacity-50"
+                className="mobile-touch-target rounded-md bg-red-800 px-6 py-2 font-semibold text-white hover:bg-red-900 disabled:opacity-50"
               >
                 {submitting ? 'Submitting...' : 'Cast Ballot'}
               </button>

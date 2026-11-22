@@ -399,6 +399,41 @@ class TestStorefrontAddressFilter:
         )
         assert kept == ["off@fd.example"]
 
+    async def test_muting_announcements_does_not_mute_a_payment_reminder(self):
+        # W67b-17, owner decision 2026-11-22: what a member owes is its own
+        # choice, so turning off "ordering is open" mail keeps the reminder.
+        service = self._service(
+            [("muted@fd.example", {"email_kinds": {"store_announcements": False}})]
+        )
+        kept = await service._drop_opted_out(
+            SimpleNamespace(id="org-1"),
+            ["muted@fd.example"],
+            "storefront_payment_reminder",
+        )
+        assert kept == ["muted@fd.example"]
+
+    async def test_the_store_balance_choice_mutes_a_payment_reminder(self):
+        service = self._service(
+            [("off@fd.example", {"email_kinds": {"store_balance": False}})]
+        )
+        kept = await service._drop_opted_out(
+            SimpleNamespace(id="org-1"),
+            ["off@fd.example"],
+            "storefront_payment_reminder",
+        )
+        assert kept == []
+
+    async def test_the_store_balance_choice_leaves_announcements_alone(self):
+        service = self._service(
+            [("off@fd.example", {"email_kinds": {"store_balance": False}})]
+        )
+        kept = await service._drop_opted_out(
+            SimpleNamespace(id="org-1"),
+            ["off@fd.example"],
+            "storefront_window_open",
+        )
+        assert kept == ["off@fd.example"]
+
     async def test_a_receipt_is_never_filtered(self):
         service = self._service([("off@fd.example", {"email_notifications": False})])
         kept = await service._drop_opted_out(

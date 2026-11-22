@@ -58,6 +58,32 @@ async def get_event_staffing(
     return {**state, "request_id": None}
 
 
+async def member_signup_sheet(
+    db: AsyncSession, event: Event, org: Optional[Organization], user_id: str
+) -> Optional[dict[str, Any]]:
+    """The event's live signup sheet for a member to sign up from, or None.
+
+    Reads the same state the organizer's card does (``get_event_staffing``),
+    so the two cannot disagree about what is still needed, but returns only the
+    roles and the caller's own seat. Signing up itself goes through the
+    scheduling signup endpoint, which enforces eligibility and the window.
+    """
+    if event.is_cancelled:
+        return None
+    state = await get_event_staffing(db, event, org)
+    if not state["shift_id"]:
+        return None
+    mine = next(
+        (v for v in state["volunteers"] if str(v["user_id"]) == str(user_id)), None
+    )
+    return {
+        "shift_id": str(state["shift_id"]),
+        "roles": state["roles"],
+        "signed_up": mine is not None,
+        "my_role_label": mine["outreach_role_label"] if mine else None,
+    }
+
+
 async def open_event_staffing(
     db: AsyncSession,
     event: Event,

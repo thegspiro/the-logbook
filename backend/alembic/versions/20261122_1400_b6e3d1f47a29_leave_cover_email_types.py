@@ -10,7 +10,7 @@ before narrowing the enum, as a row holding a value the narrower column
 cannot store would stop the ALTER.
 
 Revision ID: b6e3d1f47a29
-Revises: 561a3e9f4165
+Revises: c4e7a9d2f1b8
 Create Date: 2026-11-22 14:00:00.000000
 """
 
@@ -21,7 +21,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "b6e3d1f47a29"
-down_revision: Union[str, None] = "561a3e9f4165"
+down_revision: Union[str, None] = "c4e7a9d2f1b8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

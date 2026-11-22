@@ -29,6 +29,7 @@ const bulkPreview = vi.fn();
 const bulkDraft = vi.fn();
 const attention = vi.fn();
 const exportPeriod = vi.fn();
+const exportPeriodPdfs = vi.fn();
 const saveBlob = vi.fn();
 vi.mock('../../../utils/saveBlob', () => ({ saveBlob: (...a: unknown[]) => saveBlob(...a) as unknown }));
 vi.mock('../services/evaluationsApi', () => ({
@@ -41,6 +42,7 @@ vi.mock('../services/evaluationsApi', () => ({
     bulkPreview: (...a: unknown[]) => bulkPreview(...a) as unknown,
     bulkDraft: (...a: unknown[]) => bulkDraft(...a) as unknown,
     exportPeriod: (...a: unknown[]) => exportPeriod(...a) as unknown,
+    exportPeriodPdfs: (...a: unknown[]) => exportPeriodPdfs(...a) as unknown,
   },
 }));
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
@@ -246,6 +248,8 @@ describe('EvaluationListPage', () => {
       list.mockReset();
       list.mockResolvedValue([SUMMARY, DONE, DONE_TOO, ELSEWHERE]);
       exportPeriod.mockResolvedValue(new Blob(['csv']));
+      exportPeriodPdfs.mockReset();
+      exportPeriodPdfs.mockResolvedValue(new Blob(['zip']));
     });
 
     it('shows view_all the grade column, the period counts and the export', async () => {
@@ -273,6 +277,20 @@ describe('EvaluationListPage', () => {
       await user.click(within(results).getByRole('button', { name: 'Export CSV' }));
       await waitFor(() => expect(exportPeriod).toHaveBeenCalledWith('p1'));
       expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'evaluation-results.csv');
+    });
+
+    it("downloads the period's signed PDFs for view_all", async () => {
+      granted = new Set(['evaluations.view_all']);
+      const user = userEvent.setup();
+      renderWithRouter(<EvaluationListPage />);
+      await screen.findByRole('link', { name: 'Pat Member' });
+      await user.selectOptions(screen.getByLabelText('Period'), 'p1');
+
+      const results = screen.getByRole('region', { name: 'Period results' });
+      await user.click(within(results).getByRole('button', { name: 'Download signed PDFs' }));
+
+      await waitFor(() => expect(exportPeriodPdfs).toHaveBeenCalledWith('p1'));
+      expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'evaluation-pdfs.zip');
     });
 
     it('shows no grades or export without view_all', async () => {

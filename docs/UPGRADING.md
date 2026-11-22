@@ -835,8 +835,7 @@ should not have to discover by being surprised.
 Nothing blocks a restart. Migration `b6e3d1f47a29` adds three email template
 types (`leave_cover_named`, `leave_cover_cleared`, `leave_cover_ended`) to
 `email_templates.template_type` and `scheduled_emails.template_type`, and
-changes no other table. It builds on the merge revision `561a3e9f4165`, which
-rejoins two heads `main` carried and changes nothing.
+changes no other table. It builds on `c4e7a9d2f1b8`.
 
 - **Stand-ins are told.** The officer named to cover an approver gets an
   email and an in-app notice when named, when the cover is cleared, and the
@@ -852,6 +851,20 @@ rejoins two heads `main` carried and changes nothing.
   is written to the audit log. The export has no reasons.
 - **Downgrading** deletes any template or scheduled email of the three new
   types before narrowing the column.
+
+### Store payment reminders get their own email choice (2026-11-22)
+
+Nothing blocks a restart, and nothing is migrated.
+
+- **A member who turned off Store announcements receives store payment
+  reminders again.** Reminders were part of that group, so muting "ordering is
+  open" also muted being told about money owed. They are now the separate
+  optional **Your store balance** kind (`store_balance`), on by default, with
+  no carry-over from the announcements choice (owner decision, W67b-17). A
+  member can turn it off on their notification settings; a department can
+  make it required.
+- **Store announcements now covers only** the ordering-window notices and the
+  vendor-order update.
 
 ### Leave requests: an approver's own request goes to the Chief; approver cover (2026-11-21)
 

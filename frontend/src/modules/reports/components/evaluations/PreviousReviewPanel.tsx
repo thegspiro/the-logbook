@@ -45,6 +45,9 @@ export const PreviousReviewPanel: React.FC<PreviousReviewPanelProps> = ({ review
             <li key={goal.key}>
               <span className="text-theme-text-secondary">{goal.label}</span>
               <p className="text-theme-text-primary whitespace-pre-line">{goal.text}</p>
+              {goal.target_date && (
+                <p className="text-theme-text-secondary text-xs">Target: {formatCalendarDate(goal.target_date)}</p>
+              )}
             </li>
           ))}
         </ul>
