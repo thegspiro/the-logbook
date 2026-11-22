@@ -58,8 +58,13 @@ def test_it_targets_event_requests():
 def test_the_chain_has_one_head_again():
     config = Config(str(_BACKEND / "alembic.ini"))
     config.set_main_option("script_location", str(_BACKEND / "alembic"))
-    heads = ScriptDirectory.from_config(config).get_heads()
-    assert heads == ["c4e7a9d2f1b8"]
+    script = ScriptDirectory.from_config(config)
+    heads = script.get_heads()
+    # One head, with this revision on its line: naming the head itself would
+    # fail for every migration added after this one, which is not a fork.
+    assert len(heads) == 1
+    line = {rev.revision for rev in script.walk_revisions(base="base", head=heads[0])}
+    assert "c4e7a9d2f1b8" in line
 
 
 @pytest.fixture
