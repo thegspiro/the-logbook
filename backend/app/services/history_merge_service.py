@@ -39,12 +39,14 @@ from app.models.history import (
 )
 from app.services.history_clearance_service import HistoryClearanceService
 from app.services.history_document_service import HistoryDocumentService
+from app.services.history_event_service import HistoryEventService
 from app.services.history_media_service import HistoryMediaService
 from app.services.history_service import (
     RECORD_MEMBER,
     HistoryService,
     display_name,
     service_years,
+    title_dates,
 )
 
 KEEP = "keep"
@@ -277,6 +279,9 @@ class HistoryMergeService:
         # with both keeps one tag.
         await HistoryMediaService(self.db).move_tags(other.id, keep.id)
         await HistoryDocumentService(self.db).move_tags(other.id, keep.id)
+        # Event links follow too; on an event with both, the kept person's
+        # link and role stay.
+        await HistoryEventService(self.db).move_members(other.id, keep.id)
         await self._move_references(keep, other, actor_id)
 
         # A plain DELETE: the periods and links have already moved, and the
@@ -352,9 +357,13 @@ class HistoryMergeService:
             held = {t.title_id for t in twin.titles}
             for link in period.titles:
                 if link.title_id not in held:
+                    # The dates a title was held move with it; a title the
+                    # kept period already has keeps the kept record's dates.
                     self.db.add(
                         HistoricalMemberPeriodTitle(
-                            period_id=twin.id, title_id=link.title_id
+                            period_id=twin.id,
+                            title_id=link.title_id,
+                            **title_dates(link),
                         )
                     )
                     held.add(link.title_id)

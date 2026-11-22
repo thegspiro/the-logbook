@@ -77,6 +77,7 @@ export const CLEARANCE_STATUS_LABELS: Record<ClearanceStatus, string> = {
 };
 
 export type ClearancePurpose = 'public' | 'review';
+export type ClearanceRecordType = 'member' | 'media' | 'document' | 'apparatus' | 'event';
 export type ClearanceDecisionKind = 'cleared' | 'returned';
 export type EditKind = 'minor' | 'substantial';
 
@@ -103,9 +104,16 @@ export const REVISION_KIND_LABELS: Record<RevisionKind, string> = {
   withdrawn: 'Clearance withdrawn',
 };
 
+/** A title held in a service period, with the dates it was held when known. */
 export interface TitleRef {
   id: string;
   name: string;
+  held_from_date?: string | null;
+  held_from_precision?: DatePrecision;
+  held_from_circa?: boolean;
+  held_to_date?: string | null;
+  held_to_precision?: DatePrecision;
+  held_to_circa?: boolean;
 }
 
 export interface HistoryTitle {
@@ -114,7 +122,21 @@ export interface HistoryTitle {
   source: 'rank' | 'position' | 'custom';
   sort_order: number;
   is_retired: boolean;
+  /** Whether a dated start of this title reaches the department timeline.
+   * Off unless the Historian turns it on. */
+  show_on_timeline?: boolean;
   usage_count: number;
+}
+
+/** A held title as a service period saves it. */
+export interface HeldTitleWrite {
+  title_id: string;
+  held_from_date: string | null;
+  held_from_precision: DatePrecision;
+  held_from_circa: boolean;
+  held_to_date: string | null;
+  held_to_precision: DatePrecision;
+  held_to_circa: boolean;
 }
 
 export interface ServicePeriod {
@@ -140,6 +162,8 @@ export interface ServicePeriodWrite {
   is_ongoing: boolean;
   notes: string | null;
   title_ids: string[];
+  /** The titles with their dates; when sent, used instead of `title_ids`. */
+  titles?: HeldTitleWrite[] | undefined;
 }
 
 export interface Relation {
@@ -211,7 +235,7 @@ export interface ClearanceStepState {
 
 export interface ClearanceRequest {
   id: string;
-  record_type: 'member' | 'media' | 'document';
+  record_type: ClearanceRecordType;
   record_id: string;
   record_label: string;
   revision_number: number;
@@ -335,11 +359,14 @@ export interface ClearanceStep {
   blocked: boolean;
 }
 
+export type ClearanceReviewRecord =
+  HistoricalMemberMemberView | MediaMemberView | DocumentMemberView | ApparatusMemberView | EventMemberView;
+
 export interface ClearanceReview {
   request: ClearanceRequest;
-  /** A person, a photo/media item or a document, as members would read it:
-   * which one is `request.record_type`. */
-  record: HistoricalMemberMemberView | MediaMemberView | DocumentMemberView;
+  /** A person, photo, document, apparatus or event, as members would read
+   * it: which one is `request.record_type`. */
+  record: ClearanceReviewRecord;
 }
 
 export interface PeopleQuery {
@@ -570,6 +597,10 @@ interface MediaCatalogue {
   has_thumbnail: boolean;
   mime_type: string | null;
   publication_level: PublicationLevel;
+  /** Apparatus the item shows, as far as the caller may read them. */
+  apparatus: ApparatusTag[];
+  /** The events the item belongs to that the caller may read. */
+  events: EventSummary[];
 }
 
 export interface MediaMemberView extends MediaCatalogue {
@@ -675,6 +706,7 @@ export interface MediaQuery {
   decade?: number | undefined;
   album_id?: string | undefined;
   member_id?: string | undefined;
+  apparatus_id?: string | undefined;
   level?: PublicationLevel | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
@@ -733,6 +765,8 @@ interface DocumentCatalogue {
   has_thumbnail: boolean;
   mime_type: string | null;
   publication_level: PublicationLevel;
+  apparatus: ApparatusTag[];
+  events: EventSummary[];
 }
 
 export interface DocumentMemberView extends DocumentCatalogue {
@@ -795,6 +829,7 @@ export interface DocumentQuery {
   decade?: number | undefined;
   album_id?: string | undefined;
   member_id?: string | undefined;
+  apparatus_id?: string | undefined;
   level?: PublicationLevel | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
@@ -802,6 +837,366 @@ export interface DocumentQuery {
 
 /** Whether a clearance review's record is a document: its kind is a
  * document's, not a photo's. */
-export const isDocumentRecord = (
-  record: HistoricalMemberMemberView | MediaMemberView | DocumentMemberView
-): record is DocumentMemberView => 'kind' in record && (record.kind === 'pdf' || record.kind === 'image');
+export const isDocumentRecord = (record: ClearanceReviewRecord): record is DocumentMemberView =>
+  'kind' in record && (record.kind === 'pdf' || record.kind === 'image');
+
+/** Whether a clearance review's record is an apparatus: only an apparatus
+ * has designations. */
+export const isApparatusRecord = (record: ClearanceReviewRecord): record is ApparatusMemberView =>
+  'designations' in record;
+
+/** Whether a clearance review's record is an event: only an event links
+ * people with roles. */
+export const isEventRecord = (record: ClearanceReviewRecord): record is EventMemberView =>
+  'start_date' in record && 'members' in record;
+
+// --- Phase 5: managed lists (stations, apparatus types, event types) ---
+
+/** One entry of a managed list. Sources and document types have this shape too. */
+export interface HistoryListEntry {
+  id: string;
+  name: string;
+  sort_order: number;
+  is_retired: boolean;
+  usage_count: number;
+}
+
+// --- Phase 5: historical apparatus ---
+
+export const ApparatusDisposition = {
+  IN_SERVICE: 'in_service',
+  SOLD: 'sold',
+  TRADED: 'traded',
+  SCRAPPED: 'scrapped',
+  PRESERVED: 'preserved',
+  MUSEUM: 'museum',
+  UNKNOWN: 'unknown',
+} as const;
+export type ApparatusDisposition = (typeof ApparatusDisposition)[keyof typeof ApparatusDisposition];
+
+export const APPARATUS_DISPOSITION_LABELS: Record<ApparatusDisposition, string> = {
+  in_service: 'Still in service',
+  sold: 'Sold',
+  traded: 'Traded',
+  scrapped: 'Scrapped',
+  preserved: 'Preserved',
+  museum: 'In a museum',
+  unknown: 'Not known',
+};
+
+export interface ApparatusTag {
+  apparatus_id: string;
+  name: string;
+}
+
+export interface Designation {
+  id: string;
+  designation: string;
+  station_id: string | null;
+  station_name: string | null;
+  start_date: string | null;
+  start_precision: DatePrecision;
+  start_circa: boolean;
+  end_date: string | null;
+  end_precision: DatePrecision;
+  end_circa: boolean;
+}
+
+export interface DesignationWrite {
+  designation: string;
+  station_id: string | null;
+  start_date: string | null;
+  start_precision: DatePrecision;
+  start_circa: boolean;
+  end_date: string | null;
+  end_precision: DatePrecision;
+  end_circa: boolean;
+}
+
+export interface ApparatusSummary {
+  id: string;
+  name: string;
+  apparatus_type_name: string | null;
+  year: number | null;
+  make: string | null;
+  model: string | null;
+  designations: string[];
+  service_span: string | null;
+  disposition: ApparatusDisposition;
+  publication_level: PublicationLevel;
+}
+
+export interface ApparatusList {
+  items: ApparatusSummary[];
+  total: number;
+}
+
+interface ApparatusCatalogue {
+  id: string;
+  name: string;
+  apparatus_type_id: string | null;
+  apparatus_type_name: string | null;
+  year: number | null;
+  make: string | null;
+  model: string | null;
+  body_builder: string | null;
+  pump_gpm: number | null;
+  tank_gallons: number | null;
+  ladder_feet: number | null;
+  in_service_date: string | null;
+  in_service_precision: DatePrecision;
+  in_service_circa: boolean;
+  out_of_service_date: string | null;
+  out_of_service_precision: DatePrecision;
+  out_of_service_circa: boolean;
+  disposition: ApparatusDisposition;
+  current_location: string | null;
+  description: string | null;
+  source_id: string | null;
+  source_name: string | null;
+  accession_number: string | null;
+  designations: Designation[];
+  service_span: string | null;
+  publication_level: PublicationLevel;
+}
+
+export interface ApparatusMemberView extends ApparatusCatalogue {
+  view: 'member';
+}
+
+export interface ApparatusFullView extends ApparatusCatalogue {
+  view: 'full';
+  research_notes: string | null;
+  fleet_apparatus_id: string | null;
+  fleet_label: string | null;
+  published_at: string | null;
+  revision_number: number;
+  public_revision_number: number | null;
+  public_changes_pending: boolean;
+  clearance_required: boolean;
+  cleared_for_public: boolean;
+  clearance: ClearanceRequest | null;
+  can_edit: boolean;
+  can_publish: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ApparatusView = ApparatusFullView | ApparatusMemberView;
+
+/** The catalogue fields a keeper sets. Update payloads send `null` to clear. */
+export interface ApparatusFields {
+  name?: string | undefined;
+  apparatus_type_id?: string | null | undefined;
+  year?: number | null | undefined;
+  make?: string | null | undefined;
+  model?: string | null | undefined;
+  body_builder?: string | null | undefined;
+  pump_gpm?: number | null | undefined;
+  tank_gallons?: number | null | undefined;
+  ladder_feet?: number | null | undefined;
+  in_service_date?: string | null | undefined;
+  in_service_precision?: DatePrecision | undefined;
+  in_service_circa?: boolean | undefined;
+  out_of_service_date?: string | null | undefined;
+  out_of_service_precision?: DatePrecision | undefined;
+  out_of_service_circa?: boolean | undefined;
+  disposition?: ApparatusDisposition | undefined;
+  current_location?: string | null | undefined;
+  description?: string | null | undefined;
+  research_notes?: string | null | undefined;
+  source_id?: string | null | undefined;
+  accession_number?: string | null | undefined;
+}
+
+export interface ApparatusCreate extends ApparatusFields {
+  name: string;
+  designations: DesignationWrite[];
+}
+
+export interface ApparatusUpdate extends ApparatusFields {
+  designations?: DesignationWrite[] | undefined;
+  edit_kind?: EditKind | undefined;
+  edit_note?: string | undefined;
+}
+
+export interface FleetOption {
+  id: string;
+  unit_number: string;
+  name: string | null;
+  description: string;
+  is_archived: boolean;
+  history_apparatus_id: string | null;
+}
+
+export interface ApparatusQuery {
+  search?: string | undefined;
+  apparatus_type_id?: string | undefined;
+  station_id?: string | undefined;
+  decade?: number | undefined;
+  level?: PublicationLevel | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
+}
+
+// --- Phase 5: events ---
+
+export interface EventSummary {
+  id: string;
+  title: string;
+  start_date: string;
+  start_precision: DatePrecision;
+  start_circa: boolean;
+  end_date: string | null;
+  end_precision: DatePrecision;
+  end_circa: boolean;
+  place: string | null;
+  station_name: string | null;
+  event_type_name: string | null;
+  publication_level: PublicationLevel;
+}
+
+export interface EventList {
+  items: EventSummary[];
+  total: number;
+}
+
+export interface EventMemberLink {
+  member_id: string;
+  display_name: string;
+  role: string | null;
+}
+
+export interface EventMemberWrite {
+  member_id: string;
+  role?: string | null | undefined;
+}
+
+interface EventCatalogue extends EventSummary {
+  description: string | null;
+  station_id: string | null;
+  event_type_id: string | null;
+  source_id: string | null;
+  source_name: string | null;
+  /** Each link only where the caller may read the record it points at. */
+  members: EventMemberLink[];
+  apparatus: ApparatusTag[];
+  media: MediaSummary[];
+  documents: DocumentSummary[];
+}
+
+export interface EventMemberView extends EventCatalogue {
+  view: 'member';
+}
+
+export interface EventFullView extends EventCatalogue {
+  view: 'full';
+  research_notes: string | null;
+  published_at: string | null;
+  revision_number: number;
+  public_revision_number: number | null;
+  public_changes_pending: boolean;
+  clearance_required: boolean;
+  cleared_for_public: boolean;
+  clearance: ClearanceRequest | null;
+  can_edit: boolean;
+  can_publish: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type EventView = EventFullView | EventMemberView;
+
+/** An event's fields. Update payloads send `null` to clear. */
+export interface EventFields {
+  title?: string | undefined;
+  description?: string | null | undefined;
+  start_date?: string | undefined;
+  start_precision?: DatePrecision | undefined;
+  start_circa?: boolean | undefined;
+  end_date?: string | null | undefined;
+  end_precision?: DatePrecision | undefined;
+  end_circa?: boolean | undefined;
+  place?: string | null | undefined;
+  station_id?: string | null | undefined;
+  event_type_id?: string | null | undefined;
+  research_notes?: string | null | undefined;
+  source_id?: string | null | undefined;
+}
+
+/** The link sets an event write may replace. One that is omitted stays. */
+export interface EventLinks {
+  members?: EventMemberWrite[] | undefined;
+  apparatus_ids?: string[] | undefined;
+  media_ids?: string[] | undefined;
+  document_ids?: string[] | undefined;
+}
+
+export interface EventCreate extends EventFields, EventLinks {
+  title: string;
+  start_date: string;
+}
+
+export interface EventUpdate extends EventFields, EventLinks {
+  edit_kind?: EditKind | undefined;
+  edit_note?: string | undefined;
+}
+
+export interface EventQuery {
+  search?: string | undefined;
+  event_type_id?: string | undefined;
+  station_id?: string | undefined;
+  decade?: number | undefined;
+  member_id?: string | undefined;
+  apparatus_id?: string | undefined;
+  level?: PublicationLevel | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
+}
+
+// --- Phase 5: timelines ---
+
+export const TimelineKind = {
+  EVENT: 'event',
+  APPARATUS_IN: 'apparatus_in',
+  APPARATUS_OUT: 'apparatus_out',
+  LINE_OF_DUTY: 'line_of_duty',
+  TITLE: 'title',
+  DESIGNATION: 'designation',
+} as const;
+export type TimelineKind = (typeof TimelineKind)[keyof typeof TimelineKind];
+
+/** The milestone kinds the department timeline can show beside events. */
+export const MILESTONE_KINDS: TimelineKind[] = ['apparatus_in', 'apparatus_out', 'line_of_duty', 'title'];
+
+export const TIMELINE_KIND_LABELS: Record<TimelineKind, string> = {
+  event: 'Event',
+  apparatus_in: 'Apparatus into service',
+  apparatus_out: 'Apparatus out of service',
+  line_of_duty: 'Line-of-duty death',
+  title: 'Title',
+  designation: 'Unit number',
+};
+
+export interface TimelineEntry {
+  key: string;
+  kind: TimelineKind;
+  date: string;
+  precision: DatePrecision;
+  circa: boolean;
+  end_date: string | null;
+  end_precision: DatePrecision | null;
+  end_circa: boolean;
+  label: string;
+  detail: string | null;
+  record_type: 'event' | 'apparatus' | 'member';
+  record_id: string;
+  event_type_id: string | null;
+  event_type_name: string | null;
+  publication_level: PublicationLevel;
+}
+
+export interface TimelineDecade {
+  decade: number;
+  count: number;
+}

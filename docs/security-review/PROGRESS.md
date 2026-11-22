@@ -16,6 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4547](https://github.com/thegspiro/the-logbook/pull/4547)**
+(branch `claude/security-review-security-audit-ip`): Feature 28 (Security,
+audit & IP), pass 14 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). All nine backend scope files byte-identical to pass 12/13's
+baseline. `core/security_middleware.py` carries only a benign 2-line
+addition to the shared `EXPORT_ENDPOINTS` allowlist beyond what pass 13
+already read (another feature's own export route, same shape pass 7
+accepted); the rest of that file's diff (sign-in rate limiting) is
+unchanged from pass 13's out-of-scope ruling. Three frontend files carry
+small cosmetic diffs (`StatGrid` adoption, AAA-contrast token sweep,
+`rwd-table` reflow) with no query/permission/data-flow change. 37 routes
+re-enumerated by AST, unchanged, all auth-gated. **0 fixed, 0 new security
+findings.** Both open items (SEC2-28-6, dead detector code) re-verified
+unchanged. Also fixed, unrelated to this feature: a forked Alembic chain
+(two heads landed separately since pass 13) — resolved with an empty merge
+revision. Full write-up: `docs/security-review/SEC2-28-security-audit-ip.md`'s
+**Pass 14** section.
+
+Row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
+analytics) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 14, PR #4543, merged as `0af595b72`), preserved for history</summary>
+
 **PR [#4543](https://github.com/thegspiro/the-logbook/pull/4543)**
 (branch `claude/security-review-integrations-p14`): Feature 27
 (Integrations), pass 14 — watchdog pickup (the dedicated `/loop 30m
@@ -33,8 +59,10 @@ column, cascading into 321 unrelated test failures — resolved with an empty
 merge revision. Full write-up:
 `docs/security-review/INT-27-integrations.md`'s **Pass 14** section.
 
-Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit &
-IP) — re-check `list_pull_requests` fresh rather than trusting this note.
+Row 27 → ✅ (merged as `0af595b72`); next is Feature 28 (Security, audit &
+IP).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 26, Forms, pass 14, PR #4541, merged), preserved for history</summary>
@@ -27404,7 +27432,7 @@ iteration's commit" rule.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (33 routes incl. undo, added pass 14), `historical_staffing_*.py`, `historical_import_undo.py` (added pass 14)                                                                                                        | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ⬜     |
