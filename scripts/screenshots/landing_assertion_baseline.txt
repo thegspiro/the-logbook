@@ -405,8 +405,6 @@
 19-28-station-board-messages
 19-29-training-session-linkage
 19-30-skill-point-deduction
-19-31-notification-before-action
-19-32-notification-after-action
 19-33-label-printers
 19-34-schedule-board-desktop
 19-35-schedule-board-phone

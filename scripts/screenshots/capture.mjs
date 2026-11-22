@@ -667,6 +667,12 @@ function makeSessions(browser, baseOptions) {
         // Privileged and deliberately not enrolled in two-step sign-in, for
         // the grace-period banner and the password step-up box.
         await login(page, DEMO_MFA_GRACE_CREDENTIALS);
+      } else if (auth === "admin-unconfirmed") {
+        // The administrator in a session of its own, which nothing confirms.
+        // Shots on the admin session step up whenever the server asks, and
+        // for ten minutes after that a switch needing confirmation saves at
+        // once instead of opening the Confirm it's you box it pictures.
+        await login(page, DEMO_CREDENTIALS);
       } else if (auth !== "anonymous") {
         throw new Error(`unknown auth mode '${auth}' on shot ${shot.id}`);
       }

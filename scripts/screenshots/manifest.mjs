@@ -409,6 +409,22 @@ export function clickSettingsSection(label) {
  * record in a particular state should say so.
  */
 /** Unpin every notification of the signed-in member's own inbox. */
+/** The event the seeder leaves ended and unfinalized, for the 19-31 pair. */
+const VALIDATION_EVENT_TITLE = "Wednesday Evening Drill — Attendance Pending";
+
+/** The inbox's stack of attendance-validation prompts. */
+const VALIDATION_STACK =
+  "[data-testid^='notification-stack-']:has(> div > div > button[aria-expanded]:has-text('attendance validations'))";
+
+async function openValidationStack(page) {
+  await unpinAllNotifications(page);
+  await page
+    .locator("button[aria-expanded='false']")
+    .filter({ hasText: "attendance validations" })
+    .first()
+    .click({ timeout: 20_000 });
+}
+
 async function unpinAllNotifications(page) {
   await page.evaluate(async () => {
     const listed = await fetch("/api/v1/notifications/my?limit=100", {
@@ -3572,6 +3588,122 @@ async function memberHoursSince(page, daysBack) {
  * which seeded shift that is depends on the hour the run happens. Fails the
  * shot rather than photographing a different state.
  */
+/** Notes on the shift 03-114 makes when the secretary has none running. */
+const CHECK_OUT_FIXTURE_NOTE = "Check-out screenshot fixture";
+let checkOutFixture = null;
+
+/**
+ * The id of a shift the signed-in member is on that is under way, making one
+ * if there is none. The secretary's rotation shifts run on only some days and
+ * hours, so leaning on them failed the shot whenever the run fell outside
+ * one. The shift made here started an hour ago and ends three hours from now,
+ * short enough that it rarely meets a rotation shift of theirs. A shift that
+ * has started cannot be deleted, so cleanup checks the member out of it and
+ * cancels it, the way a department withdraws a shift under way; a leftover
+ * from an interrupted run is cancelled first. Cancelling notifies the crew,
+ * which is only the secretary, whose inbox no shot pictures.
+ */
+async function liveShiftOf(page, { lookupPage }) {
+  const admin = await lookupPage();
+  const listed = await apiFromPage(
+    admin,
+    "GET",
+    "/scheduling/shifts?limit=200",
+  );
+  const shifts = Array.isArray(listed.body)
+    ? listed.body
+    : listed.body?.shifts || listed.body?.items || [];
+  let running = null;
+  try {
+    running = await currentShiftOf(page);
+  } catch (error) {
+    if (!String(error.message).startsWith("currentShiftOf:")) throw error;
+  }
+  if (running) {
+    // A fixture an interrupted run left running is still the shot's own, so
+    // cleanup checks the member out of it and cancels it.
+    const own = shifts.find(
+      (s) => s.id === running && s.notes === CHECK_OUT_FIXTURE_NOTE,
+    );
+    if (own) checkOutFixture = { admin, shiftId: running };
+    return running;
+  }
+  for (const stale of shifts.filter(
+    (s) => s.notes === CHECK_OUT_FIXTURE_NOTE && s.status !== "cancelled",
+  )) {
+    await cancelCheckOutShift(admin, stale.id);
+  }
+  const me = await rawApiFromPage(page, "GET", "/auth/me");
+  if (me.status !== 200 || !me.body?.id) {
+    throw new Error(`/auth/me returned ${me.status}`);
+  }
+  const start = new Date(Date.now() - 60 * 60 * 1000);
+  start.setSeconds(0, 0);
+  const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+  // The shift's calendar day is the department's, not the machine's.
+  const shiftDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+  }).format(start);
+  const created = await apiFromPage(admin, "POST", "/scheduling/shifts", {
+    shift_date: shiftDate,
+    start_time: start.toISOString(),
+    end_time: end.toISOString(),
+    min_staffing: 1,
+    positions: ["officer"],
+    notes: CHECK_OUT_FIXTURE_NOTE,
+  });
+  if (created.status >= 300 || !created.body?.id) {
+    throw new Error(`creating the check-out shift returned ${created.status}`);
+  }
+  checkOutFixture = { admin, shiftId: created.body.id };
+  const seated = await apiFromPage(
+    admin,
+    "POST",
+    `/scheduling/shifts/${created.body.id}/assignments`,
+    { user_id: me.body.id, position: "officer" },
+  );
+  if (seated.status >= 300) {
+    throw new Error(
+      `seating the member on the check-out shift returned ${seated.status}: ` +
+        JSON.stringify(seated.body?.detail ?? seated.body),
+    );
+  }
+  return created.body.id;
+}
+
+async function cancelCheckOutShift(admin, shiftId) {
+  const cancelled = await apiFromPage(
+    admin,
+    "POST",
+    `/scheduling/shifts/${shiftId}/cancel`,
+    { reason: "Screenshot fixture, no longer needed" },
+  );
+  if (cancelled.status >= 300) {
+    throw new Error(
+      `cancelling the check-out shift returned ${cancelled.status}`,
+    );
+  }
+}
+
+/**
+ * Only the shot's own shift is checked out: Check out now cannot be undone,
+ * so on one of the secretary's rotation shifts the dialog is left unanswered
+ * and they stay checked in, as before.
+ */
+async function removeCheckOutFixture(page) {
+  const fixture = checkOutFixture;
+  checkOutFixture = null;
+  if (!fixture) return;
+  const checkOut = page.getByRole("button", { name: "Check out now" });
+  if (await checkOut.count()) {
+    await checkOut.click();
+    await page
+      .getByRole("button", { name: /^Check Out$/i })
+      .waitFor({ state: "detached", timeout: 15_000 });
+  }
+  await cancelCheckOutShift(fixture.admin, fixture.shiftId);
+}
+
 async function currentShiftOf(page) {
   const shifts = await page.evaluate(async () => {
     const response = await fetch("/api/v1/scheduling/my-shifts?limit=100", {
@@ -7816,12 +7948,13 @@ export const SHOTS = [
         );
       }
       await addPasskeyOnCard(page, "My phone");
-      const setup = await apiFromPage(page, "POST", "/auth/mfa/setup");
+      await memberPasskeyStepUp(page);
+      const setup = await rawApiFromPage(page, "POST", "/auth/mfa/setup");
       if (setup.status !== 200 || !setup.body?.secret) {
         throw new Error(`authenticator setup returned ${setup.status}`);
       }
       passkeyShot.secret = setup.body.secret;
-      const verified = await apiFromPage(
+      const verified = await rawApiFromPage(
         page,
         "POST",
         "/auth/mfa/verify-setup",
@@ -17667,7 +17800,7 @@ export const SHOTS = [
         );
       });
       await page.route(
-        /\/api\/v1\/prospective-members\/prospects\/[^/]+\/follow-up-forms\/[^/]+\/answers$/,
+        /\/api\/v1\/prospective-members\/prospects\/[^/]+\/interview\/follow-up-forms\/[^/]+\/answers$/,
         async (route) => {
           const rec = await recordFor();
           const requestId = route.request().url().split("/").slice(-2)[0];
@@ -17886,7 +18019,7 @@ export const SHOTS = [
     // The template list only: the editor beside it opens on whichever
     // template is first, which is not the subject.
     viewport: { width: 1440, height: 1700 },
-    selector: "div.space-y-1:has(> h3:text-is('Email Templates'))",
+    selector: "div.space-y-1:has(> h2:text-is('Email Templates'))",
   },
   {
     id: "15-09-bulk-action-result",
@@ -20883,75 +21016,82 @@ export const SHOTS = [
     fullPage: false,
   },
   {
-    // The seeder runs `post_event_validation` against a freshly-ended,
-    // unfinalized event on every seed, so the prompt is already in the inbox
-    // -- this shot only has to read it.
+    // Several unread notifications of one kind are folded into a stack, so a
+    // single prompt vanishing cannot be seen on the inbox itself: the
+    // validations stack only counts one fewer. The pair frames that stack
+    // opened, where the prompt for the seeder's fixture event is listed among
+    // the others before, and missing after.
     id: "19-31-notification-before-action",
     doc: "00-getting-started.md",
     line: 334,
     anchor: "same notification before and after completing its related",
-    alt: "The notification inbox with an unread 'Validate attendance' prompt for a just-ended event, beside an unrelated shift-assignment notification",
+    alt: "The attendance validations stack opened in the inbox: unread prompts to validate attendance for several events that have ended, the Wednesday Evening Drill among them",
     route: "/notifications?tab=inbox",
+    expect: `Validate attendance for ${VALIDATION_EVENT_TITLE}`,
     prepare: async (page) => {
+      await openValidationStack(page);
       await page
-        .getByText(/Action Required: Validate attendance/)
-        // .first(): the seeder's validation fixture slides an event forward on
-        // every run, and the post-event task raises a notice for each event
-        // that ended unfinalized, so the inbox accumulates them -- 15 by the
-        // time this broke. A bare waitFor is strict and fails on the second.
+        .getByText(`Validate attendance for ${VALIDATION_EVENT_TITLE}`)
         .first()
         .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(400);
     },
-    fullPage: true,
+    selector: VALIDATION_STACK,
   },
   {
     // Completes the notification's related action directly against the API
     // (finalize-attendance), the same call `EventDetailPage`'s End Event
     // flow makes -- `archive_related_notifications` runs inside that
     // endpoint, so this is the same code path a chief clicking through would
-    // take, not a shortcut around it.
+    // take, not a shortcut around it. The event is the seeder's fixture,
+    // found by its title: the newest validation prompt can be any event that
+    // ended unfinalized, and finalizing the in-progress drill's closed the
+    // check-in monitor's fixture.
     //
     // Real mutation, deliberately unflagged: `mutatesSeedData` would force
     // this to be the last shot of guide 19, and `19-26` already holds that
     // position for unrelated (election) data with its own ordering
     // dependencies. Placed before `19-25`/`19-26` instead, which is what the
     // guard actually requires -- nothing later in guide 19 reads event or
-    // notification state, so no later shot can be broken by this one.
+    // notification state, so no later shot can be broken by this one. The
+    // seeder reopens the event on its next run.
     id: "19-32-notification-after-action",
     doc: "00-getting-started.md",
     line: 336,
     anchor: "__paired-with-19-31__",
-    alt: "The same inbox after finalizing the event's attendance: the validation prompt gone, the unrelated shift-assignment notification still there",
+    alt: "The same stack after the Wednesday Evening Drill's attendance was finalized: its prompt is gone, and the prompts for the other events are still there",
     route: "/notifications?tab=inbox",
+    expect: "Validate attendance for",
     prepare: async (page) => {
-      const eventId = await page.evaluate(async () => {
-        const res = await fetch("/api/v1/notifications/my?limit=100", {
-          credentials: "include",
-        });
-        const body = await res.json();
-        const notif = (body.logs ?? []).find(
-          (log) => log.category === "event_validation",
-        );
-        if (!notif) throw new Error("no event_validation notification found");
-        return notif.metadata?.event_id;
-      });
-      await page.evaluate(async (id) => {
-        const csrf =
-          document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
-        const res = await fetch(`/api/v1/events/${id}/finalize-attendance`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "X-CSRF-Token": decodeURIComponent(csrf) },
-        });
-        if (!res.ok) throw new Error(`finalize-attendance: ${res.status}`);
-      }, eventId);
+      const listed = await apiFromPage(page, "GET", "/events?limit=100");
+      const events = Array.isArray(listed.body)
+        ? listed.body
+        : listed.body?.events || listed.body?.items || [];
+      const event = events.find((e) => e.title === VALIDATION_EVENT_TITLE);
+      if (!event) throw new Error(`no event named ${VALIDATION_EVENT_TITLE}`);
+      const finalized = await apiFromPage(
+        page,
+        "POST",
+        `/events/${event.id}/finalize-attendance`,
+      );
+      if (finalized.status !== 200) {
+        throw new Error(`finalize-attendance returned ${finalized.status}`);
+      }
       await page.reload({ waitUntil: "networkidle" });
+      await openValidationStack(page);
       await page
-        .getByText(/New Shift Assignment/)
+        .getByText("Validate attendance for")
+        .first()
         .waitFor({ state: "visible", timeout: 20_000 });
-      await page.waitForTimeout(300);
+      const stillThere = await page
+        .getByText(`Validate attendance for ${VALIDATION_EVENT_TITLE}`)
+        .count();
+      if (stillThere) {
+        throw new Error("the finalized event's prompt is still in the stack");
+      }
+      await page.waitForTimeout(400);
     },
-    fullPage: true,
+    selector: VALIDATION_STACK,
   },
   {
     // The station board's message rail, framed rather than the whole board.
@@ -20989,7 +21129,7 @@ export const SHOTS = [
     doc: "19-august-2026-release-changes.md",
     line: 74,
     anchor: "closed election results showing manual paper-ballot count and its",
-    alt: "Record Paper Ballots refusing a 24-ballot tally against a 22-member roster, with the override checkbox it offers instead",
+    alt: "Record Paper Ballots refusing a 24-ballot tally for Captain when only 8 members are eligible to vote in that race, with the override checkbox it offers instead",
     route: "/elections",
     prepare: async (page) => {
       await openFirstFromApi(
@@ -21012,7 +21152,7 @@ export const SHOTS = [
       // for the whole state this shot is about.
       await dialog
         .getByRole("alert")
-        .getByText(/only 22 member\(s\) are eligible/)
+        .getByText(/only \d+ member\(s\) are eligible/)
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(400);
     },
@@ -22463,14 +22603,14 @@ export const SHOTS = [
       "Shift Check-In at phone width, one hour into a shift → tap Check Out",
     alt: "Shift Check-In on a phone during a shift: the Check out early? dialog saying when the shift runs until, with Stay checked in and Check out now",
     route: "/scheduling/checkin",
-    // The account seated on a shift that is under way when the run happens.
-    // The secretary is a captain on the rotation; `currentShiftOf` fails the
-    // shot rather than guessing when none of their shifts is in progress.
+    // The account seated on a shift that is under way when the run happens:
+    // one of the secretary's own if it is running, else one made for the
+    // shot and removed again (see liveShiftOf).
     auth: "secretary",
     viewport: { width: 390, height: 844 },
     expect: "Check out early?",
-    prepare: async (page) => {
-      const shiftId = await currentShiftOf(page);
+    prepare: async (page, helpers) => {
+      const shiftId = await liveShiftOf(page, helpers);
       await page.goto(
         new URL(`/scheduling/checkin?shift=${shiftId}`, page.url()).toString(),
       );
@@ -22491,6 +22631,9 @@ export const SHOTS = [
         .click({ timeout: 15_000 });
       await page.getByText("Check out early?").waitFor({ timeout: 10_000 });
       await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await removeCheckOutFixture(page);
     },
   },
   {
@@ -22932,9 +23075,11 @@ export const SHOTS = [
         priority: 5,
       });
       await page.reload({ waitUntil: "domcontentloaded" });
-      const card = page.locator(`li:has(h3:text-is("${GUIDE08_ROLE}"))`);
+      const card = page.locator(`li:has(h2:text-is("${GUIDE08_ROLE}"))`);
       await card.scrollIntoViewIfNeeded({ timeout: 15_000 });
-      await card.getByRole("button", { name: "Edit", exact: true }).click();
+      await card
+        .getByRole("button", { name: `Edit ${GUIDE08_ROLE}`, exact: true })
+        .click();
       const dialog = page.locator('[aria-labelledby="role-modal-title"]');
       await dialog.waitFor({ timeout: 10_000 });
       await dialog
@@ -22952,7 +23097,7 @@ export const SHOTS = [
         await guide08Api(page, "DELETE", `/roles/${role.id}`);
       }
     },
-    selector: `li:has(h3:text-is("${GUIDE08_ROLE}"))`,
+    selector: `li:has(h2:text-is("${GUIDE08_ROLE}"))`,
   },
   {
     id: "08-90-training-admin-hub",
@@ -23246,7 +23391,9 @@ export const SHOTS = [
     line: 1026,
     anchor: "__placed-by-hand-08-105__",
     alt: "Customize Department pulse open above the cards: Grant deadlines moved above Budget threshold and Dues retitled Member dues, with Save for me, Save as department default and Close",
-    route: "/dashboard",
+    // The pulse is on the department tab for anyone who can see it, and the
+    // dashboard opens on the personal one.
+    route: "/dashboard?tab=department",
     expect: "Customize Department pulse",
     // Edited in the panel and never saved.
     prepare: async (page) => {
@@ -23270,7 +23417,9 @@ export const SHOTS = [
     line: 1026,
     anchor: "__placed-by-hand-08-106__",
     alt: "Department pulse with every card hidden: All cards are hidden. Choose Customize to show some.",
-    route: "/dashboard",
+    // The pulse is on the department tab for anyone who can see it, and the
+    // dashboard opens on the personal one.
+    route: "/dashboard?tab=department",
     expect: "All cards are hidden",
     // A personal layout with every card hidden, saved for the administrator
     // and removed afterwards; the demo starts with no personal layout.
@@ -23352,9 +23501,12 @@ export const SHOTS = [
     expect: "is the position every member holds",
     // Keep editing, then Cancel: the Member position is never changed.
     prepare: async (page) => {
-      const card = page.locator('li:has(h3:text-is("Member"))');
+      // A role's name is its card's h2, and its Edit button is named for it.
+      const card = page.locator('li:has(h2:text-is("Member"))');
       await card.scrollIntoViewIfNeeded({ timeout: 15_000 });
-      await card.getByRole("button", { name: "Edit", exact: true }).click();
+      await card
+        .getByRole("button", { name: "Edit Member", exact: true })
+        .click();
       const dialog = page.locator('[aria-labelledby="role-modal-title"]');
       await dialog.waitFor({ timeout: 10_000 });
       await dialog
@@ -25755,7 +25907,7 @@ export const SHOTS = [
     // row is chosen. Change the amount is the way out; nothing is recorded.
     prepare: async (page) => {
       const buttons = page.getByRole("button", {
-        name: /^Record a payment for /,
+        name: /^Record (a )?payment for /,
       });
       await buttons.first().waitFor({ timeout: 20_000 });
       const me = await apiCall(page, "GET", "auth/me");
@@ -25856,10 +26008,13 @@ export const SHOTS = [
     viewport: { width: 1280, height: 900 },
     // The switch asks the server first, and the server answers that a fresh
     // confirmation is needed, which is the box. Cancel leaves the policy as
-    // it was. Should this session already be confirmed the switch would save,
-    // so the policy read before the click is put back in cleanup either way.
+    // it was. A confirmed session would save the switch instead, which
+    // turned passkeys off for the department and failed every passkey shot
+    // after it, so the shot runs in a session nothing confirms, and the
+    // policy read before the click is still put back in cleanup.
+    auth: "admin-unconfirmed",
     prepare: async (page) => {
-      const before = await apiFromPage(page, "GET", "/auth/mfa/policy");
+      const before = await rawApiFromPage(page, "GET", "/auth/mfa/policy");
       if (before.status !== 200) {
         throw new Error(`reading the MFA policy returned ${before.status}`);
       }
@@ -25883,12 +26038,19 @@ export const SHOTS = [
       });
       if (await cancel.count()) await cancel.click();
       if (!held) return;
-      const now = await apiFromPage(page, "GET", "/auth/mfa/policy");
+      const now = await rawApiFromPage(page, "GET", "/auth/mfa/policy");
       if (now.body?.passkeys_enabled === held.policy.passkeys_enabled) return;
-      throw new Error(
-        "the MFA policy changed during 00-34 and could not be restored " +
-          "without a step-up; switch Allow passkeys back by hand",
-      );
+      // Put back through the administrator's step-up, which also confirms
+      // this session; it is not reused by any other shot.
+      const restored = await apiFromPage(page, "PUT", "/auth/mfa/policy", {
+        mfa_required: held.policy.mfa_required,
+        passkeys_enabled: held.policy.passkeys_enabled,
+      });
+      if (restored.status !== 200) {
+        throw new Error(
+          `restoring the MFA policy after 00-34 returned ${restored.status}`,
+        );
+      }
     },
   },
   {
@@ -25908,10 +26070,7 @@ export const SHOTS = [
     // Reset MFA request it was holding is never sent again, so whalloway
     // (the one member enrolled in the app) keeps it.
     prepare: async (page) => {
-      await page
-        .getByRole("button", { name: /^Reset MFA for .*Halloway/ })
-        .first()
-        .click({ timeout: 20_000 });
+      await chooseMemberRowAction(page, "Halloway", "Reset MFA");
       await page
         .getByRole("dialog")
         .getByRole("button", { name: "Reset MFA", exact: true })
@@ -26087,10 +26246,7 @@ export const SHOTS = [
       await addPasskeyOnCard(memberPage, "My phone");
 
       await page.reload({ waitUntil: "domcontentloaded" });
-      const reset = page.getByRole("button", {
-        name: /^Reset MFA for .*Adeyemi/,
-      });
-      await reset.first().click({ timeout: 20_000 });
+      await chooseMemberRowAction(page, "Adeyemi", "Reset MFA");
       const dialog = page.getByRole("dialog");
       await dialog.getByText("My phone").waitFor({ timeout: 20_000 });
       await hideScanNotice(page);
@@ -27063,7 +27219,7 @@ export const SHOTS = [
     anchor: "The Member ID Cards page on the Cards tab with two cards ticked",
     alt: "The Member ID Cards page on the Cards tab: the search and filters, two cards ticked, and the bar offering Suspend, Reactivate, Report lost and Revoke for them",
     route: "/members/admin/id-cards",
-    expect: "Member ID Cards",
+    expect: { selector: "[aria-label='Actions for selected cards']" },
     fullPage: false,
     prepare: async (page) => {
       const boxes = page.getByRole("checkbox", {
@@ -27146,7 +27302,9 @@ export const SHOTS = [
     anchor: "The Leave of Absence card on a member's profile with three leaves",
     alt: "The Leave of Absence card on Rafael Duarte's profile: a military leave in December badged Future, a leave of absence running now badged Active, and a personal leave that ended in October badged Expired, each with its dates and reason",
     route: "/members",
-    expect: { selector: "div.card:has(> h2:text-is('Leave of Absence'))" },
+    expect: {
+      selector: "div.card:has(> div > h2:text-is('Leave of Absence'))",
+    },
     prepare: async (page) => {
       await openFirstFromApi(
         "/users?limit=100",
@@ -27155,12 +27313,12 @@ export const SHOTS = [
         (user) => user.username === "rduarte",
       )(page);
       await page
-        .locator("div.card:has(> h2:text-is('Leave of Absence'))")
+        .locator("div.card:has(> div > h2:text-is('Leave of Absence'))")
         .getByText("Future", { exact: true })
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
-    selector: "div.card:has(> h2:text-is('Leave of Absence'))",
+    selector: "div.card:has(> div > h2:text-is('Leave of Absence'))",
   },
   {
     id: "01-58-member-class-status",
@@ -27426,6 +27584,9 @@ export const SHOTS = [
       '"No location" is the location summary card and filter option, not an empty list.',
     expect: { selector: "button[aria-label='Rename Structural Coat']" },
     fullPage: false,
+    // The pencil is the table row's; under the reflow tier the row is a card
+    // and that cell is hidden, which it still is at 1440px.
+    viewport: { width: 1920, height: 1080 },
     // Focus only, so the button's ring marks it; nothing is renamed.
     prepare: async (page) => {
       await unpinEverything(page);
@@ -27448,6 +27609,7 @@ export const SHOTS = [
     route: "/inventory/items",
     expect: "Product name",
     selector: '[data-testid="modal-panel"]',
+    viewport: { width: 1920, height: 1080 },
     // Opened and cancelled: the product keeps its name.
     prepare: async (page) => {
       await page
@@ -27730,16 +27892,18 @@ export const SHOTS = [
     anchor:
       "The Edit Pattern form for that pattern, with the inactive template",
     alt: "Edit Pattern for Reserve Engine Weekend Cover: the Reserve Engine — Out of Service template chosen and marked inactive, with the Template inactive warning beneath it",
-    route: "/scheduling/admin/planning/templates",
+    route: "/scheduling/admin/planning/patterns",
     expect: { selector: "[role='dialog'] [role='status']" },
     viewport: { width: 1280, height: 900 },
     selector: "[role='dialog']",
     // "No template" is the picker's first option, not an empty page.
     allowEmptyState: true,
-    // Only opened, never saved.
+    // Only opened, never saved. Each pattern's card opens on its header, and
+    // Edit is inside it.
     prepare: async (page) => {
       await page
-        .getByRole("tab", { name: /Patterns/ })
+        .locator("button[aria-controls^='pattern-details-']")
+        .filter({ hasText: "Reserve Engine Weekend Cover" })
         .click({ timeout: 20_000 });
       await page
         .getByRole("button", { name: "Edit Reserve Engine Weekend Cover" })
@@ -28046,6 +28210,85 @@ async function adminStepUp(page) {
   throw new Error("the administrator's step-up was refused twice");
 }
 
+/**
+ * Choose an action from a member's row menu on /members/admin. Reset
+ * Password and Reset MFA moved from buttons on the row into its More actions
+ * menu. The menu closes on any scroll, and Playwright scrolls to reach an
+ * item off screen, so the row is centred before the menu opens.
+ */
+async function chooseMemberRowAction(page, surname, action) {
+  const row = page.locator("tr").filter({ hasText: surname }).first();
+  await row.waitFor({ timeout: 20_000 });
+  await row.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(300);
+  await row
+    .getByRole("button", { name: new RegExp(`^More actions for .*${surname}`) })
+    .click({ timeout: 15_000 });
+  await page
+    .getByRole("menuitem", { name: new RegExp(`^${action} for .*${surname}`) })
+    .click({ timeout: 15_000 });
+}
+
+/**
+ * Step the signed-in member up with their passkey, the way the step-up box's
+ * Use your passkey button does, through the page's virtual authenticator.
+ * Once a member has a passkey, adding an authenticator app needs this: a
+ * password is weaker than the factor they already hold. adminStepUp cannot
+ * stand in, since the administrator's code is not this member's factor.
+ */
+async function memberPasskeyStepUp(page) {
+  const options = await rawApiFromPage(
+    page,
+    "POST",
+    "/auth/step-up/passkey-options",
+  );
+  if (options.status !== 200) {
+    throw new Error(`step-up passkey options returned ${options.status}`);
+  }
+  const credential = await page.evaluate(async (opts) => {
+    const fromB64 = (value) =>
+      Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/")), (c) =>
+        c.charCodeAt(0),
+      );
+    const toB64 = (buffer) =>
+      btoa(String.fromCharCode(...new Uint8Array(buffer)))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        ...opts,
+        challenge: fromB64(opts.challenge),
+        allowCredentials: (opts.allowCredentials ?? []).map((c) => ({
+          ...c,
+          id: fromB64(c.id),
+        })),
+      },
+    });
+    const r = assertion.response;
+    return {
+      id: assertion.id,
+      rawId: toB64(assertion.rawId),
+      type: assertion.type,
+      response: {
+        authenticatorData: toB64(r.authenticatorData),
+        clientDataJSON: toB64(r.clientDataJSON),
+        signature: toB64(r.signature),
+        ...(r.userHandle ? { userHandle: toB64(r.userHandle) } : {}),
+      },
+      clientExtensionResults: assertion.getClientExtensionResults(),
+    };
+  }, options.body);
+  const confirmed = await rawApiFromPage(page, "POST", "/auth/step-up", {
+    passkey_credential: credential,
+  });
+  if (confirmed.status !== 200) {
+    throw new Error(
+      `the member's passkey step-up returned ${confirmed.status}`,
+    );
+  }
+}
+
 /** State a passkey shot's cleanup needs: the page, its authenticator, the TOTP secret. */
 let passkeyShot = null;
 
@@ -28247,9 +28490,9 @@ async function tearDownPasskeyShot() {
       }
     }
     if (state.secret) {
-      const status = await apiFromPage(page, "GET", "/auth/mfa/status");
+      const status = await rawApiFromPage(page, "GET", "/auth/mfa/status");
       if (status.body?.mfa_enabled) {
-        const off = await apiFromPage(page, "POST", "/auth/mfa/disable", {
+        const off = await rawApiFromPage(page, "POST", "/auth/mfa/disable", {
           code: await nextMemberTotp(page, state),
         });
         if (off.status !== 200) {

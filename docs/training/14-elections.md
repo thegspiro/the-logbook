@@ -1148,7 +1148,7 @@ counted as one).
 
 ![Record Paper Ballots on a ranked-choice race: one ballot already added with its choices in order, and the next ballot being entered with its 1st and 2nd choice menus and the Identical ballots count](./images/14-28-paper-ballots-ranked.png)
 
-![Record Paper Ballots refusing a 24-ballot tally against a 22-member roster, with the override checkbox it offers instead](./images/19-27-paper-ballot-over-roster.png)
+![Record Paper Ballots refusing a 24-ballot tally for Captain when only 8 members are eligible to vote in that race, with the override checkbox it offers instead](./images/19-27-paper-ballot-over-roster.png)
 
 ### Officer Attestation
 

@@ -2958,9 +2958,12 @@ class Seeder:
         — a fixed past date works exactly once, then the window has closed
         for good. Slid forward like the guest check-in event, and with
         `custom_fields` reset alongside it: finalizing (the manifest's "after"
-        shot) stamps `attendance_finalized` permanently, so a capture run that
-        already used this fixture needs it un-stamped, not just re-dated, to
-        produce a fresh "before" state.
+        shot) locks it, so a capture run that already used this fixture needs
+        it unlocked, not just re-dated, to produce a fresh "before" state.
+        The lock is `attendance_finalized_at`, and only reopening clears it;
+        emptying `custom_fields` cleared the marker that held it before that
+        column existed, and on its own now leaves the event locked, so the
+        task skips it and the "after" shot's finalize is refused.
         """
         end = (NOW - timedelta(minutes=45)).replace(second=0, microsecond=0)
         start = end - timedelta(hours=2)
@@ -2975,6 +2978,10 @@ class Seeder:
             None,
         )
         if existing and pick(existing, "id"):
+            if pick(existing, "attendance_finalized_at"):
+                self.api.post(
+                    f"/events/{pick(existing, 'id')}/reopen-attendance", {}
+                )
             event = self.api.patch(
                 f"/events/{pick(existing, 'id')}",
                 {**window, "custom_fields": {}},
@@ -21433,7 +21440,7 @@ class Seeder:
         lands on any shift's checklists or in the reports.
         """
         existing = {
-            str(pick(t, "name"))
+            str(pick(t, "name")): str(pick(t, "id"))
             for t in items(self.api.get("/equipment-checks/templates"), "templates")
         }
 
@@ -21535,7 +21542,49 @@ class Seeder:
                 },
             )
             result["crew"] = "created"
+        else:
+            result["crew"] = self._backlog03_restore_presence_lines(
+                existing[self.BACKLOG_CREW_CHECKLIST]
+            )
         return result
+
+    BACKLOG_CREW_PRESENCE_LINES = (
+        "Portable radio",
+        "Hand light",
+        "Traffic vest",
+        "Spill kit",
+    )
+
+    def _backlog03_restore_presence_lines(self, template_id: str) -> str:
+        """Put the walkaround's Present lines back to `presence`, published.
+
+        A walkaround seeded before 2026-10-18 stored them as `function`, the
+        type `presence` used to collapse into, and the check form then offers
+        Pass and Fail where guide 03 pictures Present and Absent. The template
+        is created once, so a re-run has to settle the lines it already has.
+        Editing a line moves the template back to draft, which takes it off
+        Unscheduled checklist, so it is published again afterwards; an earlier
+        run stopped between the two is published as well.
+        """
+        template = self.api.get(f"/equipment-checks/templates/{template_id}")
+        fixed = 0
+        for compartment in pick(template, "compartments") or []:
+            for item in pick(compartment, "items") or []:
+                if pick(item, "name") not in self.BACKLOG_CREW_PRESENCE_LINES:
+                    continue
+                if pick(item, "check_type", "checkType") == "presence":
+                    continue
+                self.api.put(
+                    f"/equipment-checks/items/{pick(item, 'id')}",
+                    {"check_type": "presence"},
+                )
+                fixed += 1
+        if fixed or not pick(template, "is_active", "isActive"):
+            self.api.put(
+                f"/equipment-checks/templates/{template_id}", {"is_active": True}
+            )
+            return f"{fixed} lines set to presence, published"
+        return "already"
 
     ICAL_INTEGRATION_TYPE = "ical"
 
