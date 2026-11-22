@@ -182,6 +182,19 @@ backfilled.
 - Tests: `tests/test_prospect_applicant_edited_identity.py` (four of its seven
   failed before the fix) and `tests/test_prospect_identity_edited_migration.py`.
 
+## Training-only waivers (2026-11-22)
+
+Found by the 2026-11-21 documentation pass after ADV2-9:
+`POST /training/waivers` let a `training.manage` holder give themselves a
+training-only waiver, the outcome the ADV2-9 fix stopped for leave. Owner
+decision: block it the same way.
+
+- `create_training_waiver` refuses `user_id == current_user.id` (400), and
+  `update_training_waiver` refuses the caller's own waiver (403). Deactivating
+  one's own waiver is unchanged.
+- Tests: `tests/test_training_waiver_self_grant.py` (six tests; the three
+  refusals failed before the fix).
+
 ## Awaiting an owner decision
 
 - **ADV2-4**: resolved 2026-11-16, owner's option 2 (refuse, and add a
