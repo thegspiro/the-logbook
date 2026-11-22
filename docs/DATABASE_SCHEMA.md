@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**400 tables · 6321 columns · 1335 foreign keys**
+**412 tables · 6452 columns · 1372 foreign keys**
 
 ---
 
@@ -373,30 +373,42 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`historical_member_period_titles`](#historical_member_period_titles) | `HistoricalMemberPeriodTitle` | 2 | A title held during one service period. |
+| [`historical_member_period_titles`](#historical_member_period_titles) | `HistoricalMemberPeriodTitle` | 8 | A title held during one service period. |
 | [`historical_member_relations`](#historical_member_relations) | `HistoricalMemberRelation` | 8 | A family link between two people, stored once and read from both ends. |
 | [`historical_member_service_periods`](#historical_member_service_periods) | `HistoricalMemberServicePeriod` | 12 | One stretch of service. A person who left and rejoined has several. |
 | [`historical_members`](#historical_members) | `HistoricalMember` | 39 | A person who served the department, as the archive records them. |
 | [`history_album_documents`](#history_album_documents) | `HistoryAlbumDocument` | 4 | One document's place in one album. ``position`` shares one sequence |
 | [`history_album_items`](#history_album_items) | `HistoryAlbumItem` | 4 | One media item's place in one album. |
 | [`history_albums`](#history_albums) | `HistoryAlbum` | 10 | A named group of media items, in an order the Historian sets. |
+| [`history_apparatus`](#history_apparatus) | `HistoryApparatus` | 35 | A truck, wagon or engine in the department's history. |
+| [`history_apparatus_designations`](#history_apparatus_designations) | `HistoryApparatusDesignation` | 12 | One period under one unit number: Engine 1 from 1924, Engine 3 from |
+| [`history_apparatus_types`](#history_apparatus_types) | `HistoryApparatusType` | 9 | One entry in a department's managed list of apparatus types (engine, |
 | [`history_clearance_decisions`](#history_clearance_decisions) | `HistoryClearanceDecision` | 9 | One step's decision on one request. |
 | [`history_clearance_requests`](#history_clearance_requests) | `HistoryClearanceRequest` | 12 | One submission of one revision through the clearance list. |
 | [`history_clearance_steps`](#history_clearance_steps) | `HistoryClearanceStep` | 7 | One step in a department's clearance list, in order. |
+| [`history_document_apparatus_tags`](#history_document_apparatus_tags) | `HistoryDocumentApparatusTag` | 4 | An apparatus a document concerns. |
 | [`history_document_files`](#history_document_files) | `HistoryDocumentFile` | 8 | A derived file of a document: the stripped copy readers open, or its |
 | [`history_document_tags`](#history_document_tags) | `HistoryDocumentTag` | 4 | A person a document is about, by, to or names. |
 | [`history_document_types`](#history_document_types) | `HistoryDocumentType` | 9 | One entry in a department's managed list of document types (letter, |
 | [`history_documents`](#history_documents) | `HistoryDocument` | 36 | The archive's catalogue of one document, one-to-one with its row in the |
+| [`history_event_apparatus`](#history_event_apparatus) | `HistoryEventApparatus` | 3 | An apparatus that took part in an event. |
+| [`history_event_documents`](#history_event_documents) | `HistoryEventDocument` | 4 | A document about an event, in the event's order. |
+| [`history_event_media`](#history_event_media) | `HistoryEventMedia` | 4 | A photo, recording or film of an event, in the event's order. |
+| [`history_event_members`](#history_event_members) | `HistoryEventMember` | 5 | A past member's part in an event, with an optional role in their own |
+| [`history_event_types`](#history_event_types) | `HistoryEventType` | 9 | One entry in a department's managed list of event types (fire or |
+| [`history_events`](#history_events) | `HistoryEvent` | 26 | Something that happened: a fire, a station opening, a parade, a |
 | [`history_import_rows`](#history_import_rows) | `HistoryImportRow` | 12 | One line of an uploaded file, with the Historian's decision about it. |
 | [`history_import_title_mappings`](#history_import_title_mappings) | `HistoryImportTitleMapping` | 9 | A department's remembered answer for one title text an import met. |
 | [`history_imports`](#history_imports) | `HistoryImport` | 14 | One uploaded roster file, from draft through commit. |
 | [`history_media`](#history_media) | `HistoryMedia` | 31 | A photo, audio recording or video in the archive, with its catalogue. |
+| [`history_media_apparatus_tags`](#history_media_apparatus_tags) | `HistoryMediaApparatusTag` | 4 | An apparatus shown or heard in a media item. No consent warning: a |
 | [`history_media_files`](#history_media_files) | `HistoryMediaFile` | 8 | One stored file of a media item: its original, viewing copy or |
 | [`history_media_tags`](#history_media_tags) | `HistoryMediaTag` | 4 | A person shown or heard in a media item. |
 | [`history_record_redirects`](#history_record_redirects) | `HistoryRecordRedirect` | 7 | Where a merged-away record's address now leads. |
 | [`history_revisions`](#history_revisions) | `HistoryRevision` | 10 | One entry in an archive record's change history. |
 | [`history_sources`](#history_sources) | `HistorySource` | 9 | One entry in a department's managed list of sources and donors. |
-| [`history_titles`](#history_titles) | `HistoryTitle` | 10 | One entry in a department's managed list of historical titles. |
+| [`history_stations`](#history_stations) | `HistoryStation` | 9 | One entry in a department's managed list of station names. |
+| [`history_titles`](#history_titles) | `HistoryTitle` | 11 | One entry in a department's managed list of historical titles. |
 
 ### IP Security
 
@@ -5976,12 +5988,18 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **HistoricalMemberPeriodTitle** · `app/models/history.py`
 
-> A title held during one service period.
+> A title held during one service period. The held-from and held-to dates are optional (phase 5): a period of service often spans several titles, so the period's own start says nothing about when this one began. The timeline places a title only by its own held-from date, never by guessing from the period.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `period_id` | VARCHAR(36) | no | PK, FK |  | → `historical_member_service_periods.id` ON DELETE CASCADE |
 | `title_id` | VARCHAR(36) | no | PK, FK |  | → `history_titles.id` ON DELETE RESTRICT |
+| `held_from_date` | DATE | yes |  |  |  |
+| `held_from_precision` | ENUM(`day`, `month`, `year`) | no |  | `year` |  |
+| `held_from_circa` | BOOL | no |  | `0` |  |
+| `held_to_date` | DATE | yes |  |  |  |
+| `held_to_precision` | ENUM(`day`, `month`, `year`) | no |  | `year` |  |
+| `held_to_circa` | BOOL | no |  | `0` |  |
 
 ### `historical_member_relations`
 
@@ -6146,6 +6164,109 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `ix_history_albums_org_level` (`organization_id`, `level`)
 
+### `history_apparatus`
+
+**HistoryApparatus** · `app/models/history.py`
+
+> A truck, wagon or engine in the department's history. History's own record (owner decision 1, phase 5), so the archive works with the Apparatus module off and keeps a truck after the fleet deletes it. A record made from a fleet truck copies its descriptive details once and keeps ``fleet_apparatus_id`` only to say so and to stop a second record being made from the same truck; nothing syncs afterwards. No price, VIN, plate, financing or maintenance figure is ever copied. Published like a person or photo, under ``record_type = "apparatus"``.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(200) | no |  |  |  |
+| `apparatus_type_id` | VARCHAR(36) | yes | FK |  | → `history_apparatus_types.id` ON DELETE SET NULL |
+| `year` | INTEGER | yes |  |  |  |
+| `make` | VARCHAR(100) | yes |  |  |  |
+| `model` | VARCHAR(100) | yes |  |  |  |
+| `body_builder` | VARCHAR(100) | yes |  |  |  |
+| `pump_gpm` | INTEGER | yes |  |  |  |
+| `tank_gallons` | INTEGER | yes |  |  |  |
+| `ladder_feet` | INTEGER | yes |  |  |  |
+| `in_service_date` | DATE | yes |  |  |  |
+| `in_service_precision` | ENUM(`day`, `month`, `year`) | no |  | `'year'` |  |
+| `in_service_circa` | BOOL | no |  | `0` |  |
+| `out_of_service_date` | DATE | yes |  |  |  |
+| `out_of_service_precision` | ENUM(`day`, `month`, `year`) | no |  | `'year'` |  |
+| `out_of_service_circa` | BOOL | no |  | `0` |  |
+| `disposition` | ENUM(`in_service`, `sold`, `traded`, `scrapped`, `preserved`, `museum`, `unknown`) | no |  | `unknown` |  |
+| `current_location` | VARCHAR(255) | yes |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `research_notes` | TEXT | yes |  |  |  |
+| `source_id` | VARCHAR(36) | yes | FK, IDX |  | → `history_sources.id` ON DELETE SET NULL |
+| `accession_number` | VARCHAR(100) | yes |  |  |  |
+| `fleet_apparatus_id` | VARCHAR(36) | yes | FK |  | → `apparatus.id` ON DELETE SET NULL |
+| `publication_level` | ENUM(`draft`, `members`, `public`) | no |  | `'draft'` |  |
+| `published_at` | DATETIME | yes |  |  |  |
+| `published_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `public_snapshot` | JSON | yes |  |  |  |
+| `public_revision_number` | INTEGER | yes |  |  |  |
+| `substantial_revision_number` | INTEGER | no |  | `1` |  |
+| `revision_number` | INTEGER | no |  | `1` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_apparatus_org_in_service` (`organization_id`, `in_service_date`)
+- `ix_history_apparatus_org_level` (`organization_id`, `publication_level`)
+- `ix_history_apparatus_org_type` (`organization_id`, `apparatus_type_id`)
+- `ix_history_apparatus_source` (`source_id`)
+
+**Constraints**
+
+- UNIQUE `uq_history_apparatus_fleet` (`organization_id`, `fleet_apparatus_id`)
+
+### `history_apparatus_designations`
+
+**HistoryApparatusDesignation** · `app/models/history.py`
+
+> One period under one unit number: Engine 1 from 1924, Engine 3 from 1951, Reserve Engine from 1968. A station is optional. No ``organization_id``: reached only through its apparatus, which is.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `apparatus_id` | VARCHAR(36) | no | FK, IDX |  | → `history_apparatus.id` ON DELETE CASCADE |
+| `designation` | VARCHAR(100) | no |  |  |  |
+| `station_id` | VARCHAR(36) | yes | FK, IDX |  | → `history_stations.id` ON DELETE SET NULL |
+| `start_date` | DATE | yes |  |  |  |
+| `start_precision` | ENUM(`day`, `month`, `year`) | no |  | `'year'` |  |
+| `start_circa` | BOOL | no |  | `0` |  |
+| `end_date` | DATE | yes |  |  |  |
+| `end_precision` | ENUM(`day`, `month`, `year`) | no |  | `'year'` |  |
+| `end_circa` | BOOL | no |  | `0` |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_designations_apparatus` (`apparatus_id`)
+- `ix_history_designations_station` (`station_id`)
+
+### `history_apparatus_types`
+
+**HistoryApparatusType** · `app/models/history.py`
+
+> One entry in a department's managed list of apparatus types (engine, ladder, tanker, ...). Managed like sources: retired or merged, never deleted.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(150) | no |  |  |  |
+| `name_key` | VARCHAR(150) | no |  |  |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `is_retired` | BOOL | no |  | `0` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_history_apparatus_type_key` (`organization_id`, `name_key`)
+
 ### `history_clearance_decisions`
 
 **HistoryClearanceDecision** · `app/models/history.py`
@@ -6213,6 +6334,23 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_history_clearance_steps_org` (`organization_id`, `step_order`)
+
+### `history_document_apparatus_tags`
+
+**HistoryDocumentApparatusTag** · `app/models/history.py`
+
+> An apparatus a document concerns.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `document_id` | VARCHAR(36) | no | PK, FK |  | → `history_documents.document_id` ON DELETE CASCADE |
+| `apparatus_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `history_apparatus.id` ON DELETE CASCADE |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_document_apparatus_apparatus` (`apparatus_id`)
 
 ### `history_document_files`
 
@@ -6325,6 +6463,139 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_history_documents_org_level` (`organization_id`, `publication_level`)
 - `ix_history_documents_org_type` (`organization_id`, `document_type_id`)
 - `ix_history_documents_source` (`source_id`)
+
+### `history_event_apparatus`
+
+**HistoryEventApparatus** · `app/models/history.py`
+
+> An apparatus that took part in an event.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `event_id` | VARCHAR(36) | no | PK, FK |  | → `history_events.id` ON DELETE CASCADE |
+| `apparatus_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `history_apparatus.id` ON DELETE CASCADE |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_event_apparatus_apparatus` (`apparatus_id`)
+
+### `history_event_documents`
+
+**HistoryEventDocument** · `app/models/history.py`
+
+> A document about an event, in the event's order.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `event_id` | VARCHAR(36) | no | PK, FK |  | → `history_events.id` ON DELETE CASCADE |
+| `document_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `history_documents.document_id` ON DELETE CASCADE |
+| `position` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_event_documents_document` (`document_id`)
+
+### `history_event_media`
+
+**HistoryEventMedia** · `app/models/history.py`
+
+> A photo, recording or film of an event, in the event's order.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `event_id` | VARCHAR(36) | no | PK, FK |  | → `history_events.id` ON DELETE CASCADE |
+| `media_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `history_media.id` ON DELETE CASCADE |
+| `position` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_event_media_media` (`media_id`)
+
+### `history_event_members`
+
+**HistoryEventMember** · `app/models/history.py`
+
+> A past member's part in an event, with an optional role in their own words ("commanded", "injured").
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `event_id` | VARCHAR(36) | no | PK, FK |  | → `history_events.id` ON DELETE CASCADE |
+| `member_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `historical_members.id` ON DELETE CASCADE |
+| `role` | VARCHAR(100) | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_event_members_member` (`member_id`)
+
+### `history_event_types`
+
+**HistoryEventType** · `app/models/history.py`
+
+> One entry in a department's managed list of event types (fire or incident, station, ceremony, ...). Managed like sources.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(150) | no |  |  |  |
+| `name_key` | VARCHAR(150) | no |  |  |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `is_retired` | BOOL | no |  | `0` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_history_event_type_key` (`organization_id`, `name_key`)
+
+### `history_events`
+
+**HistoryEvent** · `app/models/history.py`
+
+> Something that happened: a fire, a station opening, a parade, a line-of-duty death. Dated by a start date (required, so it can be placed on the timeline) and an optional end date for an event that ran over days or years, both partial and "circa". No civilian fields (owner decision 7): a civilian's name goes in the description, checked by the clearance list before anything is public, or in the encrypted research notes. Published like a person or photo, under ``record_type = "event"``.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `title` | VARCHAR(200) | no |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `start_date` | DATE | no |  |  |  |
+| `start_precision` | ENUM(`day`, `month`, `year`) | no |  | `'year'` |  |
+| `start_circa` | BOOL | no |  | `0` |  |
+| `end_date` | DATE | yes |  |  |  |
+| `end_precision` | ENUM(`day`, `month`, `year`) | no |  | `'year'` |  |
+| `end_circa` | BOOL | no |  | `0` |  |
+| `place` | VARCHAR(255) | yes |  |  |  |
+| `station_id` | VARCHAR(36) | yes | FK, IDX |  | → `history_stations.id` ON DELETE SET NULL |
+| `event_type_id` | VARCHAR(36) | yes | FK |  | → `history_event_types.id` ON DELETE SET NULL |
+| `research_notes` | TEXT | yes |  |  |  |
+| `source_id` | VARCHAR(36) | yes | FK, IDX |  | → `history_sources.id` ON DELETE SET NULL |
+| `publication_level` | ENUM(`draft`, `members`, `public`) | no |  | `'draft'` |  |
+| `published_at` | DATETIME | yes |  |  |  |
+| `published_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `public_snapshot` | JSON | yes |  |  |  |
+| `public_revision_number` | INTEGER | yes |  |  |  |
+| `substantial_revision_number` | INTEGER | no |  | `1` |  |
+| `revision_number` | INTEGER | no |  | `1` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_events_org_level` (`organization_id`, `publication_level`)
+- `ix_history_events_org_start` (`organization_id`, `start_date`)
+- `ix_history_events_org_type` (`organization_id`, `event_type_id`)
+- `ix_history_events_source` (`source_id`)
+- `ix_history_events_station` (`station_id`)
 
 ### `history_import_rows`
 
@@ -6448,6 +6719,23 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_history_media_org_level` (`organization_id`, `publication_level`)
 - `ix_history_media_source` (`source_id`)
 
+### `history_media_apparatus_tags`
+
+**HistoryMediaApparatusTag** · `app/models/history.py`
+
+> An apparatus shown or heard in a media item. No consent warning: a truck has no say.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `media_id` | VARCHAR(36) | no | PK, FK |  | → `history_media.id` ON DELETE CASCADE |
+| `apparatus_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `history_apparatus.id` ON DELETE CASCADE |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_media_apparatus_apparatus` (`apparatus_id`)
+
 ### `history_media_files`
 
 **HistoryMediaFile** · `app/models/history.py`
@@ -6555,6 +6843,28 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_history_source_key` (`organization_id`, `name_key`)
 
+### `history_stations`
+
+**HistoryStation** · `app/models/history.py`
+
+> One entry in a department's managed list of station names. Not yet a station record of its own (owner decision, phase 5: full station records come later). Events and designation periods point at an entry rather than repeating free text, so a misspelling is corrected in one place and two names for one firehouse can be merged. When station records arrive, this list becomes them.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(150) | no |  |  |  |
+| `name_key` | VARCHAR(150) | no |  |  |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `is_retired` | BOOL | no |  | `0` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_history_station_key` (`organization_id`, `name_key`)
+
 ### `history_titles`
 
 **HistoryTitle** · `app/models/history.py`
@@ -6570,6 +6880,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `source` | ENUM(`rank`, `position`, `custom`) | no |  | `'custom'` |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
 | `is_retired` | BOOL | no |  | `0` |  |
+| `show_on_timeline` | BOOL | no |  | `0` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -13629,7 +13940,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (486 references)
+### → `users` (498 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13832,13 +14143,23 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `historical_members` | `user_id` | SET NULL | yes |
 | `historical_staffing_files` | `created_by` | SET NULL | yes |
 | `history_albums` | `created_by` | SET NULL | yes |
+| `history_apparatus` | `created_by` | SET NULL | yes |
+| `history_apparatus` | `published_by` | SET NULL | yes |
+| `history_apparatus` | `updated_by` | SET NULL | yes |
+| `history_apparatus_types` | `created_by` | SET NULL | yes |
 | `history_clearance_decisions` | `decided_by` | SET NULL | yes |
 | `history_clearance_requests` | `submitted_by` | SET NULL | yes |
+| `history_document_apparatus_tags` | `created_by` | SET NULL | yes |
 | `history_document_tags` | `created_by` | SET NULL | yes |
 | `history_document_types` | `created_by` | SET NULL | yes |
 | `history_documents` | `created_by` | SET NULL | yes |
 | `history_documents` | `published_by` | SET NULL | yes |
 | `history_documents` | `updated_by` | SET NULL | yes |
+| `history_event_members` | `created_by` | SET NULL | yes |
+| `history_event_types` | `created_by` | SET NULL | yes |
+| `history_events` | `created_by` | SET NULL | yes |
+| `history_events` | `published_by` | SET NULL | yes |
+| `history_events` | `updated_by` | SET NULL | yes |
 | `history_import_rows` | `target_user_id` | SET NULL | yes |
 | `history_import_title_mappings` | `updated_by` | SET NULL | yes |
 | `history_imports` | `committed_by` | SET NULL | yes |
@@ -13846,10 +14167,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `history_media` | `created_by` | SET NULL | yes |
 | `history_media` | `published_by` | SET NULL | yes |
 | `history_media` | `updated_by` | SET NULL | yes |
+| `history_media_apparatus_tags` | `created_by` | SET NULL | yes |
 | `history_media_tags` | `created_by` | SET NULL | yes |
 | `history_record_redirects` | `merged_by` | SET NULL | yes |
 | `history_revisions` | `actor_id` | SET NULL | yes |
 | `history_sources` | `created_by` | SET NULL | yes |
+| `history_stations` | `created_by` | SET NULL | yes |
 | `history_titles` | `created_by` | SET NULL | yes |
 | `instructor_qualifications` | `created_by` | SET NULL | yes |
 | `instructor_qualifications` | `user_id` | CASCADE | no |
@@ -14120,7 +14443,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (325 references)
+### → `organizations` (330 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14261,16 +14584,21 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `historical_members` | `organization_id` | CASCADE | no |
 | `historical_staffing_files` | `organization_id` | CASCADE | no |
 | `history_albums` | `organization_id` | CASCADE | no |
+| `history_apparatus` | `organization_id` | CASCADE | no |
+| `history_apparatus_types` | `organization_id` | CASCADE | no |
 | `history_clearance_requests` | `organization_id` | CASCADE | no |
 | `history_clearance_steps` | `organization_id` | CASCADE | no |
 | `history_document_types` | `organization_id` | CASCADE | no |
 | `history_documents` | `organization_id` | CASCADE | no |
+| `history_event_types` | `organization_id` | CASCADE | no |
+| `history_events` | `organization_id` | CASCADE | no |
 | `history_import_title_mappings` | `organization_id` | CASCADE | no |
 | `history_imports` | `organization_id` | CASCADE | no |
 | `history_media` | `organization_id` | CASCADE | no |
 | `history_record_redirects` | `organization_id` | CASCADE | no |
 | `history_revisions` | `organization_id` | CASCADE | no |
 | `history_sources` | `organization_id` | CASCADE | no |
+| `history_stations` | `organization_id` | CASCADE | no |
 | `history_titles` | `organization_id` | CASCADE | no |
 | `imported_source_records` | `organization_id` | CASCADE | no |
 | `instructor_qualifications` | `organization_id` | CASCADE | no |
@@ -14477,6 +14805,31 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `return_requests` | `item_id` | CASCADE | no |
 | `store_products` | `inventory_item_id` | SET NULL | yes |
 
+### → `apparatus` (20 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `apparatus_component_notes` | `apparatus_id` | CASCADE | no |
+| `apparatus_components` | `apparatus_id` | CASCADE | no |
+| `apparatus_documents` | `apparatus_id` | CASCADE | no |
+| `apparatus_equipment` | `apparatus_id` | CASCADE | no |
+| `apparatus_event_template_units` | `apparatus_id` | CASCADE | no |
+| `apparatus_fuel_logs` | `apparatus_id` | CASCADE | no |
+| `apparatus_location_history` | `apparatus_id` | CASCADE | no |
+| `apparatus_maintenance` | `apparatus_id` | CASCADE | no |
+| `apparatus_nfpa_compliance` | `apparatus_id` | CASCADE | no |
+| `apparatus_operators` | `apparatus_id` | CASCADE | no |
+| `apparatus_photos` | `apparatus_id` | CASCADE | no |
+| `apparatus_status_history` | `apparatus_id` | CASCADE | no |
+| `driver_exceptions` | `apparatus_id` | CASCADE | yes |
+| `equipment_check_templates` | `apparatus_id` | CASCADE | yes |
+| `event_apparatus_units` | `apparatus_id` | CASCADE | no |
+| `history_apparatus` | `fleet_apparatus_id` | SET NULL | yes |
+| `purchase_requests` | `apparatus_id` | SET NULL | yes |
+| `skill_checkoffs` | `apparatus_id` | SET NULL | yes |
+| `training_records` | `apparatus_id` | SET NULL | yes |
+| `training_sessions` | `apparatus_id` | SET NULL | yes |
+
 ### → `events` (20 references)
 
 | From table | Column | On delete | Nullable |
@@ -14501,30 +14854,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_approvals` | `event_id` | CASCADE | no |
 | `training_records` | `source_event_id` | SET NULL | yes |
 | `training_sessions` | `event_id` | CASCADE | no |
-
-### → `apparatus` (19 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `apparatus_component_notes` | `apparatus_id` | CASCADE | no |
-| `apparatus_components` | `apparatus_id` | CASCADE | no |
-| `apparatus_documents` | `apparatus_id` | CASCADE | no |
-| `apparatus_equipment` | `apparatus_id` | CASCADE | no |
-| `apparatus_event_template_units` | `apparatus_id` | CASCADE | no |
-| `apparatus_fuel_logs` | `apparatus_id` | CASCADE | no |
-| `apparatus_location_history` | `apparatus_id` | CASCADE | no |
-| `apparatus_maintenance` | `apparatus_id` | CASCADE | no |
-| `apparatus_nfpa_compliance` | `apparatus_id` | CASCADE | no |
-| `apparatus_operators` | `apparatus_id` | CASCADE | no |
-| `apparatus_photos` | `apparatus_id` | CASCADE | no |
-| `apparatus_status_history` | `apparatus_id` | CASCADE | no |
-| `driver_exceptions` | `apparatus_id` | CASCADE | yes |
-| `equipment_check_templates` | `apparatus_id` | CASCADE | yes |
-| `event_apparatus_units` | `apparatus_id` | CASCADE | no |
-| `purchase_requests` | `apparatus_id` | SET NULL | yes |
-| `skill_checkoffs` | `apparatus_id` | SET NULL | yes |
-| `training_records` | `apparatus_id` | SET NULL | yes |
-| `training_sessions` | `apparatus_id` | SET NULL | yes |
 
 ### → `facilities` (18 references)
 
@@ -14752,6 +15081,18 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_records` | `external_provider_id` | SET NULL | yes |
 | `xapi_statements` | `source_provider_id` | SET NULL | yes |
 
+### → `historical_members` (7 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `historical_member_relations` | `member_id` | CASCADE | no |
+| `historical_member_relations` | `related_member_id` | CASCADE | no |
+| `historical_member_service_periods` | `member_id` | CASCADE | no |
+| `history_document_tags` | `member_id` | CASCADE | no |
+| `history_event_members` | `member_id` | CASCADE | no |
+| `history_import_rows` | `target_member_id` | SET NULL | yes |
+| `history_media_tags` | `member_id` | CASCADE | no |
+
 ### → `inventory_categories` (7 references)
 
 | From table | Column | On delete | Nullable |
@@ -14820,16 +15161,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `expense_reports` | `fiscal_year_id` | CASCADE | no |
 | `purchase_requests` | `fiscal_year_id` | CASCADE | no |
 
-### → `historical_members` (6 references)
+### → `history_media` (6 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `historical_member_relations` | `member_id` | CASCADE | no |
-| `historical_member_relations` | `related_member_id` | CASCADE | no |
-| `historical_member_service_periods` | `member_id` | CASCADE | no |
-| `history_document_tags` | `member_id` | CASCADE | no |
-| `history_import_rows` | `target_member_id` | SET NULL | yes |
-| `history_media_tags` | `member_id` | CASCADE | no |
+| `history_album_items` | `media_id` | CASCADE | no |
+| `history_albums` | `cover_media_id` | SET NULL | yes |
+| `history_event_media` | `media_id` | CASCADE | no |
+| `history_media_apparatus_tags` | `media_id` | CASCADE | no |
+| `history_media_files` | `media_id` | CASCADE | no |
+| `history_media_tags` | `media_id` | CASCADE | no |
 
 ### → `membership_pipeline_steps` (6 references)
 
@@ -14904,6 +15245,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `evaluation_signatures` | `evaluation_id` | CASCADE | no |
 | `evaluation_steps` | `evaluation_id` | CASCADE | no |
 
+### → `history_documents` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `history_album_documents` | `document_id` | CASCADE | no |
+| `history_document_apparatus_tags` | `document_id` | CASCADE | no |
+| `history_document_files` | `document_id` | CASCADE | no |
+| `history_document_tags` | `document_id` | CASCADE | no |
+| `history_event_documents` | `document_id` | CASCADE | no |
+
 ### → `suggestions` (5 references)
 
 | From table | Column | On delete | Nullable |
@@ -14977,14 +15328,32 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `imported_source_records` | `historical_import_id` | SET NULL | yes |
 | `shift_history_imports` | `historical_import_id` | SET NULL | yes |
 
-### → `history_media` (4 references)
+### → `history_apparatus` (4 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `history_album_items` | `media_id` | CASCADE | no |
-| `history_albums` | `cover_media_id` | SET NULL | yes |
-| `history_media_files` | `media_id` | CASCADE | no |
-| `history_media_tags` | `media_id` | CASCADE | no |
+| `history_apparatus_designations` | `apparatus_id` | CASCADE | no |
+| `history_document_apparatus_tags` | `apparatus_id` | CASCADE | no |
+| `history_event_apparatus` | `apparatus_id` | CASCADE | no |
+| `history_media_apparatus_tags` | `apparatus_id` | CASCADE | no |
+
+### → `history_events` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `history_event_apparatus` | `event_id` | CASCADE | no |
+| `history_event_documents` | `event_id` | CASCADE | no |
+| `history_event_media` | `event_id` | CASCADE | no |
+| `history_event_members` | `event_id` | CASCADE | no |
+
+### → `history_sources` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `history_apparatus` | `source_id` | SET NULL | yes |
+| `history_documents` | `source_id` | SET NULL | yes |
+| `history_events` | `source_id` | SET NULL | yes |
+| `history_media` | `source_id` | SET NULL | yes |
 
 ### → `meetings` (4 references)
 
@@ -15070,14 +15439,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `event_requests` | `form_submission_id` | SET NULL | yes |
 | `prospect_form_requests` | `submission_id` | SET NULL | yes |
 | `prospective_members` | `form_submission_id` | SET NULL | yes |
-
-### → `history_documents` (3 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `history_album_documents` | `document_id` | CASCADE | no |
-| `history_document_files` | `document_id` | CASCADE | no |
-| `history_document_tags` | `document_id` | CASCADE | no |
 
 ### → `inventory_vendors` (3 references)
 
@@ -15254,12 +15615,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `historical_members` | `import_id` | SET NULL | yes |
 | `history_import_rows` | `import_id` | CASCADE | no |
 
-### → `history_sources` (2 references)
+### → `history_stations` (2 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `history_documents` | `source_id` | SET NULL | yes |
-| `history_media` | `source_id` | SET NULL | yes |
+| `history_apparatus_designations` | `station_id` | SET NULL | yes |
+| `history_events` | `station_id` | SET NULL | yes |
 
 ### → `history_titles` (2 references)
 
@@ -15549,6 +15910,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `historical_staffing_rows` | `file_id` | CASCADE | no |
 
+### → `history_apparatus_types` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `history_apparatus` | `apparatus_type_id` | SET NULL | yes |
+
 ### → `history_clearance_requests` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -15560,6 +15927,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `history_documents` | `document_type_id` | SET NULL | yes |
+
+### → `history_event_types` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `history_events` | `event_type_id` | SET NULL | yes |
 
 ### → `history_import_rows` (1 references)
 
@@ -15798,10 +16171,17 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `historical_staffing_rows` | `historical_staffing_files` |
 | `history_album_documents` | `history_albums`, `history_documents` |
 | `history_album_items` | `history_albums`, `history_media` |
+| `history_apparatus_designations` | `history_apparatus`, `history_stations` |
 | `history_clearance_decisions` | `history_clearance_requests`, `users` |
+| `history_document_apparatus_tags` | `history_apparatus`, `history_documents`, `users` |
 | `history_document_files` | `history_documents` |
 | `history_document_tags` | `historical_members`, `history_documents`, `users` |
+| `history_event_apparatus` | `history_apparatus`, `history_events` |
+| `history_event_documents` | `history_documents`, `history_events` |
+| `history_event_media` | `history_events`, `history_media` |
+| `history_event_members` | `historical_members`, `history_events`, `users` |
 | `history_import_rows` | `historical_members`, `history_import_rows`, `history_imports`, `users` |
+| `history_media_apparatus_tags` | `history_apparatus`, `history_media`, `users` |
 | `history_media_files` | `history_media` |
 | `history_media_tags` | `historical_members`, `history_media`, `users` |
 | `ip_exception_audit_log` | `ip_exceptions`, `users` |

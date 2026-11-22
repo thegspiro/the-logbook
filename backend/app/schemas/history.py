@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.models.history import (
     AlbumLevel,
+    ApparatusDisposition,
     ClearanceDecisionKind,
     ClearancePurpose,
     ClearanceStatus,
@@ -46,6 +47,9 @@ class HistoryTitleResponse(BaseModel):
     source: TitleSource
     sort_order: int
     is_retired: bool
+    #: Whether a dated start of this title reaches the department timeline.
+    #: Off unless the Historian turns it on (owner decision 9, phase 5).
+    show_on_timeline: bool = False
     usage_count: int = 0
 
 
@@ -56,6 +60,7 @@ class HistoryTitleCreate(BaseModel):
 class HistoryTitleUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=150)
     is_retired: Optional[bool] = None
+    show_on_timeline: Optional[bool] = None
     sort_order: Optional[int] = Field(default=None, ge=0, le=100000)
 
 
@@ -64,6 +69,30 @@ class HistoryTitleMerge(BaseModel):
 
 
 # --- People ---
+
+
+class HeldTitleWrite(BaseModel):
+    """A title held in a service period, with the dates it was held when
+    they are known. A title's start is placed on a timeline only by these
+    dates, never by the period's."""
+
+    title_id: str = Field(max_length=36)
+    held_from_date: Optional[date] = None
+    held_from_precision: DatePrecision = DatePrecision.YEAR
+    held_from_circa: bool = False
+    held_to_date: Optional[date] = None
+    held_to_precision: DatePrecision = DatePrecision.YEAR
+    held_to_circa: bool = False
+
+    @model_validator(mode="after")
+    def _consistent(self) -> "HeldTitleWrite":
+        if (
+            self.held_from_date
+            and self.held_to_date
+            and self.held_to_date < self.held_from_date
+        ):
+            raise ValueError("A title cannot end before it was first held")
+        return self
 
 
 class ServicePeriodWrite(BaseModel):
@@ -76,6 +105,10 @@ class ServicePeriodWrite(BaseModel):
     is_ongoing: bool = False
     notes: Optional[str] = _TEXT
     title_ids: list[str] = Field(default_factory=list, max_length=50)
+    #: The titles with their dates. When sent, it is used instead of
+    #: ``title_ids``; a caller that sends only ``title_ids`` gets undated
+    #: titles, as before phase 5.
+    titles: Optional[list[HeldTitleWrite]] = Field(default=None, max_length=50)
 
     @model_validator(mode="after")
     def _consistent(self) -> "ServicePeriodWrite":
@@ -95,6 +128,12 @@ class ServicePeriodsReplace(BaseModel):
 class TitleRef(BaseModel):
     id: str
     name: str
+    held_from_date: Optional[date] = None
+    held_from_precision: DatePrecision = DatePrecision.YEAR
+    held_from_circa: bool = False
+    held_to_date: Optional[date] = None
+    held_to_precision: DatePrecision = DatePrecision.YEAR
+    held_to_circa: bool = False
 
 
 class ServicePeriodResponse(BaseModel):
@@ -370,7 +409,7 @@ class PositionOption(BaseModel):
 
 
 class ClearanceSubmit(BaseModel):
-    record_type: Literal["member", "media", "document"]
+    record_type: Literal["member", "media", "document", "apparatus", "event"]
     record_id: str
     purpose: ClearancePurpose = ClearancePurpose.PUBLIC
 
@@ -393,9 +432,15 @@ class ClearanceReview(BaseModel):
     """A request with the record as members would read it, for its reviewers."""
 
     request: ClearanceRequestResponse
-    #: A person, a photo/media item or a document, as members would read it;
-    #: which one is ``request.record_type``.
-    record: Union[HistoricalMemberMemberView, "MediaMemberView", "DocumentMemberView"]
+    #: A person, a photo/media item, a document, an apparatus or an event, as
+    #: members would read it; which one is ``request.record_type``.
+    record: Union[
+        HistoricalMemberMemberView,
+        "MediaMemberView",
+        "DocumentMemberView",
+        "ApparatusMemberView",
+        "EventMemberView",
+    ]
 
 
 class MarkdownRender(BaseModel):
@@ -556,6 +601,38 @@ class MergeRequest(BaseModel):
 
 
 # ----------------------------------------------------------------------
+# Shared by photos, documents and the phase 5 records
+# ----------------------------------------------------------------------
+
+
+class ApparatusTag(BaseModel):
+    """An apparatus a photo, document or event is linked to. Only apparatus
+    the caller may read are listed."""
+
+    apparatus_id: str
+    name: str
+
+
+class EventSummary(BaseModel):
+    id: str
+    title: str
+    start_date: date
+    start_precision: DatePrecision
+    start_circa: bool
+    end_date: Optional[date]
+    end_precision: DatePrecision
+    end_circa: bool
+    place: Optional[str]
+    station_name: Optional[str]
+    event_type_name: Optional[str]
+    publication_level: PublicationLevel
+
+
+class ApparatusTagsReplace(BaseModel):
+    apparatus_ids: list[str] = Field(max_length=200)
+
+
+# ----------------------------------------------------------------------
 # Photos and media
 # ----------------------------------------------------------------------
 
@@ -596,6 +673,9 @@ class _MediaCatalogue(BaseModel):
     #: or the stripped copy of a recording (same container as the original).
     mime_type: Optional[str]
     publication_level: PublicationLevel
+    apparatus: list[ApparatusTag] = Field(default_factory=list)
+    #: The events this item belongs to that the caller may read.
+    events: list[EventSummary] = Field(default_factory=list)
 
 
 class MediaMemberView(_MediaCatalogue):
@@ -812,6 +892,9 @@ class _DocumentCatalogue(BaseModel):
     #: The type of what ``/view`` returns: the stripped PDF, or a scan's WebP.
     mime_type: Optional[str]
     publication_level: PublicationLevel
+    apparatus: list[ApparatusTag] = Field(default_factory=list)
+    #: The events this document belongs to that the caller may read.
+    events: list[EventSummary] = Field(default_factory=list)
 
 
 class DocumentMemberView(_DocumentCatalogue):
@@ -921,6 +1004,336 @@ class HistoryDocumentTypeUpdate(BaseModel):
 
 class HistoryDocumentTypeMerge(BaseModel):
     into_type_id: str
+
+
+# --- Phase 5: managed lists (stations, apparatus types, event types) ---
+
+
+class HistoryListEntryResponse(BaseModel):
+    id: str
+    name: str
+    sort_order: int
+    is_retired: bool
+    usage_count: int = 0
+
+
+class HistoryListEntryCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=150)
+
+
+class HistoryListEntryUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=150)
+    is_retired: Optional[bool] = None
+
+
+class HistoryListEntryMerge(BaseModel):
+    into_id: str = Field(max_length=36)
+
+
+# --- Phase 5: historical apparatus ---
+
+
+class _PartialSpanWrite(BaseModel):
+    start_date: Optional[date] = None
+    start_precision: DatePrecision = DatePrecision.YEAR
+    start_circa: bool = False
+    end_date: Optional[date] = None
+    end_precision: DatePrecision = DatePrecision.YEAR
+    end_circa: bool = False
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "_PartialSpanWrite":
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValueError("A period cannot end before it starts")
+        return self
+
+
+class DesignationWrite(_PartialSpanWrite):
+    designation: str = Field(min_length=1, max_length=100)
+    station_id: Optional[str] = Field(default=None, max_length=36)
+
+
+class DesignationResponse(BaseModel):
+    id: str
+    designation: str
+    station_id: Optional[str]
+    station_name: Optional[str]
+    start_date: Optional[date]
+    start_precision: DatePrecision
+    start_circa: bool
+    end_date: Optional[date]
+    end_precision: DatePrecision
+    end_circa: bool
+
+
+class _ApparatusCatalogue(BaseModel):
+    id: str
+    name: str
+    apparatus_type_id: Optional[str]
+    apparatus_type_name: Optional[str]
+    year: Optional[int]
+    make: Optional[str]
+    model: Optional[str]
+    body_builder: Optional[str]
+    pump_gpm: Optional[int]
+    tank_gallons: Optional[int]
+    ladder_feet: Optional[int]
+    in_service_date: Optional[date]
+    in_service_precision: DatePrecision
+    in_service_circa: bool
+    out_of_service_date: Optional[date]
+    out_of_service_precision: DatePrecision
+    out_of_service_circa: bool
+    disposition: ApparatusDisposition
+    current_location: Optional[str]
+    description: Optional[str]
+    source_id: Optional[str]
+    source_name: Optional[str]
+    accession_number: Optional[str]
+    designations: list[DesignationResponse]
+    #: "1924–1968", "1998–present", or none when no dates are known.
+    service_span: Optional[str]
+    publication_level: PublicationLevel
+
+
+class ApparatusMemberView(_ApparatusCatalogue):
+    """What a member reading published history receives: no research notes
+    and no link to the fleet record."""
+
+    view: Literal["member"] = "member"
+
+
+class ApparatusFullView(_ApparatusCatalogue):
+    view: Literal["full"] = "full"
+    research_notes: Optional[str]
+    fleet_apparatus_id: Optional[str]
+    #: The fleet truck's name, when the record was made from one that still
+    #: exists.
+    fleet_label: Optional[str]
+    published_at: Optional[datetime]
+    revision_number: int
+    public_revision_number: Optional[int]
+    public_changes_pending: bool
+    clearance_required: bool
+    cleared_for_public: bool
+    clearance: Optional[ClearanceRequestResponse]
+    can_edit: bool
+    can_publish: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+ApparatusView = Union[ApparatusFullView, ApparatusMemberView]
+
+
+class ApparatusSummary(BaseModel):
+    id: str
+    name: str
+    apparatus_type_name: Optional[str]
+    year: Optional[int]
+    make: Optional[str]
+    model: Optional[str]
+    #: Unit numbers, oldest first.
+    designations: list[str]
+    service_span: Optional[str]
+    disposition: ApparatusDisposition
+    publication_level: PublicationLevel
+
+
+class ApparatusList(BaseModel):
+    items: list[ApparatusSummary]
+    total: int
+
+
+class _ApparatusFields(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    apparatus_type_id: Optional[str] = Field(default=None, max_length=36)
+    year: Optional[int] = Field(default=None, ge=1600, le=2200)
+    make: Optional[str] = Field(default=None, max_length=100)
+    model: Optional[str] = Field(default=None, max_length=100)
+    body_builder: Optional[str] = Field(default=None, max_length=100)
+    pump_gpm: Optional[int] = Field(default=None, ge=0, le=100000)
+    tank_gallons: Optional[int] = Field(default=None, ge=0, le=100000)
+    ladder_feet: Optional[int] = Field(default=None, ge=0, le=1000)
+    in_service_date: Optional[date] = None
+    in_service_precision: Optional[DatePrecision] = None
+    in_service_circa: Optional[bool] = None
+    out_of_service_date: Optional[date] = None
+    out_of_service_precision: Optional[DatePrecision] = None
+    out_of_service_circa: Optional[bool] = None
+    disposition: Optional[ApparatusDisposition] = None
+    current_location: Optional[str] = Field(default=None, max_length=255)
+    description: Optional[str] = _TEXT
+    research_notes: Optional[str] = _TEXT
+    source_id: Optional[str] = Field(default=None, max_length=36)
+    accession_number: Optional[str] = Field(default=None, max_length=100)
+
+
+class ApparatusCreate(_ApparatusFields):
+    name: str = Field(min_length=1, max_length=200)
+    designations: list[DesignationWrite] = Field(default_factory=list, max_length=50)
+
+
+class ApparatusUpdate(_ApparatusFields):
+    #: Replaces every designation when sent; left alone when omitted.
+    designations: Optional[list[DesignationWrite]] = Field(default=None, max_length=50)
+    #: Forced to substantial when anything a reader sees changes.
+    edit_kind: EditKind = "minor"
+    edit_note: Optional[str] = Field(default=None, max_length=2000)
+
+
+class FleetOption(BaseModel):
+    """An Apparatus-module truck a History record can be started from."""
+
+    id: str
+    unit_number: str
+    name: Optional[str]
+    description: str
+    is_archived: bool
+    #: The History record already made from this truck, if any.
+    history_apparatus_id: Optional[str]
+
+
+class FleetApparatusCreate(BaseModel):
+    fleet_apparatus_id: str = Field(max_length=36)
+
+
+# --- Phase 5: events ---
+
+
+class EventMemberLink(BaseModel):
+    member_id: str
+    display_name: str
+    role: Optional[str]
+
+
+class EventMemberWrite(BaseModel):
+    member_id: str = Field(max_length=36)
+    role: Optional[str] = Field(default=None, max_length=100)
+
+
+class _EventCatalogue(EventSummary):
+    description: Optional[str]
+    station_id: Optional[str]
+    event_type_id: Optional[str]
+    source_id: Optional[str]
+    source_name: Optional[str]
+    #: Each link only where the caller may read the record it points at.
+    members: list[EventMemberLink]
+    apparatus: list[ApparatusTag]
+    media: list[MediaSummary]
+    documents: list[DocumentSummary]
+
+
+class EventMemberView(_EventCatalogue):
+    view: Literal["member"] = "member"
+
+
+class EventFullView(_EventCatalogue):
+    view: Literal["full"] = "full"
+    research_notes: Optional[str]
+    published_at: Optional[datetime]
+    revision_number: int
+    public_revision_number: Optional[int]
+    public_changes_pending: bool
+    clearance_required: bool
+    cleared_for_public: bool
+    clearance: Optional[ClearanceRequestResponse]
+    can_edit: bool
+    can_publish: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+EventView = Union[EventFullView, EventMemberView]
+
+
+class EventList(BaseModel):
+    items: list[EventSummary]
+    total: int
+
+
+class _EventLinks(BaseModel):
+    """The links an event write may set. A list that is sent replaces that
+    set; one that is omitted is left alone."""
+
+    members: Optional[list[EventMemberWrite]] = Field(default=None, max_length=500)
+    apparatus_ids: Optional[list[str]] = Field(default=None, max_length=200)
+    media_ids: Optional[list[str]] = Field(default=None, max_length=500)
+    document_ids: Optional[list[str]] = Field(default=None, max_length=500)
+
+
+class _EventFields(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    description: Optional[str] = _TEXT
+    start_date: Optional[date] = None
+    start_precision: Optional[DatePrecision] = None
+    start_circa: Optional[bool] = None
+    end_date: Optional[date] = None
+    end_precision: Optional[DatePrecision] = None
+    end_circa: Optional[bool] = None
+    place: Optional[str] = Field(default=None, max_length=255)
+    station_id: Optional[str] = Field(default=None, max_length=36)
+    event_type_id: Optional[str] = Field(default=None, max_length=36)
+    research_notes: Optional[str] = _TEXT
+    source_id: Optional[str] = Field(default=None, max_length=36)
+
+
+class EventCreate(_EventFields, _EventLinks):
+    title: str = Field(min_length=1, max_length=200)
+    #: Required: an undated event cannot be placed on the timeline.
+    start_date: date
+
+
+class EventUpdate(_EventFields, _EventLinks):
+    #: Forced to substantial when anything a reader sees changes, its links
+    #: included.
+    edit_kind: EditKind = "minor"
+    edit_note: Optional[str] = Field(default=None, max_length=2000)
+
+
+# --- Phase 5: the timeline ---
+
+TimelineKind = Literal[
+    "event",
+    "apparatus_in",
+    "apparatus_out",
+    "line_of_duty",
+    "title",
+    "designation",
+]
+
+
+#: ``date`` under another name, for a model with a field called ``date``:
+#: inside that class the field's name would shadow the type.
+CalendarDate = date
+
+
+class TimelineEntry(BaseModel):
+    """One entry on a timeline: an event, or a milestone read from the record
+    it links to. Nothing here is stored; correcting the record corrects it."""
+
+    key: str
+    kind: TimelineKind
+    date: CalendarDate
+    precision: DatePrecision
+    circa: bool
+    end_date: Optional[CalendarDate]
+    end_precision: Optional[DatePrecision]
+    end_circa: bool
+    label: str
+    detail: Optional[str]
+    record_type: Literal["event", "apparatus", "member"]
+    record_id: str
+    event_type_id: Optional[str]
+    event_type_name: Optional[str]
+    #: For the archive's keepers, who see drafts on the timeline, badged.
+    publication_level: PublicationLevel
+
+
+class TimelineDecade(BaseModel):
+    decade: int
+    count: int
 
 
 ClearanceReview.model_rebuild()

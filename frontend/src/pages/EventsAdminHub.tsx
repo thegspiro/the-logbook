@@ -38,6 +38,7 @@ const AnalyticsDashboardPage = lazyWithRetry(() => import('./AnalyticsDashboardP
 const CommunityEngagementTab = lazyWithRetry(() => import('./CommunityEngagementTab'));
 const PastEventsTab = lazyWithRetry(() => import('./PastEventsTab'));
 const EventRequestsTab = lazyWithRetry(() => import('./EventRequestsTab'));
+const OutreachOverviewTab = lazyWithRetry(() => import('./outreach-overview/OutreachOverviewTab'));
 const EventsSettingsTab = lazyWithRetry(() => import('./EventsSettingsTab'));
 const EventCardCheckinsTab = lazyWithRetry(() => import('./EventCardCheckinsTab'));
 const ApparatusEventsTab = lazyWithRetry(() => import('./ApparatusEventsTab'));
@@ -54,6 +55,8 @@ const TabContent: React.FC<{ tab: EventsAdminTab; onMetricsSaved: () => void }> 
       return <EventCreatePage />;
     case 'past_events':
       return <PastEventsTab />;
+    case 'overview':
+      return <OutreachOverviewTab />;
     case 'requests':
       return <EventRequestsTab />;
     case 'analytics':

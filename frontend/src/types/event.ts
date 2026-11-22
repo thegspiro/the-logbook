@@ -1178,6 +1178,29 @@ export interface EventRequestStaffCreate {
 
 export type VenuePreference = 'their_location' | 'our_station' | 'either';
 
+/**
+ * One outreach event on the Outreach Overview's calendar
+ * (GET /events/outreach-calendar). A fill pair is null when the event has no
+ * live signup sheet, or no apparatus crew, so "none" never reads as "empty".
+ */
+export interface OutreachCalendarItem {
+  event_id: string;
+  title: string;
+  event_type: string;
+  start_datetime: string;
+  end_datetime: string;
+  location: string | null;
+  is_draft: boolean;
+  request_id: string | null;
+  request_organization: string | null;
+  volunteers_filled: number | null;
+  volunteers_total: number | null;
+  crew_filled: number | null;
+  crew_total: number | null;
+  unit_numbers: string[];
+  attendance_finalized: boolean;
+}
+
 export interface EventRequestListItem {
   id: string;
   contact_name: string;

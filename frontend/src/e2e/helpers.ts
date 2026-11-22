@@ -23,6 +23,7 @@ import type {
   AlbumSummary,
   ClearanceStep,
   HistoryDocumentType,
+  HistoryListEntry,
   HistorySource,
   HistoryTitle,
   HonorRollEntry,
@@ -245,6 +246,54 @@ const requestDay = (days: number) => new Date(Date.now() + days * 86_400_000).to
  * with none — because each draws a different cell, and the long organization
  * name is the one that wraps on a phone.
  */
+/** Outreach events for the Overview, placed around the moment the test runs. */
+const outreachCalendar = () => {
+  const at = (days: number, hours: number) => new Date(Date.now() + (days * 24 + hours) * 3600 * 1000).toISOString();
+  const base = {
+    event_type: 'public_education',
+    location: 'Station 1 Bay',
+    is_draft: false,
+    request_id: null,
+    request_organization: null,
+    volunteers_filled: null,
+    volunteers_total: null,
+    crew_filled: null,
+    crew_total: null,
+    unit_numbers: [] as string[],
+    attendance_finalized: false,
+  };
+  return [
+    {
+      ...base,
+      event_id: 'oc-past',
+      title: 'Block party safety booth',
+      start_datetime: at(-3, 0),
+      end_datetime: at(-3, 2),
+    },
+    {
+      ...base,
+      event_id: 'oc-today',
+      title: 'Car seat check at the library',
+      start_datetime: at(0, 0),
+      end_datetime: at(0, 2),
+      request_id: 'req-open-1',
+      request_organization: 'Falls Library',
+      volunteers_filled: 1,
+      volunteers_total: 3,
+    },
+    {
+      ...base,
+      event_id: 'oc-santa',
+      title: 'Santa run through Oak Hills',
+      start_datetime: at(4, 0),
+      end_datetime: at(4, 3),
+      crew_filled: 4,
+      crew_total: 4,
+      unit_numbers: ['E1'],
+    },
+  ];
+};
+
 const COMMUNITY_ENGAGEMENT = {
   total_public_events: 21,
   total_member_attendees: 160,
@@ -462,6 +511,39 @@ const HISTORY_CLEARANCE_STEPS: ClearanceStep[] = [
     blocked: false,
   },
 ];
+
+const HISTORY_STATIONS: HistoryListEntry[] = [
+  { id: 'station-1', name: 'Central Station', sort_order: 1, is_retired: false, usage_count: 7 },
+  { id: 'station-2', name: 'Hose Company No. 2', sort_order: 2, is_retired: true, usage_count: 3 },
+];
+
+const HISTORY_EVENT_TYPES: HistoryListEntry[] = [
+  { id: 'eventtype-1', name: 'Fire or incident', sort_order: 1, is_retired: false, usage_count: 4 },
+  { id: 'eventtype-2', name: 'Ceremony or celebration', sort_order: 2, is_retired: false, usage_count: 2 },
+];
+
+const HISTORY_APPARATUS_TYPES: HistoryListEntry[] = [
+  { id: 'apptype-1', name: 'Engine', sort_order: 1, is_retired: false, usage_count: 3 },
+  { id: 'apptype-2', name: 'Steamer', sort_order: 2, is_retired: false, usage_count: 1 },
+];
+
+const HISTORY_TIMELINE_ENTRY = {
+  key: 'event:e2e-event-1',
+  kind: 'event',
+  date: '1911-03-04',
+  precision: 'day',
+  circa: false,
+  end_date: null,
+  end_precision: null,
+  end_circa: false,
+  label: 'The Mill Street fire',
+  detail: 'Mill Street',
+  record_type: 'event',
+  record_id: 'e2e-event-1',
+  event_type_id: 'eventtype-1',
+  event_type_name: 'Fire or incident',
+  publication_level: 'members',
+};
 
 /** Answers a lookup list the way the API does: retired rows only on request. */
 const withRetired = <T extends { is_retired: boolean }>(rows: T[], request: Request): T[] =>
@@ -4334,6 +4416,97 @@ const routes = ({
     }),
   ],
 
+  // History phase 5: events, apparatus, the timeline and its three lists.
+  ['**/api/v1/history/stations?**', (request) => (empty ? [] : withRetired(HISTORY_STATIONS, request))],
+  ['**/api/v1/history/event-types?**', (request) => (empty ? [] : withRetired(HISTORY_EVENT_TYPES, request))],
+  [
+    '**/api/v1/history/events**',
+    () => ({
+      items: empty
+        ? []
+        : [
+            {
+              id: 'e2e-event-1',
+              title: 'The Mill Street fire',
+              start_date: '1911-03-04',
+              start_precision: 'day',
+              start_circa: false,
+              end_date: '1911-03-06',
+              end_precision: 'day',
+              end_circa: false,
+              place: 'Mill Street',
+              station_name: 'Central Station',
+              event_type_name: 'Fire or incident',
+              publication_level: 'members',
+            },
+            {
+              id: 'e2e-event-2',
+              title: 'Centennial parade',
+              start_date: '1923-01-01',
+              start_precision: 'year',
+              start_circa: true,
+              end_date: null,
+              end_precision: 'year',
+              end_circa: false,
+              place: null,
+              station_name: null,
+              event_type_name: 'Ceremony or celebration',
+              publication_level: 'draft',
+            },
+          ],
+      total: empty ? 0 : 2,
+    }),
+  ],
+  [
+    '**/api/v1/history/apparatus**',
+    () => ({
+      items: empty
+        ? []
+        : [
+            {
+              id: 'e2e-apparatus-1',
+              name: '1924 Ahrens-Fox pumper',
+              apparatus_type_name: 'Engine',
+              year: 1924,
+              make: 'Ahrens-Fox',
+              model: 'K-S-4',
+              designations: ['Engine 1', 'Engine 3', 'Reserve Engine'],
+              service_span: '1924–1968',
+              disposition: 'preserved',
+              publication_level: 'members',
+            },
+            {
+              id: 'e2e-apparatus-2',
+              name: 'Hand-drawn hose reel',
+              apparatus_type_name: null,
+              year: null,
+              make: null,
+              model: null,
+              designations: [],
+              service_span: 'c. 1890–',
+              disposition: 'unknown',
+              publication_level: 'draft',
+            },
+          ],
+      total: empty ? 0 : 2,
+    }),
+  ],
+  // After the apparatus glob above, which also matches this URL: a later
+  // `page.route` takes precedence.
+  ['**/api/v1/history/apparatus-types?**', (request) => (empty ? [] : withRetired(HISTORY_APPARATUS_TYPES, request))],
+  [
+    '**/api/v1/history/timeline/decades**',
+    () =>
+      empty
+        ? []
+        : [
+            { decade: 1910, count: 1 },
+            { decade: 1950, count: 3 },
+          ],
+  ],
+  ['**/api/v1/history/timeline?**', () => (empty ? [] : [HISTORY_TIMELINE_ENTRY])],
+  ['**/api/v1/history/today', () => (empty ? [] : [HISTORY_TIMELINE_ENTRY])],
+
   // Three pages now reject a payload that is valid JSON but not their declared
   // type, rather than substituting empty lists: an audit log that reads "no
   // events" over a broken endpoint, or a check-in board showing blank totals as
@@ -5307,6 +5480,9 @@ const routes = ({
     () => ({ ...request, ...EVENT_REQUEST_DETAIL }),
   ]),
   ['**/api/v1/dashboard/community-engagement**', () => COMMUNITY_ENGAGEMENT],
+  // The Outreach Overview's calendar and attention cards: one event short of
+  // volunteers, one with a full crew, one waiting to be closed out.
+  ['**/api/v1/events/outreach-calendar**', () => (empty ? [] : outreachCalendar())],
   ['**/api/v1/admin-hub/events/metrics', eventMetricSettings],
   ['**/api/v1/admin-hub/training/metrics', trainingMetricSettings],
   // The notifications page lists rules and needs a list, not the catch-all

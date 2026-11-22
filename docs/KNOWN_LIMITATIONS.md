@@ -1076,6 +1076,41 @@ Phase 4, documents (2026-11-14), ships with these:
 - **New dependency: pypdfium2** (PDFium bindings, 5.15.2) draws the first
   page; pypdf was already installed.
 
+Phase 5, events, apparatus and timelines (2026-11-21), ships with these:
+
+- **Stations are names, not records yet (owner decision 12).** Events and
+  unit numbers pick a station from a managed list, which is renamed, retired
+  and merged like sources, so a misspelling is fixed in one place. A station
+  has no address, dates or photos of its own until full station records
+  arrive; the list becomes them then.
+- **A truck from the fleet is copied once.** Its descriptive details are
+  copied when the History record is started and nothing syncs afterwards. No
+  price, VIN, plate, financing, insurance or maintenance figure is ever
+  copied. Its type and station are matched to History's lists by name only,
+  and its disposal is read from the disposal method's wording; a word it does
+  not recognize (donated, say) reads as "not known" for the Historian to set.
+- **No apparatus or event merge.** A duplicate apparatus or event is deleted
+  while it is a draft, or returned to draft and deleted. A person merge does
+  carry event links.
+- **A title reaches the timeline only with its own date.** Titles held
+  before phase 5 have no dates: the Historian adds a "held from" date on the
+  person's record, and switches the title on in settings, before a chief's
+  term appears. A title is never placed by its service period's start. On a
+  person's own page every dated title shows, switched on or not.
+- **"Today in history" is inside the app.** It is on the History home and the
+  Dashboard; the public website widget arrives with the public feed in phase 7.
+  Only entries dated to the day match; a 29 February entry shows on 28 February
+  in other years.
+- **The event-type filter narrows events only.** Milestones have no event type;
+  the timeline's milestone switches narrow those.
+- **The decade counts are computed each time.** The timeline reads every dated
+  record of the department to count its decades. Fine for a department's
+  archive; a collection in the tens of thousands of dated records would want a
+  stored count.
+- **No civilian fields (owner decision 7).** A civilian named in an event goes
+  in the description, which the clearance list checks before anything is
+  public, or in the encrypted research notes.
+
 ## Department Store — Decisions for the Owner (2026-11-13)
 
 From the department store follow-up
@@ -1708,12 +1743,31 @@ stored Guest Headcount Reminder templates. The document headings titled
 "Public Outreach Request Pipeline" were kept, because other pages link to their
 anchors.
 
+**Outreach Overview — built (2026-11-21).** The area's first page: needs
+attention (requests waiting for a reply, events short of people, events waiting
+to be closed out), a week and month planning calendar, quick actions and the
+year at a glance, read from `GET /events/outreach-calendar`. Boundaries drawn
+without a ruling:
+
+- **Which events show is `outreach_event_clause`, unchanged** — the rule
+  Outreach Impact counts by, so the two pages cannot disagree (pitfall #29). An
+  apparatus night whose template uses a non-public type (business meeting,
+  other) is therefore not on the Overview, though it stays on Apparatus Events.
+  Widening the rule would change Outreach Impact's counts too. "Tagged with a
+  CRR activity" joins the rule when Phase 3 adds activities.
+- **"Closed out" is attendance finalized**, per the 2026-11-20 decision
+  (completion on finalize). An event with a headcount but no finalize still
+  shows as waiting; a draft never does.
+- **"Short of people" counts open volunteer and crew seats together**, for
+  events not yet started in the next 60 days.
+- **New outreach event opens the ordinary event form** without a type preset;
+  the form takes a template, not a type, from its address.
+
 Decided for later phases, not yet built:
 
-- **Outreach Overview** as the area's first page — needs attention, upcoming
-  outreach with seats filled against needed, quick actions. An outreach event
-  is one scheduled from a request or tagged with an outreach type or CRR
-  activity. The planning view offers week and month, as Shift Scheduling does.
+- **Location data for CRR activities comes from a ZIP list bundled with the
+  app** (owner decision, 2026-11-21) — offline, so it works on Unraid and
+  air-gapped installs, and no ZIP code leaves the server.
 - **CRR activity tracking**, recordable both as an event and as a lightweight
   log entry. A department-configurable catalogue (smoke and CO alarm installs,
   home safety surveys, car seat inspections, extinguisher training, hands-only

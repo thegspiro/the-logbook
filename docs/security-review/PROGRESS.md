@@ -16,6 +16,57 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4547](https://github.com/thegspiro/the-logbook/pull/4547)**
+(branch `claude/security-review-security-audit-ip`): Feature 28 (Security,
+audit & IP), pass 14 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). All nine backend scope files byte-identical to pass 12/13's
+baseline. `core/security_middleware.py` carries only a benign 2-line
+addition to the shared `EXPORT_ENDPOINTS` allowlist beyond what pass 13
+already read (another feature's own export route, same shape pass 7
+accepted); the rest of that file's diff (sign-in rate limiting) is
+unchanged from pass 13's out-of-scope ruling. Three frontend files carry
+small cosmetic diffs (`StatGrid` adoption, AAA-contrast token sweep,
+`rwd-table` reflow) with no query/permission/data-flow change. 37 routes
+re-enumerated by AST, unchanged, all auth-gated. **0 fixed, 0 new security
+findings.** Both open items (SEC2-28-6, dead detector code) re-verified
+unchanged. Also fixed, unrelated to this feature: a forked Alembic chain
+(two heads landed separately since pass 13) — resolved with an empty merge
+revision. Full write-up: `docs/security-review/SEC2-28-security-audit-ip.md`'s
+**Pass 14** section.
+
+Row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
+analytics) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 14, PR #4543, merged as `0af595b72`), preserved for history</summary>
+
+**PR [#4543](https://github.com/thegspiro/the-logbook/pull/4543)**
+(branch `claude/security-review-integrations-p14`): Feature 27
+(Integrations), pass 14 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). PR #4541 (Feature 26, Forms, pass 14) merged (`2d97d8402`)
+since the last iteration; row 26 marked ✅ below. Real delta since pass 13:
+a new Historical Data Import undo sub-feature (`historical_import_undo.py`,
+1144 lines, two new routes), three small security-positive correctness
+fixes on the Salesforce/PayPal connect paths, and a new public
+PayPal.Me/email pair read end to end including its out-of-feature
+Storefront consumer. **0 fixed, 0 new security findings, 1 flagged
+(test-coverage only).** Also fixed, unrelated to this feature: a forked
+Alembic chain that had silently left the sandbox's database missing a real
+column, cascading into 321 unrelated test failures — resolved with an empty
+merge revision. Full write-up:
+`docs/security-review/INT-27-integrations.md`'s **Pass 14** section.
+
+Row 27 → ✅ (merged as `0af595b72`); next is Feature 28 (Security, audit &
+IP).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 26, Forms, pass 14, PR #4541, merged), preserved for history</summary>
+
 **PR [#4541](https://github.com/thegspiro/the-logbook/pull/4541)**
 (branch `claude/security-review-forms-p14` — prior branch names for this
 feature already carry merged PRs, most recently pass 13's PR #4234, so this
@@ -35,8 +86,9 @@ org_today(org)` keyword correctly), plus a cosmetic `StatGrid` swap in
 `FormResultsPanel.tsx`. **0 fixed, 0 newly flagged.** Full write-up:
 `docs/security-review/FORM-26-forms.md`'s **Pass 14** section.
 
-Row 26 → ✅ (pending this PR's merge); next is Feature 27 (Integrations) —
-re-check `list_pull_requests` fresh rather than trusting this note.
+Row 26 → ✅ (merged as `2d97d8402`); next was Feature 27 (Integrations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 14, PR #4520, merged), preserved for history</summary>
@@ -27379,8 +27431,8 @@ iteration's commit" rule.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 14)                                                                                                                                                                                                             | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (31 routes, added pass 13), `historical_staffing_*.py`                                                                                                                                                                | ⬜     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (33 routes incl. undo, added pass 14), `historical_staffing_*.py`, `historical_import_undo.py` (added pass 14)                                                                                                        | ✅     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ⬜     |
@@ -27447,6 +27499,75 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-22 — Feature 26 (Forms, pass 14) merged; Feature 27 (Integrations, pass 14): watchdog pickup, undo for Historical Data Import read in full, 0 fixed, 0 new security findings (1 flagged, test-coverage only)
+
+PR #4541 merged as `2d97d8402`. A fresh `list_pull_requests` (state=open)
+found no `claude/security-review-*` head, and row 27 was the next `⬜` row,
+confirmed directly against the table on a freshly pulled `main`.
+
+Baseline: PR #4235's head `7d1fe1518dc4` (pass 13's merge; this repo's
+shallow clone no longer carries the merge commit itself, so the PR's own
+head — tree-identical to the merge — was fetched directly and diffed
+against). Across eleven days of otherwise very heavy, unrelated repo
+activity (141 new migrations), real content in six files: `historical_import.py`
+(two new routes, +84/-5), a brand-new `historical_import_undo.py` (1144
+lines, new), `historical_staffing_commit.py`/`historical_staffing_plan.py`
+(a separate, already-merged feature PR, #4534), `integrations.py` (+56) and
+`schemas/integration.py` (+30), and `IntegrationsPage.tsx` (+204/-38). Every
+other declared file is byte-identical to pass 13.
+
+**Historical Data Import gets an undo**, one committed step at a time (owner
+decision 2026-11-16): `GET /{import_id}/undo` and `POST /{import_id}/undo/{step}`,
+both gated by the same `integrations.historical_import` permission as every
+other route in the file. Read the new 1144-line service in full: every query
+and delete filters `organization_id` (confirmed by name, not sampled); the
+one dynamically-built query (`count_shift_references`, a reflection-based
+`UNION ALL` over every table with a FK to `shifts.id`) and the one
+seemingly-bare `db.get(Shift, ...)` (in the separately-merged staffing-commit
+feature) both resolve from an already org-scoped `shift_id`, so neither is a
+cross-tenant gap; both use SQLAlchemy Core, not string-built SQL. JSON-column
+mutation on `record.results` goes through `copy.deepcopy` + reassignment
+throughout (Pitfall #12), dependent-step ordering is enforced
+(`_DEPENDENTS`), and former-member deletion is reference-counted first.
+Three small, independent, security-positive fixes on `integrations.py`
+(discard a stale Salesforce access token when its grant changes; require
+both new PayPal credentials together on a sandbox↔live environment switch)
+and a new public (non-secret, correctly excluded from redaction, HTML-escaped
+at every render site) PayPal.Me/email pair read end to end, including the
+out-of-feature consumer (Storefront's connected-PayPal button) that reads
+them. One LOW item flagged, test-coverage only: the new undo service has no
+explicit cross-org test, though every query it runs was traced by hand and
+found already scoped. Full write-up:
+`docs/security-review/INT-27-integrations.md`'s **Pass 14** section.
+
+**Also fixed, unrelated to this feature:** `validate_migrations.py --strict`
+found a forked Alembic chain (two heads landed separately in the pass-13→14
+window, neither touching a table the other writes) — blocking CI's
+Migration Chain job for every pull request. Worse than cosmetic: this
+sandbox's test database had been stamped at only one of the two heads, so
+`event_rsvps.is_volunteer` did not exist, cascading into 321 failures across
+unrelated suites on this pass's first scoped-suite run. Resolved with an
+empty `alembic merge` revision (`3f93727e84ba`); re-running `alembic upgrade
+head` applied the missing branch and the previously-failing files went green
+with no code change. Per CLAUDE.md's "no acceptable pre-existing errors"
+rule.
+
+**Completion gate:** `flake8==7.4.1`/`black==26.10.1 --check`/
+`isort==9.0.2 --check-only` on `app/ tests/ alembic/` all clean (verified
+under both the repo-root and backend-venv Python). `validate_migrations.py
+--strict` — 807 revisions, single head `3f93727e84ba` (after the merge-revision
+fix). `check_route_permissions.py --strict` — 329 routes, 0 errors/warnings
+(72 this feature's own, up from pass 13's 70). `generate_schema_docs.py
+--check` — up to date. `npm run typecheck` — 0 errors. `npm run lint` — exit 0. `npx vitest run src/pages/IntegrationsPage.test.tsx
+src/pages/historicalImport src/pages/scheduling/admin/historyImport` — 156
+passed (4 files, up from pass 13's 135). Scoped backend pytest (after
+`alembic upgrade head` applied the merge revision) — 12,923 passed, 24
+environment-only skips, 0 failed (the 321 failures the first run reported
+were the missing-column symptom above, not a code defect).
+
+Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit &
+IP) — re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-21 — Feature 25 (Messaging & notifications, pass 14) merged; Feature 26 (Forms, pass 14): watchdog pickup, real delta is a date/timezone fix on a shared helper plus a cosmetic StatGrid swap, 0 fixed, 0 new findings
 
