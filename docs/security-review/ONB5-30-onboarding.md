@@ -1,17 +1,18 @@
-# Security Review — Feature 30: Onboarding (passes 7–13)
+# Security Review — Feature 30: Onboarding (passes 7–14)
 
-**Prefix:** `ONB5` · **Rotation pass:** 13 (prior: module-audit iteration 25,
+**Prefix:** `ONB5` · **Rotation pass:** 14 (prior: module-audit iteration 25,
 app-review B25 (4 passes), security-review pass 1 — PR #1913 + follow-up
 (`docs/security-review/ONB2-30-onboarding.md`), pass 2 — PR #2093
 (`docs/security-review/ONB-30-onboarding.md`), passes 3–5 — PRs #2358, #2521,
 #2898 (`docs/security-review/ONB3-30-onboarding.md`), pass 6 — PR #2996,
 pass 7 — PR #3381, pass 8 — PR #3517 (both `docs/security-review/ONB4-30-onboarding.md`
 and this file), pass 9 — PR #3658 + recovery PR #3686 (ONB6-30-1/2/3, both this
-file), pass 10 — PR #3785, pass 11 — PR #3856, pass 12 — PR #4003) ·
+file), pass 10 — PR #3785, pass 11 — PR #3856, pass 12 — PR #4003, pass 13 —
+PR #4240) ·
 **Reviewed:** 2026-10-17 (pass 7), 2026-10-21 (pass 8), 2026-10-24 (pass 9,
 watchdog pickup), 2026-10-25 (pass 9 recovery), 2026-10-27 (pass 10, watchdog
 pickup), 2026-10-30 (pass 11, watchdog pickup), 2026-11-04 (pass 12, watchdog
-pickup), 2026-11-11 (pass 13, this PR)
+pickup), 2026-11-11 (pass 13), 2026-11-22 (pass 14, watchdog pickup)
 
 **Backend (pass 13):** `backend/app/api/v1/onboarding.py` (3,295 L, **26**
 unauthenticated bootstrap routes — unchanged count and auth posture from
@@ -41,6 +42,106 @@ onboarding-owned migration remains
 `20261009_1045_7e1a3c94d2b6_add_encryption_key_custody.py`, pass 7); the
 `public_info`-defaults backfill (`20261103_2316_289504a34d3c`, noted as
 pending at pass 12) is confirmed merged and unchanged.
+
+**Backend (pass 14):** same declared file list as pass 13, re-diffed in full
+against pass 13's merge (`deb9601f3`, PR #4240) rather than carried forward.
+`onboarding.py`, `services/onboarding.py`, `models/onboarding.py`,
+`utils/onboarding_security.py`, `email_test_helper.py`, and the other
+declared-but-usually-untouched files (`email_providers.py`,
+`microsoft_oauth.py`, `template_service.py`, `org_template_service.py`,
+`key_custody_service.py`, `system_notices.py` + its endpoint/schema,
+`upload_scanning.py`, `google_drive_storage.py`) are all byte-identical. The
+one real backend change is `org_template_registry.py` (+7/−1), read in full
+with its `TableSpec`/`null_columns` mechanism. **Frontend (pass 14):**
+`frontend/src/modules/onboarding/pages/positionTemplates.ts` (+4/−4, read in
+full) is the only frontend change under the feature's declared tree.
+
+---
+
+## Pass 14 (2026-11-22) — watchdog pickup, 0 fixed, 0 new findings; one independent export-scrub fix verified good
+
+**Step 0.** `list_pull_requests` (state=open) returned no PR whose head
+branch starts with `claude/security-review-`. PR #4553 (Feature 29, Reports &
+analytics, pass 16) had already merged (`89bdc2bff`), confirming row 30
+(Onboarding) as the next `⬜` row.
+
+**Scope check.** Pass 13 landed as PR #4240, merge commit `deb9601f3`.
+`git diff --stat deb9601f3..HEAD`, restricted to this feature's full declared
+file list (backend + frontend, as passes 7–13 defined it), found a real diff
+in exactly two files: `backend/app/services/org_template_registry.py` (+7/−1)
+and `frontend/src/modules/onboarding/pages/positionTemplates.ts` (+4/−4).
+Every other declared file is byte-identical since pass 13.
+
+- **`org_template_registry.py:328-334` — a new Training template field is
+  scrubbed on org-template export, closing a leak before it could open.**
+  `EventTemplate.training_details` (`models/event.py:663-671`) is a new JSON
+  column (owner decision 2026-11-20, landed by the Events feature, not this
+  rotation) holding an `instructor_id`/instructor name and a course id when a
+  Training event template is saved. The org-template export path
+  (`org_template_service.py`'s `_serialize_row`) walks every column of every
+  `INCLUDE`d table and writes it into a shareable template unless the column
+  is named in that table's `null_columns` — the same mechanism already used
+  for `settings` (device ids), `report_email_recipients` (email PII),
+  `apparatus_id`/`equipment_id`/`item_id` (physical-asset ids) elsewhere in
+  this same registry. Before this commit, `EventTemplate`'s `TableSpec` had
+  no `null_columns` entry, so exporting an org's templates (to share with
+  another department, per this feature's stated purpose) would have carried
+  the instructor's name and id and an org-local course id into the exported
+  file. The commit adds `null_columns=("training_details",)`, verified by
+  reading `_serialize_row` (`org_template_service.py:271-284`) directly: any
+  column in `null_columns_for(spec)` is forced to `out[name] = None` before
+  the generic `_scrub_json` pass runs, so the whole blob is nulled rather than
+  key-matched — correctly broader than `_scrub_json`'s key-based scrub, which
+  the accompanying code comment notes would not have caught
+  `instructor_id`/`name`. Traced end to end: `_select_rows` always fetches the
+  column (no column-level SQL projection), `_serialize_row` is the only
+  serialization path into the export file, and the null is applied
+  unconditionally, not behind any feature flag. **Verified good, no
+  finding** — this closes a real PII/cross-tenant exposure in the export
+  path, landed by the Events feature as part of shipping the new column
+  rather than by this rotation.
+- **`positionTemplates.ts` — cosmetic rename only.** `public_outreach`'s and
+  `community_outreach_team`'s `name`/`description` strings changed; their
+  `permissions` (`generateRolePermissions(modules, 'specialist', ['events',
+'documents'])` and `generateRolePermissions(modules, 'member')`
+  respectively) are unchanged, confirmed by diff. No security dimension.
+
+**Route inventory re-enumerated by AST from source** (not carried forward):
+walked every `@router.{get,post,put,patch,delete}` decorator in
+`onboarding.py` directly — **26 routes**, identical method/path/function set
+to pass 13 (`onboarding.py` is byte-identical, so the auth-dependency shape
+per route is unchanged by construction, not merely assumed).
+`check_route_permissions.py --strict`: 338 routes repo-wide, 0
+errors/warnings (grew from 305 at pass 13 — other features' new routes, not
+this one's).
+
+**Still OPEN (by design), unchanged — re-confirmed via the byte-identical
+diff rather than re-read line by line:** **ONB-7** (no numeric rate cap
+specifically on `/session/roles` beyond the 200-item size cap).
+`ITTeamMemberRequest.email` (`onboarding.py:511`) is still `str`, not
+`EmailStr` (intentionally loose, matching `create_it_team_users`'s
+skip-if-invalid behavior).
+
+**0 new findings.**
+
+### Completion gate (pass 14)
+
+| Check                                                                                                                                                                                                 | Result                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `python3.13 -m flake8 app/ tests/ alembic/` (CI pins 7.4.1; sandbox has 7.5.0)                                                                                                                        | ✅ 0 violations                                |
+| `python3.13 -m black --check app/ tests/ alembic/` (26.10.1, CI-pinned)                                                                                                                               | ✅ clean, 3,415 files unchanged                |
+| `python3.13 -m isort --check-only app/ tests/ alembic/` (9.0.2, CI-pinned)                                                                                                                            | ✅ clean                                       |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                  | ✅ 818 revisions, single head `dd939b45d6c0`   |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                 | ✅ 338 routes, 0 errors/warnings               |
+| `pytest tests/ -q -k "onboard or org_template or template_service or key_custody or system_notices or gmail_service_account or email_provider or encrypt_email or position_kind or position_seeding"` | ✅ 725 passed, 1 skipped (pywebpush, env-only) |
+| `cd frontend && npm run typecheck`                                                                                                                                                                    | ✅ 0 errors                                    |
+| `cd frontend && npm run lint` (`--max-warnings 10`)                                                                                                                                                   | ✅ 0 errors/warnings                           |
+| `npx vitest run src/modules/onboarding`                                                                                                                                                               | ✅ 509 passed (44 files)                       |
+
+No `KNOWN_LIMITATIONS.md` change needed. Rotation row 30 → ✅ (pending this
+PR's merge). Next: Feature 31 (Scheduled tasks) — unless a later watchdog
+pass already advanced further; check `list_pull_requests` fresh rather than
+trusting this note.
 
 ---
 
