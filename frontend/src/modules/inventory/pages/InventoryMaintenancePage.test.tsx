@@ -614,6 +614,13 @@ describe('InventoryMaintenancePage — recording a scheduled inspection', () => 
 
 // W42-6: an item that needs inspecting but has never had one has no due date,
 // so the Due Items list never showed it.
+// makeItem gives every item a due date; a never-inspected one has none.
+const neverInspected = (overrides: Partial<InventoryItem>): InventoryItem => {
+  const item = makeItem(overrides);
+  delete item.next_inspection_due;
+  return item;
+};
+
 describe('InventoryMaintenancePage — items never inspected', () => {
   const turnout = { id: 'cat-1', name: 'Turnout Gear', requires_maintenance: true };
 
@@ -625,8 +632,8 @@ describe('InventoryMaintenancePage — items never inspected', () => {
     mockToastError.mockReset();
     mockGetCategories.mockResolvedValue([turnout]);
     mockGetNeverInspectedItems.mockResolvedValue([
-      makeItem({ id: 'coat', name: 'Structural Coat', category_id: 'cat-1', next_inspection_due: undefined }),
-      makeItem({ id: 'meter', name: 'Gas Meter', inspection_interval_days: 90, next_inspection_due: undefined }),
+      neverInspected({ id: 'coat', name: 'Structural Coat', category_id: 'cat-1' }),
+      neverInspected({ id: 'meter', name: 'Gas Meter', inspection_interval_days: 90 }),
     ]);
   });
 
