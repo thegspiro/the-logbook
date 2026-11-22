@@ -1738,6 +1738,13 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxTinyText: 0,
     expectText: 'Regular Business Meeting — November 2026',
   },
+  // The token rides in the fragment, as the ballot email sends it.
+  {
+    path: '/ballot#token=e2e-ballot-token',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: 'Admit Alexandra Montgomery-Fitzgerald to full membership',
+  },
 ];
 
 // Useful when diagnosing one newly exposed permission-gated body locally;

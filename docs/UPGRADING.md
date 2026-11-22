@@ -830,6 +830,20 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Store payment reminders get their own email choice (2026-11-22)
+
+Nothing blocks a restart, and nothing is migrated.
+
+- **A member who turned off Store announcements receives store payment
+  reminders again.** Reminders were part of that group, so muting "ordering is
+  open" also muted being told about money owed. They are now the separate
+  optional **Your store balance** kind (`store_balance`), on by default, with
+  no carry-over from the announcements choice (owner decision, W67b-17). A
+  member can turn it off on their notification settings; a department can
+  make it required.
+- **Store announcements now covers only** the ordering-window notices and the
+  vendor-order update.
+
 ### Leave requests: an approver's own request goes to the Chief; approver cover (2026-11-21)
 
 Nothing blocks a restart. Migration `a9763f96e072` adds a column to
