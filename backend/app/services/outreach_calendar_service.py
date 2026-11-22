@@ -141,7 +141,7 @@ class OutreachCalendarService:
         rows = []
         for event in events:
             eid = str(event.id)
-            request = linked_requests.get(eid)
+            origin = linked_requests.get(eid)
             sheet = sheets.get(str(owners[eid].id))
             crew: Optional[tuple[int, int]] = (
                 crew_counts.get(eid, (0, 0)) if eid in planned else None
@@ -161,9 +161,9 @@ class OutreachCalendarService:
                     )
                     or event.location,
                     "is_draft": bool(event.is_draft),
-                    "request_id": str(request.id) if request else None,
+                    "request_id": str(origin.id) if origin else None,
                     "request_organization": (
-                        request.organization_name if request else None
+                        origin.organization_name if origin else None
                     ),
                     "volunteers_filled": sheet[0] if sheet else None,
                     "volunteers_total": sheet[1] if sheet else None,
