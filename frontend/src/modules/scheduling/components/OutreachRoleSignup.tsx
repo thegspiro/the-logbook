@@ -70,7 +70,12 @@ const OutreachRoleSignup: React.FC<OutreachRoleSignupProps> = ({ shiftId, roles,
           </select>
         </div>
       )}
-      <button type="button" onClick={() => void signUp()} disabled={busy} className="btn-primary">
+      <button
+        type="button"
+        onClick={() => void signUp()}
+        disabled={busy}
+        className="btn-primary inline-flex items-center gap-2"
+      >
         {busy ? (
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         ) : (
