@@ -769,6 +769,13 @@ export const ALL_ROUTES: RouteCheck[] = [
     expectText: 'County burn ban in effect through Sunday',
   },
   { path: '/admin-hours', maxSmallTargets: 0, maxTinyText: 0 },
+  {
+    path: '/admin-hours/manage',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['admin_hours.manage'],
+    expectText: 'Public education and community risk reduction',
+  },
   { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory/my-equipment', maxSmallTargets: 0, maxTinyText: 0 },
@@ -915,6 +922,13 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxTinyText: 0,
     permissions: ['inventory.check_manage'],
   },
+  {
+    path: '/inventory/admin/checklists/templates/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage'],
+    expectText: 'Build from scratch',
+  },
   // The equipment-check screens a crew and its officers use day to day. Each
   // was exempt until helpers.ts served the equipment-check reads; four of them
   // threw on the catch-all's `{}`. One grant set for all six, so they share a
@@ -1028,6 +1042,13 @@ export const ALL_ROUTES: RouteCheck[] = [
   // heading is an h2, so a route stuck on it has no h1 at all.
   // manage: so its header buttons render — see the note on /events.
   { path: '/apparatus', maxSmallTargets: 0, maxTinyText: 0, permissions: ['apparatus.view', 'apparatus.manage'] },
+  {
+    path: '/apparatus/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['apparatus.view', 'apparatus.create'],
+    expectText: 'Add Apparatus',
+  },
   { path: '/apparatus-basic', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/locations', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/locations/qr-codes', maxSmallTargets: 0, maxTinyText: 0 },
@@ -1097,6 +1118,13 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/action-items', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/forms', maxSmallTargets: 0, maxTinyText: 0, permissions: ['forms.manage'] },
   { path: '/store', maxSmallTargets: 0, maxTinyText: 0, permissions: ['storefront.view'] },
+  {
+    path: '/store/orders',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['storefront.view'],
+    expectText: 'ORD-2026-0142',
+  },
   // The store console: its overview, Orders and Payments tabs crashed on a
   // malformed response; see the Training hub block above.
   {
@@ -1157,6 +1185,16 @@ export const ALL_ROUTES: RouteCheck[] = [
   // dashboard under the name "/settings" — a green line for a page that never
   // rendered. Granting it is what makes the entry mean anything.
   { path: '/settings', maxSmallTargets: 0, maxTinyText: 0, permissions: ['settings.manage'] },
+  // Role management reads /roles, which ten other screens also read; the
+  // `roles` fixture serves it here only.
+  {
+    path: '/settings/roles',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['positions.manage_permissions'],
+    fixture: { roles: true },
+    expectText: 'Apparatus & Equipment Committee',
+  },
   // The second of the seven SettingsLayout screens, and the only other one that
   // needs no grant. Two screens is what keeps the shared shell honest: a fix to
   // the section strip that only suits one screen's section list fails here.
@@ -1608,6 +1646,23 @@ export const ALL_ROUTES: RouteCheck[] = [
     expectText: 'Transcription',
   },
   { path: '/history/albums', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Centennial Parade, 1923' },
+  { path: '/history/timeline', maxSmallTargets: 0, maxTinyText: 0, expectText: 'The Mill Street fire' },
+  { path: '/history/events', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Centennial parade' },
+  {
+    path: '/history/events/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'What happened',
+  },
+  { path: '/history/apparatus', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Hand-drawn hose reel' },
+  {
+    path: '/history/apparatus/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'Unit numbers',
+  },
   {
     path: '/history/honor-roll',
     maxSmallTargets: 0,
@@ -1622,9 +1677,36 @@ export const ALL_ROUTES: RouteCheck[] = [
     expectText: '3 records · retired',
   },
   { path: '/medical-supplies', maxSmallTargets: 0, maxTinyText: 0, permissions: ['inventory.view_medical'] },
+  {
+    path: '/medical-supplies/categories',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.view_medical', 'inventory.manage'],
+    fixture: { medicalCategories: true },
+    expectText: 'Airway management',
+  },
   { path: '/ip-security', maxSmallTargets: 0, maxTinyText: 0, permissions: ['security.manage'] },
+  {
+    path: '/ip-security/my-requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: '203.0.113.48',
+  },
   // Both are settings.manage-gated, so they cost no extra sign-in between them.
   { path: '/integrations', maxSmallTargets: 0, maxTinyText: 0, permissions: ['settings.manage'] },
+  {
+    path: '/claude/connections',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: 'Claude on the station tablet',
+  },
+  {
+    path: '/integrations/historical-import',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['integrations.historical_import'],
+    expectText: 'Historical Data Import',
+  },
   { path: '/admin/public-portal', maxSmallTargets: 0, maxTinyText: 0, permissions: ['settings.manage'] },
   //: The onboarding wizard is 22 routes and none was measured. It is also the
   //: one flow reached before any session exists — a chief standing in the
@@ -1641,6 +1723,21 @@ export const ALL_ROUTES: RouteCheck[] = [
   //: coverage. `skipLinkTarget.test.ts` checks the assumption directly instead,
   //: on every page that owns its shell.
   { path: '/onboarding/start', maxSmallTargets: 0, maxTinyText: 0 },
+  // The pages a member reaches before signing in, from an email link or the
+  // sign-in screen, and as often as not on a phone. Each renders the same
+  // whether or not a session exists, so the pass's sign-in does not change
+  // what is measured.
+  { path: '/forgot-password', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Send Reset Link' },
+  // The token rides in the fragment, as the reset email sends it.
+  { path: '/reset-password#token=e2e-reset-token', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Set New Password' },
+  { path: '/privacy', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Privacy Policy' },
+  { path: '/terms', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Terms of Service' },
+  {
+    path: '/public/minutes',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: 'Regular Business Meeting — November 2026',
+  },
 ];
 
 // Useful when diagnosing one newly exposed permission-gated body locally;

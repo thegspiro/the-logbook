@@ -91,7 +91,14 @@ const AdminHoursManagePage: React.FC = () => {
       />
 
       {/* Tabs */}
-      <div className="bg-theme-surface hscroll mb-6 flex gap-1 rounded-lg p-1">
+      {/* Five tabs need ~395px; under that the row scrolls sideways rather
+          than squeezing the labels. */}
+      <div
+        className="bg-theme-surface hscroll mb-6 flex gap-1 rounded-lg p-1"
+        data-mobile-scroll-region
+        role="group"
+        aria-label="Admin hours sections"
+      >
         {TAB_KEYS.map((tab) => (
           <button
             key={tab}

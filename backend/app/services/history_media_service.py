@@ -39,6 +39,7 @@ from app.models.history import (
     HistoryAlbumItem,
     HistoryClearanceRequest,
     HistoryMedia,
+    HistoryMediaApparatusTag,
     HistoryMediaFile,
     HistoryMediaTag,
     HistoryRevision,
@@ -52,6 +53,11 @@ from app.services import file_storage_service as file_storage
 from app.services import history_media_files as media_files
 from app.services.consent_service import ConsentService
 from app.services.file_storage_service import FileStorageService, StorageArea
+from app.services.history_records import (
+    apparatus_tag_views,
+    public_apparatus_names,
+    validated_apparatus_ids,
+)
 from app.services.history_service import (
     HistoryService,
     Viewer,
@@ -138,6 +144,9 @@ class HistoryMediaService:
             selectinload(HistoryMedia.files),
             selectinload(HistoryMedia.tags).selectinload(HistoryMediaTag.member),
             selectinload(HistoryMedia.source),
+            selectinload(HistoryMedia.apparatus_tags).selectinload(
+                HistoryMediaApparatusTag.apparatus
+            ),
         )
 
     async def get_media(
@@ -176,6 +185,7 @@ class HistoryMediaService:
         decade: Optional[int] = None,
         album_id: Optional[str] = None,
         member_id: Optional[str] = None,
+        apparatus_id: Optional[str] = None,
         level: Optional[PublicationLevel] = None,
         limit: int = 60,
         offset: int = 0,
@@ -223,6 +233,15 @@ class HistoryMediaService:
                     select(HistoryMediaTag.media_id).where(
                         HistoryMediaTag.media_id == HistoryMedia.id,
                         HistoryMediaTag.member_id == str(member_id),
+                    )
+                )
+            )
+        if apparatus_id:
+            conditions.append(
+                exists(
+                    select(HistoryMediaApparatusTag.media_id).where(
+                        HistoryMediaApparatusTag.media_id == HistoryMedia.id,
+                        HistoryMediaApparatusTag.apparatus_id == str(apparatus_id),
                     )
                 )
             )
@@ -305,6 +324,9 @@ class HistoryMediaService:
             for tag in sorted(item.tags, key=lambda t: t.member.last_name)
             if self.history.can_read(viewer, tag.member)
         ]
+        view["apparatus"] = apparatus_tag_views(
+            viewer.can_view_archive, (tag.apparatus for tag in item.apparatus_tags)
+        )
         return view
 
     async def full_view(
@@ -336,6 +358,9 @@ class HistoryMediaService:
                     }
                     for tag in sorted(item.tags, key=lambda t: t.member.last_name)
                 ],
+                "apparatus": apparatus_tag_views(
+                    True, (tag.apparatus for tag in item.apparatus_tags)
+                ),
                 "published_at": item.published_at,
                 "revision_number": item.revision_number,
                 "public_revision_number": item.public_revision_number,
@@ -410,6 +435,9 @@ class HistoryMediaService:
             )
         data["kind"] = _enum_value(item.kind)
         data["tag_member_ids"] = sorted(tag.member_id for tag in item.tags)
+        data["tag_apparatus_ids"] = sorted(
+            tag.apparatus_id for tag in item.apparatus_tags
+        )
         original = self.file_of(item, MediaFileRole.ORIGINAL)
         data["original_sha256"] = original.sha256 if original else None
         return data
@@ -421,7 +449,13 @@ class HistoryMediaService:
             {
                 key: value
                 for key, value in self._snapshot(item).items()
-                if key not in ("research_notes", "tag_member_ids", "source_id")
+                if key
+                not in (
+                    "research_notes",
+                    "tag_member_ids",
+                    "tag_apparatus_ids",
+                    "source_id",
+                )
             }
         )
         snapshot["source_name"] = item.source.name if item.source else None
@@ -429,6 +463,9 @@ class HistoryMediaService:
             display_name(tag.member)
             for tag in item.tags
             if tag.member.publication_level == PublicationLevel.PUBLIC
+        )
+        snapshot["apparatus"] = public_apparatus_names(
+            tag.apparatus for tag in item.apparatus_tags
         )
         return snapshot
 
@@ -747,6 +784,43 @@ class HistoryMediaService:
         if reloaded is None:
             raise ValueError("This item could not be read back")
         return await self._after_edit(reloaded, True, "Tags changed", actor_id)
+
+    async def replace_apparatus_tags(
+        self, item: HistoryMedia, apparatus_ids: list[str], actor_id: str
+    ) -> HistoryMedia:
+        """Set the apparatus a photo, recording or film shows. A change is
+        substantial, as a change of people is."""
+        wanted = await validated_apparatus_ids(
+            self.db, item.organization_id, apparatus_ids
+        )
+        current = {tag.apparatus_id for tag in item.apparatus_tags}
+        if set(wanted) == current:
+            return item
+        stale = [apparatus_id for apparatus_id in current if apparatus_id not in wanted]
+        if stale:
+            await self.db.execute(
+                delete(HistoryMediaApparatusTag).where(
+                    HistoryMediaApparatusTag.media_id == item.id,
+                    HistoryMediaApparatusTag.apparatus_id.in_(stale),
+                )
+            )
+        for apparatus_id in wanted:
+            if apparatus_id not in current:
+                self.db.add(
+                    HistoryMediaApparatusTag(
+                        media_id=item.id,
+                        apparatus_id=apparatus_id,
+                        created_by=actor_id,
+                    )
+                )
+        item.updated_by = actor_id
+        await self.db.flush()
+        reloaded = await self.get_media(item.organization_id, item.id)
+        if reloaded is None:
+            raise ValueError("This item could not be read back")
+        return await self._after_edit(
+            reloaded, True, "Apparatus tags changed", actor_id
+        )
 
     async def delete(self, item: HistoryMedia) -> list[str]:
         """Remove a draft item and its records. Returns the stored references

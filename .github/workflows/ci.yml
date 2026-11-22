@@ -1173,11 +1173,11 @@ jobs:
     # the exact loss the note at the top of this file warns about and the thing
     # that cancelled #2890 twice.
     #
-    # The legs hold four, four, three and three `@sweep` tests (see the
-    # matrix below). Budgets are 15 minutes for a mobile-accessibility part and
-    # 20 for a dialogs or presentation part, so the most a leg can spend is
-    # the second's three accessibility parts and one dialogs part: 65. Setup
-    # measured 0.4-0.6 min on 2026-10-04 (the Playwright cache hits); 70
+    # Each of the five sweep legs holds three `@sweep` tests (see the matrix
+    # below). Budgets are 15 minutes for a mobile-accessibility part, 20 for a
+    # dialogs part and 13 for a presentation part, so the most a leg can spend
+    # is the third's one accessibility part and two dialogs parts: 55. Setup
+    # measured 0.4-0.6 min on 2026-10-04 (the Playwright cache hits); 60
     # leaves the 3 min the cold-cache install needs when the lockfile hash
     # invalidates it, and two more. Re-derive this if a @sweep budget, a
     # sweep's number of parts or the sweep shard count changes — the spec
@@ -1187,7 +1187,7 @@ jobs:
     # runs out its budget fails once and the leg moves on; on 2026-11-22 a
     # presentation part that did retry spent three budgets and was cancelled
     # here at 75 minutes with nothing reported (run 44940079030).
-    timeout-minutes: 70
+    timeout-minutes: 60
     # No `needs:` on another test job — see the note on
     # backend-test-integration.
     defaults:
@@ -1206,27 +1206,30 @@ jobs:
         # runners idle, so the wall clock barely moved.
         #
         # Splitting the tag out gives the sweeps runners of their own and
-        # leaves the other tests to share two. Each sweep is cut into parts
-        # (`routesInPart` in e2e/mobile-routes.ts): seven of
-        # mobile-accessibility at 4-7 minutes each, three of mobile-dialogs at
-        # 6-9, four of mobile-presentation at about 7. Because the fourteen
-        # tests are near enough equal, `--shard`'s balance by count is a
-        # balance by time: `--shard=i/4` deals them 4, 4, 3, 3, about 21-25
-        # minutes a leg. More legs would shorten that for the same runner time
-        # and more queued jobs; fewer would lengthen it. After changing a part
-        # count or the leg count, list the deal with `npx playwright test
-        # --project=chromium --grep @sweep --shard=i/4 --list` and re-derive
-        # the cap above. e2eSweepTagIntegrity.test.ts fails if a long test
-        # forgets the tag.
+        # leaves the other tests to share two. Each sweep is cut into parts of
+        # about ten minutes or less (`routesInPart` in e2e/mobile-routes.ts):
+        # seven of mobile-accessibility, three of mobile-dialogs, five of
+        # mobile-presentation. Because the fifteen tests are of similar
+        # length, `--shard`'s balance by count is close to a balance by time,
+        # and `--shard=i/5` gives each leg three of them. The fifth leg came
+        # with presentation's third to fifth parts (2026-11-22), so a leg still
+        # runs three tests. More legs would
+        # shorten a leg for the same runner time and more queued jobs; fewer
+        # would lengthen it. After changing a part count or the leg count,
+        # list the deal with `npx playwright test --project=chromium --grep
+        # @sweep --shard=i/5 --list` and re-derive the cap above.
+        # e2eSweepTagIntegrity.test.ts fails if a long test forgets the tag.
         leg:
-          - name: sweep 1/4
-            select: --grep @sweep --shard=1/4
-          - name: sweep 2/4
-            select: --grep @sweep --shard=2/4
-          - name: sweep 3/4
-            select: --grep @sweep --shard=3/4
-          - name: sweep 4/4
-            select: --grep @sweep --shard=4/4
+          - name: sweep 1/5
+            select: --grep @sweep --shard=1/5
+          - name: sweep 2/5
+            select: --grep @sweep --shard=2/5
+          - name: sweep 3/5
+            select: --grep @sweep --shard=3/5
+          - name: sweep 4/5
+            select: --grep @sweep --shard=4/5
+          - name: sweep 5/5
+            select: --grep @sweep --shard=5/5
           # Two workers on the `rest` legs only. playwright.config.ts runs CI
           # at one worker, which left three of a runner's four cores idle for
           # the 21-23 minutes each of these legs took. Before this was turned

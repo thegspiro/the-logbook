@@ -16,6 +16,93 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (branch `claude/friendly-babbage-n4b791`)**: Feature 30 (Onboarding),
+pass 14 — watchdog pickup (the dedicated `/loop 30m /security-review`
+session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). This
+session's own environment restricts pushes to its assigned branch, so the PR
+is opened from `claude/friendly-babbage-n4b791` rather than a
+`claude/security-review-onboarding-pNN` name — recorded here so the next
+iteration's Step 0 finds it.
+
+PR #4553 (Feature 29, Reports & analytics, pass 16) had already merged
+(`89bdc2bff`) before this iteration started; row 29 marked ✅ below. Real
+delta since pass 13's merge (`deb9601f3`, PR #4240): a new `null_columns`
+entry scrubbing the new `EventTemplate.training_details` column (instructor
+identity + an org-local course id) out of org-template exports, landed by the
+Events feature when it added that column, plus a cosmetic position-template
+rename with no permission change. **0 fixed, 0 new findings** — the export
+scrub was verified end to end against `org_template_service.py`'s
+`_serialize_row` and found to close a real PII leak before it could ship.
+26 routes, unchanged. See
+`docs/security-review/ONB5-30-onboarding.md`'s **Pass 14** section for the
+full trace.
+
+Row 30 → ✅ (pending this PR's merge); next is Feature 31 (Scheduled tasks)
+— re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 16, merged as `89bdc2bff`), preserved for history</summary>
+
+**PR (branch `claude/friendly-babbage-v1mcno`)**: Feature 29 (Reports &
+analytics), pass 16 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). This session's own environment restricts pushes to its
+assigned branch, so the PR is opened from `claude/friendly-babbage-v1mcno`
+rather than a `claude/security-review-reports-analytics-pNN` name — recorded
+here so the next iteration's Step 0 finds it.
+
+PR #4547 (Feature 28, Security, audit & IP, pass 14) had already merged
+(`78809b873`) before this iteration started; row 28 marked ✅ below. Real
+delta since pass 15's merge (`413ab36e6`, PR #4238): a new server-side
+`POST /reports/export` (PDF/CSV, audited), a new
+`GET /dashboard/community-engagement/events` backing the same report's
+export, leave periods now surfaced on the Annual Training and Program
+Requirement Progress reports (RPT5-29-1's follow-through), and voting
+eligibility on the attendance dashboard now reusing the election gate's own
+rule instead of re-deriving it. **0 fixed, 0 new findings** — every new
+surface traced and found already using the safe patterns (`SafeCsvWriter`,
+escaped PDF cells, org-scoped by-id checks, in-org FK validation, row
+locking). A pre-existing, unrelated forked Alembic chain was found but left
+to the open PR (#4549) already fixing it, to avoid adding a third fork.
+37→38 routes. See `docs/security-review/RPT6-29-reports-analytics.md`'s
+**Pass 16** section for the full trace.
+
+Row 29 → ✅ (pending this PR's merge); next is Feature 30 (Onboarding) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 14, PR #4547, merged), preserved for history</summary>
+
+**PR [#4547](https://github.com/thegspiro/the-logbook/pull/4547)**
+(branch `claude/security-review-security-audit-ip`): Feature 28 (Security,
+audit & IP), pass 14 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). All nine backend scope files byte-identical to pass 12/13's
+baseline. `core/security_middleware.py` carries only a benign 2-line
+addition to the shared `EXPORT_ENDPOINTS` allowlist beyond what pass 13
+already read (another feature's own export route, same shape pass 7
+accepted); the rest of that file's diff (sign-in rate limiting) is
+unchanged from pass 13's out-of-scope ruling. Three frontend files carry
+small cosmetic diffs (`StatGrid` adoption, AAA-contrast token sweep,
+`rwd-table` reflow) with no query/permission/data-flow change. 37 routes
+re-enumerated by AST, unchanged, all auth-gated. **0 fixed, 0 new security
+findings.** Both open items (SEC2-28-6, dead detector code) re-verified
+unchanged. Also fixed, unrelated to this feature: a forked Alembic chain
+(two heads landed separately since pass 13) — resolved with an empty merge
+revision. Full write-up: `docs/security-review/SEC2-28-security-audit-ip.md`'s
+**Pass 14** section.
+
+Row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
+analytics) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 14, PR #4543, merged as `0af595b72`), preserved for history</summary>
+
 **PR [#4543](https://github.com/thegspiro/the-logbook/pull/4543)**
 (branch `claude/security-review-integrations-p14`): Feature 27
 (Integrations), pass 14 — watchdog pickup (the dedicated `/loop 30m
@@ -33,8 +120,10 @@ column, cascading into 321 unrelated test failures — resolved with an empty
 merge revision. Full write-up:
 `docs/security-review/INT-27-integrations.md`'s **Pass 14** section.
 
-Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit &
-IP) — re-check `list_pull_requests` fresh rather than trusting this note.
+Row 27 → ✅ (merged as `0af595b72`); next is Feature 28 (Security, audit &
+IP).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 26, Forms, pass 14, PR #4541, merged), preserved for history</summary>
@@ -27404,9 +27493,9 @@ iteration's commit" rule.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (33 routes incl. undo, added pass 14), `historical_staffing_*.py`, `historical_import_undo.py` (added pass 14)                                                                                                        | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ⬜     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ⬜     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ✅     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ✅     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                                                   | ⬜     |
@@ -27471,6 +27560,51 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-22 — Feature 28 (Security, audit & IP, pass 14) merged; Feature 29 (Reports & analytics, pass 16) merged; Feature 30 (Onboarding, pass 14): watchdog pickup, one independent export-scrub fix verified good, 0 fixed, 0 new findings
+
+PR #4547 merged as `78809b873`, and PR #4553 merged as `89bdc2bff`, both
+since the last log entry below; rows 28 and 29 marked ✅ above. A fresh
+`list_pull_requests` (state=open) found no `claude/security-review-*` head,
+confirming row 30 (Onboarding) as the next `⬜` row.
+
+Baseline `deb9601f3` (pass 13's merge, PR #4240). Diffed the feature's full
+declared file list against it directly: every file is byte-identical except
+`backend/app/services/org_template_registry.py` (+7/−1) and
+`frontend/src/modules/onboarding/pages/positionTemplates.ts` (+4/−4).
+
+The real backend delta is a new `null_columns=("training_details",)` entry
+on `EventTemplate`'s `TableSpec` in the org-template export registry. The
+Events feature added `EventTemplate.training_details` (a JSON column
+carrying an instructor's name/id and an org-local course id) on 2026-11-20,
+and without this entry the org-template export path — which turns one
+department's templates into a file meant to be shared with another
+department — would have carried that instructor identity and course id
+straight into the export. Traced `_serialize_row` in
+`org_template_service.py` directly: a `null_columns` entry forces the whole
+column to `None` before serialization, unconditionally, the same mechanism
+already used for `settings`, `report_email_recipients`,
+`apparatus_id`/`equipment_id`/`item_id` elsewhere in the same registry.
+**Verified good, no finding** — a security-positive fix landed by another
+feature's own commit, not by this rotation. The frontend delta is a cosmetic
+position-template name/description change with no permission change.
+
+Route inventory re-enumerated by AST from source: 26 routes, unchanged from
+pass 13. Both previously-OPEN items (ONB-7's rate-cap design choice, and
+`ITTeamMemberRequest.email`'s intentionally-loose `str` typing) are
+unchanged, confirmed via the byte-identical core files rather than re-read
+line by line.
+
+**Completion gate:** `flake8`, `black --check` and `isort --check-only` on
+`app/ tests/ alembic/` are all clean. `validate_migrations.py --strict`
+reports 818 revisions and a single head, `dd939b45d6c0`.
+`check_route_permissions.py --strict` checked 338 routes with 0 errors and 0
+warnings. The scoped backend suite had 725 passed and 1 environment-only
+skip (`pywebpush`). `npm run typecheck` reports 0 errors, `npm run lint`
+reports 0 errors/warnings, and `npx vitest run src/modules/onboarding`
+reports 509 passed (44 files).
+
+Row 30 → ✅ (pending this PR's merge). Next is Feature 31 (Scheduled tasks).
 
 ### 2026-11-22 — Feature 26 (Forms, pass 14) merged; Feature 27 (Integrations, pass 14): watchdog pickup, undo for Historical Data Import read in full, 0 fixed, 0 new security findings (1 flagged, test-coverage only)
 

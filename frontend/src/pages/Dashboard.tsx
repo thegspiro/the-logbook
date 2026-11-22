@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { formatRelativeTime } from '../hooks/useRelativeTime';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
@@ -17,6 +17,7 @@ import ChiefOperationsDashboard from '../components/dashboard/ChiefOperationsDas
 import { canViewChiefDashboard } from '../components/dashboard/chiefWidgetRegistry';
 import OrganizationSetupWidget from '../components/dashboard/OrganizationSetupWidget';
 import WeatherAlertBanner from '../components/dashboard/WeatherAlertBanner';
+import { lazyOptional } from '../utils/lazyOptional';
 import { READINESS_WINDOW_DAYS, currentCredentials } from '../utils/readiness';
 import type { ReadinessCert } from '../utils/readiness';
 import { LinkifiedText } from '../components/ux';
@@ -102,6 +103,13 @@ import {
   stackUnreadCount,
 } from '../utils/notificationStacks';
 
+// Lazy: the Dashboard is in the first load, and the card brings the History
+// module's client and formatting (DOMPurify among it) with it, which took the
+// first load over its budget. A department without History never downloads it.
+// Optional, not lazyWithRetry: a card that will not load (offline, a dropped
+// signal) is left out rather than reloading the Dashboard around it.
+const TodayInHistoryCard = lazyOptional(() => import('../modules/history/components/TodayInHistoryCard'));
+
 /**
  * Main Dashboard Component — "station board"
  *
@@ -112,6 +120,7 @@ import {
  * Organization tab so
  * it does not outrank a member's own work.
  */
+
 const INSTALL_BANNER_DISMISSED_KEY = 'installBannerDismissed';
 
 /** Days the "Next 30 Days" list covers, counting today as day one. */
@@ -1920,6 +1929,14 @@ const Dashboard: React.FC = () => {
               {/* First thing a new member sees, because the dashboard is where
                   they land and nothing here pointed at the lessons before. */}
               <DashboardOrientation />
+              {/* "Today in history" for any member, when the department keeps
+                  its history here. It hides itself on a day with nothing to
+                  show, so it never takes room for an empty card. */}
+              {!modulesLoading && isModuleOn('history') && (
+                <Suspense fallback={null}>
+                  <TodayInHistoryCard hideWhenEmpty />
+                </Suspense>
+              )}
               {/* Department-wide money, grant and outreach totals. A leader has
                   a My Department tab for exactly this, and here it pushed their
                   own shifts and training below the fold; a member whose grants
