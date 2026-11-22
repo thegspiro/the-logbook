@@ -1,17 +1,18 @@
-# Security Review — Feature 30: Onboarding (passes 7–13)
+# Security Review — Feature 30: Onboarding (passes 7–14)
 
-**Prefix:** `ONB5` · **Rotation pass:** 13 (prior: module-audit iteration 25,
+**Prefix:** `ONB5` · **Rotation pass:** 14 (prior: module-audit iteration 25,
 app-review B25 (4 passes), security-review pass 1 — PR #1913 + follow-up
 (`docs/security-review/ONB2-30-onboarding.md`), pass 2 — PR #2093
 (`docs/security-review/ONB-30-onboarding.md`), passes 3–5 — PRs #2358, #2521,
 #2898 (`docs/security-review/ONB3-30-onboarding.md`), pass 6 — PR #2996,
 pass 7 — PR #3381, pass 8 — PR #3517 (both `docs/security-review/ONB4-30-onboarding.md`
 and this file), pass 9 — PR #3658 + recovery PR #3686 (ONB6-30-1/2/3, both this
-file), pass 10 — PR #3785, pass 11 — PR #3856, pass 12 — PR #4003) ·
+file), pass 10 — PR #3785, pass 11 — PR #3856, pass 12 — PR #4003, pass 13 —
+PR #4240) ·
 **Reviewed:** 2026-10-17 (pass 7), 2026-10-21 (pass 8), 2026-10-24 (pass 9,
 watchdog pickup), 2026-10-25 (pass 9 recovery), 2026-10-27 (pass 10, watchdog
 pickup), 2026-10-30 (pass 11, watchdog pickup), 2026-11-04 (pass 12, watchdog
-pickup), 2026-11-11 (pass 13, this PR)
+pickup), 2026-11-11 (pass 13), 2026-11-22 (pass 14, watchdog pickup, this PR)
 
 **Backend (pass 13):** `backend/app/api/v1/onboarding.py` (3,295 L, **26**
 unauthenticated bootstrap routes — unchanged count and auth posture from
@@ -41,6 +42,90 @@ onboarding-owned migration remains
 `20261009_1045_7e1a3c94d2b6_add_encryption_key_custody.py`, pass 7); the
 `public_info`-defaults backfill (`20261103_2316_289504a34d3c`, noted as
 pending at pass 12) is confirmed merged and unchanged.
+
+---
+
+## Pass 14 (2026-11-22) — watchdog pickup, true zero-delta, 0 fixed, 0 new findings
+
+**Step 0/1.** `list_pull_requests` (state `open`) returned zero PRs with a
+`claude/security-review-*` head. PR #4553 (Feature 29, Reports & analytics,
+pass 16) had already merged (`89bdc2bff`), confirming row 30 (Onboarding) as
+the next `⬜` row on a freshly fetched `main`.
+
+**Baseline:** pass 13's merge, `deb9601f3` (PR #4240).
+
+**All five declared backend scope files are byte-identical to pass 13:**
+`onboarding.py`, `services/onboarding.py`, `models/onboarding.py`,
+`utils/onboarding_security.py`, `api/v1/email_test_helper.py`. The four
+cross-feature files pass 13 read in full for the same reason
+(`services/s3_storage.py`, `models/member_position_term.py`,
+`services/location_service.py`, `services/grant_federal_programs.py`) are
+also byte-identical, so nothing new needed re-reading there.
+
+**Real delta, found by diffing everything else that could plausibly touch
+this feature:**
+
+- `frontend/src/modules/onboarding/pages/positionTemplates.ts` (+4/-4) — a
+  cosmetic rename only: `public_outreach`'s display name/description changed
+  from "Public Outreach" to "Community Outreach Manager" (and the team
+  position's from "Community Education / Outreach Team" to "Community
+  Outreach Team"), matching the same Outreach-Impact rename this rotation's
+  Feature 29 pass 16 and Feature 16's own work already carried. The
+  `generateRolePermissions(modules, 'specialist', ['events', 'documents'])` /
+  `generateRolePermissions(modules, 'member')` calls that set each position's
+  actual grants are untouched — this is a label change, not a permission
+  change.
+- `backend/app/schemas/organization.py` (+68/-0) — two additions, neither
+  reachable from onboarding: `EquipmentCheckAlertSettings` (Feature 14,
+  Equipment check & shifts, already ✅ — read by the scheduling-notifications
+  settings panel and the failure-alert sender, never by
+  `onboarding.py`/`services/onboarding.py`) and `OrganizationProfileUpdate`
+  gaining a `short_name` field with a blank-to-`None` validator (Feature 07,
+  Users & organizations, already ✅ — read by the authenticated organization
+  profile update endpoint, not by onboarding's own persist path). Confirmed
+  by grepping both new symbol names (`EquipmentCheckAlertSettings`,
+  `short_name`) against `onboarding.py` and `services/onboarding.py`: zero
+  hits in either file.
+
+**0 fixed, 0 newly flagged.**
+
+### Route inventory — re-enumerated by AST from source, 26 routes, unchanged from pass 13
+
+Since the file is byte-identical to pass 13's own baseline (which itself
+re-enumerated by AST and found 26, unchanged from passes 7–12), this count
+and the unauthenticated-by-design posture behind it (session-token expiry,
+`_require_owner_authority`, the completed/half-provisioned guards, the
+per-field size caps on `/session/*`) carry forward unchanged rather than
+being re-derived from nothing.
+
+### Still OPEN (by design), unchanged
+
+- **ONB-7** — no numeric rate cap specifically on `/session/roles` beyond the
+  200-item size cap; the session-minting rate limit on `/start` remains the
+  accepted mitigation (re-stood at passes 2–13).
+- `ITTeamMemberRequest.email` (`onboarding.py:511`) is still `str`, not
+  `EmailStr` — intentionally loose, to match `create_it_team_users`'s
+  skip-if-invalid behavior.
+
+### Completion gate (pass 14)
+
+| Check                                                                                                                                                                                                 | Result                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, both the sandbox's `python3.13` and bare `python3` interpreters)                                                                                      | ✅ 0 violations, both interpreters                                                                                                                                                                 |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, both interpreters)                                                                                                                            | ✅ clean, 3,415 files unchanged, both interpreters                                                                                                                                                 |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, both interpreters)                                                                                                                         | ✅ clean, both interpreters                                                                                                                                                                        |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                  | ✅ 818 revisions, single head `dd939b45d6c0` (the repo-wide Alembic fork that had blocked earlier CI runs today was resolved upstream — PR #4549 and its successors — before this pass's gate ran) |
+| `python3.13 scripts/generate_schema_docs.py --check`                                                                                                                                                  | ✅ up to date                                                                                                                                                                                      |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                     | ✅ 338 routes, 0 errors, 0 warnings                                                                                                                                                                |
+| `pytest tests/ -q -k "onboard or org_template or template_service or key_custody or system_notices or gmail_service_account or email_provider or encrypt_email or position_kind or position_seeding"` | ✅ 725 passed, 1 pre-existing skip (`pywebpush`)                                                                                                                                                   |
+| `cd frontend && npm run typecheck`                                                                                                                                                                    | ✅ 0 errors                                                                                                                                                                                        |
+| `cd frontend && npm run lint`                                                                                                                                                                         | ✅ 0 errors/warnings                                                                                                                                                                               |
+| `npx vitest run src/modules/onboarding`                                                                                                                                                               | ✅ 509 passed (44 files)                                                                                                                                                                           |
+
+No `KNOWN_LIMITATIONS.md` change needed. Rotation row 30 → ✅ (pending this
+PR's merge). Next: Feature 31 (Scheduled tasks) — unless a later watchdog
+pass already advanced further; check `list_pull_requests` fresh rather than
+trusting this note.
 
 ---
 
