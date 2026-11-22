@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PLACEHOLDER](https://github.com/thegspiro/the-logbook/pull/PLACEHOLDER)
+**PR [#4577](https://github.com/thegspiro/the-logbook/pull/4577)
 (branch `claude/friendly-babbage-ng64wn`)**: Feature 32 (Locations & kiosk),
 pass 14 — watchdog pickup (the dedicated `/loop 30m /security-review`
 session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). This
