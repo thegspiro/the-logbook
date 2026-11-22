@@ -330,9 +330,9 @@ export const RoleManagementPage: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex flex-wrap items-center gap-3">
-                      <h3 className="text-theme-text-primary text-lg font-medium">{role.name}</h3>
+                      <h2 className="text-theme-text-primary text-lg font-medium">{role.name}</h2>
                       {role.is_system && (
-                        <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
+                        <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-900 dark:bg-blue-500/20 dark:text-blue-300">
                           System Role
                         </span>
                       )}
@@ -387,7 +387,7 @@ export const RoleManagementPage: React.FC = () => {
                     <button
                       onClick={() => handleEdit(role)}
                       aria-label={`Edit ${role.name}`}
-                      className="touch-target-phone text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                      className="touch-target-phone text-sm font-medium text-blue-900 hover:text-blue-950 dark:text-blue-300 dark:hover:text-blue-200"
                     >
                       Edit
                     </button>
@@ -397,7 +397,7 @@ export const RoleManagementPage: React.FC = () => {
                           void handleDelete(role);
                         }}
                         aria-label={`Delete ${role.name}`}
-                        className="touch-target-phone text-sm font-medium text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                        className="touch-target-phone text-sm font-medium text-red-900 hover:text-red-950 dark:text-red-300 dark:hover:text-red-200"
                       >
                         Delete
                       </button>

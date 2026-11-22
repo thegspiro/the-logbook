@@ -1,13 +1,25 @@
 /**
  * A person's periods of service — several when they left and rejoined — and
- * the titles held in each. Saved as one replacement, with an edit kind.
+ * the titles held in each, each with the dates it was held when known. Saved
+ * as one replacement, with an edit kind.
+ *
+ * A title's own dates are what places it on a timeline: a period of service
+ * often spans several titles, so the period's start says nothing about when a
+ * chief's term began.
  */
 import React, { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { historyService } from '../services/api';
-import type { EditKind, HistoricalMemberFullView, HistoryTitle, ServicePeriodWrite } from '../types';
+import type {
+  EditKind,
+  HeldTitleWrite,
+  HistoricalMemberFullView,
+  HistoryTitle,
+  ServicePeriodWrite,
+  TitleRef,
+} from '../types';
 import { EditKindChoice } from './EditKindChoice';
 import { PartialDateInput } from './PartialDateInput';
 import { TitlePicker } from './TitlePicker';
@@ -20,7 +32,30 @@ interface ServicePeriodsEditorProps {
   onCancel: () => void;
 }
 
-const blankPeriod = (): ServicePeriodWrite => ({
+/** A period as the editor holds it: every title with its dates. */
+type PeriodDraft = ServicePeriodWrite & { titles: HeldTitleWrite[] };
+
+const undatedTitle = (titleId: string): HeldTitleWrite => ({
+  title_id: titleId,
+  held_from_date: null,
+  held_from_precision: 'year',
+  held_from_circa: false,
+  held_to_date: null,
+  held_to_precision: 'year',
+  held_to_circa: false,
+});
+
+const heldTitle = (title: TitleRef): HeldTitleWrite => ({
+  title_id: title.id,
+  held_from_date: title.held_from_date ?? null,
+  held_from_precision: title.held_from_precision ?? 'year',
+  held_from_circa: title.held_from_circa ?? false,
+  held_to_date: title.held_to_date ?? null,
+  held_to_precision: title.held_to_precision ?? 'year',
+  held_to_circa: title.held_to_circa ?? false,
+});
+
+const blankPeriod = (): PeriodDraft => ({
   start_date: null,
   start_precision: 'year',
   start_circa: false,
@@ -30,6 +65,7 @@ const blankPeriod = (): ServicePeriodWrite => ({
   is_ongoing: false,
   notes: null,
   title_ids: [],
+  titles: [],
 });
 
 export const ServicePeriodsEditor: React.FC<ServicePeriodsEditorProps> = ({
@@ -39,7 +75,7 @@ export const ServicePeriodsEditor: React.FC<ServicePeriodsEditorProps> = ({
   onSaved,
   onCancel,
 }) => {
-  const [periods, setPeriods] = useState<ServicePeriodWrite[]>(() =>
+  const [periods, setPeriods] = useState<PeriodDraft[]>(() =>
     person.service_periods.map((p) => ({
       start_date: p.start_date,
       start_precision: p.start_precision,
@@ -50,14 +86,38 @@ export const ServicePeriodsEditor: React.FC<ServicePeriodsEditorProps> = ({
       is_ongoing: p.is_ongoing,
       notes: p.notes,
       title_ids: p.titles.map((t) => t.id),
+      titles: p.titles.map(heldTitle),
     }))
   );
   const [editKind, setEditKind] = useState<EditKind>('substantial');
   const [editNote, setEditNote] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const update = (index: number, change: Partial<ServicePeriodWrite>) =>
+  const update = (index: number, change: Partial<PeriodDraft>) =>
     setPeriods((current) => current.map((p, i) => (i === index ? { ...p, ...change } : p)));
+
+  /** The chosen titles changed: keep the dates of those still chosen. */
+  const setTitles = (index: number, ids: string[]) =>
+    setPeriods((current) =>
+      current.map((p, i) =>
+        i === index
+          ? {
+              ...p,
+              title_ids: ids,
+              titles: ids.map((id) => p.titles.find((t) => t.title_id === id) ?? undatedTitle(id)),
+            }
+          : p
+      )
+    );
+
+  const updateTitle = (index: number, titleId: string, change: Partial<HeldTitleWrite>) =>
+    setPeriods((current) =>
+      current.map((p, i) =>
+        i === index ? { ...p, titles: p.titles.map((t) => (t.title_id === titleId ? { ...t, ...change } : t)) } : p
+      )
+    );
+
+  const titleName = (id: string) => titles.find((t) => t.id === id)?.name ?? 'Title';
 
   const save = async () => {
     setSaving(true);
@@ -119,9 +179,48 @@ export const ServicePeriodsEditor: React.FC<ServicePeriodsEditorProps> = ({
             label="Titles held"
             titles={titles}
             selectedIds={period.title_ids}
-            onChange={(ids) => update(index, { title_ids: ids })}
+            onChange={(ids) => setTitles(index, ids)}
             onTitleAdded={onTitleAdded}
           />
+          {period.titles.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-theme-text-secondary text-xs">
+                When each title was held, if known. A title appears on the department timeline only with the date it
+                began.
+              </p>
+              {period.titles.map((held) => (
+                <fieldset key={held.title_id} className="grid gap-3 md:grid-cols-2">
+                  <legend className="text-theme-text-primary text-sm font-medium">{titleName(held.title_id)}</legend>
+                  <PartialDateInput
+                    label={`${titleName(held.title_id)}: held from`}
+                    value={held.held_from_date}
+                    precision={held.held_from_precision}
+                    circa={held.held_from_circa}
+                    onChange={(next) =>
+                      updateTitle(index, held.title_id, {
+                        held_from_date: next.value,
+                        held_from_precision: next.precision,
+                        held_from_circa: next.circa,
+                      })
+                    }
+                  />
+                  <PartialDateInput
+                    label={`${titleName(held.title_id)}: held to`}
+                    value={held.held_to_date}
+                    precision={held.held_to_precision}
+                    circa={held.held_to_circa}
+                    onChange={(next) =>
+                      updateTitle(index, held.title_id, {
+                        held_to_date: next.value,
+                        held_to_precision: next.precision,
+                        held_to_circa: next.circa,
+                      })
+                    }
+                  />
+                </fieldset>
+              ))}
+            </div>
+          )}
           <label className="block">
             <span className="form-label">Notes</span>
             <textarea

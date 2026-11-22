@@ -26,12 +26,15 @@ from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.history import (
     HistoricalMember,
+    HistoryApparatus,
     HistoryDocument,
+    HistoryEvent,
     HistoryMedia,
     PublicationLevel,
 )
 from app.models.user import Position, User
 from app.schemas.history import (
+    ApparatusMemberView,
     ClearanceDecide,
     ClearanceRequestResponse,
     ClearanceReview,
@@ -39,6 +42,7 @@ from app.schemas.history import (
     ClearanceStepsReplace,
     ClearanceSubmit,
     DocumentMemberView,
+    EventMemberView,
     HistoricalMemberCreate,
     HistoricalMemberFullView,
     HistoricalMemberList,
@@ -63,6 +67,10 @@ from app.schemas.history import (
     ServicePeriodsReplace,
     UnpublishRequest,
 )
+from app.services.history_apparatus_service import (
+    RECORD_APPARATUS,
+    HistoryApparatusService,
+)
 from app.services.history_clearance_service import (
     HistoryClearanceService,
     record_path,
@@ -72,6 +80,7 @@ from app.services.history_document_service import (
     RECORD_DOCUMENT,
     HistoryDocumentService,
 )
+from app.services.history_event_service import RECORD_EVENT, HistoryEventService
 from app.services.history_media_service import RECORD_MEDIA, HistoryMediaService
 from app.services.history_merge_service import HistoryMergeService
 from app.services.history_notifications import (
@@ -92,6 +101,17 @@ from app.services.history_service import (
 from app.utils.markdown_render import render_markdown
 
 router = APIRouter()
+
+ClearanceRecord = Union[
+    HistoricalMember, HistoryMedia, HistoryDocument, HistoryApparatus, HistoryEvent
+]
+ClearanceReviewRecord = Union[
+    HistoricalMemberMemberView,
+    MediaMemberView,
+    DocumentMemberView,
+    ApparatusMemberView,
+    EventMemberView,
+]
 
 _PERSON = "Person"
 
@@ -158,9 +178,18 @@ async def _managed_person(
 
 async def _clearance_record(
     db: AsyncSession, organization_id: str, record_type: str, record_id: str
-) -> tuple[Optional[Union[HistoricalMember, HistoryMedia, HistoryDocument]], str]:
-    """The person, media item or document a clearance request is about, in
-    the department, and the label its notices and review page use."""
+) -> tuple[Optional[ClearanceRecord], str]:
+    """The person, media item, document, apparatus or event a clearance
+    request is about, in the department, and the label its notices and review
+    page use."""
+    if record_type == RECORD_EVENT:
+        event = await HistoryEventService(db).get_event(organization_id, record_id)
+        return (event, event.title) if event else (None, "")
+    if record_type == RECORD_APPARATUS:
+        truck = await HistoryApparatusService(db).get_apparatus(
+            organization_id, record_id
+        )
+        return (truck, truck.name) if truck else (None, "")
     if record_type == RECORD_MEDIA:
         item = await HistoryMediaService(db).get_media(organization_id, record_id)
         return (item, item.title) if item else (None, "")
@@ -708,6 +737,7 @@ def _title_response(title, uses: int = 0) -> HistoryTitleResponse:
         source=title.source,
         sort_order=title.sort_order,
         is_retired=title.is_retired,
+        show_on_timeline=title.show_on_timeline,
         usage_count=uses,
     )
 
@@ -1103,8 +1133,20 @@ async def review_clearance_request(
     )
     if record is None:
         raise HTTPException(status_code=404, detail="Record not found")
-    review_view: Union[HistoricalMemberMemberView, MediaMemberView, DocumentMemberView]
-    if isinstance(record, HistoryDocument):
+    review_view: ClearanceReviewRecord
+    if isinstance(record, HistoryEvent):
+        # As for a photo: the reviewer reads the event and its links as
+        # members will, draft or not.
+        review_view = EventMemberView(
+            **HistoryEventService(db).member_view(
+                replace(viewer, can_view_archive=True), record
+            )
+        )
+    elif isinstance(record, HistoryApparatus):
+        review_view = ApparatusMemberView(
+            **HistoryApparatusService(db).member_view(record)
+        )
+    elif isinstance(record, HistoryDocument):
         # As for a photo: the reviewer reads what members will read.
         review_view = DocumentMemberView(
             **HistoryDocumentService(db).member_view(

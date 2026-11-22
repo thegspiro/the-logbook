@@ -237,6 +237,41 @@ def _period_titles(person: HistoricalMember) -> list[str]:
     return list(seen)
 
 
+#: The columns a held title's own dates are stored in.
+TITLE_DATE_FIELDS = (
+    "held_from_date",
+    "held_from_precision",
+    "held_from_circa",
+    "held_to_date",
+    "held_to_precision",
+    "held_to_circa",
+)
+
+
+def title_dates(link: HistoricalMemberPeriodTitle) -> dict[str, Any]:
+    """A held title's own dates, for copying onto another row."""
+    return {field: getattr(link, field) for field in TITLE_DATE_FIELDS}
+
+
+def _held_title_values(values: dict[str, Any]) -> dict[str, Any]:
+    """The dates a client sent for one held title, settled to their stored
+    form. A blank date is stored as none, never guessed."""
+    from_precision = values.get("held_from_precision") or DatePrecision.YEAR
+    to_precision = values.get("held_to_precision") or DatePrecision.YEAR
+    held_from = normalize_partial_date(values.get("held_from_date"), from_precision)
+    held_to = normalize_partial_date(values.get("held_to_date"), to_precision)
+    if held_from and held_to and held_to < held_from:
+        raise ValueError("A title cannot end before it was first held")
+    return {
+        "held_from_date": held_from,
+        "held_from_precision": from_precision,
+        "held_from_circa": bool(values.get("held_from_circa")),
+        "held_to_date": held_to,
+        "held_to_precision": to_precision,
+        "held_to_circa": bool(values.get("held_to_circa")),
+    }
+
+
 def _date_iso(value: Optional[date]) -> Optional[str]:
     return value.isoformat() if value else None
 
@@ -406,6 +441,8 @@ class HistoryService:
             title.name_key = title_key(cleaned)
         if updates.get("is_retired") is not None:
             title.is_retired = bool(updates["is_retired"])
+        if updates.get("show_on_timeline") is not None:
+            title.show_on_timeline = bool(updates["show_on_timeline"])
         if updates.get("sort_order") is not None:
             title.sort_order = int(updates["sort_order"])
         await self.db.flush()
@@ -772,7 +809,10 @@ class HistoryService:
             "is_ongoing": period.is_ongoing,
             "notes": period.notes,
             "titles": sorted(
-                ({"id": t.title.id, "name": t.title.name} for t in period.titles),
+                (
+                    {"id": t.title.id, "name": t.title.name, **title_dates(t)}
+                    for t in period.titles
+                ),
                 key=lambda t: t["name"],
             ),
         }
@@ -927,6 +967,20 @@ class HistoryService:
                 "is_ongoing": p.is_ongoing,
                 "notes": p.notes,
                 "title_ids": sorted(t.title_id for t in p.titles),
+                "titles": [
+                    {
+                        "title_id": t.title_id,
+                        **{
+                            key: (
+                                _date_iso(value)
+                                if isinstance(value, date)
+                                else _enum_value(value)
+                            )
+                            for key, value in title_dates(t).items()
+                        },
+                    }
+                    for t in sorted(p.titles, key=lambda t: t.title_id)
+                ],
             }
             for p in person.service_periods
         ]
@@ -1086,8 +1140,18 @@ class HistoryService:
             await self.db.delete(period)
         await self.db.flush()
         for index, values in enumerate(periods):
+            # A held title may carry its own dates (phase 5). A caller that
+            # sends only ``title_ids`` — the import, an older client — still
+            # works, and those titles simply have no dates.
+            held: dict[str, dict[str, Any]] = {}
+            if values.get("titles") is not None:
+                for entry in values["titles"]:
+                    held[str(entry["title_id"])] = _held_title_values(entry)
+            else:
+                for title_id in values.get("title_ids") or []:
+                    held[str(title_id)] = {}
             title_ids = await self._validated_title_ids(
-                person.organization_id, values.get("title_ids") or []
+                person.organization_id, list(held)
             )
             period = HistoricalMemberServicePeriod(
                 member_id=person.id,
@@ -1109,7 +1173,9 @@ class HistoryService:
             await self.db.flush()
             for title_id in title_ids:
                 self.db.add(
-                    HistoricalMemberPeriodTitle(period_id=period.id, title_id=title_id)
+                    HistoricalMemberPeriodTitle(
+                        period_id=period.id, title_id=title_id, **held[title_id]
+                    )
                 )
         person.updated_by = actor_id
         await self.db.flush()

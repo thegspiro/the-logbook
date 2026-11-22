@@ -2,16 +2,39 @@ import React, { useEffect, useState } from 'react';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { historyDocumentService, historyMediaService, historyService } from '../services/api';
-import { REVISION_KIND_LABELS, type Revision } from '../types';
+import {
+  historyApparatusService,
+  historyDocumentService,
+  historyEventService,
+  historyMediaService,
+  historyService,
+} from '../services/api';
+import { REVISION_KIND_LABELS, type ClearanceRecordType, type Revision } from '../types';
+
+/** Where each kind of record keeps its change history. Each service is read
+ * only when its kind is asked for. */
+const source = (recordType: ClearanceRecordType): { listRevisions: (id: string) => Promise<Revision[]> } => {
+  switch (recordType) {
+    case 'media':
+      return historyMediaService;
+    case 'document':
+      return historyDocumentService;
+    case 'apparatus':
+      return historyApparatusService;
+    case 'event':
+      return historyEventService;
+    case 'member':
+      return historyService;
+  }
+};
 
 /** A record's change history, newest first. */
 export const RevisionList: React.FC<{
   personId: string;
   refreshKey: number;
-  /** Whose history: a person's (the default), a photo/media item's or a
-   * document's. */
-  recordType?: 'member' | 'media' | 'document';
+  /** Whose history: a person's (the default), a photo/media item's, a
+   * document's, an apparatus record's or an event's. */
+  recordType?: ClearanceRecordType;
 }> = ({ personId, refreshKey, recordType = 'member' }) => {
   const tz = useTimezone();
   const [revisions, setRevisions] = useState<Revision[]>([]);
@@ -19,13 +42,7 @@ export const RevisionList: React.FC<{
 
   useEffect(() => {
     let cancelled = false;
-    const source =
-      recordType === 'media'
-        ? historyMediaService
-        : recordType === 'document'
-          ? historyDocumentService
-          : historyService;
-    source
+    source(recordType)
       .listRevisions(personId)
       .then((list) => {
         if (!cancelled) setRevisions(list);
