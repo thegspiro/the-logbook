@@ -67,7 +67,8 @@ _LATER_REVOCATIONS = (
     ),
 )
 # Later grant backfills, each exposing ``_SLUGS`` and ``_PERMISSION`` — or,
-# for one that adds several grants, a ``_GRANTS`` map of slug to permissions.
+# for one that adds several grants, a ``_GRANTS`` map of slug to permissions,
+# ``_EVIDENCE_GRANTS`` pairs, ``_SLUG_GRANTS`` pairs, or both of the last two.
 _LATER_GRANTS = (
     _VERSIONS / "20260923_2219_394600cbfae2_grant_suggestions_manage.py",
     _VERSIONS / "20260930_0327_f73b449bdb8b_add_quartermaster_check_manage.py",
@@ -80,6 +81,7 @@ _LATER_GRANTS = (
     _VERSIONS / "20261101_1930_1476abf56dd3_grant_evaluation_conduct_to_chief.py",
     _VERSIONS / "20261102_0500_857291750c67_evaluation_deletion.py",
     _VERSIONS / "20261116_1602_3f8a1c6e2b94_apparatus_events_tables_and_grants.py",
+    _VERSIONS / "20261122_1613_5c2e8a417d90_crr_activities_and_grants.py",
 )
 
 
@@ -135,6 +137,11 @@ def _pristine_registry_set(slug: str) -> set[str]:
                 permissions.discard(grant._PERMISSION)
         elif slug in grant._SLUGS:
             permissions.discard(grant._PERMISSION)
+        # Not an alternative to the shapes above: a migration may grant by
+        # evidence and by slug at once, as 5c2e8a417d90 does.
+        for permission, slugs in getattr(grant, "_SLUG_GRANTS", ()):
+            if slug in slugs:
+                permissions.discard(permission)
     return {_RENAMED_SINCE.get(p, p) for p in permissions}
 
 

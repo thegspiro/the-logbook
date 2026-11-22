@@ -7,8 +7,10 @@
  * it is made, so there is no Save footer to forget. A built-in type is retired
  * rather than deleted; a type the department added can be deleted.
  *
- * Nothing reads the catalogue until CRR activity logging ships, so the section
- * says so rather than looking live (pitfall #19).
+ * CRR Activities (and an outreach event's CRR card) offer what is here. Each
+ * type credits the Admin Hours category chosen for it, or the department's
+ * Public Education mapping when none is chosen; the retention setting is read
+ * by the daily task that clears resident details.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -60,12 +62,20 @@ const CrrCatalogueSection: React.FC = () => {
   const [newTypeName, setNewTypeName] = useState('');
   const [newTypeCounts, setNewTypeCounts] = useState('');
   const [newTag, setNewTag] = useState<Record<CrrTagKind, string>>({ risk: '', population: '' });
+  const [retention, setRetention] = useState('24');
 
   const load = useCallback(async () => {
     try {
       const data = await crrService.getCatalogue();
       // A malformed body reads as an empty catalogue, not a crashed page.
-      setCatalogue({ activity_types: asArray(data?.activity_types), tags: asArray(data?.tags) });
+      setCatalogue({
+        activity_types: asArray(data?.activity_types),
+        tags: asArray(data?.tags),
+        admin_hours_categories: asArray(data?.admin_hours_categories),
+        resident_details_retention_months:
+          typeof data?.resident_details_retention_months === 'number' ? data.resident_details_retention_months : 24,
+      });
+      setRetention(String(data?.resident_details_retention_months ?? 24));
       setError(null);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'The CRR catalogue could not be loaded.'));
@@ -187,11 +197,6 @@ const CrrCatalogueSection: React.FC = () => {
           The community risk reduction activities your department records, what each one counts, and the risks and
           priority populations they are tagged with. Changes save as you make them.
         </p>
-      </div>
-
-      <div className="alert-info text-sm" role="note">
-        <strong>Not in use yet.</strong> Logging CRR activities arrives in the next update. It will offer the activity
-        types, counts and tags you set up here.
       </div>
 
       <section aria-labelledby="crr-types-heading" className="space-y-3">
@@ -407,6 +412,37 @@ const CrrCatalogueSection: React.FC = () => {
                   </fieldset>
                 ))}
               </div>
+
+              <div className="mt-3 max-w-sm">
+                <label htmlFor={`crr-hours-${activityType.id}`} className="form-label">
+                  Admin Hours category
+                </label>
+                <select
+                  id={`crr-hours-${activityType.id}`}
+                  className="form-input"
+                  value={activityType.admin_hours_category_id ?? ''}
+                  disabled={busy}
+                  onChange={(e) =>
+                    void run(
+                      async () =>
+                        replaceType(
+                          await crrService.updateType(activityType.id, {
+                            admin_hours_category_id: e.target.value || null,
+                          })
+                        ),
+                      `Updated ${activityType.name}.`,
+                      'The Admin Hours category could not be saved.'
+                    )
+                  }
+                >
+                  <option value="">The Public Education mapping</option>
+                  {catalogue.admin_hours_categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </li>
           ))}
           <li className="card-secondary border-dashed p-4 opacity-80" aria-labelledby="crr-type-firesetter">
@@ -462,6 +498,58 @@ const CrrCatalogueSection: React.FC = () => {
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
             Add activity type
+          </button>
+        </div>
+      </section>
+
+      <section aria-labelledby="crr-retention-heading" className="card-secondary space-y-3 p-4">
+        <h3 id="crr-retention-heading" className="text-theme-text-primary font-semibold">
+          Resident details
+        </h3>
+        <p className="text-theme-text-muted text-sm">
+          A resident&apos;s address, name, phone, email and the notes are cleared automatically this many months after
+          the activity. The ZIP code, city, state and counts are kept.
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <div>
+            <label htmlFor="crr-retention" className="form-label">
+              Keep for (months)
+            </label>
+            <input
+              id="crr-retention"
+              type="number"
+              min={1}
+              max={120}
+              inputMode="numeric"
+              className="form-input w-28"
+              value={retention}
+              onChange={(e) => setRetention(e.target.value)}
+            />
+          </div>
+          <button
+            type="button"
+            className="btn-secondary touch:min-h-11"
+            disabled={
+              busy ||
+              !/^\d+$/.test(retention) ||
+              Number(retention) < 1 ||
+              Number(retention) > 120 ||
+              Number(retention) === catalogue.resident_details_retention_months
+            }
+            onClick={() =>
+              void run(
+                async () => {
+                  const months = await crrService.updateSettings(Number(retention));
+                  setCatalogue((current) =>
+                    current ? { ...current, resident_details_retention_months: months } : current
+                  );
+                },
+                'Saved.',
+                'The setting could not be saved.'
+              )
+            }
+          >
+            Save
           </button>
         </div>
       </section>

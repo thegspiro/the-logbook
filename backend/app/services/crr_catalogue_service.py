@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.admin_hours import AdminHoursCategory
 from app.models.crr import (
     CRR_TAG_KINDS,
     CrrActivityMeasure,
@@ -25,6 +26,23 @@ from app.services.crr_catalogue_defaults import DEFAULT_ACTIVITY_TYPES, DEFAULT_
 from app.utils.model_updates import apply_updates
 
 _CODE_MAX = 64
+
+DEFAULT_RETENTION_MONTHS = 24
+MIN_RETENTION_MONTHS = 1
+MAX_RETENTION_MONTHS = 120
+
+
+def retention_months(org: Optional[Organization]) -> int:
+    """How long the department keeps CRR resident details, read defensively:
+    a missing or malformed setting means the default, never "keep forever" or
+    "clear now" (pitfall #19)."""
+    raw = ((org.settings or {}).get("crr") or {}) if org is not None else {}
+    value = (
+        raw.get("resident_details_retention_months") if isinstance(raw, dict) else None
+    )
+    if isinstance(value, bool) or not isinstance(value, int):
+        return DEFAULT_RETENTION_MONTHS
+    return min(max(value, MIN_RETENTION_MONTHS), MAX_RETENTION_MONTHS)
 
 
 def code_from_label(label: str) -> str:
@@ -182,9 +200,24 @@ class CrrCatalogueService:
             .scalars()
             .all()
         )
+        categories = (
+            await self.db.execute(
+                select(AdminHoursCategory.id, AdminHoursCategory.name)
+                .where(
+                    AdminHoursCategory.organization_id == org_id,
+                    AdminHoursCategory.is_active.is_(True),
+                )
+                .order_by(AdminHoursCategory.sort_order, AdminHoursCategory.name)
+            )
+        ).all()
+        org = await self.db.get(Organization, org_id)
         return {
             "activity_types": [self._type_row(t) for t in types],
             "tags": [self._tag_row(t) for t in tags],
+            "admin_hours_categories": [
+                {"id": cid, "name": name} for cid, name in categories
+            ],
+            "resident_details_retention_months": retention_months(org),
         }
 
     @staticmethod
@@ -208,6 +241,7 @@ class CrrCatalogueService:
                 for m in activity_type.measures
             ],
             "tag_ids": sorted(link.tag_id for link in activity_type.tag_links),
+            "admin_hours_category_id": activity_type.admin_hours_category_id,
         }
 
     @staticmethod
@@ -310,6 +344,18 @@ class CrrCatalogueService:
             await self._check_type_name(org_id, changes["name"], activity_type.id)
         if "description" in changes:
             changes["description"] = (changes["description"] or "").strip() or None
+        if changes.get("admin_hours_category_id"):
+            # A client-supplied id must be one of the department's own
+            # active categories (pitfall #14c).
+            found = await self.db.scalar(
+                select(AdminHoursCategory.id).where(
+                    AdminHoursCategory.id == str(changes["admin_hours_category_id"]),
+                    AdminHoursCategory.organization_id == org_id,
+                    AdminHoursCategory.is_active.is_(True),
+                )
+            )
+            if found is None:
+                raise ValueError("Admin Hours category not found")
         apply_updates(activity_type, changes)
         await self.db.flush()
         return await self.get_type(org_id, activity_type.id)

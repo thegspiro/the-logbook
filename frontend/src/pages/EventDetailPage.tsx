@@ -89,6 +89,7 @@ import EventApparatusCrewCard from '../components/event-detail/EventApparatusCre
 import EventGuestHeadcountCard from '../components/event-detail/EventGuestHeadcountCard';
 import EventStaffingCard from '../components/event-detail/EventStaffingCard';
 import EventOutreachCloseoutCard from '../components/event-detail/EventOutreachCloseoutCard';
+import EventCrrActivitiesCard from '../components/event-detail/EventCrrActivitiesCard';
 import { GuestCheckInQRCard } from '../components/events/GuestCheckInQRCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
@@ -1831,6 +1832,11 @@ export const EventDetailPage: React.FC = () => {
             {/* Volunteers for an outreach event: its own signup sheet, or the
                 request's when it was scheduled from one. */}
             {event.can_staff_event && <EventStaffingCard eventId={event.id} />}
+
+            {/* Community risk reduction done at this outreach event. */}
+            {event.can_record_crr && (
+              <EventCrrActivitiesCard eventId={event.id} eventTitle={event.title} timezone={tz} />
+            )}
 
             {/* The headcount for an outreach event nobody signed in at.
                 Merged rather than replaced: the save answers with a plain

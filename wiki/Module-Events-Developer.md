@@ -158,8 +158,27 @@ POST   /crr/activity-types/{id}/measures         # Add a count (manage)
 PATCH  /crr/measures/{id}                        # Rename, retire, restore a count (manage)
 POST   /crr/tags                                 # Add a risk or a priority population (manage)
 PATCH  /crr/tags/{id}                            # Rename, retire, restore a tag (manage)
-GET    /crr/zip-lookup/{zip}                     # City, state, county from the bundled GeoNames data; 404 when unknown (manage)
+GET    /crr/zip-lookup/{zip}                     # City, state, county from the bundled GeoNames data; 404 when unknown (record or manage)
+PUT    /crr/settings                             # How many months resident details are kept, 1-120, default 24 (manage)
+GET    /crr/form-options                         # Active types, tags, members, the department's city and state, can_view_contact (record or manage)
+GET    /crr/activities                           # Newest first; start, end, activity_type_id, event_id, limit, offset (record or manage)
+GET    /crr/activities/{id}                      # One activity (record or manage)
+POST   /crr/activities                           # Record one; a log entry credits its members' Admin Hours, an event's does not (record or manage)
+PATCH  /crr/activities/{id}                      # Counts, tags, place, notes, resident details; recorder or events.manage (record or manage)
+DELETE /crr/activities/{id}                      # Removes it and the Admin Hours it credited; recorder or events.manage (record or manage)
 ```
+
+"record or manage" is `crr.record` or `events.manage`. Resident details
+(address, name, phone, email) and notes are `EncryptedText`, returned only to
+`crr.view_contact` holders, and each response that discloses any is audited as
+`crr.resident_details_viewed` with activity ids only. Changing details needs
+`crr.view_contact` too. The daily `crr_resident_details_retention` task clears
+them after the department's period and stamps `resident_details_cleared_at`,
+keeping ZIP, city, state, county and counts. A log entry's Admin Hours entries
+carry `entry_method = crr_activity` and `source_crr_activity_id`, in the type's
+own category at 100%, or else through the Public Education mapping. The event
+detail response's `can_record_crr` says whether the event page offers the
+recording card (`crr_recording_offered` in `endpoints/events.py`).
 
 The ZIP data is `backend/app/data/us_zip_codes.json`, rebuilt by
 `backend/scripts/build_us_zip_codes.py`. `data/` is gitignored repository-wide,

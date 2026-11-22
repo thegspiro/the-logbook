@@ -8,6 +8,7 @@ const createType = vi.fn();
 const updateType = vi.fn();
 const deleteType = vi.fn();
 const setTypeTags = vi.fn();
+const updateSettings = vi.fn();
 vi.mock('../../services/crrServices', () => ({
   crrService: {
     getCatalogue: (...args: unknown[]) => getCatalogue(...args) as unknown,
@@ -15,6 +16,7 @@ vi.mock('../../services/crrServices', () => ({
     updateType: (...args: unknown[]) => updateType(...args) as unknown,
     deleteType: (...args: unknown[]) => deleteType(...args) as unknown,
     setTypeTags: (...args: unknown[]) => setTypeTags(...args) as unknown,
+    updateSettings: (...args: unknown[]) => updateSettings(...args) as unknown,
   },
 }));
 
@@ -31,6 +33,7 @@ const smoke: CrrActivityType = {
   sort_order: 0,
   measures: [{ id: 'm-1', code: 'alarms_installed', label: 'Alarms installed', is_active: true, sort_order: 0 }],
   tag_ids: ['tag-fire'],
+  admin_hours_category_id: null,
 };
 
 const knox: CrrActivityType = {
@@ -43,6 +46,7 @@ const knox: CrrActivityType = {
   sort_order: 1,
   measures: [],
   tag_ids: [],
+  admin_hours_category_id: null,
 };
 
 const catalogue = (): CrrCatalogue => ({
@@ -59,20 +63,22 @@ const catalogue = (): CrrCatalogue => ({
       sort_order: 0,
     },
   ],
+  admin_hours_categories: [{ id: 'cat-outreach', name: 'Outreach' }],
+  resident_details_retention_months: 24,
 });
 
 const card = (name: string) => screen.findByRole('listitem', { name });
 
 describe('CrrCatalogueSection', () => {
   beforeEach(() => {
-    for (const mock of [getCatalogue, createType, updateType, deleteType, setTypeTags]) mock.mockReset();
+    for (const mock of [getCatalogue, createType, updateType, deleteType, setTypeTags, updateSettings])
+      mock.mockReset();
     getCatalogue.mockResolvedValue(catalogue());
   });
 
-  it('says the catalogue is not in use yet, and shows juvenile firesetter intervention as coming soon', async () => {
+  it('shows juvenile firesetter intervention as coming soon, with nothing to press', async () => {
     renderWithRouter(<CrrCatalogueSection />);
 
-    expect(await screen.findByRole('note')).toHaveTextContent('Not in use yet');
     const comingSoon = await card('Juvenile firesetter intervention');
     expect(within(comingSoon).getByText('Coming soon')).toBeInTheDocument();
     expect(within(comingSoon).queryByRole('button')).not.toBeInTheDocument();
@@ -136,5 +142,43 @@ describe('CrrCatalogueSection', () => {
     renderWithRouter(<CrrCatalogueSection />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('The server is down');
+  });
+});
+
+describe('CrrCatalogueSection settings', () => {
+  beforeEach(() => {
+    for (const mock of [getCatalogue, updateType, updateSettings]) mock.mockReset();
+    getCatalogue.mockResolvedValue(catalogue());
+  });
+
+  it("sets a type's Admin Hours category, and back to the mapping", async () => {
+    const user = userEvent.setup();
+    updateType.mockResolvedValueOnce({ ...smoke, admin_hours_category_id: 'cat-outreach' });
+    updateType.mockResolvedValueOnce({ ...smoke, admin_hours_category_id: null });
+    renderWithRouter(<CrrCatalogueSection />);
+
+    const smokeCard = await card('Smoke alarm install');
+    const picker = within(smokeCard).getByLabelText('Admin Hours category');
+    await user.selectOptions(picker, 'cat-outreach');
+    expect(updateType).toHaveBeenLastCalledWith('t-smoke', { admin_hours_category_id: 'cat-outreach' });
+    await user.selectOptions(picker, '');
+    expect(updateType).toHaveBeenLastCalledWith('t-smoke', { admin_hours_category_id: null });
+  });
+
+  it('saves how long resident details are kept', async () => {
+    const user = userEvent.setup();
+    updateSettings.mockResolvedValue(12);
+    renderWithRouter(<CrrCatalogueSection />);
+
+    const field = await screen.findByLabelText('Keep for (months)');
+    const save = within(screen.getByRole('region', { name: 'Resident details' })).getByRole('button', {
+      name: 'Save',
+    });
+    expect(save).toBeDisabled();
+    await user.clear(field);
+    await user.type(field, '12');
+    await user.click(save);
+
+    expect(updateSettings).toHaveBeenCalledWith(12);
   });
 });
