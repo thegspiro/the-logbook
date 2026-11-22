@@ -1723,6 +1723,21 @@ export const ALL_ROUTES: RouteCheck[] = [
   //: coverage. `skipLinkTarget.test.ts` checks the assumption directly instead,
   //: on every page that owns its shell.
   { path: '/onboarding/start', maxSmallTargets: 0, maxTinyText: 0 },
+  // The pages a member reaches before signing in, from an email link or the
+  // sign-in screen, and as often as not on a phone. Each renders the same
+  // whether or not a session exists, so the pass's sign-in does not change
+  // what is measured.
+  { path: '/forgot-password', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Send Reset Link' },
+  // The token rides in the fragment, as the reset email sends it.
+  { path: '/reset-password#token=e2e-reset-token', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Set New Password' },
+  { path: '/privacy', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Privacy Policy' },
+  { path: '/terms', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Terms of Service' },
+  {
+    path: '/public/minutes',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: 'Regular Business Meeting — November 2026',
+  },
 ];
 
 // Useful when diagnosing one newly exposed permission-gated body locally;

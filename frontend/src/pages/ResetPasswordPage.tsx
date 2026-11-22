@@ -164,7 +164,7 @@ export const ResetPasswordPage: React.FC = () => {
       >
         <div className="w-full max-w-md">
           <div className="card p-8 text-center">
-            <h2 className="text-theme-text-primary mb-4 text-2xl font-bold">Too Many Attempts</h2>
+            <h1 className="text-theme-text-primary mb-4 text-2xl font-bold">Too Many Attempts</h1>
             <p className="text-theme-text-secondary mb-6">
               {`This connection has made too many password-reset attempts. Wait ${rateLimitedMinutes} minute${rateLimitedMinutes === 1 ? '' : 's'}, then reload this page. If you haven't used this link yet, it still works until it expires.`}
             </p>
@@ -200,7 +200,7 @@ export const ResetPasswordPage: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <h2 className="text-theme-text-primary mb-4 text-2xl font-bold">Invalid Reset Link</h2>
+            <h1 className="text-theme-text-primary mb-4 text-2xl font-bold">Invalid Reset Link</h1>
             <p className="text-theme-text-secondary mb-6">{error}</p>
             <div className="space-y-3">
               <Link to="/forgot-password" className="btn-primary block w-full rounded-md text-sm font-medium">
@@ -231,7 +231,7 @@ export const ResetPasswordPage: React.FC = () => {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
               <CheckCircle className="h-10 w-10 text-green-700 dark:text-green-400" aria-hidden="true" />
             </div>
-            <h2 className="text-theme-text-primary mb-4 text-2xl font-bold">Password Changed</h2>
+            <h1 className="text-theme-text-primary mb-4 text-2xl font-bold">Password Changed</h1>
             <p className="text-theme-text-secondary mb-4">You can now sign in with your new password.</p>
             <p className="text-theme-text-muted mb-6 text-sm">Taking you to sign in…</p>
             <Link
@@ -308,7 +308,7 @@ export const ResetPasswordPage: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
-                  className="form-input bg-theme-surface-secondary placeholder-theme-text-muted block pr-10 pl-10 focus:border-transparent sm:text-sm"
+                  className="form-input bg-theme-surface-secondary placeholder-theme-text-muted touch:pr-12 block pr-10 pl-10 focus:border-transparent sm:text-sm"
                   placeholder="Enter new password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -317,7 +317,7 @@ export const ResetPasswordPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="text-theme-text-muted hover:text-theme-text-primary absolute inset-y-0 right-0 flex items-center pr-3 focus:outline-hidden focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-red-500"
+                  className="text-theme-text-muted hover:text-theme-text-primary touch:min-w-11 absolute inset-y-0 right-0 flex items-center justify-center pr-3 pl-3 focus:outline-hidden focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-red-500"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
@@ -373,7 +373,7 @@ export const ResetPasswordPage: React.FC = () => {
                   type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
-                  className="form-input bg-theme-surface-secondary placeholder-theme-text-muted block pr-10 pl-10 focus:border-transparent sm:text-sm"
+                  className="form-input bg-theme-surface-secondary placeholder-theme-text-muted touch:pr-12 block pr-10 pl-10 focus:border-transparent sm:text-sm"
                   placeholder="Confirm new password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -382,7 +382,7 @@ export const ResetPasswordPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="text-theme-text-muted hover:text-theme-text-primary absolute inset-y-0 right-0 flex items-center pr-3 focus:outline-hidden focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-red-500"
+                  className="text-theme-text-muted hover:text-theme-text-primary touch:min-w-11 absolute inset-y-0 right-0 flex items-center justify-center pr-3 pl-3 focus:outline-hidden focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-red-500"
                   aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                 >
                   {showConfirmPassword ? (
