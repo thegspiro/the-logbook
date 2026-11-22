@@ -1470,3 +1470,76 @@ describe('ShiftDetailPanel — officer override for an ungranted custom seat', (
     expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('ShiftDetailPanel — a community outreach signup sheet', () => {
+  // The sheet's seats are plain volunteer seats; the server refuses any signup
+  // or assignment that does not name a role ("Choose what you would like to
+  // do: Tour Guide"), which is what the per-seat buttons used to send.
+  const outreachShift = {
+    ...shift,
+    shift_officer_id: 'officer-9',
+    shift_date: '2099-04-01',
+    start_time: '2099-04-01T13:00:00Z',
+    end_time: '2099-04-01T14:00:00Z',
+    is_outreach: true,
+    outreach_roles: [
+      { role: 'tour_guide', label: 'Tour Guide', total: 2, filled: 0, remaining: 2 },
+      { role: 'educator', label: 'Educator', total: 1, filled: 1, remaining: 0 },
+    ],
+    apparatus_positions: [
+      { position: 'volunteer', required: true },
+      { position: 'volunteer', required: true },
+      { position: 'volunteer', required: true },
+    ],
+  };
+  const mockSignup = vi.mocked(schedulingService.signupForShift);
+  const mockCreate = vi.mocked(schedulingService.createAssignment);
+  const mockEligibility = vi.mocked(schedulingService.getEligiblePositions);
+
+  beforeEach(() => {
+    mockSignup.mockReset();
+    mockSignup.mockResolvedValue({} as never);
+    mockCreate.mockReset();
+    mockCreate.mockResolvedValue({} as never);
+    mockEligibility.mockReset();
+    mockEligibility.mockResolvedValue({ positions: ['volunteer'], is_excluded: false });
+    schedulingStoreState.members = [{ id: 'member-9', label: 'Pat Doe' }] as never;
+  });
+
+  afterEach(() => {
+    schedulingStoreState.members = [];
+    grantedPermissions.current = null;
+  });
+
+  it('signs a member up for the open role rather than for a bare seat', async () => {
+    grantedPermissions.current = ['scheduling.view'];
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={outreachShift as never} onClose={vi.fn()} />);
+
+    // A filled role is not offered, so with one left the button names it.
+    await user.click(await screen.findByRole('button', { name: 'Sign me up as Tour Guide' }));
+
+    await waitFor(() => expect(mockSignup).toHaveBeenCalledTimes(1));
+    expect(mockSignup).toHaveBeenCalledWith('shift-1', { outreach_role: 'tour_guide' });
+    expect(screen.queryByRole('button', { name: /Sign myself up as/ })).not.toBeInTheDocument();
+  });
+
+  it('has an officer choose the role when assigning someone, and offers no bulk fill', async () => {
+    grantedPermissions.current = ['scheduling.assign', 'scheduling.view'];
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={outreachShift as never} onClose={vi.fn()} />);
+
+    const assignButton = await screen.findByRole('button', { name: /Assign someone/ });
+    // Three open volunteer seats would offer it; the roster has loaded by now.
+    await waitFor(() => expect(mockEligibility).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /Fill All Open/ })).not.toBeInTheDocument();
+    await user.click(assignButton);
+    expect(screen.getByRole('combobox', { name: 'Role' })).toHaveValue('tour_guide');
+
+    await user.selectOptions(screen.getByRole('listbox', { name: 'Select a member' }), 'member-9');
+    await user.click(screen.getByRole('button', { name: 'Assign' }));
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
+    expect(mockCreate.mock.calls[0]?.[1]).toMatchObject({ user_id: 'member-9', outreach_role: 'tour_guide' });
+  });
+});

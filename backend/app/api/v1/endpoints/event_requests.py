@@ -72,8 +72,11 @@ from app.services.apparatus_event_service import (
     ConflictsNotAcknowledged,
 )
 from app.services.event_request_service import (
+    AUTOMATIC_TASK_HINTS,
     apply_default_assignee,
+    automatic_task_states,
     configured_task_ids,
+    effective_task_completions,
     get_linked_calendar_event,
     get_live_staffing_shift,
     get_outreach_roles,
@@ -156,6 +159,13 @@ async def _build_response(
             db, event_request.event_location_id, event_request.organization_id
         )
 
+    staffing = (
+        await staffing_counts_by_request(
+            db, event_request.organization_id, [event_request]
+        )
+    ).get(str(event_request.id))
+    automatic = automatic_task_states(event_request, staffing)
+
     activity_items = []
     for entry in event_request.activity_log:
         performer_name = None
@@ -199,7 +209,10 @@ async def _build_response(
         assignee_name=assignee_name,
         reviewer_notes=event_request.reviewer_notes,
         decline_reason=event_request.decline_reason,
-        task_completions=event_request.task_completions,
+        task_completions=effective_task_completions(event_request, staffing),
+        automatic_tasks={
+            task_id: AUTOMATIC_TASK_HINTS[task_id] for task_id in automatic
+        },
         event_id=event_request.event_id,
         event_date=event_request.event_date,
         event_end_date=event_request.event_end_date,
@@ -450,12 +463,16 @@ async def check_request_status(
     show_progress = pipeline.get("public_progress_visible", False)
 
     task_progress = None
-    if show_progress and event_request.task_completions:
+    if show_progress:
         tasks = pipeline.get("tasks", [])
+        staffing = (
+            await staffing_counts_by_request(
+                db, event_request.organization_id, [event_request]
+            )
+        ).get(str(event_request.id))
+        completions = effective_task_completions(event_request, staffing)
         completed_count = sum(
-            1
-            for t in tasks
-            if event_request.task_completions.get(t["id"], {}).get("completed")
+            1 for t in tasks if completions.get(t["id"], {}).get("completed")
         )
         task_progress = {
             "total": len(tasks),
@@ -463,9 +480,7 @@ async def check_request_status(
             "tasks": [
                 {
                     "label": t["label"],
-                    "completed": bool(
-                        event_request.task_completions.get(t["id"], {}).get("completed")
-                    ),
+                    "completed": bool(completions.get(t["id"], {}).get("completed")),
                 }
                 for t in tasks
             ],
@@ -689,7 +704,7 @@ async def list_event_requests(
                 audience_size=req.audience_size,
                 assigned_to=req.assigned_to,
                 assignee_name=assignee_name,
-                task_completions=req.task_completions,
+                task_completions=effective_task_completions(req, counts),
                 event_date=req.event_date,
                 staffing_shift_id=req.staffing_shift_id,
                 short_notice=str(req.id) in short_notice,
@@ -1675,6 +1690,17 @@ async def update_task_completion(
             ),
         )
 
+    staffing = (
+        await staffing_counts_by_request(
+            db, current_user.organization_id, [event_request]
+        )
+    ).get(str(event_request.id))
+    if update.task_id in automatic_task_states(event_request, staffing):
+        raise HTTPException(
+            status_code=400,
+            detail=safe_error_detail(ValueError(AUTOMATIC_TASK_HINTS[update.task_id])),
+        )
+
     completions = copy.deepcopy(event_request.task_completions or {})
 
     if update.completed:
@@ -1713,7 +1739,7 @@ async def update_task_completion(
 
     return {
         "message": f"Task '{update.task_id}' {'completed' if update.completed else 'uncompleted'}",
-        "task_completions": completions,
+        "task_completions": effective_task_completions(event_request, staffing),
         "status": event_request.status.value,
     }
 

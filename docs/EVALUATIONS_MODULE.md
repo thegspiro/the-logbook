@@ -365,6 +365,21 @@ you" email for a step already open; the member is not emailed and sees the new
 name. Each evaluation moved is audited as `evaluation_work_reassigned` at
 `warning` with both people and what moved.
 
+## Self-evaluation beside the evaluation
+
+Once the member has submitted their self-evaluation, the evaluation screen
+lists each rated item they answered beside the evaluator's rating of it, and
+marks the items **far apart**: two or more levels on a scale, or opposite
+answers on meets / does not meet. Those are the points worth raising when the
+review is discussed. An unrated item or one marked not applicable is never
+marked. For the evaluator writing their part it follows their unsaved ratings.
+
+It is drawn on the screen from the two parts the server already sends, so it
+shows nobody anything new: the evaluator sees the self-evaluation only once it
+is submitted, and the member sees the evaluator's ratings only once they are
+released (`compareSelfEvaluation` in `utils/evaluationRecord.ts`). It is not
+printed on the PDF, which carries both parts in full.
+
 ## After finalization
 
 - **Response** (`PUT /{id}/response`, `POST /{id}/response/submit`): the

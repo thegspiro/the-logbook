@@ -26,6 +26,7 @@ import { EvaluationForm } from '../components/evaluations/EvaluationForm';
 import { FiguresPanel } from '../components/evaluations/FiguresPanel';
 import { PreviousReviewPanel } from '../components/evaluations/PreviousReviewPanel';
 import { ReviewHistoryPanel } from '../components/evaluations/ReviewHistoryPanel';
+import { SelfComparisonPanel } from '../components/evaluations/SelfComparisonPanel';
 import { ResponsePanel } from '../components/evaluations/ResponsePanel';
 import { SignDialog } from '../components/evaluations/SignDialog';
 import { StepList } from '../components/evaluations/StepList';
@@ -141,6 +142,11 @@ const EvaluationDetailPage: React.FC = () => {
 
   const kind = editableKind(detail);
   const readOnlyParts = detail.parts.filter((p) => p.kind !== kind && p.kind in PART_TITLES);
+  // The self-evaluation once the member has submitted it, beside the
+  // evaluator's ratings: their live draft while they write, otherwise the part
+  // the server sent. Each side is only what this page already shows the viewer.
+  const submittedSelf = detail.parts.find((p) => p.kind === 'self_evaluation' && p.status === 'submitted');
+  const evaluatorContent = kind === 'evaluator' ? draft : detail.parts.find((p) => p.kind === 'evaluator')?.content;
 
   const onEdit = (content: PartContent) => {
     editRevision.current += 1;
@@ -464,6 +470,14 @@ const EvaluationDetailPage: React.FC = () => {
                   </button>
                 </div>
               </section>
+            )}
+
+            {submittedSelf && evaluatorContent && (
+              <SelfComparisonPanel
+                definition={detail.definition}
+                self={submittedSelf.content}
+                evaluator={evaluatorContent}
+              />
             )}
 
             {readOnlyParts.map((part) => (
