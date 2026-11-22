@@ -16,6 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #4558 (Feature 30, Onboarding, pass 14) merged (`2248da3bf4`)
+before this iteration started — confirmed via `pull_request_read` (state
+`closed`, `merged: true`, merge commit `2248da3bf4`), not from this file.
+Row 30 → ✅. A fresh `list_pull_requests` (state `open`) at the start of this
+iteration returned no PR with a head branch starting
+`claude/security-review-`, so this iteration proceeds to review the next
+pending feature per Step 1. This is a docs-only housekeeping edit (CLAUDE.md
+/ Step 0 rule): it rides along, uncommitted, in the next feature's own PR
+rather than getting a PR of its own.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 14, PR #4558, merged), preserved for history</summary>
+
 **PR (branch `claude/friendly-babbage-n4b791`)**: Feature 30 (Onboarding),
 pass 14 — watchdog pickup (the dedicated `/loop 30m /security-review`
 session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). This
@@ -39,6 +52,8 @@ full trace.
 
 Row 30 → ✅ (pending this PR's merge); next is Feature 31 (Scheduled tasks)
 — re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 16, merged as `89bdc2bff`), preserved for history</summary>
@@ -27496,7 +27511,7 @@ iteration's commit" rule.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                                                   | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                                                                                                          | ⬜     |
@@ -27560,6 +27575,66 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-22 — Feature 30 (Onboarding, pass 14) merged; Feature 31 (Scheduled tasks, pass 14): watchdog pickup, 7 new delegate tasks verified good, 0 fixed, 0 new findings
+
+PR #4558 merged as `2248da3b`, since the last log entry below; row 30 marked
+✅ above (this had already happened in this file before this iteration
+started — the Open PR section's prior note already recorded it — so the
+correction here is only this Log entry and clearing the Open PR row, which
+ride along with this feature's own PR per Step 0's rule rather than getting
+one of their own). A fresh `list_pull_requests` (state=open, 10 results,
+second page empty) found no `claude/security-review-*` head, confirming row
+31 (Scheduled tasks) as the next pending feature.
+
+Baseline: pass 13's own file content (`CRON13-31-scheduled-tasks.md`, merge
+commit `079b82fb9`). Diffed `scheduled_tasks.py`/`scheduled.py` directly
+against that commit rather than trusting `git log` (whose path-filtered
+output omits some real contributing commits in this tree — see the findings
+file's own note). `scheduled.py`: 0 diff. `scheduled_tasks.py`: **7 new
+tasks** (`guest_headcount_reminders`, `leave_ending_reminders`,
+`open_ended_leave_digest`, `leave_request_upkeep`, `attendance_waiver_expiry`,
+`pending_file_deletions`, `history_import_expiry`), all delegating to other
+features' already-reviewed-elsewhere services, plus a real idempotency bug
+fix to the existing `run_rolling_recurrence_extend` (a cancelled occurrence
+was invisible to its "latest occurrence" query, so a nightly re-run recreated
+a live copy of the exact date just cancelled — fixed by the Events feature's
+own commit, verified end to end here) and an unrelated CC/BCC-merge change
+inside the manual-only `scheduled_emails` runner (Communications feature's
+own change, reviewed for the scheduler-wiring angle only).
+
+Each of the seven new tasks was read in full for idempotency and
+org-scoping: all use either the shared `_for_each_org` helper, a durable
+DB-unique claim row (`LeaveNoticeSend`'s `uq_leave_notice_send` constraint —
+Pitfall #36's "unique constraint on the provider's own id" shape, with a real
+constraint rather than a JSON flag), a row re-read under `with_for_update()`
+immediately before acting, or `FOR UPDATE SKIP LOCKED` claiming
+(`pending_file_deletions`). **0 fixed, 0 new findings** — every new surface
+traced and found already using the safe patterns. Registry re-verified by
+AST (handling the `TASK_INTERVALS_SECONDS: Dict[str, int] = {...}`
+`AnnAssign` form, which a naive walk under-counts): 88/88/87+1, up from
+80/80/79+1 at pass 13. Route inventory unchanged (2 routes, 0 diff).
+`CRON4-31-2`, `CRON-4`, `CRON-31-8` and the Redis-down fail-open fallback all
+re-confirmed unchanged at their current locations.
+
+**A pre-existing, out-of-scope 2-head Alembic fork** (`809893462b67`,
+`dd939b45d6c0`) was found and left to [PR
+#4560](https://github.com/thegspiro/the-logbook/pull/4560) (open, already
+carries the join revision `561a3e9f4165`), per the standing rule against
+writing a competing merge revision for this class of defect.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean. `validate_migrations.py --strict` fails
+only on the pre-existing fork noted above (819 revisions, 2 heads).
+`check_route_permissions.py --strict` — 338 routes, 0 errors/warnings.
+Scoped backend pytest (scheduled-task/cron + all seven new delegates) — 694
+passed, 1 pre-existing skip (`pywebpush`). `npm run typecheck` — 0 errors.
+`npm run lint` — 0 errors/warnings.
+
+Full write-up: `docs/security-review/CRON14-31-scheduled-tasks.md`.
+
+Row 31 → ✅ (pending this PR's merge); next is Feature 32 (Locations &
+kiosk) — re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-22 — Feature 28 (Security, audit & IP, pass 14) merged; Feature 29 (Reports & analytics, pass 16) merged; Feature 30 (Onboarding, pass 14): watchdog pickup, one independent export-scrub fix verified good, 0 fixed, 0 new findings
 
