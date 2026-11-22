@@ -1,10 +1,11 @@
 """
 History collections: the managed source / donor and document-type lists, and
-albums.
+albums. The phase 5 lists (stations, apparatus and event types) are in
+``history_lists_service``.
 
 Both lists are managed like the title list (owner decision): an entry is
 retired or merged into another, never deleted while an item points at it. A
-source is shared by photos and documents.
+source is shared by photos, documents, apparatus and events.
 
 Albums are draft or shown to members; public album pages arrive with the
 public feed. An album holds photos and documents in one order (phase 4,
@@ -15,7 +16,7 @@ and a member never sees a draft album at all.
 
 from typing import Any, Literal, Optional, Union
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.history import (
@@ -23,8 +24,10 @@ from app.models.history import (
     HistoryAlbum,
     HistoryAlbumDocument,
     HistoryAlbumItem,
+    HistoryApparatus,
     HistoryDocument,
     HistoryDocumentType,
+    HistoryEvent,
     HistoryMedia,
     HistorySource,
 )
@@ -37,6 +40,10 @@ from app.services.history_media_service import HistoryMediaService
 from app.services.history_service import Viewer, clean_title_name, title_key
 
 EntryKind = Literal["media", "document"]
+
+#: Every record that carries a ``source_id``. A source's usage count and a
+#: source merge cover all of them.
+_SOURCE_USERS = (HistoryMedia, HistoryDocument, HistoryApparatus, HistoryEvent)
 #: One entry of an album, in the album's order.
 AlbumEntry = tuple[EntryKind, Union[HistoryMedia, HistoryDocument]]
 
@@ -48,14 +55,14 @@ class HistorySourceService:
     async def list_sources(
         self, organization_id: str, *, include_retired: bool
     ) -> list[tuple[HistorySource, int]]:
-        # A source is used by photos and by documents; both count.
-        users = (
-            select(HistoryMedia.source_id.label("source_id")).where(
-                HistoryMedia.organization_id == str(organization_id)
-            )
-        ).union_all(
-            select(HistoryDocument.source_id.label("source_id")).where(
-                HistoryDocument.organization_id == str(organization_id)
+        # A source is used by photos, documents, apparatus and events; every
+        # use counts.
+        users = union_all(
+            *(
+                select(model.source_id.label("source_id")).where(
+                    model.organization_id == str(organization_id)
+                )
+                for model in _SOURCE_USERS
             )
         )
         uses = users.subquery()
@@ -142,13 +149,13 @@ class HistorySourceService:
     async def merge_source(
         self, source: HistorySource, target: HistorySource
     ) -> HistorySource:
-        """Move every photo and document from *source* to *target*, then
-        remove *source*."""
+        """Move every photo, document, apparatus and event from *source* to
+        *target*, then remove *source*."""
         if source.id == target.id:
             raise ValueError("Choose a different source to merge into")
         if source.organization_id != target.organization_id:
             raise ValueError("Source not found")
-        for model in (HistoryMedia, HistoryDocument):
+        for model in _SOURCE_USERS:
             await self.db.execute(
                 update(model)
                 .where(

@@ -26,6 +26,9 @@ vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_Y
 import HistoryDocumentPage from './HistoryDocumentPage';
 
 const catalogue = {
+  // Phase 5: every view carries the apparatus and events it is linked to.
+  apparatus: [],
+  events: [],
   id: 'd1',
   kind: 'pdf' as const,
   title: 'Letter of thanks',

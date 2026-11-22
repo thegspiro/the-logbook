@@ -8,6 +8,8 @@
  */
 import React from 'react';
 import { Link } from 'react-router';
+import { ApparatusLinks } from './ApparatusDetails';
+import { LinkedEventsList } from './LinkedEventsList';
 import { FileAudio, FileVideo, Image as ImageIcon } from 'lucide-react';
 import { mediaFileUrl } from '../services/api';
 import type { MediaKind, MediaSummary, MediaView } from '../types';
@@ -123,6 +125,15 @@ export const MediaDetails: React.FC<{ item: MediaView }> = ({ item }) => {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+      <ApparatusLinks apparatus={item.apparatus} headingId="media-apparatus-heading" />
+      {item.events.length > 0 && (
+        <section aria-labelledby="media-events-heading">
+          <h2 id="media-events-heading" className="text-theme-text-primary mb-1 text-base font-semibold">
+            Events
+          </h2>
+          <LinkedEventsList events={item.events} />
         </section>
       )}
     </div>
