@@ -294,6 +294,60 @@ const CRR_CATALOGUE = {
   ],
 };
 
+const crrActivities = () => [
+  {
+    id: 'crr-a1',
+    activity_type_id: 'crr-smoke',
+    activity_type_name: 'Smoke alarm install',
+    event_id: null,
+    event_title: null,
+    occurred_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+    zip_code: '22046',
+    city: 'Falls Church',
+    state: 'VA',
+    county: 'Falls Church (city)',
+    counts: [
+      { measure_id: 'crr-m1', label: 'Alarms installed', quantity: 3 },
+      { measure_id: 'crr-m2', label: 'Homes', quantity: 1 },
+    ],
+    tags: [{ id: 'crr-fire', label: 'Fire' }],
+    members: [{ user_id: 'user-1', name: 'Alex Rivera', minutes: 90 }],
+    recorded_by_name: 'Alex Rivera',
+    has_resident_details: true,
+    resident_details_cleared: false,
+    street_address: '1200 West Broad Street, Apartment 4B',
+    resident_name: 'Jordan Whitfield-Castellanos',
+    resident_phone: '703-555-0142',
+    resident_email: 'jordan.whitfield@example.test',
+    notes: 'Second-floor bedroom had no working alarm; replaced the hallway unit as well.',
+    can_edit: true,
+  },
+  {
+    id: 'crr-a2',
+    activity_type_id: 'crr-smoke',
+    activity_type_name: 'Smoke alarm install',
+    event_id: 'oc-today',
+    event_title: 'Car seat check at the library',
+    occurred_at: new Date(Date.now() - 800 * 24 * 3600 * 1000).toISOString(),
+    zip_code: '22044',
+    city: 'Falls Church',
+    state: 'VA',
+    county: 'Fairfax',
+    counts: [{ measure_id: 'crr-m1', label: 'Alarms installed', quantity: 12 }],
+    tags: [],
+    members: [],
+    recorded_by_name: null,
+    has_resident_details: false,
+    resident_details_cleared: true,
+    street_address: null,
+    resident_name: null,
+    resident_phone: null,
+    resident_email: null,
+    notes: null,
+    can_edit: false,
+  },
+];
+
 /** Outreach events for the Overview, placed around the moment the test runs. */
 const outreachCalendar = () => {
   const at = (days: number, hours: number) => new Date(Date.now() + (days * 24 + hours) * 3600 * 1000).toISOString();
@@ -5553,6 +5607,22 @@ const routes = ({
   // Events Settings -> CRR Catalogue: one built-in type, one the department
   // added, and a tag of each kind, so every control the section draws renders.
   ['**/api/v1/crr/catalogue', () => (empty ? { activity_types: [], tags: [] } : CRR_CATALOGUE)],
+  // The CRR log and its form: one activity with resident details (the
+  // signed-in manager may see them), one at an event with a cleared address.
+  [
+    '**/api/v1/crr/form-options',
+    () => ({
+      activity_types: CRR_CATALOGUE.activity_types.filter((t) => t.is_active),
+      tags: CRR_CATALOGUE.tags,
+      default_city: 'Falls Church',
+      default_state: 'VA',
+      zip_lookup_enabled: true,
+      members: [{ id: 'user-1', name: 'Alex Rivera' }],
+      retention_months: 24,
+      can_view_contact: true,
+    }),
+  ],
+  ['**/api/v1/crr/activities**', () => (empty ? { items: [], total: 0 } : { items: crrActivities(), total: 2 })],
   ['**/api/v1/admin-hub/events/metrics', eventMetricSettings],
   ['**/api/v1/admin-hub/training/metrics', trainingMetricSettings],
   // The notifications page lists rules and needs a list, not the catch-all

@@ -814,7 +814,6 @@ export const eventService = {
 // Event Request Pipeline Service
 // ============================================
 
-/** The department's CRR activity catalogue (events.manage). */
 export const eventRequestService = {
   async getForms(params?: { skip?: number; limit?: number }): Promise<import('./formTypes').FormsListResponse> {
     const response = await api.get<import('./formTypes').FormsListResponse>('/event-requests/forms', { params });

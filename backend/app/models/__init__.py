@@ -79,7 +79,11 @@ from app.models.compliance_config import (
 )
 from app.models.consent import ConsentType, UserConsent
 from app.models.crr import (
+    CrrActivity,
+    CrrActivityCount,
     CrrActivityMeasure,
+    CrrActivityMember,
+    CrrActivityTag,
     CrrActivityType,
     CrrActivityTypeTag,
     CrrTag,
@@ -822,7 +826,11 @@ __all__ = [
     "ApparatusEventSeatType",
     "ApparatusEventSeatCall",
     "ApparatusEventTemplate",
+    "CrrActivity",
+    "CrrActivityCount",
     "CrrActivityMeasure",
+    "CrrActivityMember",
+    "CrrActivityTag",
     "CrrActivityType",
     "CrrActivityTypeTag",
     "CrrTag",

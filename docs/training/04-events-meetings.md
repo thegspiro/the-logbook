@@ -3089,9 +3089,8 @@ Outreach Manager.
 
 **Manage Events → Settings → CRR Catalogue** lists the community risk
 reduction activities your department records, what each one counts, and the
-risks and priority populations they are tagged with. Logging activities
-against it arrives in the next update; until then the section says it is not
-in use yet.
+risks and priority populations they are tagged with. Activities are recorded
+against it under [CRR Activities](#crr-activities).
 
 Every department starts with the same built-in types: smoke alarm install, CO
 alarm install, home safety survey, car seat inspection, extinguisher training,
@@ -3107,10 +3106,54 @@ its counts (for example, **Alarms installed** and **Homes**) and default tags
 - **Add an activity type** with a name and, optionally, its counts separated by
   commas. A type you added can be deleted.
 - Under **Tags**, add, rename or retire risks and priority populations.
+- **Admin Hours category**, on each type: the category a member's time on a
+  logged activity of that type is credited to. Left at **The Public Education
+  mapping**, it follows whatever your Hour Tracking mapping for public
+  education events says.
+- **Resident details → Keep for (months)**: how long a resident's address,
+  name, phone, email and the activity's notes are kept, 24 months unless you
+  change it. After that they are cleared automatically; the ZIP code, city,
+  state and counts stay.
 
 Changes save as you make them. **Juvenile firesetter intervention** is listed
 as **Coming soon**: it will be a separate option, with its own access rules
 because its records concern minors.
+
+### CRR Activities
+
+**Who can do this:** members of the Community Outreach Team and anyone who can
+manage events. Only the Community Outreach Manager, the chiefs and the
+president see a resident's details.
+
+**Events → CRR Activities** (also **Manage Events → Community Outreach → CRR
+Activities**) lists the community risk reduction work your department has
+recorded, newest first, filtered by **Activity type** and **When**.
+
+**Log a CRR activity** records work done away from an event — an alarm install
+at a resident's home, a home safety survey:
+
+1. Choose the **Activity type** and when it happened, and fill in its counts
+   (for example, **Alarms installed: 3**). Blank counts are left out.
+2. Tick the **Risks** and **Priority populations** it addressed; the type's
+   defaults are ticked for you.
+3. Enter the **ZIP code**. In a US department the city and state fill in from
+   it; the form starts with your department's own city and state.
+4. Tick **Add resident details** only when you need to record the address,
+   name, phone or email. They are encrypted, shown only to the Community
+   Outreach Manager and above, and cleared after your department's retention
+   period.
+5. Under **Who took part**, list the members and their minutes. You are listed
+   with 60 minutes to start with. Each member's time is credited to Admin
+   Hours, in the category the activity type names.
+
+**At an event,** an outreach event's page has a **CRR activities** card:
+**Record an activity** records what was done there, such as seats checked at a
+car seat event. No members are listed, because the event's attendance already
+credits their time.
+
+An activity cannot be edited once recorded. To correct one, **Delete** it —
+which also removes the Admin Hours it credited — and record it again. You can
+delete activities you recorded; anyone who manages events can delete any.
 
 ### The Outreach Overview
 

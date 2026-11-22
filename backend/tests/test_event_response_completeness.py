@@ -91,6 +91,10 @@ CALLER_SUPPLIED = {
     # events.manage on an outreach event that is not cancelled. Per caller,
     # detail endpoint only; False is the honest default elsewhere.
     "can_staff_event",
+    # Whether this caller may record CRR activities against the event:
+    # crr.record or events.manage on an outreach event that is not cancelled.
+    # Per caller, detail endpoint only; False is the honest default elsewhere.
+    "can_record_crr",
     # The rest of the list card's derived fields, per caller: whether this
     # member checked in (their own RSVP row), what the event would credit (the
     # org's hour mappings) and whether the attendee list will answer them (the

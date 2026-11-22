@@ -1,6 +1,6 @@
 /**
  * Community risk reduction (CRR): the catalogue of activity types, their
- * counts and tags.
+ * counts and tags, the activities recorded against it, and the ZIP lookup.
  *
  * Imported directly rather than through the `services/api` barrel: only the
  * lazily loaded CRR screens use it, and the barrel is part of every page's
@@ -8,7 +8,18 @@
  */
 
 import api from './apiClient';
-import type { CrrActivityType, CrrActivityTypeUpdate, CrrCatalogue, CrrTag, CrrTagKind } from '../types/crr';
+import type {
+  CrrActivity,
+  CrrActivityCreate,
+  CrrActivityList,
+  CrrActivityType,
+  CrrActivityTypeUpdate,
+  CrrCatalogue,
+  CrrFormOptions,
+  CrrTag,
+  CrrTagKind,
+  CrrZipPlace,
+} from '../types/crr';
 
 export const crrService = {
   async getCatalogue(): Promise<CrrCatalogue> {
@@ -58,6 +69,40 @@ export const crrService = {
     body: { label?: string | undefined; is_active?: boolean | undefined }
   ): Promise<CrrTag> {
     const response = await api.patch<CrrTag>(`/crr/tags/${tagId}`, body);
+    return response.data;
+  },
+  async updateSettings(residentDetailsRetentionMonths: number): Promise<number> {
+    const response = await api.put<{ resident_details_retention_months: number }>('/crr/settings', {
+      resident_details_retention_months: residentDetailsRetentionMonths,
+    });
+    return response.data.resident_details_retention_months;
+  },
+  /** What the activity form offers (crr.record or events.manage). */
+  async getFormOptions(): Promise<CrrFormOptions> {
+    const response = await api.get<CrrFormOptions>('/crr/form-options');
+    return response.data;
+  },
+  async listActivities(params: {
+    start?: string | undefined;
+    end?: string | undefined;
+    activity_type_id?: string | undefined;
+    event_id?: string | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
+  }): Promise<CrrActivityList> {
+    const response = await api.get<CrrActivityList>('/crr/activities', { params });
+    return response.data;
+  },
+  async createActivity(body: CrrActivityCreate): Promise<CrrActivity> {
+    const response = await api.post<CrrActivity>('/crr/activities', body);
+    return response.data;
+  },
+  async deleteActivity(activityId: string): Promise<void> {
+    await api.delete(`/crr/activities/${activityId}`);
+  },
+  /** City, state and county for a US ZIP; rejects with 404 when it is not in the data. */
+  async lookupZip(zipCode: string): Promise<CrrZipPlace> {
+    const response = await api.get<CrrZipPlace>(`/crr/zip-lookup/${encodeURIComponent(zipCode)}`);
     return response.data;
   },
 };

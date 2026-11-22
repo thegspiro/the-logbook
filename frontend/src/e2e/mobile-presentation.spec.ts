@@ -163,7 +163,20 @@ test.describe('mobile presentation', () => {
         // panel that was not rendering — was satisfied by the General tab's own
         // body copy, "...and show platoon rosters on shifts". The guard passed on
         // exactly the page it was written to catch.
-        if (route.expectText && !(await page.getByText(route.expectText, { exact: true }).first().isVisible())) {
+        //
+        // Waited for, not read once: networkidle gives up after 2s, so on a busy
+        // runner the page can still be rendering when this runs, and a single
+        // isVisible() then reported a correct page as the wrong one — seen on
+        // /members/admin?tab=settings under four workers (Pitfall #38).
+        if (
+          route.expectText &&
+          !(await page
+            .getByText(route.expectText, { exact: true })
+            .first()
+            .waitFor({ state: 'visible', timeout: 5_000 })
+            .then(() => true)
+            .catch(() => false))
+        ) {
           wrongPage.push(`${route.path}: expected text "${route.expectText}" is not on the page`);
         }
 

@@ -1766,8 +1766,8 @@ without a ruling:
   Outreach Impact counts by, so the two pages cannot disagree (pitfall #29). An
   apparatus night whose template uses a non-public type (business meeting,
   other) is therefore not on the Overview, though it stays on Apparatus Events.
-  Widening the rule would change Outreach Impact's counts too. "Tagged with a
-  CRR activity" joins the rule when Phase 3 adds activities.
+  Widening the rule would change Outreach Impact's counts too. "Has a CRR
+  activity" joins the rule with the Outreach Impact breakdowns (CRR part 3).
 - **"Closed out" is attendance finalized**, per the 2026-11-20 decision
   (completion on finalize). An event with a headcount but no finalize still
   shows as waiting; a draft never does.
@@ -1780,29 +1780,57 @@ without a ruling:
 
 Answers to the Phase 3 plan's questions, as they will be built:
 
-| Question                                  | Decision                                                                                                                                                   |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Who records activities                    | The Community Outreach Team, and anyone holding `events.manage`                                                                                            |
-| Who sees a resident's address and contact | The Community Outreach Manager and above; everyone else sees ZIP, city, state and counts                                                                   |
-| How long resident details are kept        | Cleared automatically after a period the department sets, 24 months by default; the ZIP code is kept for audit                                             |
-| Default counts                            | As listed in `app/services/crr_catalogue_defaults.py`                                                                                                      |
-| Admin Hours                               | Each activity type credits a category the department chooses, or none; an activity attached to an event does not credit again, its attendance already does |
-| Repeat-visit lookup                       | Later                                                                                                                                                      |
-| ZIP lookup                                | On when the department's own address is in the US; new entries start with the department's city and state                                                  |
-| ZIP data                                  | GeoNames' US postal codes (CC BY 4.0), bundled; credit with a link in the app footer                                                                       |
+| Question                                  | Decision                                                                                                                                                                                                    |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Who records activities                    | The Community Outreach Team, and anyone holding `events.manage`                                                                                                                                             |
+| Who sees a resident's address and contact | The Community Outreach Manager and above; everyone else sees ZIP, city, state and counts                                                                                                                    |
+| How long resident details are kept        | Cleared automatically after a period the department sets, 24 months by default; the ZIP code is kept for audit                                                                                              |
+| Default counts                            | As listed in `app/services/crr_catalogue_defaults.py`                                                                                                                                                       |
+| Admin Hours                               | Each activity type credits a category the department chooses; with none chosen it follows the Public Education mapping. An activity attached to an event does not credit again, its attendance already does |
+| Repeat-visit lookup                       | Later                                                                                                                                                                                                       |
+| ZIP lookup                                | On when the department's own address is in the US; new entries start with the department's city and state                                                                                                   |
+| ZIP data                                  | GeoNames' US postal codes (CC BY 4.0), bundled; credit with a link in the app footer                                                                                                                        |
 
 **Part 1 — the catalogue (built 2026-11-22).** Events Settings → CRR
 Catalogue: activity types, their counts, and risk and priority-population
 tags, each department's own copy of the defaults, seeded the first time the
 catalogue is read. A built-in row is retired, never deleted. Managed with
 `events.manage`. The ZIP lookup (`GET /crr/zip-lookup/{zip}`) and its bundled
-data ship with it. Nothing reads the catalogue until activity logging ships,
-and the section says so (pitfall #19). Juvenile firesetter intervention shows
-as "Coming soon" with nothing stored.
+data ship with it. Juvenile firesetter intervention shows as "Coming soon" with
+nothing stored.
 
-Still to build: activity logging with encrypted resident details and the
-`crr.*` permissions (part 2), the Outreach Impact breakdowns (part 3), and
-yearly goals per count (phase 4).
+**Part 2 — activity logging (built 2026-11-22).** Events → CRR Activities
+(`/events/crr-activities`, also the hub's CRR Activities tab), a "Record an
+activity" card on an outreach event's page, and a link from the Outreach
+Overview. Two new permissions: `crr.record`, granted to the Community Outreach
+Team position and alongside every seeded `events.manage`, and
+`crr.view_contact`, granted to the Public Outreach position, the chief ranks
+and the president. The migration grants both to stored positions (pitfall #23).
+Boundaries drawn without a ruling:
+
+- **The screen records and deletes; it does not edit.** An activity's type,
+  event, time and members are fixed once recorded, because the members' Admin
+  Hours entries are written from them. `PATCH /crr/activities/{id}` changes
+  counts, tags, place, notes and resident details, but no screen calls it yet;
+  to correct an activity, delete it (which removes the hours it credited) and
+  record it again.
+- **Notes are treated as resident details.** They are encrypted, shown only
+  with `crr.view_contact`, and cleared with the details, because free text is
+  where a resident's name or condition turns up.
+- **Clearing is a daily task** (03:55 UTC). It clears address, name, phone,
+  email and notes on activities older than the period, keeps ZIP, city, state,
+  county and counts, and stamps the activity so the page says the details were
+  cleared. An activity that never held details is left unstamped. Details cannot
+  be added back to a cleared activity.
+- **Reading resident details is audited** (`crr.resident_details_viewed`, with
+  activity ids and no content), once per list or detail response that shows any.
+- **The event card shows to `crr.record` or `events.manage`** on an outreach
+  event that is not cancelled — the same rule a save is checked against.
+- **A member credited 0 minutes is recorded as taking part** but credits no
+  time.
+
+Still to build: the Outreach Impact breakdowns by count, risk, population and
+ZIP (part 3), and yearly goals per count (phase 4).
 
 **The footer credit is hidden on a phone,** with the rest of its line: a link
 on every page's footer would be a tap target under 44px on every route. The
