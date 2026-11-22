@@ -654,6 +654,43 @@ async def export_period_results(
     )
 
 
+@router.get("/export-pdfs")
+async def export_period_pdfs(
+    period_id: str = Query(min_length=1, max_length=36),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.view_all")),
+    _stepup: User = Depends(require_stepup),
+):
+    """A zip of the signed PDF of every finalized evaluation in a period: the
+    copy the signatures attest to, without any later response. Requires
+    ``evaluations.view_all`` and a recently re-verified session, since it
+    hands over a period's personnel records at once (owner decision
+    2026-11-22). Audited, and watched as a bulk export; a period of another
+    department answers 404.
+
+    **Permissions required:** evaluations.view_all
+    """
+    async with handle_service_errors("Failed to prepare the PDFs"):
+        bundle = await EvaluationDocumentService(db).period_bundle(
+            current_user.organization_id, current_user, period_id
+        )
+    content, count = ensure_found(bundle, "Review period")
+    await _audit(
+        db,
+        current_user,
+        "evaluation_period_pdfs_exported",
+        {"period_id": period_id, "documents": count},
+    )
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": 'attachment; filename="evaluation-pdfs.zip"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @router.get("/draft-options", response_model=DraftOptions)
 async def get_draft_options(
     db: AsyncSession = Depends(get_db),

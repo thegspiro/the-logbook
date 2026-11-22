@@ -3467,6 +3467,108 @@ class TestGoalReview:
         ]
 
 
+class TestPeriodPdfs:
+    """GET /evaluations/export-pdfs: the signed PDF of every finalized
+    evaluation in a period in one zip, for view_all, with step-up."""
+
+    URL = "/evaluations/export-pdfs"
+
+    async def test_view_all_gets_each_finished_reviews_signed_pdf(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        import io
+        import zipfile
+
+        from app.models.audit import AuditLog
+
+        other = await _user(dept.db, dept.org, [])
+        await _finalized(dept, make_client)
+        await _finalized(dept, make_client, member=other)
+        # Not included: a review still in progress.
+        await _draft(
+            await make_client(dept.manager),
+            dept,
+            member=await _user(dept.db, dept.org, []),
+        )
+
+        response = await (await make_client(dept.reader)).get(
+            self.URL, params={"period_id": dept.period.id}
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.headers["content-type"] == "application/zip"
+        assert response.headers["cache-control"] == "no-store"
+        with zipfile.ZipFile(io.BytesIO(response.content)) as bundle:
+            names = sorted(bundle.namelist())
+            assert names == sorted(
+                f"{member.full_name} - {dept.template.name} - 2025-12-31.pdf"
+                for member in (dept.member, other)
+            )
+            assert all(bundle.read(name).startswith(b"%PDF") for name in names)
+        audited = (
+            await dept.db.execute(
+                select(AuditLog).where(
+                    AuditLog.event_type == "evaluation_period_pdfs_exported"
+                )
+            )
+        ).scalar_one()
+        assert audited.event_data == {"period_id": dept.period.id, "documents": 2}
+
+    async def test_a_pdf_missing_from_storage_is_named_not_dropped(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        import io
+        import os
+        import zipfile
+
+        from app.models.evaluation import EvaluationDocument
+        from app.services import file_storage_service as file_storage
+
+        url = await _finalized(dept, make_client)
+        document = (
+            await dept.db.execute(
+                select(EvaluationDocument).where(
+                    EvaluationDocument.evaluation_id == url.rsplit("/", 1)[-1]
+                )
+            )
+        ).scalar_one()
+        stored = file_storage.resolve(
+            document.file_path, dept.org, file_storage.StorageArea.EVALUATIONS
+        )
+        assert stored is not None
+        os.remove(stored)
+
+        response = await (await make_client(dept.reader)).get(
+            self.URL, params={"period_id": dept.period.id}
+        )
+
+        with zipfile.ZipFile(io.BytesIO(response.content)) as bundle:
+            assert bundle.namelist() == ["NOT INCLUDED.txt"]
+            assert dept.member.full_name in bundle.read("NOT INCLUDED.txt").decode()
+
+    async def test_it_needs_view_all_and_a_period_of_this_department(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        params = {"period_id": dept.period.id}
+        conductor = await make_client(dept.evaluator)
+        assert (await conductor.get(self.URL, params=params)).status_code == 403
+        elsewhere = await _period(dept.db, await _org(dept.db))
+        missing = await (await make_client(dept.reader)).get(
+            self.URL, params={"period_id": elsewhere.id}
+        )
+        assert missing.status_code == 404
+
+    @pytest.mark.real_stepup
+    async def test_it_requires_a_recent_re_verification(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        response = await (await make_client(dept.reader)).get(
+            self.URL, params={"period_id": dept.period.id}
+        )
+        assert response.status_code == 403
+        assert response.headers.get("x-stepup-required") == "true"
+
+
 class TestPeriodResults:
     """The conduct list's grade column and the period export: for a holder of
     evaluations.view_all, finalized reviews only."""
