@@ -158,6 +158,15 @@ export const evaluationsService = {
     return { ...response.data, evaluators: asArray(response.data.evaluators) };
   },
 
+  /** A zip of the signed PDF of every finalized evaluation in a period (evaluations.view_all, step-up). */
+  async exportPeriodPdfs(periodId: string): Promise<Blob> {
+    const response = await api.get<Blob>('/evaluations/export-pdfs', {
+      responseType: 'blob',
+      params: { period_id: periodId },
+    });
+    return response.data;
+  },
+
   /** A review period's evaluations as CSV, with each finalized one's grade. */
   async exportPeriod(periodId: string): Promise<Blob> {
     const response = await api.get<Blob>('/evaluations/export', {

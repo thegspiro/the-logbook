@@ -294,6 +294,16 @@ export interface ItemAnswer {
   justification?: string | null | undefined;
   /** A goal-review item's result for each goal the previous review set, keyed by that review's goals item. */
   goal_ratings?: Record<string, GoalRating> | undefined;
+  /** A Goals item's goals. An answer saved before goals were a list holds them as `text` instead. */
+  goals?: GoalEntry[] | undefined;
+}
+
+/** One goal on a Goals item; `id` stays with it so next year's review rates it by it. */
+export interface GoalEntry {
+  id: string;
+  text: string;
+  /** ISO date, or none. */
+  target_date?: string | null | undefined;
 }
 
 export const GoalResult = {
@@ -518,7 +528,7 @@ export interface GoalsUnderReview {
   period_name: string | null;
   period_start: string;
   period_end: string;
-  goals: { key: string; label: string; text: string }[];
+  goals: { key: string; label: string; text: string; target_date?: string | null | undefined }[];
 }
 
 export interface PreviousReview {
@@ -529,7 +539,7 @@ export interface PreviousReview {
   /** The grade that stood: the evaluator's where they changed the calculated one. */
   overall: string | null;
   sections: { key: string; title: string; label: string }[];
-  goals: { key: string; label: string; text: string }[];
+  goals: { key: string; label: string; text: string; target_date?: string | null | undefined }[];
 }
 
 export interface SubmitResult {

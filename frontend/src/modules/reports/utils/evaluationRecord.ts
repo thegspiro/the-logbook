@@ -162,3 +162,51 @@ export function gradeCounts(rows: EvaluationSummary[]): { label: string; count: 
     .map(([label, count]) => ({ label, count }))
     .sort((a, b) => rank(a.label) - rank(b.label) || a.label.localeCompare(b.label));
 }
+
+/** Two ratings this far apart, in levels of the item's scale, are flagged as worth discussing. */
+export const SELF_COMPARISON_GAP = 2;
+
+export interface SelfComparisonRow {
+  key: string;
+  label: string;
+  self: string;
+  evaluator: string;
+  /** The two ratings are far enough apart to talk about: two levels or more on a scale, or opposite answers on meets / does not meet. */
+  differs: boolean;
+}
+
+function ratingLabel(item: TemplateItem, answer: ItemAnswer | undefined): string {
+  if (answer?.na) return 'Not applicable';
+  if (answer?.rating === undefined || answer.rating === null) return 'Not rated';
+  if (item.tool === 'meets') return answer.rating === 1 ? 'Meets' : 'Does not meet';
+  return item.levels.find((level) => level.value === answer.rating)?.label ?? String(answer.rating);
+}
+
+/**
+ * The rated items the member answered in their self-evaluation, beside the
+ * evaluator's rating of each. Both parts are what the server already sent this
+ * viewer; nothing here is read that the two forms do not show on their own.
+ */
+export function compareSelfEvaluation(
+  definition: TemplateDefinition,
+  self: PartContent,
+  evaluator: PartContent
+): SelfComparisonRow[] {
+  return partItems(definition, 'self_evaluation')
+    .filter((item) => item.tool === 'labeled_scale' || item.tool === 'numeric_scale' || item.tool === 'meets')
+    .map((item) => {
+      const mine = self.answers[item.key];
+      const theirs = evaluator.answers[item.key];
+      const a = mine?.na ? null : (mine?.rating ?? null);
+      const b = theirs?.na ? null : (theirs?.rating ?? null);
+      const differs =
+        a !== null && b !== null && (item.tool === 'meets' ? a !== b : Math.abs(a - b) >= SELF_COMPARISON_GAP);
+      return {
+        key: item.key,
+        label: item.label,
+        self: ratingLabel(item, mine),
+        evaluator: ratingLabel(item, theirs),
+        differs,
+      };
+    });
+}

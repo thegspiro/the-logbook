@@ -65,6 +65,7 @@ from app.schemas.evaluation import (
     BulkDraftItem,
     EvaluationCreate,
     EvaluationTool,
+    GoalEntry,
     PartContent,
     TemplateDefinition,
     TemplateItem,
@@ -172,6 +173,8 @@ def shape_errors(
             EvaluationTool.GOALS,
         ):
             errors.append(f"'{item.label}' takes a comment, not a written answer.")
+        if answer.goals and item.tool != EvaluationTool.GOALS:
+            errors.append(f"'{item.label}' does not take goals.")
         if answer.justification and kind != EvaluationPartKind.EVALUATOR.value:
             errors.append(f"'{item.label}': only the evaluator justifies a score.")
         if answer.goal_ratings:
@@ -223,9 +226,12 @@ def completeness_errors(
                     f"'{item.label}': explain why the score differs from the "
                     f"{suggested[key]} the figures suggest."
                 )
-        if item.tool in (EvaluationTool.NARRATIVE, EvaluationTool.GOALS):
+        if item.tool == EvaluationTool.NARRATIVE:
             if answer is None or not answer.text:
                 errors.append(f"Answer '{item.label}'.")
+        elif item.tool == EvaluationTool.GOALS:
+            if answer is None or not (answer.goals or answer.text):
+                errors.append(f"Set at least one goal in '{item.label}'.")
         elif item.tool == EvaluationTool.GOAL_REVIEW:
             rated = answer.goal_ratings if answer is not None else {}
             if any(key not in rated or rated[key].result is None for key in goal_keys):
@@ -400,20 +406,57 @@ def standing_overall(
 
 def goals_set(
     definition: TemplateDefinition, evaluator: PartContent
-) -> List[Dict[str, str]]:
-    """The goals an evaluator's part set: each answered Goals item's text,
-    keyed by the item. Read by the last-review summary and by the copy a
-    later evaluation's goal-review item rates."""
-    goals: List[Dict[str, str]] = []
+) -> List[Dict[str, Any]]:
+    """The goals an evaluator's part set, one entry per goal. Read by the
+    last-review summary and by the copy a later evaluation's goal-review item
+    rates, which keys its results by ``key``.
+
+    A goal from the list is keyed ``<item>:<goal id>`` and labelled with its
+    place in the item. A part saved before goals were a list holds them as
+    the item's ``text``: that reads as one goal keyed by the item alone, the
+    key copies and ratings taken before then already use.
+    """
+    goals: List[Dict[str, Any]] = []
     for section in definition.sections:
         for item in section.items:
             if item.tool != EvaluationTool.GOALS:
                 continue
             answer = evaluator.answers.get(item.key)
-            text = (answer.text or "").strip() if answer else ""
+            if answer is None:
+                continue
+            if answer.goals:
+                many = len(answer.goals) > 1
+                for number, goal in enumerate(answer.goals, start=1):
+                    entry: Dict[str, Any] = {
+                        "key": f"{item.key}:{goal.id}",
+                        "label": f"{item.label}, goal {number}" if many else item.label,
+                        "text": goal.text,
+                    }
+                    if goal.target_date is not None:
+                        entry["target_date"] = goal.target_date.isoformat()
+                    goals.append(entry)
+                continue
+            text = (answer.text or "").strip()
             if text:
                 goals.append({"key": item.key, "label": item.label, "text": text})
     return goals
+
+
+def as_goal_list(content: PartContent, items: Dict[str, TemplateItem]) -> PartContent:
+    """``content`` with every Goals item's free-text answer turned into one
+    goal, and goals still blank left out: the shape every save stores (see
+    ``ItemAnswer``). A row the evaluator has added but not yet filled in so
+    does not stop a draft from saving."""
+    converted = content.model_copy(deep=True)
+    for key, answer in converted.answers.items():
+        item = items.get(key)
+        if item is None or item.tool != EvaluationTool.GOALS:
+            continue
+        if answer.text and not answer.goals:
+            answer.goals = [GoalEntry(id="goal-1", text=answer.text)]
+        answer.goals = [goal for goal in answer.goals if goal.text]
+        answer.text = None
+    return converted
 
 
 def goals_under_review(evaluation: Evaluation) -> Optional[Dict[str, Any]]:
@@ -2300,7 +2343,7 @@ class EvaluationService:
             )
         )
         part = parts.get(kind)
-        stored = content.model_dump(mode="json")
+        stored = as_goal_list(content, items).model_dump(mode="json")
         if part is None:
             self.db.add(
                 EvaluationPart(

@@ -92,6 +92,18 @@ class TestEveryNoticeRenders:
             "send_vendor_order_updates",
         }
 
+    async def test_the_cancellation_notice_can_be_previewed(self, db_session):
+        # W67b-17: it had a template but no catalog entry, so it could be
+        # neither previewed nor test-sent. Its switch is "status changes".
+        org = await _store(db_session)
+        preview = await StorefrontPreviewService(db_session).render(
+            "order_cancelled", org.id
+        )
+
+        assert preview["setting"] == "send_status_updates"
+        assert "cancelled" in preview["subject"]
+        assert "has been cancelled" in preview["html_body"]
+
     async def test_an_unknown_notice_is_rejected(self, db_session):
         org = await _store(db_session)
         with pytest.raises(PreviewNotAvailable):

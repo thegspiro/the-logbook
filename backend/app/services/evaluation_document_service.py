@@ -21,6 +21,9 @@ as it was signed (owner decision 2026-11-02).
 from __future__ import annotations
 
 import hashlib
+import io
+import re
+import zipfile
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -36,6 +39,7 @@ from app.models.evaluation import (
     EvaluationDocument,
     EvaluationPartKind,
     EvaluationPartStatus,
+    EvaluationPeriod,
     EvaluationSignature,
     EvaluationStatus,
     EvaluationStepStatus,
@@ -213,7 +217,10 @@ def _goal_review_answer(
             if rating is not None and rating.result is not None
             else "Not rated"
         )
-        lines = [goal["text"], f"Result: {result}"]
+        lines = [goal["text"]]
+        if goal.get("target_date"):
+            lines.append(f"Target: {_iso_day(goal['target_date'])}")
+        lines.append(f"Result: {result}")
         if rating is not None and rating.comment:
             lines.append(f"Comment: {rating.comment}")
         notes.append((goal["label"], "\n".join(lines)))
@@ -235,7 +242,13 @@ def _answer(
     if answer is None:
         return None
     notes: List[Tuple[str, str]] = []
-    if item.tool in (EvaluationTool.NARRATIVE, EvaluationTool.GOALS):
+    if item.tool == EvaluationTool.GOALS and answer.goals:
+        text = "\n".join(
+            f"{number}. {goal.text}"
+            + (f" (by {_day(goal.target_date)})" if goal.target_date else "")
+            for number, goal in enumerate(answer.goals, start=1)
+        )
+    elif item.tool in (EvaluationTool.NARRATIVE, EvaluationTool.GOALS):
         text = answer.text or "—"
     elif item.tool == EvaluationTool.CHECKLIST:
         text = ", ".join(answer.checked) if answer.checked else "None checked"
@@ -346,6 +359,72 @@ class EvaluationDocumentService:
             with_response,
         )
         return document
+
+    async def period_bundle(
+        self, organization_id: str, viewer: User, period_id: str
+    ) -> Optional[Tuple[bytes, int]]:
+        """A zip of the signed PDF of every finalized evaluation in a period,
+        and how many PDFs it holds, or None when the period is not this
+        department's.
+
+        The evaluations are the finalized rows ``list_evaluations`` gives a
+        holder of ``evaluations.view_all``, the same the period export and
+        the grade spread count, so the caller's own is left out. Each is the
+        signed copy (owner decision 2026-11-22): the record its signatures
+        attest to, without any later response, built now if it never was. A
+        PDF missing from storage is named in ``NOT INCLUDED.txt`` in the zip
+        rather than failing the whole download or vanishing from it.
+        """
+        period = await self.db.scalar(
+            select(EvaluationPeriod.id).where(
+                EvaluationPeriod.id == str(period_id),
+                EvaluationPeriod.organization_id == organization_id,
+            )
+        )
+        if period is None:
+            return None
+        rows = await self.evaluations.list_evaluations(
+            organization_id, viewer, period_id=period
+        )
+        finalized = sorted(
+            (r for r in rows if r["status"] == EvaluationStatus.FINALIZED.value),
+            key=lambda r: (r["member"]["name"].casefold(), r["id"]),
+        )
+        buffer = io.BytesIO()
+        names: set = set()
+        missing: List[str] = []
+        included = 0
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as bundle:
+            for row in finalized:
+                member = row["member"]["name"]
+                document = await self.ensure_document(
+                    organization_id, row["id"], viewer
+                )
+                path = (
+                    file_storage.resolve(
+                        document.file_path, organization_id, StorageArea.EVALUATIONS
+                    )
+                    if document is not None
+                    else None
+                )
+                if path is None or not await file_storage.exists(path):
+                    logger.error(
+                        "Signed PDF of evaluation {} is missing from storage", row["id"]
+                    )
+                    missing.append(f"{member} ({row['template_name']})")
+                    continue
+                name = _bundle_name(
+                    f"{member} - {row['template_name']} - {row['period_end']}", names
+                )
+                bundle.writestr(name, await file_storage.read_bytes(path))
+                included += 1
+            if missing:
+                bundle.writestr(
+                    "NOT INCLUDED.txt",
+                    "These signed PDFs could not be read from storage:\n"
+                    + "".join(f"- {line}\n" for line in missing),
+                )
+        return buffer.getvalue(), included
 
     async def response(
         self, organization_id: str, evaluation: Evaluation, document: EvaluationDocument
@@ -557,6 +636,24 @@ class EvaluationDocumentService:
             ),
             "generated_at": _moment(datetime.now(timezone.utc), tz),
         }
+
+
+_UNSAFE_NAME = re.compile(r"[^\w .()-]+")
+
+
+def _bundle_name(stem: str, taken: set) -> str:
+    """A file name for a zip entry, from text people typed (a member's name, a
+    form's title): only letters, digits, spaces and ``.()-_``, no leading dot
+    or separator, so no entry can name a path outside the folder it unpacks
+    into, and never a name already used in the zip."""
+    cleaned = _UNSAFE_NAME.sub("_", stem).strip(" ._") or "evaluation"
+    cleaned = cleaned[:150]
+    name, number = f"{cleaned}.pdf", 2
+    while name.casefold() in taken:
+        name = f"{cleaned} ({number}).pdf"
+        number += 1
+    taken.add(name.casefold())
+    return name
 
 
 def excluded_line(excluded: Dict[str, Any]) -> str:
