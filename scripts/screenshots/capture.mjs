@@ -588,6 +588,18 @@ async function enterAuthenticatorCode(page, credentials) {
  * session never pays for that login — which matters because `--only` runs are
  * the common case while iterating on one guide.
  */
+/**
+ * How long a signed-in context may sit unused before it is signed in afresh.
+ *
+ * The backend ends a session after HIPAA_SESSION_TIMEOUT_MINUTES (15) of
+ * inactivity. The administrator's context is used by most shots and never goes
+ * quiet that long, but the officer accounts are used by a handful each, spread
+ * over a two-hour run: by their next shot the session had lapsed, the app sent
+ * them to /login, and fifteen shots in one run failed with "route did not
+ * land". Under the timeout, with room for one slow shot.
+ */
+const SESSION_IDLE_LIMIT_MS = 12 * 60 * 1000;
+
 function makeSessions(browser, baseOptions) {
   const cache = new Map();
 
@@ -597,8 +609,15 @@ function makeSessions(browser, baseOptions) {
       const theme = shot.theme || "light";
       const key = `${auth}:${theme}`;
 
-      let entry = cache.get(key);
-      if (entry) return entry;
+      const cached = cache.get(key);
+      if (cached && Date.now() - cached.lastUsed < SESSION_IDLE_LIMIT_MS) {
+        cached.lastUsed = Date.now();
+        return cached.page;
+      }
+      if (cached) {
+        await cached.page.context().close();
+        cache.delete(key);
+      }
 
       const context = await browser.newContext({
         ...baseOptions,
@@ -652,9 +671,8 @@ function makeSessions(browser, baseOptions) {
         throw new Error(`unknown auth mode '${auth}' on shot ${shot.id}`);
       }
 
-      entry = page;
-      cache.set(key, page);
-      return entry;
+      cache.set(key, { page, lastUsed: Date.now() });
+      return page;
     },
   };
 }
