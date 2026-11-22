@@ -30,6 +30,7 @@ import {
 } from '../components/members/LeaveRequestConversation';
 import { useLeaveRequestNavStore } from '../hooks/useLeaveRequestNav';
 import EndLeaveEarly from '../components/members/EndLeaveEarly';
+import ApproverCover from '../components/members/ApproverCover';
 
 // The kinds a member asks for. Administrative and new-member leave are an
 // officer's to record, not a member's to request.
@@ -75,20 +76,31 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => (
   <span className={`badge ${STATUS_STYLES[status] ?? ''}`}>{STATUS_LABELS[status] ?? status}</span>
 );
 
-/** The current round's votes: accepting changed dates starts a new round. */
+/** The current round's votes: accepting changed dates starts a new round. A
+ * stand-in's vote names the away approver it was cast for. */
 const Votes: React.FC<{ request: LeaveRequest }> = ({ request }) => {
   const round = request.vote_round ?? 1;
   const votes = request.votes.filter((v) => (v.round ?? 1) === round);
   return votes.length === 0 ? null : (
     <ul className="mt-2 space-y-1 text-xs">
       {votes.map((v) => (
-        <li key={v.voter_id} className="text-theme-text-secondary">
+        <li key={`${v.voter_id}:${v.on_behalf_of_name ?? ''}`} className="text-theme-text-secondary">
           <span className="font-medium">{v.voter_name}</span> {v.vote === 'approve' ? 'approved' : 'denied'}
+          {v.on_behalf_of_name ? <> for {v.on_behalf_of_name}</> : null}
           {v.note ? <>: &ldquo;{v.note}&rdquo;</> : null}
         </li>
       ))}
     </ul>
   );
+};
+
+/** Who settled a decided request and when; empty while it waits. */
+const decidedLine = (r: LeaveRequest, tz: string): string => {
+  if (r.status === LeaveRequestStatus.PENDING || !r.decided_at) return '';
+  const on = formatDate(r.decided_at, tz);
+  if (r.status === LeaveRequestStatus.WITHDRAWN) return `Withdrawn on ${on}.`;
+  const verb = r.status === LeaveRequestStatus.APPROVED ? 'Approved' : 'Denied';
+  return r.decided_by_name ? `${verb} by ${r.decided_by_name} on ${on}.` : `${verb} on ${on}.`;
 };
 
 const LeaveRequestsPage: React.FC = () => {
@@ -300,7 +312,7 @@ const LeaveRequestsPage: React.FC = () => {
                       {r.reason}
                     </p>
                   )}
-                  <p className="text-theme-text-muted mt-2 text-xs">{tallyLine(r)}</p>
+                  <p className="text-theme-text-muted mt-2 text-xs">{tallyLine(r) || decidedLine(r, tz)}</p>
                   <Votes request={r} />
                   <LeaveRequestDetails request={r} audience="approver" />
                   {r.can_vote && (
@@ -374,6 +386,8 @@ const LeaveRequestsPage: React.FC = () => {
           manages leave.
         </div>
       )}
+
+      {enabled && <ApproverCover />}
 
       {enabled && <EndLeaveEarly leaves={myLeaves} today={today} onEnded={load} />}
 
@@ -483,7 +497,12 @@ const LeaveRequestsPage: React.FC = () => {
                   </div>
                   <StatusBadge status={r.status} />
                 </div>
-                <p className="text-theme-text-muted mt-2 text-xs">{tallyLine(r)}</p>
+                <p className="text-theme-text-muted mt-2 text-xs">{tallyLine(r) || decidedLine(r, tz)}</p>
+                {r.routed_to_chief && r.status === LeaveRequestStatus.PENDING && (
+                  <p className="text-theme-text-muted mt-1 text-xs">
+                    As an approver yourself, your request goes to the Chief.
+                  </p>
+                )}
                 <Votes request={r} />
                 <LeaveRequestDetails request={r} audience="member" />
                 <LeaveMemberActions

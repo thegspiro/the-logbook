@@ -743,10 +743,17 @@ app/api/v1/endpoints/scheduling.py::review_time_off_request
 # Added 2026-11-17: end-early acts only on a leave whose user_id is the
 # caller's, in the caller's organization (404 for any other), and only where
 # the department takes leave requests.
+# Added 2026-11-21: approver covers. The board shows a non-manager only covers
+# naming them (as approver or stand-in) in their own organization; setting one
+# for anyone but oneself, and clearing one, require members.manage in the
+# service; the stand-in must hold members.manage; a cover in another
+# organization is a 404.
 app/api/v1/endpoints/leave_requests.py::answer_leave_request_question
 app/api/v1/endpoints/leave_requests.py::ask_leave_request_question
+app/api/v1/endpoints/leave_requests.py::clear_leave_approver_cover
 app/api/v1/endpoints/leave_requests.py::create_leave_request
 app/api/v1/endpoints/leave_requests.py::end_own_leave_early
+app/api/v1/endpoints/leave_requests.py::get_leave_approver_covers
 app/api/v1/endpoints/leave_requests.py::get_leave_request
 app/api/v1/endpoints/leave_requests.py::get_leave_request_config
 app/api/v1/endpoints/leave_requests.py::get_leave_request_summary
@@ -754,5 +761,6 @@ app/api/v1/endpoints/leave_requests.py::list_leave_requests_to_decide
 app/api/v1/endpoints/leave_requests.py::list_my_leave_requests
 app/api/v1/endpoints/leave_requests.py::propose_leave_request_changes
 app/api/v1/endpoints/leave_requests.py::respond_to_leave_request_changes
+app/api/v1/endpoints/leave_requests.py::set_leave_approver_cover
 app/api/v1/endpoints/leave_requests.py::vote_on_leave_request
 app/api/v1/endpoints/leave_requests.py::withdraw_leave_request

@@ -14,6 +14,7 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { MoreHorizontal } from 'lucide-react';
+import { bottomNavInset } from '../../utils/popoverPlacement';
 
 export interface RowAction {
   label: string;
@@ -52,8 +53,7 @@ export const RowActionsMenu: React.FC<RowActionsMenuProps> = ({ label, actions }
     const panelHeight = panelRef.current?.offsetHeight ?? 0;
     // The phone's bottom tab bar paints over the last 56px of the window
     // (CLAUDE.md pitfall #21), so it does not count as room below.
-    const bottomNav =
-      parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bottom-nav-height')) || 0;
+    const bottomNav = bottomNavInset();
     const roomBelow = window.innerHeight - bottomNav;
     const openUp = rect.bottom + GAP_PX + panelHeight > roomBelow && rect.top - GAP_PX - panelHeight > 0;
     setPosition({

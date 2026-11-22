@@ -2370,6 +2370,45 @@ cannot end a leave that has not begun or has already ended, set a date that
 does not shorten it (to stay away longer, ask for leave instead), or end it
 while a request to extend it is still waiting.
 
+**An approver's own request goes to the Chief** _(2026-11-21)_. When you
+hold one of the approver positions and ask for leave yourself, the Chief
+decides your request, not the other approvers; **Your requests** says
+**As an approver yourself, your request goes to the Chief.** If you are the
+Chief, the officers who manage leave decide it. A request made before
+2026-11-21 keeps the approvers it had.
+
+**Approver cover** _(2026-11-21)_. An approver who will be away can name an
+officer who manages leave to decide requests in their place. On **Leave
+Requests**, under **Approver cover**, choose the **Stand-in** (an officer who
+manages leave chooses the **Approver who is away** first), enter **First day
+away** and **Last day away**, and select **Set cover**. A cover starts today
+or later and runs for at most a year; one approver cannot have two covers on
+the same day.
+
+While a cover runs:
+
+- The stand-in votes, asks questions and proposes dates in the approver's
+  place, and gets the reminders. Their vote shows as, for example, **Olive
+  Officer approved for Blake Board**.
+- The approver cannot vote until the cover ends.
+- A stand-in who is also an approver decides once, and that decision fills
+  both places.
+- A stand-in who stops managing leave stops standing in, and the approver
+  decides again.
+
+**End cover** stops it now (the approver or an officer who manages leave);
+votes the stand-in already cast still count.
+
+**Who decided, and when.** A decided request shows **Approved by** or
+**Denied by** the approver whose vote settled it, with the date, and a
+withdrawn one shows **Withdrawn on** the date.
+
+**Leave requested on the schedule** _(2026-11-21)_. When you assign someone
+to a shift, the member list marks anyone with an undecided leave request
+covering the shift's date as **leave requested**, and choosing them shows a
+note. You can still assign them; if the leave is approved, the assignment is
+dropped.
+
 > **Screenshots to create:** `01-59-leave-request-ask-question.png`, an
 > approver's request under **To decide** with **Ask a question** open
 > (**Your question to the member**, **Send question**);

@@ -97,7 +97,15 @@ export function withTool(item: TemplateItem, tool: EvaluationTool): TemplateItem
     weight: SCORED_TOOLS.includes(tool) ? item.weight : 0,
     require_example_for: item.require_example_for.filter((v) => values.has(v)),
     checklist_options: tool === EvaluationTool.CHECKLIST ? item.checklist_options : [],
-    data_block: item.data_block && !scale ? { ...item.data_block, scoring_rule: null } : item.data_block,
+    // A goal review rates the previous review's goals: no figures, and each
+    // goal is marked "no longer applies" on its own rather than the item N/A.
+    allow_na: tool === EvaluationTool.GOAL_REVIEW ? false : item.allow_na,
+    data_block:
+      tool === EvaluationTool.GOAL_REVIEW
+        ? null
+        : item.data_block && !scale
+          ? { ...item.data_block, scoring_rule: null }
+          : item.data_block,
   };
 }
 
@@ -190,6 +198,8 @@ const DATA_SOURCE_GROUP_LABELS: Record<string, string> = {
   scheduling: 'Shifts',
   calls: 'Calls',
   admin_hours: 'Administrative hours',
+  apparatus: 'Apparatus & equipment',
+  inventory: 'Inventory',
   members: 'Membership',
 };
 

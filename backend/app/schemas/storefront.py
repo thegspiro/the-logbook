@@ -953,6 +953,15 @@ class StoreOrderCancel(BaseModel):
     notify_member: bool = True
 
 
+class StoreOrderPaymentReportRejection(BaseModel):
+    """Mark a member's reported payment as not received"""
+
+    model_config = _REQUEST_CONFIG
+
+    reason: Optional[str] = Field(None, max_length=500)
+    notify_member: bool = True
+
+
 class StoreOrderMessage(BaseModel):
     """Post an update to the order timeline"""
 

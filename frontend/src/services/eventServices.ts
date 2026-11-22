@@ -290,6 +290,17 @@ export const eventService = {
    * Record, or clear with null, how many guests were counted at an outreach
    * event — the Outreach Impact report's actual figure for it.
    */
+  /**
+   * Outreach events overlapping [start, end), with their signup-sheet and crew
+   * fill, for the Outreach Overview (events.manage). At most 93 days.
+   */
+  async getOutreachCalendar(start: string, end: string): Promise<import('../types/event').OutreachCalendarItem[]> {
+    const response = await api.get<import('../types/event').OutreachCalendarItem[]>('/events/outreach-calendar', {
+      params: { start, end },
+    });
+    return asArray(response.data);
+  },
+
   /** The volunteer signup sheet staffing an outreach event (events.manage). */
   async getStaffing(eventId: string): Promise<import('../types/event').EventStaffing> {
     const response = await api.get<import('../types/event').EventStaffing>(`/events/${eventId}/staffing`);

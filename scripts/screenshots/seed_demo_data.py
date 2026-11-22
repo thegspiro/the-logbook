@@ -97,6 +97,23 @@ ADMIN_RESET_WINDOW_SECONDS = float(
 )
 ADMIN_RESET_THROTTLE = Throttle(max_calls=5, window_seconds=ADMIN_RESET_WINDOW_SECONDS)
 
+# Sent on the elections whose paper tallies the seeder records. Left out, an
+# election copies the department's voter rules, and the demo department's
+# regular members must have attended half of the last year's meetings to vote.
+# How many pass depends on how many attendance records earlier seeds and shots
+# have left behind, so the roll frozen at open moved from run to run (22, 8,
+# then 4) and a tally that fit one run was refused on the next as more ballots
+# than eligible voters. An explicit null means "no election-wide rules": every
+# current member on a voting tier is on the roll. A rule that differs from the
+# department's must say why, hence the reason.
+OPEN_ROLL = {
+    "eligibility_rules": None,
+    "eligibility_override_reason": (
+        "Every current member votes on this, without the meeting-attendance "
+        "requirement."
+    ),
+}
+
 # Shared password given to the seeded member accounts so the seeder can act as
 # them where the API has no admin-on-behalf-of route (event RSVPs). Demo-only.
 DEMO_MEMBER_PASSWORD = "DemoMember!2026"
@@ -9056,6 +9073,13 @@ class Seeder:
         member no longer on the roster, and a shift on another department's
         unit. Committing would write past shifts into every hours figure other
         guides photograph, so the draft stays a draft.
+
+        Three unit names match nothing, as an old system's free-text unit
+        column does: a personal vehicle and a vague "Other EMS" for the Units
+        tab's catch-all, and a unit of an outside department the list already
+        has but under a name it does not, for adding a unit under a picked
+        department. Each is on a member already in the file, so the Members
+        tab is unchanged.
         """
         drafts = items(self.api.get("/scheduling/history-import"), "imports")
         if any(
@@ -9146,6 +9170,36 @@ class Seeder:
                 "07:00",
                 "19:00",
                 "4",
+            ),
+            (
+                "Marcus Bell",
+                "POV",
+                "",
+                "Firefighter",
+                "2026-08-10",
+                "09:00",
+                "13:00",
+                "1",
+            ),
+            (
+                "Priya Raman",
+                "Other EMS",
+                "",
+                "Firefighter",
+                "2026-08-11",
+                "18:00",
+                "23:00",
+                "2",
+            ),
+            (
+                "Emeka Adeyemi",
+                "Medic 7",
+                "Lakeside Volunteer Rescue",
+                "Firefighter",
+                "2026-08-12",
+                "07:00",
+                "19:00",
+                "2",
             ),
         ]
         text = "".join(",".join(f'"{cell}"' for cell in row) + "\r\n" for row in rows)
@@ -14979,6 +15033,7 @@ class Seeder:
         election = self.api.post(
             "/elections",
             {
+                **OPEN_ROLL,
                 "title": self.RUNOFF_ELECTION_TITLE,
                 "description": (
                     "Election for Fire Chief. No candidate reached a majority "
@@ -15027,7 +15082,8 @@ class Seeder:
             )
 
         # (tally for this round, note) — the last round has a majority, which
-        # is what stops the chain.
+        # is what stops the chain. Each round stays within the 22-member roll
+        # (see OPEN_ROLL), or the plausibility check refuses it.
         rounds = [
             ([8, 6, 5], "First ballot, September business meeting. No majority."),
             ([9, 9], "Second ballot, same meeting. Tied — a third was called."),
@@ -15126,6 +15182,7 @@ class Seeder:
             self.api.post(
                 "/elections",
                 {
+                    **OPEN_ROLL,
                     "title": self.MEMBERSHIP_ELECTION_TITLE,
                     "description": (
                         "Membership approval carried to the floor at the "
@@ -15183,6 +15240,7 @@ class Seeder:
             self.api.post(
                 "/elections",
                 {
+                    **OPEN_ROLL,
                     "title": self.DECLINED_ELECTION_TITLE,
                     "description": (
                         "Membership approval carried to the floor at the "
@@ -15409,6 +15467,7 @@ class Seeder:
             "/elections",
             {
                 **({"event_id": event_id} if event_id else {}),
+                **OPEN_ROLL,
                 "title": self.CLOSED_ELECTION_TITLE,
                 "description": (
                     "Special election to fill the Assistant Chief vacancy — "
@@ -15467,8 +15526,8 @@ class Seeder:
             self.api.post(
                 f"/elections/{election_id}/manual-ballots",
                 {
-                    # Under the eligible-voter count, or the plausibility check
-                    # rejects the batch — 22 members are eligible.
+                    # Under the 22-member roll (see OPEN_ROLL), or the
+                    # plausibility check rejects the batch.
                     "entries": [
                         {"candidate_id": pick(candidates[0], "id"), "count": 12},
                         {"candidate_id": pick(candidates[1], "id"), "count": 7},
@@ -18708,8 +18767,8 @@ class Seeder:
                     raise
                 self.blocked.append(f"election package: {exc}")
 
-    # Approve / Deny, under the 22-member eligible count so each paper batch
-    # passes the plausibility check without an audited override.
+    # Approve / Deny, under the 22-member roll (see OPEN_ROLL) so each paper
+    # batch passes the plausibility check without an audited override.
     MEMBERSHIP_VOTE_TALLY = (18, 2)
     # The vote that does not carry. Deny has to WIN, not merely show up:
     # `_sync_package_statuses` writes `elected` only on `approve > deny`, so a

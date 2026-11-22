@@ -7,7 +7,6 @@ use these helpers so that waiver adjustments are applied consistently
 across:
   - GET /my-training  (member self-view)
   - GET /compliance-matrix  (officer view)
-  - GET /competency-matrix  (department heat-map)
   - GET /training/reports/user/{id}  (individual report)
   - GET /training/requirements/progress/{id}  (per-requirement)
   - POST /reports/generate  (training_summary / department_overview)

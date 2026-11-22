@@ -345,6 +345,38 @@ describe('EquipmentRequestsPage', () => {
     expect(mockToastSuccess).toHaveBeenCalledWith('Issued to John Doe');
   });
 
+  // INV2-9: a cleared or 0 quantity was sent as undefined, and the server
+  // then issued the full requested quantity, the opposite of what was typed.
+  const openFulfilWithQuantity = async (user: ReturnType<typeof userEvent.setup>) => {
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [makeRequest({ status: 'approved', item_id: 'item-9', quantity: 4 })],
+    });
+    renderWithRouter(<EquipmentRequestsPage />);
+    await user.click(await screen.findByText('Fulfill'));
+    const quantity = await screen.findByLabelText('Quantity');
+    await user.clear(quantity);
+    return quantity;
+  };
+
+  it('refuses a cleared fulfil quantity instead of issuing the request in full', async () => {
+    const user = userEvent.setup();
+    await openFulfilWithQuantity(user);
+    await user.click(screen.getByRole('button', { name: /Fulfill Request/ }));
+
+    expect(mockToastError).toHaveBeenCalledWith('Enter a whole quantity of at least 1');
+    expect(mockFulfillEquipmentRequest).not.toHaveBeenCalled();
+  });
+
+  it.each(['0', '1.5'])('refuses a fulfil quantity of %s', async (typed) => {
+    const user = userEvent.setup();
+    const quantity = await openFulfilWithQuantity(user);
+    await user.type(quantity, typed);
+    await user.click(screen.getByRole('button', { name: /Fulfill Request/ }));
+
+    expect(mockToastError).toHaveBeenCalledWith('Enter a whole quantity of at least 1');
+    expect(mockFulfillEquipmentRequest).not.toHaveBeenCalled();
+  });
+
   it('sends the return-by date as the end of that day in the department zone', async () => {
     const user = userEvent.setup();
     mockGetEquipmentRequests.mockResolvedValue({

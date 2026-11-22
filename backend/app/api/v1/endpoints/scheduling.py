@@ -2686,12 +2686,19 @@ async def get_unavailable_members(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.assign")),
 ):
-    """Return user IDs that cannot be assigned to a shift (on leave, time-off, or already assigned)."""
+    """Return user IDs that cannot be assigned to a shift (on leave, time-off, or already assigned).
+
+    ``leave_requested_user_ids`` names members with an undecided leave request
+    covering the shift date. They can still be assigned; the picker says so.
+    """
     service = SchedulingService(db)
     user_ids = await service.get_unavailable_user_ids(
         current_user.organization_id, shift_id
     )
-    return {"unavailable_user_ids": user_ids}
+    requested = await service.get_leave_requested_user_ids(
+        current_user.organization_id, shift_id
+    )
+    return {"unavailable_user_ids": user_ids, "leave_requested_user_ids": requested}
 
 
 def _curated_refusal(exc: CodedValueError) -> CodedHTTPException:

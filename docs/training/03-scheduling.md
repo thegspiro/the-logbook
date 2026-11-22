@@ -503,11 +503,7 @@ The same layout is used for a member's **Shift & Call History** on their
 profile, for the member and for officers with **View scheduling reports**;
 an officer sees the list but not **Log outside shift**.
 
-_Screenshots: `03-104-my-shifts-hours`, `03-108-member-outside-shifts` and
-`03-113-member-hours-with-outside` show the old layout and need replacing (see
-the 2026-11-20 rows in `SCREENSHOT_CURRENCY.md`)._
-
-![My Shifts on its Hours view: cards for this month, this year and all time, above the month-by-month table with its vs. busiest month bar column](./images/03-104-my-shifts-hours.png)
+![My Shifts on its Hours view: This month, this year and all-time cards with the two-colour split bar, the year picker between its Previous year and Next year arrows, the year-at-a-glance chart with its Busiest month, Months with shifts and Avg per active month tiles, and All shifts below](./images/03-104-my-shifts-hours.png)
 
 ### Your shifts on the dashboard
 
@@ -680,7 +676,7 @@ evaluated too, but the credit waits for the approval. See
 The Shift Compliance report **does** add them into each member's shift and
 hour totals.
 
-![The Shifts with other departments card on a member's Hours view: two counted shifts with their times, hours and unit, one Not counted entry with the officer's reason, and the Log outside shift button](./images/03-108-member-outside-shifts.png)
+![All shifts on a member's Hours view: the All, department and Other departments filter, Log outside shift, and the year opened to a department shift labelled with the department's name beside outside shifts on a blue edge, one of them Not counted with the officer's reason](./images/03-108-member-outside-shifts.png)
 
 ![The Log a shift with another department dialog: Start filled in, End set by the +12 hours button, Counts as 12 hours, and Township Fire Company and Engine 21 chosen](./images/03-109-log-outside-shift-dialog.png)
 
@@ -748,7 +744,7 @@ You need to be able to manage schedules for both of these.
 
 ![The Log a shift with another department dialog at phone width, filled in: Start, an End set with +12 hours, Counts as 12 hours, Township Fire Company, Engine 21 and Position Driver](./images/03-112-member-outside-dialog-driver.png)
 
-![A member's Hours view: the This month card reading +24 hrs with other departments above the monthly table, and the Shifts with other departments section beneath with two counted entries and one Not counted with its reason](./images/03-113-member-hours-with-outside.png)
+![A member's Hours view with outside hours: each card's figure includes them, split under the bar into the department's own hours and +24 with other departments, above the year chart and All shifts with one Not counted entry](./images/03-113-member-hours-with-outside.png)
 
 ---
 
@@ -3426,9 +3422,8 @@ its heading points to **Shift patterns**. Each pattern on the **Patterns** tab
 has an **Edit** button, which opens **Edit Pattern** and saves exactly as the
 old form did: emptying a field clears it, a field the server refuses stays
 flagged while the rest saves, and an inactive template is warned about.
-_Screenshots: check `03-12-shift-templates` and `03-129-template-reactivate`
-and replace either if it shows the old Templates / Patterns switch; create one
-of a pattern card on the Patterns tab with its **Edit** button._
+_Screenshot still to make: a pattern card on the Patterns tab with its **Edit**
+button._
 
 ### Templates
 
@@ -3495,7 +3490,7 @@ and re-adds nothing to shifts.
 
 Select **Save Template** when you are done.
 
-![Shift Templates tab listing templates with start and end times](./images/03-12-shift-templates.png)
+![Shift Templates tab listing templates with start and end times, under the heading's pointer to Shift patterns for repeating a template](./images/03-12-shift-templates.png)
 
 #### Required and optional seats
 
@@ -5040,6 +5035,10 @@ well as ones still in service. If members should still log hours on it, switch
 it on in **Outside Apparatus** settings after you commit. Units already hidden
 stay pickable in the import, marked **hidden from members**. Names that are not
 a vehicle at all (`POV`, `Other EMS`) can each be sent to **Catch-all: Other**.
+That puts all of them on a single outside unit named **Other**, under an agency
+named **Other**, created on the first commit and reused after that.
+
+![A draft import's Units tab: POV and Other EMS both recorded on the catch-all Other unit, and Medic 7 open on Add as an outside agency's unit with Lakeside Volunteer Rescue picked from the Agency list, Medic 7 in the Unit box, and the note that a unit added here starts hidden from members](./images/03-140-history-import-units.png)
 
 **Shift notification CC boxes** _(2026-11-09)_. The four **CC additional email
 addresses** boxes in Scheduling notification settings now refuse text that is
@@ -5051,8 +5050,6 @@ accepted and saved onto the CC list.
 in-app notice now list each call type once with a count, most frequent first
 ("EMS ×10"), instead of one line per call. Every type is listed; the old notice
 stopped after five calls and the email after ten.
-That puts all of them on a single outside unit named **Other**, under an agency
-named **Other**, created on the first commit and reused after that.
 
 **Retired units of your own.** To stop a unit of your own being scheduled,
 **archive** it in the Apparatus module, or **deactivate** it on the basic

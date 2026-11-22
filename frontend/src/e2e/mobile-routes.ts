@@ -578,6 +578,15 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: ['events.manage'],
     expectText: 'Event Details',
   },
+  // The Community Outreach Manager's home: attention cards, the planning
+  // calendar (a compact month grid and a day list on a phone) and the year.
+  {
+    path: '/events/admin?tab=overview',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+    expectText: 'Planning calendar',
+  },
   {
     path: '/events/admin?tab=requests',
     maxSmallTargets: 0,
@@ -1495,6 +1504,27 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxTinyText: 0,
     permissions: ['fundraising.view', 'fundraising.manage'],
     expectText: 'Oakville Hardware & Supply',
+  },
+  {
+    path: '/grants/opportunities/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Add Grant Opportunity',
+  },
+  {
+    path: '/grants/applications/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'New Grant Application',
+  },
+  {
+    path: '/grants/donations/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Record Donation',
   },
   {
     path: '/grants/pledges',

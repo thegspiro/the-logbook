@@ -65,6 +65,8 @@ export interface LeaveRequestVoteEntry {
   /** The voting round it was cast in; only the request's current round counts. */
   round?: number;
   vote: LeaveVote;
+  /** The away approver a stand-in voted in place of; null for an approver's own vote. */
+  on_behalf_of_name?: string | null;
   note: string | null;
   created_at: string;
 }
@@ -123,9 +125,47 @@ export interface LeaveRequest {
   denials: number;
   approver_count: number;
   approvals_needed: number;
+  /** The member held an approver position when they asked, so the Chief decides it. */
+  routed_to_chief?: boolean;
   can_vote: boolean;
   can_ask?: boolean;
   can_answer?: boolean;
   can_respond_to_changes?: boolean;
   my_vote: LeaveVote | null;
+}
+
+/** An approver away for a period, and the officer deciding in their place. */
+export interface LeaveApproverCover {
+  id: string;
+  approver_id: string;
+  approver_name: string;
+  stand_in_id: string;
+  stand_in_name: string;
+  start_date: string;
+  end_date: string;
+  /** Running today, in the department's timezone. */
+  active: boolean;
+  can_clear: boolean;
+}
+
+export interface LeaveCoverPerson {
+  id: string;
+  name: string;
+}
+
+export interface LeaveApproverCoverBoard {
+  covers: LeaveApproverCover[];
+  /** Approvers the caller may set a cover for. Empty when they may set none. */
+  approvers: LeaveCoverPerson[];
+  /** Who may stand in: the members who manage leave. */
+  stand_ins: LeaveCoverPerson[];
+  /** The department's today, as YYYY-MM-DD. */
+  today: string;
+}
+
+export interface LeaveApproverCoverCreate {
+  approver_id: string;
+  stand_in_id: string;
+  start_date: string;
+  end_date: string;
 }

@@ -1036,3 +1036,28 @@ class TestAttendanceWaiverCapLocking:
         assert "Event.id == str(event_id)" in source
         assert "with_for_update(read=True)" in source
         assert "with_for_update()" not in source
+
+
+class TestLotRecallDuplicateCheck:
+    """INV2-6: recording a lot recall locks the supply row, then checks there
+    is no active recall for that lot before inserting one. The check was a
+    plain SELECT, and the medical-supplies endpoint reads the supply first,
+    so under REPEATABLE READ it answered from the snapshot taken before the
+    lock: two officers recording the same recall together both saw none and
+    both inserted, and lifting one left the lot recalled. No unique constraint
+    backs it (``idx_lot_recalls_org_item_key`` is a plain index), so the
+    locking read is the whole guard."""
+
+    def test_the_supply_row_is_locked(self):
+        source = _source_of(inventory_service.InventoryService.record_lot_recall)
+        assert "with_for_update()" in source
+
+    def test_the_active_recall_check_is_a_locking_read(self):
+        source = _source_of(inventory_service.InventoryService.record_lot_recall)
+        check = source[source.index("existing = await self.db.scalar(") :]
+        check = check[: check.index("if existing:")]
+        assert "with_for_update()" in check, (
+            "The duplicate check must be a locking read, or it answers from "
+            "the pre-lock snapshot and a concurrent recall slips past it "
+            "(CLAUDE.md pitfall #27)."
+        )

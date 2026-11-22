@@ -658,7 +658,6 @@ Returns `(adjusted_required, waived_months_count, active_months_count)` using th
 
 - `training_module_config.py` — My Training self-view
 - `training.py` — Compliance Matrix (`_evaluate_member_requirement`)
-- `competency_matrix_service.py` — Competency Matrix / Heat Map
 - `training_service.py` — Training Reports, Requirement Progress
 - `training_program_service.py` — Program Enrollment Progress
 
