@@ -358,6 +358,93 @@
 }
 
 /*
+ * A checkbox or radio sits beside its label's first line
+ * ------------------------------------------------------
+ * Most choice rows are `<label class="flex items-center">` (or
+ * `mobile-touch-row`) with the input first, and on a phone or touch screen the
+ * base rule above makes every such label at least 44px tall. Centring puts the
+ * box on the middle of the whole text block, so once the text wraps (most
+ * labels do at 390px) the box floats between the lines instead of beside the
+ * first.
+ *
+ * Here the label's content is pinned to the top and padded down to where
+ * centring in 44px left a one-line row, and the box is pushed down half the
+ * difference between one line and its own height. A one-line row stays put; a
+ * wrapped one keeps its box beside the first line and grows a few pixels.
+ *
+ * - `--choice-line` is one line of the row's text: `min(1lh, 1.25rem)`. Inputs
+ *   inherit the label's font, so `1lh` is the label's line height, but most
+ *   rows set `text-sm` on a span inside an unstyled label, where the label's
+ *   line is 24px and the text's 20px. The cap makes both `text-sm` shapes
+ *   exact; a base-size row is 2px off, against 10px or more before.
+ * - `--choice-size` is the drawn box: 13px for an unstyled native one in
+ *   Chromium (12px in WebKit, half a pixel off), or the size class on it.
+ *
+ * Only where the label's height is known to be 44px: on a phone or touch
+ * screen, and at every width for the three classes that set it everywhere.
+ * Elsewhere a label's height is whatever its row stretches it to: a filter bar
+ * makes "Show inactive" as tall as the selects beside it, and pinning that box
+ * to the top lifted it 10px off its centred text. A row that wraps on a laptop
+ * is aligned at its call site with `items-start`.
+ *
+ * Unlayered, like the reflow-table rules, to beat the `items-center` utility.
+ * Labels that set their own top padding are left alone: the padding here
+ * would override theirs. checkbox-first-line.spec.ts holds both halves.
+ */
+label:is(.flex.items-center, .inline-flex.items-center, .mobile-touch-row):has(
+    > input:is([type='checkbox'], [type='radio'])
+  ):not(
+    [class^='p-'],
+    [class*=' p-'],
+    [class*=':p-'],
+    [class^='py-'],
+    [class*=' py-'],
+    [class*=':py-'],
+    [class^='pt-'],
+    [class*=' pt-'],
+    [class*=':pt-']
+  ) {
+  --choice-line: min(1lh, 1.25rem);
+
+  & > input:is([type='checkbox'], [type='radio']) {
+    --choice-size: 13px;
+
+    &:is(.form-checkbox, [class~='h-4']) {
+      --choice-size: 1rem;
+    }
+    &[class~='h-3.5'] {
+      --choice-size: 0.875rem;
+    }
+    &[class~='h-5'] {
+      --choice-size: 1.25rem;
+    }
+    &[class~='h-6'] {
+      --choice-size: 1.5rem;
+    }
+  }
+
+  &:is(.mobile-touch-target, .mobile-touch-row, [class~='min-h-11']) {
+    align-items: flex-start;
+    padding-top: max(0px, calc((44px - var(--choice-line)) / 2));
+
+    & > input:is([type='checkbox'], [type='radio']) {
+      align-self: flex-start;
+      margin-top: max(0px, calc((var(--choice-line) - var(--choice-size)) / 2));
+    }
+  }
+
+  @media (max-width: 767px), (pointer: coarse) {
+    align-items: flex-start;
+    padding-top: max(0px, calc((44px - var(--choice-line)) / 2));
+
+    & > input:is([type='checkbox'], [type='radio']) {
+      align-self: flex-start;
+      margin-top: max(0px, calc((var(--choice-line) - var(--choice-size)) / 2));
+    }
+  }
+}
+
+/*
  * Application page spacing
  * ------------------------
  * Protected routes all pass through PageTransition, making this the single
