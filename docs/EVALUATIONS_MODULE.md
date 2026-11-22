@@ -131,15 +131,15 @@ A template version holds a **definition** and a **workflow**.
 `officer_only`, shown only to members whose rank is in `officer_ranks`. Each
 item has a tool:
 
-| Tool            | Answer                                       | Scored |
-| --------------- | -------------------------------------------- | ------ |
-| `labeled_scale` | one of the item's labelled levels            | yes    |
-| `numeric_scale` | one of the item's numbered levels            | yes    |
-| `meets`         | meets or does not meet                       | yes    |
-| `checklist`     | the options ticked                           | no     |
-| `narrative`     | free text                                    | no     |
-| `goals`         | free text for goals                          | no     |
-| `goal_review`   | a result for each of the last review's goals | no     |
+| Tool            | Answer                                             | Scored |
+| --------------- | -------------------------------------------------- | ------ |
+| `labeled_scale` | one of the item's labelled levels                  | yes    |
+| `numeric_scale` | one of the item's numbered levels                  | yes    |
+| `meets`         | meets or does not meet                             | yes    |
+| `checklist`     | the options ticked                                 | no     |
+| `narrative`     | free text                                          | no     |
+| `goals`         | a list of goals, each with an optional target date | no     |
+| `goal_review`   | a result for each of the last review's goals       | no     |
 
 Items can allow N/A, require an example for given levels, require or forbid a
 comment, be left out of the self-evaluation, carry a weight, and carry a
@@ -409,8 +409,19 @@ this review alone.
 A `goal_review` item rates each goal the member's previous review set. The
 previous review is the one the last-review panel shows: the most recent
 finalized evaluation on the same template, whatever its version, whose period
-ended before this one began. Its goals are the text of each answered `goals`
-item in its evaluator's part.
+ended before this one began. Its goals are the goals on each `goals` item in
+its evaluator's part, one entry per goal, keyed `<item>:<goal id>` and
+labelled with its place in the item ("Goals for the coming year, goal 2").
+
+**Goals are a list since 2026-11-22.** A `goals` item holds up to 20 goals
+(`ItemAnswer.goals`), each with an id the form chooses, its text and an
+optional target date. Every save stores that shape: an answer sent as free
+`text` is stored as one goal (`goal-1`), and a goal still blank is left out
+(`as_goal_list`). A part saved before then keeps its `text`, because a
+submitted part is in the record hash its signatures attest to; it reads as one
+goal keyed by the item alone, the key goal copies and ratings taken before
+then already use. The PDF prints the list numbered, with "(by <date>)", and a
+goal review prints each goal's target.
 
 **The goals are copied into the evaluation** when it is drafted, under
 `data_snapshot.previous_goals`, and copied again when the figures are

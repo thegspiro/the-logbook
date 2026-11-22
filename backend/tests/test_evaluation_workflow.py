@@ -3333,11 +3333,14 @@ class TestGoalReview:
 
         copied = this["goals_under_review"]
         assert copied["evaluation_id"] == last_id
+        # Last year's goals were sent as free text, which a save stores as
+        # one goal on the list.
         assert copied["goals"] == [
             {
-                "key": "goals",
+                "key": "goals:goal-1",
                 "label": "Goals for the coming year",
                 "text": "Lead two drills.",
+                "target_date": None,
             }
         ]
 
@@ -3350,11 +3353,83 @@ class TestGoalReview:
         rated = _answers(
             goals={"text": "Earn Officer I."},
             last_goals={
-                "goal_ratings": {"goals": {"result": "met", "comment": "Led three."}}
+                "goal_ratings": {
+                    "goals:goal-1": {"result": "met", "comment": "Led three."}
+                }
             },
         )
         saved = await evaluator.put(f"{url}/parts/evaluator", json={"content": rated})
         assert saved.status_code == 200, saved.text
+        submitted = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert submitted.status_code == 200, submitted.text
+
+    async def test_each_goal_on_last_years_list_is_rated_on_its_own(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        await _with_goal_review(dept)
+        last = await _draft(await make_client(dept.manager), dept)
+        await _finish(
+            dept,
+            make_client,
+            f"/evaluations/{last['id']}",
+            _answers(
+                goals={
+                    "goals": [
+                        {
+                            "id": "drills",
+                            "text": "Lead two drills.",
+                            "target_date": "2026-06-30",
+                        },
+                        {"id": "officer", "text": "Earn Officer I."},
+                    ]
+                }
+            ),
+        )
+        this = await _draft(
+            await make_client(dept.manager),
+            dept,
+            period_id=(await _next_period(dept)).id,
+        )
+        url = f"/evaluations/{this['id']}"
+        member = await make_client(dept.member)
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+        evaluator = await make_client(dept.evaluator)
+
+        assert this["goals_under_review"]["goals"] == [
+            {
+                "key": "goals:drills",
+                "label": "Goals for the coming year, goal 1",
+                "text": "Lead two drills.",
+                "target_date": "2026-06-30",
+            },
+            {
+                "key": "goals:officer",
+                "label": "Goals for the coming year, goal 2",
+                "text": "Earn Officer I.",
+                "target_date": None,
+            },
+        ]
+        next_goals = {"goals": [{"id": "g1", "text": "Pass the driver course."}]}
+        one_rated = _answers(
+            goals=next_goals,
+            last_goals={"goal_ratings": {"goals:drills": {"result": "met"}}},
+        )
+        await evaluator.put(f"{url}/parts/evaluator", json={"content": one_rated})
+        refused = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert refused.status_code == 400
+        assert "rate each of the last review's goals" in refused.text
+
+        both_rated = _answers(
+            goals=next_goals,
+            last_goals={
+                "goal_ratings": {
+                    "goals:drills": {"result": "met"},
+                    "goals:officer": {"result": "not_met"},
+                }
+            },
+        )
+        await evaluator.put(f"{url}/parts/evaluator", json={"content": both_rated})
         submitted = await evaluator.post(f"{url}/parts/evaluator/submit")
         assert submitted.status_code == 200, submitted.text
 
@@ -3441,7 +3516,10 @@ class TestGoalReview:
                 goals={"text": "Earn Officer I."},
                 last_goals={
                     "goal_ratings": {
-                        "goals": {"result": "partly_met", "comment": "Led one."}
+                        "goals:goal-1": {
+                            "result": "partly_met",
+                            "comment": "Led one.",
+                        }
                     }
                 },
             ),

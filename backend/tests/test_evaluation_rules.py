@@ -361,7 +361,7 @@ class TestCompleteness:
         assert errors == [
             "Rate 'Attendance'.",
             "Rate 'Teamwork'.",
-            "Answer 'Goals'.",
+            "Set at least one goal in 'Goals'.",
             "'Gear' needs a comment.",
         ]
 

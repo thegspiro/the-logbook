@@ -213,7 +213,10 @@ def _goal_review_answer(
             if rating is not None and rating.result is not None
             else "Not rated"
         )
-        lines = [goal["text"], f"Result: {result}"]
+        lines = [goal["text"]]
+        if goal.get("target_date"):
+            lines.append(f"Target: {_iso_day(goal['target_date'])}")
+        lines.append(f"Result: {result}")
         if rating is not None and rating.comment:
             lines.append(f"Comment: {rating.comment}")
         notes.append((goal["label"], "\n".join(lines)))
@@ -235,7 +238,13 @@ def _answer(
     if answer is None:
         return None
     notes: List[Tuple[str, str]] = []
-    if item.tool in (EvaluationTool.NARRATIVE, EvaluationTool.GOALS):
+    if item.tool == EvaluationTool.GOALS and answer.goals:
+        text = "\n".join(
+            f"{number}. {goal.text}"
+            + (f" (by {_day(goal.target_date)})" if goal.target_date else "")
+            for number, goal in enumerate(answer.goals, start=1)
+        )
+    elif item.tool in (EvaluationTool.NARRATIVE, EvaluationTool.GOALS):
         text = answer.text or "—"
     elif item.tool == EvaluationTool.CHECKLIST:
         text = ", ".join(answer.checked) if answer.checked else "None checked"
