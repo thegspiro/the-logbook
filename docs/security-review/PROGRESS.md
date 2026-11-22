@@ -16,13 +16,49 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (branch `claude/friendly-babbage-n4b791`)**: Feature 30 (Onboarding),
-pass 14 — watchdog pickup (the dedicated `/loop 30m /security-review`
-session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). This
-session's own environment restricts pushes to its assigned branch, so the PR
-is opened from `claude/friendly-babbage-n4b791` rather than a
-`claude/security-review-onboarding-pNN` name — recorded here so the next
-iteration's Step 0 finds it.
+**PR (branch `claude/friendly-babbage-n4b791`)**: Feature 31 (Scheduled
+tasks), pass 14 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). This session's own environment restricts pushes to its
+assigned branch, so the PR is opened from `claude/friendly-babbage-n4b791`
+rather than a `claude/security-review-scheduled-tasks-pNN` name — recorded
+here so the next iteration's Step 0 finds it. **Do not merge this PR — a
+separate watchdog/tending process picks it up, runs CI, and merges once
+green.**
+
+PR #4558 (Feature 30, Onboarding, pass 14) had already merged (`2248da3bf`)
+before this iteration started; row 30 marked ✅ below. Real delta since pass
+13's merge (`17ffe629a`, PR #4245): eight new scheduled tasks, all
+delegating to other features' already-built services (leave reminders/
+digest/upkeep, a guest-headcount reminder, attendance-waiver attachment
+retention and expiry, a pending-file-deletion sweep, and a History-import
+draft expiry) plus two genuine in-file changes — a CC/BCC merge that now
+also resolves position-held addresses, and a fix closing a real idempotency
+gap in the rolling-recurrence extender (a nightly re-run could previously
+regenerate a copy on a date the officer had explicitly cancelled). **0 fixed,
+0 new findings** — both in-file changes verified good, landed by their own
+features' commits, not by this rotation. 88 registered tasks, up from 80,
+registry re-verified fully consistent by AST. The 2 routes are unchanged.
+`validate_migrations.py --strict` and 4 scoped tests fail on current `main`
+for a reason unrelated to this feature — a pre-existing forked Alembic
+chain already owned by open PR #4560 — see
+`docs/security-review/CRON14-31-scheduled-tasks.md`'s **Pass 14** section
+for the full trace, including why those 4 test failures are not this
+feature's.
+
+Row 31 → ✅ (pending this PR's merge); next is Feature 32 (Locations &
+kiosk) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 14, PR #4558, merged as `2248da3bf`), preserved for history</summary>
+
+**PR [#4558](https://github.com/thegspiro/the-logbook/pull/4558)**
+(branch `claude/friendly-babbage-n4b791`): Feature 30 (Onboarding), pass
+14 — watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). This session's
+own environment restricts pushes to its assigned branch, so the PR is
+opened from `claude/friendly-babbage-n4b791` rather than a
+`claude/security-review-onboarding-pNN` name.
 
 PR #4553 (Feature 29, Reports & analytics, pass 16) had already merged
 (`89bdc2bff`) before this iteration started; row 29 marked ✅ below. Real
@@ -37,8 +73,9 @@ scrub was verified end to end against `org_template_service.py`'s
 `docs/security-review/ONB5-30-onboarding.md`'s **Pass 14** section for the
 full trace.
 
-Row 30 → ✅ (pending this PR's merge); next is Feature 31 (Scheduled tasks)
-— re-check `list_pull_requests` fresh rather than trusting this note.
+Row 30 → ✅ (merged as `2248da3bf`); next was Feature 31 (Scheduled tasks).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 16, merged as `89bdc2bff`), preserved for history</summary>
@@ -27496,7 +27533,7 @@ iteration's commit" rule.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                                                   | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                                                                                                          | ⬜     |
