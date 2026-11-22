@@ -46,8 +46,11 @@ def _unique_code(base: str, taken: Iterable[str]) -> str:
         n += 1
 
 
+_WHITESPACE = re.compile(r"\s+")
+
+
 def _clean_label(value: str, what: str) -> str:
-    cleaned = " ".join(value.split())
+    cleaned = _WHITESPACE.sub(" ", value).strip()
     if not cleaned:
         raise ValueError(f"{what} cannot be blank")
     return cleaned

@@ -186,4 +186,7 @@ class CrrActivityTypeTag(Base):
         "CrrActivityType", back_populates="tag_links"
     )
 
-    __table_args__ = (Index("ix_crr_activity_type_tags_tag", "tag_id"),)
+    __table_args__ = (
+        Index("ix_crr_activity_type_tags_tag", "tag_id"),
+        Index("ix_crr_activity_type_tags_org", "organization_id"),
+    )

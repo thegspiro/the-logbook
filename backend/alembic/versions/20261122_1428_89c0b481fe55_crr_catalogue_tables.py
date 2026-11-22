@@ -162,6 +162,11 @@ def upgrade() -> None:
         op.create_index(
             "ix_crr_activity_type_tags_tag", "crr_activity_type_tags", ["tag_id"]
         )
+        op.create_index(
+            "ix_crr_activity_type_tags_org",
+            "crr_activity_type_tags",
+            ["organization_id"],
+        )
 
 
 def downgrade() -> None:

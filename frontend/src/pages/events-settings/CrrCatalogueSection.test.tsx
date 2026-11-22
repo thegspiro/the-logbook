@@ -8,7 +8,7 @@ const createType = vi.fn();
 const updateType = vi.fn();
 const deleteType = vi.fn();
 const setTypeTags = vi.fn();
-vi.mock('../../services/api', () => ({
+vi.mock('../../services/crrServices', () => ({
   crrService: {
     getCatalogue: (...args: unknown[]) => getCatalogue(...args) as unknown,
     createType: (...args: unknown[]) => createType(...args) as unknown,

@@ -815,61 +815,6 @@ export const eventService = {
 // ============================================
 
 /** The department's CRR activity catalogue (events.manage). */
-export const crrService = {
-  async getCatalogue(): Promise<import('../types/crr').CrrCatalogue> {
-    const response = await api.get<import('../types/crr').CrrCatalogue>('/crr/catalogue');
-    return response.data;
-  },
-  async createType(body: {
-    name: string;
-    description?: string | undefined;
-    measures?: string[] | undefined;
-  }): Promise<import('../types/crr').CrrActivityType> {
-    const response = await api.post<import('../types/crr').CrrActivityType>('/crr/activity-types', body);
-    return response.data;
-  },
-  async updateType(
-    typeId: string,
-    body: import('../types/crr').CrrActivityTypeUpdate
-  ): Promise<import('../types/crr').CrrActivityType> {
-    const response = await api.patch<import('../types/crr').CrrActivityType>(`/crr/activity-types/${typeId}`, body);
-    return response.data;
-  },
-  async deleteType(typeId: string): Promise<void> {
-    await api.delete(`/crr/activity-types/${typeId}`);
-  },
-  async setTypeTags(typeId: string, tagIds: string[]): Promise<import('../types/crr').CrrActivityType> {
-    const response = await api.put<import('../types/crr').CrrActivityType>(`/crr/activity-types/${typeId}/tags`, {
-      tag_ids: tagIds,
-    });
-    return response.data;
-  },
-  async addMeasure(typeId: string, label: string): Promise<import('../types/crr').CrrActivityType> {
-    const response = await api.post<import('../types/crr').CrrActivityType>(`/crr/activity-types/${typeId}/measures`, {
-      label,
-    });
-    return response.data;
-  },
-  async updateMeasure(
-    measureId: string,
-    body: { label?: string | undefined; is_active?: boolean | undefined }
-  ): Promise<import('../types/crr').CrrActivityType> {
-    const response = await api.patch<import('../types/crr').CrrActivityType>(`/crr/measures/${measureId}`, body);
-    return response.data;
-  },
-  async createTag(kind: import('../types/crr').CrrTagKind, label: string): Promise<import('../types/crr').CrrTag> {
-    const response = await api.post<import('../types/crr').CrrTag>('/crr/tags', { kind, label });
-    return response.data;
-  },
-  async updateTag(
-    tagId: string,
-    body: { label?: string | undefined; is_active?: boolean | undefined }
-  ): Promise<import('../types/crr').CrrTag> {
-    const response = await api.patch<import('../types/crr').CrrTag>(`/crr/tags/${tagId}`, body);
-    return response.data;
-  },
-};
-
 export const eventRequestService = {
   async getForms(params?: { skip?: number; limit?: number }): Promise<import('./formTypes').FormsListResponse> {
     const response = await api.get<import('./formTypes').FormsListResponse>('/event-requests/forms', { params });

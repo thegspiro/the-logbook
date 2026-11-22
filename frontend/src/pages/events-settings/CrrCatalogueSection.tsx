@@ -14,7 +14,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Archive, ArchiveRestore, Hourglass, Pencil, Plus, Trash2 } from 'lucide-react';
-import { crrService } from '../../services/api';
+import { crrService } from '../../services/crrServices';
 import type { CrrActivityType, CrrCatalogue, CrrTag, CrrTagKind } from '../../types/crr';
 import { CrrTagKind as TAG_KIND } from '../../types/crr';
 import { PromptDialog } from '../../components/ux/PromptDialog';
