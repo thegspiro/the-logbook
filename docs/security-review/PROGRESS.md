@@ -16,6 +16,66 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4566](https://github.com/thegspiro/the-logbook/pull/4566) (branch
+`claude/security-review-scheduled-tasks-p14`)**: Feature 31 (Scheduled
+tasks), pass 14 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). This session's own environment did **not** restrict pushes
+this time — `git push -u origin claude/security-review-scheduled-tasks-p14`
+succeeded directly, so the branch matches the rotation's own naming
+convention and the next iteration's Step 0 can find it either by name or by
+the general open-PR search.
+
+PR #4558 (Feature 30, Onboarding, pass 14) had already merged (`2248da3bf4`)
+before this iteration started; row 30 marked ✅ below. Real delta since pass
+13's merge (`079b82fb9`): 7 new delegate tasks (`guest_headcount_reminders`,
+`leave_ending_reminders`, `open_ended_leave_digest`, `leave_request_upkeep`,
+`attendance_waiver_expiry`, `pending_file_deletions`,
+`history_import_expiry`), all verified for idempotency and org-scoping, plus
+a real idempotency fix to `run_rolling_recurrence_extend` landed by the
+Events feature's own commit (verified here, not applied by this review).
+**0 fixed, 0 new findings.** Registry re-verified by AST: 88/88/87+1, up
+from 80/80/79+1. A pre-existing, out-of-scope 2-head Alembic fork was found
+and left to the already-open PR #4560, which carries its join revision.
+Route inventory unchanged (2 routes). See
+`docs/security-review/CRON14-31-scheduled-tasks.md`'s **Pass 14** section
+for the full trace.
+
+Row 31 → ✅ (pending this PR's merge); next is Feature 32 (Locations &
+kiosk) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 14, PR #4558, merged), preserved for history</summary>
+
+**PR (branch `claude/friendly-babbage-n4b791`)**: Feature 30 (Onboarding),
+pass 14 — watchdog pickup (the dedicated `/loop 30m /security-review`
+session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). This
+session's own environment restricts pushes to its assigned branch, so the PR
+is opened from `claude/friendly-babbage-n4b791` rather than a
+`claude/security-review-onboarding-pNN` name — recorded here so the next
+iteration's Step 0 finds it.
+
+PR #4553 (Feature 29, Reports & analytics, pass 16) had already merged
+(`89bdc2bff`) before this iteration started; row 29 marked ✅ below. Real
+delta since pass 13's merge (`deb9601f3`, PR #4240): a new `null_columns`
+entry scrubbing the new `EventTemplate.training_details` column (instructor
+identity + an org-local course id) out of org-template exports, landed by the
+Events feature when it added that column, plus a cosmetic position-template
+rename with no permission change. **0 fixed, 0 new findings** — the export
+scrub was verified end to end against `org_template_service.py`'s
+`_serialize_row` and found to close a real PII leak before it could ship.
+26 routes, unchanged. See
+`docs/security-review/ONB5-30-onboarding.md`'s **Pass 14** section for the
+full trace.
+
+Row 30 → ✅ (pending this PR's merge); next is Feature 31 (Scheduled tasks)
+— re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 16, merged as `89bdc2bff`), preserved for history</summary>
+
 **PR (branch `claude/friendly-babbage-v1mcno`)**: Feature 29 (Reports &
 analytics), pass 16 — watchdog pickup (the dedicated `/loop 30m
 /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
@@ -42,6 +102,8 @@ to the open PR (#4549) already fixing it, to avoid adding a third fork.
 
 Row 29 → ✅ (pending this PR's merge); next is Feature 30 (Onboarding) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 14, PR #4547, merged), preserved for history</summary>
@@ -27466,8 +27528,8 @@ iteration's commit" rule.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (33 routes incl. undo, added pass 14), `historical_staffing_*.py`, `historical_import_undo.py` (added pass 14)                                                                                                        | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ⬜     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ✅     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                                                   | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                                                                                                          | ⬜     |
@@ -27531,6 +27593,111 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-22 — Feature 30 (Onboarding, pass 14) merged; Feature 31 (Scheduled tasks, pass 14): watchdog pickup, 7 new delegate tasks verified good, 0 fixed, 0 new findings
+
+PR #4558 merged as `2248da3b`, since the last log entry below; row 30 marked
+✅ above (this had already happened in this file before this iteration
+started — the Open PR section's prior note already recorded it — so the
+correction here is only this Log entry and clearing the Open PR row, which
+ride along with this feature's own PR per Step 0's rule rather than getting
+one of their own). A fresh `list_pull_requests` (state=open, 10 results,
+second page empty) found no `claude/security-review-*` head, confirming row
+31 (Scheduled tasks) as the next pending feature.
+
+Baseline: pass 13's own file content (`CRON13-31-scheduled-tasks.md`, merge
+commit `079b82fb9`). Diffed `scheduled_tasks.py`/`scheduled.py` directly
+against that commit rather than trusting `git log` (whose path-filtered
+output omits some real contributing commits in this tree — see the findings
+file's own note). `scheduled.py`: 0 diff. `scheduled_tasks.py`: **7 new
+tasks** (`guest_headcount_reminders`, `leave_ending_reminders`,
+`open_ended_leave_digest`, `leave_request_upkeep`, `attendance_waiver_expiry`,
+`pending_file_deletions`, `history_import_expiry`), all delegating to other
+features' already-reviewed-elsewhere services, plus a real idempotency bug
+fix to the existing `run_rolling_recurrence_extend` (a cancelled occurrence
+was invisible to its "latest occurrence" query, so a nightly re-run recreated
+a live copy of the exact date just cancelled — fixed by the Events feature's
+own commit, verified end to end here) and an unrelated CC/BCC-merge change
+inside the manual-only `scheduled_emails` runner (Communications feature's
+own change, reviewed for the scheduler-wiring angle only).
+
+Each of the seven new tasks was read in full for idempotency and
+org-scoping: all use either the shared `_for_each_org` helper, a durable
+DB-unique claim row (`LeaveNoticeSend`'s `uq_leave_notice_send` constraint —
+Pitfall #36's "unique constraint on the provider's own id" shape, with a real
+constraint rather than a JSON flag), a row re-read under `with_for_update()`
+immediately before acting, or `FOR UPDATE SKIP LOCKED` claiming
+(`pending_file_deletions`). **0 fixed, 0 new findings** — every new surface
+traced and found already using the safe patterns. Registry re-verified by
+AST (handling the `TASK_INTERVALS_SECONDS: Dict[str, int] = {...}`
+`AnnAssign` form, which a naive walk under-counts): 88/88/87+1, up from
+80/80/79+1 at pass 13. Route inventory unchanged (2 routes, 0 diff).
+`CRON4-31-2`, `CRON-4`, `CRON-31-8` and the Redis-down fail-open fallback all
+re-confirmed unchanged at their current locations.
+
+**A pre-existing, out-of-scope 2-head Alembic fork** (`809893462b67`,
+`dd939b45d6c0`) was found and left to [PR
+#4560](https://github.com/thegspiro/the-logbook/pull/4560) (open, already
+carries the join revision `561a3e9f4165`), per the standing rule against
+writing a competing merge revision for this class of defect.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean. `validate_migrations.py --strict` fails
+only on the pre-existing fork noted above (819 revisions, 2 heads).
+`check_route_permissions.py --strict` — 338 routes, 0 errors/warnings.
+Scoped backend pytest (scheduled-task/cron + all seven new delegates) — 694
+passed, 1 pre-existing skip (`pywebpush`). `npm run typecheck` — 0 errors.
+`npm run lint` — 0 errors/warnings.
+
+Full write-up: `docs/security-review/CRON14-31-scheduled-tasks.md`.
+
+Row 31 → ✅ (pending this PR's merge); next is Feature 32 (Locations &
+kiosk) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-22 — Feature 28 (Security, audit & IP, pass 14) merged; Feature 29 (Reports & analytics, pass 16) merged; Feature 30 (Onboarding, pass 14): watchdog pickup, one independent export-scrub fix verified good, 0 fixed, 0 new findings
+
+PR #4547 merged as `78809b873`, and PR #4553 merged as `89bdc2bff`, both
+since the last log entry below; rows 28 and 29 marked ✅ above. A fresh
+`list_pull_requests` (state=open) found no `claude/security-review-*` head,
+confirming row 30 (Onboarding) as the next `⬜` row.
+
+Baseline `deb9601f3` (pass 13's merge, PR #4240). Diffed the feature's full
+declared file list against it directly: every file is byte-identical except
+`backend/app/services/org_template_registry.py` (+7/−1) and
+`frontend/src/modules/onboarding/pages/positionTemplates.ts` (+4/−4).
+
+The real backend delta is a new `null_columns=("training_details",)` entry
+on `EventTemplate`'s `TableSpec` in the org-template export registry. The
+Events feature added `EventTemplate.training_details` (a JSON column
+carrying an instructor's name/id and an org-local course id) on 2026-11-20,
+and without this entry the org-template export path — which turns one
+department's templates into a file meant to be shared with another
+department — would have carried that instructor identity and course id
+straight into the export. Traced `_serialize_row` in
+`org_template_service.py` directly: a `null_columns` entry forces the whole
+column to `None` before serialization, unconditionally, the same mechanism
+already used for `settings`, `report_email_recipients`,
+`apparatus_id`/`equipment_id`/`item_id` elsewhere in the same registry.
+**Verified good, no finding** — a security-positive fix landed by another
+feature's own commit, not by this rotation. The frontend delta is a cosmetic
+position-template name/description change with no permission change.
+
+Route inventory re-enumerated by AST from source: 26 routes, unchanged from
+pass 13. Both previously-OPEN items (ONB-7's rate-cap design choice, and
+`ITTeamMemberRequest.email`'s intentionally-loose `str` typing) are
+unchanged, confirmed via the byte-identical core files rather than re-read
+line by line.
+
+**Completion gate:** `flake8`, `black --check` and `isort --check-only` on
+`app/ tests/ alembic/` are all clean. `validate_migrations.py --strict`
+reports 818 revisions and a single head, `dd939b45d6c0`.
+`check_route_permissions.py --strict` checked 338 routes with 0 errors and 0
+warnings. The scoped backend suite had 725 passed and 1 environment-only
+skip (`pywebpush`). `npm run typecheck` reports 0 errors, `npm run lint`
+reports 0 errors/warnings, and `npx vitest run src/modules/onboarding`
+reports 509 passed (44 files).
+
+Row 30 → ✅ (pending this PR's merge). Next is Feature 31 (Scheduled tasks).
 
 ### 2026-11-22 — Feature 26 (Forms, pass 14) merged; Feature 27 (Integrations, pass 14): watchdog pickup, undo for Historical Data Import read in full, 0 fixed, 0 new security findings (1 flagged, test-coverage only)
 
