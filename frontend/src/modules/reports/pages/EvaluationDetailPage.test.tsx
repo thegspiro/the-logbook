@@ -214,6 +214,42 @@ describe('EvaluationDetailPage', () => {
     );
   });
 
+  describe('self-evaluation beside the evaluation', () => {
+    const part = (kind: string, status: 'draft' | 'submitted', rating: number) => ({
+      kind,
+      status,
+      content: { answers: { training: { rating } } },
+      submitted_at: status === 'submitted' ? '2027-01-10T12:00:00Z' : null,
+      updated_at: null,
+    });
+
+    it("marks an item far apart, following the evaluator's draft as they rate", async () => {
+      get.mockResolvedValue(
+        detail({ parts: [part('self_evaluation', 'submitted', 5), part('evaluator', 'draft', 2)] })
+      );
+      const user = userEvent.setup();
+      renderPage();
+
+      const panel = await screen.findByRole('region', { name: 'Self-evaluation beside the evaluation' });
+      expect(within(panel).getByText('Far apart')).toBeInTheDocument();
+      expect(within(panel).getByText('Level 5')).toBeInTheDocument();
+      expect(within(panel).getByText('Level 2')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('radio', { name: /Level 4/ }));
+
+      expect(within(panel).queryByText('Far apart')).not.toBeInTheDocument();
+      expect(within(panel).getByText('No rated item is far apart.')).toBeInTheDocument();
+    });
+
+    it('is not shown until the member has submitted their self-evaluation', async () => {
+      get.mockResolvedValue(detail({ parts: [part('self_evaluation', 'draft', 5), part('evaluator', 'draft', 2)] }));
+      renderPage();
+      expect(await screen.findAllByText('11.5 h')).not.toHaveLength(0);
+
+      expect(screen.queryByRole('region', { name: 'Self-evaluation beside the evaluation' })).not.toBeInTheDocument();
+    });
+  });
+
   it('shows no last review when the server sends none', async () => {
     renderPage();
     expect(await screen.findAllByText('11.5 h')).not.toHaveLength(0);
