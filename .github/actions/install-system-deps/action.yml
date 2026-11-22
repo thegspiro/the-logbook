@@ -30,10 +30,19 @@ runs:
     # is the runner image's own convention and not part of the Actions contract.
     # The same step in the Mobile Safari job explains why the release must be
     # in the key: one release's .debs are not another's.
-    - name: Identify the Ubuntu release
+    #
+    # The ISO week is in the key too. actions/cache never saves over an exact
+    # key match, so a key that changed only with the script would be saved
+    # once and then restored forever: each security update Ubuntu shipped for
+    # ffmpeg or one of its 81 libraries would be downloaded by every job and
+    # never cached. A new key each week saves the archive again, restored from
+    # last week's, with that week's updates in it.
+    - name: Identify the Ubuntu release and the cache week
       id: distro
       shell: bash
-      run: echo "release=$(. /etc/os-release && echo "${ID}-${VERSION_ID}")" >> "$GITHUB_OUTPUT"
+      run: |
+        echo "release=$(. /etc/os-release && echo "${ID}-${VERSION_ID}")" >> "$GITHUB_OUTPUT"
+        echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
 
     # /var/cache/apt/archives is root-owned, so the cache restore, which runs as
     # the runner user, cannot write into it without this. apt installs via sudo
@@ -43,14 +52,16 @@ runs:
       run: sudo mkdir -p /var/cache/apt/archives/partial && sudo chown -R "$(id -u):$(id -g)" /var/cache/apt/archives
 
     # The script decides which packages to install, so its hash is in the key.
-    # The restore key lets a changed script start from the previous archive;
-    # apt fetches only what that archive lacks.
+    # The restore keys start a new week from the last one with the same script,
+    # and a changed script from the previous archive; apt fetches only what the
+    # restored archive lacks.
     - name: Cache apt packages for backend system dependencies
       uses: actions/cache@v6
       with:
         path: /var/cache/apt/archives
-        key: apt-system-deps-${{ runner.os }}-${{ steps.distro.outputs.release }}-${{ hashFiles('.github/scripts/install-system-deps.sh') }}
+        key: apt-system-deps-${{ runner.os }}-${{ steps.distro.outputs.release }}-${{ hashFiles('.github/scripts/install-system-deps.sh') }}-${{ steps.distro.outputs.week }}
         restore-keys: |
+          apt-system-deps-${{ runner.os }}-${{ steps.distro.outputs.release }}-${{ hashFiles('.github/scripts/install-system-deps.sh') }}-
           apt-system-deps-${{ runner.os }}-${{ steps.distro.outputs.release }}-
 
     # Not a bare `apt-get update`: that is unbounded, and on 2026-08-19 it
@@ -62,10 +73,18 @@ runs:
       run: |
         "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
 
-    # apt hands archives/partial back to its `_apt` user, mode 0700, while it
-    # installs. The post-job save runs tar as the runner user and would drop
-    # the save with a warning ("Cannot open: Permission denied"), as the Mobile
-    # Safari job's cache did until it took the directory back the same way.
-    - name: Let the post-job cache save read the apt archive directory
+    # autoclean deletes the .debs whose version the package lists no longer
+    # offer, so a weekly save carries the current packages and not every
+    # version that has passed through the archive. It reads only the local
+    # lists, which the script has just updated whenever it installed anything.
+    #
+    # Then the chown: apt hands archives/partial back to its `_apt` user, mode
+    # 0700, while it installs. The post-job save runs tar as the runner user
+    # and would drop the save with a warning ("Cannot open: Permission
+    # denied"), as the Mobile Safari job's cache did until it took the
+    # directory back the same way.
+    - name: Prune superseded packages and let the post-job save read the archive
       shell: bash
-      run: sudo chown -R "$(id -u):$(id -g)" /var/cache/apt/archives
+      run: |
+        sudo apt-get autoclean
+        sudo chown -R "$(id -u):$(id -g)" /var/cache/apt/archives
