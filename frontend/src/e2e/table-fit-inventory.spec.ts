@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { json, signIn, TEST_USER } from './helpers';
 import { TABLE_FIT_VIEWPORTS, expectTableFitsItsCard } from './tableFit';
@@ -139,6 +139,56 @@ test.describe('Inventory items — Unavailable table', () => {
       const table = page.getByRole('table', { name: 'Unavailable' });
       await table.waitFor();
       await expectTableFitsItsCard(table, 'Unavailable items table');
+    });
+  }
+});
+
+// In the stacked view each labelled cell is a row spanning the card, label on
+// the left and value on the right. Location carried `max-w-[160px]` on its
+// <td>, which capped that whole row: its label and "-" sat together in a
+// 160px box on the left while Condition, above it, spanned the card.
+test.describe('Inventory items — stacked Location row spans the card', () => {
+  for (const viewport of [
+    { name: 'iPhone 390x844', width: 390, height: 844 },
+    { name: 'iPad portrait 820x1180', width: 820, height: 1180 },
+  ]) {
+    test(`/inventory/admin/items — ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await signIn(page, { permissions: PERMISSIONS });
+      const items = ITEMS.map((item, i) => (i === 4 ? { ...item, storage_location: '' } : item));
+      await page.route('**/api/v1/inventory/items?**', (route) => {
+        void route.fulfill(json({ items, total: items.length, skip: 0, limit: 50 }));
+      });
+      await page.route('**/api/v1/inventory/categories**', (route) => {
+        void route.fulfill(json(CATEGORIES));
+      });
+      await page.goto('/inventory/admin/items');
+      const table = page.getByRole('table', { name: 'Unavailable' });
+      await table.waitFor();
+      // The table must be stacked here, or the widths below compare columns.
+      await expect(table.locator('thead')).toBeHidden();
+
+      const rows = await table.locator('tbody tr').evaluateAll((trs) =>
+        trs.map((tr) => {
+          const cell = (label: string) => tr.querySelector<HTMLElement>(`td[data-label="${label}"]`);
+          const location = cell('Location');
+          const value = location?.firstElementChild ?? location;
+          return {
+            text: location?.textContent?.trim() ?? '',
+            locationWidth: Math.round(location?.getBoundingClientRect().width ?? -1),
+            conditionWidth: Math.round(cell('Condition')?.getBoundingClientRect().width ?? -2),
+            valueRight: Math.round(value?.getBoundingClientRect().right ?? -1),
+            cellContentRight: location
+              ? Math.round(location.getBoundingClientRect().right - parseFloat(getComputedStyle(location).paddingRight))
+              : -2,
+          };
+        })
+      );
+      expect(rows.map((r) => r.text)).toContain('-');
+      for (const row of rows) {
+        expect(row.locationWidth, `Location "${row.text}" row width`).toBe(row.conditionWidth);
+        expect(row.valueRight, `Location "${row.text}" value sits at the right edge`).toBe(row.cellContentRight);
+      }
     });
   }
 });
