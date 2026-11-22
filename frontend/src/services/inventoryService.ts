@@ -555,6 +555,12 @@ export const inventoryService = {
     return asArray(response.data);
   },
 
+  /** Active items that need inspecting and have never had one (W42-6). */
+  async getNeverInspectedItems(): Promise<InventoryItem[]> {
+    const response = await api.get<InventoryItem[]>('/inventory/maintenance/never-inspected');
+    return asArray(response.data);
+  },
+
   async getItemMaintenanceHistory(itemId: string): Promise<MaintenanceRecord[]> {
     const response = await api.get<MaintenanceRecord[]>(`/inventory/items/${itemId}/maintenance`);
     return asArray(response.data);

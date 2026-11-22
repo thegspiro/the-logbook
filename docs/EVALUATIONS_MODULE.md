@@ -339,6 +339,32 @@ spacing ignored), an intent checkbox, and step-up. The step is read under the
 evaluation's row lock, and the unique key on (evaluation, revision, step) backs
 that up.
 
+## Handing over open work
+
+When an evaluator or approver leaves or changes role, a holder of
+`evaluations.manage` hands their open work in one review period to someone
+else (owner decision 2026-11-21) from the conduct list's **Hand over work**:
+
+- `GET /periods/{id}/reassign-options` lists who holds open work in the period,
+  a former member included, with how many evaluations each.
+- `GET /periods/{id}/reassign-preview?from_user_id=&to_user_id=` says what
+  would move and what would be skipped and why, and changes nothing.
+- `POST /periods/{id}/reassign` (step-up) does it, deciding each evaluation
+  again under its row lock by the same rule, so it does what the preview said.
+
+What moves, on evaluations still in progress: the evaluator's part while the
+evaluator has not submitted (their draft stays, for the new evaluator to
+finish and submit as theirs), and approval and calibration steps not yet done
+that name the person. A step that goes to a position's holders follows the
+position and is not moved. An evaluation moves whole or not at all: it is
+skipped when the new person is its member, cannot conduct evaluations (for the
+evaluator's part), is named on its approval or calibration (for the
+evaluator's part), or is the evaluator or signed another approval (for an
+approval). The new evaluator or assignee gets the usual "Evaluation waiting on
+you" email for a step already open; the member is not emailed and sees the new
+name. Each evaluation moved is audited as `evaluation_work_reassigned` at
+`warning` with both people and what moved.
+
 ## After finalization
 
 - **Response** (`PUT /{id}/response`, `POST /{id}/response/submit`): the
@@ -464,6 +490,8 @@ All under `/api/v1/evaluations`.
 | `GET ""`                                                                                                                      | `conduct`, `view_all` or `manage`                                                             |
 | `GET /draft-options`, `POST ""`                                                                                               | `conduct` or `manage`                                                                         |
 | `GET /bulk-preview`, `POST /bulk`                                                                                             | `manage`                                                                                      |
+| `GET /periods/{id}/reassign-options`, `GET /periods/{id}/reassign-preview`                                                    | `manage`                                                                                      |
+| `POST /periods/{id}/reassign`                                                                                                 | `manage`, with step-up                                                                        |
 | `GET /removed`                                                                                                                | `view_all`, `manage` or `delete`                                                              |
 | `GET /export?period_id=`                                                                                                      | `view_all`                                                                                    |
 | `GET /mine`, `/mine/live-data`, `/mine/removed`                                                                               | sign-in                                                                                       |

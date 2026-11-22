@@ -1610,11 +1610,13 @@ the owner, because closing them changes how members get into their accounts:
   is; the email change itself is now ceiling-bound, step-up gated, audited and
   reported to the previous address.
 
-## Separation of Duties — Two Decisions Left Open (ADV-02, 2026-11-14)
+## Separation of Duties — All Decisions Taken (ADV-02, 2026-11-14)
 
 The adversarial pass over the month to 2026-11-14 found these items. Its
 findings are in `docs/security-review/ADV-02-adversarial-last-month.md`. Each
-fix changes a workflow some departments rely on, so the owner decides:
+fix changed a workflow some departments rely on, so the owner decided each one;
+all are now resolved, and one consequence is kept below as an accepted
+limitation:
 
 - ~~**One officer can conduct, calibrate and approve a personnel evaluation
   (ADV2-4).**~~ ✅ Resolved 2026-11-16 (owner: refuse, and add a reassign
@@ -1637,22 +1639,33 @@ fix changes a workflow some departments rely on, so the owner decides:
   request, which they cannot decide. Ending one's own leave early (deleting
   it) is still allowed, since it excuses nothing. See
   `docs/security-review/ADV-02-adversarial-last-month.md`.
-- **An officer can still give themselves a training-only waiver (found
-  2026-11-21, documentation pass; awaiting an owner decision).** The ADV2-9 fix
-  closed the leave route. `POST /training/waivers` (`create_training_waiver`
-  in `backend/app/api/v1/endpoints/training_waivers.py`, `training.manage`)
-  has no `user_id == granted_by` check, so a holder can choose **Applies To:
-  Training only** on the Waivers page and excuse their own training
-  requirements, the outcome ADV2-9 was meant to stop. The fix would mirror
-  `MemberLeaveService.create_leave` and `RequirementOverrideService.grant`:
-  refuse a waiver for oneself and send the member through a waiver request
-  another officer decides. Not changed by the documentation pass, because
-  whether a Chief with no other officer may excuse their own training is the
-  owner's call.
-- **An applicant's edited email or name and birth date can make a coordinator's
-  self-access guard hide their file (ADV2-10).** Refusing a member's email
-  covers half of it. The rest turns on whether self-detection should trust
-  fields the applicant can edit.
+- ~~**An officer can still give themselves a training-only waiver (found
+  2026-11-21, documentation pass).**~~ ✅ Resolved 2026-11-22 (owner: block it,
+  as for leave). `POST /training/waivers` refuses a waiver for oneself (400),
+  and `PATCH /training/waivers/{id}` refuses changes to one's own waiver (403),
+  so a waiver cannot be extended, widened or turned back on by its own member.
+  Deactivating one's own waiver is still allowed: it excuses nothing. An
+  officer's own training-only waiver is recorded by another training officer,
+  or they submit a leave request. **A Chief who is the department's only
+  `training.manage` holder can no longer excuse their own training this way**;
+  another officer must be given the permission, or the leave-request route
+  used.
+- ~~**An applicant's edited email or name and birth date can make a coordinator's
+  self-access guard hide their file (ADV2-10).**~~ ✅ Resolved 2026-11-21
+  (owner: trust only `transferred_user_id` once the applicant edits). An
+  applicant who changes their email, name or date of birth through a follow-up
+  form stamps `identity_edited_by_applicant_at`, and the guard then matches
+  that record to a member only by the transfer back-link. A coordinator's
+  change to one of those fields clears the stamp. Applications already edited
+  were stamped from the activity log on upgrade.
+- **The first public application is still matched on what the applicant typed
+  (found 2026-11-21 with ADV2-10; left as is by owner decision).** Someone
+  applying through the public interest form with a coordinator's email, or
+  their name and birth date, is hidden from that coordinator from the start,
+  because the stamp marks only later follow-up edits. The owner chose this so
+  that a member's own application stays hidden from them before transfer. A
+  coordinator who suspects a missing applicant can ask another coordinator,
+  who sees the record.
 - ~~**A Zeffy dues payment credits whichever member's email the payer typed
   (ADV2-11).**~~ ✅ Resolved 2026-11-21 (owner: hold as unmatched until a
   treasurer confirms). A membership payment is recorded as **Awaiting

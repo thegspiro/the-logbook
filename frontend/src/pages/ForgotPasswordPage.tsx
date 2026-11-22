@@ -78,7 +78,7 @@ export const ForgotPasswordPage: React.FC = () => {
       >
         <div className="w-full max-w-md">
           <div className="card p-8 text-center">
-            <h2 className="text-theme-text-primary mb-4 text-2xl font-bold">No Reset Link Was Sent</h2>
+            <h1 className="text-theme-text-primary mb-4 text-2xl font-bold">No Reset Link Was Sent</h1>
             <p className="text-theme-text-secondary mb-6">{answer.message}</p>
             <Link
               to="/login"
@@ -105,7 +105,7 @@ export const ForgotPasswordPage: React.FC = () => {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
               <CheckCircle className="h-10 w-10 text-green-700 dark:text-green-400" aria-hidden="true" />
             </div>
-            <h2 className="text-theme-text-primary mb-4 text-2xl font-bold">Check Your Email</h2>
+            <h1 className="text-theme-text-primary mb-4 text-2xl font-bold">Check Your Email</h1>
             <p className="text-theme-text-secondary mb-6">
               If an account exists with the email <strong className="text-theme-text-primary">{email}</strong>, you will
               receive a password reset link shortly.
@@ -276,7 +276,7 @@ export const ForgotPasswordPage: React.FC = () => {
               />
             </svg>
             <div>
-              <h4 className="text-theme-alert-info-title mb-1 text-sm font-medium">Security Note</h4>
+              <h2 className="text-theme-alert-info-title mb-1 text-sm font-medium">Security Note</h2>
               <p className="text-theme-alert-info-text text-sm">
                 For security reasons, we don't reveal whether an email exists in our system. You'll receive an email
                 only if the account exists.

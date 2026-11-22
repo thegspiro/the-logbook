@@ -5569,6 +5569,10 @@ const routes = ({
   ['**/api/v1/admin-hours/categories?include_inactive=true', () => (empty ? [] : ADMIN_HOURS_CATEGORIES)],
   ['**/api/v1/admin-hours/active-sessions', () => (empty ? [] : ADMIN_HOURS_ACTIVE_SESSIONS)],
   ['**/api/v1/admin-hours/pending-count', () => ({ count: empty ? 0 : 3 })],
+  // The reset-password and public minutes pages are reached without a session;
+  // nothing signed in reads either answer.
+  ['**/api/v1/auth/validate-reset-token', () => ({ valid: true, email: 'test.user@example.com' })],
+  ['**/api/public/v1/minutes', () => PUBLIC_MINUTES_LIST(empty)],
   ...(roles
     ? ([
         ['**/api/v1/roles', () => DEPARTMENT_ROLES],
@@ -5579,6 +5583,39 @@ const routes = ({
     ? ([['**/api/v1/medical-supplies/categories**', () => MEDICAL_CATEGORIES]] as [string, () => unknown][])
     : []),
 ];
+
+// PublicMinutesPage declares its response types locally, so this is shaped to
+// the page's PublicList rather than an imported interface.
+const PUBLIC_MINUTES_LIST = (empty: boolean) => ({
+  organization_name: 'Oakville Volunteer Fire Department',
+  minutes: empty
+    ? []
+    : [
+        {
+          id: 'e2e-public-minutes-1',
+          title: 'Regular Business Meeting — November 2026',
+          meeting_type_display: 'Business meeting',
+          meeting_date: '2026-11-04',
+          meeting_date_display: 'Wednesday, November 4, 2026',
+          posted_at: '2026-11-12T18:00:00Z',
+          version: 2,
+          under_correction: false,
+        },
+        {
+          id: 'e2e-public-minutes-2',
+          title: 'Special Meeting on the Engine 2 Replacement and the Station 3 Roof Bond Proposal',
+          meeting_type_display: 'Special meeting',
+          meeting_date: '2026-10-21',
+          meeting_date_display: 'Wednesday, October 21, 2026',
+          posted_at: '2026-10-29T14:30:00Z',
+          version: 1,
+          under_correction: true,
+        },
+      ],
+  total: empty ? 0 : 2,
+  skip: 0,
+  limit: 50,
+});
 
 const MY_IP_EXCEPTIONS: IPException[] = [
   {

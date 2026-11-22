@@ -5560,6 +5560,42 @@ class InventoryService:
         )
         return list(result.scalars().all())
 
+    async def get_never_inspected(
+        self, organization_id: UUID | str, limit: int = 200
+    ) -> List[InventoryItem]:
+        """Active items that need inspecting and have never had one.
+
+        ``get_maintenance_due`` lists items by ``next_inspection_due``, which
+        only a completed inspection sets, so an item whose category requires
+        maintenance (or which carries its own interval) had no date and never
+        appeared there (workflow review W42-6). The owner chose to list these
+        on their own rather than count them as due: what "due" means, and the
+        dashboard counts built on it, are unchanged.
+
+        An item given a due date by hand is excluded, since the due list
+        already shows it.
+        """
+        result = await self.db.execute(
+            select(InventoryItem)
+            .outerjoin(
+                InventoryCategory, InventoryItem.category_id == InventoryCategory.id
+            )
+            .where(InventoryItem.organization_id == str(organization_id))
+            .where(InventoryItem.active.is_(True))
+            .where(InventoryItem.last_inspection_date.is_(None))
+            .where(InventoryItem.next_inspection_due.is_(None))
+            .where(
+                or_(
+                    InventoryItem.inspection_interval_days > 0,
+                    InventoryCategory.requires_maintenance.is_(True),
+                )
+            )
+            .options(selectinload(InventoryItem.category))
+            .order_by(InventoryItem.name, InventoryItem.id)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
     async def get_item_maintenance_history(
         self,
         item_id: UUID,
