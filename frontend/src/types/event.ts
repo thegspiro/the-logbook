@@ -1069,9 +1069,12 @@ export type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'flexible';
 
 export interface TaskCompletion {
   completed: boolean;
-  completed_by: string;
-  completed_at: string;
+  /** Absent on a step the request's state ticks (`automatic`). */
+  completed_by?: string;
+  completed_at?: string;
   notes?: string;
+  /** Ticked by the request's state, not by a coordinator. */
+  automatic?: boolean;
 }
 
 export interface EmailTemplate {
@@ -1132,6 +1135,8 @@ export interface EventRequest {
   reviewer_notes?: string;
   decline_reason?: string;
   task_completions?: Record<string, TaskCompletion>;
+  /** Task id to how it ticks itself; a coordinator cannot toggle these. */
+  automatic_tasks?: Record<string, string>;
   event_id?: string;
   event_date?: string;
   event_end_date?: string;

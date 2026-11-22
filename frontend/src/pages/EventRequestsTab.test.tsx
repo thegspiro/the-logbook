@@ -10,6 +10,7 @@ const assignRequest = vi.fn();
 const updateRequestStatus = vi.fn();
 const createRequest = vi.fn();
 const scheduleRequest = vi.fn();
+const updateTaskCompletion = vi.fn();
 const getOutreachTypeLabels = vi.fn(() => Promise.resolve({}));
 const toastError = vi.fn();
 const sendVolunteerCall = vi.fn();
@@ -32,6 +33,7 @@ vi.mock('../services/api', () => ({
     updateRequestStatus: (...args: unknown[]) => updateRequestStatus(...args) as unknown,
     createRequest: (...args: unknown[]) => createRequest(...args) as unknown,
     scheduleRequest: (...args: unknown[]) => scheduleRequest(...args) as unknown,
+    updateTaskCompletion: (...args: unknown[]) => updateTaskCompletion(...args) as unknown,
     getOutreachTypeLabels: () => getOutreachTypeLabels(),
     listEmailTemplates: () => Promise.resolve([]),
     getOutreachRoles: () => Promise.resolve([]),
@@ -852,5 +854,36 @@ describe('EventRequestsTab scheduling a request', () => {
     await user.selectOptions(within(page).getByRole('combobox', { name: /Start time AM\/PM|Start time period/ }), 'PM');
     await user.click(within(page).getByRole('button', { name: '8 hours' }));
     expect(within(page).getByLabelText('End Date & Time')).toHaveValue('2026-11-26');
+  });
+});
+
+describe('EventRequestsTab checklist steps the request ticks itself', () => {
+  beforeEach(() => {
+    listRequests.mockReset();
+    getRequest.mockReset();
+    updateTaskCompletion.mockReset();
+    const detail = {
+      ...request,
+      task_completions: { confirm: { completed: true, automatic: true } },
+      automatic_tasks: { confirm: 'Ticks itself once the event is scheduled.' },
+      activity_log: [],
+    };
+    listRequests.mockResolvedValue([request]);
+    getRequest.mockResolvedValue(detail);
+  });
+
+  it('shows how the step ticks and does not let a coordinator toggle it', async () => {
+    const user = userEvent.setup();
+    renderBoard();
+    await user.click(await screen.findByRole('button', { name: /Pat Requester/ }));
+    const page = await screen.findByRole('article', { name: 'Pat Requester' });
+
+    const confirm = await within(page).findByRole('button', { name: /Confirm Date/ });
+    expect(confirm).toHaveAttribute('aria-pressed', 'true');
+    expect(confirm).toBeDisabled();
+    expect(confirm).toHaveAccessibleDescription('Ticks itself once the event is scheduled.');
+
+    await user.click(confirm);
+    expect(updateTaskCompletion).not.toHaveBeenCalled();
   });
 });

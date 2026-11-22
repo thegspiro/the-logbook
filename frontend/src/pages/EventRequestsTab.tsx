@@ -1139,6 +1139,9 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
                       {pipelineTasks.map((task) => {
                         const completion = detail.task_completions?.[task.id];
                         const isCompleted = !!completion?.completed;
+                        // The request's state ticks these; the server refuses a hand toggle.
+                        const automaticHint = detail.automatic_tasks?.[task.id];
+                        const hintId = automaticHint ? `task-auto-${task.id}` : undefined;
                         return (
                           <button
                             key={task.id}
@@ -1146,8 +1149,10 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
                             onClick={() => void handleTaskToggle(detail.id, task.id, isCompleted)}
                             // Done or not was shown only by the icon and a strikethrough.
                             aria-pressed={isCompleted}
-                            disabled={actionLoading}
-                            className="hover:bg-theme-surface-hover flex min-h-11 w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors disabled:opacity-50"
+                            aria-describedby={hintId}
+                            disabled={actionLoading || !!automaticHint}
+                            // A locked step stays at full contrast; only a busy list dims.
+                            className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors ${automaticHint ? 'cursor-default' : 'hover:bg-theme-surface-hover disabled:opacity-50'}`}
                           >
                             {isCompleted ? (
                               <CheckSquare className="h-5 w-5 shrink-0 text-green-700 dark:text-green-400" />
@@ -1162,6 +1167,11 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
                               </span>
                               {task.description && task.description !== task.label && (
                                 <span className="text-theme-text-muted block text-xs">{task.description}</span>
+                              )}
+                              {automaticHint && (
+                                <span id={hintId} className="text-theme-text-muted block text-xs italic">
+                                  {automaticHint}
+                                </span>
                               )}
                             </span>
                           </button>

@@ -12,6 +12,7 @@ button produces) created the row and stopped, so nobody was assigned and
 nobody — requester or coordinator — was told a request had arrived.
 """
 
+import copy
 import html as _html
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable, Optional, Union
@@ -201,6 +202,64 @@ def configured_task_ids(org: Optional[Organization]) -> set[str]:
     """The set of pipeline task ids this department has configured."""
     tasks = get_pipeline_settings(org).get("tasks", []) or []
     return {str(t.get("id")) for t in tasks if isinstance(t, dict) and t.get("id")}
+
+
+# Owner decision, 2026-11-22: these default pipeline tasks tick themselves from
+# the request's own state, and untick when that state is undone. They are read,
+# never stored, so a postponement or a volunteer dropping out shows at once and
+# requests filed before the rule read correctly with no backfill. A department
+# that renamed one keeps the id and the behaviour; one that deleted it never
+# shows it. Plan Content and Prepare Equipment have no such state and stay
+# manual.
+AUTOMATIC_TASK_HINTS = {
+    "review_request": "Ticks itself once work on the request starts.",
+    "assign_coordinator": "Ticks itself while a coordinator is assigned.",
+    "confirm_date": "Ticks itself once the event is scheduled.",
+    "arrange_volunteers": "Ticks itself when every volunteer seat is filled.",
+}
+
+
+def automatic_task_states(
+    event_request: EventRequest, staffing: Optional[tuple[int, int]]
+) -> dict[str, bool]:
+    """Task id -> done, for each task the request's state decides right now.
+
+    ``staffing`` is the request's ``(filled, total)`` from
+    ``staffing_counts_by_request``, the count the board shows, or None when it
+    has no live signup sheet. Without a sheet with seats on it there is nothing
+    to measure volunteers against, so Arrange Volunteers stays a manual tick
+    for a department that arranges them another way.
+    """
+    status = event_request.status
+    states = {
+        "review_request": status != EventRequestStatus.SUBMITTED,
+        "assign_coordinator": event_request.assigned_to is not None,
+        "confirm_date": status
+        in (EventRequestStatus.SCHEDULED, EventRequestStatus.COMPLETED),
+    }
+    if staffing is not None and staffing[1] > 0:
+        filled, total = staffing
+        states["arrange_volunteers"] = filled >= total
+    return states
+
+
+def effective_task_completions(
+    event_request: EventRequest, staffing: Optional[tuple[int, int]]
+) -> dict[str, Any]:
+    """The checklist every reader shows: stored ticks, with the automatic ones
+    replaced by what the request's state decides.
+
+    An automatic task's stored tick, including one a coordinator made by hand
+    before the rule existed, is overridden either way, so the checklist cannot
+    say a postponed request's date is confirmed.
+    """
+    completions: dict[str, Any] = copy.deepcopy(event_request.task_completions or {})
+    for task_id, done in automatic_task_states(event_request, staffing).items():
+        if done:
+            completions[task_id] = {"completed": True, "automatic": True}
+        else:
+            completions.pop(task_id, None)
+    return completions
 
 
 # The fixed vocabularies the requester's preference fields may hold. Unlike
