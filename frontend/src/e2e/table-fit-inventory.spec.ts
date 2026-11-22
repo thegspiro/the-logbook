@@ -260,3 +260,41 @@ test.describe('Issuance charges table', () => {
     });
   }
 });
+
+// Never Inspected (W42-6): item, category, the reason it needs inspecting,
+// condition and an action, on the Maintenance page's own tab.
+const NEVER_INSPECTED = [0, 1, 2, 3].map((i) => ({
+  ...inventoryItem(i, 'available', null),
+  tracking_type: 'individual',
+  inspection_interval_days: i % 2 ? 365 : null,
+  last_inspection_date: null,
+  next_inspection_due: null,
+}));
+
+test.describe('Maintenance — Never Inspected table', () => {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
+    test(`/inventory/admin/maintenance — ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await signIn(page, { permissions: PERMISSIONS });
+      await page.route('**/api/v1/inventory/maintenance/due**', (route) => {
+        void route.fulfill(json([]));
+      });
+      await page.route('**/api/v1/inventory/maintenance/never-inspected**', (route) => {
+        void route.fulfill(json(NEVER_INSPECTED));
+      });
+      await page.route('**/api/v1/inventory/items?**', (route) => {
+        void route.fulfill(json({ items: [], total: 0, skip: 0, limit: 100 }));
+      });
+      await page.route('**/api/v1/inventory/categories**', (route) => {
+        void route.fulfill(json(CATEGORIES.map((c) => ({ ...c, requires_maintenance: true }))));
+      });
+      await page.goto('/inventory/admin/maintenance');
+      await page.getByRole('button', { name: 'Never Inspected (4)' }).click();
+      const table = page
+        .getByRole('table')
+        .filter({ has: page.getByRole('columnheader', { includeHidden: true, name: 'Inspection Needed' }) });
+      await table.waitFor();
+      await expectTableFitsItsCard(table, 'Never Inspected table');
+    });
+  }
+});

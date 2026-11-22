@@ -3024,6 +3024,25 @@ async def get_maintenance_due(
     return items
 
 
+@router.get("/maintenance/never-inspected", response_model=list[InventoryItemResponse])
+async def get_never_inspected(
+    limit: int = Query(200, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get active items that need inspecting and have never been inspected
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    return await service.get_never_inspected(
+        organization_id=current_user.organization_id,
+        limit=limit,
+    )
+
+
 # ============================================
 # Reporting & Analytics Endpoints
 # ============================================

@@ -17,7 +17,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
-import type { InventoryItem, MaintenanceRecord, MaintenanceRecordCreate } from '../types';
+import type { InventoryCategory, InventoryItem, MaintenanceRecord, MaintenanceRecordCreate } from '../types';
 import { getConditionColor } from '../types';
 import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
@@ -68,6 +68,19 @@ function getDueLabel(days: number | null): string {
   return `${days}d`;
 }
 
+/**
+ * Why a never-inspected item is listed: its own interval, or else its
+ * category's "requires maintenance" setting (the two conditions the
+ * never-inspected endpoint selects on).
+ */
+function inspectionReason(item: InventoryItem, category: InventoryCategory | undefined): string {
+  if (item.inspection_interval_days && item.inspection_interval_days > 0) {
+    const days = item.inspection_interval_days;
+    return `Every ${formatNumber(days)} day${days === 1 ? '' : 's'}`;
+  }
+  return category ? `${category.name} requires maintenance` : 'Category requires maintenance';
+}
+
 function openRecordLabel(record: MaintenanceRecord | undefined, tz: string): string {
   if (!record) return '';
   const type = record.maintenance_type.replace(/_/g, ' ');
@@ -95,7 +108,9 @@ const InventoryMaintenancePage: React.FC = () => {
   const [dueItems, setDueItems] = useState<InventoryItem[]>([]);
   const [inMaintenanceItems, setInMaintenanceItems] = useState<InventoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'due' | 'history'>('due');
+  const [activeTab, setActiveTab] = useState<'due' | 'never' | 'history'>('due');
+  const [neverInspected, setNeverInspected] = useState<InventoryItem[]>([]);
+  const [categoriesById, setCategoriesById] = useState<Map<string, InventoryCategory>>(new Map());
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [history, setHistory] = useState<MaintenanceRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -124,6 +139,18 @@ const InventoryMaintenancePage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Failed to load maintenance data'));
     } finally {
       setIsLoading(false);
+    }
+    // Loaded apart from the due list so a failure here cannot blank it. The
+    // categories name the Category column on both tabs (the item response
+    // carries only category_id).
+    const [neverRes, categoriesRes] = await Promise.allSettled([
+      inventoryService.getNeverInspectedItems(),
+      inventoryService.getCategories(undefined, false),
+    ]);
+    if (neverRes.status === 'fulfilled') setNeverInspected(neverRes.value);
+    else toast.error(getErrorMessage(neverRes.reason, 'Failed to load items never inspected'));
+    if (categoriesRes.status === 'fulfilled') {
+      setCategoriesById(new Map(categoriesRes.value.map((c) => [c.id, c])));
     }
   }, []);
 
@@ -443,6 +470,9 @@ const InventoryMaintenancePage: React.FC = () => {
         <button onClick={() => setActiveTab('due')} className={tabCls(activeTab === 'due')}>
           Due Items ({allDueItems.length})
         </button>
+        <button onClick={() => setActiveTab('never')} className={tabCls(activeTab === 'never')}>
+          Never Inspected ({neverInspected.length})
+        </button>
         <button onClick={() => setActiveTab('history')} className={tabCls(activeTab === 'history')}>
           Maintenance History
           {selectedItem && <span className="text-theme-text-muted ml-1 text-xs">— {selectedItem.name}</span>}
@@ -502,7 +532,7 @@ const InventoryMaintenancePage: React.FC = () => {
                         )}
                       </td>
                       <td data-label="Category" className="text-theme-text-secondary px-3 py-3">
-                        {item.station ?? '--'}
+                        {(item.category_id && categoriesById.get(item.category_id)?.name) || '--'}
                       </td>
                       <td data-label="Last Inspection" className="text-theme-text-secondary px-3 py-3">
                         {item.last_inspection_date ? formatDate(item.last_inspection_date, tz) : '--'}
@@ -529,6 +559,79 @@ const InventoryMaintenancePage: React.FC = () => {
                 })}
               </tbody>
             </table>
+          </div>
+        )
+      ) : activeTab === 'never' ? (
+        neverInspected.length === 0 ? (
+          <div className="py-16 text-center">
+            <CheckCircle2 className="mx-auto mb-3 h-12 w-12 text-emerald-500" />
+            <p className="text-theme-text-muted">Every item that needs inspecting has had one.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-theme-text-muted text-sm">
+              These items need inspecting but have no inspection on record, so they have no due date and do not appear
+              under Due Items. Log their first inspection to start the schedule.
+            </p>
+            {/* Five columns need ~530px; a card beside the side navigation on
+                an iPad in portrait is ~500px, so this reflows on the card's
+                width, not the viewport's (CLAUDE.md pitfall #39). */}
+            <div className="rwd-table-container overflow-x-auto">
+              <table className="rwd-table rwd-table-wide w-full text-sm">
+                <thead>
+                  <tr className="border-theme-surface-border border-b text-left">
+                    {['Item Name', 'Category', 'Inspection Needed', 'Condition', 'Action'].map((h) => (
+                      <th key={h} className={thCls}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {neverInspected.map((item) => {
+                    const category = item.category_id ? categoriesById.get(item.category_id) : undefined;
+                    return (
+                      <tr
+                        key={item.id}
+                        className="border-theme-surface-border hover:bg-theme-surface-hover border-b transition-colors"
+                      >
+                        <td data-label="Item Name" className="px-3 py-3">
+                          <button
+                            onClick={() => void loadHistory(item)}
+                            className="text-theme-text-primary touch:min-h-11 flex items-center gap-1 text-left font-medium hover:underline"
+                          >
+                            {item.name}
+                            <ChevronRight className="text-theme-text-muted h-3 w-3" />
+                          </button>
+                          {item.serial_number && (
+                            <span className="text-theme-text-muted block text-xs break-all">
+                              SN: {item.serial_number}
+                            </span>
+                          )}
+                        </td>
+                        <td data-label="Category" className="text-theme-text-secondary px-3 py-3">
+                          {category?.name ?? '--'}
+                        </td>
+                        <td data-label="Inspection Needed" className="text-theme-text-secondary px-3 py-3">
+                          {inspectionReason(item, category)}
+                        </td>
+                        <td
+                          data-label="Condition"
+                          className={`px-3 py-3 capitalize ${getConditionColor(item.condition)}`}
+                        >
+                          {item.condition?.replace(/_/g, ' ') ?? '--'}
+                        </td>
+                        <td data-label="" className="px-3 py-3">
+                          <button onClick={() => openModal(item)} className="btn-info btn-sm">
+                            Log Maintenance
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )
       ) : !selectedItem ? (
