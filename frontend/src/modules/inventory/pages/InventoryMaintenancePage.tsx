@@ -465,8 +465,9 @@ const InventoryMaintenancePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="tab-scroll">
+      {/* Tabs. Three no longer fit a 320px screen; the row scrolls sideways
+          instead, and says so to the mobile reflow checks. */}
+      <div className="tab-scroll" data-mobile-scroll-region>
         <button onClick={() => setActiveTab('due')} className={tabCls(activeTab === 'due')}>
           Due Items ({allDueItems.length})
         </button>
