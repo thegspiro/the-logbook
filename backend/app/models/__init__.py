@@ -78,6 +78,12 @@ from app.models.compliance_config import (
     ReportStatus,
 )
 from app.models.consent import ConsentType, UserConsent
+from app.models.crr import (
+    CrrActivityMeasure,
+    CrrActivityType,
+    CrrActivityTypeTag,
+    CrrTag,
+)
 from app.models.directory_account import (
     DirectoryAccountProvision,
     DirectoryAccountStatus,
@@ -816,6 +822,10 @@ __all__ = [
     "ApparatusEventSeatType",
     "ApparatusEventSeatCall",
     "ApparatusEventTemplate",
+    "CrrActivityMeasure",
+    "CrrActivityType",
+    "CrrActivityTypeTag",
+    "CrrTag",
     "ApparatusEventTemplateSeat",
     "ApparatusEventTemplateUnit",
     "EventApparatusPlan",

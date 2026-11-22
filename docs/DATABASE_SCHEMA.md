@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**412 tables · 6453 columns · 1372 foreign keys**
+**416 tables · 6483 columns · 1379 foreign keys**
 
 ---
 
@@ -166,6 +166,17 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`user_consents`](#user_consents) | `UserConsent` | 7 |  |
+
+### Crr
+
+<sub>`app/models/crr.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`crr_activity_measures`](#crr_activity_measures) | `CrrActivityMeasure` | 8 | A count an activity type records, such as "alarms installed". |
+| [`crr_activity_type_tags`](#crr_activity_type_tags) | `CrrActivityTypeTag` | 3 | A tag an activity type carries by default. |
+| [`crr_activity_types`](#crr_activity_types) | `CrrActivityType` | 10 | A kind of CRR activity a department records. |
+| [`crr_tags`](#crr_tags) | `CrrTag` | 9 | A risk or a priority population an activity can be tagged with. |
 
 ### Directory_Account
 
@@ -2581,6 +2592,98 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `idx_user_consent_unique` (`user_id`, `consent_type`)
 - `ix_user_consents_organization_id` (`organization_id`)
+
+## Crr
+
+### `crr_activity_measures`
+
+**CrrActivityMeasure** · `app/models/crr.py`
+
+> A count an activity type records, such as "alarms installed". Phase 4's yearly goals are set per measure, which is why a count is a row of its own rather than a label inside the type.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `activity_type_id` | VARCHAR(36) | no | FK |  | → `crr_activity_types.id` ON DELETE CASCADE |
+| `code` | VARCHAR(64) | no |  |  |  |
+| `label` | VARCHAR(120) | no |  |  |  |
+| `is_active` | BOOL | no |  | `1` |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_crr_activity_measures_org` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_crr_activity_measures_code` (`activity_type_id`, `code`)
+
+### `crr_activity_type_tags`
+
+**CrrActivityTypeTag** · `app/models/crr.py`
+
+> A tag an activity type carries by default. An activity copies its type's tags when it is recorded and can change them there, so editing a type's defaults never rewrites what was recorded.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `activity_type_id` | VARCHAR(36) | no | PK, FK |  | → `crr_activity_types.id` ON DELETE CASCADE |
+| `tag_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `crr_tags.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+
+**Indexes**
+
+- `ix_crr_activity_type_tags_tag` (`tag_id`)
+
+### `crr_activity_types`
+
+**CrrActivityType** · `app/models/crr.py`
+
+> A kind of CRR activity a department records.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `code` | VARCHAR(64) | no |  |  |  |
+| `name` | VARCHAR(120) | no |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `is_system` | BOOL | no |  | `0` |  |
+| `is_active` | BOOL | no |  | `1` |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_crr_activity_types_org` (`organization_id`, `is_active`)
+
+**Constraints**
+
+- UNIQUE `uq_crr_activity_types_code` (`organization_id`, `code`)
+
+### `crr_tags`
+
+**CrrTag** · `app/models/crr.py`
+
+> A risk or a priority population an activity can be tagged with.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `kind` | VARCHAR(20) | no |  |  |  |
+| `code` | VARCHAR(64) | no |  |  |  |
+| `label` | VARCHAR(120) | no |  |  |  |
+| `is_system` | BOOL | no |  | `0` |  |
+| `is_active` | BOOL | no |  | `1` |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_crr_tags_code` (`organization_id`, `kind`, `code`)
 
 ## Directory_Account
 
@@ -14444,7 +14547,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (330 references)
+### → `organizations` (334 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14497,6 +14600,10 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `course_cohort_members` | `organization_id` | CASCADE | no |
 | `course_cohort_missed_classes` | `organization_id` | CASCADE | no |
 | `course_cohorts` | `organization_id` | CASCADE | no |
+| `crr_activity_measures` | `organization_id` | CASCADE | no |
+| `crr_activity_type_tags` | `organization_id` | CASCADE | no |
+| `crr_activity_types` | `organization_id` | CASCADE | no |
+| `crr_tags` | `organization_id` | CASCADE | no |
 | `department_message_recipients` | `organization_id` | CASCADE | no |
 | `department_messages` | `organization_id` | CASCADE | no |
 | `departure_clearance_items` | `organization_id` | CASCADE | no |
@@ -15532,6 +15639,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `check_item_deployed_lots` | `template_item_id` | CASCADE | no |
 | `shift_equipment_check_items` | `template_item_id` | SET NULL | yes |
 
+### → `crr_activity_types` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `crr_activity_measures` | `activity_type_id` | CASCADE | no |
+| `crr_activity_type_tags` | `activity_type_id` | CASCADE | no |
+
 ### → `departure_clearances` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -15778,6 +15892,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `course_cohort_missed_classes` | `cohort_member_id` | CASCADE | no |
+
+### → `crr_tags` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `crr_activity_type_tags` | `tag_id` | CASCADE | no |
 
 ### → `donations` (1 references)
 

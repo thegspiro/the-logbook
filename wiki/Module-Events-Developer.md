@@ -146,6 +146,26 @@ credit is computed from — the officer's override if one is set, otherwise
 the tap clamped forward to the scheduled start. Other RSVP responses leave it
 null.
 
+### Community risk reduction (CRR)
+
+```
+GET    /crr/catalogue                            # Activity types, counts and tags; seeds the defaults on first read (manage)
+POST   /crr/activity-types                       # Add a type, with its counts (manage)
+PATCH  /crr/activity-types/{id}                  # Rename, describe, reorder, retire, restore (manage)
+DELETE /crr/activity-types/{id}                  # A type the department added; a built-in one is refused (manage)
+PUT    /crr/activity-types/{id}/tags             # Replace a type's default tags (manage)
+POST   /crr/activity-types/{id}/measures         # Add a count (manage)
+PATCH  /crr/measures/{id}                        # Rename, retire, restore a count (manage)
+POST   /crr/tags                                 # Add a risk or a priority population (manage)
+PATCH  /crr/tags/{id}                            # Rename, retire, restore a tag (manage)
+GET    /crr/zip-lookup/{zip}                     # City, state, county from the bundled GeoNames data; 404 when unknown (manage)
+```
+
+The ZIP data is `backend/app/data/us_zip_codes.json`, rebuilt by
+`backend/scripts/build_us_zip_codes.py`. `data/` is gitignored repository-wide,
+so a rebuilt file is committed with `git add -f`; `tests/test_zip_lookup.py`
+fails if it is missing.
+
 ### Check-in and attendance
 
 ```

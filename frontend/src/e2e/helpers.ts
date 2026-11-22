@@ -252,6 +252,48 @@ const requestDay = (days: number) => new Date(Date.now() + days * 86_400_000).to
  * with none — because each draws a different cell, and the long organization
  * name is the one that wraps on a phone.
  */
+const CRR_CATALOGUE = {
+  activity_types: [
+    {
+      id: 'crr-smoke',
+      code: 'smoke_alarm_install',
+      name: 'Smoke alarm install',
+      description: "Smoke alarms installed in a resident's home.",
+      is_system: true,
+      is_active: true,
+      sort_order: 0,
+      measures: [
+        { id: 'crr-m1', code: 'alarms_installed', label: 'Alarms installed', is_active: true, sort_order: 0 },
+        { id: 'crr-m2', code: 'homes', label: 'Homes', is_active: true, sort_order: 1 },
+      ],
+      tag_ids: ['crr-fire'],
+    },
+    {
+      id: 'crr-knox',
+      code: 'knox_box_check',
+      name: 'Knox box check',
+      description: null,
+      is_system: false,
+      is_active: false,
+      sort_order: 1,
+      measures: [{ id: 'crr-m3', code: 'boxes_checked', label: 'Boxes checked', is_active: true, sort_order: 0 }],
+      tag_ids: [],
+    },
+  ],
+  tags: [
+    { id: 'crr-fire', kind: 'risk', code: 'fire', label: 'Fire', is_system: true, is_active: true, sort_order: 0 },
+    {
+      id: 'crr-older',
+      kind: 'population',
+      code: 'older_adults',
+      label: 'Older adults',
+      is_system: true,
+      is_active: true,
+      sort_order: 0,
+    },
+  ],
+};
+
 /** Outreach events for the Overview, placed around the moment the test runs. */
 const outreachCalendar = () => {
   const at = (days: number, hours: number) => new Date(Date.now() + (days * 24 + hours) * 3600 * 1000).toISOString();
@@ -5508,6 +5550,9 @@ const routes = ({
   // The Outreach Overview's calendar and attention cards: one event short of
   // volunteers, one with a full crew, one waiting to be closed out.
   ['**/api/v1/events/outreach-calendar**', () => (empty ? [] : outreachCalendar())],
+  // Events Settings -> CRR Catalogue: one built-in type, one the department
+  // added, and a tag of each kind, so every control the section draws renders.
+  ['**/api/v1/crr/catalogue', () => (empty ? { activity_types: [], tags: [] } : CRR_CATALOGUE)],
   ['**/api/v1/admin-hub/events/metrics', eventMetricSettings],
   ['**/api/v1/admin-hub/training/metrics', trainingMetricSettings],
   // The notifications page lists rules and needs a list, not the catch-all

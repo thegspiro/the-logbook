@@ -1775,22 +1775,37 @@ without a ruling:
 - **New outreach event opens the ordinary event form** without a type preset;
   the form takes a template, not a type, from its address.
 
-Decided for later phases, not yet built:
+### CRR Activity Tracking — Owner Decisions (2026-11-22)
 
-- **Location data for CRR activities comes from a ZIP list bundled with the
-  app** (owner decision, 2026-11-21) — offline, so it works on Unraid and
-  air-gapped installs, and no ZIP code leaves the server.
-- **CRR activity tracking**, recordable both as an event and as a lightweight
-  log entry. A department-configurable catalogue (smoke and CO alarm installs,
-  home safety surveys, car seat inspections, extinguisher training, hands-only
-  CPR, Stop the Bleed, fall prevention, school programs), each activity tagged
-  by risk and by priority population, both lists configurable. Location starts
-  at a ZIP code that fills in city and state; an "add more detail" choice adds
-  the full address and resident contact, always encrypted at rest.
-- **Juvenile firesetter intervention** is a separate option a department
-  enables, shown as coming soon (pitfall #19: marked not yet in effect, with no
-  stored switch).
-- **CRR goals** — yearly targets per measure.
+Answers to the Phase 3 plan's questions, as they will be built:
+
+| Question                                  | Decision                                                                                                                                                   |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Who records activities                    | The Community Outreach Team, and anyone holding `events.manage`                                                                                            |
+| Who sees a resident's address and contact | The Community Outreach Manager and above; everyone else sees ZIP, city, state and counts                                                                   |
+| How long resident details are kept        | Cleared automatically after a period the department sets, 24 months by default; the ZIP code is kept for audit                                             |
+| Default counts                            | As listed in `app/services/crr_catalogue_defaults.py`                                                                                                      |
+| Admin Hours                               | Each activity type credits a category the department chooses, or none; an activity attached to an event does not credit again, its attendance already does |
+| Repeat-visit lookup                       | Later                                                                                                                                                      |
+| ZIP lookup                                | On when the department's own address is in the US; new entries start with the department's city and state                                                  |
+| ZIP data                                  | GeoNames' US postal codes (CC BY 4.0), bundled; credit with a link in the app footer                                                                       |
+
+**Part 1 — the catalogue (built 2026-11-22).** Events Settings → CRR
+Catalogue: activity types, their counts, and risk and priority-population
+tags, each department's own copy of the defaults, seeded the first time the
+catalogue is read. A built-in row is retired, never deleted. Managed with
+`events.manage`. The ZIP lookup (`GET /crr/zip-lookup/{zip}`) and its bundled
+data ship with it. Nothing reads the catalogue until activity logging ships,
+and the section says so (pitfall #19). Juvenile firesetter intervention shows
+as "Coming soon" with nothing stored.
+
+Still to build: activity logging with encrypted resident details and the
+`crr.*` permissions (part 2), the Outreach Impact breakdowns (part 3), and
+yearly goals per count (phase 4).
+
+**The footer credit is hidden on a phone,** with the rest of its line: a link
+on every page's footer would be a tap target under 44px on every route. The
+ZIP field carries a plain-text credit that a phone shows.
 
 ## Outreach Events — What the 2026-11-20 Changes Do Not Cover Yet
 

@@ -2048,6 +2048,7 @@ and who may see the list, is covered in
 | **Categories**       | Your **Custom Event Categories** and their colours                              |
 | **Attendance**       | _"Who sees who's going; who takes requests"_, and **Mandatory event responses** |
 | **Hour Tracking**    | Mapping events to admin hours                                                   |
+| **CRR Catalogue**    | Community risk reduction activities, their counts and tags                      |
 | **Public Requests**  | Everything about outreach events the public asks for — see below                |
 | **Headline Metrics** | The four numbers at the top of the page                                         |
 
@@ -3080,6 +3081,36 @@ is on Open Shifts.
 > **Screenshot needed** (`04-105-event-volunteer-staffing.png`): the
 > **Volunteer staffing** card on an outreach event with an open sheet: "3 of 5 signed up", each role's count and the names of
 > the members who signed up.
+
+### The CRR Catalogue
+
+**Who can do this:** officers who can manage events — usually the Community
+Outreach Manager.
+
+**Manage Events → Settings → CRR Catalogue** lists the community risk
+reduction activities your department records, what each one counts, and the
+risks and priority populations they are tagged with. Logging activities
+against it arrives in the next update; until then the section says it is not
+in use yet.
+
+Every department starts with the same built-in types: smoke alarm install, CO
+alarm install, home safety survey, car seat inspection, extinguisher training,
+hands-only CPR, Stop the Bleed, fall prevention and school program. Each has
+its counts (for example, **Alarms installed** and **Homes**) and default tags
+(for example, **Fire**).
+
+- **Rename**, **Describe**, **Retire** or **Restore** any type. A built-in
+  type cannot be deleted: retire it, and it stops being offered while past
+  records keep naming it.
+- **Add a count** to a type, and rename or retire a count.
+- Tick the **Risks** and **Priority populations** a type carries by default.
+- **Add an activity type** with a name and, optionally, its counts separated by
+  commas. A type you added can be deleted.
+- Under **Tags**, add, rename or retire risks and priority populations.
+
+Changes save as you make them. **Juvenile firesetter intervention** is listed
+as **Coming soon**: it will be a separate option, with its own access rules
+because its records concern minors.
 
 ### The Outreach Overview
 

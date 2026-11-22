@@ -48,7 +48,7 @@ export {
 export type { IntegrationConfig } from './trainingServices';
 
 // Events
-export { eventService, eventRequestService } from './eventServices';
+export { eventService, eventRequestService, crrService } from './eventServices';
 export { apparatusEventService } from './apparatusEventServices';
 export { memberAudienceService } from './memberAudienceService';
 // NOTE: Inventory types are temporarily co-located with eventServices due to
