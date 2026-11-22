@@ -16,33 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#4566](https://github.com/thegspiro/the-logbook/pull/4566) (branch
-`claude/security-review-scheduled-tasks-p14`)**: Feature 31 (Scheduled
-tasks), pass 14 — watchdog pickup (the dedicated `/loop 30m
-/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
-unreachable). This session's own environment did **not** restrict pushes
-this time — `git push -u origin claude/security-review-scheduled-tasks-p14`
-succeeded directly, so the branch matches the rotation's own naming
-convention and the next iteration's Step 0 can find it either by name or by
-the general open-PR search.
+**PR (this one) (branch `claude/security-review-locations-kiosk-p14`)**:
+Feature 32 (Locations & kiosk), pass 14 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable). 0 fixed, 0 new findings; see the Log entry below and
+`docs/security-review/LOC14-32-locations-kiosk.md` for the full trace.
 
-PR #4558 (Feature 30, Onboarding, pass 14) had already merged (`2248da3bf4`)
-before this iteration started; row 30 marked ✅ below. Real delta since pass
-13's merge (`079b82fb9`): 7 new delegate tasks (`guest_headcount_reminders`,
-`leave_ending_reminders`, `open_ended_leave_digest`, `leave_request_upkeep`,
-`attendance_waiver_expiry`, `pending_file_deletions`,
-`history_import_expiry`), all verified for idempotency and org-scoping, plus
-a real idempotency fix to `run_rolling_recurrence_extend` landed by the
-Events feature's own commit (verified here, not applied by this review).
-**0 fixed, 0 new findings.** Registry re-verified by AST: 88/88/87+1, up
-from 80/80/79+1. A pre-existing, out-of-scope 2-head Alembic fork was found
-and left to the already-open PR #4560, which carries its join revision.
-Route inventory unchanged (2 routes). See
-`docs/security-review/CRON14-31-scheduled-tasks.md`'s **Pass 14** section
-for the full trace.
-
-Row 31 → ✅ (pending this PR's merge); next is Feature 32 (Locations &
-kiosk) — re-check `list_pull_requests` fresh rather than trusting this note.
+Row 32 → ✅ (pending this PR's merge); next is Feature 33 (Core
+infrastructure) — re-check `list_pull_requests` fresh rather than trusting
+this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 14, PR #4558, merged), preserved for history</summary>
@@ -27530,7 +27512,7 @@ iteration's commit" rule.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                                                   | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                                                                                                          | ⬜     |
 
@@ -27593,6 +27575,51 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-22 — Feature 31 (Scheduled tasks, pass 14) merged; Feature 32 (Locations & kiosk, pass 14): watchdog pickup, 0 fixed, 0 new findings
+
+PR #4566 merged as `42f390383`; row 31 marked ✅ above. A fresh
+`list_pull_requests` (state=open, 18 results) found no
+`claude/security-review-*` head, confirming row 32 (Locations & kiosk) as
+the next pending feature.
+
+Baseline: pass 13's merge commit `b29782324`. `git diff b29782324..HEAD`
+(1,442 commits) touched 6 of this feature's declared files: `locations.py`
+(docstring expansion for `delete_location`'s already-fixed restrict/409
+behavior), `error_codes.py` (two MFA-setup resolution strings reworded to
+match current nav labels), `admin_hub_service.py` (+46 lines — a new
+`_course_link_attention` row inside Training's own `_training_attention`,
+read in full: org-scoped via `TrainingCourseLinkService.unlinked_names`,
+gated by the existing `training.manage` module permission, and isolated in
+its own `try`/`except` so a failure there cannot drop the rows computed
+before it), `LocationKioskPage.tsx` (added `title` props on the three QR
+codes for screen readers) and `RoomCheckInPage.tsx` (swapped to the shared
+`getLoadFailureMessage` helper). `schemas/event.py`'s 248-line addition is
+entirely unrelated Outreach/Events classes, confirmed by listing every
+added symbol and finding none referenced by this feature's own endpoints.
+Every route re-enumerated by AST: **17/17, unchanged**. `LOC10-2` and
+`LOC10-4` re-confirmed open/unchanged (byte-identical files/lines). Noted,
+but did not correct (different review track, risk of collision), that
+`docs/app-review/locations-kiosk.md`'s `LOC-41` entry is now stale — pass
+13 already shipped the constraint it says is missing.
+
+**0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/LOC14-32-locations-kiosk.md`.
+
+**Completion gate:** `flake8`, `black --check` and `isort --check-only` on
+`app/ tests/ alembic/` all clean. `validate_migrations.py --strict` — 820
+revisions, single head `561a3e9f4165`. `check_route_permissions.py
+--strict` — 338 routes, 0 errors/warnings. Scoped backend pytest (`-k
+"location or admin_hub or guest_check_in or public_display or
+guest_email_first or display"`) — 779 passed, 1 pre-existing skip
+(`pywebpush`). `npm run typecheck` — 0 errors. `npm run lint` — 0
+errors/warnings. Relevant vitest (7 files: `LocationsPage`,
+`AdminHubFrame`, `RoomCheckInPage`, `RoomQRCodesPage`, `LocationKioskPage`,
+`GuestCheckInPage`, `GuestEmailSignIn`) — 106 passed (6 files).
+
+Row 32 → ✅ (pending this PR's merge). Next is Feature 33 (Core
+infrastructure) — re-check `list_pull_requests` fresh rather than trusting
+this note.
 
 ### 2026-11-22 — Feature 30 (Onboarding, pass 14) merged; Feature 31 (Scheduled tasks, pass 14): watchdog pickup, 7 new delegate tasks verified good, 0 fixed, 0 new findings
 
