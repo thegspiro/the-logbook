@@ -118,6 +118,8 @@ export interface Event {
   can_record_guest_headcount?: boolean;
   /** May this caller see and open the event's volunteer signup sheet (detail only). */
   can_staff_event?: boolean;
+  /** The live signup sheet as any member sees it, to sign up from the event page (detail only). */
+  volunteer_signup?: EventVolunteerSignup | null;
   /** What happened at an outreach event, recorded when it closes. */
   outreach_outcome_note?: string | null;
   outreach_apparatus_ids?: string[] | null;
@@ -1297,6 +1299,14 @@ export interface OutreachCloseoutUpdate {
 }
 
 /** The signup sheet staffing an event; `request_id` when it is the request's. */
+/** An outreach event's signup sheet as a member sees it: roles and their own seat, no other names. */
+export interface EventVolunteerSignup {
+  shift_id: string;
+  roles: StaffingRoleStatus[];
+  signed_up: boolean;
+  my_role_label?: string | null;
+}
+
 export interface EventStaffing extends EventRequestStaffing {
   request_id?: string | null;
 }
