@@ -118,7 +118,6 @@ POST   /api/v1/training/import/confirm                     # Historical import: 
 GET    /api/v1/training/dashboard-summary                  # Officer dashboard widget data
 GET    /api/v1/training/compliance-summary/{user_id}       # Member compliance card (green/yellow/red)
 GET    /api/v1/training/compliance-matrix                  # Members x requirements standing
-GET    /api/v1/training/competency-matrix                  # Department readiness heat-map
 GET    /api/v1/training/category-hours/{user_id}           # Per-category hour breakdown for a member
 GET    /api/v1/training/requirements                       # List requirements (filterable by source, type)
 POST   /api/v1/training/requirements                       # Create requirement

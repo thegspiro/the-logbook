@@ -1459,7 +1459,6 @@ with it:
 | ------------------------------------------ | ----------------------- |
 | `GET /training/compliance-summary/{id}`    | Yes                     |
 | `GET /training/compliance-matrix`          | Yes                     |
-| `GET /training/competency-matrix`          | Yes                     |
 | `GET /training/requirements/progress/{id}` | Yes                     |
 | `GET /training/reports/user/{id}`          | Yes                     |
 | `POST /reports/generate` (training types)  | Yes                     |

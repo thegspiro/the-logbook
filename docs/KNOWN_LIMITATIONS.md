@@ -7255,13 +7255,16 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
     readiness does not count. They used to read `expiring_soon` and count as
     ready. The summary adds `in_progress_count`. A certification cell's
     `details` is now the grader's progress, not the certificate number.
-- **Competency matrix endpoint has no screen — open, owner question
-  2026-11-21.** No frontend code or MCP tool calls
-  `GET /training/competency-matrix`; the Training heat map reads the
-  skills-evaluation view (`/training/competency/department`). The endpoint
-  now grades through the shared grader rather than its own rules. Whether to
-  keep it for direct API callers or retire it, with its documentation, is not
-  decided.
+- **Competency matrix endpoint has no screen — ✅ retired by owner decision
+  2026-11-21.** No frontend code or MCP tool called
+  `GET /training/competency-matrix`. The Training heat map reads the
+  skills-evaluation view (`/training/competency/department`). The route and
+  `CompetencyMatrixService` are removed, so a direct API caller now gets
+  `404`. The compliance matrix (`GET /training/compliance-matrix`) answers the
+  same question with the shared grader. The per-position skill matrices of
+  the training-enhancements module, the `competency_matrices` table and its
+  endpoints, are a different feature and are unchanged. Test:
+  `tests/test_competency_matrix_endpoint_retired.py`.
 - **Profiles: admin hours choose their own profile — open, owner question
   2026-11-21.** A member's admin-hours targets come from the highest-priority
   matching profile that _carries_ admin hours (ties now resolved as grading

@@ -48,7 +48,6 @@ from app.models.training import (
     TrainingType,
 )
 from app.models.user import Organization, User, UserStatus
-from app.services.competency_matrix_service import CompetencyMatrixService
 from app.services.compliance_officer_service import AnnualComplianceReportService
 from app.services.scheduling_service import SchedulingService
 from app.services.training_compliance import (
@@ -315,22 +314,6 @@ class TestEveryGraderCountsShiftsWorked:
         # The window it reports is the one it counted.
         assert summary["period_start"] == date(dept.today.year, 1, 1).isoformat()
         assert summary["period_end"] == date(dept.today.year, 12, 31).isoformat()
-
-    async def test_competency_matrix(self, db_session):
-        dept = await _department(db_session)
-        matrix = await CompetencyMatrixService(db_session).get_competency_matrix(
-            dept.org.id
-        )
-        cells = _by_member(
-            dept,
-            {
-                row["user_id"]: row["statuses"][dept.requirement.id]
-                for row in matrix["members"]
-            },
-        )
-        assert {n: c["status"] == "current" for n, c in cells.items()} == MET
-        assert cells["records"]["status"] == "not_started"
-        assert cells["pending"]["details"] == "1/2 shifts"
 
 
 @pytest.mark.integration
