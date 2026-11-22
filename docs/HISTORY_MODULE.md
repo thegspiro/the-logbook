@@ -6,10 +6,11 @@ change history and the department clearance list. Phase 2 (2026-11-13) adds
 roster import and person merge. Phase 3 (2026-11-13) adds photos, audio and
 video, with albums, a managed source list and tags on past-member records.
 Phase 4 (2026-11-14) adds documents: letters, minutes, clippings and other
-papers, kept in a protected History folder in Documents. Later phases add
-events and
-timelines with historical apparatus (5), articles with PDF/Word export (6),
-and publishing outward — the public portal feed and the "Today in history"
+papers, kept in a protected History folder in Documents. Phase 5 (2026-11-21)
+adds events, historical apparatus, the department timeline and "Today in
+history" inside the app, with managed lists of stations, apparatus types and
+event types. Later phases add articles with PDF/Word export (6), and
+publishing outward — the public portal feed and the public "Today in history"
 widget (7).
 
 Decisions the owner made are recorded in
@@ -307,31 +308,136 @@ one request each; draft, members or public with the clearance list
 cascade) and every stored file after the delete commits. A person merge moves
 document tags to the kept record.
 
+## Events, apparatus and timelines
+
+Phase 5, built to the owner-approved spec of 2026-11-21. Both new records are
+published like every other: draft, members or public with the clearance list
+(`record_type = "event"` and `"apparatus"`), minor and substantial edits, a
+change history, delete only while a draft, research notes encrypted.
+
+**Historical apparatus** (`/history/apparatus`, `history_apparatus`) are
+History's own records, so the archive works with the Apparatus module off and
+keeps a truck after the fleet deletes it. The catalogue: a name, a type from a
+managed list (a department starts with Engine, Ladder or truck, Tanker or
+tender, Rescue, Ambulance, Brush, Hose wagon, Steamer, Hand-drawn, Chief's or
+command car and Other), year, make, model, body builder, pump (GPM), tank
+(gallons) and ladder (feet), in-service and out-of-service dates (partial,
+"circa"), what became of it (in service, sold, traded, scrapped, preserved,
+museum, unknown), where it is now, a description, the source, an accession
+number and research notes. Its **unit numbers over time** are designation
+periods (`history_apparatus_designations`): Engine 1 from 1924, Engine 3 from
+1951, each with its own dates and, when known, a station. Changing anything a
+reader sees, the unit numbers included, is substantial.
+
+**Starting from a fleet truck.** With the Apparatus module on, `history.manage`
+can start a record from an Apparatus-module truck (`POST /apparatus/from-fleet`).
+Its name, type (matched by name to the type list), year, make, model, body
+builder, pump, tank and ladder figures, unit number (as the first designation,
+with its station when the fleet station's name is on the station list),
+in-service date and disposal (read from the disposal method; unrecognized
+wording is "unknown") are copied once. No price, VIN, plate, financing,
+insurance or maintenance figure is ever copied, and nothing syncs afterwards.
+`fleet_apparatus_id` records where it came from, clears if the fleet truck is
+deleted, and is unique per department, so a truck has at most one record; two
+requests at once are decided by that key (409).
+
+**Events** (`/history/events`, `history_events`) have a title, a start date
+(required: an undated event cannot be placed on a timeline) and an optional end
+date, both partial and "circa", a place, a station and an event type from
+managed lists (a department starts with Fire or incident, Station, Apparatus,
+Organisation, Ceremony or celebration, Line-of-duty death, Community and
+Other), a description, the source and research notes. There are no civilian
+fields (owner decision): a civilian's name goes in the description, which the
+clearance list checks before anything is public, or in the encrypted research
+notes. An event links **past members**, each with an optional role in the
+Historian's words ("commanded", "injured"), **apparatus**, and existing
+**photos and documents**; a write that sends a link set replaces it, one that
+omits it leaves it. A member's view lists only the links they could open: a
+draft person, truck, photo or document linked to a published event is left
+out, not shown as a name. Changing a link is substantial. A person merge moves
+event links; on an event with both people, the kept person's link and role
+stay.
+
+**Photos and documents** can be tagged with apparatus
+(`PUT /media/{id}/apparatus`, `PUT /documents/{id}/apparatus`), substantial
+like a change of people, with no consent warning. Their pages list the
+apparatus and the events they belong to, as far as the reader may open them.
+
+**Stations** are a managed list of names (`history_stations`), not yet
+records of their own (owner decision: full station records come later). Events
+and designations point at an entry, so a misspelling is corrected once,
+everywhere, and two names for one firehouse are merged; the list shows how
+many records use each name. When station records arrive, this list becomes
+them. Stations, apparatus types and event types are kept like sources:
+retired or merged, never deleted while in use. A source's usage count and a
+source merge now cover apparatus and events too.
+
+**The department timeline** (`/history/timeline`) shows events plus
+milestones read from their records each time, never stored, so correcting a
+record corrects the timeline:
+
+| Milestone                             | Read from                               | A member sees it when                                                                                |
+| ------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Apparatus in service / out of service | its in-service and out-of-service dates | the apparatus is published to members                                                                |
+| Line-of-duty death                    | an Honor Roll record's death date       | the person is published to members **and** the death date's own visibility is `members` or `public`  |
+| A title's start ("became Chief")      | a held title's own "held from" date     | the title's **On the timeline** switch is on (off by default) and the person is published to members |
+
+A held title's dates (`historical_member_period_titles.held_from_*` /
+`held_to_*`) are optional and entered on the person form. A title is never
+placed by its service period's start: someone who served 1950–1990 and was
+Chief from 1975 is not "Chief, 1950". The archive's keepers see drafts on the
+timeline, badged. The page loads a count per decade, then one decade when it
+is opened; filters narrow it by event type and by milestone kind, and a
+switch shows events alone; the viewer's choices are kept in their browser.
+
+**A person's and an apparatus's own timelines.** A person page shows the
+events they took part in and their timeline: those events, their line-of-duty
+death, and every title they held with a date entered (on their own page every
+dated title belongs, switched on or not). An apparatus page shows entering
+and leaving service, each change of unit number, the events it took part in,
+and the photos and documents tagged with it.
+
+**"Today in history"** (`GET /today`) lists entries dated to the **day** whose
+day and month are today's on the department's calendar
+(`resolve_org_today`), in earlier years, oldest first: events, apparatus in
+and out of service, line-of-duty deaths and switched-on title starts, by the
+same visibility rules as the timeline. A month-only or year-only date is
+stored as the 1st and never matches a day; a 29 February entry shows on 28
+February in a year without a 29th. It is a card on the History home (which
+says when nothing happened) and on the Dashboard when the module is on (which
+hides itself on such a day). The public widget stays in phase 7 with the
+public feed.
+
 ## API
 
 `/api/v1/history`, gated on the module. Every by-id read filters the
 caller's department, and every client-sent id (account, title, relative,
 position) is checked against it before it is stored.
 
-| Path                                                                                                                                                                                                                             | Gate                                                                                                                 |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `GET /people`, `GET /people/{id}`, `GET /honor-roll`, `GET /titles`, `GET /clearance/steps`, `GET /clearance/queue`                                                                                                              | signed in                                                                                                            |
-| `GET /people/check`, `POST /people`, `POST /people/from-member/{user_id}`, `PATCH /people/{id}`, `PUT /people/{id}/periods`, `DELETE /people/{id}`, relations, title writes, `POST /clearance/requests`, `POST /render-markdown` | `history.manage`                                                                                                     |
-| `GET /people/{id}/merge-preview`, `POST /people/{id}/merge`, everything under `/imports`                                                                                                                                         | `history.manage`                                                                                                     |
-| `POST /people/{id}/publish`, `/unpublish`                                                                                                                                                                                        | `history.publish`                                                                                                    |
-| `GET /people/{id}/revisions`                                                                                                                                                                                                     | `history.view` / `history.manage`, or a clearer                                                                      |
-| `GET /clearance/positions`, `PUT /clearance/steps`                                                                                                                                                                               | `history.manage` or `settings.manage`                                                                                |
-| `GET /clearance/requests/{id}`                                                                                                                                                                                                   | keepers, the submitter, or a holder of a step's position                                                             |
-| `POST /clearance/requests/{id}/decide`                                                                                                                                                                                           | a holder of the current step's position                                                                              |
-| `GET /media`, `GET /media/{id}`, `/thumbnail`, `/view`, `GET /people/{id}/media`, `GET /sources`, `GET /albums`, `GET /albums/{id}`                                                                                              | signed in (drafts to the keepers only)                                                                               |
-| `POST /media`, `PATCH /media/{id}`, `PUT /media/{id}/tags`, `DELETE /media/{id}`, `GET /media/{id}/original`, source and album writes                                                                                            | `history.manage`                                                                                                     |
-| `POST /media/{id}/publish`, `/unpublish`                                                                                                                                                                                         | `history.publish`                                                                                                    |
-| `GET /media/{id}/revisions`                                                                                                                                                                                                      | `history.view` / `history.manage`, or a clearer                                                                      |
-| `GET /documents`, `GET /documents/{id}`, `/thumbnail`, `/view`, `GET /people/{id}/documents`, `GET /document-types`                                                                                                              | signed in (drafts to the keepers only)                                                                               |
-| `POST /documents`, `PATCH /documents/{id}`, `PUT /documents/{id}/tags`, `DELETE /documents/{id}`, `GET /documents/{id}/original`, document-type writes                                                                           | `history.manage`                                                                                                     |
-| `POST /documents/{id}/publish`, `/unpublish`                                                                                                                                                                                     | `history.publish`                                                                                                    |
-| `GET /documents/{id}/revisions`                                                                                                                                                                                                  | `history.view` / `history.manage`, or a clearer                                                                      |
-| `PUT /albums/{id}/items`                                                                                                                                                                                                         | `history.manage`; `entries` (photos and documents in order) or the earlier `media_ids` (photos only; documents stay) |
+| Path                                                                                                                                                                                                                                                         | Gate                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `GET /people`, `GET /people/{id}`, `GET /honor-roll`, `GET /titles`, `GET /clearance/steps`, `GET /clearance/queue`                                                                                                                                          | signed in                                                                                                            |
+| `GET /people/check`, `POST /people`, `POST /people/from-member/{user_id}`, `PATCH /people/{id}`, `PUT /people/{id}/periods`, `DELETE /people/{id}`, relations, title writes, `POST /clearance/requests`, `POST /render-markdown`                             | `history.manage`                                                                                                     |
+| `GET /people/{id}/merge-preview`, `POST /people/{id}/merge`, everything under `/imports`                                                                                                                                                                     | `history.manage`                                                                                                     |
+| `POST /people/{id}/publish`, `/unpublish`                                                                                                                                                                                                                    | `history.publish`                                                                                                    |
+| `GET /people/{id}/revisions`                                                                                                                                                                                                                                 | `history.view` / `history.manage`, or a clearer                                                                      |
+| `GET /clearance/positions`, `PUT /clearance/steps`                                                                                                                                                                                                           | `history.manage` or `settings.manage`                                                                                |
+| `GET /clearance/requests/{id}`                                                                                                                                                                                                                               | keepers, the submitter, or a holder of a step's position                                                             |
+| `POST /clearance/requests/{id}/decide`                                                                                                                                                                                                                       | a holder of the current step's position                                                                              |
+| `GET /media`, `GET /media/{id}`, `/thumbnail`, `/view`, `GET /people/{id}/media`, `GET /sources`, `GET /albums`, `GET /albums/{id}`                                                                                                                          | signed in (drafts to the keepers only)                                                                               |
+| `POST /media`, `PATCH /media/{id}`, `PUT /media/{id}/tags`, `DELETE /media/{id}`, `GET /media/{id}/original`, source and album writes                                                                                                                        | `history.manage`                                                                                                     |
+| `POST /media/{id}/publish`, `/unpublish`                                                                                                                                                                                                                     | `history.publish`                                                                                                    |
+| `GET /media/{id}/revisions`                                                                                                                                                                                                                                  | `history.view` / `history.manage`, or a clearer                                                                      |
+| `GET /documents`, `GET /documents/{id}`, `/thumbnail`, `/view`, `GET /people/{id}/documents`, `GET /document-types`                                                                                                                                          | signed in (drafts to the keepers only)                                                                               |
+| `POST /documents`, `PATCH /documents/{id}`, `PUT /documents/{id}/tags`, `DELETE /documents/{id}`, `GET /documents/{id}/original`, document-type writes                                                                                                       | `history.manage`                                                                                                     |
+| `POST /documents/{id}/publish`, `/unpublish`                                                                                                                                                                                                                 | `history.publish`                                                                                                    |
+| `GET /documents/{id}/revisions`                                                                                                                                                                                                                              | `history.view` / `history.manage`, or a clearer                                                                      |
+| `PUT /albums/{id}/items`                                                                                                                                                                                                                                     | `history.manage`; `entries` (photos and documents in order) or the earlier `media_ids` (photos only; documents stay) |
+| `GET /events`, `GET /events/{id}`, `GET /apparatus`, `GET /apparatus/{id}`, `GET /apparatus/{id}/timeline`, `GET /people/{id}/timeline`, `GET /timeline`, `GET /timeline/decades`, `GET /today`, `GET /stations`, `GET /apparatus-types`, `GET /event-types` | signed in (drafts to the keepers only)                                                                               |
+| `POST /events`, `PATCH /events/{id}`, `DELETE /events/{id}`, `POST /apparatus`, `PATCH /apparatus/{id}`, `DELETE /apparatus/{id}`, `PUT /media/{id}/apparatus`, `PUT /documents/{id}/apparatus`, station and type writes                                     | `history.manage`                                                                                                     |
+| `GET /apparatus/fleet-options`, `POST /apparatus/from-fleet`                                                                                                                                                                                                 | `history.manage`, with the Apparatus module on                                                                       |
+| `POST /events/{id}/publish`, `/unpublish`, `POST /apparatus/{id}/publish`, `/unpublish`                                                                                                                                                                      | `history.publish`                                                                                                    |
+| `GET /events/{id}/revisions`, `GET /apparatus/{id}/revisions`                                                                                                                                                                                                | `history.view` / `history.manage`, or a clearer                                                                      |
 
 Markdown is rendered on the server (`app/utils/markdown_render.py`:
 `markdown-it-py` with raw HTML and images off, then `nh3` against an
@@ -349,6 +455,10 @@ allowlist (`modules/history/utils/historyFormat.ts`).
 `/history/media/:mediaId/edit`, `/history/documents`,
 `/history/documents/upload`, `/history/documents/:documentId`,
 `/history/documents/:documentId/edit`, `/history/albums`,
-`/history/albums/:albumId`. Every route carries
+`/history/albums/:albumId`, `/history/timeline`, `/history/events`,
+`/history/events/new`, `/history/events/:eventId`,
+`/history/events/:eventId/edit`, `/history/apparatus`,
+`/history/apparatus/new`, `/history/apparatus/:apparatusId`,
+`/history/apparatus/:apparatusId/edit`. Every route carries
 `requiredModule="history"`; the API client is `createApiClient`, and `/history`
 URLs are never cached (`UNCACHEABLE_SUBSTRINGS`).
