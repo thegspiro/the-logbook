@@ -12,7 +12,7 @@
  * link was previously only readable from the apparatus side.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import { Plus, Trash2, AlertTriangle, Clock, Loader2, PackagePlus, Truck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '@/services/inventoryService';
@@ -77,7 +77,10 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
   // press; and each lot's in-flight save, so saves land in press order.
   const lotsRef = useRef<InventoryLot[]>([]);
   const pendingSaves = useRef(new Map<string, Promise<unknown>>());
-  useEffect(() => {
+  // A layout effect, not a passive one: the buttons exist from this commit,
+  // and a passive effect runs in a later task, so a press in between read an
+  // empty ref and was dropped. A layout effect runs before any event can.
+  useLayoutEffect(() => {
     lotsRef.current = lots;
   }, [lots]);
   const [loading, setLoading] = useState(true);

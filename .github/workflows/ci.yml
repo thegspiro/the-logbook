@@ -1173,19 +1173,21 @@ jobs:
     # the exact loss the note at the top of this file warns about and the thing
     # that cancelled #2890 twice.
     #
-    # Each leg runs three `@sweep` tests (see the matrix below), and the
-    # largest budget among them is a mobile-accessibility part's 1_440_000
-    # (24 min), so a leg can spend 72. Setup measured 0.4-0.6 min on
-    # 2026-10-04 (the Playwright cache hits); 75 leaves the 3 min the
-    # cold-cache install needs when the lockfile hash invalidates it.
-    # Re-derive this if a @sweep budget, a sweep's number of parts or the
-    # sweep shard count changes — the spec files are the source, this is the
-    # consequence.
+    # Each of the five sweep legs holds three `@sweep` tests (see the matrix
+    # below). Budgets are 15 minutes for a mobile-accessibility part, 20 for a
+    # dialogs part and 13 for a presentation part, so the most a leg can spend
+    # is the third's one accessibility part and two dialogs parts: 55. Setup
+    # measured 0.4-0.6 min on 2026-10-04 (the Playwright cache hits); 60
+    # leaves the 3 min the cold-cache install needs when the lockfile hash
+    # invalidates it, and two more. Re-derive this if a @sweep budget, a
+    # sweep's number of parts or the sweep shard count changes — the spec
+    # files are the source, this is the consequence.
     #
-    # The cap is a hang guard, not a target. Until 2026-11-19 each sweep was
-    # one test, the accessibility one had an 85-minute budget and this cap
-    # was 88; that job was taking 55-72 minutes.
-    timeout-minutes: 75
+    # The cap is a hang guard, not a target. No sweep retries, so a part that
+    # runs out its budget fails once and the leg moves on; on 2026-11-22 a
+    # presentation part that did retry spent three budgets and was cancelled
+    # here at 75 minutes with nothing reported (run 44940079030).
+    timeout-minutes: 60
     # No `needs:` on another test job — see the note on
     # backend-test-integration.
     defaults:
@@ -1211,7 +1213,7 @@ jobs:
         # length, `--shard`'s balance by count is close to a balance by time,
         # and `--shard=i/5` gives each leg three of them. The fifth leg came
         # with presentation's third to fifth parts (2026-11-22), so a leg still
-        # runs three tests and the cap above still holds. More legs would
+        # runs three tests. More legs would
         # shorten a leg for the same runner time and more queued jobs; fewer
         # would lengthen it. After changing a part count or the leg count,
         # list the deal with `npx playwright test --project=chromium --grep
