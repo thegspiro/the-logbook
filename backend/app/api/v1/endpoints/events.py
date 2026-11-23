@@ -107,6 +107,8 @@ from app.schemas.event import (
 )
 from app.schemas.event_request import (
     EventRequestStaffingCreate,
+    EventRequestVolunteerCall,
+    EventRequestVolunteerCallResult,
     EventStaffingResponse,
 )
 from app.schemas.organization import mandatory_for_tiers
@@ -140,6 +142,7 @@ from app.services.event_staffing_service import (
     get_event_staffing,
     member_signup_sheet,
     open_event_staffing,
+    send_event_volunteer_call,
 )
 from app.services.file_storage_service import (
     FileRules,
@@ -3391,6 +3394,62 @@ async def open_event_staffing_sheet(
     await db.commit()
     event, org = await _staffed_event(db, current_user, event_id)
     return await get_event_staffing(db, event, org)
+
+
+@router.post(
+    "/{event_id}/volunteer-call", response_model=EventRequestVolunteerCallResult
+)
+async def send_event_staffing_volunteer_call(
+    event_id: UUID,
+    data: EventRequestVolunteerCall,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Email the membership asking who can help with this event's own signup sheet.
+
+    The same call a request's sheet sends, worded from the event. Email only —
+    a call for help is not one of the alerts in ``SmsAlert``. Members who have
+    turned off email notifications are skipped and counted in the response.
+    Refused for an event that came from a request (call from the request), a
+    cancelled or past event, and an event with no sheet open.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    event, org = await _staffed_event(db, current_user, event_id)
+    audience = data.to_filter()
+    try:
+        result = await send_event_volunteer_call(
+            db, event, org, message=data.message, audience=audience
+        )
+    except ValueError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+    await log_audit_event(
+        db=db,
+        event_type="event_volunteer_call_sent",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
+            "recipients": result["recipients"],
+            "skipped_opted_out": result["skipped_opted_out"],
+            **audience.as_record(),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+    return EventRequestVolunteerCallResult(**result)
 
 
 @router.post(

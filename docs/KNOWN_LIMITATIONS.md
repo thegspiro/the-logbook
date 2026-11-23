@@ -91,6 +91,27 @@ and the two fixes became two heads until #4560 joined them.
   is still one merge revision, per
   [Parallel branches and a single head](rules/migrations.md#parallel-branches-and-a-single-head).
 
+### Rejoined automatically (2026-11-23)
+
+When `main` forks anyway, the Rejoin Migration Heads workflow opens the merge
+revision as a pull request with auto-merge on, and starts CI on it; see
+[Parallel branches and a single head](rules/migrations.md#parallel-branches-and-a-single-head).
+What it depends on and leaves open:
+
+- **It needs "Allow GitHub Actions to create and approve pull requests"**
+  (Settings → Actions → General → Workflow permissions). Without it the
+  workflow pushes the branch but cannot open the pull request; the run fails
+  and says so, and the next push to `main` with the setting on opens it.
+- **Auto-merge needs "Allow auto-merge"** (Settings → General → Pull Requests).
+  Without it the pull request opens with a warning on the run and waits to be
+  merged by hand.
+- **The fork stands for one CI run.** Every database job on every other branch
+  fails until the rejoin merges, about the length of a full run.
+- **Its pull request is authored by `github-actions[bot]`**, and the
+  ruleset's automatic Copilot review applies to it like any other.
+- **A pull request closed by hand is not reopened.** The workflow warns on
+  each push to `main` until its branch is deleted, then opens a new one.
+
 ### What would reopen this
 
 - **A merge queue** tests each pull request on top of the ones queued ahead of
@@ -200,6 +221,7 @@ managed by the directory anyway), or let a fresh SSO sign-in count as step-up.
 The waiver emails and the template-CC fix (defect D1) follow the owner
 decisions of 2026-11-10. Where those left a gap, the conservative choice was
 taken; each is listed so the owner can confirm or reverse it.
+**Confirmed by the owner 2026-11-23:** the defaults below.
 
 - **A CC copy leaves out the category and the decider's note, not only the
   buttons and the reason.** The decision said a copy carries "no buttons and
@@ -239,7 +261,7 @@ taken; each is listed so the owner can confirm or reverse it.
   remain for the notices no template covers (a question, an answer, a moved
   session, an expiry).
 - **Which training notices a member cannot switch off** _(chosen
-  2026-11-21, owner may redirect)_. A training notice is sent under the
+  2026-11-21; confirmed by the owner 2026-11-23)_. A training notice is sent under the
   required _Changes to your training record_ kind when it changes how the
   member's attendance is graded: the expiry (the session counts as missed), a
   moved start (the approval is cleared and, unanswered, expires as a miss) and
@@ -352,7 +374,8 @@ The annual review can show a member's requests to be excused from training
 sessions and business meetings (`training.session_waivers_summary`,
 `training.session_waiver_history`, `meetings.waivers_summary`,
 `meetings.waiver_history`; see `docs/EVALUATIONS_MODULE.md`). Gaps the owner's
-decisions did not settle, each answered conservatively:
+decisions did not settle, each answered conservatively. **Confirmed by the
+owner 2026-11-23:** every answer below.
 
 - ~~**"Attachment on file" always reads no.**~~ **Resolved 2026-11-15:** the
   flag reads `attendance_waiver_attachments` now that attachments are on
@@ -363,10 +386,12 @@ decisions did not settle, each answered conservatively:
   Attachments are deleted `attachment_retention_days` after a request closes
   (a year by default), so an evaluation drafted after that reads no for a
   request that once had one.
-- **A voided request is listed, and counted only as voided.** Nothing voids a
-  request yet. When something does, the history shows the request and that it
-  was voided, and the summary counts it under `voided` rather than as approved
-  or denied, since a voided approval no longer counts toward the cap.
+- **A voided request is listed, and counted only as voided.** Cancelling or
+  deleting a session voids its pending requests
+  (`attendance_waiver_service.void_pending_for_events`, called from
+  `EventService`); an approved or denied request is kept. The history shows a
+  voided request and that it was voided, and the summary counts it under
+  `voided` rather than as approved or denied.
 - **Deciders are named by their current name**, or "a former member" when the
   account is gone, as the request screens name them. A decision log step
   carries no name snapshot.
@@ -379,7 +404,8 @@ decisions did not settle, each answered conservatively:
 
 The member, approver and settings screens for session waiver requests (the
 backend is #4225) made four conservative choices where the approved design left
-a gap. None blocks the feature; each is the owner's to revisit.
+a gap. None blocks the feature. **Confirmed by the owner 2026-11-23:** the
+choices below as built; who should see a department-wide backlog stays open.
 
 - **The hub count is the viewer's own queue, not the department's.** The
   Training Admin hub badges its Waiver Requests destination with the pending
@@ -389,12 +415,11 @@ a gap. None blocks the feature; each is the owner's to revisit.
   org-wide for every `training.manage` holder: a training manager who is not
   a routed approver would have been shown requests they cannot open. Adding a
   department-wide item means a backend change and a decision on who should see
-  it.
-- **No attachment setting yet.** The policy model forbids unknown keys and has
-  no attachment field, because nothing reads one (pitfall #19). The settings
-  panel says attachments arrive later instead of offering a switch. The
-  attachments work adds the field, the upload control in the request dialog and
-  the list on the decision page.
+  it; that decision is still open.
+- ~~**No attachment setting yet.**~~ **Superseded (#4243):** the policy now
+  has `attachment` and `attachment_retention_days`, the request dialog takes
+  documents and the decision page lists them; see "Training — Waiver Request
+  Documents: What Was Left Out".
 - **The overlap warning reads membership types only.** Saving a
   session-attendance requirement warns when another active one grades the same
   membership types (or both grade every type), the rule
@@ -1751,7 +1776,7 @@ limitation:
 | Item                                                                                    | Status                                                                            | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **A requirement cannot name one policy acknowledgment**                                 | ✅ Resolved (2026-10-07, owner decision: map provider courses to library courses) | A requirement graded only by training type (`training_compliance.py`) is still met by **any** record of that type. A particular policy is now required by mapping its Target Solutions Course ID to a library course (`external_course_mappings`) and linking a COURSES requirement to that course; imports set `TrainingRecord.course_id` from the mapping. Every version of a course maps to the same library course, so a reissued course never needs the requirement edited. **Residual, accepted:** members who complete a new version read as not current until an officer maps it. Training officers are emailed when a new course resembles a library course, and mapping it backfills the records already imported. See [16-integrations.md](./training/16-integrations.md). |
-| **Requirement grandfathering reads a missing hire date as the account's creation date** | Accepted (owner to note, 2026-10-03)                                              | A requirement's `new_member_cutoff_date` separates existing members from new ones by join date: `hire_date`, else the UTC date the account was created (`training_compliance.member_join_date`). A roster imported into The Logbook without hire dates therefore reads every imported member as having joined on the import day. If that day falls on or after a cutoff, veterans are graded as new members. Before relying on a cutoff, record hire dates for the existing roster, or choose a cutoff earlier than the import. Members already enrolled in a training program are governed separately, by the per-program `apply_to_current_enrollments` choice made when a requirement is added to it.                                                                              |
+| **Requirement grandfathering reads a missing hire date as the account's creation date** | Accepted (owner to note, 2026-10-03; confirmed by the owner 2026-11-23)           | A requirement's `new_member_cutoff_date` separates existing members from new ones by join date: `hire_date`, else the UTC date the account was created (`training_compliance.member_join_date`). A roster imported into The Logbook without hire dates therefore reads every imported member as having joined on the import day. If that day falls on or after a cutoff, veterans are graded as new members. Before relying on a cutoff, record hire dates for the existing roster, or choose a cutoff earlier than the import. Members already enrolled in a training program are governed separately, by the per-program `apply_to_current_enrollments` choice made when a requirement is added to it.                                                                              |
 
 ## Outreach — Vocabulary and Community Risk Reduction Direction (Owner Decisions, 2026-11-21)
 
@@ -1886,20 +1911,14 @@ Still to build: yearly goals per count (phase 4).
 on every page's footer would be a tap target under 44px on every route. The
 ZIP field carries a plain-text credit that a phone shows.
 
-## Outreach Events — What the 2026-11-20 Changes Do Not Cover Yet
+## Outreach Events — Edges Left by the 2026-11-20 Changes (All Closed)
 
 The owner decisions of 2026-11-20 (staff-entered requests, calendar-date
-preferences, event signup sheets, volunteer RSVPs, close-out) left these edges
-for a later decision rather than guessing at them:
-
-- **A seat moved by a shift swap does not update the event's RSVPs.** Volunteer
-  RSVPs follow a seat that is created, edited, declined or removed through
-  `SchedulingService`; a swap trades the seat on another path. The next seat
-  change on the sheet settles the RSVPs again, because the sync compares the
-  whole sheet each time.
-- **An event's own signup sheet has no "Email the membership" call.** A
-  request's sheet does (`send_volunteer_call`, which is written around a
-  request's details). Members find an event's sheet on Open Shifts.
+preferences, event signup sheets, volunteer RSVPs, close-out) left four edges
+for a later decision rather than guessing at them: a series cancel left its
+sheets on the schedule, volunteer RSVPs counted against `max_attendees`, a
+shift swap did not move a volunteer's RSVP, and an event's own sheet could not
+email the membership. Each was closed as follows.
 
 Closed on 2026-11-21: a series cancel or delete now stands down every
 occurrence's own sheet, as a single cancel or delete does; and a volunteer's
@@ -1907,6 +1926,15 @@ RSVP is marked `is_volunteer` and takes no attendee seat (owner decision,
 2026-11-21 — crew, not audience; the sheet's role counts cap the crew). Guests
 a volunteer brings still take seats, and must fit when added, because a
 volunteer is never waitlisted off the crew list.
+
+Closed on 2026-11-22: a seat traded by a shift swap — an officer-approved
+exchange or move, an accepted offer, or a picked-up open swap — now moves the
+going RSVP with it, as any other seat change does; and an event's own signup
+sheet can email the membership for help, the same email a request's sheet
+sends, with the time of the last send recorded on the event
+(`events.volunteer_call_sent_at`).
+
+Every edge this section listed is now closed.
 
 ## Outreach Requests — Two Deliberate Choices in the Public Pipeline (2026-09-09)
 
@@ -3526,7 +3554,7 @@ reader has to know to ask about.
 | **No formal "active/in-progress" shift state**                         | Accepted                                                                     | `ShiftStatus` is `scheduled`/`cancelled` only; a shift's "activeness" is implied by `start_time`/`end_time` vs. now, and `is_finalized` marks closed. The live readiness panel (2026-07-16) covers most of the operational need without a dedicated state.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Count-only call tracking: no cross-unit attach picker**              | ✅ Resolved (2026-10-05, owner decision: build the picker)                   | The close-out wizard's step 2 now lists **Already logged by another unit** — calls another unit recorded while the shift was on, matched by overlapping shift times — and a tick sends `attach_call_ids`, an untick `detach_call_ids` (new; removes only this shift's response, and refuses a call no other unit is on). `attachable_calls` is served from `CallTrackingService.list_attachable_calls` for an unfinalized count-only shift, with `unit_labels` and `attached`. The call-volume report's count-only branch now serves `counts_unit_responses: false` and reads **Total Calls**. What remains is a matter of practice, not code: a second unit that types the incident into its own count instead of ticking it still records a second call, and nothing can match the two afterwards. (SCHED-10)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **`dispatch` / `derived` call sources have no writer**                 | Accepted (forward compatibility)                                             | `CallSource.DISPATCH` / `.DERIVED` and the `uq_org_call_external_ref (organization_id, external_ref)` constraint exist so a CAD integration can be added without a migration — the constraint is what would make a re-sync idempotent. Nothing writes either value today; every row is `manual`. (SCHED-12)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **A program-owned SHIFTS requirement counts shift reports**            | Open (needs product decision)                                                | A SHIFTS requirement created inside a training program (`ProgramRequirement.owns_requirement`) applies to nobody on the compliance screens; only the program's `RequirementProgress` ledger grades it, adding one per shift completion report an officer files for the trainee (`shift_completion_service._update_requirement_progress`). It therefore still counts shift reports, not `ShiftAttendance`. Moving it to attendance would drop the officer's "this shift counts toward the program" step and needs a start date (enrollment, or the requirement's own window), which the shifts-three-sources decision did not settle.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **A program-owned SHIFTS requirement counts shift reports**            | Accepted by the owner (2026-11-01: leave as is)                              | A SHIFTS requirement created inside a training program (`ProgramRequirement.owns_requirement`) applies to nobody on the compliance screens; only the program's `RequirementProgress` ledger grades it, adding one per shift completion report an officer files for the trainee (`shift_completion_service._update_requirement_progress`). It therefore still counts shift reports, not `ShiftAttendance`. Moving it to attendance would drop the officer's "this shift counts toward the program" step and needs a start date (enrollment, or the requirement's own window), which the shifts-three-sources decision did not settle. **Accepted by the owner (2026-11-01):** leave as is — a program-owned SHIFTS requirement keeps counting officer-filed shift reports (see "Owner Decisions of 2026-11-01").                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **`member_call_counts` / `reported_call_types` have no list/dict cap** | ✅ Resolved (2026-11-04, owner decision of 2026-11-01: cap at 100 / 200)     | `ShiftFinalizeRequest.member_call_counts` (a list) and `.reported_call_types` (a dict keyed by call type) take an authenticated `scheduling.manage`/shift-officer submission with no size bound, unlike the sibling `attach_call_ids`/`detach_call_ids` fields, which were capped at 200 (matching `CallTrackingService.MAX_ATTACHABLE_CALLS`) by security review SCH-15 pass 8's addendum (2026-10-15, SCH-18). Each entry costs a per-member/per-type lookup, so an oversized submission is a cost multiplier on one request — abuse-resistance, not a data-isolation gap. `responding_members`'s existing 100-entry cap is a plausible precedent for the list; the dict has no clean existing ceiling since the call-type vocabulary itself is unbounded in org settings.. **Built:** `member_call_counts` takes at most 100 entries (`MAX_MEMBER_CALL_CREDITS`, matching `responding_members`) and `reported_call_types` at most 200 keys (`MAX_REPORTED_CALL_TYPES`) on both `ShiftFinalizeRequest` and `CloseoutCallsRequest`; an oversized request is a 422 naming the field and the limit. Request schemas only, so stored close-outs are read as before. The close-out wizard sends every member while the crew fits under 100 and, above that, only the members credited below the apparatus count (the server credits anyone omitted with that count); more than 100 adjusted members is refused on screen with the reason. (SCH-19)                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ### Shifts With Other Departments — Counted on Entry (2026-09-27)
@@ -5767,8 +5795,10 @@ owner.
 
 Still open, each the owner's call:
 
-- The member response still carries the cohort's `notes` and creator ids.
-  They are not displayed, but they are sent.
+- The member response still carries the cohort's creator id
+  (`created_by`). It is not displayed, but it is sent. The cohort's `notes`
+  are no longer sent to a roster member (stripped 2026-11-04,
+  `course_cohorts.py`): they are the training officers' own remarks.
 - `is_roster_member` admits a withdrawn member, while `/mine` lists only
   active ones.
 - A `training.view_all` holder without `training.manage` sees the member view
@@ -9051,7 +9081,8 @@ rolling series and a duplicate keep their session and links; and
 itself followed on 2026-11-11: see "Training — One Form for Training Events,
 the Form" below.
 
-**Defaults assumed on the owner's "Yes" (2026-11-11), and what they cost:**
+**Defaults assumed on the owner's "Yes" (2026-11-11), and what they cost**
+(all three confirmed by the owner 2026-11-23)**:**
 
 - **A rolling series copies its latest occurrence, not its parent.** This
   fixed a "this and all future events" edit being lost: it never reached the
@@ -9523,7 +9554,10 @@ need an owner decision before anything is built.
 
 Five defects in training events and recurring series were fixed on
 2026-11-21 (owner approval of that date). Where the review left a choice, the
-conservative option was taken; each can be redirected:
+conservative option was taken; each can be redirected. **Confirmed by the
+owner 2026-11-23:** the fourth and fifth below. **Owner decision of
+2026-11-23** on the first and third: rolling series keep all-or-nothing time
+changes, and get no pause or resume for now.
 
 - **Cancelling a series' future ends the series.** "Only cancel future
   events" now sets the series' end date to the last kept occurrence and turns
@@ -11184,7 +11218,8 @@ was not among the questions the owner answered on 2026-11-01. Options:
 
 ## Training — Waiver Request Documents: What Was Left Out (2026-11-11)
 
-**Open, chosen conservatively; the owner may revisit any of these.** Documents
+**Open, chosen conservatively; the owner may revisit any of these.** Every
+item but the first was confirmed by the owner 2026-11-23. Documents
 on session waiver requests (PDF, JPEG, PNG or HEIC, 10 MB each, three per
 request, kept 365 days) shipped with these gaps, each the narrower choice:
 
@@ -11224,7 +11259,9 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
 
 The business-meeting waiver workflow (owner decisions, 2026-11-10) shares the
 training workflow's engine. Where the decisions left a gap, the conservative
-option was taken; each is open for the owner to revisit.
+option was taken; each is open for the owner to revisit. **Confirmed by the
+owner 2026-11-23:** every choice below except the first (cancelling or
+deleting an event) and the moved-start one.
 
 - **Cancelling or deleting an event closes only pending requests.** The brief
   asked for requests to be voided "as the training workflow does", but the
@@ -11246,10 +11283,13 @@ option was taken; each is open for the owner to revisit.
   wording stands, and the attendee row is not linked to the request. A
   Secretary's grant over a waiver an approval wrote replaces the standard text
   and drops the link, so the waiver is the Secretary's.
-- **The meeting screens are not built yet.** A decider's in-app prompt links
-  to `/meetings/waiver-requests/{id}`, which the frontend does not have until
-  the meeting screens land; the member's notice links to the event. Until then
-  the policy can be saved only through the API, so no prompt is sent.
+- ~~**The meeting screens are not built yet.**~~ **No longer true:** the
+  queue and decision page are at `/meetings/waiver-requests` and
+  `/meetings/waiver-requests/{id}` (the path a decider's in-app prompt links
+  to), and the policy is set at `/minutes/attendance/waiver-settings`
+  (`MeetingWaiverSettingsPage`, `meetings.manage`). The policy is off until a
+  department turns it on there; once it is on, deciders are prompted as in
+  training. The member's notice still links to the event.
 - **A moved start reopens a decided request, even when the move is a
   correction made after the session** _(corrected 2026-11-21; this line used
   to say postponing left requests alone, which stopped being true with the
@@ -11414,7 +11454,7 @@ submissions, training records and attendance waiver documents the delete
 cascades away. Both keep any file another row still names. What this leaves:
 
 **Choices made without a further owner ruling** (the conservative option in
-each case):
+each case; confirmed by the owner 2026-11-23):
 
 - ~~**Files uploaded to a training record itself survive anonymisation.**~~
   **Resolved 2026-11-20** (owner decision "Anonymise officer docs too"):
@@ -11446,7 +11486,8 @@ each case):
   on `pending_file_deletions`. **Kept, deliberately:** an event guest
   check-in that created the prospect (`event_external_attendees.prospect_id`, `SET NULL`)
   stays with the event's history, as it does when Purge removes an
-  application. Default taken without a further ruling; it holds the
+  application. Default taken without a further ruling, confirmed by the owner
+  2026-11-23; it holds the
   guest's name and contact details as the event recorded them.
 
 **Accepted residuals:**
