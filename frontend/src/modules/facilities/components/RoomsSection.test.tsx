@@ -330,9 +330,7 @@ describe('RoomsSection refusals and discarding', () => {
     await user.click(screen.getByRole('button', { name: /Save Room/ }));
 
     await waitFor(() =>
-      expect(screen.getByRole('textbox', { name: /^Room Number/ })).toHaveAccessibleDescription(
-        expect.stringContaining('Value is too long.')
-      )
+      expect(screen.getByRole('textbox', { name: /^Room Number/ })).toHaveAccessibleDescription(/Value is too long\./)
     );
   });
 

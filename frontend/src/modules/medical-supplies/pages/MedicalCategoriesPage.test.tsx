@@ -344,9 +344,7 @@ describe('MedicalCategoriesPage category form', () => {
     await user.click(screen.getByRole('button', { name: 'Create category' }));
 
     await waitFor(() =>
-      expect(screen.getByRole('textbox', { name: /^Description/ })).toHaveAccessibleDescription(
-        expect.stringContaining('Value is too long.')
-      )
+      expect(screen.getByRole('textbox', { name: /^Description/ })).toHaveAccessibleDescription(/Value is too long\./)
     );
   });
 

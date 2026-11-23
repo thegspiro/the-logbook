@@ -276,9 +276,7 @@ describe('RequestEquipmentModal', () => {
 
     const describe = screen.getByRole('textbox', { name: /Describe what you need/ });
     expect(describe).toHaveAttribute('aria-invalid', 'true');
-    expect(describe).toHaveAccessibleDescription(
-      expect.stringContaining('Choose an item from the list, or describe what you need here.')
-    );
+    expect(describe).toHaveAccessibleDescription(/Choose an item from the list, or describe what you need here\./);
     expect(describe).toHaveFocus();
     expect(mockCreateEquipmentRequest).not.toHaveBeenCalled();
   });
@@ -415,7 +413,7 @@ describe('RequestEquipmentModal', () => {
 
     const description = screen.getByLabelText(/Describe what you need/);
     await waitFor(() => expect(description).toHaveAttribute('aria-invalid', 'true'));
-    expect(description).toHaveAccessibleDescription(expect.stringContaining('Value is too long.'));
+    expect(description).toHaveAccessibleDescription(/Value is too long\./);
     expect(description).toHaveAttribute('maxLength', '255');
     expect(onClose).not.toHaveBeenCalled();
   });

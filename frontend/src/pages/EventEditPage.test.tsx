@@ -1089,7 +1089,7 @@ describe('EventEditPage', () => {
 
         const linked = await screen.findByRole('checkbox', { name: /Old Drill Attendance/ });
         expect(linked).toBeChecked();
-        expect(linked).toHaveAccessibleDescription(expect.stringContaining('No longer active'));
+        expect(linked).toHaveAccessibleDescription(/No longer active/);
         expect(screen.getByRole('group', { name: 'Counts toward attendance' })).toBeInTheDocument();
         await toReview(user);
         expect(screen.getByText('Old Drill Attendance (no longer active)')).toBeInTheDocument();
@@ -1386,9 +1386,7 @@ describe('EventEditPage', () => {
 
         const hours = await screen.findByLabelText(/Credit Hours/);
         // Once the Course Library has loaded.
-        await waitFor(() =>
-          expect(hours).toHaveAccessibleDescription(expect.stringContaining('From the course (2 hours).'))
-        );
+        await waitFor(() => expect(hours).toHaveAccessibleDescription(/From the course \(2 hours\)\./));
         await toReview(user);
         expect(screen.getByText('2 hours (from the course)')).toBeInTheDocument();
       });
@@ -1426,9 +1424,7 @@ describe('EventEditPage', () => {
       // the backend.
       it("follows the event's length again when the course is left", async () => {
         const user = await openWithStoredHours(2);
-        expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
-          expect.stringContaining('From the course (2 hours).')
-        );
+        expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(/From the course \(2 hours\)\./);
 
         await user.click(screen.getByRole('radio', { name: /No course yet/ }));
         expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(3);
@@ -1458,7 +1454,7 @@ describe('EventEditPage', () => {
         renderWithRouter(<EventEditPage />);
 
         expect(await screen.findByLabelText('Requirement')).toHaveAccessibleDescription(
-          expect.stringContaining('Company Drill Attendance is a session-attendance requirement.')
+          /Company Drill Attendance is a session-attendance requirement\./
         );
         await toReview(user);
         expect(screen.getByText('Company Drill Attendance (currently linked, no longer offered)')).toBeInTheDocument();
@@ -1562,7 +1558,7 @@ describe('EventEditPage', () => {
 
         await waitFor(() =>
           expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
-            expect.stringContaining("Follows the event's length (2 hours) until you change it.")
+            /Follows the event's length \(2 hours\) until you change it\./
           )
         );
         await toReview(user);
@@ -1579,9 +1575,7 @@ describe('EventEditPage', () => {
       it('leaves on Cancel without asking, once the hours read as the length', async () => {
         const user = await open('course-nohours', 2, 'LADDER - Ladder Drills');
         await waitFor(() =>
-          expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
-            expect.stringContaining("Follows the event's length")
-          )
+          expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(/Follows the event's length/)
         );
 
         await user.click(screen.getAllByRole('button', { name: 'Cancel' })[0] as HTMLElement);
@@ -1601,9 +1595,7 @@ describe('EventEditPage', () => {
       it('keeps the stored hours of a course that has hours of its own', async () => {
         const user = await open('course-pump', 2, 'PUMP - Pump Operations');
 
-        expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
-          expect.stringContaining('From the course (2 hours).')
-        );
+        expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(/From the course \(2 hours\)\./);
         await save(user);
         expect(sent()?.training_details).toMatchObject({ course_id: 'course-pump', credit_hours: 2 });
       });
@@ -1649,7 +1641,7 @@ describe('EventEditPage', () => {
       expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
       const hours = screen.getByLabelText(/Credit Hours/);
       await waitFor(() => expect(hours).toHaveFocus());
-      expect(hours).toHaveAccessibleDescription(expect.stringContaining('Input should be a finite number'));
+      expect(hours).toHaveAccessibleDescription(/Input should be a finite number/);
       expect(mockNavigate).not.toHaveBeenCalled();
     });
 

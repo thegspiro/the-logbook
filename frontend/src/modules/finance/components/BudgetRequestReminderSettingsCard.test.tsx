@@ -107,7 +107,7 @@ describe('BudgetRequestReminderSettingsCard', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(days).toHaveAttribute('aria-invalid', 'true');
-    expect(days).toHaveAccessibleDescription(expect.stringContaining('whole number of days from 0 to 60'));
+    expect(days).toHaveAccessibleDescription(/whole number of days from 0 to 60/);
     expect(days).toHaveFocus();
     expect(mockUpdate).not.toHaveBeenCalled();
   });
@@ -126,7 +126,7 @@ describe('BudgetRequestReminderSettingsCard', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(days).toHaveAttribute('aria-invalid', 'true'));
-    expect(days).toHaveAccessibleDescription(expect.stringContaining('Reminder days must be between 0 and 60'));
+    expect(days).toHaveAccessibleDescription(/Reminder days must be between 0 and 60/);
     expect(days).toHaveFocus();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(mockToastError).not.toHaveBeenCalled();
