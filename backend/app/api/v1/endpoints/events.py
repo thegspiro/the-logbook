@@ -1602,9 +1602,7 @@ async def get_event(
     # A draft answers 404 to a caller who may not see it (can_see_draft), as
     # the attachments route does, so a guessed id does not confirm an
     # unannounced event exists.
-    if not event or (
-        event.is_draft and not can_see_draft(event.event_type, current_user)
-    ):
+    if not event or (event.is_draft and not can_see_draft(event, current_user)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
         )
@@ -4209,7 +4207,7 @@ async def _load_event_for_attachment_read(
     event: Optional[Event] = result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    if event.is_draft and not can_see_draft(event.event_type, current_user):
+    if event.is_draft and not can_see_draft(event, current_user):
         raise HTTPException(status_code=404, detail="Event not found")
     return event
 
@@ -4391,9 +4389,7 @@ async def get_event_folder(
     event, _ = await service.get_event(event_id, current_user.organization_id)
     # A draft's folder is named after its unannounced title; a caller who
     # may not see the draft gets the same 404 the event itself answers (ADV-5).
-    if not event or (
-        event.is_draft and not can_see_draft(event.event_type, current_user)
-    ):
+    if not event or (event.is_draft and not can_see_draft(event, current_user)):
         raise HTTPException(status_code=404, detail="Event not found")
 
     docs_service = DocumentsService(db)

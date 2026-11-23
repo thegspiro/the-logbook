@@ -21,7 +21,7 @@ from app.api.dependencies import (
     require_permission,
     user_has_permission,
 )
-from app.api.draft_visibility import can_see_draft, event_visible_clause
+from app.api.draft_visibility import can_see_draft_of_type, event_visible_clause
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -294,7 +294,7 @@ async def get_training_session_by_event(
         return None
 
     # A draft event's session is hidden from a caller who may not see the
-    # draft (can_see_draft), as the event itself is (ADV-5): the same null an
+    # draft (draft_visibility), as the event itself is (ADV-5): the same null an
     # event with no session answers. The type is read only for a draft.
     if not user_has_permission(current_user, "events.manage"):
         in_org = (
@@ -308,7 +308,7 @@ async def get_training_session_by_event(
             event_type = (
                 await db.execute(select(Event.event_type).where(*in_org))
             ).scalar_one_or_none()
-            if not can_see_draft(event_type, current_user):
+            if not can_see_draft_of_type(event_type, current_user):
                 return None
 
     return await _session_payload(service, training_session)

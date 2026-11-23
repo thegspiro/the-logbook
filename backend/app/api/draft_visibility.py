@@ -36,12 +36,28 @@ def visible_draft_types(user: Any) -> Optional[frozenset[EventType]]:
     return frozenset()
 
 
-def can_see_draft(event_type: Any, user: Any) -> bool:
+def _in_types(event_type: Any, types: frozenset[EventType]) -> bool:
+    return any(event_type == t or event_type == t.value for t in types)
+
+
+def can_see_draft(event: Any, user: Any) -> bool:
+    """Whether *user* may see *event*, a draft.
+
+    The event's type is read only when the answer depends on it, for a caller
+    who sees some drafts but not all.
+    """
+    types = visible_draft_types(user)
+    if types is None:
+        return True
+    return bool(types) and _in_types(event.event_type, types)
+
+
+def can_see_draft_of_type(event_type: Any, user: Any) -> bool:
     """Whether *user* may see a draft event of *event_type*."""
     types = visible_draft_types(user)
     if types is None:
         return True
-    return any(event_type == t or event_type == t.value for t in types)
+    return _in_types(event_type, types)
 
 
 def event_visible_clause(user: Any) -> Optional[ColumnElement[bool]]:
