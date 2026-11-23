@@ -9090,17 +9090,26 @@ single-page form. What it changes, and what it leaves:
   Training Info. The entry below still applies to an event made from a
   template: a library-course template saved with a blank instructor or
   expiry gets the course's.
-- **A template's lead instructor survives that member's anonymisation, as a
-  training session's instructor does.** `training_details` holds the
-  instructor's member id and name as JSON, and neither
-  `member_anonymization_service.py` nor `user_deletion_service.py` touches
-  it — nor `training_sessions.instructor`, the free-text name a session
-  stores beside its `instructor_id`, which has the same gap and was not
-  recorded before. Neither carries a foreign key, so a removed member leaves
-  a dangling id, which applying the template clears. Scrubbing both on
-  anonymisation is a change to the anonymisation service, left for an owner
-  decision. A department-template export writes `training_details` as null,
-  so neither the name nor an org-local course id leaves the installation.
+- ~~**A template's lead instructor survives that member's anonymisation, as a
+  training session's instructor does.**~~ **Resolved 2026-11-23** (owner
+  decision of that date). Anonymisation and permanent delete replace the
+  member's name with "Former member" in `event_templates.training_details`
+  (its `instructor_id` cleared), in `training_sessions.instructor` wherever
+  `instructor_id` is the member, and in each attendee's
+  `training_records.instructor` that still holds the name the session copied
+  onto it (`app.services.instructor_erasure`). "Former member" rather than a
+  blank keeps those records off the NFPA completeness report's
+  missing-instructor list. Migration `9c41e7b2d5a3` applied the same rule to
+  members anonymised before. **Not covered:** members permanently deleted
+  before 2026-11-23 (the delete cleared the sessions' `instructor_id`, so
+  nothing links their name back to them), a record written before
+  `source_event_id` existed, and a record or session whose instructor was
+  typed as free text with no `instructor_id`. The original entry read:
+  `training_details` holds the instructor's member id and name as JSON, and
+  neither `member_anonymization_service.py` nor `user_deletion_service.py`
+  touched it, nor `training_sessions.instructor`. A department-template
+  export writes `training_details` as null, so neither the name nor an
+  org-local course id leaves the installation.
 - **Under a library course, a blank Lead Instructor or Expiration is saved
   as the course's.** The backend reads `null` for those two as "use the
   course's value", on create and on edit, so an officer cannot clear either
