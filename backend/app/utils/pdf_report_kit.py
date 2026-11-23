@@ -443,7 +443,8 @@ def _letterhead(meta: ReportMeta, styles: Dict[str, ParagraphStyle]) -> List[Any
         # A grid, three pairs to a row, so a label is never wrapped away from
         # its value as it was in a single running line.
         per_row = 3
-        cells = [
+        # Paragraphs, then blank strings padding out the last row.
+        cells: List[Any] = [
             Paragraph(f"<b>{esc(label)}:</b> {esc(value)}", styles["panel"])
             for label, value in facts
         ]
