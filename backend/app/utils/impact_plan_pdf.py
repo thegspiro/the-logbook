@@ -22,7 +22,12 @@ from reportlab.platypus import (
     Table,
 )
 
-from app.utils.election_pdf_style import FOOTER_BASELINE, beside_logo, page_of_footer
+from app.utils.election_pdf_style import (
+    FOOTER_BASELINE,
+    beside_logo,
+    identity_style,
+    page_of_footer,
+)
 from app.utils.pdf_fonts import (
     BODY_FONT,
     BOLD_FONT,
@@ -91,6 +96,7 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
                 "Inventory Impact Plan",
                 next(iter(meta.get("parameters") or []), None),
                 meta.get("logo"),
+                reference=meta.get("report_number"),
             ),
             # The canvas otherwise declares Helvetica, never embedded, on every page.
             initialFontName=BODY_FONT,
@@ -136,8 +142,18 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
             Paragraph("Inventory Impact Plan", title_style),
             Paragraph(
                 f"{escape(str(org_name))} &middot; Generated "
-                f"{generated_at.strftime('%Y-%m-%d %H:%M %Z').rstrip()}",
+                f"{generated_at.strftime('%Y-%m-%d %H:%M %Z').rstrip()}"
+                + (
+                    f" &middot; Report No. {escape(str(meta['report_number']))}"
+                    if meta.get("report_number")
+                    else ""
+                ),
                 sub_style,
+            ),
+            *(
+                [Paragraph(escape(str(meta["identity"])), identity_style())]
+                if meta.get("identity")
+                else []
             ),
         ]
         story: List[Any] = beside_logo(heading, meta.get("logo"), doc.width)

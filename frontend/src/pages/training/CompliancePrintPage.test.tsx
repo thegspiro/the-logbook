@@ -73,6 +73,47 @@ describe('CompliancePrintPage', () => {
     expect(screen.getByRole('columnheader', { name: 'Annual Hazmat Hours' })).toBeInTheDocument();
   });
 
+  it("prints a certification's expiry under its mark, and nothing under other requirements", async () => {
+    getComplianceMatrix.mockReset();
+    getComplianceMatrix.mockResolvedValue({
+      generated_at: '2026-09-29T09:00:00Z',
+      requirements: [
+        { id: 'req-cpr', name: 'CPR/BLS Certification', requirement_type: 'certification' },
+        { id: 'req-hazmat', name: 'Annual Hazmat Hours', requirement_type: 'hours' },
+      ],
+      members: [
+        {
+          user_id: 'u1',
+          member_name: 'Avery, Jordan',
+          requirements: [
+            { ...cell('completed'), requirement_id: 'req-cpr', expiry_date: '2027-03-14' },
+            // An hours record can carry an expiry too; it is not a certificate.
+            { ...cell('completed'), expiry_date: '2027-06-01' },
+          ],
+          completion_pct: 100,
+          standing: 'compliant',
+        },
+        {
+          user_id: 'u2',
+          member_name: 'Brooks, Alex',
+          requirements: [{ ...cell('expired'), requirement_id: 'req-cpr', expiry_date: '2026-03-14' }],
+          completion_pct: 0,
+          standing: 'non_compliant',
+        },
+      ],
+    });
+
+    renderWithRouter(<CompliancePrintPage />);
+
+    const avery = await screen.findByRole('row', { name: /Avery, Jordan/ });
+    expect(within(avery).getByText('3/14/27')).toBeInTheDocument();
+    expect(within(avery).queryByText('6/1/27')).not.toBeInTheDocument();
+    const brooks = screen.getByRole('row', { name: /Brooks, Alex/ });
+    expect(within(brooks).getByText('Exp')).toBeInTheDocument();
+    expect(within(brooks).getByText('3/14/26')).toBeInTheDocument();
+    expect(screen.getByText(/a date under a certification is when it expires/)).toBeInTheDocument();
+  });
+
   it('prints a member nothing grades as N/A, last, and outside the compliant count', async () => {
     getComplianceMatrix.mockReset();
     getComplianceMatrix.mockResolvedValue({

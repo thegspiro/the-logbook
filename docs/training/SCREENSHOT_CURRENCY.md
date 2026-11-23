@@ -54,17 +54,19 @@ shot was re-run on its own against the same demo department and checked by eye.
   now measured against the members eligible for the race (8 for Captain), not
   the 22 on the roster. The caption in guide 14 says so.
 
-**Still failing (2).** Each keeps its committed image:
+**Still failing (1).** It keeps its committed image:
 
-- `11-28-budget-picker-inactive`: a product bug. Editing a purchase request
-  that is linked to a budget shows **No budget linked**, because the form is
-  reset before the budget options load. It is being fixed separately.
 - `15-02-board-truncated`: needs the opt-in `--bulk-prospects` seed, which
   this pass did not run because 200 extra applicants would change every other
   guide 15 shot. See `scripts/screenshots/README.md`.
 
-**Re-seeding after a capture** still fails at the steps the 2026-11-21 section
-lists. That fix is a pull request of its own.
+**`11-28-budget-picker-inactive` was re-shot afterwards.** It failed here on a
+product bug: editing a purchase request linked to a budget showed **No budget
+linked**, because the picker was given its value before its options loaded.
+With that fixed, it shows the saved line marked (inactive category).
+
+**Re-seeding after a capture** no longer fails at the steps the 2026-11-21
+section lists; #4575 fixed them.
 
 ## Captured 2026-11-21 — the Replace and Check rows of every open queue
 

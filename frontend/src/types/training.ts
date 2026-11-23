@@ -3134,6 +3134,8 @@ export interface ReportExportRequest {
   end_date?: string | undefined;
   include_details?: boolean | undefined;
   filters?: Record<string, unknown> | undefined;
+  /** End a PDF with Prepared by / Reviewed by / Approved by lines. */
+  signature_lines?: boolean | undefined;
 }
 
 export interface ReportExportResponse {

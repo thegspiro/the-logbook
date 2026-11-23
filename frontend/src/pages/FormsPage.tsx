@@ -1158,7 +1158,7 @@ const FormsPage: React.FC = () => {
                 <>
                   <label
                     htmlFor="editor-one-per-person"
-                    className="card-secondary mobile-touch-row mb-4 cursor-pointer gap-3 p-4"
+                    className="card-secondary mb-4 flex min-h-11 cursor-pointer items-start gap-3 p-4"
                   >
                     <input
                       type="checkbox"
@@ -1168,7 +1168,7 @@ const FormsPage: React.FC = () => {
                       onChange={() => {
                         void handleToggleOnePerPerson(editingForm);
                       }}
-                      className="form-checkbox shrink-0"
+                      className="form-checkbox mt-0.5 shrink-0"
                     />
                     <span className="text-sm">
                       <span className="text-theme-text-primary block font-medium">One submission per person</span>
@@ -1300,13 +1300,13 @@ const FormsPage: React.FC = () => {
                         />
                       )}
                     </FormField>
-                    <div className="flex items-center space-x-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
+                    <div className="flex items-start space-x-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
                       <input
                         type="checkbox"
                         id="is_public"
                         checked={formData.is_public}
                         onChange={(e) => setFormData({ ...formData, is_public: e.target.checked })}
-                        className="h-4 w-4 rounded-sm text-cyan-700 dark:text-cyan-600"
+                        className="mt-0.5 h-4 w-4 rounded-sm text-cyan-700 dark:text-cyan-600"
                       />
                       <label htmlFor="is_public" className="cursor-pointer text-sm">
                         <span className="font-medium text-cyan-700 dark:text-cyan-300">Public Form</span>
@@ -1318,14 +1318,14 @@ const FormsPage: React.FC = () => {
                     </div>
                     <label
                       htmlFor="create-one-per-person"
-                      className="card-secondary mobile-touch-row cursor-pointer gap-3 p-3"
+                      className="card-secondary flex min-h-11 cursor-pointer items-start gap-3 p-3"
                     >
                       <input
                         type="checkbox"
                         id="create-one-per-person"
                         checked={formData.one_per_person}
                         onChange={(e) => setFormData({ ...formData, one_per_person: e.target.checked })}
-                        className="form-checkbox shrink-0"
+                        className="form-checkbox mt-0.5 shrink-0"
                       />
                       <span className="text-sm">
                         <span className="text-theme-text-primary block font-medium">One submission per person</span>
@@ -1419,7 +1419,7 @@ const FormsPage: React.FC = () => {
 
                         <label
                           htmlFor="share-allow-anonymous"
-                          className="card-secondary mobile-touch-row cursor-pointer gap-3 p-4"
+                          className="card-secondary flex min-h-11 cursor-pointer items-start gap-3 p-4"
                         >
                           <input
                             type="checkbox"
@@ -1429,7 +1429,7 @@ const FormsPage: React.FC = () => {
                             onChange={() => {
                               void handleToggleRequireAuthentication(form);
                             }}
-                            className="form-checkbox shrink-0"
+                            className="form-checkbox mt-0.5 shrink-0"
                           />
                           <span className="text-sm">
                             <span className="text-theme-text-primary block font-medium">

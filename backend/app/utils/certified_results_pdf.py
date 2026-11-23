@@ -103,6 +103,7 @@ def _layout(
             "Certified Election Results",
             election.get("title"),
             meta.get("logo"),
+            reference=meta.get("report_number"),
         ),
         # The canvas otherwise declares Helvetica, never embedded, on every page.
         initialFontName=BODY_FONT,
@@ -141,13 +142,19 @@ def _layout(
                 Paragraph(
                     f"Election closed {esc(election.get('closed_display'))} "
                     f"by {esc(election.get('closed_by_display'))} · "
-                    f"Generated {esc(meta.get('generated_at'))}",
+                    f"Generated {esc(meta.get('generated_at'))}"
+                    + (
+                        f" · Report No. {esc(meta['report_number'])}"
+                        if meta.get("report_number")
+                        else ""
+                    ),
                     styles["meta"],
                 ),
             ],
             meta.get("logo"),
             styles,
             "Certified Election Results",
+            identity=meta.get("identity"),
         ),
         Spacer(1, 8),
         HRFlowable(width="100%", thickness=2, color=INK),

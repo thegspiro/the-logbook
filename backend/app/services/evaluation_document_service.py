@@ -69,6 +69,7 @@ from app.services.file_storage_service import (
     FileStorageService,
     StorageArea,
 )
+from app.utils.election_pdf_style import department_identity
 from app.utils.evaluation_pdf import render_evaluation_pdf
 from app.utils.org_timezone import resolve_scheduling_timezone
 
@@ -583,6 +584,9 @@ class EvaluationDocumentService:
         return {
             "org_name": organization.name if organization else None,
             "logo": organization.logo if organization else None,
+            # No report number: this PDF is built once, frozen and stored, and
+            # carries its own record fingerprint instead.
+            "identity": department_identity(organization) or None,
             "title": evaluation.template_version.template.name,
             "member_name": member.full_name if member else "Former member",
             "evaluator_name": evaluator.full_name if evaluator else None,

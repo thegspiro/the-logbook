@@ -89,7 +89,10 @@ export interface EvaluatedCell {
    * is still what decides the tone.
    */
   totalLabel: string | null;
-  /** "Expires Nov 12, 2026", "Window Jan 1 – Dec 31, 2026". */
+  /**
+   * "Expires Nov 12, 2026", "Window Jan 1 – Dec 31, 2026"; for a certification
+   * "(Expires Mar 14, 2027)", "(Mar 14, 2026)", or empty when none is on file.
+   */
   dateLabel: string;
   /** Set only when a waiver moved the target. */
   waiverNote: string | null;
@@ -306,6 +309,37 @@ const waiverNoteOf = (cell: ComplianceMatrixCell): string | null => {
   return `Adjusted for ${months}`;
 };
 
+/** A certification requirement: held or not, so read by state and expiry date. */
+export const isCertificationRequirement = (requirement: ComplianceMatrixRequirement | undefined): boolean =>
+  requirement?.requirement_type === 'certification';
+
+/**
+ * A certification cell's wording: "On file" with "(Expires Mar 14, 2027)"
+ * (or "Completed ..." for one that never expires),
+ * "Expired" with "(Mar 14, 2026)", or "Not recorded" with no date. The same
+ * words as My Training's requirement card, so an officer and the member read
+ * one certificate the same way. Null for any other tone, which keeps its
+ * usual labels (a catch-up deadline, no session held yet).
+ *
+ * A missing certificate has no date at all. The frequency window it used to
+ * print is not what a certification is graded over: it is valid until it
+ * expires.
+ */
+const certificationLabelsOf = (
+  cell: ComplianceMatrixCell,
+  tone: CellTone
+): { progress: string; date: string } | null => {
+  const expires = cell.expiry_date ? formatCalendarDate(cell.expiry_date) : null;
+  if (tone === CellTone.MET || tone === CellTone.SOON) {
+    // A certificate that never expires is dated by when it was earned instead.
+    const completed = cell.completion_date ? `Completed ${formatCalendarDate(cell.completion_date)}` : '';
+    return { progress: 'On file', date: expires ? `(Expires ${expires})` : completed };
+  }
+  if (tone === CellTone.LAPSED) return { progress: 'Expired', date: expires ? `(${expires})` : '' };
+  if (tone === CellTone.MISSING) return { progress: 'Not recorded', date: '' };
+  return null;
+};
+
 export const evaluateCell = (
   cell: ComplianceMatrixCell,
   requirement: ComplianceMatrixRequirement | undefined,
@@ -321,15 +355,16 @@ export const evaluateCell = (
   // Hours requirements lead with the server's monthly average (the same
   // figure My Training shows). The bar and tone stay on the total.
   const pace = tone === CellTone.NOT_YET_HELD ? null : monthlyPaceOf(cell.monthly_average, cell.monthly_needed);
+  const certification = isCertificationRequirement(requirement) ? certificationLabelsOf(cell, tone) : null;
   return {
     cell,
     requirement,
     tone,
     pct: percentOf(cell, tone),
-    progressLabel: pace ? paceLabel(pace) : progressLabelOf(cell, tone, basis),
+    progressLabel: certification ? certification.progress : pace ? paceLabel(pace) : progressLabelOf(cell, tone, basis),
     progressSpoken: pace ? paceSpoken(pace) : null,
     totalLabel: pace ? `${progressLabelOf(cell, tone, basis)} total` : null,
-    dateLabel: dateLabelOf(cell, tone),
+    dateLabel: certification ? certification.date : dateLabelOf(cell, tone),
     waiverNote: waiverNoteOf(cell),
     overrideNote: cell.overridden ? "Met by the Chief's override" : null,
   };
@@ -435,6 +470,20 @@ export const requirementStanding = (rollup: RequirementRollup): Standing => {
 
 export const cellFor = (member: EvaluatedMember, requirementId: string): EvaluatedCell | undefined =>
   member.cells.find((c) => c.cell.requirement_id === requirementId);
+
+/**
+ * A certification cell as the CSV export writes it: the expiry as YYYY-MM-DD
+ * (a spreadsheet sorts and compares it), "No expiry" for a certificate that
+ * never lapses, "Not recorded" when none is on file, and blank where the
+ * requirement does not apply to the member or is not graded yet.
+ */
+export const certificationExpiryText = (cell: EvaluatedCell | undefined): string => {
+  if (!cell) return '';
+  if (cell.cell.expiry_date) return cell.cell.expiry_date.slice(0, 10);
+  if (isMetTone(cell.tone)) return 'No expiry';
+  if (cell.tone === CellTone.MISSING) return 'Not recorded';
+  return '';
+};
 
 /** Frequency + target, e.g. "Annual · 24 hours" or "Biannual · certification". */
 export const requirementMeta = (requirement: ComplianceMatrixRequirement | undefined): string => {
