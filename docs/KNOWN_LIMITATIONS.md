@@ -1668,6 +1668,11 @@ limitation:
   `training.manage` holder can no longer excuse their own training this way**;
   another officer must be given the permission, or the leave-request route
   used.
+  Owner confirmed 2026-11-23: no exception for a lone Chief. The Waivers
+  page now says so as soon as an officer picks themselves, links to Leave
+  Requests and keeps the form from submitting, and it offers no Edit on the
+  officer's own leave. Leave, overrides and training waivers share one check,
+  `is_own_grant` in `app/utils/separation_of_duties.py`.
 - ~~**An applicant's edited email or name and birth date can make a coordinator's
   self-access guard hide their file (ADV2-10).**~~ ✅ Resolved 2026-11-21
   (owner: trust only `transferred_user_id` once the applicant edits). An
