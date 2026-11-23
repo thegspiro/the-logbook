@@ -486,6 +486,8 @@ export const equipmentCheckService = {
     date_to?: string;
     apparatus_id?: string;
     check_id?: string;
+    /** 'true' ends the PDF with signature lines. */
+    signature_lines?: string;
   }): string {
     const searchParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {

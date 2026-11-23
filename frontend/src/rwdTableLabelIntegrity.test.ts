@@ -111,11 +111,12 @@ describe('reflow table labels', () => {
 
 describe('reflow table cell widths', () => {
   // In the stacked view a labelled cell is a flex row holding its label and its
-  // value, spread to the card's edges. A `max-w-*` on the <td> caps that whole
-  // row, so the label and value sit together in a narrow box on the left while
-  // every other row spans the card: Inventory's Location ("-" beside its label)
-  // and the waiver Reason cells. A cap meant for the desktop column goes on an
-  // inner block, which leaves the row free to span the card.
+  // value, spread to the card's edges. A `max-w-*` or fixed `w-*` on the <td>
+  // caps that whole row, so the label and value sit together in a narrow box on
+  // the left while every other row spans the card: Inventory's Location ("-"
+  // beside its label), the waiver Reason cells, the member roster's 40px Select
+  // column. A cap meant for the desktop column goes on an inner block, which
+  // leaves the row free to span the card. `w-full` and `min-w-*` do no harm.
   const labelled = bodyCells().filter(isLabelled);
 
   it('finds the labelled cells it is meant to check', () => {
@@ -123,7 +124,7 @@ describe('reflow table cell widths', () => {
   });
 
   it('puts no width cap on a labelled body cell', () => {
-    const capped = labelled.filter((cell) => /className="(?:[^"]*\s)?max-w-/.test(cell.tag));
+    const capped = labelled.filter((cell) => /className="(?:[^"]*\s)?(?:max-)?w-[\d[]/.test(cell.tag));
     expect(capped.map((cell) => `${cell.where} ${cell.tag}`)).toEqual([]);
   });
 });

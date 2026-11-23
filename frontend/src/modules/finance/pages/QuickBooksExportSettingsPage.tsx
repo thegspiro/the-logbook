@@ -265,10 +265,12 @@ const QuickBooksExportSettingsPage: React.FC = () => {
                           )}
                         </td>
                         <td data-label="Status" className={CELL}>
-                          <span className={`badge ${STATUS_COLORS[row.status]}`}>{STATUS_LABELS[row.status]}</span>
-                          {statusHint(row) && (
-                            <span className="text-theme-text-secondary mt-1 block text-xs">{statusHint(row)}</span>
-                          )}
+                          <div className="min-w-0">
+                            <span className={`badge ${STATUS_COLORS[row.status]}`}>{STATUS_LABELS[row.status]}</span>
+                            {statusHint(row) && (
+                              <span className="text-theme-text-secondary mt-1 block text-xs">{statusHint(row)}</span>
+                            )}
+                          </div>
                         </td>
                         <td data-label="Actions" className={`${CELL} text-right`}>
                           {onlyMapping ? (

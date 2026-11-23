@@ -60,11 +60,12 @@ def test_the_chain_has_one_head_again():
     config.set_main_option("script_location", str(_BACKEND / "alembic"))
     script = ScriptDirectory.from_config(config)
     heads = script.get_heads()
-    # One head, descended from this revision. Pinning the head to this id
-    # would fail on the next migration anyone adds, which is not a fork.
     assert len(heads) == 1, heads
-    ancestors = {rev.revision for rev in script.walk_revisions("base", heads[0])}
-    assert "c4e7a9d2f1b8" in ancestors
+    # A later migration may sit on top; what matters is one head, with this
+    # revision still on its chain. Pinning the head to this id failed every
+    # branch that added a migration after it.
+    chain = {rev.revision for rev in script.iterate_revisions(heads[0], "base")}
+    assert "c4e7a9d2f1b8" in chain
 
 
 @pytest.fixture

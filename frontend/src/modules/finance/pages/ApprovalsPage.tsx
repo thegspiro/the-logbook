@@ -447,15 +447,17 @@ const ApprovalsPage: React.FC = () => {
                       {row.stepName}
                     </td>
                     <td data-label="Waiting on" className="text-theme-text-primary px-4 py-3 text-sm">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span>{row.assigneeLabel}</span>
-                        {!row.canAct && row.requiresOverride && (
-                          <span className="badge bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300">
-                            Not assigned to you
-                          </span>
-                        )}
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>{row.assigneeLabel}</span>
+                          {!row.canAct && row.requiresOverride && (
+                            <span className="badge bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300">
+                              Not assigned to you
+                            </span>
+                          )}
+                        </div>
+                        <EmailLinkStatus row={row} onResent={() => void fetchPendingApprovals()} />
                       </div>
-                      <EmailLinkStatus row={row} onResent={() => void fetchPendingApprovals()} />
                     </td>
                     <td
                       data-label="Submitted"

@@ -67,6 +67,8 @@ export interface ReportExportSource {
   end_date?: string | undefined;
   filters?: Record<string, unknown> | undefined;
   saved_report_id?: string | undefined;
+  /** End a PDF with Prepared by / Reviewed by / Approved by lines. */
+  signature_lines?: boolean | undefined;
 }
 
 // ============================================================================

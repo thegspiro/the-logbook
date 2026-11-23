@@ -159,8 +159,48 @@ export interface LeaveApproverCoverBoard {
   approvers: LeaveCoverPerson[];
   /** Who may stand in: the members who manage leave. */
   stand_ins: LeaveCoverPerson[];
+  /** The caller's own leaves, as an approver, that no cover spans yet. */
+  suggested: LeaveCoverSuggestion[];
   /** The department's today, as YYYY-MM-DD. */
   today: string;
+}
+
+/** A leave of the caller's own to offer when asking them to name a stand-in.
+ * `end_date` is null for an open-ended leave. */
+export interface LeaveCoverSuggestion {
+  leave_id: string;
+  start_date: string;
+  end_date: string | null;
+}
+
+/** A recorded leave or a request still waiting, on the department calendar.
+ * Never carries the reason. */
+export interface LeaveCalendarEntry {
+  id: string;
+  kind: 'leave' | 'request';
+  member_id: string;
+  member_name: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string | null;
+}
+
+export interface LeaveCalendarCover {
+  id: string;
+  approver_id: string;
+  approver_name: string;
+  stand_in_id: string;
+  stand_in_name: string;
+  start_date: string;
+  end_date: string;
+}
+
+export interface LeaveCalendar {
+  month_start: string;
+  month_end: string;
+  today: string;
+  entries: LeaveCalendarEntry[];
+  covers: LeaveCalendarCover[];
 }
 
 export interface LeaveApproverCoverCreate {

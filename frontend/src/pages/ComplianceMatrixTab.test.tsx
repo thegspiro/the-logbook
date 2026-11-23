@@ -189,7 +189,8 @@ describe('ComplianceMatrixTab', () => {
     expect(await screen.findByRole('heading', { name: 'Doherty, Sean' })).toBeInTheDocument();
     expect(screen.getByText('Member 1 of 3 in the queue')).toBeInTheDocument();
     expect(screen.getByText('6 of 24 hours')).toBeInTheDocument();
-    expect(screen.getByText('Nothing recorded')).toBeInTheDocument();
+    // SCBA Fit Test is a certification: read by state, as on My Training.
+    expect(screen.getByText('Not recorded')).toBeInTheDocument();
   });
 
   it('steps to the next item in the queue', async () => {
@@ -407,6 +408,24 @@ describe('ComplianceMatrixTab', () => {
       expect(filename).toBe('compliance-matrix.csv');
       expect(contents).toContain('Doherty, Sean');
       expect(contents).toContain('Non-compliant');
+    });
+
+    it('adds an expiry column for each certification requirement', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ComplianceMatrixTab />);
+      await screen.findByRole('heading', { name: 'Doherty, Sean' });
+
+      await user.click(screen.getByRole('button', { name: /Export CSV/ }));
+
+      const [contents] = downloadCsv.mock.calls[0] as [string, string];
+      const lines = contents.split(/\r?\n/);
+      expect(lines[0]).toContain('SCBA Fit Test expiry');
+      // The hours requirement gets no expiry column.
+      expect(lines[0]).not.toContain('Company Training Hours expiry');
+      const row = (name: string) => lines.find((l) => l.includes(name)) ?? '';
+      expect(row('Doherty, Sean')).toMatch(/,Not recorded$/);
+      expect(row('Halloran, Britt')).toMatch(new RegExp(`,${dateOffset(400)}$`));
+      expect(row('Alvarez, Marisol')).toMatch(new RegExp(`,${dateOffset(500)}$`));
     });
   });
 

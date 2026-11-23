@@ -1,7 +1,7 @@
 """Events: when an event's own signup sheet last emailed for volunteers
 
 Revision ID: e3b8d61f4a27
-Revises: c4e7a9d2f1b8
+Revises: b6e3d1f47a29
 Create Date: 2026-11-22 01:00:00.000000
 
 An outreach event that opened its own signup sheet can now email the
@@ -24,7 +24,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "e3b8d61f4a27"
-down_revision: Union[str, None] = "c4e7a9d2f1b8"
+down_revision: Union[str, None] = "b6e3d1f47a29"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

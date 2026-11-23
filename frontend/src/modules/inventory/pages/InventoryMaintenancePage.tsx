@@ -521,16 +521,18 @@ const InventoryMaintenancePage: React.FC = () => {
                       className="border-theme-surface-border hover:bg-theme-surface-hover border-b transition-colors"
                     >
                       <td data-label="Item Name" className="px-3 py-3">
-                        <button
-                          onClick={() => void loadHistory(item)}
-                          className="text-theme-text-primary touch:min-h-11 flex items-center gap-1 text-left font-medium hover:underline"
-                        >
-                          {item.name}
-                          <ChevronRight className="text-theme-text-muted h-3 w-3" />
-                        </button>
-                        {item.serial_number && (
-                          <span className="text-theme-text-muted block text-xs">SN: {item.serial_number}</span>
-                        )}
+                        <div className="min-w-0">
+                          <button
+                            onClick={() => void loadHistory(item)}
+                            className="text-theme-text-primary touch:min-h-11 flex items-center gap-1 text-left font-medium hover:underline"
+                          >
+                            {item.name}
+                            <ChevronRight className="text-theme-text-muted h-3 w-3" />
+                          </button>
+                          {item.serial_number && (
+                            <span className="text-theme-text-muted block text-xs">SN: {item.serial_number}</span>
+                          )}
+                        </div>
                       </td>
                       <td data-label="Category" className="text-theme-text-secondary px-3 py-3">
                         {(item.category_id && categoriesById.get(item.category_id)?.name) || '--'}
@@ -597,18 +599,20 @@ const InventoryMaintenancePage: React.FC = () => {
                         className="border-theme-surface-border hover:bg-theme-surface-hover border-b transition-colors"
                       >
                         <td data-label="Item Name" className="px-3 py-3">
-                          <button
-                            onClick={() => void loadHistory(item)}
-                            className="text-theme-text-primary touch:min-h-11 flex items-center gap-1 text-left font-medium hover:underline"
-                          >
-                            {item.name}
-                            <ChevronRight className="text-theme-text-muted h-3 w-3" />
-                          </button>
-                          {item.serial_number && (
-                            <span className="text-theme-text-muted block text-xs break-all">
-                              SN: {item.serial_number}
-                            </span>
-                          )}
+                          <div className="min-w-0">
+                            <button
+                              onClick={() => void loadHistory(item)}
+                              className="text-theme-text-primary touch:min-h-11 flex items-center gap-1 text-left font-medium hover:underline"
+                            >
+                              {item.name}
+                              <ChevronRight className="text-theme-text-muted h-3 w-3" />
+                            </button>
+                            {item.serial_number && (
+                              <span className="text-theme-text-muted block text-xs break-all">
+                                SN: {item.serial_number}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td data-label="Category" className="text-theme-text-secondary px-3 py-3">
                           {category?.name ?? '--'}

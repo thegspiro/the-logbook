@@ -101,6 +101,54 @@ Letter only, no duplex hint).
 - **Minutes and the impact plan carry the logo on page 1** (2026-11-16). They
   had the department name only; `beside_logo()` in `election_pdf_style.py`
   sets the logo beside their existing heading.
+- **Every document says whose it is, which copy it is, and how to handle it**
+  (owner decisions, 2026-11-21):
+  - **Identity line.** Page 1 sets the department's address, phone and FDID
+    under its name (`department_identity` in `election_pdf_style.py`, from the
+    organization record). Blank fields are skipped.
+  - **Report number.** `RPT-YYYYMMDD-XXXX` (`app/utils/report_number.py`):
+    the department's local date and four Crockford base32 characters. It is
+    printed on page 1 and at the right of every later page's running header,
+    and recorded as `report_number` in the export's audit row, which is what
+    makes a printed page traceable. It is not sequential and not stored
+    elsewhere, by owner decision: no counter table or migration. Reports page,
+    training and equipment PDFs, minutes, certified results, the pre-meeting
+    package and the impact plan carry one. The printable ballot does not (a
+    per-download serial on a voting instrument, tied to an audit row, is not
+    wanted), nor does the evaluation (built once, frozen and stored, with its
+    own record fingerprint). A CSV records `report_number: null`.
+  - **Report information block** (report kit): Report No., Prepared by (name
+    and the department's display name for the member's rank,
+    `document_provenance.preparer_label`), Data as of, then the parameters,
+    in a grid three pairs to a row so a label is never wrapped away from its
+    value.
+  - **Handling banner.** A document that carries a confidentiality notice
+    (the kit's member-data reports, minutes with a configured notice) shows it
+    at the top of every page as well as in the footer, as federal handling
+    markings are placed. `HeadedDocTemplate(banner=...)` shortens every page's
+    frame by `BANNER_BAND` to make room, so the banner sits inside the margins.
+  - **Signature lines, on request.** An "Add signature lines to PDF" tick-box
+    (`components/SignatureLinesOption.tsx`) sits beside the PDF download on
+    the Reports page, a member's training history, the training Member
+    Records export and the equipment-check compliance and failure reports. It
+    starts unticked: most downloads are working copies nobody signs. Ticked,
+    the request carries `signature_lines` (a body field on `/reports/export`
+    and `/training/reports/export`, a query parameter on the equipment PDF),
+    and the kit ends the report with Prepared by / Reviewed by / Approved by
+    lines, each with a date line, kept together on one page
+    (`signature_block` in `pdf_report_kit.py`). The preparer's name and rank
+    are printed under the first line. A CSV ignores the flag.
+  - `tests/test_pdf_provenance.py` checks all four across every document.
+- **Unapproved minutes are marked DRAFT** (owner decision, 2026-11-21). Draft,
+  submitted and rejected minutes, which are every status but approved, carry
+  a pale diagonal "DRAFT" across each page, because a printed copy cut off
+  from the screen that showed its status must still say so. Approved minutes
+  carry none. The mark is drawn **over** the content through
+  `HeadedDocTemplate(overlay=...)`, at 18% opacity, not beneath it: an
+  opaque table-row fill hides anything underneath, and the first attempt was
+  invisible on an attendance page for that reason. PDF/A-2b allows the
+  transparency, and veraPDF passes it. `tests/test_minutes_draft_watermark.py`
+  checks it.
 - **Documents leave scaling to the viewer.** A page shrunk to 97% by "Fit"
   is still readable.
 - **Label sheets and ID cards ask to print at actual size**

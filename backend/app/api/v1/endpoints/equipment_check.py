@@ -75,6 +75,7 @@ from app.schemas.equipment_check import (
     SupplyOverviewResponse,
     TemplateChangeLogListResponse,
 )
+from app.services.document_provenance import preparer_label, report_number_for
 from app.services.equipment_check_service import (
     EquipmentCheckConflictError,
     EquipmentCheckService,
@@ -1761,10 +1762,11 @@ async def export_pdf(
     date_to: date | None = Query(None),
     apparatus_id: str | None = Query(None),
     check_id: str | None = Query(None),
+    signature_lines: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.check_view")),
 ):
-    """Export report data as PDF."""
+    """Export report data as PDF, ending with signature lines when asked."""
     from starlette.responses import Response
 
     from app.services.equipment_check_pdf import (
@@ -1780,6 +1782,8 @@ async def export_pdf(
     organization = org_result.scalar_one_or_none()
     date_from_str = date_from.isoformat() if date_from else None
     date_to_str = date_to.isoformat() if date_to else None
+    report_number = await report_number_for(db, current_user.organization_id)
+    prepared_by = await preparer_label(db, current_user)
 
     if report_type == "compliance":
         data = await service.get_compliance_report(
@@ -1793,7 +1797,9 @@ async def export_pdf(
             date_from=date_from_str,
             date_to=date_to_str,
             organization=organization,
-            generated_by=current_user.full_name,
+            generated_by=prepared_by,
+            report_number=report_number,
+            signature_lines=signature_lines,
         )
         filename = "equipment_check_compliance.pdf"
 
@@ -1813,7 +1819,9 @@ async def export_pdf(
             date_from=date_from_str,
             date_to=date_to_str,
             organization=organization,
-            generated_by=current_user.full_name,
+            generated_by=prepared_by,
+            report_number=report_number,
+            signature_lines=signature_lines,
         )
         filename = "equipment_check_failures.pdf"
 
@@ -1872,7 +1880,9 @@ async def export_pdf(
             generate_check_detail_pdf,
             check_dict,
             organization=organization,
-            generated_by=current_user.full_name,
+            generated_by=prepared_by,
+            report_number=report_number,
+            signature_lines=signature_lines,
         )
         filename = f"equipment_check_{check_id[:8]}.pdf"
 
@@ -1891,6 +1901,7 @@ async def export_pdf(
         apparatus_id=apparatus_id,
         date_from=date_from_str,
         date_to=date_to_str,
+        report_number=report_number,
     )
 
     return Response(

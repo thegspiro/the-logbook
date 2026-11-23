@@ -111,6 +111,7 @@ from app.schemas.inventory import is_inspection_type
 from app.schemas.user import resolve_profile_visibility
 from app.services.inventory_sightings import add_sighting, record_creation_sightings
 from app.utils.color_names import canonical_color, normalize_color
+from app.utils.election_pdf_style import department_identity
 from app.utils.garment_styles import (
     FIT_NEUTRAL,
     FIT_VALUES,
@@ -14106,6 +14107,7 @@ class InventoryService:
         organization_id,
         filters: Dict[str, Any],
         contact_visibility: Optional[Dict[str, bool]] = None,
+        report_number: Optional[str] = None,
     ) -> BytesIO:
         """Render the impact-plan analysis to a print-ready PDF.
 
@@ -14153,6 +14155,8 @@ class InventoryService:
         meta = {
             "org_name": org_name,
             "logo": org.logo if org else None,
+            "identity": department_identity(org) or None,
+            "report_number": report_number,
             # Printed on the plan, so it reads in the department's zone.
             "generated_at": datetime.now(timezone.utc).astimezone(
                 scheduling_timezone(org)

@@ -159,16 +159,18 @@ const SchedulingPlatoonsPage: React.FC = () => {
                       <ul className="divide-theme-surface-border divide-y">
                         {group.members.map((m) => (
                           <li key={m.user_id}>
-                            <label className="hover:bg-theme-surface-hover mobile-touch-row cursor-pointer gap-3 px-4 py-2.5">
+                            <label className="hover:bg-theme-surface-hover flex min-h-11 cursor-pointer items-start gap-3 px-4 py-3">
                               <input
                                 type="checkbox"
                                 checked={selected.has(m.user_id)}
                                 onChange={() => toggle(m.user_id)}
-                                className="form-checkbox border-theme-surface-border"
+                                className="form-checkbox border-theme-surface-border mt-0.5"
                               />
                               <span className="text-theme-text-primary text-sm">{m.user_name}</span>
                               {m.rank && (
-                                <span className="text-theme-text-muted ml-auto text-xs">{formatRank(m.rank)}</span>
+                                <span className="text-theme-text-muted mt-0.5 ml-auto text-xs">
+                                  {formatRank(m.rank)}
+                                </span>
                               )}
                             </label>
                           </li>

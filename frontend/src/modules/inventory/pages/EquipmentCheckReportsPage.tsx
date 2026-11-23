@@ -42,6 +42,7 @@ import {
 } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
+import { SignatureLinesOption } from '../../../components/SignatureLinesOption';
 import { dayHeading } from '../utils/dayHeading';
 import { lastCheckLabel } from '../utils/lastCheckLabel';
 
@@ -273,10 +274,23 @@ const Toolbar: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="flex items-center justify-between gap-2">{children}</div>
 );
 
+/** The export control with its signature-lines tick-box, which wraps under it on a phone. */
+const ExportActions: React.FC<{
+  signatureLines: boolean;
+  onSignatureLines: (checked: boolean) => void;
+  children: React.ReactNode;
+}> = ({ signatureLines, onSignatureLines, children }) => (
+  <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
+    <SignatureLinesOption checked={signatureLines} onChange={onSignatureLines} />
+    {children}
+  </div>
+);
+
 // ─── Compliance Tab ─────────────────────────────────────────────────────────
 
 const ComplianceTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl }) => {
   const [data, setData] = useState<ComplianceReport | null>(null);
+  const [signatureLines, setSignatureLines] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -311,6 +325,7 @@ const ComplianceTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl
       report_type: 'compliance',
       date_from: startDate,
       date_to: endDate,
+      ...(signatureLines ? { signature_lines: 'true' } : {}),
     });
     window.open(url, '_blank');
   };
@@ -318,12 +333,14 @@ const ComplianceTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl
   const toolbar = (
     <Toolbar>
       {dateControl}
-      <ExportMenu
-        options={[
-          { label: 'CSV', onSelect: handleExportCsv },
-          { label: 'PDF', onSelect: handleExportPdf },
-        ]}
-      />
+      <ExportActions signatureLines={signatureLines} onSignatureLines={setSignatureLines}>
+        <ExportMenu
+          options={[
+            { label: 'CSV', onSelect: handleExportCsv },
+            { label: 'PDF', onSelect: handleExportPdf },
+          ]}
+        />
+      </ExportActions>
     </Toolbar>
   );
 
@@ -468,6 +485,7 @@ const ComplianceTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl
 
 const FailuresTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl }) => {
   const [data, setData] = useState<FailureLogResponse | null>(null);
+  const [signatureLines, setSignatureLines] = useState(false);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
@@ -521,6 +539,7 @@ const FailuresTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl }
       report_type: 'failures',
       date_from: startDate,
       date_to: endDate,
+      ...(signatureLines ? { signature_lines: 'true' } : {}),
     });
     window.open(url, '_blank');
   };
@@ -538,12 +557,14 @@ const FailuresTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl }
     <div className="space-y-4">
       <Toolbar>
         {dateControl}
-        <ExportMenu
-          options={[
-            { label: 'CSV', onSelect: handleExportCsv },
-            { label: 'PDF', onSelect: handleExportPdf },
-          ]}
-        />
+        <ExportActions signatureLines={signatureLines} onSignatureLines={setSignatureLines}>
+          <ExportMenu
+            options={[
+              { label: 'CSV', onSelect: handleExportCsv },
+              { label: 'PDF', onSelect: handleExportPdf },
+            ]}
+          />
+        </ExportActions>
       </Toolbar>
       <div className="relative">
         <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" aria-hidden="true" />

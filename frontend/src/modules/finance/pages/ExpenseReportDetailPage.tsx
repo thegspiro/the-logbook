@@ -634,23 +634,25 @@ const ExpenseReportDetailPage: React.FC = () => {
                       </td>
                       {canEditLines && (
                         <td data-label="Actions" className="px-2 py-3 text-right whitespace-nowrap">
-                          <button
-                            type="button"
-                            className="btn-icon text-theme-text-secondary hover:text-theme-text-primary"
-                            aria-label={`Edit line: ${item.description}`}
-                            onClick={() => setEditingLine(item)}
-                          >
-                            <Pencil className="h-4 w-4" aria-hidden="true" />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            className="btn-icon text-theme-text-secondary hover:text-red-700"
-                            aria-label={`Remove line: ${item.description}`}
-                            onClick={() => void handleRemoveLine(item)}
-                          >
-                            <Trash2 className="h-4 w-4" aria-hidden="true" />
-                          </button>
+                          <div className="min-w-0">
+                            <button
+                              type="button"
+                              className="btn-icon text-theme-text-secondary hover:text-theme-text-primary"
+                              aria-label={`Edit line: ${item.description}`}
+                              onClick={() => setEditingLine(item)}
+                            >
+                              <Pencil className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="btn-icon text-theme-text-secondary hover:text-red-700"
+                              aria-label={`Remove line: ${item.description}`}
+                              onClick={() => void handleRemoveLine(item)}
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                          </div>
                         </td>
                       )}
                     </tr>
