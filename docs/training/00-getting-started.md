@@ -421,9 +421,9 @@ example, an officer gets a "validate attendance" notification when an event
 ends. Once that officer finalizes the event's attendance, the notification for
 that event is archived. Notifications about anything else stay.
 
-![The notification inbox with an unread 'Validate attendance' prompt for a just-ended event, beside an unrelated shift-assignment notification](./images/19-31-notification-before-action.png)
+![The attendance validations stack opened in the inbox: unread prompts to validate attendance for several events that have ended, the Wednesday Evening Drill among them](./images/19-31-notification-before-action.png)
 
-![The same inbox after finalizing the event's attendance: the validation prompt gone, the unrelated shift-assignment notification still there](./images/19-32-notification-after-action.png)
+![The same stack after the Wednesday Evening Drill's attendance was finalized: its prompt is gone, and the prompts for the other events are still there](./images/19-32-notification-after-action.png)
 
 ![The notifications inbox with nothing pinned: unread notifications of one kind folded into stacks, such as "5 attendance validations" with its Latest line, unread badge and Mark all read, beside an ordinary single card](./images/00-29-notification-stacks.png)
 

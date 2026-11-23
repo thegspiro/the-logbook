@@ -77,6 +77,13 @@ const fingerprintOf = (m: Measurement) => `${m.textLength}:${m.totalTargets}`;
 const PARTS = 5;
 
 test.describe('mobile presentation', () => {
+  // No retries, as in the other two sweeps. A part that runs out its budget
+  // would otherwise run twice more: on 2026-11-22 the second of two parts did
+  // (run 44940079030), and the leg was cancelled at the job cap with the
+  // timeout unreported. A pass on a retry fails the job anyway
+  // (failOnFlakyTests).
+  test.describe.configure({ retries: 0 });
+
   for (let part = 0; part < PARTS; part++) {
     const routes = routesInPart(part, PARTS);
     // The route filter in mobile-routes.ts can leave a slice empty.

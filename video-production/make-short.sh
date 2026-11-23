@@ -1,9 +1,13 @@
 #!/bin/sh
-# Render one short: narration -> screen capture -> overlays -> 9:16 and 16:9 MP4.
+# Render one video: narration -> screen capture -> overlays -> MP4.
 #
-# Usage: video-production/make-short.sh <short> [--check]
-#   <short>    a folder under video-production/shorts/, e.g. 8a-rsvp
-#   --check    also transcribe the vertical render, to confirm the narration
+# Usage: video-production/make-short.sh <name> [--check]
+#   <name>     a folder under video-production/shorts/ (e.g. 8a-rsvp) or
+#              video-production/guides/ (e.g. 6-member-03-events)
+#   --check    also transcribe the render, to confirm the narration
+#
+# A short renders 9:16 and 16:9. A guide ("kind": "guide" in shots.json)
+# renders 16:9 only, with a YouTube chapter list and an .srt beside it.
 #
 # Environment:
 #   VOICE                     Piper voice from voices.txt (default en_US-ljspeech-high)
@@ -11,7 +15,8 @@
 #   PLAYWRIGHT_BASE_URL       a running frontend (default http://localhost:3000,
 #                             started for you if nothing is listening)
 #
-# Output: video-production/build/<short>/render/<short>-{vertical,horizontal}.mp4
+# Output: video-production/build/<name>/render/ — <name>-{vertical,horizontal}.mp4
+#         for a short; <name>.mp4, <name>.chapters.txt and <name>.srt for a guide
 set -eu
 
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
@@ -34,7 +39,14 @@ case $CHECK in
     *) die "unknown option: $CHECK" ;;
 esac
 
-SHORT_DIR="$HERE/shorts/$SHORT"
+if [ -d "$HERE/shorts/$SHORT" ]; then
+    KIND_DIR=shorts
+elif [ -d "$HERE/guides/$SHORT" ]; then
+    KIND_DIR=guides
+else
+    die "no folder named $SHORT under shorts/ or guides/"
+fi
+SHORT_DIR="$HERE/$KIND_DIR/$SHORT"
 BUILD="$HERE/build/$SHORT"
 [ -f "$SHORT_DIR/shots.json" ] || die "no shots.json in $SHORT_DIR"
 [ -f "$SHORT_DIR/capture.spec.ts" ] || die "no capture.spec.ts in $SHORT_DIR"
@@ -101,18 +113,24 @@ printf '==> Narration\n'
 
 printf '==> Screen capture\n'
 (cd "$REPO/frontend" && npx --no-install playwright test \
-    --config "$HERE/playwright.config.ts" "shorts/$SHORT/capture.spec.ts")
+    --config "$HERE/playwright.config.ts" "$KIND_DIR/$SHORT/capture.spec.ts")
 
 printf '==> Overlays\n'
 node "$HERE/lib/overlays.cjs" "$SHORT_DIR" "$BUILD"
 
 printf '==> Compositing\n'
-"$PY" -I "$HERE/lib/compose.py" "$SHORT_DIR" "$BUILD" v "$BUILD/render/$SHORT-vertical.mp4"
-"$PY" -I "$HERE/lib/compose.py" "$SHORT_DIR" "$BUILD" h "$BUILD/render/$SHORT-horizontal.mp4"
+if [ "$KIND_DIR" = guides ]; then
+    RENDERED="$BUILD/render/$SHORT.mp4"
+    "$PY" -I "$HERE/lib/compose.py" "$SHORT_DIR" "$BUILD" h "$RENDERED"
+else
+    RENDERED="$BUILD/render/$SHORT-vertical.mp4"
+    "$PY" -I "$HERE/lib/compose.py" "$SHORT_DIR" "$BUILD" v "$RENDERED"
+    "$PY" -I "$HERE/lib/compose.py" "$SHORT_DIR" "$BUILD" h "$BUILD/render/$SHORT-horizontal.mp4"
+fi
 
 if [ "$CHECK" = --check ]; then
-    printf '==> Transcript of the vertical render\n'
-    "$PY" -I "$HERE/lib/transcribe.py" "$BUILD/render/$SHORT-vertical.mp4"
+    printf '==> Transcript of %s\n' "$(basename -- "$RENDERED")"
+    "$PY" -I "$HERE/lib/transcribe.py" "$RENDERED"
 fi
 
 printf '==> Done: %s\n' "$BUILD/render"
