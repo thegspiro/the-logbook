@@ -48,7 +48,7 @@ from app.core.config import settings
 from app.core.database import database_manager
 from app.core.error_codes import ErrorCode, resolve_error_code
 from app.core.error_reporting import build_error_type, persist_error_log
-from app.core.logging import setup_logging, setup_sentry
+from app.core.logging import request_id_ctx, setup_logging, setup_sentry
 from app.core.migration_recovery import upgrade_skipping_duplicates
 from app.core.startup_diagnostics import env_presence_report
 from app.core.utils import sanitize_error_message
@@ -2432,6 +2432,11 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     so they appear on the Error Monitoring page.
     """
     error_type = type(exc).__name__
+    # The request's id (RequestIDMiddleware), returned as `reference` so the
+    # member can quote it: the code says what kind of error it was, the
+    # reference which one. It is on this log line, on the Error Monitoring
+    # entry and, as request_id, on every JSON log line of the request.
+    reference = request_id_ctx.get()
 
     await persist_error_log(
         request=request,
@@ -2440,19 +2445,27 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         user_message=f"An internal server error occurred: {error_type}",
         troubleshooting_steps=BACKEND_TROUBLESHOOTING_STEPS,
         exc=exc,
+        extra_context={"reference": reference},
     )
 
     logger.exception(
-        f"Unhandled {error_type} on {request.method} {request.url.path}: {exc}"
+        "Unhandled {} on {} {} (reference {}): {}",
+        error_type,
+        request.method,
+        request.url.path,
+        reference,
+        exc,
     )
 
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "Internal server error",
-            "code": ErrorCode.SYS_INTERNAL_ERROR.value,
-        },
-    )
+    content = {
+        "detail": "Internal server error",
+        "code": ErrorCode.SYS_INTERNAL_ERROR.value,
+    }
+    # "-" is the context default: no middleware ran, so there is nothing to
+    # look up by it.
+    if reference and reference != "-":
+        content["reference"] = reference
+    return JSONResponse(status_code=500, content=content)
 
 
 # ============================================
