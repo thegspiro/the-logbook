@@ -2437,16 +2437,13 @@ covering the shift's date as **leave requested**, and choosing them shows a
 note. You can still assign them; if the leave is approved, the assignment is
 dropped.
 
-> **Screenshots to create:** `01-59-leave-request-ask-question.png`, an
-> approver's request under **To decide** with **Ask a question** open
-> (**Your question to the member**, **Send question**);
-> `01-60-leave-request-changed-dates.png`, the member's own request showing
-> proposed dates with **Accept these dates** and **Keep my dates**;
-> `01-61-leave-back-early.png`, **Your leave** with **Your first day back**
-> filled in and **End my leave**; and `01-62-leave-escalation-setting.png`,
-> **Members Admin → Settings → Leave of Absence** with **Tell the Chief about a
-> request still undecided after this many days** set to 21. See
-> [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+![Leave Requests as an approver: Bram Hollis's request under To decide with Ask a question open, the Your question to the member box and Send question](./images/01-59-leave-request-ask-question.png)
+
+![A member's own leave request with the approver's changed dates proposed, the note explaining them, and Accept these dates and Keep my dates](./images/01-60-leave-request-changed-dates.png)
+
+![Your leave on Leave Requests for a member whose leave is in progress: its dates, I’m back early opened to Your first day back filled in three days from now, and End my leave](./images/01-61-leave-back-early.png)
+
+![Members Admin, Settings, Leave of Absence with leave requests on: the approver positions, how they decide, and Tell the Chief about a request still undecided after this many days set to 21](./images/01-62-leave-escalation-setting.png)
 
 The reason is shown to the member, their approvers and officers who can manage
 member profiles only. No email, from

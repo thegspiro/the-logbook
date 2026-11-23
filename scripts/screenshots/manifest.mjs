@@ -133,6 +133,17 @@ export const DEMO_MFA_GRACE_CREDENTIALS = {
 };
 
 /**
+ * A member whose leave is in progress today, for "Your leave" on Leave
+ * Requests. Shots marked `auth: "onleave"` sign in as this account. Must
+ * match BACKLOG_01_LEAVE_MEMBER in seed_demo_data.py, whose
+ * seed_backlog_01_leave_badges dates his leaves from today on every seed.
+ */
+export const DEMO_ON_LEAVE_CREDENTIALS = {
+  username: "rduarte",
+  password: "DemoMember!2026",
+};
+
+/**
  * A member who reviews no suggestion box and has one suggestion forwarded to
  * them, so the Review tab reaches them through the forward alone.
  *
@@ -1838,6 +1849,63 @@ async function rawApiFromPage(page, method, path, body) {
 // sign-offs for their own length, and their cleanup puts the setting back --
 // held here because a cleanup receives only its page.
 let practicalSkillsRestore = null;
+
+// Leave requests are opt-in, and switching them on adds Leave Requests to the
+// sidebar of every page, so the demo keeps them off and the four leave-request
+// shots switch them on for their own length. The settings are the
+// administrator's to change, so a shot signed in as a member does it through
+// lookupPage. Held here because a cleanup receives only its page.
+let leaveRequestsRestore = null;
+
+function withLeaveRequestsOn(prepare) {
+  return async (page, helpers) => {
+    const admin = await helpers.lookupPage();
+    const current = await apiFromPage(
+      admin,
+      "GET",
+      "/users/leaves-of-absence/settings",
+    );
+    if (current.status !== 200) {
+      throw new Error(`reading the leave settings returned ${current.status}`);
+    }
+    if (!current.body.requests_enabled) {
+      const { available_positions: _positions, ...settings } = current.body;
+      const switched = await apiFromPage(
+        admin,
+        "PUT",
+        "/users/leaves-of-absence/settings",
+        { ...settings, requests_enabled: true },
+      );
+      if (switched.status !== 200) {
+        throw new Error(
+          `turning leave requests on returned ${switched.status}`,
+        );
+      }
+      leaveRequestsRestore = { admin, settings };
+      // The page read the setting when it mounted.
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(1_500);
+    }
+    if (prepare) await prepare(page, helpers);
+  };
+}
+
+async function restoreLeaveRequests() {
+  const held = leaveRequestsRestore;
+  leaveRequestsRestore = null;
+  if (!held) return;
+  const restored = await apiFromPage(
+    held.admin,
+    "PUT",
+    "/users/leaves-of-absence/settings",
+    held.settings,
+  );
+  if (restored.status !== 200) {
+    throw new Error(
+      `turning leave requests off again returned ${restored.status}`,
+    );
+  }
+}
 
 function withShiftSignoffs(prepare) {
   return async (page) => {
@@ -27454,6 +27522,98 @@ export const SHOTS = [
       await page.waitForTimeout(500);
     },
     selector: "div.card:has(> div > h2:text-is('Leave of Absence'))",
+  },
+  {
+    // Bram Hollis's request, seeded pending (seed_backlog_01_leave_requests).
+    // The box is opened and nothing is typed or sent.
+    id: "01-59-leave-request-ask-question",
+    doc: "01-membership.md",
+    line: 2440,
+    anchor: "`01-59-leave-request-ask-question.png`",
+    alt: "Leave Requests as an approver: Bram Hollis's request under To decide with Ask a question open, the Your question to the member box and Send question",
+    route: "/members/leave-requests",
+    expect: "Your question to the member",
+    selector:
+      "section[aria-labelledby='to-decide-heading'] li:has-text('Bram Hollis')",
+    cleanup: restoreLeaveRequests,
+    prepare: withLeaveRequestsOn(async (page) => {
+      const card = page
+        .locator("section[aria-labelledby='to-decide-heading'] li")
+        .filter({ hasText: "Bram Hollis" });
+      await card
+        .getByRole("button", { name: "Ask a question" })
+        .click({ timeout: 20_000 });
+      await card.getByText("Your question to the member").waitFor();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    }),
+  },
+  {
+    // The second member's request, with the administrator's changed dates
+    // waiting on their answer. Neither button is pressed.
+    id: "01-60-leave-request-changed-dates",
+    doc: "01-membership.md",
+    line: 2443,
+    anchor: "`01-60-leave-request-changed-dates.png`",
+    alt: "A member's own leave request with the approver's changed dates proposed, the note explaining them, and Accept these dates and Keep my dates",
+    route: "/members/leave-requests",
+    auth: "second-member",
+    expect: "Accept these dates",
+    selector: "li:has(button:text-is('Accept these dates'))",
+    prepare: withLeaveRequestsOn(async (page) => {
+      await page
+        .getByRole("button", { name: "Accept these dates" })
+        .waitFor({ timeout: 20_000 });
+    }),
+    cleanup: restoreLeaveRequests,
+  },
+  {
+    // Rafael Duarte, whose leave is in progress. A first day back is typed
+    // and End my leave is not pressed, so the leave keeps its dates.
+    id: "01-61-leave-back-early",
+    doc: "01-membership.md",
+    line: 2445,
+    anchor: "`01-61-leave-back-early.png`",
+    alt: "Your leave on Leave Requests for a member whose leave is in progress: its dates, I’m back early opened to Your first day back filled in three days from now, and End my leave",
+    route: "/members/leave-requests",
+    auth: "onleave",
+    expect: "Your first day back",
+    selector: "section[aria-labelledby='current-leave-heading']",
+    cleanup: restoreLeaveRequests,
+    prepare: withLeaveRequestsOn(async (page) => {
+      const day = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+      // The department's calendar day, not the machine's.
+      const iso = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/New_York",
+      }).format(day);
+      await page
+        .getByRole("button", { name: "I’m back early" })
+        .first()
+        .click({ timeout: 20_000 });
+      const field = page.locator("input[id^='first-day-back-']").first();
+      await field.waitFor({ timeout: 10_000 });
+      await field.fill(iso);
+      await field.blur();
+      await page.waitForTimeout(400);
+    }),
+  },
+  {
+    id: "01-62-leave-escalation-setting",
+    doc: "01-membership.md",
+    line: 2446,
+    anchor: "`01-62-leave-escalation-setting.png`",
+    alt: "Members Admin, Settings, Leave of Absence with leave requests on: the approver positions, how they decide, and Tell the Chief about a request still undecided after this many days set to 21",
+    route: "/members/admin/settings/leave",
+    viewport: { width: 1440, height: 1700 },
+    expect: { selector: "#leave-escalation-days" },
+    cleanup: restoreLeaveRequests,
+    prepare: withLeaveRequestsOn(async (page) => {
+      await page.locator("#leave-escalation-days").waitFor({ timeout: 20_000 });
+      const value = await page.locator("#leave-escalation-days").inputValue();
+      if (value !== "21") {
+        throw new Error(`the escalation is ${value} days, not the 21 pictured`);
+      }
+    }),
   },
   {
     id: "01-58-member-class-status",

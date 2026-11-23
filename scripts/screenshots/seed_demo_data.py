@@ -21996,13 +21996,26 @@ class Seeder:
         user_id = self._user_id(self.BACKLOG_01_LEAVE_MEMBER)
         if not user_id:
             return 0
-        reasons = {
-            pick(lv, "reason")
+        on_file = {
+            pick(lv, "reason"): lv
             for lv in items(self.api.get(f"/users/{user_id}/leaves-of-absence"))
         }
         created = 0
         for start, end, kind, reason in self.BACKLOG_01_LEAVES:
-            if reason in reasons:
+            existing = on_file.get(reason)
+            if existing:
+                # Dated from today, so the three keep their Expired, Active and
+                # Future badges, and the leave in progress stays in progress
+                # for 01-61's "Your leave". Made once and left there, they
+                # drifted: a week on, the active one had ended.
+                dates = {
+                    "start_date": str(TODAY + timedelta(days=start)),
+                    "end_date": str(TODAY + timedelta(days=end)),
+                }
+                if any(str(pick(existing, k)) != v for k, v in dates.items()):
+                    self.api.patch(
+                        f"/users/leaves-of-absence/{pick(existing, 'id')}", dates
+                    )
                 continue
             self.api.post(
                 "/users/leaves-of-absence",
@@ -22017,6 +22030,96 @@ class Seeder:
             )
             created += 1
         return created
+
+    # A request waiting on the approvers, from an ordinary member, and one
+    # from the second-member capture account with changed dates proposed
+    # back to them. Far enough out that neither date range meets a shift
+    # another shot pictures.
+    BACKLOG_01_LEAVE_ASKER = "bhollis"
+    BACKLOG_01_LEAVE_ASK = (30, 37, "personal", "Family wedding out of state.")
+    BACKLOG_01_LEAVE_PROPOSAL_MEMBER = "snolan"
+    BACKLOG_01_LEAVE_PROPOSAL = (60, 69, "leave_of_absence", "Visiting family abroad.")
+    BACKLOG_01_LEAVE_PROPOSED_DATES = (62, 69)
+    BACKLOG_01_LEAVE_PROPOSAL_NOTE = (
+        "Starting two days later keeps the weekend crew covered."
+    )
+
+    def seed_backlog_01_leave_requests(self) -> dict[str, str]:
+        """Turn leave requests on, and leave two requests open for guide 01.
+
+        01-59 pictures an approver's request under To decide with Ask a
+        question open, and 01-60 the member's own request with the approver's
+        changed dates and Accept these dates / Keep my dates. With no approver
+        positions set and no Chief, the officers who manage leave decide, the
+        administrator among them, so only requests_enabled changes; the
+        escalation stays at its default of 21 days, which 01-62 pictures.
+
+        Each request is made by its member, as the form does; the changed
+        dates are the administrator's. A member with a request still pending
+        is left alone, so a re-run adds nothing and a capture, which only
+        opens these, changes nothing either.
+
+        Requests are switched on only while these are made, then put back as
+        they were. On, they add Leave Requests to every sidebar, which would
+        change the frame of nearly every other shot; the four leave shots
+        switch them on for their own length (withLeaveRequestsOn). Switched
+        off, pending requests are kept, only hidden.
+        """
+        settings = self.api.get("/users/leaves-of-absence/settings")
+        body = {k: v for k, v in settings.items() if k != "available_positions"}
+        if body.get("requests_enabled"):
+            return self._backlog01_open_leave_requests()
+        self.api.put(
+            "/users/leaves-of-absence/settings", {**body, "requests_enabled": True}
+        )
+        try:
+            return self._backlog01_open_leave_requests()
+        finally:
+            self.api.put("/users/leaves-of-absence/settings", body)
+
+    def _backlog01_open_leave_requests(self) -> dict[str, str]:
+        result: dict[str, str] = {}
+
+        def pending_of(username: str) -> tuple[Api, dict | None]:
+            member_api = Api(self.base_url)
+            member_api.login_as(username, DEMO_MEMBER_PASSWORD)
+            mine = items(member_api.get("/users/leave-requests/me"), "requests")
+            return member_api, next(
+                (r for r in mine if pick(r, "status") == "pending"), None
+            )
+
+        def request(member_api: Api, spec: tuple) -> dict:
+            start, end, kind, reason = spec
+            return member_api.post(
+                "/users/leave-requests",
+                {
+                    "leave_type": kind,
+                    "start_date": str(TODAY + timedelta(days=start)),
+                    "end_date": str(TODAY + timedelta(days=end)),
+                    "reason": reason,
+                },
+            )
+
+        asker_api, asked = pending_of(self.BACKLOG_01_LEAVE_ASKER)
+        if asked is None:
+            request(asker_api, self.BACKLOG_01_LEAVE_ASK)
+            result["to decide"] = "requested"
+
+        proposal_api, proposed = pending_of(self.BACKLOG_01_LEAVE_PROPOSAL_MEMBER)
+        if proposed is None:
+            proposed = request(proposal_api, self.BACKLOG_01_LEAVE_PROPOSAL)
+        if not pick(proposed, "proposal"):
+            start, end = self.BACKLOG_01_LEAVE_PROPOSED_DATES
+            self.api.post(
+                f"/users/leave-requests/{pick(proposed, 'id')}/changes",
+                {
+                    "start_date": str(TODAY + timedelta(days=start)),
+                    "end_date": str(TODAY + timedelta(days=end)),
+                    "note": self.BACKLOG_01_LEAVE_PROPOSAL_NOTE,
+                },
+            )
+            result["changed dates"] = "proposed"
+        return result or {"leave requests": "already"}
 
     BACKLOG_07_SENSITIVE_FORM = "Driver Background Disclosure"
     #: (label, type, required, sensitive, applicant field). The two sensitive
@@ -22408,6 +22511,7 @@ class Seeder:
             "backlog 04 volunteer staffing", self.seed_backlog_04_volunteer_staffing
         )
         self.step("backlog 04 outreach closeout", self.seed_backlog_04_outreach_closeout)
+        self.step("backlog 01 leave requests", self.seed_backlog_01_leave_requests)
         self.step("elections", lambda: self.seed_elections(minutes))
         prospect_data = (
             self.step("prospective members", self.seed_prospective_members) or {}

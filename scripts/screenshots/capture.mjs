@@ -31,6 +31,7 @@ import {
   DEMO_TRAINING_OFFICER_CREDENTIALS,
   DEMO_MEMBER_CREDENTIALS,
   DEMO_MFA_GRACE_CREDENTIALS,
+  DEMO_ON_LEAVE_CREDENTIALS,
   DEMO_SECOND_MEMBER_CREDENTIALS,
   DEMO_SECRETARY_CREDENTIALS,
   DEMO_TREASURER_CREDENTIALS,
@@ -667,6 +668,9 @@ function makeSessions(browser, baseOptions) {
         // Privileged and deliberately not enrolled in two-step sign-in, for
         // the grace-period banner and the password step-up box.
         await login(page, DEMO_MFA_GRACE_CREDENTIALS);
+      } else if (auth === "onleave") {
+        // A member whose leave is in progress today, for "Your leave".
+        await login(page, DEMO_ON_LEAVE_CREDENTIALS);
       } else if (auth === "admin-unconfirmed") {
         // The administrator in a session of its own, which nothing confirms.
         // Shots on the admin session step up whenever the server asks, and
