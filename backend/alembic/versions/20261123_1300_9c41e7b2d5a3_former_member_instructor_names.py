@@ -30,7 +30,7 @@ id, and a session or record already reading "Former member" is skipped.
 ``_rewrite_details`` is frozen here rather than imported from the service.
 
 Revision ID: 9c41e7b2d5a3
-Revises: e3b8d61f4a27
+Revises: 986d6575af35
 Create Date: 2026-11-23 13:00:00.000000
 """
 
@@ -41,7 +41,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "9c41e7b2d5a3"
-down_revision: Union[str, None] = "e3b8d61f4a27"
+down_revision: Union[str, None] = "986d6575af35"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
