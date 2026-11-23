@@ -1,10 +1,325 @@
 # Security Review 00 — Cross-Cutting Baseline
 
-**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-07 (out-of-band, ahead of pass 4), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-04 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, opens rotation lap "pass 8"), 2026-10-18 (pass 10, watchdog pickup, opens rotation lap "pass 9"), 2026-10-22 (pass 11, watchdog pickup, opens rotation lap "pass 10"), 2026-10-25 (pass 12, opens rotation lap "pass 11"), 2026-10-28 (pass 13, watchdog pickup, opens rotation lap "pass 12"), 2026-10-30 (pass 14, watchdog pickup, opens rotation lap "pass 13"), 2026-11-04 (pass 15, watchdog pickup, opens rotation lap "pass 14"), 2026-11-04 (pass 16, watchdog pickup — a second, concurrent sweep that raced pass 15 and merged just after it; see Pass 16's own note), 2026-11-15 (pass 17, watchdog pickup, opens rotation lap "pass 16") · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1), [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (pass 3, rounds 1–2, merged), [#2132](https://github.com/thegspiro/the-logbook/pull/2132) (pass 3, round 3 — separate PR per Pitfall #24, #2128 having already merged), [#2381](https://github.com/thegspiro/the-logbook/pull/2381) (out-of-band data-leakage sweep, prior art for pass 4), #2387 (pass 4), [#2534](https://github.com/thegspiro/the-logbook/pull/2534) (pass 5), [#2592](https://github.com/thegspiro/the-logbook/pull/2592) (pass 6), pass 7 PR recorded in `PROGRESS.md`, pass 8 PR recorded in `PROGRESS.md`, pass 9 PR recorded in `PROGRESS.md`, pass 10 PR recorded in `PROGRESS.md`, pass 11 PR recorded in `PROGRESS.md`, pass 12 PR recorded in `PROGRESS.md`, pass 13 PR recorded in `PROGRESS.md`, [#3869](https://github.com/thegspiro/the-logbook/pull/3869) (pass 14), [#4019](https://github.com/thegspiro/the-logbook/pull/4019) (pass 15), [#4020](https://github.com/thegspiro/the-logbook/pull/4020) (pass 16), pass 17 PR recorded in `PROGRESS.md`
+**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-07 (out-of-band, ahead of pass 4), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-04 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, opens rotation lap "pass 8"), 2026-10-18 (pass 10, watchdog pickup, opens rotation lap "pass 9"), 2026-10-22 (pass 11, watchdog pickup, opens rotation lap "pass 10"), 2026-10-25 (pass 12, opens rotation lap "pass 11"), 2026-10-28 (pass 13, watchdog pickup, opens rotation lap "pass 12"), 2026-10-30 (pass 14, watchdog pickup, opens rotation lap "pass 13"), 2026-11-04 (pass 15, watchdog pickup, opens rotation lap "pass 14"), 2026-11-04 (pass 16, watchdog pickup — a second, concurrent sweep that raced pass 15 and merged just after it; see Pass 16's own note), 2026-11-15 (pass 17, watchdog pickup, opens rotation lap "pass 16"), 2026-11-23 (pass 18, watchdog pickup, opens rotation lap "pass 17") · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1), [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (pass 3, rounds 1–2, merged), [#2132](https://github.com/thegspiro/the-logbook/pull/2132) (pass 3, round 3 — separate PR per Pitfall #24, #2128 having already merged), [#2381](https://github.com/thegspiro/the-logbook/pull/2381) (out-of-band data-leakage sweep, prior art for pass 4), #2387 (pass 4), [#2534](https://github.com/thegspiro/the-logbook/pull/2534) (pass 5), [#2592](https://github.com/thegspiro/the-logbook/pull/2592) (pass 6), pass 7 PR recorded in `PROGRESS.md`, pass 8 PR recorded in `PROGRESS.md`, pass 9 PR recorded in `PROGRESS.md`, pass 10 PR recorded in `PROGRESS.md`, pass 11 PR recorded in `PROGRESS.md`, pass 12 PR recorded in `PROGRESS.md`, pass 13 PR recorded in `PROGRESS.md`, [#3869](https://github.com/thegspiro/the-logbook/pull/3869) (pass 14), [#4019](https://github.com/thegspiro/the-logbook/pull/4019) (pass 15), [#4020](https://github.com/thegspiro/the-logbook/pull/4020) (pass 16), pass 17 PR recorded in `PROGRESS.md`, pass 18 PR recorded in `PROGRESS.md`
 
 Passes are recorded in this one file rather than a new `SEC<n>-00-*.md` per
 lap — the sweeps are cumulative and a reader needs the earlier method beside
 the later result to tell a re-verification from a first run. Newest pass first.
+
+---
+
+## Pass 18 (2026-11-23, watchdog pickup) — rotation lap "pass 17" closes (every Feature 00–34 own-pass PR since pass 17's baseline); 0 new findings, 0 tooling findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable. Step 0
+(`list_pull_requests`, state: open) found 0 open PRs with a head branch
+starting `claude/security-review-`; the last one, #4589 (Feature 34, Frontend
+shared, pass 16), had already merged into `main`. Every row of the rotation
+table was at `✅` — a full lap closed — so per Step 1 the table is reset to
+`⬜` for the next pass and the rotation wraps to Feature 00, continuing in
+this same iteration (the reset rides on this pass's own commit, per the
+standing rule against a `PROGRESS.md`-only PR).
+
+**Baseline:** `79ab1c88e` (pass 17's own head, PR #4319's merge). **Head:**
+`0238cf27f` (PR #4589's merge, `origin/main` at the start of this iteration).
+1321 commits between baseline and head, 650 non-merge, 202 backend `.py`
+files touched and 768 frontend files touched — another full rotation lap.
+Routes checked against `APPLICATION_PAGES.md`: **338** (up from 327 at pass
+17, 17 redirects skipped), 0 errors, 0 warnings.
+
+### The pass-17 Alembic fork is resolved
+
+`main` was at 3 Alembic heads when pass 17 ran (flagged there, tracked by PR
+#4323). `validate_migrations.py --strict` now reports a single head
+(`b6e3d1f47a29`) — confirmed directly rather than assumed from the PR having
+existed. No longer an open item.
+
+### Re-verified standing sweeps (all 13 classes from passes 1–17)
+
+| #   | Class swept                                           | Result                                                                                                                                                                                                                                                                                                                                                                |
+| --- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Formula injection in exports (Pitfall #15)            | **clean** — `grep -E "csv\.(writer\|DictWriter)\("` over `app/` and `scripts/` outside `csv_export.py`: 0 hits; `tests/test_csv_writer_sweep.py` passes                                                                                                                                                                                                               |
+| 2   | `SET NULL` on `NOT NULL` columns (Pitfall #2)         | **clean** — `test_database_schema.py::TestForeignKeyIntegrity::test_set_null_fks_are_nullable` passes                                                                                                                                                                                                                                                                 |
+| 3   | Proxy-IP attribution                                  | **clean** — same 3 `request.client.host` hits as every prior pass, same shape (two documenting comments, one deliberate direct-IP fallback)                                                                                                                                                                                                                           |
+| 4   | Alembic chain integrity                               | **clean, pass-17 fork resolved** — single head `b6e3d1f47a29`; `validate_migrations.py --strict` passes                                                                                                                                                                                                                                                               |
+| 5   | LIKE-wildcard handling (Pitfall #25)                  | **clean** — `tests/test_like_escaping.py` passes                                                                                                                                                                                                                                                                                                                      |
+| 6   | `BaseHTTPMiddleware` usage (Pitfall #4)               | **clean** — 0 imports, 0 subclasses; every `grep` hit is a documenting comment in `security_middleware.py` / `app/mcp/transport.py`                                                                                                                                                                                                                                   |
+| 7   | Unbounded in-memory trackers (Pitfall #9)             | **clean, 0 new unbounded trackers** — AST pass over all 202 changed backend files found 0 module-level/`self.__init__` candidates (see below)                                                                                                                                                                                                                         |
+| 8   | `window.confirm`/`alert`/`prompt` (Pitfall #16)       | **clean** — `grep -rn "window\.\(confirm\|alert\|prompt\)("` over `frontend/src/`: 0 hits                                                                                                                                                                                                                                                                             |
+| 9   | JSON shallow-copy-then-nested-mutate (Pitfall #12)    | **clean** — `tests/test_json_column_ast_sweep.py` passes                                                                                                                                                                                                                                                                                                              |
+| 10  | Org-scoping / IDOR ratchet (Pitfall #14)              | **clean** — `tests/test_org_scoping_ratchet.py` passes                                                                                                                                                                                                                                                                                                                |
+| 11  | Capacity-check locking (Pitfall #27)                  | **clean** — `tests/test_capacity_locking.py` passes; the new `apparatus_events` seat-claim path matches the pattern exactly (below)                                                                                                                                                                                                                                   |
+| 12  | Route auth coverage                                   | **clean** — `check_route_permissions.py --strict`: 338 routes, 0 errors, 0 warnings; `tests/test_endpoint_auth_coverage.py` passes                                                                                                                                                                                                                                    |
+| 13  | Raw exception text reaching the client (checklist §5) | **clean, 2 candidates traced, both false positives** — same AST shape as passes 16/17 found 2 hits in the changed files (`inventory.py:2052`, `scheduling_service.py:5046`); both are developer-curated `ValueError`/`CodedValueError` text passed through `safe_error_detail()` or used only for internal branching, never a raw driver/SQL exception (detail below) |
+
+Also re-ran: `tests/test_baseline_member_grants.py`,
+`tests/test_account_status_gates.py` (Pitfall #32), `tests/test_log_call_shape.py`
+and `tests/test_logging.py` (Pitfall #33), `tests/test_org_scoping.py`,
+`tests/test_audit_log_org_scoping.py`, `tests/test_audit_org_scoping.py`,
+`tests/test_migration_cleanup.py`, `tests/test_api_cache_pii_exclusions.py` —
+all pass (178 passed across this group plus the 13-class suite above, run
+together as one `pytest` invocation). `tests/test_alembic_migrations.py` +
+`tests/test_migration_create_all_tables.py`: 80 passed (both chain-shape
+tests now pass, confirming class 4's resolution rather than merely trusting
+`validate_migrations.py`'s own report).
+
+Outbound-transport checks: raw SQL by string interpolation is still the same
+2 sites (`scheduling_service.py`'s `int(cushion)`-guarded `INTERVAL` literal,
+`enum_normalization.py`'s fixed internal table/column names), same
+disposition as every prior pass. `httpx.AsyncClient(`/`Client(` construction
+is the same site list as pass 17 (`external_training_service.py`,
+`quickbooks_sync_service.py`, `oauth_service.py` ×4, `email_service.py` ×2,
+`gmail_api_sender.py`, `quickbooks_online.py`, `captcha.py`,
+`breached_password.py`) — `git diff 79ab1c88e..HEAD` on every one of those
+files (other than an unrelated hunk in `external_training_service.py`, read
+and confirmed to not touch its `httpx.AsyncClient`/`SSRFSafeAsyncTransport`
+construction) is empty, so none of them is new this delta.
+`SSRFSafeAsyncTransport(` direct construction is unchanged (the same 2 real
+call sites). `assert_outbound_url_safe(` call sites are unchanged (10 files,
+same list as pass 17).
+
+### Class 13's two candidates, traced
+
+- **`app/api/v1/endpoints/inventory.py:2052`** — `message = str(e)` inside
+  `except ValueError as e:` is a local variable compared against a string
+  literal (`"Item not found"`) only to pick a 404 vs. 400 status code; the
+  response itself is built from `safe_error_detail(e)`, two lines below,
+  never from `message`. Nothing reaches the client unsanitized.
+- **`app/services/scheduling_service.py:5046`** — `error = str(exc)` where
+  `exc` is a caught `CodedValueError`. `CodedValueError` (`app/core/error_codes.py:804`)
+  is a `ValueError` subclass the service layer raises itself with a curated
+  message and an attached support code — the same class of trusted,
+  developer-written text every other `ValueError`/`PermissionError` in this
+  codebase is allowed to pass through unsanitized (see CLAUDE.md's
+  `safe_error_detail()` section). `str(exc)` here recovers that curated
+  message, not a raw driver/SQL exception's text.
+
+### Class 7 (unbounded in-memory trackers): delta check against the changed files
+
+202 backend `.py` files changed in this delta (down from 323 at pass 17,
+since this delta's commit count is comparable but touches a narrower set of
+backend modules than the frontend-heavy stretch pass 17 covered). The same
+AST shape as prior passes (module-level and `self.x`-in-`__init__`
+assignments of an empty dict/set/list literal or bare
+`dict()`/`list()`/`set()`/`OrderedDict()`/`defaultdict()`, name matching
+`cache`/`track`/`seen`/`attempt`/`count`/`_map`/`registry`) found **0**
+candidates this pass — tighter than pass 17's AST shape, which also matched
+local, per-call variables (all 17 of pass 17's "local variable" hits would
+not match this pass's scope filter either, since it restricts to module level
+and `self.__init__` only). No genuinely new unbounded, attacker-reachable
+cache.
+
+### New surfaces this delta: two modules with no existing rotation row, landed and left unclaimed by their intended feature's own pass
+
+This window is another full rotation lap, so almost every changed file
+belongs to some Feature 00–34's own already-completed pass. Two exceptions —
+flagged as unclaimed by name in `PROGRESS.md`'s Rotation section (intended
+for Feature 13 and never explicitly assigned, respectively) but **not**
+actually covered by the feature pass each landed during — were read directly
+here rather than trusted clean by the tooling passing, the same way
+pass 16/17 handled `history.py`'s uncovered siblings:
+
+- **Apparatus events** (`app/api/v1/endpoints/apparatus_events.py`, 876 L,
+  20 routes; `app/services/apparatus_event_service.py`, 1591 L;
+  `app/services/apparatus_seat_call_service.py`, 318 L; mounted at
+  `/apparatus-events`) — outreach that rolls an apparatus with a named crew
+  onto `Event` nights, scheduled from a template. Landed this delta (first
+  commit `a80760942`, 2026-11-16, after pass 17's baseline) and flagged
+  unclaimed by Admin Hours' own pass through this lap
+  (`docs/security-review/AH-21-admin-hours.md`), which found and traced only
+  the slice touching its own `AdminHoursCategory` table and pointed the rest
+  at Feature 13 (Apparatus & NFC) as the natural home. Feature 13's own pass
+  this lap (`docs/security-review/AP-13-apparatus-nfc.md`) does not mention
+  it — confirmed by `grep` over that file, 0 hits — so it reached this lap's
+  close still unreviewed as a whole. Read in full:
+  - All 20 routes carry `Depends(require_permission(...))`, enumerated by
+    AST; none bare. Template/night management is gated
+    `apparatus_events.manage`; a night's crew board and seat claim/release
+    are `apparatus_events.signup` OR `.manage`; the read-only calendar
+    overlay is `events.view` — each gate matches its sensitivity (checklist
+    §2).
+  - Every by-id helper in the service (`get_template`, `_get_event`,
+    `_locked_seat`, `_unit`, `_plan_row`, `_rsvp`, `member_names`,
+    `checked_in_users`, `series_nights`, …) takes and filters on
+    `organization_id` from `current_user.organization_id`, never a
+    client-supplied org — enumerated by `grep -n "organization_id"` across
+    the service file (around 60 matches, every by-id query among them
+    carries the filter). XC-3 holds throughout.
+  - `assign_seat`'s client-supplied `target_user_id` is validated in-org
+    before use (`select(User).where(User.id == ..., User.organization_id ==
+...)`, raising `ValueError("Invalid member")` otherwise) — XC-1 holds.
+    `_assert_apparatus` and `_assert_category` (the latter via the shared
+    `assert_in_org` helper) do the same for template creation's apparatus
+    and Admin Hours category ids.
+  - `release_seat` enforces separation of duties explicitly: a non-manager
+    may only release their own seat (`if str(seat.user_id) != str(actor.id)
+and not as_manager: raise PermissionError(...)`) — checklist §2.
+  - Seat capacity is a locked read-then-write exactly to Pitfall #27's
+    pattern: `_get_event(..., lock=True)` locks the parent first, then
+    `_locked_seat`/`_locked_seat_of` take the capacity-relevant read itself
+    under `.with_for_update()` — the module's own comment names the pitfall
+    by number.
+  - The seat-call email (`ApparatusSeatCallService.send`) escapes every
+    user-supplied value it places in HTML (`_html.escape(message)`,
+    `_html.escape(unit)`, `_html.escape(location)`, `_html.escape(link)`) —
+    checklist §4. It is explicitly not idempotent by design (a coordinator
+    may ask again) and records the send only after `EmailService` confirms
+    at least one message went out, so a failed provider cannot make the UI
+    believe the department was asked when it was not.
+  - Every `SET NULL` FK in `app/models/apparatus_event.py` is `nullable=True`
+    (Pitfall #2, `grep` over the model confirms all 7). Two migrations
+    (`20261116_1602_3f8a1c6e2b94_apparatus_events_tables_and_grants.py`,
+    `20261120_1300_3daf47506e9e_apparatus_event_seat_calls.py`) cover every
+    table the models declare.
+  - `calendar()` bounds its date range (`MAX_CALENDAR_RANGE_DAYS = 62`,
+    `ValueError` otherwise) — checklist §6.
+- **Department history: events, and five new service files behind it**
+  (`app/api/v1/endpoints/history_events.py`, 1168 L, 33 routes, mounted at
+  `/history`; `app/services/history_event_service.py`,
+  `history_apparatus_service.py`, `history_lists_service.py`,
+  `history_records.py`, `history_timeline_service.py` — all five new this
+  delta) — extends the History module (already reviewed from the
+  `history.py`/`history_document_service.py` angle at passes 16/17) to cover
+  historical apparatus, department events, a timeline and "Today in
+  history", plus the managed station/apparatus-type/event-type lists they
+  use. No existing rotation row names it and no prior pass mentions it by
+  `grep`. Read in full:
+  - All 33 routes carry either `Depends(require_permission("history.manage"
+/".publish"))` or `Depends(get_current_user)`; none bare. The
+    `get_current_user`-only routes rely on the same `Viewer`/`can_read`
+    mechanism passes 16/17 already verified for `history.py`'s siblings —
+    `Viewer.of(current_user)` is read once per request and
+    `get_readable_apparatus`/`get_readable_event`/`get_readable_person` gate
+    on publication level for a caller who does not hold
+    `history.view`/`.manage`/`.publish`, confirmed by reading the service
+    implementations directly rather than assumed from the name (the same
+    "members receive the published view; the archive's keepers receive
+    every field" rule, restated in this module's own docstring).
+    `history.publish` is a distinct, higher permission from
+    `history.manage`, gating only the publish/unpublish routes — checklist
+    §2's `.view`-vs-`.manage` fit, extended one level further for the
+    publish action specifically.
+  - `list_apparatus`/`list_events`' `search` parameter uses
+    `like_pattern(search.strip())` with `.ilike(pattern,
+escape=LIKE_ESCAPE_CHAR)` in both `history_apparatus_service.py:256` and
+    `history_event_service.py:208` — Pitfall #25 satisfied, not merely
+    assumed from the import.
+  - Every list/get/revisions helper across the five service files filters
+    `organization_id == viewer.organization_id` (or the caller's
+    `str(user.organization_id)` for the non-`Viewer` write paths) —
+    `grep -n "organization_id"` across the five files returns ~90 matches,
+    every by-id and list query among them carrying the filter. XC-3 holds.
+  - `create_apparatus_from_fleet`'s client-supplied `fleet_apparatus_id` is
+    validated in-org before use
+    (`history_apparatus_service.py:670`, `Apparatus.id == ... ,
+Apparatus.organization_id == ...`, `ValueError` otherwise) and a
+    concurrent double-create is caught by the table's own unique constraint
+    rather than trusted to the read (`IntegrityError` → 409, with a comment
+    naming Pitfall #36 directly). XC-1 holds.
+  - `HistoryListService.merge_entry` (`history_lists_service.py:286`) has an
+    explicit belt-and-suspenders cross-org guard
+    (`if entry.organization_id != target.organization_id: raise`) even
+    though both `entry` and `target` are already fetched org-scoped by the
+    endpoint layer before the call — defense in depth against a future
+    caller that forgets to pre-scope.
+  - `ensure_defaults` (seeding a department's first station/apparatus-type/
+    event-type list) takes a locking count
+    (`self._count(organization_id, lock=True)`) before inserting defaults,
+    avoiding a duplicate-default race on two concurrent first reads —
+    Pitfall #27's shape applied to a seed-on-read path rather than a
+    capacity cap.
+  - `list_apparatus`/`list_events` bound `limit` (`Query(60, ge=1, le=200)`)
+    and `decade`/`search` are length- and range-constrained `Query()`
+    parameters — checklist §6.
+  - Audit entries carry ids only (`{"apparatus_id": item.id}`,
+    `{"event_id": event_id, "fields": sorted(values)}` — field _names_, not
+    values), matching the module's own docstring rule and checklist §5's
+    PII-in-audit-logs item.
+  - Every `SET NULL`/`CASCADE` FK pattern matches the rest of the History
+    module (unchanged models, no new violations).
+
+**Verified good ✅** for both — mechanism named in each bullet above, not
+merely "tooling passed." Row 13 (Apparatus & NFC) and the department-history
+rotation gap (still without its own row — see `PROGRESS.md`'s Rotation
+section, unchanged by this pass) should fold these scopes in on their next
+pass rather than leaving them to be rediscovered a third time.
+
+### Eight more new service files, spot-checked and not otherwise covered by name
+
+The same rotation-lap diff surfaced eight further new `app/services/*.py`
+files with no by-name mention in any existing feature doc. Unlike the two
+above, each of these is called only from an endpoint file that already has
+its own rotation row and was already reviewed whole this lap (confirmed by
+`grep -rl` for each service's import across `app/api/`), so the auth/
+permission gate on the surface is already covered; what was checked here is
+the service-layer org-scoping, exception handling and (where applicable)
+export safety a feature pass reviewing only its own endpoint file's diff
+could plausibly miss inside a newly-added dependency:
+
+| File                                   | Called from                                                                                                             | Checked                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `document_provenance.py` (43 L)        | report export endpoints                                                                                                 | Pure helper functions; the one query (`OperationalRank` lookup) filters `organization_id`. No exception handling to leak.                                                                                                                                                                                                 |
+| `email_templates_outreach.py` (107 L)  | `email_templates.py` (Feature 25)                                                                                       | Static template strings only, no DB access; own comment states every variable is escaped at render.                                                                                                                                                                                                                       |
+| `event_staffing_service.py` (371 L)    | `events.py` (Feature 16)                                                                                                | Every function takes an already-org-resolved `Event` or an explicit `organization_id` and filters by it; `grep` across the file: every `.where()` carries `organization_id`.                                                                                                                                              |
+| `historical_hours_match.py` (134 L)    | `historical_import.py`/the commit service (Feature 27)                                                                  | Pure dataclasses/functions, no DB access, no exception handling.                                                                                                                                                                                                                                                          |
+| `leave_calendar_service.py` (282 L)    | `leave_requests.py` (Feature 07)                                                                                        | Every query filters `organization_id`; `export_csv` uses `SafeCsvWriter` (Pitfall #15) and bounds the range (`MAX_EXPORT_DAYS`).                                                                                                                                                                                          |
+| `orphaned_member_files.py` (345 L)     | `scripts/sweep_orphaned_member_files.py` only — **no HTTP endpoint**, an operator-run container-exec maintenance script | Org ids resolved against the DB's own `Organization` table before any filesystem walk; re-reads references immediately before deleting (TOCTOU-safe, own comment names the rule); reports counts and ids only, never paths, per its own stated rule; refuses to run while a relocation/migration manifest is unfinalized. |
+| `outreach_calendar_service.py` (176 L) | `events.py` (Feature 16)                                                                                                | Every query filters `organization_id`.                                                                                                                                                                                                                                                                                    |
+| `report_tables.py` (405 L)             | `reports.py` (Feature 29)                                                                                               | No DB access at all — pure data-shaping of an already-authorized, already-fetched report JSON into export table rows.                                                                                                                                                                                                     |
+
+No finding in any of the eight.
+
+## Findings
+
+**0 findings this pass.** All 13 classes re-verified clean against head
+(class 4's pass-17 fork is now resolved, not merely re-flagged), the two new
+unclaimed modules and the eight further new service files were read directly
+and found sound, and every pre-existing guard-test suite stays green.
+
+### Re-verified open items from prior passes
+
+- **SEC12-1 (LOW/MED, S3/MinIO DNS-rebinding TOCTOU) — still OPEN/FLAGGED,
+  unchanged.** `backend/app/services/s3_storage.py`: confirmed
+  `git diff 79ab1c88e..HEAD -- backend/app/services/s3_storage.py` is empty.
+  No new information to add.
+- **The standing egress-proxy TOCTOU item** (`docs/KNOWN_LIMITATIONS.md`,
+  "Outbound Integration Requests") — remains open, unchanged.
+  `create_integration_client()` and `SSRFSafeAsyncTransport`
+  (`app/services/integration_services/base.py`, `app/utils/ssrf_transport.py`)
+  did not change in this delta (confirmed by the same empty-diff check).
+- **The pass-17 Alembic fork** — resolved (above), no longer open.
+
+**0 security-tooling findings this pass.**
+
+## Guard tests added
+
+None — 0 findings. Existing guard-test suites re-run and confirmed green
+(below).
+
+## Completion gate
+
+| Check                                                                                                                                                                                    | Result                              |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                                                                                                                          | ✅ 0 violations                     |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                                                                 | ✅ clean, 3435 files unchanged      |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                                                                                                              | ✅ clean                            |
+| `validate_migrations.py --strict`                                                                                                                                                        | ✅ single head `b6e3d1f47a29`       |
+| `check_route_permissions.py --strict`                                                                                                                                                    | ✅ 338 routes, 0 errors, 0 warnings |
+| Cross-cutting guard suite (16 files: json/like/org-scoping/capacity/auth-coverage/csv/schema/api-cache/baseline-grants/account-status/log-shape/logging/org-scoping×4/migration-cleanup) | ✅ 178 passed                       |
+| `test_alembic_migrations.py` + `test_migration_create_all_tables.py`                                                                                                                     | ✅ 80 passed                        |
+| Targeted suite (`-k` apparatus_event / history_events / history_events_migration / history_timeline_unit / member_audience, 7 files)                                                     | ✅ 240 passed                       |
+| `tests/test_compliance_report_error_sanitization.py` + `tests/test_compliance_config_service.py` (SEC17-1 regression check)                                                              | ✅ 30 passed                        |
+| `cd frontend && npm run typecheck`                                                                                                                                                       | ✅ 0 errors                         |
+| `cd frontend && npm run lint`                                                                                                                                                            | ✅ 0 errors (`--max-warnings 10`)   |
+
+Backend linters installed fresh at CI's pinned versions
+(`flake8==7.4.1`, `black==26.10.1`, `isort==9.0.2`) since this sandbox had
+none; full `backend/requirements.txt` installed fresh as well (`pywebpush`
+excluded — its `http-ece` transitive dependency fails to build a wheel in
+this sandbox under Python 3.11/3.13's mixed `pip`/`python3` resolution; this
+is a sandbox-local build issue unrelated to the pinned version, matches the
+pre-existing `py_vapid` skip prior passes have recorded, and was confirmed to
+not affect any test run above).
 
 ---
 
