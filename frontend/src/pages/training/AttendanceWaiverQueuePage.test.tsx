@@ -56,8 +56,8 @@ describe('AttendanceWaiverQueuePage', () => {
   it('lists pending requests first, then decided ones, each linking to its decision page', async () => {
     const pending = request('p1');
     const decided = request('d1', { status: 'approved', decided_by_name: 'Lt. Smith', can_decide: false });
-    mockList.mockImplementation((params: { status?: string }) =>
-      Promise.resolve(params.status === 'pending' ? page([pending]) : page([pending, decided]))
+    mockList.mockImplementation((params: { state?: string }) =>
+      Promise.resolve(params.state === 'pending' ? page([pending]) : page([decided]))
     );
     renderWithRouter(<AttendanceWaiverQueuePage />);
 
@@ -65,17 +65,16 @@ describe('AttendanceWaiverQueuePage', () => {
     expect(within(waiting).getByRole('link', { name: /Member p1/ })).toHaveAttribute('href', '/attendance-waivers/p1');
     const decidedSection = screen.getByRole('region', { name: 'Decided and closed' });
     expect(within(decidedSection).getByRole('link', { name: /Member d1/ })).toBeInTheDocument();
-    // A pending row is listed once, under pending, though the unfiltered page carries it too.
-    expect(within(decidedSection).queryByText('Member p1')).not.toBeInTheDocument();
-    expect(mockList).toHaveBeenCalledWith({ status: 'pending', limit: 200 });
-    expect(mockList).toHaveBeenCalledWith({ skip: 0, limit: 50 });
+    // The server splits the two lists, so each is paged on its own count.
+    expect(mockList).toHaveBeenCalledWith({ state: 'pending', skip: 0, limit: 50 });
+    expect(mockList).toHaveBeenCalledWith({ state: 'decided', skip: 0, limit: 50 });
     // The reason is for the decision page, not a shared list.
     expect(screen.queryByText('private')).not.toBeInTheDocument();
   });
 
   it('pages through decided requests', async () => {
-    mockList.mockImplementation((params: { status?: string; skip?: number }) => {
-      if (params.status === 'pending') return Promise.resolve(page([]));
+    mockList.mockImplementation((params: { state?: string; skip?: number }) => {
+      if (params.state === 'pending') return Promise.resolve(page([]));
       return Promise.resolve(
         params.skip === 0
           ? page([request('d1', { status: 'denied' })], 2, 0)
@@ -84,10 +83,29 @@ describe('AttendanceWaiverQueuePage', () => {
     });
     const user = userEvent.setup();
     renderWithRouter(<AttendanceWaiverQueuePage />);
-    await user.click(await screen.findByRole('button', { name: 'Show more' }));
+    await user.click(await screen.findByRole('button', { name: 'Show more decided requests' }));
     expect(await screen.findByText('Member d2')).toBeInTheDocument();
-    expect(mockList).toHaveBeenCalledWith({ skip: 1, limit: 50 });
-    expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
+    expect(mockList).toHaveBeenCalledWith({ state: 'decided', skip: 1, limit: 50 });
+    expect(screen.queryByRole('button', { name: 'Show more decided requests' })).not.toBeInTheDocument();
+  });
+
+  // Past the first page of pending requests used to be unreachable: the page
+  // asked for 200 and said only "decide these to see the rest".
+  it('pages through pending requests past the first page', async () => {
+    mockList.mockImplementation((params: { state?: string; skip?: number }) => {
+      if (params.state === 'decided') return Promise.resolve(page([]));
+      return Promise.resolve(params.skip === 0 ? page([request('p1')], 2, 0) : page([request('p2')], 2, 1));
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<AttendanceWaiverQueuePage />);
+
+    await screen.findByRole('region', { name: 'Waiting for a decision (2)' });
+    await user.click(screen.getByRole('button', { name: 'Show more waiting requests' }));
+    const waiting = screen.getByRole('region', { name: 'Waiting for a decision (2)' });
+    expect(await within(waiting).findByRole('link', { name: /Member p2/ })).toBeInTheDocument();
+    expect(within(waiting).getByRole('link', { name: /Member p1/ })).toBeInTheDocument();
+    expect(mockList).toHaveBeenCalledWith({ state: 'pending', skip: 1, limit: 50 });
+    expect(screen.queryByRole('button', { name: 'Show more waiting requests' })).not.toBeInTheDocument();
   });
 
   it('says so when the viewer decides nothing', async () => {
@@ -105,8 +123,8 @@ describe('AttendanceWaiverQueuePage', () => {
   it('says when each pending request closes, and lists expired requests with the closed ones', async () => {
     const pending = request('p1', { expires_at: '2026-11-28T05:00:00Z' });
     const expired = request('e1', { status: 'expired', can_decide: false, expires_at: null });
-    mockList.mockImplementation((params: { status?: string }) =>
-      Promise.resolve(params.status === 'pending' ? page([pending]) : page([pending, expired]))
+    mockList.mockImplementation((params: { state?: string }) =>
+      Promise.resolve(params.state === 'pending' ? page([pending]) : page([expired]))
     );
     renderWithRouter(<AttendanceWaiverQueuePage />);
 

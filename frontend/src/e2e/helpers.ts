@@ -689,10 +689,18 @@ const MEETING_WAIVER_REQUESTS: AttendanceWaiverRequest[] = [
   }),
 ];
 
-/** The approver queue reads pending requests and the full history with separate calls. */
+/** The approver queue reads pending and decided requests with separate calls
+ *  (`state`); `status` filters to one status, as the API does. */
 const meetingWaiverPage = (request: Request) => {
-  const status = new URL(request.url()).searchParams.get('status');
-  const items = status ? MEETING_WAIVER_REQUESTS.filter((row) => row.status === status) : MEETING_WAIVER_REQUESTS;
+  const params = new URL(request.url()).searchParams;
+  const status = params.get('status');
+  const state = params.get('state');
+  const items = MEETING_WAIVER_REQUESTS.filter(
+    (row) =>
+      (!status || row.status === status) &&
+      (state !== 'pending' || row.status === 'pending') &&
+      (state !== 'decided' || row.status !== 'pending')
+  );
   return { items, total: items.length, skip: 0, limit: 50 };
 };
 
