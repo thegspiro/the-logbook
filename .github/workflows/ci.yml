@@ -10,8 +10,8 @@ on:
   # this trigger nothing starts them, and every queued pull request sits until
   # the queue times it out. GitHub offers a merge queue only to repositories
   # owned by an organization, so nothing sends this event while this one is
-  # owned by a personal account; see "Migration Chain — Branches Need Not Be
-  # Up to Date to Merge" in docs/KNOWN_LIMITATIONS.md.
+  # owned by a personal account; see "Migration Chain — Branches Must Be Up
+  # to Date to Merge" in docs/KNOWN_LIMITATIONS.md.
   merge_group:
     types: [checks_requested]
   # A manual run tests everything on both database engines, on any branch.

@@ -46,35 +46,49 @@ prose (#4437) ran the full suite.
   pull requests: `decide()` in `scripts/ci_changed_areas.py` chooses the
   engines.
 
-## Migration Chain — Branches Need Not Be Up to Date to Merge (Owner Decision, 2026-11-16)
+## Migration Chain — Branches Must Be Up to Date to Merge (Owner Decision, 2026-11-22)
 
 Two pull requests that each add an Alembic migration on the same parent both
 pass CI on their own, and whichever merges second leaves `main` with two heads.
 `alembic upgrade head` then refuses to run, and every database job on every
 branch fails until a merge revision lands. It happened on 2026-11-15, when #4312
 and #4314 merged within a minute of each other; `main` stayed forked for about
-eight hours, until #4333 carried the merge revision from #4331.
+eight hours, until #4333 carried the merge revision from #4331. It happened
+again on 2026-11-22, when two pull requests each carried a merge revision for
+the same pair of heads (`809893462b67` in #4542 and `dd939b45d6c0` in #4557),
+and the two fixes became two heads until #4560 joined them.
 
 ### Decided
 
 - **`main` requires the Migration Chain and CI Success checks to pass.** A pull
   request whose own chain is forked cannot merge.
-- **It does not require a branch to be up to date with `main` before
-  merging.** That setting was turned on on 2026-11-15 and off on 2026-11-16.
-  It closes the race above, but with CI taking about two hours under the
-  current queue and something merging into `main` every hour or two, a pull
-  request fell behind again before its run finished: #4336 was brought up to date five
-  times overnight without merging. Every pull request paid that cost to guard
-  against one that only pull requests adding a migration can cause.
-- **The pre-push check (`scripts/check-migration-heads.sh`) stays.** It catches
-  a branch that forks the chain against the `main` it was pushed against, which
-  is most cases, though not two branches pushed before either merges.
+- **It requires a branch to be up to date with `main` before merging.** The
+  setting was turned on on 2026-11-15, off on 2026-11-16, and on again on
+  2026-11-22 after the second fork above. With it on, the required checks run
+  against the `main` a pull request will land on, so the second of two
+  migration branches fails Migration Chain instead of forking `main`.
+- **The pre-push check (`scripts/check-migration-heads.sh`) stays.** It reports
+  a fork before the push, which is cheaper than finding it in CI after the
+  branch has been brought up to date.
 
 ### Accepted
 
-- **`main` can still fork when two migration branches merge close together.**
-  Migration Chain fails on the push to `main` and the session-start hook
-  reports it, so it is noticed at once. The fix is one merge revision, per
+- **Every pull request pays for it, not only the ones that add a migration.**
+  A ruleset cannot be limited to pull requests that touch
+  `backend/alembic/versions/`. Each merge into `main` puts every other open
+  pull request behind, and each of those must take `main` in and pass CI again
+  before it can merge. This is why the setting was turned off on 2026-11-16:
+  CI took about two hours, something merged every hour or two, and #4336 was
+  brought up to date five times overnight without merging.
+- **A merge that bypasses the rule reopens the race.** #4560 merged on
+  2026-11-22 while GitHub reported it behind `main`, so the rule as configured
+  that day did not stop the repository owner's merge. The ruleset's bypass
+  list was not read when this was written. If the owner can bypass, the rule
+  holds only for as long as the owner chooses not to.
+- **When `main` is forked, only the pull request that carries the merge
+  revision can merge.** Every other branch brought up to date takes the fork in
+  and fails Migration Chain. Merge the fix first, then update the rest. The fix
+  is still one merge revision, per
   [Parallel branches and a single head](rules/migrations.md#parallel-branches-and-a-single-head).
 
 ### What would reopen this
@@ -85,9 +99,13 @@ eight hours, until #4333 carried the merge revision from #4331.
   moved into one (a free organization is enough for a public repository).
   `ci.yml` already runs on `merge_group` (2026-11-16), so turning the queue on
   is a settings change: a ruleset on `main` with **Require merge queue** and
-  **CI Success** as a required check.
-- **CI fast enough** that a pull request usually finishes before `main` moves
-  would make the up-to-date setting workable again.
+  **CI Success** as a required check. The queue's status check timeout defaults
+  to 60 minutes and a queued commit runs every job on both database engines,
+  so the timeout must be raised above the length of a full run.
+- **Pull requests falling behind faster than CI finishes**, as #4336 did.
+  Turning the setting off returns to the position of 2026-11-16: `main` can
+  fork when two migration branches merge close together, and Migration Chain
+  reports it on the push to `main`.
 
 ## Apparatus Events — What the First Release Leaves Out (2026-11-16)
 
