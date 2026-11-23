@@ -21,11 +21,11 @@ from app.api.dependencies import (
     require_permission,
     user_has_permission,
 )
-from app.api.draft_visibility import event_visible_clause
+from app.api.draft_visibility import can_see_draft, event_visible_clause
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
-from app.models.event import Event, EventType
+from app.models.event import Event
 from app.models.training import TrainingApproval, TrainingSession
 from app.models.user import User
 from app.schemas.training_session import (
@@ -293,10 +293,9 @@ async def get_training_session_by_event(
     if not training_session:
         return None
 
-    # A draft event's session is hidden from a non-organizer, as the event
-    # itself is (ADV-5): the same null an event with no session answers. A
-    # training manager administers every Training event, drafts included, so
-    # a Training draft's session is theirs to read too.
+    # A draft event's session is hidden from a caller who may not see the
+    # draft (can_see_draft), as the event itself is (ADV-5): the same null an
+    # event with no session answers. The type is read only for a draft.
     if not user_has_permission(current_user, "events.manage"):
         in_org = (
             Event.id == str(event_id),
@@ -306,12 +305,10 @@ async def get_training_session_by_event(
             await db.execute(select(Event.is_draft).where(*in_org))
         ).scalar_one_or_none()
         if is_draft:
-            if not user_has_permission(current_user, "training.manage"):
-                return None
             event_type = (
                 await db.execute(select(Event.event_type).where(*in_org))
             ).scalar_one_or_none()
-            if event_type != EventType.TRAINING:
+            if not can_see_draft(event_type, current_user):
                 return None
 
     return await _session_payload(service, training_session)

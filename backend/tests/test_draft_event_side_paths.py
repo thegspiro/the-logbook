@@ -19,7 +19,12 @@ from sqlalchemy import select, text
 from app.api.dependencies import PaginationParams
 from app.api.v1.endpoints import training as training_endpoints
 from app.api.v1.endpoints import training_sessions as sessions_endpoint
-from app.api.v1.endpoints.events import get_event_folder
+from app.api.v1.endpoints.events import (
+    get_event,
+    get_event_folder,
+    list_event_attachments,
+    list_events,
+)
 from app.models.event import EventRSVP
 from app.models.training import TrainingSession, TrainingType
 from app.services.event_service import EventService
@@ -237,3 +242,87 @@ async def test_the_training_dashboard_follows_the_same_draft_rule(db_session, dr
 
     listed = {row["session_id"] for row in summary["upcoming_session_capacity"]}
     assert session_id not in listed
+
+
+async def _retype(db_session, draft, event_type: str) -> None:
+    await db_session.execute(
+        text("UPDATE events SET event_type = :t WHERE id = :id"),
+        {"t": event_type, "id": draft["event"]},
+    )
+
+
+@pytest.mark.parametrize(
+    ("event_type", "permissions", "opens"),
+    [
+        ("training", ["training.manage"], True),
+        ("business_meeting", ["training.manage"], False),
+        ("training", ["events.view"], False),
+        ("business_meeting", ["events.manage"], True),
+    ],
+)
+async def test_a_draft_opens_for_whoever_may_see_it(
+    db_session, draft, event_type, permissions, opens
+):
+    """Owner decision 2026-11-23: training.manage opens a Training draft,
+    which it administers; any other type's draft stays the events manager's."""
+    await _retype(db_session, draft, event_type)
+    caller = _caller(draft, permissions)
+
+    if opens:
+        event = await get_event(
+            uuid.UUID(draft["event"]), db=db_session, current_user=caller
+        )
+        assert str(event.id) == draft["event"]
+    else:
+        with pytest.raises(HTTPException) as exc:
+            await get_event(
+                uuid.UUID(draft["event"]), db=db_session, current_user=caller
+            )
+        assert exc.value.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("event_type", "listed"), [("training", True), ("business_meeting", False)]
+)
+async def test_a_training_manager_lists_training_drafts_only(
+    db_session, draft, event_type, listed
+):
+    await _retype(db_session, draft, event_type)
+    items = await list_events(
+        event_type=None,
+        custom_category=None,
+        exclude_event_types=None,
+        start_after=None,
+        start_before=None,
+        end_after=None,
+        end_before=None,
+        include_cancelled=False,
+        include_drafts=True,
+        mandatory_only=False,
+        recurrence_series_id=None,
+        skip=0,
+        limit=100,
+        db=db_session,
+        current_user=_caller(draft, ["training.manage"]),
+    )
+
+    assert (draft["event"] in {str(item.id) for item in items}) is listed
+
+
+async def test_a_training_manager_reads_a_training_drafts_folder_and_attachments(
+    db_session, draft
+):
+    """The event page loads both; a Training draft that opens must not 404
+    on them."""
+    caller = _caller(draft, ["training.manage", "events.view"])
+
+    assert (
+        await list_event_attachments(
+            uuid.UUID(draft["event"]), db=db_session, current_user=caller
+        )
+        is not None
+    )
+    folder = await get_event_folder(
+        uuid.UUID(draft["event"]), db=db_session, current_user=caller
+    )
+    assert folder is not None

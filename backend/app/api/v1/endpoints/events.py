@@ -34,6 +34,7 @@ from app.api.dependencies import (
     require_permission,
     user_has_permission,
 )
+from app.api.draft_visibility import can_see_draft, visible_draft_types
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
@@ -842,6 +843,7 @@ async def list_events(
     if exclude_event_types:
         exclude_list = [t.strip() for t in exclude_event_types.split(",") if t.strip()]
 
+    draft_types = visible_draft_types(current_user)
     service = EventService(db)
     rows = await service.list_events(
         organization_id=current_user.organization_id,
@@ -854,11 +856,12 @@ async def list_events(
         end_after=end_after,
         end_before=end_before,
         include_cancelled=include_cancelled,
-        # Drafts are unannounced and for organizers only. The flag is the
-        # client's request, not its authority: the page sends it as
-        # `canManage`, and a member who sends it anyway gets published events.
-        include_drafts=include_drafts
-        and user_has_permission(current_user, "events.manage"),
+        # Drafts are unannounced and for those who may see them
+        # (draft_visibility). The flag is the client's request, not its
+        # authority: a member who sends it anyway gets published events, and
+        # a training manager gets Training drafts only.
+        include_drafts=include_drafts and draft_types is None,
+        include_draft_types=draft_types if include_drafts else None,
         mandatory_only=mandatory_only,
         recurrence_series_id=recurrence_series_id,
         skip=skip,
@@ -1596,10 +1599,11 @@ async def get_event(
         user_id=current_user.id,
     )
 
-    # A draft answers 404 to a non-organizer, as the attachments route does, so
-    # a guessed id does not confirm an unannounced event exists.
+    # A draft answers 404 to a caller who may not see it (can_see_draft), as
+    # the attachments route does, so a guessed id does not confirm an
+    # unannounced event exists.
     if not event or (
-        event.is_draft and not user_has_permission(current_user, "events.manage")
+        event.is_draft and not can_see_draft(event.event_type, current_user)
     ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
@@ -4205,7 +4209,7 @@ async def _load_event_for_attachment_read(
     event: Optional[Event] = result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    if event.is_draft and not user_has_permission(current_user, "events.manage"):
+    if event.is_draft and not can_see_draft(event.event_type, current_user):
         raise HTTPException(status_code=404, detail="Event not found")
     return event
 
@@ -4385,10 +4389,10 @@ async def get_event_folder(
     """
     service = EventService(db)
     event, _ = await service.get_event(event_id, current_user.organization_id)
-    # A draft's folder is named after its unannounced title; a non-organizer
-    # gets the same 404 the event itself answers (ADV-5).
+    # A draft's folder is named after its unannounced title; a caller who
+    # may not see the draft gets the same 404 the event itself answers (ADV-5).
     if not event or (
-        event.is_draft and not user_has_permission(current_user, "events.manage")
+        event.is_draft and not can_see_draft(event.event_type, current_user)
     ):
         raise HTTPException(status_code=404, detail="Event not found")
 
