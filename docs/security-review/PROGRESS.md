@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR TBD (branch `claude/security-review-frontend-shared`)**: Feature 34
+**PR [#4589](https://github.com/thegspiro/the-logbook/pull/4589) (branch
+`claude/security-review-frontend-shared`)**: Feature 34
 (Frontend shared), pass 16 — watchdog pickup (the dedicated `/loop 30m
 /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
 unreachable). PR #4580 (Feature 33, Core infrastructure, pass 15) had
