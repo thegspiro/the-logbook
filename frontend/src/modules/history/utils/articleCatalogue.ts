@@ -20,17 +20,23 @@ import type { LinkedRecord } from './eventCatalogue';
 
 /** One block as the editor holds it. `key` identifies the block on screen
  * (and keys its rich-text editor), never on the server. */
-export type FormBlock =
-  | { key: string; kind: 'text'; html: string }
-  | {
-      key: string;
-      kind: 'photo';
-      /** Null when the photo was deleted or withdrawn since it was chosen. */
-      media: MediaSummary | null;
-      media_id: string | null;
-      caption: string;
-      size: ArticlePhotoSize;
-    };
+export interface TextFormBlock {
+  key: string;
+  kind: 'text';
+  html: string;
+}
+
+export interface PhotoFormBlock {
+  key: string;
+  kind: 'photo';
+  /** Null when the photo was deleted or withdrawn since it was chosen. */
+  media: MediaSummary | null;
+  media_id: string | null;
+  caption: string;
+  size: ArticlePhotoSize;
+}
+
+export type FormBlock = TextFormBlock | PhotoFormBlock;
 
 export interface ArticleForm {
   title: string;
@@ -53,9 +59,9 @@ export const newBlockKey = (): string => {
   return `block-${nextKey}`;
 };
 
-export const textBlock = (html = ''): FormBlock => ({ key: newBlockKey(), kind: 'text', html });
+export const textBlock = (html = ''): TextFormBlock => ({ key: newBlockKey(), kind: 'text', html });
 
-export const photoBlock = (media: MediaSummary): FormBlock => ({
+export const photoBlock = (media: MediaSummary): PhotoFormBlock => ({
   key: newBlockKey(),
   kind: 'photo',
   media,
