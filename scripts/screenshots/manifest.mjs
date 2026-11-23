@@ -1855,6 +1855,162 @@ async function leaveStoreSettingsUnsaved(page) {
   if (await discard.count()) await discard.click();
 }
 
+/**
+ * A facility's Insurance section with a new policy typed but no carrier, and
+ * Save pressed. A new record is refused whole, so nothing is written.
+ */
+async function flagInsuranceCarrier(page) {
+  await openFirstFromApi(
+    "/facilities",
+    (id) => `/facilities/${id}`,
+    "facilities",
+  )(page);
+  await page
+    .getByRole("button", { name: /^insurance/i })
+    .first()
+    .click({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByLabel("Policy type").selectOption("property");
+  await page.getByLabel("Policy number").fill("PKG-2027-0418");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByText("Carrier is required").waitFor({ timeout: 10_000 });
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(400);
+}
+
+// The hours 05-156 overwrites with 24, put back by its cleanup.
+let checkinOpensRestore = null;
+
+/**
+ * Answers Course Links' history with one live link and one undone one. The
+ * demo department has never linked a name, and a real link changes members'
+ * compliance in every shot after it, so the list is supplied rather than made.
+ */
+async function routeCourseLinkHistory(page) {
+  const day = 86_400_000;
+  const at = (daysAgo) => new Date(Date.now() - daysAgo * day).toISOString();
+  await page.route("**/api/v1/training/course-links/history*", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: "screenshot-link-live",
+            course_id: "screenshot-course-pump",
+            course_name: "Pump Operations",
+            label: "Pump Ops",
+            record_count: 6,
+            linked_by_name: "Jordan Reyes",
+            linked_at: at(1),
+            undone_at: null,
+            undone_by_name: null,
+          },
+          {
+            id: "screenshot-link-undone",
+            course_id: "screenshot-course-cpr",
+            course_name: "CPR for Healthcare Providers",
+            label: "CPR Refresher",
+            record_count: 12,
+            linked_by_name: "Jordan Reyes",
+            linked_at: at(4),
+            undone_at: at(3),
+            undone_by_name: "Morgan Ellis",
+          },
+        ],
+        total: 2,
+        offset: 0,
+        limit: 10,
+      },
+    }),
+  );
+}
+
+/**
+ * Adds the course-link row to Training Admin's attention queue. The demo
+ * library suggests a course for none of its unlinked names, so the row the
+ * hub raises for a suggested match never appears on its own.
+ */
+async function routeCourseLinkAttention(page) {
+  await page.route("**/api/v1/admin-hub/training/summary*", async (route) => {
+    const response = await route.fetch();
+    const summary = await response.json();
+    summary.attention = [
+      {
+        key: "unlinked_course_names",
+        title: "3 training names can be linked to a course",
+        detail: "across 14 records",
+        actionLabel: "Review links",
+        href: "/training/admin?page=curriculum&tab=course-links",
+        severity: "warning",
+        count: 3,
+        oldestAgeDays: null,
+      },
+      ...(summary.attention ?? []),
+    ];
+    // The fourth tile counts the queue, so it moves with the added row.
+    for (const metric of summary.metrics ?? []) {
+      if (metric.key === "needs_attention") {
+        metric.value = String(summary.attention.length);
+      }
+    }
+    await route.fulfill({ response, json: summary });
+  });
+}
+
+/**
+ * Gives Department Readiness skills and levels. The demo department has
+ * evaluated no skills, so the map would show only its empty message; the
+ * department's own members are kept and a level is drawn for most cells.
+ */
+async function routeCompetencyHeatmap(page) {
+  const skills = [
+    ["skill-scba", "SCBA donning", "Firefighting"],
+    ["skill-hose", "Hose line advancement", "Firefighting"],
+    ["skill-ladder", "Ground ladder raise", "Firefighting"],
+    ["skill-forcible", "Forcible entry", "Firefighting"],
+    ["skill-search", "Primary search", "Rescue"],
+    ["skill-pump", "Pump operations", "Driver/Operator"],
+    ["skill-airway", "Airway management", "EMS"],
+  ].map(([id, name, category]) => ({ id, name, category }));
+  const levels = [
+    "novice",
+    "advanced_beginner",
+    "competent",
+    "proficient",
+    "expert",
+  ];
+  const day = 86_400_000;
+  await page.route(
+    "**/api/v1/training/competency/department*",
+    async (route) => {
+      const response = await route.fetch();
+      const data = await response.json();
+      const members = data.members ?? [];
+      const competencies = [];
+      members.forEach((member, row) => {
+        skills.forEach((skill, column) => {
+          // Every fifth cell has no evaluation, as a real roster would.
+          if ((row * 3 + column) % 5 === 4) return;
+          competencies.push({
+            user_id: member.user_id,
+            skill_evaluation_id: skill.id,
+            current_level: levels[(row + column * 2) % levels.length],
+            last_evaluated_at: new Date(
+              Date.now() - (20 + row) * day,
+            ).toISOString(),
+            next_evaluation_due: new Date(
+              Date.now() + (160 + column) * day,
+            ).toISOString(),
+          });
+        });
+      });
+      await route.fulfill({
+        response,
+        json: { ...data, skills, competencies },
+      });
+    },
+  );
+}
+
 function withShiftSignoffs(prepare) {
   return async (page) => {
     const config = await apiFromPage(
@@ -14188,6 +14344,262 @@ export const SHOTS = [
     selector: "section.card:has(#settings-tax)",
     prepare: flagStoreTaxRate,
     cleanup: leaveStoreSettingsUnsaved,
+  },
+  {
+    id: "06-37-apparatus-saved-except",
+    doc: "06-apparatus-facilities.md",
+    line: 136,
+    anchor: "__placed-by-hand-06-37__",
+    alt: 'Editing E-2 with a year of 1850: "Apparatus saved, except year. Fix it and save again." above a These were not saved list linking to the Year box',
+    route: "/apparatus",
+    expect: { selector: "text=Apparatus saved, except year" },
+    // "No EVOC requirement" is an option in the form, not an empty page.
+    allowEmptyState: true,
+    // Every other field goes back as it was stored, and the year the form
+    // holds back is the only change, so the save writes nothing new.
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}/edit`,
+        "apparatus",
+        (rig) => (rig.unitNumber ?? rig.unit_number) === "E-2",
+      )(page);
+      const year = page.locator("#apparatus-year");
+      await year.waitFor({ timeout: 15_000 });
+      await year.fill("1850");
+      await page.getByRole("button", { name: "Save Changes" }).click();
+      await page
+        .getByText("Apparatus saved, except year")
+        .waitFor({ timeout: 15_000 });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "06-38-facility-insurance-flagged",
+    doc: "06-apparatus-facilities.md",
+    line: 794,
+    anchor: "__placed-by-hand-06-38__",
+    alt: 'Adding an insurance policy to a facility: Property and a policy number filled in, and the empty Carrier box flagged "Carrier is required."',
+    route: "/facilities",
+    expect: { selector: "text=Carrier is required" },
+    prepare: flagInsuranceCarrier,
+    selector: "form:has(button:text-is('Save'))",
+  },
+  {
+    id: "06-39-facility-discard-changes",
+    doc: "06-apparatus-facilities.md",
+    line: 794,
+    anchor: "__placed-by-hand-06-39__",
+    alt: 'Cancelling the insurance form after typing: "Discard your changes?" with Keep editing and Discard changes',
+    route: "/facilities",
+    expect: { selector: "text=Discard your changes?" },
+    // The facility has no policies yet; the list behind the dialog says so.
+    allowEmptyState: true,
+    prepare: async (page) => {
+      await flagInsuranceCarrier(page);
+      await page.getByRole("button", { name: "Cancel", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Discard changes" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    fullPage: false,
+  },
+  {
+    id: "05-155-my-gear-quartermaster-notified",
+    doc: "05-inventory.md",
+    line: 888,
+    anchor: "__placed-by-hand-05-155__",
+    alt: "Issued to Me on My Issued Gear: one item reads Quartermaster notified with the date of the notice, where the others offer Notify quartermaster of return",
+    auth: "member",
+    route: "/inventory/my-equipment",
+    expect: { selector: "text=Quartermaster notified" },
+    // A real notice would sit on Return Requests and in Waiting for action in
+    // every other shot until a quartermaster received it, so the member's own
+    // list of notices is answered with one for their first assigned item.
+    prepare: async (page) => {
+      const me = await apiFromPage(page, "GET", "/auth/me");
+      const inventory = await apiFromPage(
+        page,
+        "GET",
+        `/inventory/users/${me.body.id}/inventory`,
+      );
+      const item = inventory.body.permanent_assignments?.[0];
+      if (!item) throw new Error("the member holds no assigned gear");
+      const sent = new Date(Date.now() - 2 * 86_400_000).toISOString();
+      await page.route("**/api/v1/inventory/return-requests?*", (route) =>
+        route.fulfill({
+          json: [
+            {
+              id: "screenshot-return-notice",
+              organization_id: me.body.organization_id,
+              requester_id: me.body.id,
+              return_type: "assignment",
+              item_id: item.item_id,
+              item_name: item.item_name,
+              assignment_id: item.assignment_id,
+              quantity_returning: 1,
+              reported_condition: item.condition,
+              status: "requested",
+              created_at: sent,
+              updated_at: sent,
+            },
+          ],
+        }),
+      );
+      await page.reload();
+      await page
+        .getByText("Quartermaster notified")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    fullPage: true,
+  },
+  {
+    id: "05-156-checklist-hours-clamped",
+    doc: "05-inventory.md",
+    line: 3077,
+    anchor: "__placed-by-hand-05-156__",
+    alt: 'Checklist Settings after 99 was typed into Opens before the start: the box holds 24, and under it "24 is the most allowed. 24 was saved."',
+    route: "/inventory/admin/checklists/settings",
+    expect: { selector: "text=24 is the most allowed" },
+    selector: "section:has(#checkin-opens)",
+    prepare: async (page) => {
+      const box = page.locator("#checkin-opens");
+      await box.waitFor({ timeout: 20_000 });
+      checkinOpensRestore = await box.inputValue();
+      await box.fill("99");
+      await box.press("Enter");
+      await page
+        .getByText("24 is the most allowed. 24 was saved.")
+        .waitFor({ timeout: 10_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+    // The box saves on Enter, so typing the old value back is the restore.
+    cleanup: async (page) => {
+      if (checkinOpensRestore === null) return;
+      const box = page.locator("#checkin-opens");
+      await box.fill(checkinOpensRestore);
+      await box.press("Enter");
+      await page.waitForTimeout(1000);
+      checkinOpensRestore = null;
+    },
+  },
+  {
+    id: "02-151-course-links-recent",
+    doc: "02-training.md",
+    line: 562,
+    anchor: "__placed-by-hand-02-151__",
+    alt: "Recent links on Course Links: Pump Ops linked to Pump Operations with an Undo button, and CPR Refresher's link to CPR for Healthcare Providers reading undone with the date and who undid it",
+    route: "/training/admin?page=curriculum&tab=course-links",
+    expect: { selector: "#course-links-recent-heading" },
+    beforeNavigate: routeCourseLinkHistory,
+    selector: "section[aria-labelledby='course-links-recent-heading']",
+    prepare: async (page) => {
+      await page
+        .getByText("undone", { exact: false })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "02-152-course-links-undo-confirm",
+    doc: "02-training.md",
+    line: 565,
+    anchor: "__placed-by-hand-02-152__",
+    alt: "The Undo confirmation for the Pump Ops link to Pump Operations, with Keep it and Undo link",
+    route: "/training/admin?page=curriculum&tab=course-links",
+    expect: { selector: "text=Undo link" },
+    beforeNavigate: routeCourseLinkHistory,
+    // Opened and left with Keep it: the link is a mock, never undone.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Undo the link of Pump Ops" })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Keep it" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const keep = page.getByRole("button", { name: "Keep it" });
+      if (await keep.count()) await keep.click();
+    },
+    fullPage: false,
+  },
+  {
+    id: "02-153-course-links-attention",
+    doc: "02-training.md",
+    line: 599,
+    anchor: "__placed-by-hand-02-153__",
+    alt: 'Training Admin\'s attention list with "3 training names can be linked to a course, across 14 records" and its Review links button',
+    route: "/training/admin",
+    expect: { selector: "text=can be linked to a course" },
+    beforeNavigate: routeCourseLinkAttention,
+    allowEmptyState:
+      "Upcoming Session Capacity sits below the frame; the attention list is the subject.",
+    prepare: async (page) => {
+      await page
+        .getByText("can be linked to a course")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    // The attention list and, under it, the Curriculum card's badge.
+    viewport: { width: 1440, height: 1000 },
+    fullPage: false,
+  },
+  {
+    id: "02-154-competency-heatmap-phone",
+    doc: "02-training.md",
+    line: 4449,
+    anchor: "__placed-by-hand-02-154__",
+    alt: "Department Readiness on a 390px phone: the member column pinned on the left with long names wrapping, skill names pinned along the top, and a fade with a chevron on the right edge where more skills lie",
+    route: "/training/admin?page=enhancements&tab=competency",
+    expect: {
+      selector: "[aria-label='Competency levels by member and skill']",
+    },
+    viewport: { width: 390, height: 844 },
+    beforeNavigate: routeCompetencyHeatmap,
+    // The phone's own frame rather than the section: the section is taller
+    // than the screen, and an element crop puts the sticky top and bottom
+    // bars over the middle of it.
+    fullPage: false,
+    prepare: async (page) => {
+      const grid = page.getByRole("group", {
+        name: "Competency levels by member and skill",
+      });
+      await grid.waitFor({ timeout: 20_000 });
+      await page
+        .locator(
+          "section[aria-labelledby='competency-heatmap-heading'] [aria-label='Legend']",
+        )
+        .evaluate((node) => node.scrollIntoView({ block: "start" }));
+      await page.evaluate(() => window.scrollBy(0, -80));
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    id: "10-30-expiring-certs-phone",
+    doc: "10-mobile-pwa.md",
+    line: 362,
+    anchor: "__placed-by-hand-10-30__",
+    alt: "Expiring Certifications on a 390px phone: each certification is a card led by the member's name, with its certification, expiry date and days left labelled beneath",
+    route: "/training/admin?page=dashboard&tab=expiring-certs",
+    expect: { selector: "table.rwd-table" },
+    viewport: { width: 390, height: 844 },
+    selector: "div.rwd-table-container:has(table.rwd-table)",
+    prepare: async (page) => {
+      await page
+        .locator("table.rwd-table td[data-label='Member']")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
   },
   {
     id: "08-01-setup-checklist",
