@@ -661,6 +661,7 @@ async def export_report(
                     end_date=data.end_date,
                     generated_by=prepared_by,
                     report_number=report_number,
+                    signature_lines=data.signature_lines,
                 )
             elif data.report_type == "member_records":
                 pdf_buf = await service.generate_bulk_pdf(
@@ -669,6 +670,7 @@ async def export_report(
                     end_date=data.end_date,
                     generated_by=prepared_by,
                     report_number=report_number,
+                    signature_lines=data.signature_lines,
                 )
             elif data.report_type == "compliance":
                 pdf_buf = await service.generate_compliance_pdf(
@@ -677,6 +679,7 @@ async def export_report(
                     end_date=data.end_date,
                     generated_by=prepared_by,
                     report_number=report_number,
+                    signature_lines=data.signature_lines,
                 )
             else:
                 raise ValueError(

@@ -565,6 +565,8 @@ class ReportExportRequest(BaseModel):
     end_date: Optional[date] = None
     include_details: bool = True
     filters: Optional[Dict[str, Any]] = None
+    # End a PDF with Prepared by / Reviewed by / Approved by lines.
+    signature_lines: bool = False
 
 
 class ReportExportResponse(UTCResponseBase):

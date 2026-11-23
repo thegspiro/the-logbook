@@ -144,6 +144,18 @@ describe('EquipmentCheckReportsPage — phone layout', () => {
     expect(open).toHaveBeenCalledWith('/export.pdf', '_blank');
   });
 
+  it('asks for signature lines on the PDF when the box is ticked', async () => {
+    renderAt('/inventory/admin/checklists/reports?tab=failures');
+    await screen.findByText('Portable radio');
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Add signature lines to PDF' }));
+    await userEvent.click(screen.getByText('Export'));
+    await userEvent.click(screen.getByRole('button', { name: 'PDF' }));
+    expect(mockPdfUrl).toHaveBeenCalledWith(
+      expect.objectContaining({ report_type: 'failures', signature_lines: 'true' })
+    );
+  });
+
   it('lists failures under the day they were found, each on a row of its own', async () => {
     renderAt('/inventory/admin/checklists/reports?tab=failures');
     await screen.findByText('Portable radio');

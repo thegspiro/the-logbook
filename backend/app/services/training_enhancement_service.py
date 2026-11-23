@@ -1608,6 +1608,7 @@ class ReportExportService:
         end_date: Optional[date] = None,
         generated_by: Optional[str] = None,
         report_number: Optional[str] = None,
+        signature_lines: bool = False,
     ) -> io.BytesIO:
         """Generate a compliance report as a PDF document.
 
@@ -1726,6 +1727,7 @@ class ReportExportService:
             generated_by=generated_by,
             identity=header["identity"],
             report_number=report_number,
+            signature_lines=signature_lines,
             parameters=[
                 ("Period", f"{start_date} to {end_date}"),
                 ("Graded as of", generated_on.isoformat()),
@@ -1906,6 +1908,7 @@ class ReportExportService:
         include_certifications: bool = True,
         generated_by: Optional[str] = None,
         report_number: Optional[str] = None,
+        signature_lines: bool = False,
     ) -> io.BytesIO:
         """Generate an individual training history PDF.
 
@@ -1965,6 +1968,7 @@ class ReportExportService:
             generated_by=generated_by,
             identity=header["identity"],
             report_number=report_number,
+            signature_lines=signature_lines,
             parameters=[("Member", user_name), ("Period", period_label)],
             subject=f"Training record: {user_name}",
         )
@@ -2098,6 +2102,7 @@ class ReportExportService:
         end_date: Optional[date] = None,
         generated_by: Optional[str] = None,
         report_number: Optional[str] = None,
+        signature_lines: bool = False,
     ) -> io.BytesIO:
         """Generate a combined PDF with one report section per member.
 
@@ -2172,6 +2177,7 @@ class ReportExportService:
             generated_by=generated_by,
             identity=header["identity"],
             report_number=report_number,
+            signature_lines=signature_lines,
             parameters=[("Period", period_label), ("Members", len(members))],
             subject="Training records, all members",
         )

@@ -127,6 +127,17 @@ Letter only, no duplex hint).
     at the top of every page as well as in the footer, as federal handling
     markings are placed. `HeadedDocTemplate(banner=...)` shortens every page's
     frame by `BANNER_BAND` to make room, so the banner sits inside the margins.
+  - **Signature lines, on request.** An "Add signature lines to PDF" tick-box
+    (`components/SignatureLinesOption.tsx`) sits beside the PDF download on
+    the Reports page, a member's training history, the training Member
+    Records export and the equipment-check compliance and failure reports. It
+    starts unticked: most downloads are working copies nobody signs. Ticked,
+    the request carries `signature_lines` (a body field on `/reports/export`
+    and `/training/reports/export`, a query parameter on the equipment PDF),
+    and the kit ends the report with Prepared by / Reviewed by / Approved by
+    lines, each with a date line, kept together on one page
+    (`signature_block` in `pdf_report_kit.py`). The preparer's name and rank
+    are printed under the first line. A CSV ignores the flag.
   - `tests/test_pdf_provenance.py` checks all four across every document.
 - **Documents leave scaling to the viewer.** A page shrunk to 97% by "Fit"
   is still readable.
