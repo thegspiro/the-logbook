@@ -16,8 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**(none recorded yet this iteration — Feature 34, Frontend shared, pass 16;
-updated in a second commit once the PR is open.)**
+**PR [#4590](https://github.com/thegspiro/the-logbook/pull/4590) (branch
+`claude/security-review-frontend-shared-p16`)**: Feature 34 (Frontend
+shared), pass 16 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). 0 fixed, 0 new findings (one drafted fix/guard test was
+written and reverted after disproving itself per CLAUDE.md Pitfall #37); see
+the Log entry below and `docs/security-review/FE16-34-frontend-shared.md`
+for the full trace.
+
+Row 34 → ✅ (pending this PR's merge). **Every row 00–34 is now ✅** — the
+next iteration's Step 1 should find the full table at ✅ and reset it to ⬜
+for a fresh pass before picking Feature 00 again, re-checking
+`list_pull_requests` fresh rather than trusting this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 15, PR #4580, merged), preserved for history</summary>
