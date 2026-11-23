@@ -16,6 +16,12 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**(none recorded yet this iteration — Feature 34, Frontend shared, pass 16;
+updated in a second commit once the PR is open.)**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 15, PR #4580, merged), preserved for history</summary>
+
 **PR [#4580](https://github.com/thegspiro/the-logbook/pull/4580) (branch
 `claude/security-review-core-infra-p15`)**:
 Feature 33 (Core infrastructure), pass 15 — watchdog pickup (the dedicated
@@ -33,8 +39,11 @@ verified org-scoped, permission-gated and audited. `database.py` and
 flagged (tracked by #4255) is now resolved: single head. **0 fixed, 0 new
 findings.** Full write-up: `docs/security-review/CI15-33-core-infra.md`.
 
-Row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend shared)
-— re-check `list_pull_requests` fresh rather than trusting this note.
+Row 33 → ✅ (merged, `c01ab8df1`); this iteration (Feature 34, Frontend
+shared, pass 16) picked it up on a freshly fast-forwarded `main` and
+confirmed row 34 as the next `⬜` row — see the new Log entry below.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 14, PR #4576, merged), preserved for history</summary>
@@ -27540,7 +27549,7 @@ iteration's commit" rule.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                                                   | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                                                                                                          | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                                                                                                          | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
@@ -27601,6 +27610,51 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-23 — Feature 33 (Core infrastructure, pass 15) merged; Feature 34 (Frontend shared, pass 16): watchdog pickup, 0 fixed, 0 new findings — closes this rotation lap
+
+PR #4580 merged as `c01ab8df1`; row 33 marked ✅ above. This session's local
+clone started 957 commits behind `origin/main` (including that exact merge);
+fast-forwarded before anything else, since a stale read had briefly (and
+incorrectly) marked row 33 `🔄` as the next feature — corrected once the
+fast-forward landed and `list_pull_requests` (state=open, 15 results) was
+re-checked fresh, confirming no `claude/security-review-*` head and row 34
+(Frontend shared) as the real next pending feature.
+
+Baseline: pass 15's merge commit `f3030998` (PR #4259). This window is wide —
+1592 commits (832 non-merge) over 12 days, 967 frontend files touched —
+because it spans most of a rotation lap's worth of other features' own
+passes landing in parallel. Every declared scope file was diffed against the
+baseline: `createApiClient.ts`, `apiClient.ts`, `ProtectedRoute.tsx`,
+`authStore.ts`, `postLoginRedirect.ts`, `purgeLocalMemberData.ts` and 10 of
+14 module `services/api.ts` files are byte-identical. Real deltas in
+`apiCache.ts` (one stale entry removed for a retired endpoint, two new
+additive PII exclusions already added by the owning feature work),
+`services/api.ts`, `errorReporting.ts`, `errorHandling.ts` (UX-only — it
+reformats text the server already sent) and `skillsTestingStore.ts`
+(an offline-sync race fix) were all read in full and judged non-findings. A
+repo-wide sweep found 12 new top-level `stores`/`services`/`utils`/`contexts`
+files, 1 new per-member-namespaced `localStorage` write (filter toggles, no
+member data), 0 new `axios.create`/`createApiClient` sites outside one
+deliberately-bypassing public-token service, 0 new hardcoded secrets, 0 new
+XSS sinks, and 0 new cache-exclusion gaps — every new GET endpoint checked
+programmatically against `UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS`
+using the cache's own `startsWith`/`includes` semantics.
+
+One apparent gap (`/training/course-links/history`, a new Course Links
+history endpoint naming the officer who linked/undid a course match) was
+drafted as a fix and a guard test, then — per CLAUDE.md Pitfall #37 — the fix
+was stashed and the test run against the unfixed tree first. It passed
+anyway: the route is already covered by the existing broad `/history`
+substring exclusion. Both the drafted fix and the test were reverted; no real
+gap existed. **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/FE16-34-frontend-shared.md`.
+
+Row 34 → ✅ (pending this PR's merge). Every row 00–34 is now ✅, closing
+this rotation lap — the next iteration's Step 1 will find the full table at
+✅ and reset it to ⬜ for a fresh pass, per the rotation's own rule; this
+iteration did not do that reset itself, since its own task was Feature 34
+alone. Re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-22 — Feature 32 (Locations & kiosk, pass 14) merged; Feature 33 (Core infrastructure, pass 15): watchdog pickup, 0 fixed, 0 new findings
 
