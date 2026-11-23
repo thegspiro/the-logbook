@@ -43,6 +43,7 @@ const template: ApparatusEventTemplate = {
   admin_hours_category_name: 'Community Outreach',
   evoc_mode: ApparatusEventEvocMode.ENFORCE,
   allow_self_signup: true,
+  require_signup_approval: true,
   show_on_schedule: true,
   duplicated_from_id: null,
   duplicated_from_name: null,
@@ -106,6 +107,14 @@ describe('templateForm', () => {
     expect(copy.name).toBe('Santamobile — Small');
     expect(copy.duplicated_from_id).toBe('tpl-1');
     expect(copy.units[0]?.seats.map((s) => s.count)).toEqual(['1', '4']);
+  });
+
+  it('keeps coordinator approval on a copy, and saves it off when members cannot sign up', () => {
+    expect(duplicateDraft(template, 'Copy').require_signup_approval).toBe(true);
+    expect(toPayload({ ...santa(), require_signup_approval: true }).require_signup_approval).toBe(true);
+    expect(
+      toPayload({ ...santa(), allow_self_signup: false, require_signup_approval: true }).require_signup_approval
+    ).toBe(false);
   });
 
   it('leaves a seat set to 0 off a copy, and an apparatus with none left', () => {

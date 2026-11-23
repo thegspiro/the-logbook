@@ -1618,7 +1618,10 @@ needs, and how many of each.
    - **Warn only** — anyone can take it; a member below the level is flagged.
    - **Don't check** — for a static display where nobody drives.
 5. Leave **Members can take open seats themselves** on unless a coordinator
-   should fill every seat. Select **Save template**.
+   should fill every seat. Tick **Coordinator approves self sign-ups** if a
+   member should ask for a seat and wait for a yes (see
+   [Approving sign-ups](#approving-sign-ups-coordinators)). Select **Save
+   template**.
 
 > **A smaller or larger version.** Select **Duplicate** on a template's card.
 > Give the copy a name, change the apparatus if you like, and set a count for
@@ -1656,6 +1659,34 @@ the seat says so.
 Coordinators see **Assign…** and **Change…** on every seat. For a Driver seat,
 the list starts with the members who qualify, each judged by the same EVOC
 rule the seat uses.
+
+### Approving sign-ups (coordinators)
+
+When a template has **Coordinator approves self sign-ups** ticked, its nights
+show **Sign-ups need approval**. Members see **Ask for this seat** instead of
+**Sign me up**:
+
+- Asking leaves the seat open. You are not marked as going until a
+  coordinator approves. You can ask for one seat per night, and **Withdraw
+  request** takes it back.
+- Several members can ask for the same seat. Each seat lists who is waiting,
+  first asked first, with **Approve** and **Decline**.
+- **Approve** puts the member in the seat, marks them as going, and declines
+  everyone else waiting on that seat. A Driver seat is checked against the
+  EVOC rule again when you approve.
+- **Decline** asks for an optional note, which is sent to the member.
+- Assigning the seat to someone yourself, or removing it in **Edit this
+  night**, declines anyone waiting on it.
+- A request nobody answers is declined automatically once the night starts,
+  or if the night is cancelled.
+
+The night's organizer and alternate are emailed each request, if they can
+manage apparatus events. Members are emailed the answer, whichever it is.
+Both emails follow the recipient's email settings: **Event officer duties**
+for the request, **Event changes and cancellations** for the answer. The
+**Upcoming** list shows how many requests are waiting on each night.
+
+To change the setting for one night only, use **Edit this night**.
 
 ### Emailing members about open seats
 
