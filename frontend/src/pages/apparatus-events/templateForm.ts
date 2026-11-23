@@ -148,7 +148,7 @@ export const validateDraft = (draft: TemplateDraft): string[] => {
   if (!draft.name.trim()) errors.push('Give the template a name.');
   const minutes = Number.parseInt(draft.duration_minutes, 10);
   if (!Number.isFinite(minutes) || minutes < 15 || minutes > 1440) {
-    errors.push('Duration must be between 15 minutes and 24 hours.');
+    errors.push('Length must be between a quarter of an hour and 24 hours.');
   }
   if (draft.units.length === 0) errors.push('Add at least one apparatus.');
   const chosen = draft.units.map((u) => u.apparatus_id).filter(Boolean);
@@ -228,6 +228,28 @@ const addDays = (isoDate: string, days: number): string => {
 /** `count` dates, a week apart, starting on `firstDate`. */
 export const weeklyDates = (firstDate: string, count: number): string[] =>
   Array.from({ length: Math.max(0, count) }, (_, i) => addDays(firstDate, i * 7));
+
+/** `count` dates on consecutive days, starting on `firstDate`: a run of nights in a row. */
+export const dailyDates = (firstDate: string, count: number): string[] =>
+  Array.from({ length: Math.max(0, count) }, (_, i) => addDays(firstDate, i));
+
+// ---------------------------------------------------------------------------
+// Lengths: entered in hours, sent in minutes
+// ---------------------------------------------------------------------------
+
+/** "180" minutes shown as "3", "150" as "2.5"; blank stays blank. */
+export const hoursText = (minutes: string): string => {
+  const n = Number.parseInt(minutes, 10);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return String(Math.round((n / 60) * 100) / 100);
+};
+
+/** Hours typed in the box, as whole minutes; empty when it is not a positive number. */
+export const minutesFromHours = (hours: string): string => {
+  const n = Number.parseFloat(hours);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return String(Math.round(n * 60));
+};
 
 /**
  * A night as UTC instants. The wall-clock start is read in the department's

@@ -14,6 +14,9 @@ import {
   totalSeats,
   validateDraft,
   weeklyDates,
+  dailyDates,
+  hoursText,
+  minutesFromHours,
   withoutEmptySeats,
   type TemplateDraft,
 } from './templateForm';
@@ -154,5 +157,38 @@ describe('hoursWouldNotBeCredited', () => {
 
   it('says nothing before the options have loaded', () => {
     expect(hoursWouldNotBeCredited('', 'public_education', null)).toBe(false);
+  });
+});
+
+describe('consecutive nights', () => {
+  it('runs day after day, across a month end', () => {
+    expect(dailyDates('2026-11-29', 4)).toEqual(['2026-11-29', '2026-11-30', '2026-12-01', '2026-12-02']);
+  });
+
+  it('crosses a daylight-saving change without skipping or repeating a day', () => {
+    expect(dailyDates('2026-10-31', 3)).toEqual(['2026-10-31', '2026-11-01', '2026-11-02']);
+  });
+});
+
+describe('lengths entered in hours', () => {
+  it.each([
+    ['180', '3'],
+    ['150', '2.5'],
+    ['75', '1.25'],
+    ['', ''],
+    ['0', ''],
+  ])('shows %s minutes as "%s" hours', (minutes, hours) => {
+    expect(hoursText(minutes)).toBe(hours);
+  });
+
+  it.each([
+    ['3', '180'],
+    ['2.5', '150'],
+    ['0.25', '15'],
+    ['', ''],
+    ['-1', ''],
+    ['abc', ''],
+  ])('stores "%s" hours as "%s" minutes', (hours, minutes) => {
+    expect(minutesFromHours(hours)).toBe(minutes);
   });
 });
