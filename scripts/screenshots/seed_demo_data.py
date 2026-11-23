@@ -294,11 +294,17 @@ ADMIN_SEATS_FULL = re.compile(
     r"Administrative access seats were already filled", re.IGNORECASE
 )
 
+# `_assignment_refusal` declines a member on a leave of absence covering the
+# shift's date. The seeder gives one member a leave running from two days ago
+# to nine days ahead (`seed_backlog_01_leave_badges`), and the day pool rotates
+# every active member through the upcoming roster, so a re-run lands on it.
+MEMBER_ON_LEAVE = re.compile(r"on leave of absence for this date", re.IGNORECASE)
+
 
 def is_expected_seat_refusal(exc: "ApiError") -> bool:
     """Whether a refused shift assignment is the application working correctly.
 
-    Five refusals are ordinary and must not fail the seed:
+    Six refusals are ordinary and must not fail the seed:
 
     * **A conflicting shift.** The night shift runs 19:00-07:00, so its crew is
       still on duty into the next date and the API declines to double-book
@@ -319,8 +325,11 @@ def is_expected_seat_refusal(exc: "ApiError") -> bool:
     * **The shift's administrative seats are full.** A shift caps how many of
       its seats may go to administrative members. The day pool rotates every
       active member through, so it reaches that cap on its own.
+    * **The member is on leave that day.** The seeded leaves are real leave,
+      and the app keeps a member on leave off the roster, which is the rule
+      the leave badges exist to show.
 
-    All five leave the shift a seat short, which is what the Open Shifts tab
+    All six leave the shift a seat short, which is what the Open Shifts tab
     exists to show. Treating any of them as fatal aborted the whole scheduling
     step: a single refusal left the demo with 2 shifts and no scheduling
     apparatus, which silently blocked the close-out fixture, the batch report
@@ -334,6 +343,7 @@ def is_expected_seat_refusal(exc: "ApiError") -> bool:
         or POSITION_NOT_ELIGIBLE.search(exc.detail)
         or SEAT_TAKEN.search(exc.detail)
         or ADMIN_SEATS_FULL.search(exc.detail)
+        or MEMBER_ON_LEAVE.search(exc.detail)
     )
 
 
