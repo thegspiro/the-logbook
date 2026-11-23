@@ -1793,20 +1793,14 @@ Decided for later phases, not yet built:
   stored switch).
 - **CRR goals** — yearly targets per measure.
 
-## Outreach Events — What the 2026-11-20 Changes Do Not Cover Yet
+## Outreach Events — Edges Left by the 2026-11-20 Changes (All Closed)
 
 The owner decisions of 2026-11-20 (staff-entered requests, calendar-date
-preferences, event signup sheets, volunteer RSVPs, close-out) left these edges
-for a later decision rather than guessing at them:
-
-- **A seat moved by a shift swap does not update the event's RSVPs.** Volunteer
-  RSVPs follow a seat that is created, edited, declined or removed through
-  `SchedulingService`; a swap trades the seat on another path. The next seat
-  change on the sheet settles the RSVPs again, because the sync compares the
-  whole sheet each time.
-- **An event's own signup sheet has no "Email the membership" call.** A
-  request's sheet does (`send_volunteer_call`, which is written around a
-  request's details). Members find an event's sheet on Open Shifts.
+preferences, event signup sheets, volunteer RSVPs, close-out) left four edges
+for a later decision rather than guessing at them: a series cancel left its
+sheets on the schedule, volunteer RSVPs counted against `max_attendees`, a
+shift swap did not move a volunteer's RSVP, and an event's own sheet could not
+email the membership. Each was closed as follows.
 
 Closed on 2026-11-21: a series cancel or delete now stands down every
 occurrence's own sheet, as a single cancel or delete does; and a volunteer's
@@ -1814,6 +1808,15 @@ RSVP is marked `is_volunteer` and takes no attendee seat (owner decision,
 2026-11-21 — crew, not audience; the sheet's role counts cap the crew). Guests
 a volunteer brings still take seats, and must fit when added, because a
 volunteer is never waitlisted off the crew list.
+
+Closed on 2026-11-22: a seat traded by a shift swap — an officer-approved
+exchange or move, an accepted offer, or a picked-up open swap — now moves the
+going RSVP with it, as any other seat change does; and an event's own signup
+sheet can email the membership for help, the same email a request's sheet
+sends, with the time of the last send recorded on the event
+(`events.volunteer_call_sent_at`).
+
+Every edge this section listed is now closed.
 
 ## Outreach Requests — Two Deliberate Choices in the Public Pipeline (2026-09-09)
 
