@@ -830,6 +830,21 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Training sign-off reminders (2026-11-23)
+
+Nothing blocks a restart. Migration `5845dae0c277` adds the
+`training_approval_reminder` email template type to
+`email_templates.template_type` and `scheduled_emails.template_type`, and
+changes no other table. It builds on `b6e3d1f47a29`.
+
+- **A one-time burst of sign-off reminders.** The new daily
+  `training_approval_reminders` task (07:50) emails the training officers
+  about each training session whose sign-off has waited 7 days, and once more
+  at 14 days. The first run after the upgrade reminds every approval already
+  waiting 7 days or more, once (an approval past 14 days gets one email, not
+  two). A host that runs the tasks from cron rather than the built-in
+  scheduler needs the new line from `app/services/scheduled_tasks.py`.
+
 ### Leave: stand-in notices, a cover prompt, a calendar and an export (2026-11-22)
 
 Nothing blocks a restart. Migration `b6e3d1f47a29` adds three email template

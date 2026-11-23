@@ -9463,7 +9463,21 @@ conservative option was taken; each can be redirected:
   attended — was not taken, because nothing ends a pending approval on its
   own and it would credit attendance an officer may still reject. Only the
   newest approval counts; "newest" is by a one-second `created_at`, and a tie
-  with a pending approval reads as pending.
+  with a pending approval reads as pending. **Owner decision 2026-11-23:
+  keep it, and remind the approvers.** Attendees stay uncredited until an
+  officer decides. The daily `training_approval_reminders` task emails the
+  training officers (the members the sign-off request goes to) once the
+  newest pending approval has waited 7 days, and once more at 14, then
+  stops; email only, no SMS. Each reminder is claimed in the approval's
+  `reminder_sent_at` before it is sent, so a re-run or a second worker sends
+  nothing new, and a crash between the claim and the send loses that
+  reminder rather than repeating it. _Defaults taken:_ twice, then stop — a
+  sign-off nobody has acted on in a fortnight needs a person, not a third
+  email; nothing ends a pending approval on its own, as before; a superseded
+  approval (its link killed by a re-finalize), a cancelled event and an
+  expired link are not reminded; the first run after the upgrade reminds an
+  already-overdue approval once. Tests:
+  `tests/test_training_approval_reminders.py`.
 - **A series time change that would strand check-ins refuses the whole save.**
   The refusal names how many members and occurrences are affected; nothing is
   moved. Postponing each affected occurrence is the way through.
