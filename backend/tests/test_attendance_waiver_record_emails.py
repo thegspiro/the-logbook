@@ -41,7 +41,9 @@ from tests.waiver_request_support import (
     make_org,
     make_position,
     make_requirement,
+    make_meeting_event,
     make_session,
+    set_meeting_policy,
     set_policy,
     utc,
 )
@@ -116,9 +118,20 @@ class TestTheKinds:
         )
         assert EMAIL_POLICIES[EmailKind.TRAINING_RECORD_CHANGES].required
 
-    def test_meetings_are_unchanged(self):
-        assert MEETING_SPEC.member_record_email_kind == EmailKind.EVENT_CHANGES
+    # Owner decision 2026-11-23: the meeting notices that lead to a charged
+    # absence are required too, under the same kind. The decision and void
+    # notices keep the meeting workflow's optional kind.
+    def test_meeting_record_notices_are_the_required_kind(self):
+        assert MEETING_SPEC.member_record_email_kind == (
+            EmailKind.TRAINING_RECORD_CHANGES
+        )
         assert MEETING_SPEC.member_email_kind == EmailKind.EVENT_CHANGES
+
+    def test_the_preferences_screen_names_the_meeting_notices(self):
+        includes = " ".join(
+            EMAIL_POLICIES[EmailKind.TRAINING_RECORD_CHANGES].includes
+        ).lower()
+        assert "business meeting" in includes
 
     def test_the_preferences_screen_names_them(self):
         includes = " ".join(
@@ -185,3 +198,39 @@ class TestAVoidFollowsThePreference:
 
         assert len(notices) == 1
         assert _to_member(outbox, dept) == []
+
+
+@pytest.fixture
+async def meeting_dept(db_session):
+    org_id = await make_org(db_session)
+    clerk_pos = await make_position(db_session, org_id, "Clerk")
+    member = await make_member(db_session, org_id, "Sam")
+    clerk = await make_member(db_session, org_id, "Cleo")
+    await assign(db_session, clerk, clerk_pos)
+    await set_meeting_policy(db_session, org_id, approver_position_ids=[clerk_pos])
+    meeting = await make_meeting_event(db_session, org_id, DRILL)
+    member_row = await load(db_session, member)
+    member_row.notification_preferences = {"email_kinds": {"event_changes": False}}
+    await db_session.flush()
+    return SimpleNamespace(
+        org=org_id,
+        member=member_row,
+        clerk=await load(db_session, clerk),
+        meeting=meeting,
+    )
+
+
+@pytest.mark.integration
+class TestAMeetingMemberOptedOutOfEventChangesIsStillTold:
+    async def test_a_deciders_question(self, db_session, meeting_dept, outbox):
+        service = AttendanceWaiverService(db_session, MEETING_SPEC.workflow)
+        request = await service.submit(
+            meeting_dept.org, meeting_dept.member, meeting_dept.meeting, None, "Work"
+        )
+        outbox.clear()
+
+        await service.request_info(
+            meeting_dept.org, meeting_dept.clerk, request.id, "Which shift?"
+        )
+
+        assert len(_to_member(outbox, meeting_dept)) == 1

@@ -238,10 +238,11 @@ class WorkflowSpec:
     # The kind for a member's notice that changes how their attendance is
     # graded: the expiry (the session now counts as missed), a moved start
     # (the approval is cleared and, unanswered, expires as a miss) and a
-    # decider's question (unanswered, it expires as a miss). For training this
-    # is the required record-changes kind, the one the decision email already
-    # uses, so a member who turned training reminders off is still told
-    # (CLAUDE.md pitfall #18). A void is not one: its session is not held.
+    # decider's question (unanswered, it expires as a miss). For both
+    # workflows this is the required record-changes kind (for training the one
+    # the decision email already uses), so a member who turned reminders or
+    # event changes off is still told (CLAUDE.md pitfall #18; owner, 2026-11-23
+    # for meetings). A void is not one: its session is not held.
     member_record_email_kind: EmailKind
     # Whether a request may carry documents. Only training has the upload
     # routes and the retention sweep; a meeting policy cannot ask for them.
@@ -280,7 +281,9 @@ MEETING_SPEC = WorkflowSpec(
     member_fallback_url="/events",
     decider_email_kind=EmailKind.EVENT_DUTIES,
     member_email_kind=EmailKind.EVENT_CHANGES,
-    member_record_email_kind=EmailKind.EVENT_CHANGES,
+    # Owner decision 2026-11-23: required, as for training, because each of
+    # these notices can end in a charged absence on the minutes.
+    member_record_email_kind=EmailKind.TRAINING_RECORD_CHANGES,
     takes_documents=False,
 )
 

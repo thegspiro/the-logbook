@@ -239,7 +239,8 @@ taken; each is listed so the owner can confirm or reverse it.
   remain for the notices no template covers (a question, an answer, a moved
   session, an expiry).
 - **Which training notices a member cannot switch off** _(chosen
-  2026-11-21, owner may redirect)_. A training notice is sent under the
+  2026-11-21; confirmed, and extended to meetings, by owner decision
+  2026-11-23)_. A training notice is sent under the
   required _Changes to your training record_ kind when it changes how the
   member's attendance is graded: the expiry (the session counts as missed), a
   moved start (the approval is cleared and, unanswered, expires as a miss) and
@@ -247,8 +248,11 @@ taken; each is listed so the owner can confirm or reverse it.
   these went under the optional _Training and certification reminders_, so a
   member who had turned reminders off learned of a charged miss only from the
   bell. A **void** stays optional: its session was cancelled or deleted, so
-  nothing is graded and the cap slot is freed. Meeting notices are unchanged
-  (`EVENT_CHANGES`, optional, as above). `member_record_email_kind` on
+  nothing is graded and the cap slot is freed. ✅ **Meetings follow, owner
+  decision 2026-11-23:** the meeting workflow's expiry, moved-start and
+  decider-question emails now go under the same required kind, since each can
+  end in a charged absence on the minutes; its decision and void emails stay
+  under the optional _Event changes_. `member_record_email_kind` on
   `WorkflowSpec` holds the choice.
 
 ## Elections — Voter Rules by Member Type (Owner Decisions, 2026-11-13)
