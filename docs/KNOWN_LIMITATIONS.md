@@ -391,9 +391,10 @@ owner 2026-11-23:** every answer below.
   (a year by default), so an evaluation drafted after that reads no for a
   request that once had one.
 - **A voided request is listed, and counted only as voided.** Cancelling or
-  deleting a session voids its pending requests
+  deleting a session voids its pending and approved requests
   (`attendance_waiver_service.void_pending_for_events`, called from
-  `EventService`); an approved or denied request is kept. The history shows a
+  `EventService`; approved ones too since the owner decision of 2026-11-23);
+  a denied request is kept. The history shows a
   voided request and that it was voided, and the summary counts it under
   `voided` rather than as approved or denied.
 - **Deciders are named by their current name**, or "a former member" when the
