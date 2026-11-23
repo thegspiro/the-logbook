@@ -4918,10 +4918,10 @@ Details**; the course is on **Training Info**.
 > open, **Start from a Template** above the form offers the department's
 > active Training templates. Picking one fills the event's details and, when
 > the template saved them, **Training Info**: the course, training type,
-> credit hours, lead instructor and certification settings. It replaces what
-> was already typed. Requirement and program links, **Counts toward
-> attendance** and the completion settings are not saved on a template and
-> start on their defaults. If the template's course is no longer in the
+> credit hours, lead instructor and certification settings, and since
+> 2026-11-23 the requirement and program links, **Counts toward
+> attendance** and the completion settings. It replaces what was already
+> typed. A link no longer active is left out, with a note. If the template's course is no longer in the
 > Course Library, **Training Info** starts on **No course yet**; if its lead
 > instructor is no longer a current member, **Lead instructor** starts empty.
 > A note on **Training Info** says which. Templates are made and edited under

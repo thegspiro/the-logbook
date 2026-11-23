@@ -216,7 +216,7 @@ describe('CreateTrainingSessionPage templates', () => {
         .map((o) => o.textContent)
     ).toEqual(['— No template —', 'Company Drill']);
     expect(picker).toHaveAccessibleDescription(
-      'Training templates only. A template fills the event and its training details, replacing what is already typed.'
+      'Training templates only. A template fills the event and its training details, links and completion settings, replacing what is already typed.'
     );
     await user.selectOptions(picker, 'tpl-drill');
 
