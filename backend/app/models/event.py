@@ -196,6 +196,12 @@ class Event(Base):
     staffing_roles: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
         JSON, nullable=True
     )
+    # When the organizer last emailed the membership asking for help with this
+    # event's own sheet, as a request records for its sheet — so a second
+    # organizer can see the call already went out.
+    volunteer_call_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # What happened at an outreach event, recorded when it closes (owner
     # decision, 2026-11-20). Written only by CommunityEngagementService.
