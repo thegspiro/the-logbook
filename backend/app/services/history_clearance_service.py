@@ -26,6 +26,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.utils import list_within_detail_limit
 from app.models.history import (
     ClearanceDecisionKind,
     ClearancePurpose,
@@ -298,10 +299,12 @@ class HistoryClearanceService:
 
                 hidden = HistoryArticleService.photos_not_public(person)
                 if hidden:
-                    titles = ", ".join(p["title"] for p in hidden)
                     raise ValueError(
-                        "Clear these photos for the public first, or take them "
-                        f"out of the article: {titles}"
+                        list_within_detail_limit(
+                            "Clear these photos for the public first, or take "
+                            "them out of the article: ",
+                            [p["title"] for p in hidden],
+                        )
                     )
         elif isinstance(person, HistoryEvent):
             record_type = "event"
