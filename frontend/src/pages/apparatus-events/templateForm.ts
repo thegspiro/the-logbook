@@ -63,6 +63,7 @@ export interface TemplateDraft {
   admin_hours_category_id: string;
   evoc_mode: ApparatusEventEvocMode;
   allow_self_signup: boolean;
+  require_signup_approval: boolean;
   show_on_schedule: boolean;
   units: UnitDraft[];
   duplicated_from_id: string;
@@ -92,6 +93,7 @@ export const blankDraft = (apparatusId = ''): TemplateDraft => ({
   admin_hours_category_id: '',
   evoc_mode: ApparatusEventEvocMode.ENFORCE,
   allow_self_signup: true,
+  require_signup_approval: false,
   show_on_schedule: true,
   units: [blankUnit(apparatusId)],
   duplicated_from_id: '',
@@ -109,6 +111,7 @@ export const draftFromTemplate = (template: ApparatusEventTemplate): TemplateDra
   admin_hours_category_id: template.admin_hours_category_id ?? '',
   evoc_mode: template.evoc_mode,
   allow_self_signup: template.allow_self_signup,
+  require_signup_approval: template.require_signup_approval,
   show_on_schedule: template.show_on_schedule,
   units: template.units.map((unit) => ({
     key: nextKey(),
@@ -181,6 +184,9 @@ export const toPayload = (draft: TemplateDraft): ApparatusEventTemplatePayload =
   admin_hours_category_id: draft.admin_hours_category_id || undefined,
   evoc_mode: draft.evoc_mode,
   allow_self_signup: draft.allow_self_signup,
+  // Only meaningful while members can sign up at all; saved off otherwise so
+  // switching sign-up back on does not silently bring approval with it.
+  require_signup_approval: draft.allow_self_signup && draft.require_signup_approval,
   show_on_schedule: draft.show_on_schedule,
   duplicated_from_id: draft.duplicated_from_id || undefined,
   units: draft.units.map((unit) => ({

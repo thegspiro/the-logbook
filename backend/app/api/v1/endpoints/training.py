@@ -113,12 +113,16 @@ from app.services.requirement_override_service import (
 )
 from app.services.training_compliance import (
     STANDING_NOT_APPLICABLE,
+    STANDING_NOT_CURRENT_MEMBER,
+    STANDING_NOT_CURRENT_MEMBER_LABEL,
     UNGRADED_STATUSES,
     ComplianceGrading,
+    OrgComplianceTally,
     _load_compliance_config,
     evaluate_member_requirement,
     get_requirement_date_window,
     grade_members,
+    is_current_member,
     load_credited_shift_dates,
     load_evaluation_credits,
     load_graded_records,
@@ -457,11 +461,16 @@ async def get_training_dashboard_summary(
             "graded_members": graded_members,
             "not_applicable_members": not_applicable,
             "compliant_members": compliant,
-            # None when no member is graded against anything: an empty
-            # population is not applicable, not 100%.
-            "compliance_percentage": (
-                round(compliant / graded_members * 100) if graded_members else None
-            ),
+            # The Admin hub's figure, to its one decimal: one department must
+            # not read 67% here and 66.7% there (pitfall 29). None when no
+            # member is graded against anything: an empty population is not
+            # applicable, not 100%.
+            "compliance_percentage": OrgComplianceTally(
+                compliant=compliant,
+                graded=graded_members,
+                not_applicable=not_applicable,
+                active_requirements=len(requirements),
+            ).pct,
             "expiring_count": len(expiring_records),
             "completions_last_30_days": len(recent),
             "total_hours_this_year": total_hours,
@@ -2690,17 +2699,20 @@ async def get_user_stats(
 # "not_applicable", not green: no screen may show a member as passing what
 # nobody measured (TR4-4). Both maps cover every classify_standing() output,
 # so a new standing raises KeyError rather than being shown under a wrong one.
+# A former member is never graded and reads "not_current_member" (pitfall 32).
 _STANDING_COLOR = {
     "compliant": "green",
     "at_risk": "yellow",
     "non_compliant": "red",
     STANDING_NOT_APPLICABLE: STANDING_NOT_APPLICABLE,
+    STANDING_NOT_CURRENT_MEMBER: STANDING_NOT_CURRENT_MEMBER,
 }
 _STANDING_LABEL = {
     "compliant": "Compliant",
     "at_risk": "At Risk",
     "non_compliant": "Non-Compliant",
     STANDING_NOT_APPLICABLE: "Not Applicable",
+    STANDING_NOT_CURRENT_MEMBER: STANDING_NOT_CURRENT_MEMBER_LABEL,
 }
 
 
@@ -2752,6 +2764,22 @@ async def get_compliance_summary(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+    # The matrix lists only current members, so a former member gets no
+    # grade here either; checked before the exemption, which a member who has
+    # left may still carry.
+    if not is_current_member(target_user):
+        return ComplianceSummary(
+            user_id=user_id,
+            requirements_met=0,
+            requirements_total=0,
+            certs_expiring_soon=stats.expiring_soon,
+            certs_expired=stats.expired,
+            compliance_status=_STANDING_COLOR[STANDING_NOT_CURRENT_MEMBER],
+            compliance_label=_STANDING_LABEL[STANDING_NOT_CURRENT_MEMBER],
+            hours_this_year=stats.hours_this_year,
+            active_certifications=stats.active_certifications,
+        )
+
     # Check if member is exempt from compliance tracking
     is_exempt = bool(target_user.compliance_exempt)
 

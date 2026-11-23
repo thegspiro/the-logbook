@@ -7,10 +7,12 @@
  * excused every shift (workflow review W13).
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
+import { useAuthStore } from '../stores/authStore';
+import type { CurrentUser } from '../types/auth';
 
 const mockListLeaves = vi.fn();
 const mockListWaivers = vi.fn();
@@ -235,5 +237,94 @@ describe('WaiverManagementPage — deactivating and filtering (workflow review W
     expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
     await user.click(future);
     expect(future).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+// Owner decision 2026-11-22/23: nobody excuses their own training. The server
+// refuses a waiver for oneself and an edit of one's own; the form says so as
+// soon as the officer picks themselves, rather than after a refused submit.
+describe('WaiverManagementPage — a waiver for oneself', () => {
+  const signedInAs = (id: string): CurrentUser => ({
+    id,
+    username: 'cmorgan',
+    email: 'cmorgan@example.test',
+    organization_id: 'org-1',
+    timezone: 'UTC',
+    roles: [],
+    positions: [],
+    rank: 'fire_chief',
+    membership_type: null,
+    permissions: ['training.manage'],
+    is_active: true,
+    email_verified: true,
+    mfa_enabled: false,
+    password_expired: false,
+    must_change_password: false,
+  });
+
+  beforeEach(() => {
+    for (const m of [
+      mockListLeaves,
+      mockListWaivers,
+      mockCreateLeave,
+      mockCreateWaiver,
+      mockGetUsers,
+      mockGetRequirements,
+    ]) {
+      m.mockReset();
+    }
+    mockGetRequirements.mockResolvedValue([]);
+    mockListLeaves.mockResolvedValue([]);
+    mockListWaivers.mockResolvedValue([]);
+    mockGetUsers.mockResolvedValue([
+      chief,
+      { id: 'u2', username: 'jlee', full_name: 'Jordan Lee', rank: null, status: 'active' },
+    ]);
+    useAuthStore.setState({ user: signedInAs('u1') });
+  });
+
+  afterEach(() => {
+    useAuthStore.setState({ user: null });
+  });
+
+  it('explains the refusal, points to a leave request, and does not submit', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState({}, '', '/members/admin/waivers?tab=create');
+    renderWithRouter(<WaiverManagementPage />);
+    await screen.findByRole('group', { name: 'Applies To' });
+
+    await fillAndSubmit(user);
+
+    const note = screen.getByRole('note');
+    expect(note).toHaveTextContent('You cannot excuse your own requirements');
+    expect(within(note).getByRole('link', { name: 'submit a leave request' })).toHaveAttribute(
+      'href',
+      '/members/leave-requests'
+    );
+    const submit = screen
+      .getAllByRole('button', { name: 'Create Waiver' })
+      .find((b) => b.getAttribute('type') === 'submit');
+    expect(submit).toBeDisabled();
+    expect(mockCreateWaiver).not.toHaveBeenCalled();
+    expect(mockCreateLeave).not.toHaveBeenCalled();
+  });
+
+  it('shows no such note for another member', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState({}, '', '/members/admin/waivers?tab=create');
+    renderWithRouter(<WaiverManagementPage />);
+    await screen.findByRole('group', { name: 'Applies To' });
+
+    await user.selectOptions(screen.getByLabelText('Member'), 'u2');
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it("offers no Edit on the officer's own leave, which only another officer may change", async () => {
+    mockListLeaves.mockResolvedValue([leave, { ...leave, id: 'loa-2', user_id: 'u2' }]);
+    window.history.replaceState({}, '', '/members/admin/waivers?tab=active');
+    renderWithRouter(<WaiverManagementPage />);
+
+    expect(await screen.findByRole('button', { name: 'Edit the leave for Jordan Lee' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit the leave for Casey Morgan' })).not.toBeInTheDocument();
   });
 });

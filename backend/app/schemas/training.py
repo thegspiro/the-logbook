@@ -929,9 +929,11 @@ class ComplianceSummary(BaseModel):
     certs_expired: int
     # The member's compliance matrix standing in traffic-light form:
     # compliant "green", at_risk "yellow", non_compliant "red",
-    # "not_applicable"; or "exempt" for a compliance-exempt member.
+    # "not_applicable"; "exempt" for a compliance-exempt member; or
+    # "not_current_member" for one who has left, who is not graded.
     compliance_status: str
-    # "Compliant", "At Risk", "Non-Compliant", "Exempt", "Not Applicable"
+    # "Compliant", "At Risk", "Non-Compliant", "Exempt", "Not Applicable",
+    # "Not a Current Member"
     compliance_label: str
     hours_this_year: float
     active_certifications: int

@@ -10,6 +10,7 @@ event in the series.
 Mocked session — no DB.
 """
 
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -40,6 +41,25 @@ def _scalars(values):
     return r
 
 
+@contextmanager
+def _no_room_checks():
+    """Stub the room lock and clash check for a mocked session.
+
+    A series edit that sends times or a room locks room bookings and checks
+    each moved occurrence's room, both of which read the database; these
+    mocked sessions answer only the anchor and series reads. The room checks
+    are pinned against a real database in test_event_series_room_overlap.py.
+    """
+    with (
+        patch(
+            "app.services.event_service.LocationService.lock_room_bookings",
+            AsyncMock(),
+        ),
+        patch.object(EventService, "_refuse_series_room_clashes", AsyncMock()),
+    ):
+        yield
+
+
 def _anchor():
     return MagicMock(
         is_cancelled=False,
@@ -56,6 +76,7 @@ class TestUpdateFutureEventsLocationValidation:
         # execute #1: anchor fetch. #2: series query.
         db.execute.side_effect = [_scalar(_anchor()), _scalars([MagicMock()])]
         with patch("app.services.event_service.LocationService") as MockLoc:
+            MockLoc.return_value.lock_room_bookings = AsyncMock()
             MockLoc.return_value.get_location = AsyncMock(return_value=None)
             with pytest.raises(ValueError, match="Location not found"):
                 await svc.update_future_events(
@@ -130,6 +151,7 @@ class TestUpdateFutureEventsTiming:
             patch.object(
                 EventService, "_count_stranded_check_ins", AsyncMock(return_value=0)
             ),
+            _no_room_checks(),
         ):
             return await EventService(db).update_future_events(uuid4(), uuid4(), update)
 
@@ -245,6 +267,7 @@ async def _save_series(series, update):
         patch.object(
             EventService, "_count_stranded_check_ins", AsyncMock(return_value=0)
         ),
+        _no_room_checks(),
     ):
         count = await EventService(db).update_future_events(uuid4(), uuid4(), update)
     return count, db

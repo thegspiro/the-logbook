@@ -1,89 +1,25 @@
 """Regression coverage for raw attendance grading in shift compliance."""
 
 from datetime import date
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
-from uuid import uuid4
 
 import pytest
 
-from app.models.training import RequirementType
-from app.services.scheduling_service import SchedulingService
+from tests.test_external_shift_hours import _add_org, _add_user
+from tests.test_shift_compliance_hours_shared_grader import _hours_req, _row, _shift
+
+pytestmark = [pytest.mark.integration]
 
 
-@pytest.fixture(autouse=True)
-def _department_today(monkeypatch):
-    """The service asks the org for its date; answer with the same
-    ``date.today()`` the fixtures here are built from."""
-    monkeypatch.setattr(
-        "app.services.scheduling_service.resolve_org_today",
-        AsyncMock(return_value=date.today()),
-    )
+async def test_hours_compliance_uses_raw_minutes_before_display_rounding(db_session):
+    # 53 minutes shows as 1.0 hour at quarter-hour precision, but is short of
+    # a one-hour target: rounding must not erase the shortfall.
+    org_id = await _add_org(db_session)
+    user_id = await _add_user(db_session, org_id)
+    await _hours_req(db_session, org_id, 1)
+    await _shift(db_session, org_id, user_id, date(2025, 8, 25), 53)
 
+    member = await _row(db_session, org_id)
 
-class _Result:
-    def __init__(self, *, scalar_rows=None, rows=None):
-        self._scalar_rows = scalar_rows or []
-        self._rows = rows or []
-
-    def scalars(self):
-        return SimpleNamespace(all=lambda: self._scalar_rows)
-
-    def all(self):
-        return self._rows
-
-
-@pytest.mark.asyncio
-async def test_hours_compliance_uses_raw_minutes_before_display_rounding(
-    monkeypatch,
-):
-    # No compliance configuration: the department defaults grade, and no
-    # profile narrows the requirement.
-    monkeypatch.setattr(
-        "app.services.scheduling_service._load_compliance_config",
-        AsyncMock(return_value=None),
-    )
-    user_id = str(uuid4())
-    requirement = SimpleNamespace(
-        id=str(uuid4()),
-        name="One hour",
-        requirement_type=RequirementType.HOURS.value,
-        required_hours=1.0,
-        applies_to_all=True,
-        due_date_type=None,
-        rolling_period_months=None,
-        frequency="annual",
-    )
-    user = SimpleNamespace(
-        id=user_id,
-        first_name="Short",
-        last_name="Member",
-        full_name="Short Member",
-        rank=None,
-        membership_type="active",
-        positions=[],
-    )
-    attendance = SimpleNamespace(user_id=user_id, shift_count=1, total_minutes=53)
-    db = SimpleNamespace(
-        execute=AsyncMock(
-            side_effect=[
-                _Result(scalar_rows=[requirement]),
-                _Result(scalar_rows=[user]),
-                _Result(rows=[attendance]),
-                # approved pre-shift work: none
-                _Result(rows=[]),
-                # external_shift_hours: none logged
-                _Result(rows=[]),
-            ]
-        )
-    )
-    service = SchedulingService(db)
-    service._compute_period_bounds = lambda *_: (date(2026, 1, 1), date(2026, 12, 31))
-
-    result = await service.get_shift_compliance(uuid4(), date(2026, 8, 25))
-
-    member = result[0]["members"][0]
     assert member["completed_value"] == 1.0
     assert member["total_hours"] == 1.0
     assert member["compliant"] is False
-    assert result[0]["compliant_count"] == 0

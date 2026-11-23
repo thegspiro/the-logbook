@@ -31,6 +31,7 @@ const STANDING_CLASSES: Record<ComplianceSummary['compliance_status'], string> =
   red: 'bg-red-500/10 text-red-800 dark:text-red-300',
   exempt: 'bg-theme-surface-secondary text-theme-text-secondary',
   not_applicable: 'bg-theme-surface-secondary text-theme-text-secondary',
+  not_current_member: 'bg-theme-surface-secondary text-theme-text-secondary',
 };
 
 const MyCrewPage: React.FC = () => {

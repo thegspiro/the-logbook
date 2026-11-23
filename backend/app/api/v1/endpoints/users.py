@@ -3902,6 +3902,10 @@ async def anonymize_member(
             "training_record_files_shared_kept": summary[
                 "training_record_files_shared_kept"
             ],
+            # Files whose rows went but which would not delete, queued for
+            # the hourly pending_file_deletions sweep.
+            "attendance_waiver_files_queued": summary["attendance_waiver_files_queued"],
+            "applicant_files_queued": summary["applicant_files_queued"],
         },
         **_request_origin(request),
     )
