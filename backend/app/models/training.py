@@ -601,6 +601,69 @@ def _key_certification_number(target, value, oldvalue, initiator):
     target.certification_key = training_match_key(value)
 
 
+class TrainingCreditDuplicateFlag(Base):
+    """A finalize's credit that may repeat a record the member already had.
+
+    Owner decision 2026-11-23: when a Training event's finalize credits a
+    member who already holds an approved self-report or a hand-entered
+    completed record for the same day and the same course (or a close name),
+    neither record is merged into the other. The pair is flagged here for an
+    officer, who keeps both or voids one.
+
+    The unique pair is what keeps a re-finalize from flagging again (pitfall
+    #36): the event's record keeps its id across finalizes (it is keyed by
+    ``source_event_id``), so a second detection of the same pair finds this row.
+    A pair is open while ``resolution`` is NULL and both records stand; voiding
+    either record closes it without touching this row.
+    """
+
+    __tablename__ = "training_credit_duplicate_flags"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    # The record the event's finalize wrote.
+    event_record_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("training_records.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # The record the member already had: a self-report's or a hand-entered one.
+    other_record_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("training_records.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # "same_course" (both name the same library course) or "same_name" (equal
+    # match keys).
+    match_reason: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # NULL while open; "kept_both" once an officer decided both stand.
+    resolution: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    resolved_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "event_record_id", "other_record_id", name="uq_training_credit_dup_pair"
+        ),
+        Index("idx_training_credit_dup_org_open", "organization_id", "resolution"),
+        Index("idx_training_credit_dup_other", "other_record_id"),
+    )
+
+
 def _default_shift_credited(context) -> bool:
     """A new SHIFTS requirement is shift-credited unless the caller says not."""
     value = context.get_current_parameters().get("requirement_type")

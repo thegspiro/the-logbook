@@ -73,6 +73,9 @@ from app.schemas.training import (
     CourseLinkSpelling,
     CourseLinksView,
     CourseUnlinkResult,
+    DoubleCreditPair,
+    DoubleCreditRecord,
+    DoubleCreditView,
     DuplicateWarning,
     HistoricalImportConfirmRequest,
     RequirementChangeScope,
@@ -131,6 +134,12 @@ from app.services.training_course_links import (
 from app.services.training_course_names import (
     library_course_names,
     member_course_name,
+)
+from app.services.training_credit_duplicates import (
+    DuplicateCreditPair,
+    keep_both,
+    list_open_flags,
+    submission_record_ids,
 )
 from app.services.training_record_notices import (
     CHANGED,
@@ -781,6 +790,104 @@ async def undo_course_link(
         username=current_user.username,
     )
     return CourseUnlinkResult(reverted=result.reverted, kept=result.kept)
+
+
+def _double_credit_record(record: TrainingRecord) -> DoubleCreditRecord:
+    return DoubleCreditRecord(
+        id=str(record.id),
+        course_name=record.course_name,
+        course_id=str(record.course_id) if record.course_id else None,
+        completion_date=record.completion_date,
+        hours_completed=float(record.hours_completed or 0),
+        source_event_id=str(record.source_event_id) if record.source_event_id else None,
+    )
+
+
+def _double_credit_view(pair: DuplicateCreditPair) -> DoubleCreditPair:
+    return DoubleCreditPair(
+        id=str(pair.flag.id),
+        user_id=str(pair.flag.user_id),
+        member_name=pair.member_name,
+        match_reason=pair.flag.match_reason,
+        detected_at=pair.flag.created_at,
+        event_record=_double_credit_record(pair.event_record),
+        other_record=_double_credit_record(pair.other_record),
+        other_from_self_report=pair.other_from_self_report,
+    )
+
+
+@router.get("/double-credit", response_model=DoubleCreditView)
+async def list_double_credit(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Possible double credit waiting on an officer: a finalized event's record
+    beside a self-report or hand-entered record of the same member, on the
+    same day, with the same course or a close name (owner decision
+    2026-11-23). Oldest first. A pair leaves the list once an officer keeps
+    both or voids either record.
+
+    **Requires permission: training.manage**
+    """
+    pairs = await list_open_flags(db, str(current_user.organization_id))
+    return DoubleCreditView(
+        items=[_double_credit_view(p) for p in pairs], total=len(pairs)
+    )
+
+
+@router.post("/double-credit/{flag_id}/keep-both", response_model=DoubleCreditPair)
+async def keep_both_double_credit(
+    flag_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Decide that both records of a possible double credit stand. Neither
+    record changes; the pair leaves the review list and a later re-finalize
+    of the event does not raise it again. Keeping a pair twice changes
+    nothing.
+
+    **Requires permission: training.manage**
+    """
+    org = str(current_user.organization_id)
+    flag = await keep_both(db, org, str(flag_id), str(current_user.id))
+    if flag is None:
+        raise HTTPException(status_code=404, detail="Possible double credit not found")
+    await db.commit()
+    await log_audit_event(
+        db=db,
+        event_type="training_double_credit_kept",
+        event_category="training",
+        severity="info",
+        event_data={
+            "flag_id": str(flag_id),
+            "event_record_id": str(flag.event_record_id),
+            "other_record_id": str(flag.other_record_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    # Read back with both records for the response.
+    event_record = await db.get(TrainingRecord, str(flag.event_record_id))
+    other_record = await db.get(TrainingRecord, str(flag.other_record_id))
+    member = await db.get(User, str(flag.user_id))
+    if event_record is None or other_record is None:
+        raise HTTPException(status_code=404, detail="Possible double credit not found")
+    claimed = await submission_record_ids(db, [str(other_record.id)])
+    return _double_credit_view(
+        DuplicateCreditPair(
+            flag=flag,
+            member_name=(
+                (member.display_name or member.username or "Member")
+                if member
+                else "Member"
+            ),
+            event_record=event_record,
+            other_record=other_record,
+            other_from_self_report=str(other_record.id) in claimed,
+        )
+    )
 
 
 @router.get("/courses", response_model=list[TrainingCourseResponse])

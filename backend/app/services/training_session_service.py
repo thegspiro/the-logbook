@@ -67,6 +67,10 @@ from app.services.training_compliance import (
     MandatoryTiers,
     mandatory_tiers_for_requirements,
 )
+from app.services.training_credit_duplicates import (
+    flag_duplicate_credit,
+    submission_record_ids,
+)
 from app.utils.json_ids import json_array_contains
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_current_members, is_in_org
@@ -1865,7 +1869,7 @@ class TrainingSessionService:
         credit.uncredited_names.sort()
 
         if training_session is None:
-            await self._write_sessionless_records(
+            written = await self._write_sessionless_records(
                 event, credited, event_date, actor, org, now
             )
             credit.records_completed = len(credited)
@@ -1876,6 +1880,13 @@ class TrainingSessionService:
                 keep_user_ids=set(credited),
             )
             await self.db.flush()
+            await flag_duplicate_credit(
+                self.db,
+                written,
+                event_title=event.title,
+                dates=event_dates,
+                organization_id=org,
+            )
             return credit
 
         credit.session_id = str(training_session.id)
@@ -1983,14 +1994,16 @@ class TrainingSessionService:
         actor: UUID | str | None,
         organization_id: str,
         now: datetime,
-    ) -> None:
+    ) -> List[TrainingRecord]:
         """Completed records for a Training event with no training details.
 
         Filed under the event's title as Continuing Education — the same
         default a session gets when nothing more specific is known. Matched on
         the source alone: a manual record that happens to share the title and
-        date is somebody else's entry and is never taken over.
+        date is somebody else's entry and is never taken over. Returns the
+        records it wrote.
         """
+        written: List[TrainingRecord] = []
         for user_id, minutes in credited.items():
             result = await self.db.execute(
                 EventService.event_training_record_query(
@@ -2024,6 +2037,68 @@ class TrainingSessionService:
             # The record's column is shorter than the event's.
             record.location = (event.location or "")[:255] or None
             record.updated_at = now
+            written.append(record)
+        return written
+
+    async def _adoptable_event_record(
+        self, query, *, earlier_finalize_credited: bool
+    ) -> Optional[TrainingRecord]:
+        """The first record ``event_training_record_query`` found that may be used.
+
+        Owner decision 2026-11-23 ("Double credit: flag, never merge"): a
+        record that is not this event's is never taken over, even when it
+        carries the course's exact name and the event's day. Of the unsourced
+        rows the name-and-day lookup finds, only the two shapes this event's
+        own writers left before ``source_event_id`` existed are adopted:
+
+        * one that carries no credit (the member's check-in placeholder);
+        * a completed one, when an earlier approved finalize of this session
+          credited the member (``earlier_finalize_credited``) — the record that
+          finalize wrote. With no such finalize, a completed record is a
+          hand-entered one.
+
+        A self-report's record is never adopted. Whatever is passed over gets
+        its own event record beside it, and the pair is flagged for an officer.
+        """
+        records: List[TrainingRecord] = list(
+            (await self.db.execute(query)).scalars().all()
+        )
+        unsourced = [str(r.id) for r in records if r.source_event_id is None]
+        claimed = await submission_record_ids(self.db, unsourced)
+        for record in records:
+            if record.source_event_id is None:
+                if str(record.id) in claimed:
+                    continue
+                status = getattr(record.status, "value", record.status)
+                if (
+                    status == TrainingStatus.COMPLETED.value
+                    and not earlier_finalize_credited
+                ):
+                    continue
+            return record
+        return None
+
+    async def _earlier_approved_user_ids(
+        self,
+        training_session_id: str,
+        organization_id: str,
+        exclude_approval_id: Optional[str] = None,
+    ) -> Set[str]:
+        """Members an earlier approved finalize of this session credited."""
+        query = (
+            select(TrainingApproval.id, TrainingApproval.attendee_data)
+            .where(TrainingApproval.training_session_id == str(training_session_id))
+            .where(TrainingApproval.organization_id == str(organization_id))
+            .where(TrainingApproval.status == ApprovalStatus.APPROVED)
+        )
+        if exclude_approval_id:
+            query = query.where(TrainingApproval.id != str(exclude_approval_id))
+        user_ids: Set[str] = set()
+        for _, attendee_data in (await self.db.execute(query)).all():
+            for entry in attendee_data or []:
+                if isinstance(entry, dict) and entry.get("user_id"):
+                    user_ids.add(str(entry["user_id"]))
+        return user_ids
 
     async def _hold_pending_records(
         self,
@@ -2041,8 +2116,11 @@ class TrainingSessionService:
         not taken back to in-progress: that credit stands until the officer's
         approval replaces it.
         """
+        earlier = await self._earlier_approved_user_ids(
+            str(training_session.id), organization_id
+        )
         for user_id in credited:
-            result = await self.db.execute(
+            record = await self._adoptable_event_record(
                 EventService.event_training_record_query(
                     organization_id,
                     user_id,
@@ -2050,9 +2128,9 @@ class TrainingSessionService:
                     adopt_course_name=training_session.course_name,
                     dates=event_dates,
                     lock=True,
-                )
+                ),
+                earlier_finalize_credited=user_id in earlier,
             )
-            record = result.scalars().first()
             if record is not None:
                 record.source_event_id = str(event.id)
                 continue
@@ -2234,7 +2312,15 @@ class TrainingSessionService:
             # member's check-in placeholder (created by the member, never
             # credited) and a completed record, which the callers only look
             # for among members this session's approvals credited.
-            for record in (await self.db.execute(legacy)).scalars().all():
+            legacy_records = list((await self.db.execute(legacy)).scalars().all())
+            # A self-report's record is the member's own claim, never this
+            # event's credit, whatever its name (owner decision 2026-11-23).
+            claimed = await submission_record_ids(
+                self.db, [str(r.id) for r in legacy_records]
+            )
+            for record in legacy_records:
+                if str(record.id) in claimed:
+                    continue
                 status = getattr(record.status, "value", record.status)
                 own_placeholder = (
                     status == TrainingStatus.IN_PROGRESS.value
@@ -3133,6 +3219,11 @@ class TrainingSessionService:
             training_session.course.code if training_session.course else None
         )
         now = datetime.now(timezone.utc)
+        earlier_credited = await self._earlier_approved_user_ids(
+            str(training_session.id),
+            organization_id,
+            exclude_approval_id=str(approval.id) if approval.id else None,
+        )
 
         for attendee in attendees:
             user_id = str(attendee.user_id)
@@ -3168,7 +3259,7 @@ class TrainingSessionService:
 
             hours_completed = round(minutes / 60.0, 2)
 
-            existing_record_result = await self.db.execute(
+            existing_record = await self._adoptable_event_record(
                 EventService.event_training_record_query(
                     organization_id,
                     user_id,
@@ -3176,9 +3267,9 @@ class TrainingSessionService:
                     adopt_course_name=training_session.course_name,
                     dates=event_dates,
                     lock=True,
-                )
+                ),
+                earlier_finalize_credited=user_id in earlier_credited,
             )
-            existing_record = existing_record_result.scalars().first()
 
             if existing_record:
                 existing_record.source_event_id = event_id
@@ -3310,6 +3401,16 @@ class TrainingSessionService:
                         course_id=course_id,
                     )
                 )
+
+        # A member who already holds this class from a self-report or a
+        # hand-entered record is flagged for an officer, never merged.
+        await flag_duplicate_credit(
+            self.db,
+            completed_records,
+            event_title=getattr(event, "title", None),
+            dates=event_dates,
+            organization_id=organization_id,
+        )
 
         # NOTE: Callers are responsible for commit/rollback to keep approval +
         # record creation atomic; they apply the returned pipeline updates only

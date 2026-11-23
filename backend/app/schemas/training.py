@@ -1592,6 +1592,38 @@ class CourseLinksView(BaseModel):
     courses: List[CourseLinkCourse]
 
 
+class DoubleCreditRecord(BaseModel):
+    """One side of a possible double credit."""
+
+    id: str
+    course_name: str
+    course_id: Optional[str] = None
+    completion_date: Optional[date] = None
+    hours_completed: float
+    source_event_id: Optional[str] = None
+
+
+class DoubleCreditPair(BaseModel):
+    """A finalize's record and the member's own record it may repeat."""
+
+    id: str
+    user_id: str
+    member_name: str
+    # "same_course" or "same_name" (equal match keys).
+    match_reason: str
+    detected_at: datetime
+    event_record: DoubleCreditRecord
+    other_record: DoubleCreditRecord
+    # The other record came from an approved self-report; otherwise an officer
+    # entered it.
+    other_from_self_report: bool
+
+
+class DoubleCreditView(BaseModel):
+    items: List[DoubleCreditPair]
+    total: int
+
+
 class CourseLinkRequest(BaseModel):
     key: str = Field(..., min_length=1, max_length=255)
     course_id: UUID

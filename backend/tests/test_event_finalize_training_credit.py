@@ -256,6 +256,7 @@ class TestLegacyReach:
 
     def _legacy(self, **overrides):
         fields = {
+            "id": "record-1",
             "user_id": "user-1",
             "course_id": None,
             "status": TrainingStatus.IN_PROGRESS,
@@ -267,9 +268,13 @@ class TestLegacyReach:
         fields.update(overrides)
         return SimpleNamespace(**fields)
 
-    async def _void(self, legacy):
+    async def _void(self, legacy, *, self_reported_ids=()):
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_all([]), _all([legacy])])
+        # The sourced records, the legacy ones, then which legacy records an
+        # approved self-report created.
+        claimed = MagicMock()
+        claimed.all.return_value = [(i,) for i in self_reported_ids]
+        db.execute = AsyncMock(side_effect=[_all([]), _all([legacy]), claimed])
         db.delete = AsyncMock()
         db.flush = AsyncMock()
         svc = TrainingSessionService(db)
@@ -310,6 +315,19 @@ class TestLegacyReach:
         changed, db = await self._void(legacy)
         assert changed == 1
         assert legacy.status == TrainingStatus.CANCELLED
+        db.delete.assert_not_awaited()
+
+    async def test_a_self_report_s_record_survives(self):
+        # Owner decision 2026-11-23: a self-report is the member's own claim,
+        # never this event's credit, even with the course's name and day.
+        legacy = self._legacy(
+            status=TrainingStatus.COMPLETED,
+            completion_date=date(2026, 9, 20),
+            hours_completed=3.0,
+        )
+        changed, db = await self._void(legacy, self_reported_ids=["record-1"])
+        assert changed == 0
+        assert legacy.status == TrainingStatus.COMPLETED
         db.delete.assert_not_awaited()
 
     async def test_removing_someone_never_credited_reaches_no_legacy_row(self):

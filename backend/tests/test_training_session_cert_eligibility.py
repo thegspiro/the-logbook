@@ -36,9 +36,15 @@ def _one(obj):
     return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
 
 
-def _scalars_first(obj):
+def _scalars_all(items):
     r = MagicMock()
-    r.scalars.return_value.first.return_value = obj
+    r.scalars.return_value.all.return_value = items
+    return r
+
+
+def _rows(rows):
+    r = MagicMock()
+    r.all.return_value = rows
     return r
 
 
@@ -89,11 +95,14 @@ def _run(counts_toward_certification: bool):
         start_datetime=datetime(2026, 7, 1, 9, 0, tzinfo=timezone.utc),
         location="Training Grounds",
     )
-    # session lookup, event lookup, existing-record lookup (none → create).
-    db = RecordingSession([_one(session), _one(event), _scalars_first(None)])
+    # session lookup, event lookup, the members an earlier approved finalize
+    # credited (none), existing-record lookup (none → create).
+    db = RecordingSession([_one(session), _one(event), _rows([]), _scalars_all([])])
     svc = TrainingSessionService(db)
 
-    approval = SimpleNamespace(training_session_id="sess-1", event_id="evt-1")
+    approval = SimpleNamespace(
+        id="appr-1", training_session_id="sess-1", event_id="evt-1"
+    )
     attendee = SimpleNamespace(
         user_id=user,
         override_duration_minutes=120,  # 2.0 hours; avoids the RSVP lookup
