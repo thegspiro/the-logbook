@@ -8767,6 +8767,15 @@ fails loudly rather than double-booking. The same residual exists for the
 store's per-department lock, and for program enrollment, which takes the same
 kind of lock (scope `program_enrollment`) around its duplicate check.
 
+**Series edits (2026-11-23).** A "this and all future events" edit that moves
+the times or changes the room now checks each moved occurrence at its new slot
+and refuses the save, naming the clashing bookings. It ignores the occurrences
+it is moving, since they vacate their old slots. **Default taken:** earlier
+occurrences of the same series, which the edit does not move, still count as
+bookings, so a shift that lands a moved occurrence on an earlier one is refused. An
+edit that moves no occurrence is not refused over a clash already there
+(`tests/test_event_series_room_overlap.py`).
+
 ## Prospects — Seven Drawer Fields Have Readers and No Producer (2026-09-24, resolved 2026-09-24)
 
 Found by the mapper sweep that followed the `election_title` fix (see below).
