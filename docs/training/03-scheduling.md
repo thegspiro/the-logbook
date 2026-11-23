@@ -426,9 +426,7 @@ higher on Past than on Hours, with nothing to say why. Now:
   recent attended shifts, so a member with more lost the older ones, and their
   hours, without warning. Every shift is now loaded.
 
-_Screenshot: create the Past view image (still outstanding from
-2026-11-09) after this change, with the **Hours credited** tiles and an amber
-**awaiting close-out** pill in frame._
+![My Shifts on Past: the Year picker, the Hours credited, Credited shifts and Avg hours/shift tiles with the hours awaiting close-out beneath, the hours-by-month chart, and past shifts under month headers giving each month's shifts and credited hours, one shift's pill reading awaiting close-out in amber](./images/03-142-my-shifts-past-credited.png)
 
 _Added 2026-11-10._ **End-of-shift summary.** The email and the in-app notice
 list call types as counts, most frequent first ("3 × EMS, 1 × Fire Alarm"),
@@ -504,6 +502,8 @@ profile, for the member and for officers with **View scheduling reports**;
 an officer sees the list but not **Log outside shift**.
 
 ![My Shifts on its Hours view: This month, this year and all-time cards with the two-colour split bar, the year picker between its Previous year and Next year arrows, the year-at-a-glance chart with its Busiest month, Months with shifts and Avg per active month tiles, and All shifts below](./images/03-104-my-shifts-hours.png)
+
+![The Hours view with October's bar selected on the year-at-a-glance chart, its tooltip giving the month's hours, shifts and calls: the other months dimmed, and October's shift highlighted in All shifts below](./images/03-143-hours-month-selected.png)
 
 ### Your shifts on the dashboard
 
