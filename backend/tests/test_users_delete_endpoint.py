@@ -19,6 +19,7 @@ from fastapi import HTTPException
 
 from app.api.v1.endpoints import users as users_endpoint
 from app.models.user import UserStatus
+from app.services.member_documents import MemberDocumentErasure
 from app.services.member_files import FileRemoval, MemberFiles
 from app.services.user_deletion_service import ApplicantRecordRemoval
 from tests.fake_request import fake_request
@@ -101,6 +102,13 @@ class TestDeleteUserHard:
             AsyncMock(
                 return_value=ApplicantRecordRemoval(applications=0, document_paths={})
             ),
+        )
+        # LIFE-11's document step has its own database-backed tests in
+        # test_member_documents_erasure.py.
+        monkeypatch.setattr(
+            users_endpoint,
+            "erase_member_documents",
+            AsyncMock(return_value=MemberDocumentErasure()),
         )
         monkeypatch.setattr(
             users_endpoint,
