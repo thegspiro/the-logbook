@@ -94,6 +94,23 @@ export const apparatusEventService = {
     return response.data;
   },
 
+  async approveRequest(eventId: string, requestId: string): Promise<CrewBoard> {
+    const response = await api.post<CrewBoard>(`${BASE}/events/${eventId}/requests/${requestId}/approve`);
+    return response.data;
+  },
+
+  async declineRequest(eventId: string, requestId: string, note?: string): Promise<CrewBoard> {
+    const response = await api.post<CrewBoard>(`${BASE}/events/${eventId}/requests/${requestId}/decline`, {
+      note,
+    });
+    return response.data;
+  },
+
+  async withdrawRequest(eventId: string, requestId: string): Promise<CrewBoard> {
+    const response = await api.post<CrewBoard>(`${BASE}/events/${eventId}/requests/${requestId}/withdraw`);
+    return response.data;
+  },
+
   async releaseSeat(eventId: string, seatId: string): Promise<CrewBoard> {
     const response = await api.post<CrewBoard>(`${BASE}/events/${eventId}/seats/${seatId}/release`);
     return response.data;

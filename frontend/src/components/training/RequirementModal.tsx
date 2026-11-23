@@ -1,8 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CallTypeRequirementPicker } from './CallTypeRequirementPicker';
 import { useDialog } from '../../hooks/useDialog';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';
-import toast from 'react-hot-toast';
 import { CourseLibraryPicker } from './CourseLibraryPicker';
 import { RecencyWindowField } from './RecencyWindowField';
 import { EvaluationRequirementFields } from './EvaluationRequirementFields';
@@ -10,6 +9,11 @@ import { ChecklistItemsEditor } from './ChecklistItemsEditor';
 import { ChangeScopeDialog } from './ChangeScopeDialog';
 import { useCourseLibrary } from '../../hooks/useCourseLibrary';
 import { useTimezone } from '../../hooks/useTimezone';
+import { useDiscardGuard } from '../../hooks/useDiscardGuard';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../../hooks/useFieldErrors';
+import { FIELD_ERROR_CLASS, FormField } from '../ux/FormField';
+import { ErrorSummary } from '../ux/ErrorSummary';
+import { firstRefused, saveExceptRefused } from '../../utils/saveExceptRefused';
 import { eventService } from '../../services/api';
 import { blankToNull } from '../../utils/formValues';
 import { formatCalendarDate, getTodayLocalDate } from '../../utils/dateFormatting';
@@ -81,6 +85,129 @@ const mergeMembershipTypeOptions = (
   return merged;
 };
 
+type RequirementField = 'name' | 'description' | 'target' | 'audience' | 'cutoff' | 'deadline' | 'year';
+
+/** Mirrors TrainingRequirementBase.name (max_length=255). */
+const NAME_MAX_LENGTH = 255;
+
+/**
+ * The input that holds each type's target, and what it is called. A type with
+ * no number to set (skills evaluation, checklist) has no entry: nothing about
+ * its target can be refused.
+ */
+const TARGET_INPUT: Partial<Record<RequirementType, { id: string; label: string; missing?: string }>> = {
+  hours: {
+    id: 'req-required-hours',
+    label: 'Required hours',
+    missing: 'Enter the hours an hours requirement asks for.',
+  },
+  courses: {
+    id: 'req-course-search',
+    label: 'Courses',
+    missing: 'Select at least one course from the library for a courses requirement.',
+  },
+  certification: { id: 'req-course-search', label: 'Courses' },
+  shifts: { id: 'req-required-shifts', label: 'Required shifts', missing: 'Enter the number of shifts to work.' },
+  calls: { id: 'req-required-calls', label: 'Required calls', missing: 'Enter the number of calls to run.' },
+  evaluated_shifts: {
+    id: 'req-required-evaluated-shifts',
+    label: 'Required evaluated shifts',
+    missing: 'Enter the number of evaluated shifts.',
+  },
+  evaluated_calls: {
+    id: 'req-required-evaluated-calls',
+    label: 'Required evaluated calls',
+    missing: 'Enter the number of evaluated calls.',
+  },
+  transports: {
+    id: 'req-required-transports',
+    label: 'Required transports',
+    missing: 'Enter the number of transports.',
+  },
+  refusals: { id: 'req-required-refusals', label: 'Required refusals', missing: 'Enter the number of refusals.' },
+  session_attendance: {
+    id: 'req-attendance-pct',
+    label: 'Sessions to attend',
+    missing: 'Enter the share of linked sessions to attend.',
+  },
+  knowledge_test: {
+    id: 'req-passing-score',
+    label: 'Passing score',
+    missing: 'Enter the passing score for a knowledge test.',
+  },
+};
+
+/**
+ * Every request key that depends on the requirement's type. An edit whose
+ * target is refused leaves all of them out, the type included, so the stored
+ * type keeps its stored target: leaving out only the number could pair a new
+ * type with the target of the old one, which the backend reads as a
+ * requirement that can never be met.
+ */
+const TYPE_DEPENDENT_KEYS = [
+  'requirement_type',
+  'required_hours',
+  'required_courses',
+  'recency_days',
+  'required_shifts',
+  'required_calls',
+  'required_transports',
+  'required_refusals',
+  'required_attendance_pct',
+  'allows_chief_override',
+  'evaluation_excludes_lowest_rating',
+  'required_call_types',
+  'checklist_items',
+  'passing_score',
+  'max_attempts',
+  'shift_credited',
+] as const;
+
+/** The grandfathering pair is one decision: refusing either keeps both as stored. */
+const GRANDFATHERING_KEYS = ['new_member_cutoff_date', 'existing_member_deadline'] as const;
+
+const REQUIREMENT_KEYS: Record<RequirementField, readonly string[]> = {
+  name: ['name'],
+  description: ['description'],
+  target: TYPE_DEPENDENT_KEYS,
+  audience: ['applies_to_all', 'required_membership_types'],
+  cutoff: GRANDFATHERING_KEYS,
+  deadline: GRANDFATHERING_KEYS,
+  year: ['year'],
+};
+
+function requirementFields(type: RequirementType): FieldSpecs<RequirementField> {
+  const target = TARGET_INPUT[type];
+  // Ordered as on screen, so the first refusal takes focus.
+  return {
+    name: { id: 'req-name', label: 'Name' },
+    description: { id: 'req-description', label: 'Description' },
+    target: {
+      id: target?.id ?? 'req-requirement-type',
+      label: target?.label ?? 'Requirement type',
+      apiKeys: [
+        'required_hours',
+        'required_courses',
+        'required_shifts',
+        'required_calls',
+        'required_transports',
+        'required_refusals',
+        'required_attendance_pct',
+        'passing_score',
+        'requirement_type',
+      ],
+    },
+    year: { id: 'req-year', label: 'Year' },
+    audience: {
+      id: 'req-applies-to-all',
+      label: 'Who it applies to',
+      apiKeys: ['applies_to_all', 'required_membership_types'],
+    },
+    cutoff: { id: 'req-cutoff-date', label: 'Existing members joined before', apiKeys: ['new_member_cutoff_date'] },
+    deadline: { id: 'req-catch-up-deadline', label: 'Catch-up deadline', apiKeys: ['existing_member_deadline'] },
+  };
+}
+
 /**
  * Full create/edit form for a training requirement.
  *
@@ -94,7 +221,17 @@ export interface RequirementModalProps {
   template?: TrainingRequirementCreate | null;
   categories: TrainingCategory[];
   onClose: () => void;
-  onSave: (data: TrainingRequirementCreate | TrainingRequirementUpdate, isEdit: boolean, id?: string) => Promise<void>;
+  /**
+   * Rejects when the save fails, so the form can put the reason on its field.
+   * `keepOpen` marks an edit saved without a refused field: apply it, but leave
+   * the form open with that field flagged.
+   */
+  onSave: (
+    data: TrainingRequirementCreate | TrainingRequirementUpdate,
+    isEdit: boolean,
+    id?: string,
+    options?: { keepOpen: boolean }
+  ) => Promise<void>;
 }
 
 export const RequirementModal: React.FC<RequirementModalProps> = ({
@@ -104,7 +241,6 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
   onClose,
   onSave,
 }) => {
-  const dialogRef = useDialog<HTMLDivElement>({ onClose });
   const tz = useTimezone();
   const today = getTodayLocalDate(tz);
 
@@ -170,6 +306,32 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
   // used to clear before the request returned, so both clicks created a row.
   const savingRef = useRef(false);
 
+  const fields = useMemo(() => requirementFields(formData.requirement_type), [formData.requirement_type]);
+  const fieldErrors = useFieldErrors(fields);
+  const { errors } = fieldErrors;
+  // Bumped when a refusal no field answers for is shown, to move focus there.
+  const [summaryFocus, setSummaryFocus] = useState(0);
+  // An edit waits here, with the fields refused before it was sent, while the
+  // chief chooses who the change reaches.
+  const pendingRefused = useRef<FieldErrors<RequirementField>>({});
+  const edited = (...names: RequirementField[]) => {
+    for (const name of names) fieldErrors.setError(name, null);
+  };
+
+  // Escape, the X and Cancel ask before typed changes are thrown away (forms
+  // review F-6). A field left out of a partial save still counts as unsaved.
+  const snapshot = JSON.stringify([
+    formData,
+    requiredCourses,
+    existingPolicy,
+    cutoffDate,
+    catchUpDeadline,
+    recencyDays,
+  ]);
+  const [baseline, setBaseline] = useState(snapshot);
+  const requestClose = useDiscardGuard({ isDirty: snapshot !== baseline || fieldErrors.hasErrors, onClose });
+  const dialogRef = useDialog<HTMLDivElement>({ onClose: requestClose });
+
   // A one-time requirement never recurs, so every cycle-related control (due
   // date type, calendar period, year) is hidden rather than shown with values
   // the backend ignores — that pairing is what made one-time requirements read
@@ -219,6 +381,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
   // they are already ticked; any other category (Retired, Administrative,
   // Honorary) is left as the officer set it.
   const toggleOperational = () => {
+    edited('audience');
     setFormData((prev) => {
       const hasAll = operationalTypes.every((t) => prev.required_membership_types.includes(t));
       return {
@@ -236,71 +399,53 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (savingRef.current) return;
-    if (!formData.name.trim()) {
-      toast.error('Name is required');
-      return;
-    }
+    // Each refusal is said on its field rather than in a toast that vanished
+    // (forms review F-3); the checks mirror the backend's create validator.
+    const problems: FieldErrors<RequirementField> = {};
+    if (!formData.name.trim()) problems.name = 'Give the requirement a name.';
 
-    // Mirror the backend TrainingRequirementCreate validator so users get a
-    // specific message instead of a generic 422 failure
     const checklistItems = formData.checklist_items.filter((i) => i.text.trim());
-    if (formData.requirement_type === 'hours' && !formData.required_hours) {
-      toast.error('Required hours must be set for an hours requirement');
-      return;
-    }
-    if (formData.requirement_type === 'courses' && requiredCourses.length === 0) {
-      toast.error('Select at least one course from the library for a courses requirement');
-      return;
-    }
-    if (formData.requirement_type === 'shifts' && !formData.required_shifts) {
-      toast.error('Required shifts must be set for a shifts requirement');
-      return;
-    }
-    if (formData.requirement_type === 'calls' && !formData.required_calls) {
-      toast.error('Required calls must be set for a calls requirement');
-      return;
-    }
-    if (formData.requirement_type === 'evaluated_shifts' && !formData.required_shifts) {
-      toast.error('Required evaluated shifts must be set for an evaluated shifts requirement');
-      return;
-    }
-    if (formData.requirement_type === 'transports' && !formData.required_transports) {
-      toast.error('Required transports must be set for a transports requirement');
-      return;
-    }
-    if (formData.requirement_type === 'evaluated_calls' && !formData.required_calls) {
-      toast.error('Required evaluated calls must be set for an evaluated calls requirement');
-      return;
-    }
-    if (formData.requirement_type === 'refusals' && !formData.required_refusals) {
-      toast.error('Required refusals must be set for a refusals requirement');
-      return;
-    }
-    if (formData.requirement_type === 'session_attendance' && !formData.required_attendance_pct) {
-      toast.error('Attendance percentage must be set for a session attendance requirement');
-      return;
-    }
-    if (formData.requirement_type === 'knowledge_test' && !formData.passing_score) {
-      toast.error('Passing score must be set for a knowledge test requirement');
-      return;
-    }
+    const targetMissing: Partial<Record<RequirementType, boolean>> = {
+      hours: !formData.required_hours,
+      courses: requiredCourses.length === 0,
+      shifts: !formData.required_shifts,
+      calls: !formData.required_calls,
+      evaluated_shifts: !formData.required_shifts,
+      evaluated_calls: !formData.required_calls,
+      transports: !formData.required_transports,
+      refusals: !formData.required_refusals,
+      session_attendance: !formData.required_attendance_pct,
+      knowledge_test: !formData.passing_score,
+    };
+    const missingTarget = TARGET_INPUT[formData.requirement_type]?.missing;
+    if (targetMissing[formData.requirement_type] && missingTarget) problems.target = missingTarget;
 
     // A requirement that applies to nobody silently disappears from every
-    // member's compliance view — block it unless the record targets by
+    // member's compliance view — refuse it unless the record targets by
     // role/position (set outside this form)
     const hasRoleTargeting = (seed?.required_roles?.length || 0) > 0 || (seed?.required_positions?.length || 0) > 0;
     if (!formData.applies_to_all && formData.required_membership_types.length === 0 && !hasRoleTargeting) {
-      toast.error('Select at least one member category, or check "Applies to all members"');
-      return;
+      problems.audience = 'Select at least one member category, or check "Applies to all members".';
+    }
+
+    if (!isOneTime && formData.year != null && (formData.year < 2020 || formData.year > 2100)) {
+      problems.year = 'Enter a year from 2020 to 2100, or leave it empty for the current year.';
     }
 
     const grandfathers = existingPolicy !== ExistingMemberPolicy.APPLY_TO_ALL;
     if (grandfathers && !cutoffDate) {
-      toast.error('Choose the date that separates existing members from new members');
-      return;
+      problems.cutoff = 'Choose the date that separates existing members from new members.';
     }
     if (existingPolicy === ExistingMemberPolicy.CATCH_UP && !catchUpDeadline) {
-      toast.error('Choose the date existing members have until');
+      problems.deadline = 'Choose the date existing members have until.';
+    }
+
+    fieldErrors.setFormError(null);
+    fieldErrors.setErrors(problems);
+    // A new requirement is not created until every field is fixed (create
+    // forms do not partially save); an edit saves the rest.
+    if (!requirement && Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
       return;
     }
 
@@ -400,17 +545,60 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
 
     if (requirement) {
       // Every edit asks who it reaches before anything is sent.
+      pendingRefused.current = problems;
       setPendingUpdate(data);
       return;
     }
     await persist(data);
   };
 
-  const persist = async (data: TrainingRequirementCreate | TrainingRequirementUpdate) => {
+  /** Show a failed save on the fields it names, or in the form when none does. */
+  const showFailure = (err: unknown) => {
+    const placed = fieldErrors.setFromApiError(err, 'Could not save the requirement. Try again.');
+    if (Object.keys(placed).length > 0) fieldErrors.focusFirst(placed);
+    else setSummaryFocus((n) => n + 1);
+  };
+
+  const persist = async (
+    data: TrainingRequirementCreate | TrainingRequirementUpdate,
+    // Fields refused before sending; only an edit for everyone reaches here with any.
+    refused: FieldErrors<RequirementField> = {},
+    // A save for new members creates a copy, so like a create it saves whole or not at all.
+    partial = false
+  ) => {
     savingRef.current = true;
     setSaving(true);
     try {
-      await onSave(data, !!requirement, requirement?.id);
+      if (!requirement || !partial) {
+        await onSave(data, !!requirement, requirement?.id);
+        return;
+      }
+      const payload = data as Record<string, unknown>;
+      const result = await saveExceptRefused<RequirementField, void>({
+        payload,
+        refused,
+        keysFor: (field) => REQUIREMENT_KEYS[field],
+        // A full save keeps the three-argument call every caller was written
+        // against; only a save that left a field out asks to stay open.
+        send: (body) =>
+          Object.keys(payload).some((key) => !(key in body))
+            ? onSave(body, true, requirement.id, { keepOpen: true })
+            : onSave(body, true, requirement.id),
+        place: (err) => placeApiError(fields, err),
+      });
+      const first = firstRefused(Object.keys(fields) as RequirementField[], result.refused);
+      if (first) {
+        // The form stays open with the refused field flagged; what did save is
+        // no longer an unsaved change.
+        fieldErrors.setErrors(result.refused);
+        fieldErrors.setFormError(
+          `Requirement saved, except ${fields[first].label.toLowerCase()}. Fix it and save again.`
+        );
+        fieldErrors.focusFirst(result.refused);
+        setBaseline(snapshot);
+      }
+    } catch (err: unknown) {
+      showFailure(err);
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -432,6 +620,30 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       ? 'You changed how existing members are treated. Save that for everyone first, then edit the standard for new members separately.'
       : null;
 
+  /** The target's refusal sits on whichever input holds this type's target. */
+  const targetError = (id: string) => (errors.target && fields.target.id === id ? errors.target : undefined);
+  const targetAria = (id: string, describedBy?: string) =>
+    targetError(id)
+      ? { 'aria-invalid': true as const, 'aria-describedby': [`${id}-error`, describedBy].filter(Boolean).join(' ') }
+      : describedBy
+        ? { 'aria-describedby': describedBy }
+        : {};
+  const targetMessage = (id: string) =>
+    targetError(id) ? (
+      <p id={`${id}-error`} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+        {targetError(id)}
+      </p>
+    ) : null;
+  /** Error text and its id, for a hand-built field. */
+  const fieldMessage = (name: RequirementField) =>
+    errors[name] ? (
+      <p id={`${fields[name].id}-error`} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+        {errors[name]}
+      </p>
+    ) : null;
+  const fieldAria = (name: RequirementField) =>
+    errors[name] ? { 'aria-invalid': true as const, 'aria-describedby': `${fields[name].id}-error` } : {};
+
   const handleCategoryToggle = (categoryId: string) => {
     setFormData((prev) => ({
       ...prev,
@@ -449,7 +661,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
         aria-modal="true"
         aria-labelledby="requirement-modal-title"
         onKeyDown={(e) => {
-          if (e.key === 'Escape') onClose();
+          if (e.key === 'Escape') requestClose();
         }}
       >
         <div ref={dialogRef} className="modal-panel max-h-[90dvh] w-full max-w-3xl overflow-y-auto p-6">
@@ -458,7 +670,8 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
               {requirement ? 'Edit Requirement' : 'Create Requirement'}
             </h3>
             <button
-              onClick={onClose}
+              type="button"
+              onClick={requestClose}
               className="hover:bg-theme-surface-hover text-theme-text-muted rounded-lg p-2 transition-colors"
               aria-label="Close dialog"
             >
@@ -467,49 +680,69 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
           </div>
 
           <form
+            noValidate
             onSubmit={(e) => {
               void handleSubmit(e);
             }}
             className="space-y-6"
           >
+            <ErrorSummary
+              items={fieldErrors.summary}
+              formError={fieldErrors.formError}
+              focusKey={summaryFocus}
+              title="Fix these and save again"
+            />
+
             {/* Basic Info */}
             <div className="space-y-4">
               <h4 className="text-theme-text-primary border-theme-surface-border border-b pb-2 font-semibold">
                 Basic Information
               </h4>
 
-              <div>
-                <label htmlFor="req-name" className="text-theme-text-secondary mb-2 block text-sm font-medium">
-                  Name{' '}
-                  <span aria-hidden="true" className="text-red-700 dark:text-red-400">
-                    *
-                  </span>
-                </label>
-                <input
-                  id="req-name"
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="form-input placeholder-theme-text-muted"
-                  placeholder="e.g., Annual Training Hours"
-                  required
-                  aria-required="true"
-                />
-              </div>
+              <FormField
+                id={fields.name.id}
+                label="Name"
+                required
+                error={errors.name}
+                maxLength={NAME_MAX_LENGTH}
+                count={formData.name.length}
+                labelClassName="text-theme-text-secondary mb-2 block text-sm font-medium"
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => {
+                      setFormData({ ...formData, name: e.target.value });
+                      edited('name');
+                    }}
+                    className="form-input placeholder-theme-text-muted"
+                    placeholder="e.g., Annual Training Hours"
+                  />
+                )}
+              </FormField>
 
-              <div>
-                <label htmlFor="req-description" className="text-theme-text-secondary mb-2 block text-sm font-medium">
-                  Description
-                </label>
-                <textarea
-                  id="req-description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="form-input placeholder-theme-text-muted"
-                  placeholder="Describe the requirement..."
-                  rows={3}
-                />
-              </div>
+              <FormField
+                id={fields.description.id}
+                label="Description"
+                error={errors.description}
+                labelClassName="text-theme-text-secondary mb-2 block text-sm font-medium"
+              >
+                {(field) => (
+                  <textarea
+                    {...field}
+                    value={formData.description}
+                    onChange={(e) => {
+                      setFormData({ ...formData, description: e.target.value });
+                      edited('description');
+                    }}
+                    className="form-input placeholder-theme-text-muted"
+                    placeholder="Describe the requirement..."
+                    rows={3}
+                  />
+                )}
+              </FormField>
 
               <div>
                 <label
@@ -542,10 +775,11 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                       ...(autoTrainingType ? { training_type: autoTrainingType } : {}),
                       ...(autoDueDateType ? { due_date_type: autoDueDateType } : {}),
                     });
+                    edited('target');
                   }}
                   className="form-input"
-                  required
                   aria-required="true"
+                  {...targetAria('req-requirement-type')}
                 >
                   <option value="hours">Hours</option>
                   <option value="courses">Courses</option>
@@ -608,17 +842,21 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                       id="req-required-hours"
                       type="number"
                       value={formData.required_hours || ''}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setFormData({
                           ...formData,
                           required_hours: e.target.value ? Number(e.target.value) : undefined,
-                        })
-                      }
+                        });
+                        edited('target');
+                      }}
                       className="form-input placeholder-theme-text-muted"
                       placeholder="e.g., 36"
                       min="0"
                       step="0.5"
+                      {...(formData.requirement_type === 'hours' ? { 'aria-required': true as const } : {})}
+                      {...targetAria('req-required-hours')}
                     />
+                    {targetMessage('req-required-hours')}
                   </div>
                 </div>
               )}
@@ -635,7 +873,11 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                   error={coursesError}
                   variant={formData.requirement_type === 'certification' ? 'certification' : 'courses'}
                   selectedIds={requiredCourses}
-                  onChange={setRequiredCourses}
+                  onChange={(ids) => {
+                    setRequiredCourses(ids);
+                    edited('target');
+                  }}
+                  fieldError={targetError('req-course-search')}
                 />
               )}
 
@@ -658,13 +900,20 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                     id="req-required-shifts"
                     type="number"
                     value={formData.required_shifts || ''}
-                    onChange={(e) =>
-                      setFormData({ ...formData, required_shifts: e.target.value ? Number(e.target.value) : undefined })
-                    }
+                    onChange={(e) => {
+                      setFormData({
+                        ...formData,
+                        required_shifts: e.target.value ? Number(e.target.value) : undefined,
+                      });
+                      edited('target');
+                    }}
                     className="form-input placeholder-theme-text-muted"
                     placeholder="e.g., 12"
                     min="1"
+                    aria-required="true"
+                    {...targetAria('req-required-shifts')}
                   />
+                  {targetMessage('req-required-shifts')}
                 </div>
               )}
 
@@ -683,13 +932,17 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                     id="req-required-calls"
                     type="number"
                     value={formData.required_calls || ''}
-                    onChange={(e) =>
-                      setFormData({ ...formData, required_calls: e.target.value ? Number(e.target.value) : undefined })
-                    }
+                    onChange={(e) => {
+                      setFormData({ ...formData, required_calls: e.target.value ? Number(e.target.value) : undefined });
+                      edited('target');
+                    }}
                     className="form-input placeholder-theme-text-muted"
                     placeholder="e.g., 24"
                     min="1"
+                    aria-required="true"
+                    {...targetAria('req-required-calls')}
                   />
+                  {targetMessage('req-required-calls')}
                   <div className="mt-3">
                     <CallTypeRequirementPicker
                       value={formData.required_call_types}
@@ -707,11 +960,24 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                 transports={formData.required_transports?.toString() ?? ''}
                 refusals={formData.required_refusals?.toString() ?? ''}
                 excludesLowest={formData.evaluation_excludes_lowest_rating}
-                onShiftsChange={(v) => setFormData({ ...formData, required_shifts: v ? Number(v) : undefined })}
-                onCallsChange={(v) => setFormData({ ...formData, required_calls: v ? Number(v) : undefined })}
-                onTransportsChange={(v) => setFormData({ ...formData, required_transports: v ? Number(v) : undefined })}
-                onRefusalsChange={(v) => setFormData({ ...formData, required_refusals: v ? Number(v) : undefined })}
+                onShiftsChange={(v) => {
+                  setFormData({ ...formData, required_shifts: v ? Number(v) : undefined });
+                  edited('target');
+                }}
+                onCallsChange={(v) => {
+                  setFormData({ ...formData, required_calls: v ? Number(v) : undefined });
+                  edited('target');
+                }}
+                onTransportsChange={(v) => {
+                  setFormData({ ...formData, required_transports: v ? Number(v) : undefined });
+                  edited('target');
+                }}
+                onRefusalsChange={(v) => {
+                  setFormData({ ...formData, required_refusals: v ? Number(v) : undefined });
+                  edited('target');
+                }}
                 onExcludesLowestChange={(v) => setFormData({ ...formData, evaluation_excludes_lowest_rating: v })}
+                error={errors.target}
               />
 
               {formData.requirement_type === 'session_attendance' && (
@@ -729,18 +995,22 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                     id="req-attendance-pct"
                     type="number"
                     value={formData.required_attendance_pct || ''}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setFormData({
                         ...formData,
                         required_attendance_pct: e.target.value ? Number(e.target.value) : undefined,
-                      })
-                    }
+                      });
+                      edited('target');
+                    }}
                     className="form-input placeholder-theme-text-muted"
                     placeholder="e.g., 60"
                     min="1"
                     max="100"
+                    aria-required="true"
                     aria-describedby="req-attendance-pct-help"
+                    {...targetAria('req-attendance-pct', 'req-attendance-pct-help')}
                   />
+                  {targetMessage('req-attendance-pct')}
                   <p id="req-attendance-pct-help" className="text-theme-text-muted mt-1 text-xs">
                     Of the training sessions linked to this requirement and held in the period. Link sessions when you
                     create them or from their event pages; sessions not linked are optional. A waiver or leave covering
@@ -782,14 +1052,21 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                       id="req-passing-score"
                       type="number"
                       value={formData.passing_score || ''}
-                      onChange={(e) =>
-                        setFormData({ ...formData, passing_score: e.target.value ? Number(e.target.value) : undefined })
-                      }
+                      onChange={(e) => {
+                        setFormData({
+                          ...formData,
+                          passing_score: e.target.value ? Number(e.target.value) : undefined,
+                        });
+                        edited('target');
+                      }}
                       className="form-input placeholder-theme-text-muted"
                       placeholder="e.g., 80"
                       min="1"
                       max="100"
+                      aria-required="true"
+                      {...targetAria('req-passing-score')}
                     />
+                    {targetMessage('req-passing-score')}
                   </div>
                   <div>
                     <label
@@ -850,14 +1127,17 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                       id="req-year"
                       type="number"
                       value={formData.year || ''}
-                      onChange={(e) =>
-                        setFormData({ ...formData, year: e.target.value ? Number(e.target.value) : undefined })
-                      }
+                      onChange={(e) => {
+                        setFormData({ ...formData, year: e.target.value ? Number(e.target.value) : undefined });
+                        edited('year');
+                      }}
                       className="form-input placeholder-theme-text-muted"
                       placeholder="e.g., 2026"
                       min="2020"
                       max="2100"
+                      {...fieldAria('year')}
                     />
+                    {fieldMessage('year')}
                   </div>
                 )}
               </div>
@@ -1228,22 +1508,26 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
               <div>
                 <label className="flex cursor-pointer items-center space-x-3">
                   <input
+                    id="req-applies-to-all"
                     type="checkbox"
                     checked={formData.applies_to_all}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setFormData({
                         ...formData,
                         applies_to_all: e.target.checked,
                         ...(e.target.checked ? { required_membership_types: [] } : {}),
-                      })
-                    }
+                      });
+                      edited('audience');
+                    }}
                     className="form-checkbox"
+                    {...fieldAria('audience')}
                   />
                   <span className="text-theme-text-secondary">Applies to all members</span>
                 </label>
                 <p className="text-theme-text-muted mt-1 ml-8 text-sm">
                   When checked, this requirement applies to everyone in the organization.
                 </p>
+                {fieldMessage('audience')}
               </div>
 
               {/* Member Categories - shown when not applies_to_all */}
@@ -1288,6 +1572,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                           type="checkbox"
                           checked={formData.required_membership_types.includes(memberType.value)}
                           onChange={() => {
+                            edited('audience');
                             setFormData((prev) => ({
                               ...prev,
                               required_membership_types: prev.required_membership_types.includes(memberType.value)
@@ -1364,7 +1649,10 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                     type="button"
                     role="radio"
                     aria-checked={existingPolicy === option.value}
-                    onClick={() => setExistingPolicy(option.value)}
+                    onClick={() => {
+                      setExistingPolicy(option.value);
+                      edited('cutoff', 'deadline');
+                    }}
                     className={`rounded-lg border p-3 text-left transition-colors ${
                       existingPolicy === option.value
                         ? 'text-theme-text-primary border-red-500 bg-red-500/20'
@@ -1389,9 +1677,15 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                       id="req-cutoff-date"
                       type="date"
                       value={cutoffDate}
-                      onChange={(e) => setCutoffDate(e.target.value)}
+                      onChange={(e) => {
+                        setCutoffDate(e.target.value);
+                        edited('cutoff');
+                      }}
                       className="form-input"
+                      aria-required="true"
+                      {...fieldAria('cutoff')}
                     />
+                    {fieldMessage('cutoff')}
                   </div>
                   {existingPolicy === ExistingMemberPolicy.CATCH_UP && (
                     <div>
@@ -1405,9 +1699,15 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                         id="req-catch-up-deadline"
                         type="date"
                         value={catchUpDeadline}
-                        onChange={(e) => setCatchUpDeadline(e.target.value)}
+                        onChange={(e) => {
+                          setCatchUpDeadline(e.target.value);
+                          edited('deadline');
+                        }}
                         className="form-input"
+                        aria-required="true"
+                        {...fieldAria('deadline')}
                       />
+                      {fieldMessage('deadline')}
                     </div>
                   )}
                 </div>
@@ -1424,7 +1724,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
             <div className="border-theme-surface-border flex justify-end space-x-3 border-t pt-4">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={requestClose}
                 className="bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg px-4 py-2 transition-colors"
               >
                 Cancel
@@ -1448,13 +1748,22 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
           const data = pendingUpdate;
           setPendingUpdate(null);
           if (!data) return;
-          void persist({
-            ...data,
-            apply_to: scope,
-            ...(scope === RequirementChangeScope.NEW_MEMBERS_ONLY && effectiveDate
-              ? { effective_date: effectiveDate }
-              : {}),
-          });
+          const forEveryone = scope !== RequirementChangeScope.NEW_MEMBERS_ONLY;
+          const refused = pendingRefused.current;
+          if (!forEveryone && Object.keys(refused).length > 0) {
+            fieldErrors.setFormError('Saving for new members makes a new copy, so fix these first.');
+            fieldErrors.focusFirst(refused);
+            return;
+          }
+          void persist(
+            {
+              ...data,
+              apply_to: scope,
+              ...(!forEveryone && effectiveDate ? { effective_date: effectiveDate } : {}),
+            },
+            refused,
+            forEveryone
+          );
         }}
       />
     </>

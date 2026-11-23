@@ -110,7 +110,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                 templates={templates}
                 value={selectedTemplateId}
                 onChange={setSelectedTemplateId}
-                hint="Training templates only. A template fills the event and its training details, replacing what is already typed."
+                hint="Training templates only. A template fills the event and its training details, links and completion settings, replacing what is already typed."
               />
             )}
             {/* A template starts the form afresh from its values. */}

@@ -5,25 +5,27 @@
  * Officers build templates with sections and criteria at a station computer.
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import {
-  Plus,
-  Trash2,
-  GripVertical,
-  ClipboardCheck,
-  Save,
-  Send,
-  ChevronDown,
-  ChevronUp,
-  AlertCircle,
-} from 'lucide-react';
+import { Plus, Trash2, GripVertical, ClipboardCheck, Save, Send, ChevronDown, ChevronUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { trainingProgramService, trainingModuleConfigService, roleService } from '../services/api';
 import type { TrainingRequirementEnhanced, TrainingModuleConfig as TMConfig } from '../types/training';
 import type { Role } from '../types/role';
 import { ConfirmDialog } from '../components/ux';
+import { ErrorSummary } from '../components/ux/ErrorSummary';
+import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
+import {
+  placeApiError,
+  useFieldErrors,
+  type FieldErrors,
+  type FieldSpecs,
+  type SummaryItem,
+} from '../hooks/useFieldErrors';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { firstRefused, saveExceptRefused } from '../utils/saveExceptRefused';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { blankToNull } from '../utils/formValues';
 import { CriterionScoreMode, SCORE_MODE_TYPES } from '../types/skillsTesting';
@@ -34,6 +36,61 @@ import type {
   ResultDisclosure,
   ResultRelease,
 } from '../types/skillsTesting';
+
+/**
+ * The template's own settings a save can refuse, by the request key they
+ * write, in the order they appear. `sections` is the whole sheet: the update
+ * replaces every section on each save, so a sheet with an open error keeps
+ * the stored one rather than saving part of it.
+ */
+type TemplateField =
+  'name' | 'category' | 'time_limit_seconds' | 'passing_percentage' | 'valid_for_months' | 'sections';
+
+// Limits mirror SkillTemplateCreate (name 255, category 100, passing 0-100,
+// valid_for_months 1-MAX_VALID_FOR_MONTHS).
+const NAME_MAX_LENGTH = 255;
+const CATEGORY_MAX_LENGTH = 100;
+const MAX_VALID_FOR_MONTHS = 120;
+
+const TEMPLATE_FIELDS: FieldSpecs<TemplateField> = {
+  name: { id: 'template-template-name', label: 'Template name' },
+  category: { id: 'template-category', label: 'Category' },
+  time_limit_seconds: { id: 'template-global-time-limit-minutes', label: 'Global time limit' },
+  passing_percentage: { id: 'template-passing-percentage', label: 'Passing percentage' },
+  valid_for_months: { id: 'template-valid-for-months', label: 'Valid for' },
+  sections: { id: 'template-sections', label: 'Evaluation sections' },
+};
+const TEMPLATE_ORDER = Object.keys(TEMPLATE_FIELDS) as TemplateField[];
+
+/** One open error on the sheet, keyed by the DOM id of the control it belongs to. */
+type SheetErrors = Record<string, string>;
+
+const sectionNameId = (localId: string) => `section-name-${localId}`;
+
+/**
+ * A 422 placed on the template's settings, with every entry about the sheet
+ * (`sections.N.criteria.M.label`, …) put on the sheet as a whole: its last
+ * key would otherwise land on a setting of the same name — a section's `name`
+ * on the template name.
+ */
+function placeTemplateError(error: unknown): { fieldErrors: FieldErrors<TemplateField>; unmatched: string[] } | null {
+  const response = (error as { response?: { status?: number; data?: { detail?: unknown } } } | null)?.response;
+  const detail = response?.data?.detail;
+  if (response?.status !== 422 || !Array.isArray(detail)) return null;
+  const entries = detail as Array<{ loc?: unknown[]; msg?: string; message?: string }>;
+  const aboutSheet = entries.filter((entry) => Array.isArray(entry.loc) && entry.loc.includes('sections'));
+  const rest = entries.filter((entry) => !aboutSheet.includes(entry));
+  const placed = placeApiError(TEMPLATE_FIELDS, { response: { status: 422, data: { detail: rest } } }) ?? {
+    fieldErrors: {},
+    unmatched: [],
+  };
+  if (aboutSheet.length > 0) {
+    placed.fieldErrors.sections = aboutSheet
+      .map((entry) => (entry.message || entry.msg || 'Invalid value').replace(/^Value error, /, ''))
+      .join(' ');
+  }
+  return placed;
+}
 
 /** Empty value means "inherit"; the label names what that resolves to. */
 const DISCLOSURE_CHOICES = [
@@ -117,8 +174,29 @@ const CriterionEditor: React.FC<{
   /** The template-wide Pass/Fail setting, so the "template default" choice can
    *  say what it currently resolves to instead of leaving the author to guess. */
   scorePassFailCriteria: boolean;
-}> = ({ criterion, onChange, onRemove, index, scorePassFailCriteria }) => {
+  /** Open errors on the sheet, by control id; editing a control answers its own. */
+  errors: SheetErrors;
+  onFieldEdit: (id: string) => void;
+}> = ({ criterion, onChange, onRemove, index, scorePassFailCriteria, errors, onFieldEdit }) => {
   const [checklistText, setChecklistText] = useState((criterion.checklist_items ?? []).join('\n'));
+  const aria = (id: string, describedBy?: string) =>
+    errors[id]
+      ? { 'aria-invalid': true as const, 'aria-describedby': [`${id}-error`, describedBy].filter(Boolean).join(' ') }
+      : describedBy
+        ? { 'aria-describedby': describedBy }
+        : {};
+  const message = (id: string) =>
+    errors[id] ? (
+      <p id={`${id}-error`} className={`mt-1 text-xs ${FIELD_ERROR_CLASS}`}>
+        {errors[id]}
+      </p>
+    ) : null;
+  const labelId = `criterion-criterion-label-${criterion.localId}`;
+  const maxId = `criterion-max-points-${criterion.localId}`;
+  const passingId = `criterion-passing-points-${criterion.localId}`;
+  const checklistId = `criterion-checklist-items-one-per-line-${criterion.localId}`;
+  const statementId = `criterion-statement-text-${criterion.localId}`;
+  const modeId = `criterion-if-this-step-is-failed-${criterion.localId}`;
   const takesScoreMode = SCORE_MODE_TYPES.includes(criterion.type);
   const mode = criterion.score_mode;
 
@@ -137,16 +215,26 @@ const CriterionEditor: React.FC<{
               htmlFor={`criterion-criterion-label-${criterion.localId}`}
               className="text-theme-text-muted mb-1 block text-xs font-medium"
             >
-              Criterion Label <span className="text-red-500">*</span>
+              Criterion Label{' '}
+              <span className={FIELD_ERROR_CLASS} aria-hidden="true">
+                *
+              </span>
             </label>
             <input
-              id={`criterion-criterion-label-${criterion.localId}`}
+              id={labelId}
               type="text"
               value={criterion.label}
-              onChange={(e) => onChange({ ...criterion, label: e.target.value })}
+              onChange={(e) => {
+                onChange({ ...criterion, label: e.target.value });
+                onFieldEdit(labelId);
+              }}
               placeholder="e.g., Dons SCBA within 60 seconds"
               className="form-input px-3 text-sm"
+              maxLength={NAME_MAX_LENGTH}
+              aria-required="true"
+              {...aria(labelId)}
             />
+            {message(labelId)}
           </div>
 
           {/* Type */}
@@ -182,22 +270,25 @@ const CriterionEditor: React.FC<{
                   Max Points
                 </label>
                 <input
-                  id={`criterion-max-points-${criterion.localId}`}
+                  id={maxId}
                   type="number"
                   min="1"
                   value={criterion.max_score ?? ''}
-                  onChange={(e) =>
-                    onChange({ ...criterion, max_score: e.target.value ? Number(e.target.value) : undefined })
-                  }
+                  onChange={(e) => {
+                    onChange({ ...criterion, max_score: e.target.value ? Number(e.target.value) : undefined });
+                    onFieldEdit(maxId);
+                  }}
                   placeholder="3"
                   className="form-input px-3 text-sm"
+                  {...aria(maxId)}
                 />
+                {message(maxId)}
                 {/* A scored step with no maximum carries no points at all —
                     the percentage is computed from max_score, so the step is
                     on the sheet, is marked by the examiner, and contributes
                     nothing. Said here as well as in the save-time errors
                     because this is where the author can still fix it. */}
-                {(criterion.max_score == null || criterion.max_score <= 0) && (
+                {!errors[maxId] && (criterion.max_score == null || criterion.max_score <= 0) && (
                   <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                     Without a maximum this step earns no points toward the score.
                   </p>
@@ -218,16 +309,19 @@ const CriterionEditor: React.FC<{
                     Passing Points
                   </label>
                   <input
-                    id={`criterion-passing-points-${criterion.localId}`}
+                    id={passingId}
                     type="number"
                     min="0"
                     value={criterion.passing_score ?? ''}
-                    onChange={(e) =>
-                      onChange({ ...criterion, passing_score: e.target.value ? Number(e.target.value) : undefined })
-                    }
+                    onChange={(e) => {
+                      onChange({ ...criterion, passing_score: e.target.value ? Number(e.target.value) : undefined });
+                      onFieldEdit(passingId);
+                    }}
                     placeholder="2"
                     className="form-input px-3 text-sm"
+                    {...aria(passingId)}
                   />
+                  {message(passingId)}
                 </div>
               )}
             </>
@@ -264,10 +358,12 @@ const CriterionEditor: React.FC<{
                 Checklist Items (one per line)
               </label>
               <textarea
-                id={`criterion-checklist-items-one-per-line-${criterion.localId}`}
+                id={checklistId}
                 value={checklistText}
+                {...aria(checklistId)}
                 onChange={(e) => {
                   setChecklistText(e.target.value);
+                  onFieldEdit(checklistId);
                   onChange({
                     ...criterion,
                     checklist_items: e.target.value.split('\n').filter((l) => l.trim()),
@@ -277,6 +373,7 @@ const CriterionEditor: React.FC<{
                 placeholder="Check airway&#10;Assess breathing&#10;Check pulse"
                 className="form-input resize-none px-3 text-sm"
               />
+              {message(checklistId)}
             </div>
           )}
 
@@ -286,16 +383,25 @@ const CriterionEditor: React.FC<{
                 htmlFor={`criterion-statement-text-${criterion.localId}`}
                 className="text-theme-text-muted mb-1 block text-xs font-medium"
               >
-                Statement Text <span className="text-red-500">*</span>
+                Statement Text{' '}
+                <span className={FIELD_ERROR_CLASS} aria-hidden="true">
+                  *
+                </span>
               </label>
               <textarea
-                id={`criterion-statement-text-${criterion.localId}`}
+                id={statementId}
                 value={criterion.statement_text ?? ''}
-                onChange={(e) => onChange({ ...criterion, statement_text: e.target.value || undefined })}
+                onChange={(e) => {
+                  onChange({ ...criterion, statement_text: e.target.value || undefined });
+                  onFieldEdit(statementId);
+                }}
                 rows={3}
                 placeholder="Enter the statement the evaluator must read or announce..."
                 className="form-input resize-none px-3 text-sm"
+                aria-required="true"
+                {...aria(statementId)}
               />
+              {message(statementId)}
               {/* Sheets differ on this and the difference is invisible from the
                   scorecard afterwards: an opening brief read before the
                   candidate is in position is off the clock, while a prompt
@@ -333,10 +439,12 @@ const CriterionEditor: React.FC<{
               </label>
               <div className="flex gap-2">
                 <select
-                  id={`criterion-if-this-step-is-failed-${criterion.localId}`}
+                  id={modeId}
                   value={mode ?? ''}
                   aria-label={`Score effect for criterion ${index + 1}`}
+                  {...aria(modeId)}
                   onChange={(e) => {
+                    onFieldEdit(modeId);
                     const next = e.target.value as CriterionScoreMode | '';
                     onChange({
                       ...criterion,
@@ -389,6 +497,7 @@ const CriterionEditor: React.FC<{
                   />
                 )}
               </div>
+              {message(modeId)}
               {mode === CriterionScoreMode.POINTS && (
                 <p className="text-theme-text-muted mt-1 text-xs">
                   Adds {criterion.max_score && criterion.max_score > 0 ? criterion.max_score : 1} to the points
@@ -462,7 +571,10 @@ const SectionEditor: React.FC<{
   onRemove: () => void;
   index: number;
   scorePassFailCriteria: boolean;
-}> = ({ section, onChange, onRemove, index, scorePassFailCriteria }) => {
+  errors: SheetErrors;
+  onFieldEdit: (id: string) => void;
+}> = ({ section, onChange, onRemove, index, scorePassFailCriteria, errors, onFieldEdit }) => {
+  const nameId = sectionNameId(section.localId);
   const addCriterion = () => {
     onChange({
       ...section,
@@ -493,14 +605,28 @@ const SectionEditor: React.FC<{
         <span className="text-theme-text-muted text-sm font-bold">Section {index + 1}</span>
 
         <div className="flex flex-1 gap-3">
-          <input
-            type="text"
-            value={section.name}
-            onChange={(e) => onChange({ ...section, name: e.target.value })}
-            aria-label="Section name"
-            placeholder="Section name (e.g., SCBA Operations)"
-            className="form-input flex-1 px-3 py-1.5 text-sm font-medium"
-          />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <input
+              id={nameId}
+              type="text"
+              value={section.name}
+              onChange={(e) => {
+                onChange({ ...section, name: e.target.value });
+                onFieldEdit(nameId);
+              }}
+              aria-label="Section name"
+              placeholder="Section name (e.g., SCBA Operations)"
+              className="form-input px-3 py-1.5 text-sm font-medium"
+              maxLength={NAME_MAX_LENGTH}
+              aria-required="true"
+              {...(errors[nameId] ? { 'aria-invalid': true as const, 'aria-describedby': `${nameId}-error` } : {})}
+            />
+            {errors[nameId] && (
+              <p id={`${nameId}-error`} className={`mt-1 text-xs ${FIELD_ERROR_CLASS}`}>
+                {errors[nameId]}
+              </p>
+            )}
+          </div>
           <input
             type="text"
             value={section.description ?? ''}
@@ -542,10 +668,13 @@ const SectionEditor: React.FC<{
               onRemove={() => removeCriterion(i)}
               index={i}
               scorePassFailCriteria={scorePassFailCriteria}
+              errors={errors}
+              onFieldEdit={onFieldEdit}
             />
           ))}
 
           <button
+            type="button"
             onClick={addCriterion}
             className="border-theme-surface-border touch:min-h-11 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2 text-sm text-red-800 transition-colors hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20"
           >
@@ -573,8 +702,10 @@ export const SkillTemplateBuilderPage: React.FC = () => {
     updateTemplate,
     publishTemplate,
     clearCurrentTemplate,
+    clearError,
     error: storeError,
   } = useSkillsTestingStore();
+  const { confirm } = useConfirm();
 
   // Form state
   const [name, setName] = useState('');
@@ -602,7 +733,23 @@ export const SkillTemplateBuilderPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  // Open errors on the settings (useFieldErrors) and on the sheet (by control
+  // id). Each stays flagged until it is fixed (owner rule, 2026-11-05).
+  const fieldErrors = useFieldErrors(TEMPLATE_FIELDS);
+  const [sheetErrors, setSheetErrors] = useState<SummaryItem[]>([]);
+  const [summaryFocus, setSummaryFocus] = useState(0);
+  const sheetErrorMap: SheetErrors = Object.fromEntries(sheetErrors.map((item) => [item.id, item.message]));
+  const clearSheetError = useCallback(
+    (id: string) =>
+      setSheetErrors((prev) => (prev.some((item) => item.id === id) ? prev.filter((item) => item.id !== id) : prev)),
+    []
+  );
+  // A save that left a refused setting out must not have the stored template
+  // it returns re-seed the form: that would put the stored value back over
+  // what was typed, and the flag would sit on a field showing something else.
+  const keepTyped = useRef(false);
+  // Bumped with each seed from the stored template, to retake the baseline.
+  const [seedVersion, setSeedVersion] = useState(0);
 
   // Load the org's training requirements for the optional pipeline link.
   useEffect(() => {
@@ -659,7 +806,12 @@ export const SkillTemplateBuilderPage: React.FC = () => {
 
   // Populate form when template data loads
   useEffect(() => {
+    if (keepTyped.current) {
+      keepTyped.current = false;
+      return;
+    }
     if (currentTemplate && isEditing) {
+      setSeedVersion((n) => n + 1);
       setName(currentTemplate.name);
       setDescription(currentTemplate.description ?? '');
       setCategory(currentTemplate.category ?? '');
@@ -709,20 +861,57 @@ export const SkillTemplateBuilderPage: React.FC = () => {
     }
   }, [currentTemplate, isEditing]);
 
-  const validate = useCallback((): string[] => {
-    const errors: string[] = [];
-    if (!name.trim()) errors.push('Template name is required');
-    if (sections.length === 0) errors.push('At least one section is required');
+  /**
+   * Every open error: on the settings by field, and on the sheet as summary
+   * rows that point at their control. The sheet's wording names the section
+   * and criterion, so the summary reads the way the old banner did.
+   */
+  const validate = useCallback((): { fields: FieldErrors<TemplateField>; sheet: SummaryItem[] } => {
+    const fields: FieldErrors<TemplateField> = {};
+    const sheet: SummaryItem[] = [];
+    if (!name.trim()) fields.name = 'Give the template a name.';
+    if (passingPercentage != null && (passingPercentage < 0 || passingPercentage > 100)) {
+      fields.passing_percentage = 'Enter a percentage from 0 to 100, or leave it empty.';
+    }
+    if (
+      validForMonths != null &&
+      (!Number.isInteger(validForMonths) || validForMonths < 1 || validForMonths > MAX_VALID_FOR_MONTHS)
+    ) {
+      fields.valid_for_months = `Enter a whole number of months from 1 to ${MAX_VALID_FOR_MONTHS}, or leave it empty.`;
+    }
+    if (timeLimitMinutes != null && timeLimitMinutes < 0) {
+      fields.time_limit_seconds = 'Enter 0 or more minutes, or leave it empty.';
+    }
+    if (sections.length === 0) {
+      sheet.push({
+        id: TEMPLATE_FIELDS.sections.id,
+        label: 'Evaluation sections',
+        message: 'Add at least one section.',
+      });
+    }
 
     sections.forEach((section, si) => {
-      if (!section.name.trim()) errors.push(`Section ${si + 1}: Name is required`);
-      if (section.criteria.length === 0) errors.push(`Section ${si + 1}: At least one criterion is required`);
+      const where = `Section ${si + 1}`;
+      if (!section.name.trim()) {
+        sheet.push({ id: sectionNameId(section.localId), label: where, message: 'Name is required.' });
+      }
+      if (section.criteria.length === 0) {
+        sheet.push({
+          id: sectionNameId(section.localId),
+          label: where,
+          message: 'At least one criterion is required.',
+        });
+      }
       section.criteria.forEach((criterion, ci) => {
-        if (!criterion.label.trim()) errors.push(`Section ${si + 1}, Criterion ${ci + 1}: Label is required`);
+        const at = `${where}, Criterion ${ci + 1}`;
+        const cid = criterion.localId;
+        if (!criterion.label.trim()) {
+          sheet.push({ id: `criterion-criterion-label-${cid}`, label: at, message: 'Give the criterion a label.' });
+        }
         // Scoped to critical criteria because that is where the field is now
         // shown. A non-critical criterion can still carry a stale passing_score
-        // from before it was unmarked, and validating that would block saving
-        // over a field the editor no longer displays — an error with no
+        // from before it was unmarked, and validating that would refuse the
+        // sheet over a field the editor no longer displays — an error with no
         // reachable cause. The value is inert while non-critical, and is
         // deliberately kept rather than cleared: dropping it would silently
         // reset the threshold to 0 (pass at any score) if the criterion were
@@ -734,27 +923,33 @@ export const SkillTemplateBuilderPage: React.FC = () => {
           criterion.passing_score != null &&
           criterion.passing_score > criterion.max_score
         ) {
-          errors.push(`Section ${si + 1}, Criterion ${ci + 1}: Passing score cannot exceed max score`);
+          sheet.push({
+            id: `criterion-passing-points-${cid}`,
+            label: at,
+            message: 'Passing score cannot exceed max score.',
+          });
         }
         // A scored step's points come entirely from max_score: _criterion_point_value
         // returns null without one, so the step is marked by the examiner and
-        // contributes nothing to the percentage — silently. That is the same
-        // shape of failure as the unrenderable criterion type, and it is caught
-        // here rather than in the API schema because the template PUT resends
-        // every section: a 422 would block edits to templates saved before this
-        // rule existed, with no way to see which step was at fault. Blocking
-        // rather than advisory, matching the checklist and statement rules
-        // below — a step that cannot score is not a step.
+        // contributes nothing to the percentage — silently. The API refuses it
+        // too, so it refuses the sheet here, on the step, rather than as a 422
+        // naming the whole sheet.
         if (criterion.type === 'score' && (criterion.max_score == null || criterion.max_score <= 0)) {
-          errors.push(
-            `Section ${si + 1}, Criterion ${ci + 1}: Scored steps need a max points value, or they earn nothing`
-          );
+          sheet.push({
+            id: `criterion-max-points-${cid}`,
+            label: at,
+            message: 'Scored steps need a max points value, or they earn nothing.',
+          });
         }
         if (criterion.type === 'checklist' && (!criterion.checklist_items || criterion.checklist_items.length === 0)) {
-          errors.push(`Section ${si + 1}, Criterion ${ci + 1}: At least one checklist item is required`);
+          sheet.push({
+            id: `criterion-checklist-items-one-per-line-${cid}`,
+            label: at,
+            message: 'At least one checklist item is required.',
+          });
         }
         if (criterion.type === 'statement' && !criterion.statement_text?.trim()) {
-          errors.push(`Section ${si + 1}, Criterion ${ci + 1}: Statement text is required`);
+          sheet.push({ id: `criterion-statement-text-${cid}`, label: at, message: 'Statement text is required.' });
         }
       });
     });
@@ -762,10 +957,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
     // A deduction is subtracted from a point total; with no point-carrying step
     // anywhere on the sheet there is no total to subtract from, and the scorer
     // falls back to averaging per-section percentages — which quietly ignores
-    // every deduction the examiner recorded. Caught here rather than server-side
-    // for the same reason as the max-points rule above: the template PUT resends
-    // every section, so a 422 would block edits to templates saved before the
-    // rule existed with no way to see which step was at fault.
+    // every deduction the examiner recorded. Said on the first deducting step.
     const allCriteria = sections.flatMap((s) => s.criteria);
     const deducting = allCriteria.filter(
       (c) => SCORE_MODE_TYPES.includes(c.type) && c.score_mode === CriterionScoreMode.DEDUCT
@@ -776,16 +968,22 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       if (c.score_mode === CriterionScoreMode.POINTS) return true;
       return c.score_mode == null && c.type === 'pass_fail' && scorePassFailCriteria;
     });
-    if (deducting.length > 0 && !earnsPoints) {
-      errors.push(
-        `${deducting.length === 1 ? 'A step deducts points' : `${deducting.length} steps deduct points`}, but no step ` +
+    const firstDeducting = deducting[0];
+    if (firstDeducting && !earnsPoints) {
+      const si = sections.findIndex((s) => s.criteria.includes(firstDeducting));
+      const ci = sections[si]?.criteria.indexOf(firstDeducting) ?? 0;
+      sheet.push({
+        id: `criterion-if-this-step-is-failed-${firstDeducting.localId}`,
+        label: `Section ${si + 1}, Criterion ${ci + 1}`,
+        message:
+          `${deducting.length === 1 ? 'A step deducts points' : `${deducting.length} steps deduct points`}, but no step ` +
           'on this template earns any — there is no total for the deduction to come off. Give at least one step a ' +
-          'point value first.'
-      );
+          'point value first.',
+      });
     }
 
-    return errors;
-  }, [name, sections, scorePassFailCriteria]);
+    return { fields, sheet };
+  }, [name, sections, scorePassFailCriteria, passingPercentage, validForMonths, timeLimitMinutes]);
 
   const buildPayload = useCallback(() => {
     const parsedTags = tags
@@ -860,41 +1058,129 @@ export const SkillTemplateBuilderPage: React.FC = () => {
     sections,
   ]);
 
-  const handleSave = async () => {
-    const errors = validate();
-    if (errors.length > 0) {
-      setValidationErrors(errors);
+  // What the form held when it was last loaded or saved, so leaving with
+  // changes asks first (forms review F-6). Taken a render after each seed,
+  // once the seeded values are what the form holds.
+  const snapshot = JSON.stringify(buildPayload());
+  const snapshotRef = useRef(snapshot);
+  snapshotRef.current = snapshot;
+  const [baseline, setBaseline] = useState<string | null>(null);
+  useEffect(() => {
+    setBaseline(snapshotRef.current);
+  }, [seedVersion]);
+  // A refused field left out of a partial save still counts as unsaved.
+  const isDirty = (baseline !== null && snapshot !== baseline) || fieldErrors.hasErrors || sheetErrors.length > 0;
+  useUnsavedChanges({ hasChanges: isDirty && !isSaving });
+
+  /**
+   * Show every open error: settings on their fields, the sheet on its
+   * controls, with any collapsed section holding one opened so it can be
+   * seen. Focus goes to the first, top to bottom.
+   */
+  const showProblems = (fields: FieldErrors<TemplateField>, sheet: SummaryItem[]) => {
+    fieldErrors.setErrors(fields);
+    setSheetErrors(sheet);
+    const ids = new Set(sheet.map((item) => item.id));
+    if (sheet.length > 0) {
+      setSections((prev) =>
+        prev.map((section) =>
+          section.collapsed &&
+          (ids.has(sectionNameId(section.localId)) ||
+            section.criteria.some((c) => [...ids].some((id) => id.endsWith(c.localId))))
+            ? { ...section, collapsed: false }
+            : section
+        )
+      );
+    }
+    const first = TEMPLATE_ORDER.find((field) => fields[field]);
+    const target = first ? TEMPLATE_FIELDS[first].id : sheet[0]?.id;
+    // After the re-render that opens a collapsed section.
+    if (target) window.setTimeout(() => document.getElementById(target)?.focus(), 0);
+  };
+
+  /** A failed save on the field it names, or in the form when none does. */
+  const showFailure = (err: unknown, fallback: string) => {
+    keepTyped.current = false;
+    // The page says it itself; the store's banner would say it twice.
+    clearError();
+    const placed = placeTemplateError(err);
+    if (placed) {
+      fieldErrors.setErrors(placed.fieldErrors);
+      fieldErrors.setFormError(placed.unmatched.length ? placed.unmatched.join(' ') : null);
+      const first = TEMPLATE_ORDER.find((field) => placed.fieldErrors[field]);
+      if (first) document.getElementById(TEMPLATE_FIELDS[first].id)?.focus();
+      else setSummaryFocus((n) => n + 1);
       return;
     }
-    setValidationErrors([]);
+    fieldErrors.setFromApiError(err, fallback);
+    setSummaryFocus((n) => n + 1);
+  };
+
+  const handleSave = async () => {
+    if (isSaving) return;
+    const { fields, sheet } = validate();
+    fieldErrors.setFormError(null);
+    showProblems(fields, sheet);
+    // A new template is not created until every field is fixed (create forms
+    // do not partially save). An existing one saves the rest: a refused
+    // setting is left out and keeps its stored value, and a sheet with an open
+    // error keeps the stored sheet, because the update replaces it whole.
+    const refused: FieldErrors<TemplateField> =
+      sheet.length > 0 ? { ...fields, sections: 'The sheet has an open error.' } : fields;
+    if (!isEditing && Object.keys(refused).length > 0) return;
     setIsSaving(true);
 
     try {
       const payload = buildPayload();
       if (isEditing && id) {
-        await updateTemplate(id, payload);
+        const result = await saveExceptRefused<TemplateField, unknown>({
+          payload,
+          refused,
+          send: (body) => {
+            if (Object.keys(payload).some((key) => !(key in body))) keepTyped.current = true;
+            return updateTemplate(id, body);
+          },
+          place: placeTemplateError,
+        });
+        const first = firstRefused(TEMPLATE_ORDER, result.refused);
+        if (first) {
+          clearError();
+          // A sheet refused here is already flagged on its controls; one the
+          // server refused is said under the sheet's heading.
+          const shown = { ...result.refused };
+          if (sheet.length > 0) delete shown.sections;
+          fieldErrors.setErrors(shown);
+          fieldErrors.setFormError(
+            `Template saved, except ${TEMPLATE_FIELDS[first].label.toLowerCase()}. Fix it and save again.`
+          );
+          setBaseline(JSON.stringify(payload));
+          if (!fields[first] && first !== 'sections') document.getElementById(TEMPLATE_FIELDS[first].id)?.focus();
+          return;
+        }
+        setBaseline(JSON.stringify(payload));
         toast.success('Template updated');
       } else {
         const created = await createTemplate(payload);
+        setBaseline(JSON.stringify(payload));
         toast.success('Template created');
         void navigate(`/training/skills-testing/templates/${created.id}/edit`, { replace: true });
       }
-    } catch {
-      toast.error('Failed to save template');
+    } catch (err: unknown) {
+      showFailure(err, 'Could not save the template. Try again.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  /** Validate first, then ask. Publishing saves the current edits as well, so
-   *  the confirmation has to say so — the officer is agreeing to both. */
+  /** Publishing is the step that refuses: every open error is fixed first. The
+   *  confirmation says publishing saves the current edits as well, because the
+   *  officer is agreeing to both. */
   const requestPublish = () => {
     if (!isEditing || !id) return;
-    const errors = validate();
-    if (errors.length > 0) {
-      setValidationErrors(errors);
-      return;
-    }
+    const { fields, sheet } = validate();
+    fieldErrors.setFormError(null);
+    showProblems(fields, sheet);
+    if (Object.keys(fields).length > 0 || sheet.length > 0) return;
     setShowPublishConfirm(true);
   };
 
@@ -904,15 +1190,31 @@ export const SkillTemplateBuilderPage: React.FC = () => {
     try {
       const payload = buildPayload();
       await updateTemplate(id, payload);
+      setBaseline(JSON.stringify(payload));
       await publishTemplate(id);
       setShowPublishConfirm(false);
       toast.success('Template published');
       void navigate('/training/admin?page=skills-testing&tab=templates');
-    } catch {
-      toast.error('Failed to publish template');
+    } catch (err: unknown) {
+      setShowPublishConfirm(false);
+      showFailure(err, 'Could not publish the template. Try again.');
     } finally {
       setIsPublishing(false);
     }
+  };
+
+  const leave = async () => {
+    if (isDirty) {
+      const discard = await confirm({
+        title: 'Discard your changes?',
+        message: 'What you changed on this template has not been saved. Leaving will lose it.',
+        confirmLabel: 'Discard changes',
+        cancelLabel: 'Keep editing',
+        variant: 'warning',
+      });
+      if (!discard) return;
+    }
+    void navigate('/training/admin?page=skills-testing&tab=templates');
   };
 
   const addSection = () => {
@@ -954,6 +1256,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
           actions={
             <>
               <button
+                type="button"
                 onClick={() => void handleSave()}
                 disabled={isSaving}
                 className="btn-secondary flex items-center gap-2 font-medium"
@@ -962,7 +1265,11 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 {isSaving ? 'Saving...' : 'Save Draft'}
               </button>
               {isEditing && (
-                <button onClick={requestPublish} className="btn-success flex items-center gap-2 font-medium">
+                <button
+                  type="button"
+                  onClick={requestPublish}
+                  className="btn-success flex items-center gap-2 font-medium"
+                >
                   <Send className="h-4 w-4" />
                   Publish
                 </button>
@@ -971,26 +1278,14 @@ export const SkillTemplateBuilderPage: React.FC = () => {
           }
         />
 
-        {/* Validation Errors */}
-        {validationErrors.length > 0 && (
-          <div
-            className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4"
-            role="alert"
-            aria-live="assertive"
-          >
-            <div className="flex items-start gap-2">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
-              <div>
-                <p className="font-medium text-red-700 dark:text-red-300">Fix these before saving:</p>
-                <ul className="mt-1 list-inside list-disc text-sm text-red-700 dark:text-red-300">
-                  {validationErrors.map((err, i) => (
-                    <li key={i}>{err}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
+        <div className="mb-6 empty:hidden">
+          <ErrorSummary
+            items={[...fieldErrors.summary.filter((item) => item.id !== TEMPLATE_FIELDS.sections.id), ...sheetErrors]}
+            formError={fieldErrors.formError}
+            focusKey={summaryFocus}
+            title="Fix these and save again"
+          />
+        </div>
 
         {storeError && (
           <div
@@ -1002,357 +1297,404 @@ export const SkillTemplateBuilderPage: React.FC = () => {
           </div>
         )}
 
-        {/* Template Settings */}
-        <div className="card mb-6 p-6">
-          <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Template Settings</h2>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label htmlFor="template-template-name" className="text-theme-text-muted mb-1 block text-sm font-medium">
-                Template Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="template-template-name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., SCBA Proficiency Evaluation"
-                className="form-input px-3"
-              />
-            </div>
-            <div>
-              <label htmlFor="template-category" className="text-theme-text-muted mb-1 block text-sm font-medium">
-                Category
-              </label>
-              <input
-                id="template-category"
-                type="text"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="e.g., Fire Operations, EMS, Hazmat"
-                className="form-input px-3"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label htmlFor="template-visibility" className="text-theme-text-muted mb-1 block text-sm font-medium">
-                Visibility
-              </label>
-              <select
-                id="template-visibility"
-                value={visibility}
-                onChange={(e) => setVisibility(e.target.value)}
-                className="form-input px-3"
+        <form
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleSave();
+          }}
+        >
+          {/* Template Settings */}
+          <div className="card mb-6 p-6">
+            <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Template Settings</h2>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <FormField
+                id={TEMPLATE_FIELDS.name.id}
+                label="Template Name"
+                required
+                error={fieldErrors.errors.name}
+                maxLength={NAME_MAX_LENGTH}
+                count={name.length}
+                labelClassName="text-theme-text-muted mb-1 block text-sm font-medium"
               >
-                <option value="all_members">All Members</option>
-                <option value="officers_only">Officers Only</option>
-                <option value="assigned_only">Assigned Members Only</option>
-              </select>
-              <p className="text-theme-text-muted mt-1 text-xs">
-                Controls who can see this test. Officers always have full access.
-              </p>
-            </div>
-            <div className="md:col-span-2">
-              <label
-                htmlFor="template-linked-training-requirement-optional"
-                className="text-theme-text-muted mb-1 block text-sm font-medium"
+                {(field) => (
+                  <input
+                    {...field}
+                    type="text"
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      fieldErrors.setError('name', null);
+                    }}
+                    placeholder="e.g., SCBA Proficiency Evaluation"
+                    className="form-input px-3"
+                  />
+                )}
+              </FormField>
+              <FormField
+                id={TEMPLATE_FIELDS.category.id}
+                label="Category"
+                error={fieldErrors.errors.category}
+                maxLength={CATEGORY_MAX_LENGTH}
+                count={category.length}
+                labelClassName="text-theme-text-muted mb-1 block text-sm font-medium"
               >
-                Linked Training Requirement (optional)
-              </label>
-              <select
-                id="template-linked-training-requirement-optional"
-                value={requirementId}
-                onChange={(e) => setRequirementId(e.target.value)}
-                className="form-input px-3"
-              >
-                <option value="">None — not linked to a pipeline requirement</option>
-                {requirements.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-              <p className="text-theme-text-muted mt-1 text-xs">
-                When a test built from this template passes, this pipeline requirement is marked complete for the
-                candidate. Individual tests can override this.
-              </p>
-            </div>
-            {/* Result disclosure — a per-template override of the department
+                {(field) => (
+                  <input
+                    {...field}
+                    type="text"
+                    value={category}
+                    onChange={(e) => {
+                      setCategory(e.target.value);
+                      fieldErrors.setError('category', null);
+                    }}
+                    placeholder="e.g., Fire Operations, EMS, Hazmat"
+                    className="form-input px-3"
+                  />
+                )}
+              </FormField>
+              <div className="md:col-span-2">
+                <label htmlFor="template-visibility" className="text-theme-text-muted mb-1 block text-sm font-medium">
+                  Visibility
+                </label>
+                <select
+                  id="template-visibility"
+                  value={visibility}
+                  onChange={(e) => setVisibility(e.target.value)}
+                  className="form-input px-3"
+                >
+                  <option value="all_members">All Members</option>
+                  <option value="officers_only">Officers Only</option>
+                  <option value="assigned_only">Assigned Members Only</option>
+                </select>
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Controls who can see this test. Officers always have full access.
+                </p>
+              </div>
+              <div className="md:col-span-2">
+                <label
+                  htmlFor="template-linked-training-requirement-optional"
+                  className="text-theme-text-muted mb-1 block text-sm font-medium"
+                >
+                  Linked Training Requirement (optional)
+                </label>
+                <select
+                  id="template-linked-training-requirement-optional"
+                  value={requirementId}
+                  onChange={(e) => setRequirementId(e.target.value)}
+                  className="form-input px-3"
+                >
+                  <option value="">None — not linked to a pipeline requirement</option>
+                  {requirements.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  When a test built from this template passes, this pipeline requirement is marked complete for the
+                  candidate. Individual tests can override this.
+                </p>
+              </div>
+              {/* Result disclosure — a per-template override of the department
                 default. Left on "Inherit", a template follows whatever the
                 organization is set to, so most templates need nothing here;
                 the labels name the inherited value so an officer can see what
                 that means without leaving the page. */}
-            <div className="md:col-span-2">
-              <div className="card p-4">
-                <p className="text-theme-text-primary text-sm font-medium">Result Disclosure</p>
-                <p className="text-theme-text-muted mt-0.5 mb-3 text-xs">
-                  What the person tested sees of their own result, and when. Officers always see everything. Individual
-                  tests can override this again.
-                </p>
+              <div className="md:col-span-2">
+                <div className="card p-4">
+                  <p className="text-theme-text-primary text-sm font-medium">Result Disclosure</p>
+                  <p className="text-theme-text-muted mt-0.5 mb-3 text-xs">
+                    What the person tested sees of their own result, and when. Officers always see everything.
+                    Individual tests can override this again.
+                  </p>
 
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div>
-                    <label
-                      htmlFor="template-result-disclosure"
-                      className="text-theme-text-muted mb-1 block text-xs font-medium"
-                    >
-                      What the member sees
-                    </label>
-                    <select
-                      id="template-result-disclosure"
-                      value={resultDisclosure}
-                      onChange={(e) => setResultDisclosure(e.target.value)}
-                      className="form-input px-3 text-sm"
-                    >
-                      <option value="">
-                        Inherit — {labelFor(DISCLOSURE_CHOICES, orgConfig?.skills_result_disclosure ?? 'full')}
-                      </option>
-                      {DISCLOSURE_CHOICES.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Nothing to time when results are never shown. */}
-                  {resultDisclosure !== 'none' && (
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div>
                       <label
-                        htmlFor="template-result-release"
+                        htmlFor="template-result-disclosure"
                         className="text-theme-text-muted mb-1 block text-xs font-medium"
                       >
-                        When they see it
+                        What the member sees
                       </label>
                       <select
-                        id="template-result-release"
-                        value={resultRelease}
-                        onChange={(e) => setResultRelease(e.target.value)}
+                        id="template-result-disclosure"
+                        value={resultDisclosure}
+                        onChange={(e) => setResultDisclosure(e.target.value)}
                         className="form-input px-3 text-sm"
                       >
                         <option value="">
-                          Inherit — {labelFor(RELEASE_CHOICES, orgConfig?.skills_result_release ?? 'on_completion')}
+                          Inherit — {labelFor(DISCLOSURE_CHOICES, orgConfig?.skills_result_disclosure ?? 'full')}
                         </option>
-                        {RELEASE_CHOICES.map((opt) => (
+                        {DISCLOSURE_CHOICES.map((opt) => (
                           <option key={opt.value} value={opt.value}>
                             {opt.label}
                           </option>
                         ))}
                       </select>
                     </div>
+
+                    {/* Nothing to time when results are never shown. */}
+                    {resultDisclosure !== 'none' && (
+                      <div>
+                        <label
+                          htmlFor="template-result-release"
+                          className="text-theme-text-muted mb-1 block text-xs font-medium"
+                        >
+                          When they see it
+                        </label>
+                        <select
+                          id="template-result-release"
+                          value={resultRelease}
+                          onChange={(e) => setResultRelease(e.target.value)}
+                          className="form-input px-3 text-sm"
+                        >
+                          <option value="">
+                            Inherit — {labelFor(RELEASE_CHOICES, orgConfig?.skills_result_release ?? 'on_completion')}
+                          </option>
+                          {RELEASE_CHOICES.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {positions.length > 0 && (
+                    <fieldset className="mt-4">
+                      <legend className="text-theme-text-muted mb-1 block text-xs font-medium">
+                        Also visible to these positions (optional)
+                      </legend>
+                      <p className="text-theme-text-muted mb-2 text-xs">
+                        Holders of the selected positions can see results of tests built from this template, at the same
+                        level the member sees them — never more.
+                      </p>
+                      <div className="grid max-h-40 grid-cols-1 gap-1 overflow-y-auto sm:grid-cols-2">
+                        {positions.map((position) => (
+                          <label
+                            key={position.id}
+                            className="hover:bg-theme-surface-hover mobile-touch-target flex cursor-pointer items-center gap-2 rounded-md px-2 py-1"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={viewerPositions.includes(position.slug)}
+                              onChange={(e) =>
+                                setViewerPositions((current) =>
+                                  e.target.checked
+                                    ? [...current, position.slug]
+                                    : current.filter((slug) => slug !== position.slug)
+                                )
+                              }
+                              className="border-theme-surface-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
+                            />
+                            <span className="text-theme-text-primary text-sm">{position.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
                   )}
                 </div>
+              </div>
 
-                {positions.length > 0 && (
-                  <fieldset className="mt-4">
-                    <legend className="text-theme-text-muted mb-1 block text-xs font-medium">
-                      Also visible to these positions (optional)
-                    </legend>
-                    <p className="text-theme-text-muted mb-2 text-xs">
-                      Holders of the selected positions can see results of tests built from this template, at the same
-                      level the member sees them — never more.
-                    </p>
-                    <div className="grid max-h-40 grid-cols-1 gap-1 overflow-y-auto sm:grid-cols-2">
-                      {positions.map((position) => (
-                        <label
-                          key={position.id}
-                          className="hover:bg-theme-surface-hover mobile-touch-target flex cursor-pointer items-center gap-2 rounded-md px-2 py-1"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={viewerPositions.includes(position.slug)}
-                            onChange={(e) =>
-                              setViewerPositions((current) =>
-                                e.target.checked
-                                  ? [...current, position.slug]
-                                  : current.filter((slug) => slug !== position.slug)
-                              )
-                            }
-                            className="border-theme-surface-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
-                          />
-                          <span className="text-theme-text-primary text-sm">{position.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
+              <div className="md:col-span-2">
+                <label htmlFor="template-description" className="text-theme-text-muted mb-1 block text-sm font-medium">
+                  Description
+                </label>
+                <textarea
+                  id="template-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={2}
+                  placeholder="Brief description of the evaluation..."
+                  className="form-input resize-none px-3"
+                />
+              </div>
+              <FormField
+                id={TEMPLATE_FIELDS.time_limit_seconds.id}
+                label="Global Time Limit (minutes)"
+                error={fieldErrors.errors.time_limit_seconds}
+                labelClassName="text-theme-text-muted mb-1 block text-sm font-medium"
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={timeLimitMinutes ?? ''}
+                    onChange={(e) => {
+                      setTimeLimitMinutes(e.target.value ? Number(e.target.value) : undefined);
+                      fieldErrors.setError('time_limit_seconds', null);
+                    }}
+                    placeholder="e.g., 30"
+                    className="form-input px-3"
+                  />
                 )}
+              </FormField>
+              <FormField
+                id={TEMPLATE_FIELDS.passing_percentage.id}
+                label="Passing Percentage (%)"
+                error={fieldErrors.errors.passing_percentage}
+                labelClassName="text-theme-text-muted mb-1 block text-sm font-medium"
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={passingPercentage ?? ''}
+                    onChange={(e) => {
+                      setPassingPercentage(e.target.value ? Number(e.target.value) : undefined);
+                      fieldErrors.setError('passing_percentage', null);
+                    }}
+                    placeholder="e.g., 70"
+                    className="form-input px-3"
+                  />
+                )}
+              </FormField>
+              <FormField
+                id={TEMPLATE_FIELDS.valid_for_months.id}
+                label="Valid for (months)"
+                error={fieldErrors.errors.valid_for_months}
+                hint="A passing official test expires this many months after it was taken and appears in the member's upcoming list."
+                labelClassName="text-theme-text-muted mb-1 block text-sm font-medium"
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    min="1"
+                    max={MAX_VALID_FOR_MONTHS}
+                    step="1"
+                    value={validForMonths ?? ''}
+                    onChange={(e) => {
+                      setValidForMonths(e.target.value ? Number(e.target.value) : undefined);
+                      fieldErrors.setError('valid_for_months', null);
+                    }}
+                    placeholder="Leave blank if it never expires"
+                    className="form-input px-3"
+                  />
+                )}
+              </FormField>
+              <div>
+                <label
+                  htmlFor="template-tags-comma-separated"
+                  className="text-theme-text-muted mb-1 block text-sm font-medium"
+                >
+                  Tags (comma-separated)
+                </label>
+                <input
+                  id="template-tags-comma-separated"
+                  type="text"
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                  placeholder="e.g., NFPA 1001, Probationary"
+                  className="form-input px-3"
+                />
+              </div>
+              <div className="flex items-end">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={requireAllCritical}
+                    onChange={(e) => setRequireAllCritical(e.target.checked)}
+                    className="border-theme-surface-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
+                  />
+                  <span className="text-theme-text-primary text-sm">Require all critical criteria to pass</span>
+                </label>
               </div>
             </div>
 
-            <div className="md:col-span-2">
-              <label htmlFor="template-description" className="text-theme-text-muted mb-1 block text-sm font-medium">
-                Description
-              </label>
-              <textarea
-                id="template-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={2}
-                placeholder="Brief description of the evaluation..."
-                className="form-input resize-none px-3"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="template-global-time-limit-minutes"
-                className="text-theme-text-muted mb-1 block text-sm font-medium"
-              >
-                Global Time Limit (minutes)
-              </label>
-              <input
-                id="template-global-time-limit-minutes"
-                type="number"
-                min="0"
-                step="1"
-                value={timeLimitMinutes ?? ''}
-                onChange={(e) => setTimeLimitMinutes(e.target.value ? Number(e.target.value) : undefined)}
-                placeholder="e.g., 30"
-                className="form-input px-3"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="template-passing-percentage"
-                className="text-theme-text-muted mb-1 block text-sm font-medium"
-              >
-                Passing Percentage (%)
-              </label>
-              <input
-                id="template-passing-percentage"
-                type="number"
-                min="0"
-                max="100"
-                value={passingPercentage ?? ''}
-                onChange={(e) => setPassingPercentage(e.target.value ? Number(e.target.value) : undefined)}
-                placeholder="e.g., 70"
-                className="form-input px-3"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="template-valid-for-months"
-                className="text-theme-text-muted mb-1 block text-sm font-medium"
-              >
-                Valid for (months)
-              </label>
-              <input
-                id="template-valid-for-months"
-                type="number"
-                min="1"
-                max="120"
-                step="1"
-                value={validForMonths ?? ''}
-                onChange={(e) => setValidForMonths(e.target.value ? Number(e.target.value) : undefined)}
-                placeholder="Leave blank if it never expires"
-                aria-describedby="template-valid-for-months-help"
-                className="form-input px-3"
-              />
-              <p id="template-valid-for-months-help" className="text-theme-text-muted mt-1 text-xs">
-                A passing official test expires this many months after it was taken and appears in the member&apos;s
-                upcoming list.
-              </p>
-            </div>
-            <div>
-              <label
-                htmlFor="template-tags-comma-separated"
-                className="text-theme-text-muted mb-1 block text-sm font-medium"
-              >
-                Tags (comma-separated)
-              </label>
-              <input
-                id="template-tags-comma-separated"
-                type="text"
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                placeholder="e.g., NFPA 1001, Probationary"
-                className="form-input px-3"
-              />
-            </div>
-            <div className="flex items-end">
-              <label className="flex cursor-pointer items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={requireAllCritical}
-                  onChange={(e) => setRequireAllCritical(e.target.checked)}
-                  className="border-theme-surface-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
-                />
-                <span className="text-theme-text-primary text-sm">Require all critical criteria to pass</span>
-              </label>
-            </div>
-          </div>
-
-          {/* Which steps the percentage is actually computed from. Without this
+            {/* Which steps the percentage is actually computed from. Without this
               setting, Pass/Fail steps were worth nothing at all — a template
               whose knowledge questions are written as Pass/Fail produced a
               percentage that ignored every one of them, and nothing said so. */}
-          <div className="border-theme-surface-border mt-4 border-t pt-4">
-            <label className="flex cursor-pointer items-start gap-2">
-              <input
-                type="checkbox"
-                checked={scorePassFailCriteria}
-                onChange={(e) => setScorePassFailCriteria(e.target.checked)}
-                className="border-theme-surface-border focus:ring-theme-focus-ring mt-0.5 rounded-sm text-blue-600"
-              />
-              <span>
-                <span className="text-theme-text-primary text-sm font-medium">
-                  Count Pass/Fail steps toward the overall percentage
+            <div className="border-theme-surface-border mt-4 border-t pt-4">
+              <label className="flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={scorePassFailCriteria}
+                  onChange={(e) => setScorePassFailCriteria(e.target.checked)}
+                  className="border-theme-surface-border focus:ring-theme-focus-ring mt-0.5 rounded-sm text-blue-600"
+                />
+                <span>
+                  <span className="text-theme-text-primary text-sm font-medium">
+                    Count Pass/Fail steps toward the overall percentage
+                  </span>
+                  <span className="text-theme-text-muted block text-xs">
+                    A passed step earns its points, a failed one earns none. Each is worth 1 point unless you set a
+                    point value on it. Leave this off and the percentage comes from scored steps only — Pass/Fail steps
+                    still appear on the scorecard and can still fail the test outright when marked critical, but they do
+                    not move the number.
+                  </span>
                 </span>
-                <span className="text-theme-text-muted block text-xs">
-                  A passed step earns its points, a failed one earns none. Each is worth 1 point unless you set a point
-                  value on it. Leave this off and the percentage comes from scored steps only — Pass/Fail steps still
-                  appear on the scorecard and can still fail the test outright when marked critical, but they do not
-                  move the number.
-                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* Sections */}
+          <div className="mb-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2
+                id={TEMPLATE_FIELDS.sections.id}
+                tabIndex={-1}
+                className="text-theme-text-primary text-lg font-semibold"
+              >
+                Evaluation Sections
+              </h2>
+              <span className="text-theme-text-muted text-sm">
+                {sections.length} section{sections.length !== 1 ? 's' : ''} &middot;{' '}
+                {sections.reduce((sum, s) => sum + s.criteria.length, 0)} criteria
               </span>
-            </label>
+            </div>
+            {fieldErrors.errors.sections && (
+              <p className={`text-sm ${FIELD_ERROR_CLASS}`}>{fieldErrors.errors.sections}</p>
+            )}
+
+            {sections.map((section, i) => (
+              <SectionEditor
+                key={section.localId}
+                section={section}
+                onChange={(updated) => updateSection(i, updated)}
+                onRemove={() => removeSection(i)}
+                index={i}
+                scorePassFailCriteria={scorePassFailCriteria}
+                errors={sheetErrorMap}
+                onFieldEdit={(fieldId) => {
+                  clearSheetError(fieldId);
+                  fieldErrors.setError('sections', null);
+                }}
+              />
+            ))}
+
+            <button
+              type="button"
+              onClick={addSection}
+              className="border-theme-surface-border flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-3 text-sm font-medium text-red-800 transition-colors hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20"
+            >
+              <Plus className="h-5 w-5" />
+              Add Section
+            </button>
           </div>
-        </div>
 
-        {/* Sections */}
-        <div className="mb-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-theme-text-primary text-lg font-semibold">Evaluation Sections</h2>
-            <span className="text-theme-text-muted text-sm">
-              {sections.length} section{sections.length !== 1 ? 's' : ''} &middot;{' '}
-              {sections.reduce((sum, s) => sum + s.criteria.length, 0)} criteria
-            </span>
+          {/* Bottom Save Bar */}
+          <div className="modal-footer-sticky -mx-4 flex justify-end gap-2 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+            <button
+              type="button"
+              onClick={() => void leave()}
+              className="text-theme-text-muted hover:text-theme-text-primary px-4 py-2 transition-colors"
+            >
+              Cancel
+            </button>
+            <button type="submit" disabled={isSaving} className="btn-primary flex items-center gap-2 px-6 font-medium">
+              <Save className="h-4 w-4" />
+              {isSaving ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Template'}
+            </button>
           </div>
-
-          {sections.map((section, i) => (
-            <SectionEditor
-              key={section.localId}
-              section={section}
-              onChange={(updated) => updateSection(i, updated)}
-              onRemove={() => removeSection(i)}
-              index={i}
-              scorePassFailCriteria={scorePassFailCriteria}
-            />
-          ))}
-
-          <button
-            onClick={addSection}
-            className="border-theme-surface-border flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-3 text-sm font-medium text-red-800 transition-colors hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20"
-          >
-            <Plus className="h-5 w-5" />
-            Add Section
-          </button>
-        </div>
-
-        {/* Bottom Save Bar */}
-        <div className="modal-footer-sticky -mx-4 flex justify-end gap-2 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-          <button
-            onClick={() => void navigate('/training/admin?page=skills-testing&tab=templates')}
-            className="text-theme-text-muted hover:text-theme-text-primary px-4 py-2 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => void handleSave()}
-            disabled={isSaving}
-            className="btn-primary flex items-center gap-2 px-6 font-medium"
-          >
-            <Save className="h-4 w-4" />
-            {isSaving ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Template'}
-          </button>
-        </div>
+        </form>
       </div>
 
       <ConfirmDialog

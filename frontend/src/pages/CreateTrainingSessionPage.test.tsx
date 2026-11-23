@@ -12,10 +12,15 @@ const createEvent = vi.fn();
 const createRecurringEvent = vi.fn();
 const getMandatoryTiers = vi.fn();
 const getTemplates = vi.fn();
+// Every requirement, read for the name of a linked one no longer offered.
+const getRequirements = vi.fn();
 
 vi.mock('../services/api', () => ({
   userService: { getUsers: (...args: unknown[]) => getUsers(...args) as unknown },
-  trainingService: { getCourses: (...args: unknown[]) => getCourses(...args) as unknown },
+  trainingService: {
+    getCourses: (...args: unknown[]) => getCourses(...args) as unknown,
+    getRequirements: (...args: unknown[]) => getRequirements(...args) as unknown,
+  },
   trainingSessionService: {
     getMandatoryTiers: (...args: unknown[]) => getMandatoryTiers(...args) as unknown,
   },
@@ -30,12 +35,16 @@ vi.mock('../services/api', () => ({
 }));
 
 const linkageRequirements = vi.hoisted(() => ({ value: [] as unknown[] }));
+// Which lists answered: unset, as for a hook that predates the flags, the
+// apply step checks no link. Reset in the top-level beforeEach.
+const linkageLoaded = vi.hoisted(() => ({ value: undefined as Record<string, unknown> | undefined }));
 vi.mock('../hooks/useTrainingLinkageData', () => ({
   useTrainingLinkageData: () => ({
     categories: [],
     requirements: linkageRequirements.value,
     programs: [],
     phases: [],
+    ...(linkageLoaded.value ? { loaded: linkageLoaded.value, settled: true } : {}),
   }),
 }));
 
@@ -86,6 +95,7 @@ function resetApi() {
   tzState.value = 'UTC';
   permissions.value = new Set(['events.manage', 'training.manage']);
   linkageRequirements.value = [];
+  linkageLoaded.value = undefined;
   for (const mock of [
     getUsers,
     getCourses,
@@ -96,6 +106,7 @@ function resetApi() {
     createRecurringEvent,
     getMandatoryTiers,
     getTemplates,
+    getRequirements,
     navigate,
     toastError,
   ]) {
@@ -103,6 +114,7 @@ function resetApi() {
   }
   getUsers.mockResolvedValue([]);
   getCourses.mockResolvedValue([]);
+  getRequirements.mockResolvedValue([]);
   getLocations.mockResolvedValue([]);
   getEvents.mockResolvedValue([]);
   getVisibleEventTypesWithCategories.mockResolvedValue({
@@ -204,7 +216,7 @@ describe('CreateTrainingSessionPage templates', () => {
         .map((o) => o.textContent)
     ).toEqual(['— No template —', 'Company Drill']);
     expect(picker).toHaveAccessibleDescription(
-      'Training templates only. A template fills the event and its training details, replacing what is already typed.'
+      'Training templates only. A template fills the event and its training details, links and completion settings, replacing what is already typed.'
     );
     await user.selectOptions(picker, 'tpl-drill');
 
@@ -304,6 +316,33 @@ describe('CreateTrainingSessionPage templates', () => {
       )
     ).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /No course yet/ })).toBeChecked();
+  });
+
+  // Owner decision 2026-11-23: a template keeps its links, and applying it
+  // re-checks each against what the department still offers.
+  it('applies the links still active and leaves out one that is not, with a note', async () => {
+    const DRILLS = { id: 'att-1', name: 'Company drills', requirement_type: 'session_attendance', active: true };
+    linkageRequirements.value = [DRILLS];
+    linkageLoaded.value = { categories: true, requirements: true, programs: true, phasesFor: null };
+    withDetails({ ...DETAILS, attendance_requirement_ids: [DRILLS.id, 'att-retired'], approval_deadline_days: 7 });
+    getCourses.mockResolvedValue([CPR]);
+    getUsers.mockResolvedValue([RITA]);
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Start from a template' }), 'tpl-cpr');
+    await next(user);
+
+    expect(
+      await screen.findByText(
+        "One of this template's Counts toward attendance requirements is no longer active, so it is left unticked."
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /Company drills/ })).toBeChecked();
+    await toReview(user);
+    await submit(user);
+    await waitFor(() => expect(createEvent).toHaveBeenCalledTimes(1));
+    expect(sentEvent().training_details).toEqual(expect.objectContaining({ attendance_requirement_ids: [DRILLS.id] }));
   });
 
   it('clears an instructor who is no longer a member, with a note', async () => {
