@@ -54,8 +54,11 @@ from app.services.skills_testing_service import member_skill_expirations
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
     NOT_YET_HELD_STATUS,
+    STANDING_NOT_CURRENT_MEMBER,
+    STANDING_NOT_CURRENT_MEMBER_LABEL,
     ComplianceGrading,
     _load_compliance_config,
+    is_current_member,
     load_credited_shift_dates,
     load_evaluation_credits,
     load_held_sessions,
@@ -931,14 +934,28 @@ async def get_member_requirements(
         raise HTTPException(status_code=404, detail="Member not found")
 
     today = await resolve_org_today(db, org_id)
-    requirements_detail, statuses, total_progress_pct, optional_detail = (
-        await _evaluate_member_requirements(db, member, member, org_id, today)
-    )
+    # A former member is not graded: the matrix lists only current members
+    # (pitfall 32), so any grade here would have no matrix row to agree with.
+    # ``standing`` is None for a current member, whose grade is the summary.
+    current = is_current_member(member)
+    if current:
+        requirements_detail, statuses, total_progress_pct, optional_detail = (
+            await _evaluate_member_requirements(db, member, member, org_id, today)
+        )
+    else:
+        requirements_detail, statuses, total_progress_pct, optional_detail = (
+            [],
+            [],
+            0.0,
+            [],
+        )
     met_count, total_reqs = tally_standing(statuses)
 
     return {
         "user_id": str(member.id),
         "as_of": str(today),
+        "standing": None if current else STANDING_NOT_CURRENT_MEMBER,
+        "standing_label": None if current else STANDING_NOT_CURRENT_MEMBER_LABEL,
         "leave_month_rule": await get_leave_month_rule(db, org_id),
         "requirements_summary": {
             "total_requirements": total_reqs,

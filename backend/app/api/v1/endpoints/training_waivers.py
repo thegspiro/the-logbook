@@ -27,6 +27,7 @@ from app.models.training import TrainingRequirement, TrainingWaiver, TrainingWai
 from app.models.user import User
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org
+from app.utils.separation_of_duties import is_own_grant
 
 router = APIRouter()
 
@@ -95,7 +96,7 @@ async def create_training_waiver(
 
     Not for oneself (400): see ``_OWN_WAIVER``.
     """
-    if str(data.user_id) == str(current_user.id):
+    if is_own_grant(current_user.id, data.user_id):
         raise HTTPException(status_code=400, detail=_OWN_WAIVER)
     if data.end_date and data.end_date < data.start_date:
         raise HTTPException(status_code=400, detail="End date must be after start date")
@@ -225,7 +226,7 @@ async def update_training_waiver(
         )
     )
     waiver = ensure_found(result.scalar_one_or_none(), "Waiver")
-    if str(waiver.user_id) == str(current_user.id):
+    if is_own_grant(current_user.id, waiver.user_id):
         raise HTTPException(status_code=403, detail=_OWN_WAIVER)
 
     updates = data.model_dump(exclude_unset=True)
