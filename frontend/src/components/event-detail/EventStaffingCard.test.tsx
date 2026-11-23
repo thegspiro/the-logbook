@@ -5,11 +5,13 @@ import { MemoryRouter } from 'react-router';
 
 const getStaffing = vi.fn();
 const openStaffing = vi.fn();
+const getVolunteerSeats = vi.fn();
 
 vi.mock('../../services/api', () => ({
   eventService: {
     getStaffing: (...a: unknown[]) => getStaffing(...a) as unknown,
     openStaffing: (...a: unknown[]) => openStaffing(...a) as unknown,
+    getVolunteerSeats: (...a: unknown[]) => getVolunteerSeats(...a) as unknown,
     getModuleSettings: () =>
       Promise.resolve({
         outreach_event_types: [
@@ -44,6 +46,7 @@ describe('EventStaffingCard', () => {
   beforeEach(() => {
     getStaffing.mockReset();
     openStaffing.mockReset();
+    getVolunteerSeats.mockReset();
   });
 
   it('opens a sheet starting from a request type preset', async () => {
@@ -54,6 +57,14 @@ describe('EventStaffingCard', () => {
       shift_id: 'sh-1',
       slots_total: 2,
       roles: [{ role: 'educator', label: 'Educator', total: 2, filled: 0, remaining: 2 }],
+    });
+    getVolunteerSeats.mockResolvedValue({
+      shift_id: 'sh-1',
+      seats: [
+        { role: 'educator', label: 'Educator', member_name: null, is_me: false },
+        { role: 'educator', label: 'Educator', member_name: null, is_me: false },
+      ],
+      signed_up: false,
     });
     renderCard();
 
@@ -66,8 +77,8 @@ describe('EventStaffingCard', () => {
     await user.click(screen.getByRole('button', { name: 'Open signups' }));
 
     await waitFor(() => expect(openStaffing).toHaveBeenCalledWith('ev-1', { roles: [{ role: 'educator', count: 2 }] }));
-    expect(await screen.findByText(/0 of 2 signed up/)).toBeInTheDocument();
-    expect(screen.getByText(/2 still needed/)).toBeInTheDocument();
+    expect(await screen.findByText('0 of 2 signed up')).toBeInTheDocument();
+    expect(screen.getByText('2 open')).toBeInTheDocument();
   });
 
   it('starts from the first configured role without a preset', async () => {
@@ -77,7 +88,9 @@ describe('EventStaffingCard', () => {
     expect(await screen.findByRole('combobox', { name: 'Role 1' })).toHaveValue('greeter');
   });
 
-  it("sends the organizer to the request when the sheet is the request's", async () => {
+  it("shows a request's open sheet seat by seat, without sending the organizer away", async () => {
+    // Owner request, 2026-11-23: the "arranged there — Open the request" line
+    // is gone once the sheet is open; the seats are the card.
     getStaffing.mockResolvedValue({
       ...EMPTY,
       request_id: 'req-9',
@@ -85,23 +98,28 @@ describe('EventStaffingCard', () => {
       slots_total: 1,
       slots_filled: 1,
       roles: [{ role: 'greeter', label: 'Greeter', total: 1, filled: 1, remaining: 0 }],
-      volunteers: [
-        {
-          user_id: 'u1',
-          member_name: 'Jordan Avery',
-          position: 'volunteer',
-          outreach_role_label: 'Greeter',
-          status: 'confirmed',
-        },
-      ],
+    });
+    getVolunteerSeats.mockResolvedValue({
+      shift_id: 'sh-9',
+      seats: [{ role: 'greeter', label: 'Greeter', member_name: 'Jordan Avery', is_me: false }],
+      signed_up: false,
     });
     renderCard();
 
-    expect(await screen.findByRole('link', { name: 'Open the request' })).toHaveAttribute(
+    expect(await screen.findByText('Jordan Avery')).toBeInTheDocument();
+    expect(screen.queryByText(/arranged there/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /request/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open signups' })).not.toBeInTheDocument();
+  });
+
+  it('points to the request when its signups are not open yet', async () => {
+    getStaffing.mockResolvedValue({ ...EMPTY, request_id: 'req-9' });
+    renderCard();
+
+    expect(await screen.findByRole('link', { name: 'Open them from the request' })).toHaveAttribute(
       'href',
       '/events/admin/requests/req-9'
     );
-    expect(screen.getByText('Jordan Avery')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open signups' })).not.toBeInTheDocument();
   });
 });

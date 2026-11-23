@@ -1307,6 +1307,22 @@ export interface EventVolunteerSignup {
   my_role_label?: string | null;
 }
 
+/** One seat on an outreach signup sheet, held (member_name) or open. */
+export interface EventVolunteerSeat {
+  role: string;
+  label: string;
+  member_name?: string | null;
+  is_me: boolean;
+}
+
+/** An outreach event's signup sheet seat by seat, laid out like a shift's crew board. */
+export interface EventVolunteerSeatBoard {
+  shift_id: string;
+  seats: EventVolunteerSeat[];
+  signed_up: boolean;
+  my_role_label?: string | null;
+}
+
 export interface EventStaffing extends EventRequestStaffing {
   request_id?: string | null;
 }

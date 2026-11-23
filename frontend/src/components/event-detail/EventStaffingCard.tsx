@@ -14,15 +14,8 @@ import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { Plus, Trash2, UserPlus } from 'lucide-react';
 import { eventRequestService, eventService } from '../../services/api';
-import type {
-  EventStaffing,
-  EventVolunteerSignup,
-  OutreachEventTypeConfig,
-  OutreachRole,
-  StaffingRoleNeed,
-} from '../../types/event';
-import OutreachRoleSignup from '../../modules/scheduling/components/OutreachRoleSignup';
-import { VolunteerRoleList } from './EventVolunteerSignupCard';
+import type { EventStaffing, OutreachEventTypeConfig, OutreachRole, StaffingRoleNeed } from '../../types/event';
+import VolunteerSeatBoard from './VolunteerSeatBoard';
 import { asArray } from '../../utils/asArray';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { initialRoleNeeds } from '../../utils/outreachRoles';
@@ -30,19 +23,11 @@ import { requestPagePath } from '../../pages/event-requests/requestInbox';
 
 interface EventStaffingCardProps {
   eventId: string;
-  /** The sheet as the organizer sees it as a member, so they can sign themselves up too. */
-  volunteerSignup?: EventVolunteerSignup | null | undefined;
+  /** The event has ended, so the board offers no seat. */
   isPast?: boolean;
-  /** After the organizer signs themselves up, so the page re-reads the event. */
-  onSignedUp?: () => void | Promise<void>;
 }
 
-const EventStaffingCard: React.FC<EventStaffingCardProps> = ({
-  eventId,
-  volunteerSignup,
-  isPast = false,
-  onSignedUp,
-}) => {
+const EventStaffingCard: React.FC<EventStaffingCardProps> = ({ eventId, isPast = false }) => {
   const [staffing, setStaffing] = useState<EventStaffing | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [roles, setRoles] = useState<OutreachRole[]>([]);
@@ -112,7 +97,7 @@ const EventStaffingCard: React.FC<EventStaffingCardProps> = ({
     <section className="card p-6" aria-labelledby="event-staffing-heading">
       <h2
         id="event-staffing-heading"
-        className="text-theme-text-primary mb-1 flex items-center gap-2 text-lg font-semibold"
+        className="text-theme-text-primary mb-3 flex items-center gap-2 text-lg font-semibold"
       >
         <UserPlus className="h-5 w-5" aria-hidden="true" />
         Volunteer staffing
@@ -122,48 +107,20 @@ const EventStaffingCard: React.FC<EventStaffingCardProps> = ({
           {loadError}
         </p>
       )}
-      {staffing?.request_id && (
-        <p className="text-theme-text-secondary mb-3 text-sm">
-          This event came from a public request, so its volunteers are arranged there.{' '}
+      {staffing?.shift_id ? (
+        <VolunteerSeatBoard eventId={eventId} isPast={isPast} onSignedUp={load} />
+      ) : staffing?.request_id ? (
+        <p className="text-theme-text-secondary text-sm">
+          Volunteer signups are not open yet.{' '}
           <Link
             to={requestPagePath(staffing.request_id)}
             className="font-medium text-blue-700 underline dark:text-blue-400"
           >
-            Open the request
+            Open them from the request
           </Link>
         </p>
-      )}
-      {staffing?.shift_id ? (
-        <div className="space-y-3">
-          <p className="text-theme-text-secondary text-sm">
-            {staffing.slots_filled} of {staffing.slots_total} signed up. Members sign up here or from Scheduling → Open
-            Shifts.
-          </p>
-          <VolunteerRoleList roles={staffing.roles} />
-          {staffing.shift_id && volunteerSignup && !volunteerSignup.signed_up && !isPast && (
-            <OutreachRoleSignup
-              shiftId={staffing.shift_id}
-              roles={staffing.roles}
-              onSignedUp={async () => {
-                await load();
-                await onSignedUp?.();
-              }}
-            />
-          )}
-          {staffing.volunteers.length > 0 && (
-            <ul className="border-theme-surface-border space-y-1 border-t pt-3 text-sm">
-              {staffing.volunteers.map((v) => (
-                <li key={v.user_id} className="flex justify-between gap-3">
-                  <span className="text-theme-text-primary">{v.member_name}</span>
-                  <span className="text-theme-text-muted">{v.outreach_role_label ?? ''}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
       ) : (
-        staffing &&
-        !staffing.request_id && (
+        staffing && (
           <div className="space-y-3">
             <p className="text-theme-text-secondary text-sm">
               Say what help you need and members can claim a role from Scheduling → Open Shifts.

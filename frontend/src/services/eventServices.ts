@@ -307,6 +307,14 @@ export const eventService = {
     return response.data;
   },
 
+  /** The event's signup sheet seat by seat, for any member who may view it; 404 when there is none. */
+  async getVolunteerSeats(eventId: string): Promise<import('../types/event').EventVolunteerSeatBoard> {
+    const response = await api.get<import('../types/event').EventVolunteerSeatBoard>(
+      `/events/${eventId}/staffing/seats`
+    );
+    return response.data;
+  },
+
   /** Open a signup sheet on an outreach event created directly (events.manage). */
   async openStaffing(
     eventId: string,

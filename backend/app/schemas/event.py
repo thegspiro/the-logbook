@@ -609,6 +609,25 @@ class EventVolunteerSignup(BaseModel):
     my_role_label: Optional[str] = None
 
 
+class EventVolunteerSeat(BaseModel):
+    """One seat on an outreach signup sheet, held or open."""
+
+    role: str
+    label: str
+    # Who holds it; None for an open seat.
+    member_name: Optional[str] = None
+    is_me: bool = False
+
+
+class EventVolunteerSeatBoard(BaseModel):
+    """An outreach event's signup sheet seat by seat, as the shift crew board shows one."""
+
+    shift_id: str
+    seats: List[EventVolunteerSeat]
+    signed_up: bool = False
+    my_role_label: Optional[str] = None
+
+
 class EventResponse(EventBase, UTCResponseBase):
     """Schema for event response"""
 

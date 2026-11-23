@@ -648,3 +648,90 @@ class TestTheSheetAMemberSees:
         event.is_cancelled = True
         await db_session.flush()
         assert await self._view(db_session, org, event, officer) is None
+
+
+class TestTheSeatBoard:
+    """The event page lays the sheet out seat by seat, as the shift crew board
+    does (2026-11-23): GET /events/{id}/staffing/seats, for any member."""
+
+    async def _board(self, db, event, user):
+        from app.api.v1.endpoints.events import get_event_volunteer_seats
+
+        return await get_event_volunteer_seats(
+            event_id=uuid.UUID(event.id), db=db, current_user=user
+        )
+
+    async def test_each_seat_is_listed_with_its_holder_or_open(self, db_session):
+        from app.services.scheduling_service import SchedulingService
+
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        await _open(db_session, officer, event, ("educator", 2), ("tour_guide", 1))
+        shift = await _sheet(db_session, event)
+        jordan = await _member(db_session, org, "jordan")
+        riley = await _member(db_session, org, "riley")
+        _, error = await SchedulingService(db_session).create_assignment(
+            org.id,
+            shift.id,
+            {
+                "user_id": jordan.id,
+                "position": "volunteer",
+                "outreach_role": "educator",
+            },
+            jordan.id,
+        )
+        assert error is None, error
+
+        board = await self._board(db_session, event, riley)
+        assert board["shift_id"] == str(shift.id)
+        assert [(s["role"], s["member_name"], s["is_me"]) for s in board["seats"]] == [
+            ("educator", "Jordan Member", False),
+            ("educator", None, False),
+            ("tour_guide", None, False),
+        ]
+        assert board["signed_up"] is False
+
+        mine = await self._board(db_session, event, jordan)
+        assert mine["seats"][0]["is_me"] is True
+        assert mine["signed_up"] is True
+        assert mine["my_role_label"] == "Educator"
+
+    async def test_no_sheet_is_not_found(self, db_session):
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        with pytest.raises(HTTPException) as exc:
+            await self._board(db_session, event, officer)
+        assert exc.value.status_code == 404
+
+    async def test_a_cancelled_event_is_not_found(self, db_session):
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        await _open(db_session, officer, event, ("educator", 1))
+        event.is_cancelled = True
+        await db_session.flush()
+        with pytest.raises(HTTPException) as exc:
+            await self._board(db_session, event, officer)
+        assert exc.value.status_code == 404
+
+    async def test_a_draft_is_hidden_from_a_member(self, db_session):
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        await _open(db_session, officer, event, ("educator", 1))
+        event.is_draft = True
+        await db_session.flush()
+        member = await _member(db_session, org, "casey")
+        with patch(
+            "app.api.v1.endpoints.events.user_has_permission", return_value=False
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await self._board(db_session, event, member)
+        assert exc.value.status_code == 404
+
+    async def test_another_departments_event_is_not_found(self, db_session):
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        await _open(db_session, officer, event, ("educator", 1))
+        _, outsider = await _dept(db_session)
+        with pytest.raises(HTTPException) as exc:
+            await self._board(db_session, event, outsider)
+        assert exc.value.status_code == 404
