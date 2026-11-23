@@ -35,6 +35,7 @@ describe('attendanceWaiverService response shapes', () => {
       actions: [],
       attachments: [],
       can_attach: false,
+      can_remove_attachment: false,
     });
   });
 
