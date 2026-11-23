@@ -8,7 +8,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useDialog } from '../hooks/useDialog';
 import toast from 'react-hot-toast';
-import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
+import { getErrorMessage } from '../utils/errorHandling';
+import { blankToNull } from '../utils/formValues';
+import { ErrorSummary } from '../components/ux/ErrorSummary';
+import { FormField } from '../components/ux/FormField';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import { useDiscardGuard } from '../hooks/useDiscardGuard';
+import { firstRefused, saveExceptRefused } from '../utils/saveExceptRefused';
 import { useTimezone } from '../hooks/useTimezone';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { formatDate, formatDateTime } from '../utils/dateFormatting';
@@ -81,58 +87,64 @@ interface SyncScheduleFieldsProps {
   intervalHours: number;
   // null hides the review time: only Target Solutions has a daily review.
   reviewTime: string | null;
+  intervalError?: string | undefined;
+  reviewTimeError?: string | undefined;
   onChange: (next: { intervalHours: number; reviewTime: string | null }) => void;
 }
 
-const SyncScheduleFields: React.FC<SyncScheduleFieldsProps> = ({ idPrefix, intervalHours, reviewTime, onChange }) => {
+const SyncScheduleFields: React.FC<SyncScheduleFieldsProps> = ({
+  idPrefix,
+  intervalHours,
+  reviewTime,
+  intervalError,
+  reviewTimeError,
+  onChange,
+}) => {
   const tz = useTimezone();
 
   return (
     <div className="space-y-3">
-      <div>
-        <label
-          htmlFor={`${idPrefix}-sync-interval`}
-          className="text-theme-text-secondary mb-2 block text-sm font-medium"
-        >
-          {reviewTime !== null ? 'Pull new completions' : 'Sync Interval'}
-        </label>
-        <select
-          id={`${idPrefix}-sync-interval`}
-          value={intervalHours}
-          onChange={(e) => onChange({ intervalHours: parseInt(e.target.value), reviewTime })}
-          className="form-input"
-        >
-          <option value={1}>Every hour</option>
-          <option value={6}>Every 6 hours</option>
-          <option value={12}>Every 12 hours</option>
-          <option value={24}>Daily</option>
-          <option value={48}>Every 2 days</option>
-          <option value={168}>Weekly</option>
-        </select>
-      </div>
+      <FormField
+        id={`${idPrefix}-sync-interval`}
+        label={reviewTime !== null ? 'Pull new completions' : 'Sync Interval'}
+        labelClassName={PROVIDER_LABEL_CLASS}
+        error={intervalError}
+      >
+        {(field) => (
+          <select
+            {...field}
+            value={intervalHours}
+            onChange={(e) => onChange({ intervalHours: parseInt(e.target.value), reviewTime })}
+            className="form-input"
+          >
+            <option value={1}>Every hour</option>
+            <option value={6}>Every 6 hours</option>
+            <option value={12}>Every 12 hours</option>
+            <option value={24}>Daily</option>
+            <option value={48}>Every 2 days</option>
+            <option value={168}>Weekly</option>
+          </select>
+        )}
+      </FormField>
 
       {reviewTime !== null && (
-        <div>
-          <label
-            htmlFor={`${idPrefix}-review-time`}
-            className="text-theme-text-secondary mb-2 block text-sm font-medium"
-          >
-            Daily 30-day review at
-          </label>
-          <input
-            id={`${idPrefix}-review-time`}
-            type="time"
-            value={reviewTime}
-            onChange={(e) => onChange({ intervalHours, reviewTime: e.target.value || DEFAULT_REVIEW_TIME })}
-            className="form-input w-40"
-            required
-          />
-          <p className="text-theme-text-muted mt-1 text-xs">
-            Each pull fetches completions since the last one. Once a day the review re-checks the last 30 days, which
-            catches completions recorded for a past date. Times are in the department&apos;s timezone ({tz}); runs start
-            within 30 minutes of their time.
-          </p>
-        </div>
+        <FormField
+          id={`${idPrefix}-review-time`}
+          label="Daily 30-day review at"
+          labelClassName={PROVIDER_LABEL_CLASS}
+          error={reviewTimeError}
+          hint={`Each pull fetches completions since the last one. Once a day the review re-checks the last 30 days, which catches completions recorded for a past date. Times are in the department's timezone (${tz}); runs start within 30 minutes of their time.`}
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="time"
+              value={reviewTime}
+              onChange={(e) => onChange({ intervalHours, reviewTime: e.target.value || DEFAULT_REVIEW_TIME })}
+              className="form-input w-40"
+            />
+          )}
+        </FormField>
       )}
     </div>
   );
@@ -144,59 +156,131 @@ interface CreateProviderModalProps {
   onSuccess: () => void;
 }
 
-const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClose, onSuccess }) => {
-  const dialogRef1 = useDialog<HTMLDivElement>({ isOpen, onClose });
+const EMPTY_PROVIDER_FORM: ExternalTrainingProviderCreate = {
+  name: '',
+  provider_type: 'vector_solutions',
+  api_base_url: '',
+  api_key: '',
+  auth_type: 'api_key',
+  auto_sync_enabled: false,
+  sync_interval_hours: 24,
+};
 
+type CreateProviderField =
+  | 'name'
+  | 'api_base_url'
+  | 'auth_type'
+  | 'api_key'
+  | 'site_id'
+  | 'api_secret'
+  | 'description'
+  | 'sync_interval_hours'
+  | 'review_time';
+
+// Ordered as on screen, so the first refusal takes focus. Limits mirror
+// ExternalTrainingProviderBase (name 255, api_base_url 500).
+const CREATE_PROVIDER_FIELDS: FieldSpecs<CreateProviderField> = {
+  name: { id: 'provider-name', label: 'Display name' },
+  api_base_url: { id: 'provider-api-url', label: 'API base URL' },
+  auth_type: { id: 'provider-auth-type', label: 'Authentication type' },
+  api_key: { id: 'provider-api-key', label: 'API key' },
+  site_id: { id: 'provider-site-id', label: 'Site ID' },
+  api_secret: { id: 'provider-api-secret', label: 'API secret' },
+  description: { id: 'provider-description', label: 'Description' },
+  sync_interval_hours: { id: 'provider-sync-interval', label: 'Sync interval' },
+  review_time: { id: 'provider-review-time', label: 'Daily review time' },
+};
+const PROVIDER_LIMITS = { name: 255, api_base_url: 500 } as const;
+const PROVIDER_LABEL_CLASS = 'text-theme-text-secondary mb-2 block text-sm font-medium';
+
+/** An address the sync can call: a full http(s) URL, as the old url input insisted. */
+function providerUrlProblem(value: string): string | undefined {
+  const url = value.trim();
+  if (!url) return 'Enter the API address.';
+  if (!/^https?:\/\/\S+$/i.test(url)) return 'Enter a full address, starting with https://.';
+  return undefined;
+}
+
+const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [step, setStep] = useState<'type' | 'details'>('type');
-  const [formData, setFormData] = useState<ExternalTrainingProviderCreate>({
-    name: '',
-    provider_type: 'vector_solutions',
-    api_base_url: '',
-    api_key: '',
-    auth_type: 'api_key',
-    auto_sync_enabled: false,
-    sync_interval_hours: 24,
-  });
+  const [formData, setFormData] = useState<ExternalTrainingProviderCreate>(EMPTY_PROVIDER_FORM);
+  // What the details step held when it opened, so Escape and Cancel ask
+  // before throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState<ExternalTrainingProviderCreate>(EMPTY_PROVIDER_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const providerErrors = useFieldErrors(CREATE_PROVIDER_FIELDS);
+  const { errors } = providerErrors;
   const isTargetSolutions = formData.provider_type === 'target_solutions';
 
+  const update = (
+    field: CreateProviderField,
+    next: (prev: ExternalTrainingProviderCreate) => ExternalTrainingProviderCreate
+  ) => {
+    setFormData(next);
+    providerErrors.setError(field, null);
+  };
+
+  // Closing (after asking, when something was typed) starts the next opening
+  // from the provider list, not from the abandoned details.
+  const closeAndReset = () => {
+    setStep('type');
+    setFormData(EMPTY_PROVIDER_FORM);
+    setBaseline(EMPTY_PROVIDER_FORM);
+    providerErrors.clear();
+    onClose();
+  };
+  const requestClose = useDiscardGuard({
+    isDirty: isOpen && step === 'details' && JSON.stringify(formData) !== JSON.stringify(baseline),
+    onClose: closeAndReset,
+  });
+  const dialogRef1 = useDialog<HTMLDivElement>({ isOpen, onClose: requestClose });
+
   const handleTypeSelect = (type: ExternalProviderType) => {
-    setFormData((prev) => ({
-      ...prev,
+    const next: ExternalTrainingProviderCreate = {
+      ...formData,
       provider_type: type,
       name: PROVIDER_TYPES.find((p) => p.value === type)?.label || '',
       ...(type === 'target_solutions'
         ? {
             sync_interval_hours: TS_DEFAULT_PULL_HOURS,
-            config: { ...prev.config, review_time: DEFAULT_REVIEW_TIME },
+            config: { ...formData.config, review_time: DEFAULT_REVIEW_TIME },
           }
         : {}),
-    }));
+    };
+    setFormData(next);
+    setBaseline(next);
+    providerErrors.clear();
     setStep('details');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    setError('');
+    if (isSubmitting) return;
+    // A new provider is created only once every field is fixed, each refusal
+    // named on its field (owner rule, 2026-11-05).
+    const problems: FieldErrors<CreateProviderField> = {};
+    if (!formData.name.trim()) problems.name = 'Give the provider a name.';
+    const urlProblem = providerUrlProblem(formData.api_base_url ?? '');
+    if (urlProblem) problems.api_base_url = urlProblem;
+    if (!formData.api_key?.trim()) {
+      problems.api_key =
+        formData.provider_type === 'vector_solutions' ? 'Enter the AccessToken.' : 'Enter the API key.';
+    }
+    if (isTargetSolutions && !formData.api_secret?.trim()) problems.api_secret = 'Enter the API secret.';
+    providerErrors.setFormError(null);
+    providerErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      providerErrors.focusFirst(problems);
+      return;
+    }
 
+    setIsSubmitting(true);
     try {
-      await externalTrainingService.createProvider(formData);
+      await externalTrainingService.createProvider({ ...formData, name: formData.name.trim() });
       onSuccess();
-      onClose();
-      setStep('type');
-      setFormData({
-        name: '',
-        provider_type: 'vector_solutions',
-        api_base_url: '',
-        api_key: '',
-        auth_type: 'api_key',
-        auto_sync_enabled: false,
-        sync_interval_hours: 24,
-      });
+      closeAndReset();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to create provider'));
+      providerErrors.focusFirst(providerErrors.setFromApiError(err, 'Failed to create provider'));
     } finally {
       setIsSubmitting(false);
     }
@@ -210,9 +294,6 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-provider-title"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
     >
       <div ref={dialogRef1} className="modal-panel max-h-[90dvh] w-full max-w-2xl overflow-y-auto">
         <div className="border-theme-surface-border border-b p-6">
@@ -242,7 +323,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
             <div className="flex justify-end pt-4">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={requestClose}
                 className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2"
               >
                 Cancel
@@ -251,191 +332,211 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
           </div>
         ) : (
           <form
+            noValidate
             onSubmit={(e) => {
               void handleSubmit(e);
             }}
             className="space-y-4 p-6"
           >
-            {error && (
-              <div
-                className="rounded-sm border border-red-500 bg-red-500/10 px-4 py-3 text-red-500"
-                role="alert"
-                aria-live="assertive"
-              >
-                {error}
-              </div>
-            )}
+            <ErrorSummary
+              items={providerErrors.summary}
+              formError={providerErrors.formError}
+              title="Check these fields"
+            />
 
-            <div>
-              <label htmlFor="provider-name" className="text-theme-text-secondary mb-2 block text-sm font-medium">
-                Display Name <span aria-hidden="true">*</span>
-              </label>
-              <input
-                id="provider-name"
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                className="form-input"
-                placeholder="e.g., Vector Solutions - Main Account"
-                required
-                aria-required="true"
-              />
-            </div>
+            <FormField
+              id={CREATE_PROVIDER_FIELDS.name.id}
+              label="Display Name"
+              labelClassName={PROVIDER_LABEL_CLASS}
+              required
+              error={errors.name}
+              maxLength={PROVIDER_LIMITS.name}
+              count={formData.name.length}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    update('name', (prev) => ({ ...prev, name }));
+                  }}
+                  className="form-input"
+                  placeholder="e.g., Vector Solutions - Main Account"
+                />
+              )}
+            </FormField>
 
-            <div>
-              <label htmlFor="provider-api-url" className="text-theme-text-secondary mb-2 block text-sm font-medium">
-                API Base URL <span aria-hidden="true">*</span>
-              </label>
-              <input
-                id="provider-api-url"
-                type="url"
-                value={formData.api_base_url}
-                onChange={(e) => setFormData((prev) => ({ ...prev, api_base_url: e.target.value }))}
-                className="form-input"
-                placeholder={
-                  formData.provider_type === 'vector_solutions'
-                    ? 'https://app.targetsolutions.com/tsapp/dashboard/pl/api/v1'
-                    : isTargetSolutions
-                      ? TARGET_SOLUTIONS_REPORT_URL
-                      : 'https://api.example.com'
-                }
-                required
-                aria-required="true"
-              />
-              {formData.provider_type === 'vector_solutions' && (
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  For Vector Solutions / TargetSolutions, use your organization&apos;s API base URL (e.g.,
-                  https://app.targetsolutions.com/tsapp/dashboard/pl/api/v1)
-                </p>
+            <FormField
+              id={CREATE_PROVIDER_FIELDS.api_base_url.id}
+              label="API Base URL"
+              labelClassName={PROVIDER_LABEL_CLASS}
+              required
+              error={errors.api_base_url}
+              maxLength={PROVIDER_LIMITS.api_base_url}
+              count={formData.api_base_url?.length ?? 0}
+              hint={
+                formData.provider_type === 'vector_solutions'
+                  ? "For Vector Solutions / TargetSolutions, use your organization's API base URL (e.g., https://app.targetsolutions.com/tsapp/dashboard/pl/api/v1)"
+                  : isTargetSolutions
+                    ? `The Training Records API address, without the query string: ${TARGET_SOLUTIONS_REPORT_URL}`
+                    : undefined
+              }
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="url"
+                  value={formData.api_base_url}
+                  onChange={(e) => {
+                    const apiBaseUrl = e.target.value;
+                    update('api_base_url', (prev) => ({ ...prev, api_base_url: apiBaseUrl }));
+                  }}
+                  className="form-input"
+                  placeholder={
+                    formData.provider_type === 'vector_solutions'
+                      ? 'https://app.targetsolutions.com/tsapp/dashboard/pl/api/v1'
+                      : isTargetSolutions
+                        ? TARGET_SOLUTIONS_REPORT_URL
+                        : 'https://api.example.com'
+                  }
+                />
               )}
-              {isTargetSolutions && (
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  The Training Records API address, without the query string: {TARGET_SOLUTIONS_REPORT_URL}
-                </p>
-              )}
-            </div>
+            </FormField>
 
             {formData.provider_type !== 'vector_solutions' && !isTargetSolutions && (
-              <div>
-                <label
-                  htmlFor="provider-auth-type"
-                  className="text-theme-text-secondary mb-2 block text-sm font-medium"
-                >
-                  Authentication Type
-                </label>
-                <select
-                  id="provider-auth-type"
-                  value={formData.auth_type}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, auth_type: e.target.value as 'api_key' | 'basic' | 'oauth2' }))
-                  }
-                  className="form-input"
-                >
-                  <option value="api_key">API Key</option>
-                  <option value="basic">Basic Auth</option>
-                  <option value="oauth2">OAuth 2.0</option>
-                </select>
-              </div>
+              <FormField
+                id={CREATE_PROVIDER_FIELDS.auth_type.id}
+                label="Authentication Type"
+                labelClassName={PROVIDER_LABEL_CLASS}
+                error={errors.auth_type}
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    value={formData.auth_type}
+                    onChange={(e) => {
+                      const authType = e.target.value as 'api_key' | 'basic' | 'oauth2';
+                      update('auth_type', (prev) => ({ ...prev, auth_type: authType }));
+                    }}
+                    className="form-input"
+                  >
+                    <option value="api_key">API Key</option>
+                    <option value="basic">Basic Auth</option>
+                    <option value="oauth2">OAuth 2.0</option>
+                  </select>
+                )}
+              </FormField>
             )}
 
-            <div>
-              <label htmlFor="provider-api-key" className="text-theme-text-secondary mb-2 block text-sm font-medium">
-                {formData.provider_type === 'vector_solutions' ? 'AccessToken' : 'API Key'}{' '}
-                <span aria-hidden="true">*</span>
-              </label>
-              <input
-                id="provider-api-key"
-                type="password"
-                value={formData.api_key}
-                onChange={(e) => setFormData((prev) => ({ ...prev, api_key: e.target.value }))}
-                className="form-input"
-                placeholder={
-                  formData.provider_type === 'vector_solutions'
-                    ? 'Enter your TargetSolutions AccessToken'
-                    : isTargetSolutions
-                      ? 'The key= value from your Training Records API URL'
-                      : 'Enter your API key'
-                }
-                required
-                aria-required="true"
-              />
-              {formData.provider_type === 'vector_solutions' && (
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  Your AccessToken is provided by your Vector Solutions account manager. Each token has specific access
-                  levels.
-                </p>
+            <FormField
+              id={CREATE_PROVIDER_FIELDS.api_key.id}
+              label={formData.provider_type === 'vector_solutions' ? 'AccessToken' : 'API Key'}
+              labelClassName={PROVIDER_LABEL_CLASS}
+              required
+              error={errors.api_key}
+              hint={
+                formData.provider_type === 'vector_solutions'
+                  ? 'Your AccessToken is provided by your Vector Solutions account manager. Each token has specific access levels.'
+                  : isTargetSolutions
+                    ? 'Target Solutions issues a Training Records API URL containing a key and a secret. Enter each value separately; they are stored encrypted.'
+                    : undefined
+              }
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="password"
+                  value={formData.api_key}
+                  onChange={(e) => {
+                    const apiKey = e.target.value;
+                    update('api_key', (prev) => ({ ...prev, api_key: apiKey }));
+                  }}
+                  className="form-input"
+                  placeholder={
+                    formData.provider_type === 'vector_solutions'
+                      ? 'Enter your TargetSolutions AccessToken'
+                      : isTargetSolutions
+                        ? 'The key= value from your Training Records API URL'
+                        : 'Enter your API key'
+                  }
+                />
               )}
-              {isTargetSolutions && (
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  Target Solutions issues a Training Records API URL containing a key and a secret. Enter each value
-                  separately; they are stored encrypted.
-                </p>
-              )}
-            </div>
+            </FormField>
 
             {formData.provider_type === 'vector_solutions' && (
-              <div>
-                <label htmlFor="provider-site-id" className="text-theme-text-secondary mb-2 block text-sm font-medium">
-                  Site ID
-                </label>
-                <input
-                  id="provider-site-id"
-                  type="text"
-                  value={formData.config?.site_id || ''}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      config: { ...prev.config, site_id: e.target.value || undefined },
-                    }))
-                  }
-                  className="form-input"
-                  placeholder="Enter your TargetSolutions Site ID"
-                />
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  Run a connection test to discover available Site IDs. Required for syncing training records.
-                </p>
-              </div>
+              <FormField
+                id={CREATE_PROVIDER_FIELDS.site_id.id}
+                label="Site ID"
+                labelClassName={PROVIDER_LABEL_CLASS}
+                error={errors.site_id}
+                hint="Run a connection test to discover available Site IDs. Required for syncing training records."
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="text"
+                    value={formData.config?.site_id || ''}
+                    onChange={(e) => {
+                      const siteId = e.target.value || undefined;
+                      update('site_id', (prev) => ({ ...prev, config: { ...prev.config, site_id: siteId } }));
+                    }}
+                    className="form-input"
+                    placeholder="Enter your TargetSolutions Site ID"
+                  />
+                )}
+              </FormField>
             )}
 
             {(formData.auth_type === 'basic' || isTargetSolutions) && (
-              <div>
-                <label
-                  htmlFor="provider-api-secret"
-                  className="text-theme-text-secondary mb-2 block text-sm font-medium"
-                >
-                  API Secret {isTargetSolutions && <span aria-hidden="true">*</span>}
-                </label>
-                <input
-                  id="provider-api-secret"
-                  type="password"
-                  value={formData.api_secret || ''}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, api_secret: e.target.value }))}
-                  className="form-input"
-                  placeholder={
-                    isTargetSolutions ? 'The secret= value from your Training Records API URL' : 'Enter your API secret'
-                  }
-                  required={isTargetSolutions}
-                  aria-required={isTargetSolutions}
-                />
-              </div>
+              <FormField
+                id={CREATE_PROVIDER_FIELDS.api_secret.id}
+                label="API Secret"
+                labelClassName={PROVIDER_LABEL_CLASS}
+                required={isTargetSolutions}
+                error={errors.api_secret}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="password"
+                    value={formData.api_secret || ''}
+                    onChange={(e) => {
+                      const apiSecret = e.target.value;
+                      update('api_secret', (prev) => ({ ...prev, api_secret: apiSecret }));
+                    }}
+                    className="form-input"
+                    placeholder={
+                      isTargetSolutions
+                        ? 'The secret= value from your Training Records API URL'
+                        : 'Enter your API secret'
+                    }
+                  />
+                )}
+              </FormField>
             )}
 
-            <div>
-              <label
-                htmlFor="provider-description"
-                className="text-theme-text-secondary mb-2 block text-sm font-medium"
-              >
-                Description
-              </label>
-              <textarea
-                id="provider-description"
-                value={formData.description || ''}
-                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                className="form-input"
-                placeholder="Optional description for this integration"
-                rows={3}
-              />
-            </div>
+            <FormField
+              id={CREATE_PROVIDER_FIELDS.description.id}
+              label="Description"
+              labelClassName={PROVIDER_LABEL_CLASS}
+              error={errors.description}
+            >
+              {(field) => (
+                <textarea
+                  {...field}
+                  value={formData.description || ''}
+                  onChange={(e) => {
+                    const description = e.target.value;
+                    update('description', (prev) => ({ ...prev, description }));
+                  }}
+                  className="form-input"
+                  placeholder="Optional description for this integration"
+                  rows={3}
+                />
+              )}
+            </FormField>
 
             <div className="border-theme-surface-border border-t pt-4">
               <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Sync Settings</h3>
@@ -470,13 +571,16 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   idPrefix="provider"
                   intervalHours={formData.sync_interval_hours ?? 24}
                   reviewTime={isTargetSolutions ? (formData.config?.review_time ?? DEFAULT_REVIEW_TIME) : null}
-                  onChange={({ intervalHours, reviewTime }) =>
-                    setFormData((prev) => ({
+                  intervalError={errors.sync_interval_hours}
+                  reviewTimeError={errors.review_time}
+                  onChange={({ intervalHours, reviewTime }) => {
+                    providerErrors.setError('sync_interval_hours', null);
+                    update('review_time', (prev) => ({
                       ...prev,
                       sync_interval_hours: intervalHours,
                       ...(reviewTime !== null ? { config: { ...prev.config, review_time: reviewTime } } : {}),
-                    }))
-                  }
+                    }));
+                  }}
                 />
               )}
             </div>
@@ -484,7 +588,10 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
             <div className="border-theme-surface-border flex flex-wrap justify-between gap-2 border-t pt-4">
               <button
                 type="button"
-                onClick={() => setStep('type')}
+                onClick={() => {
+                  providerErrors.clear();
+                  setStep('type');
+                }}
                 className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2"
               >
                 Back
@@ -492,7 +599,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={requestClose}
                   className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2"
                 >
                   Cancel
@@ -722,26 +829,63 @@ interface EditProviderModalProps {
   onSuccess: () => void;
 }
 
-const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider, onClose, onSuccess }) => {
-  const dialogRef2 = useDialog<HTMLDivElement>({ isOpen: isOpen && Boolean(provider), onClose });
+interface EditProviderForm {
+  name: string;
+  description: string;
+  api_base_url: string;
+  api_key: string;
+  api_secret: string;
+  auth_type: 'api_key' | 'basic' | 'oauth2';
+  review_time: string | null;
+  auto_sync_enabled: boolean;
+  sync_interval_hours: number;
+}
 
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    api_base_url: '',
-    api_key: '',
-    api_secret: '',
-    auth_type: 'api_key' as 'api_key' | 'basic' | 'oauth2',
-    review_time: null as string | null,
-    auto_sync_enabled: false,
-    sync_interval_hours: 24,
-  });
+const EMPTY_EDIT_PROVIDER_FORM: EditProviderForm = {
+  name: '',
+  description: '',
+  api_base_url: '',
+  api_key: '',
+  api_secret: '',
+  auth_type: 'api_key',
+  review_time: null,
+  auto_sync_enabled: false,
+  sync_interval_hours: 24,
+};
+
+type EditProviderField =
+  'name' | 'api_base_url' | 'api_key' | 'api_secret' | 'description' | 'sync_interval_hours' | 'review_time';
+
+// Ordered as on screen. The review time is sent inside `config`, so a
+// refusal of `config.review_time` lands on it and a resend leaves out config.
+const EDIT_PROVIDER_FIELDS: FieldSpecs<EditProviderField> = {
+  name: { id: 'edit-provider-name', label: 'Display name' },
+  api_base_url: { id: 'edit-provider-api-url', label: 'API base URL' },
+  api_key: { id: 'edit-provider-api-key', label: 'API key' },
+  api_secret: { id: 'edit-provider-api-secret', label: 'API secret' },
+  description: { id: 'edit-provider-description', label: 'Description' },
+  sync_interval_hours: { id: 'edit-provider-sync-interval', label: 'Sync interval' },
+  review_time: { id: 'edit-provider-review-time', label: 'Daily review time' },
+};
+const EDIT_PROVIDER_ORDER = Object.keys(EDIT_PROVIDER_FIELDS) as EditProviderField[];
+
+const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider, onClose, onSuccess }) => {
+  const [formData, setFormData] = useState<EditProviderForm>(EMPTY_EDIT_PROVIDER_FORM);
+  // What the dialog held when it opened (or last saved), so Escape and Cancel
+  // ask before throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState<EditProviderForm>(EMPTY_EDIT_PROVIDER_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const providerErrors = useFieldErrors(EDIT_PROVIDER_FIELDS);
+  const { errors, clear: clearErrors } = providerErrors;
+  const requestClose = useDiscardGuard({
+    isDirty: isOpen && Boolean(provider) && JSON.stringify(formData) !== JSON.stringify(baseline),
+    onClose,
+  });
+  const dialogRef2 = useDialog<HTMLDivElement>({ isOpen: isOpen && Boolean(provider), onClose: requestClose });
 
   useEffect(() => {
     if (provider && isOpen) {
-      setFormData({
+      const seeded: EditProviderForm = {
         name: provider.name || '',
         description: provider.description || '',
         api_base_url: provider.api_base_url || '',
@@ -752,47 +896,88 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
           provider.provider_type === 'target_solutions' ? (provider.config?.review_time ?? DEFAULT_REVIEW_TIME) : null,
         auto_sync_enabled: provider.auto_sync_enabled || false,
         sync_interval_hours: provider.sync_interval_hours || 24,
-      });
-      setError('');
+      };
+      setFormData(seeded);
+      setBaseline(seeded);
+      clearErrors();
     }
-  }, [provider, isOpen]);
+  }, [provider, isOpen, clearErrors]);
+
+  const set = (patch: Partial<EditProviderForm>) => {
+    setFormData((prev) => ({ ...prev, ...patch }));
+    for (const key of Object.keys(patch)) {
+      if (key in EDIT_PROVIDER_FIELDS) providerErrors.setError(key as EditProviderField, null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!provider) return;
+    if (!provider || isSubmitting) return;
+
+    // An edit is a single save (owner rule, 2026-11-05): a refused field is
+    // left out of the update, keeping its stored value, and the rest saves.
+    const problems: FieldErrors<EditProviderField> = {};
+    if (!formData.name.trim()) problems.name = 'Give the provider a name.';
+    const urlProblem = providerUrlProblem(formData.api_base_url);
+    if (urlProblem) problems.api_base_url = urlProblem;
+    providerErrors.setFormError(null);
+    providerErrors.setErrors(problems);
+
+    const updates: Record<string, unknown> = {
+      name: formData.name.trim(),
+      // null when emptied: an omitted key is "leave alone" to the update, so
+      // a cleared description used to report success and keep the old text.
+      description: blankToNull(formData.description),
+      api_base_url: formData.api_base_url.trim(),
+      auth_type: formData.auth_type,
+      auto_sync_enabled: formData.auto_sync_enabled,
+      sync_interval_hours: formData.sync_interval_hours,
+    };
+    // Only send credentials if user entered new ones
+    if (formData.api_key) {
+      updates.api_key = formData.api_key;
+    }
+    if (formData.api_secret) {
+      updates.api_secret = formData.api_secret;
+    }
+    // The update replaces the stored config wholesale, so a schedule change
+    // is sent on top of the existing settings (Site ID, endpoints, …).
+    if (formData.review_time !== null && formData.review_time !== (provider.config?.review_time ?? null)) {
+      updates.config = { ...(provider.config ?? {}), review_time: formData.review_time };
+    }
 
     setIsSubmitting(true);
-    setError('');
-
     try {
-      const updates: Record<string, unknown> = {
-        name: formData.name,
-        description: formData.description || undefined,
-        api_base_url: formData.api_base_url,
-        auth_type: formData.auth_type,
-        auto_sync_enabled: formData.auto_sync_enabled,
-        sync_interval_hours: formData.sync_interval_hours,
-      };
-      // Only send credentials if user entered new ones
-      if (formData.api_key) {
-        updates.api_key = formData.api_key;
-      }
-      if (formData.api_secret) {
-        updates.api_secret = formData.api_secret;
-      }
-      // The update replaces the stored config wholesale, so a schedule change
-      // is sent on top of the existing settings (Site ID, endpoints, …).
-      if (formData.review_time !== null && formData.review_time !== (provider.config?.review_time ?? null)) {
-        updates.config = { ...(provider.config ?? {}), review_time: formData.review_time };
-      }
-      await externalTrainingService.updateProvider(provider.id, updates);
-      toast.success('Provider updated');
+      const { refused } = await saveExceptRefused<EditProviderField, unknown>({
+        payload: updates,
+        refused: problems,
+        keysFor: (field) => (field === 'review_time' ? ['config'] : [field]),
+        send: (body) => externalTrainingService.updateProvider(provider.id, body),
+        place: (err) => placeApiError(EDIT_PROVIDER_FIELDS, err),
+      });
+      const first = firstRefused(EDIT_PROVIDER_ORDER, refused);
       onSuccess();
+      if (first) {
+        // The list refreshes behind the dialog, which stays open with the
+        // refused field flagged; only that field still counts as unsaved.
+        providerErrors.setErrors(refused);
+        providerErrors.setFormError(
+          `Provider saved, except ${EDIT_PROVIDER_FIELDS[first].label.toLowerCase()}. Fix it and save again.`
+        );
+        providerErrors.focusFirst(refused);
+        const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, baseline[k as EditProviderField]]));
+        setBaseline({ ...formData, api_key: '', api_secret: '', ...keep });
+        setFormData((prev) => ({
+          ...prev,
+          api_key: refused.api_key ? prev.api_key : '',
+          api_secret: refused.api_secret ? prev.api_secret : '',
+        }));
+        return;
+      }
+      toast.success('Provider updated');
       onClose();
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Failed to update provider');
-      const detail = getErrorDetail(err);
-      setError(detail || message);
+      providerErrors.focusFirst(providerErrors.setFromApiError(err, 'Failed to update provider'));
     } finally {
       setIsSubmitting(false);
     }
@@ -806,9 +991,6 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
       role="dialog"
       aria-modal="true"
       aria-labelledby="edit-provider-title"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
     >
       <div ref={dialogRef2} className="modal-panel max-h-[90dvh] w-full max-w-2xl overflow-y-auto">
         <div className="border-theme-surface-border border-b p-6">
@@ -821,99 +1003,112 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
         </div>
 
         <form
+          noValidate
           onSubmit={(e) => {
             void handleSubmit(e);
           }}
           className="space-y-4 p-6"
         >
-          {error && (
-            <div
-              className="rounded-sm border border-red-500 bg-red-500/10 px-4 py-3 text-red-500"
-              role="alert"
-              aria-live="assertive"
-            >
-              {error}
-            </div>
-          )}
+          <ErrorSummary
+            items={providerErrors.summary}
+            formError={providerErrors.formError}
+            title="Check these fields"
+          />
 
-          <div>
-            <label htmlFor="edit-provider-name" className="text-theme-text-secondary mb-2 block text-sm font-medium">
-              Display Name <span aria-hidden="true">*</span>
-            </label>
-            <input
-              id="edit-provider-name"
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-              className="form-input"
-              required
-              aria-required="true"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="edit-provider-api-url" className="text-theme-text-secondary mb-2 block text-sm font-medium">
-              API Base URL <span aria-hidden="true">*</span>
-            </label>
-            <input
-              id="edit-provider-api-url"
-              type="url"
-              value={formData.api_base_url}
-              onChange={(e) => setFormData((prev) => ({ ...prev, api_base_url: e.target.value }))}
-              className="form-input"
-              required
-              aria-required="true"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="edit-provider-api-key" className="text-theme-text-secondary mb-2 block text-sm font-medium">
-              API Key (leave blank to keep current)
-            </label>
-            <input
-              id="edit-provider-api-key"
-              type="password"
-              value={formData.api_key}
-              onChange={(e) => setFormData((prev) => ({ ...prev, api_key: e.target.value }))}
-              className="form-input"
-              placeholder="Enter new API key to update"
-            />
-          </div>
-
-          {(formData.auth_type === 'basic' || provider?.provider_type === 'target_solutions') && (
-            <div>
-              <label
-                htmlFor="edit-provider-api-secret"
-                className="text-theme-text-secondary mb-2 block text-sm font-medium"
-              >
-                API Secret (leave blank to keep current)
-              </label>
+          <FormField
+            id={EDIT_PROVIDER_FIELDS.name.id}
+            label="Display Name"
+            labelClassName={PROVIDER_LABEL_CLASS}
+            required
+            error={errors.name}
+            maxLength={PROVIDER_LIMITS.name}
+            count={formData.name.length}
+          >
+            {(field) => (
               <input
-                id="edit-provider-api-secret"
-                type="password"
-                value={formData.api_secret}
-                onChange={(e) => setFormData((prev) => ({ ...prev, api_secret: e.target.value }))}
+                {...field}
+                type="text"
+                value={formData.name}
+                onChange={(e) => set({ name: e.target.value })}
                 className="form-input"
-                placeholder="Enter new API secret to update"
               />
-            </div>
+            )}
+          </FormField>
+
+          <FormField
+            id={EDIT_PROVIDER_FIELDS.api_base_url.id}
+            label="API Base URL"
+            labelClassName={PROVIDER_LABEL_CLASS}
+            required
+            error={errors.api_base_url}
+            maxLength={PROVIDER_LIMITS.api_base_url}
+            count={formData.api_base_url.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="url"
+                value={formData.api_base_url}
+                onChange={(e) => set({ api_base_url: e.target.value })}
+                className="form-input"
+              />
+            )}
+          </FormField>
+
+          <FormField
+            id={EDIT_PROVIDER_FIELDS.api_key.id}
+            label="API Key (leave blank to keep current)"
+            labelClassName={PROVIDER_LABEL_CLASS}
+            error={errors.api_key}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="password"
+                value={formData.api_key}
+                onChange={(e) => set({ api_key: e.target.value })}
+                className="form-input"
+                placeholder="Enter new API key to update"
+              />
+            )}
+          </FormField>
+
+          {(formData.auth_type === 'basic' || provider.provider_type === 'target_solutions') && (
+            <FormField
+              id={EDIT_PROVIDER_FIELDS.api_secret.id}
+              label="API Secret (leave blank to keep current)"
+              labelClassName={PROVIDER_LABEL_CLASS}
+              error={errors.api_secret}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="password"
+                  value={formData.api_secret}
+                  onChange={(e) => set({ api_secret: e.target.value })}
+                  className="form-input"
+                  placeholder="Enter new API secret to update"
+                />
+              )}
+            </FormField>
           )}
 
-          <div>
-            <label
-              htmlFor="edit-provider-description"
-              className="text-theme-text-secondary mb-2 block text-sm font-medium"
-            >
-              Description
-            </label>
-            <textarea
-              id="edit-provider-description"
-              value={formData.description}
-              onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-              className="form-input"
-              rows={3}
-            />
-          </div>
+          <FormField
+            id={EDIT_PROVIDER_FIELDS.description.id}
+            label="Description"
+            labelClassName={PROVIDER_LABEL_CLASS}
+            error={errors.description}
+          >
+            {(field) => (
+              <textarea
+                {...field}
+                value={formData.description}
+                onChange={(e) => set({ description: e.target.value })}
+                className="form-input"
+                rows={3}
+              />
+            )}
+          </FormField>
 
           <div className="border-theme-surface-border border-t pt-4">
             <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Sync Settings</h3>
@@ -947,8 +1142,10 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
                 idPrefix="edit-provider"
                 intervalHours={formData.sync_interval_hours}
                 reviewTime={formData.review_time}
+                intervalError={errors.sync_interval_hours}
+                reviewTimeError={errors.review_time}
                 onChange={({ intervalHours, reviewTime }) =>
-                  setFormData((prev) => ({ ...prev, sync_interval_hours: intervalHours, review_time: reviewTime }))
+                  set({ sync_interval_hours: intervalHours, review_time: reviewTime })
                 }
               />
             )}
@@ -957,7 +1154,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
           <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2"
             >
               Cancel

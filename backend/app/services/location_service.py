@@ -4,6 +4,7 @@ Location Service
 Business logic for location management.
 """
 
+from collections.abc import Collection
 from datetime import datetime, timedelta, timezone
 from typing import Any, List, Optional
 from uuid import UUID
@@ -559,6 +560,7 @@ class LocationService:
         end_datetime: datetime,
         exclude_event_id: UUID | str | None = None,
         for_booking: bool = True,
+        exclude_event_ids: Collection[str] = (),
     ) -> List[Event]:
         """
         Check for events that overlap with the given time range at this location
@@ -571,6 +573,9 @@ class LocationService:
         the request's first read, which predates a booking another
         coordinator committed while this one waited for the lock (pitfall
         #27). Only a read-only preview may pass False.
+
+        ``exclude_event_ids`` is for a series edit, whose own occurrences are
+        about to move and so do not hold the slots their stored times show.
         """
         if for_booking:
             await self.lock_room_bookings(organization_id)
@@ -602,6 +607,8 @@ class LocationService:
 
         if exclude_event_id:
             query = query.where(Event.id != str(exclude_event_id))
+        if exclude_event_ids:
+            query = query.where(Event.id.not_in([str(i) for i in exclude_event_ids]))
         if for_booking:
             query = query.with_for_update()
 

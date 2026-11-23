@@ -464,6 +464,18 @@ goals, or there is none, the item has nothing to rate and asks for nothing. If
 the item is in the self-evaluation, the member rates them too. The results are
 recorded and printed but do not count toward any grade.
 
+## Review history
+
+`GET /evaluations/{id}/history` (`view_all`) lists the member's other
+finalized reviews, newest first, on any form: each one's form, period and the
+overall result that stood (`standing_overall`, as on the conduct list). Each
+is read through `EvaluationService.detail` as the caller, so a review the
+caller could not open is left out, and an evaluation of another department
+answers 404. The evaluation screen shows it as a Review history panel below
+Last review, for `view_all` holders only. Grades from different forms are
+listed side by side with the form's name, since the department may have moved
+a member from one form to another.
+
 ## Period results
 
 For a holder of `evaluations.view_all`, the conduct list (`GET /evaluations`)
@@ -550,6 +562,7 @@ All under `/api/v1/evaluations`.
 | `GET /grade-spread?period_id=`                                                                                                | `view_all`                                                                                    |
 | `GET /export-pdfs?period_id=`                                                                                                 | `view_all`, with step-up                                                                      |
 | `GET /export?period_id=`                                                                                                      | `view_all`                                                                                    |
+| `GET /{id}/history`                                                                                                           | `view_all`; each review as the caller could open it                                           |
 | `GET /mine`, `/mine/live-data`, `/mine/removed`                                                                               | sign-in                                                                                       |
 | `GET /crew`                                                                                                                   | sign-in; lists only the evaluations of members the caller supervises today                    |
 | `GET /{id}` and its actions                                                                                                   | anyone with a part in it; the service decides who may do what, and answers 404 to anyone else |

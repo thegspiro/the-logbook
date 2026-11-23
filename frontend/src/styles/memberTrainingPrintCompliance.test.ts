@@ -20,6 +20,7 @@ const STATUSES = {
   red: true,
   exempt: true,
   not_applicable: true,
+  not_current_member: true,
 } satisfies Record<ComplianceSummary['compliance_status'], true>;
 
 /** The `color` of a rule whose selector list names the modifier as a whole token. */

@@ -240,6 +240,12 @@ def _link_customization(source: Any) -> Dict[str, Any]:
     }
 
 
+def _status_value(status: Any) -> Optional[str]:
+    """A progress status as its stored string, whether enum or plain text."""
+    value = getattr(status, "value", status)
+    return None if value is None else str(value)
+
+
 class TrainingProgramService:
     """Service for training program management"""
 
@@ -3667,9 +3673,14 @@ class TrainingProgramService:
         completion_credit_id: Optional[str] = None,
         enforce_prerequisites: bool = True,
         test_attempt_source: Optional[dict] = None,
+        keep_enrollment_completion: bool = False,
     ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
         """
         Update progress on a specific requirement
+
+        ``keep_enrollment_completion``: a completed enrollment is not reopened
+        by this write even if its rollup falls below 100% — for corrections
+        to source-backed credit (owner decision 2026-11-23).
 
         ``test_attempt_source`` is merged into the attempt a ``test_score``
         records, so an online knowledge test's attempt can be told apart from
@@ -4158,7 +4169,9 @@ class TrainingProgramService:
 
         # Recalculate enrollment progress
         await self._recalculate_enrollment_progress(
-            enrollment_id, completion_credit_id=completion_credit_id
+            enrollment_id,
+            completion_credit_id=completion_credit_id,
+            keep_completed=keep_enrollment_completion,
         )
 
         # Auto-advance phases whose requirements are now complete (no-op for
@@ -4286,6 +4299,7 @@ class TrainingProgramService:
         if units is None or units < 0 or (units == 0 and not mark_completed):
             return None, None
 
+        restated_from_completed = False
         progress = await self._get_org_scoped_progress(
             progress_id, organization_id, lock=True
         )
@@ -4351,12 +4365,17 @@ class TrainingProgramService:
             # requirement percentage, enrollment rollup and phase state all
             # unwind exactly as they accrued — then fall through and apply the
             # new ones as a fresh credit.
+            restated_from_completed = _status_value(progress.status) == (
+                RequirementProgressStatus.COMPLETED.value
+            )
             _, revoke_error = await self.revoke_requirement_credit(
                 progress_id=progress_id,
                 organization_id=organization_id,
                 source_type=source_type,
                 source_id=source_id,
                 verified_by=verified_by,
+                # Decided once the corrected figure is on, below.
+                reopen_below_target=False,
             )
             if revoke_error:
                 return None, revoke_error
@@ -4419,7 +4438,18 @@ class TrainingProgramService:
             # must accrue even while the requirement is gated. Source-backed
             # sign-offs remain subject to the same lock as manual sign-offs.
             enforce_prerequisites=mark_completed,
+            keep_enrollment_completion=restated_from_completed,
         )
+        if restated_from_completed and result[0] is not None:
+            # A correction that left the member below the target reopens the
+            # requirement; one that stays above it changes nothing (the
+            # requirement stayed COMPLETED through the restate, so its
+            # completed_at is the original).
+            if await self._reopen_if_below_target(result[0].id, organization_id):
+                result = (
+                    await self._get_org_scoped_progress(progress_id, organization_id),
+                    None,
+                )
         if mark_completed:
             phase_after_result = await self.db.execute(
                 select(ProgramEnrollment.current_phase_id).where(
@@ -4454,6 +4484,64 @@ class TrainingProgramService:
         )
         return found.scalar_one_or_none() is not None
 
+    async def _reopen_if_below_target(
+        self, progress_id: Any, organization_id: UUID | str
+    ) -> bool:
+        """Move a completed requirement a correction left short back to in progress.
+
+        Owner decision 2026-11-23: when a correction to source-backed credit (a
+        shift report fixed, a session re-finalized, a record voided) takes a
+        member below a requirement they had completed, the requirement goes
+        back to IN_PROGRESS and ``completed_at`` is cleared. Certificates
+        already issued, the enrollment's completion and phase advancement are
+        not touched, and the training officers are told so.
+
+        Only COMPLETED reopens: VERIFIED and WAIVED are an officer's explicit
+        decision and stand. "Below" is the row's own percentage, which the
+        updater recalculates from ``progress_value`` for every requirement with
+        a numeric target; a requirement with none stays at 100 and is never
+        reopened here. Returns whether it reopened; a second identical
+        correction finds the row already in progress and does nothing.
+        """
+        progress = await self._get_org_scoped_progress(
+            progress_id, organization_id, lock=True
+        )
+        if progress is None or _status_value(progress.status) != (
+            RequirementProgressStatus.COMPLETED.value
+        ):
+            return False
+        if float(progress.progress_percentage or 0) >= 100.0:
+            return False
+        progress.status = RequirementProgressStatus.IN_PROGRESS
+        progress.completed_at = None
+        progress.updated_at = datetime.now(timezone.utc)
+        enrollment_id = str(progress.enrollment_id)
+        await self.db.commit()
+        # The rollup clears the requirement's completion-notice stamp, so a
+        # later restore is announced as a completion again.
+        await self._recalculate_enrollment_progress(enrollment_id, keep_completed=True)
+
+        from app.services.program_requirement_reopen import (
+            notify_requirement_reopened,
+        )
+
+        row = (
+            await self.db.execute(
+                select(RequirementProgress)
+                .options(
+                    selectinload(RequirementProgress.enrollment).selectinload(
+                        ProgramEnrollment.program
+                    ),
+                    selectinload(RequirementProgress.requirement),
+                )
+                .where(RequirementProgress.id == str(progress_id))
+            )
+        ).scalar_one()
+        await notify_requirement_reopened(
+            self.db, row, row.enrollment, row.enrollment.program, row.requirement
+        )
+        return True
+
     async def revoke_requirement_credit(
         self,
         progress_id: Any,
@@ -4461,6 +4549,7 @@ class TrainingProgramService:
         source_type: ProgressCreditSource,
         source_id: str,
         verified_by: UUID | str | None = None,
+        reopen_below_target: bool = True,
     ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
         """Reverse a single previously-applied credit: drop its ledger row and
         subtract its units back off the requirement (floored at 0), re-running
@@ -4468,6 +4557,12 @@ class TrainingProgramService:
 
         Idempotent — reversing a credit that was never recorded is a no-op. This
         is the primitive an officer's "un-apply" action builds on.
+
+        Taking units off a completed requirement that leaves it below its
+        target reopens it (``_reopen_if_below_target``); the enrollment's
+        completion and phase are kept. ``reopen_below_target`` False defers
+        that to a caller about to apply a corrected figure (a restate), so a
+        correction that stays above the target changes nothing.
         """
         progress = await self._get_org_scoped_progress(
             progress_id, organization_id, lock=True
@@ -4491,6 +4586,9 @@ class TrainingProgramService:
             return progress, None
 
         units = float(credit.units or 0)
+        was_completed = _status_value(progress.status) == (
+            RequirementProgressStatus.COMPLETED.value
+        )
         previous_status = credit.previous_status
         phase_before_id = credit.phase_before_id
         phase_after_id = credit.phase_after_id
@@ -4534,7 +4632,16 @@ class TrainingProgramService:
             # deleting the ledger row would leave progress and its audit trail
             # inconsistent.
             enforce_prerequisites=False,
+            # Taking hours back reopens at most the requirement, never the
+            # enrollment. A sign-off reversal (zero units) keeps its old rule.
+            keep_enrollment_completion=units > 0,
         )
+        if units > 0 and was_completed and reopen_below_target and result[0]:
+            await self._reopen_if_below_target(result[0].id, organization_id)
+            result = (
+                await self._get_org_scoped_progress(progress_id, organization_id),
+                None,
+            )
         if units == 0 and phase_after_id:
             phase_result = await self.db.execute(
                 select(ProgramEnrollment).where(
@@ -5653,10 +5760,16 @@ class TrainingProgramService:
         self,
         enrollment_id: UUID | str,
         completion_credit_id: Optional[str] = None,
+        keep_completed: bool = False,
     ) -> None:
         """
         Recalculate overall progress percentage for an enrollment.
         Sends notifications on program completion.
+
+        ``keep_completed`` leaves a completed enrollment completed when the
+        rollup falls below 100%: a correction to credit reopens the
+        requirement it lowered, never the enrollment (owner decision
+        2026-11-23).
         """
         # Get enrollment before update to detect state changes
         enrollment_result = await self.db.execute(
@@ -5737,7 +5850,12 @@ class TrainingProgramService:
             and was_active
             and await self._claim_completion(enrollment_id, (EnrollmentStatus.ACTIVE,))
         )
-        if avg_percentage < 100.0 and was_completed and previous_percentage >= 100.0:
+        if (
+            avg_percentage < 100.0
+            and was_completed
+            and previous_percentage >= 100.0
+            and not keep_completed
+        ):
             # Progress fell back below 100% for an enrollment that had already
             # completed — e.g. an officer corrected an over-count downward, or a
             # new required requirement was added to the program. Reopen it so it
