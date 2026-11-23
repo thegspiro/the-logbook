@@ -854,25 +854,27 @@ const ItemTable: React.FC<ItemTableProps> = ({
                             indented under and the padding would just be a
                             ragged edge. */}
                         <td data-label="Name" className={`py-3 pr-3 ${clusterLeadId ? 'pl-3 md:pl-9' : 'pl-3'}`}>
-                          <Link
-                            to={`/inventory/items/${item.id}`}
-                            className="text-theme-text-primary touch:min-h-11 touch:inline-flex touch:items-center font-medium hover:text-blue-600 dark:hover:text-blue-400"
-                          >
-                            {/* The size, not the shared product name: under an
+                          <div className="min-w-0">
+                            <Link
+                              to={`/inventory/items/${item.id}`}
+                              className="text-theme-text-primary touch:min-h-11 touch:inline-flex touch:items-center font-medium hover:text-blue-600 dark:hover:text-blue-400"
+                            >
+                              {/* The size, not the shared product name: under an
                                 open product row every member would otherwise
                                 read as the same word repeated. */}
-                            {clusterLeadId ? displaySize(item) || getDisplayName(item) : getDisplayName(item)}
-                          </Link>
-                          {/* Desktop only: the stacked phone card already has
+                              {clusterLeadId ? displaySize(item) || getDisplayName(item) : getDisplayName(item)}
+                            </Link>
+                            {/* Desktop only: the stacked phone card already has
                               its own Serial # and Asset Tag rows. Without it
                               two radios both read "Portable Radio", and the
                               only way to tell which one a member holds was to
                               open each. */}
-                          {(item.serial_number || item.asset_tag) && (
-                            <span className="text-theme-text-muted hidden text-xs md:block">
-                              {item.serial_number ? `S/N ${item.serial_number}` : `Tag ${item.asset_tag}`}
-                            </span>
-                          )}
+                            {(item.serial_number || item.asset_tag) && (
+                              <span className="text-theme-text-muted hidden text-xs md:block">
+                                {item.serial_number ? `S/N ${item.serial_number}` : `Tag ${item.asset_tag}`}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         {/* Status: a desktop column only when showStatus, but always
                       surfaced on mobile (where items aren't column-grouped). */}
@@ -897,15 +899,17 @@ const ItemTable: React.FC<ItemTableProps> = ({
                           </td>
                         )}
                         <td data-label="Qty" className="text-theme-text-muted px-3 py-3 text-center tabular-nums">
-                          {qtyLabel(item)}
-                          {item.is_lot_stocked && (
-                            <span
-                              className="text-theme-text-muted block text-[10px] leading-tight"
-                              title="Ready units across in-date stock lots. Expired lots are not counted — they cannot be issued or swapped onto an apparatus."
-                            >
-                              in-date lots
-                            </span>
-                          )}
+                          <div className="min-w-0">
+                            {qtyLabel(item)}
+                            {item.is_lot_stocked && (
+                              <span
+                                className="text-theme-text-muted block text-[10px] leading-tight"
+                                title="Ready units across in-date stock lots. Expired lots are not counted — they cannot be issued or swapped onto an apparatus."
+                              >
+                                in-date lots
+                              </span>
+                            )}
+                          </div>
                         </td>
                         {!grouped('condition') && (
                           <td

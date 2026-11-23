@@ -55,6 +55,7 @@ from app.utils.election_pdf_style import (
     PANEL,
     base_styles,
     esc,
+    identity_style,
     logo_flowable,
 )
 from app.utils.pdf_fonts import BODY_FONT, BOLD_FONT, body_table_style
@@ -371,6 +372,8 @@ class ReportMeta:
         subject: Optional[str] = None,
         lang: str = "en-US",
         wide: bool = False,
+        identity: Optional[str] = None,
+        report_number: Optional[str] = None,
     ):
         self.title = title
         self.org_name = org_name
@@ -384,6 +387,11 @@ class ReportMeta:
         self.lang = lang
         self.wide = wide
         self.pagesize = landscape(letter) if wide else letter
+        # The department's address line and this copy's number
+        # (app.utils.report_number): page 1 shows both, and every later page
+        # carries the number in its running header.
+        self.identity = identity
+        self.report_number = report_number
 
     @property
     def width(self) -> float:
@@ -393,6 +401,7 @@ class ReportMeta:
 def _letterhead(meta: ReportMeta, styles: Dict[str, ParagraphStyle]) -> List[Any]:
     text: List[Any] = [
         Paragraph(esc(meta.org_name) or "Report", styles["org"]),
+        *([Paragraph(esc(meta.identity), identity_style())] if meta.identity else []),
         Spacer(1, 3),
         Paragraph(esc(meta.title).upper(), styles["kicker"]),
     ]
@@ -418,28 +427,42 @@ def _letterhead(meta: ReportMeta, styles: Dict[str, ParagraphStyle]) -> List[Any
             style=body_table_style([("LEFTPADDING", (0, 0), (-1, -1), 0)]),
         )
     flowables: List[Any] = [head, Spacer(1, 8)]
-    if meta.parameters:
+    # The report information block: which copy this is, who made it and as
+    # of when, then what it covers. The fields of a formal report's
+    # documentation page, in one strip (owner decision, 2026-11-21).
+    facts: List[Tuple[str, Any]] = [
+        (label, value)
+        for label, value in (
+            ("Report No.", meta.report_number),
+            ("Prepared by", meta.generated_by),
+            ("Data as of", meta.generated_at),
+        )
+        if value
+    ] + list(meta.parameters)
+    if facts:
+        # A grid, three pairs to a row, so a label is never wrapped away from
+        # its value as it was in a single running line.
+        per_row = 3
+        # Paragraphs, then blank strings padding out the last row.
+        cells: List[Any] = [
+            Paragraph(f"<b>{esc(label)}:</b> {esc(value)}", styles["panel"])
+            for label, value in facts
+        ]
+        cells += [""] * (-len(cells) % per_row)
+        rows = [cells[i : i + per_row] for i in range(0, len(cells), per_row)]
         flowables.append(
             Table(
-                [
-                    [
-                        Paragraph(
-                            " &nbsp;·&nbsp; ".join(
-                                f"<b>{esc(label)}:</b> {esc(value)}"
-                                for label, value in meta.parameters
-                            ),
-                            styles["panel"],
-                        )
-                    ]
-                ],
-                colWidths=[meta.width],
+                rows,
+                colWidths=[meta.width / per_row] * per_row,
                 style=body_table_style(
                     [
                         ("LINEABOVE", (0, 0), (-1, 0), 1.5, INK),
-                        ("LINEBELOW", (0, 0), (-1, 0), 0.5, GRID),
+                        ("LINEBELOW", (0, -1), (-1, -1), 0.5, GRID),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
                         ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                        ("TOPPADDING", (0, 0), (-1, -1), 5),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                        ("TOPPADDING", (0, 0), (-1, -1), 4),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
                     ]
                 ),
             )
@@ -508,8 +531,13 @@ def render_report(
         doc = HeadedDocTemplate(
             buf,
             running_header=RunningHeader(
-                meta.org_name, meta.title, _header_detail(meta), meta.logo
+                meta.org_name,
+                meta.title,
+                _header_detail(meta),
+                meta.logo,
+                reference=meta.report_number,
             ),
+            banner=meta.confidentiality,
             # The canvas otherwise declares Helvetica, never embedded, on every page.
             initialFontName=BODY_FONT,
             pagesize=meta.pagesize,

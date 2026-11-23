@@ -72,6 +72,7 @@ from app.schemas.minute import (
     SuggestionResponse,
     validate_attachment_category,
 )
+from app.services.document_provenance import report_number_for
 from app.services.minute_service import MinuteService
 from app.services.minutes_print_data import build_print_data
 from app.services.minutes_record_service import (
@@ -80,6 +81,7 @@ from app.services.minutes_record_service import (
 )
 from app.services.minutes_signature_service import MinutesSignatureService
 from app.utils import download_names
+from app.utils.election_pdf_style import department_identity
 from app.utils.minutes_election_corrections import replaced_corrections
 from app.utils.minutes_pdf import render_minutes_pdf
 from app.utils.minutes_pdf_attachments import select_for_pdf
@@ -1224,6 +1226,7 @@ async def download_minutes_pdf(
     contents = await MinutesRecordService(db).attachment_contents(
         minutes, select_for_pdf(data.get("attachments") or []), organization_id
     )
+    report_number = await report_number_for(db, organization_id)
     # Off the event loop: decoding images and copying PDF pages is CPU work,
     # bounded by the budgets in minutes_pdf_attachments.
     pdf = await asyncio.to_thread(
@@ -1232,6 +1235,8 @@ async def download_minutes_pdf(
         {
             "org_name": org.name if org else None,
             "logo": org.logo if org else None,
+            "identity": department_identity(org) or None,
+            "report_number": report_number,
             "generated_at": local(datetime.now(timezone.utc), "%B %d, %Y %I:%M %p %Z"),
         },
         contents,
@@ -1242,7 +1247,12 @@ async def download_minutes_pdf(
         event_type="minutes_pdf_exported",
         event_category="meetings",
         severity="info",
-        event_data={"minutes_id": minutes_id, "status": status_value},
+        event_data={
+            "minutes_id": minutes_id,
+            "status": status_value,
+            # Printed on every page of this copy, so a page traces back here.
+            "report_number": report_number,
+        },
         user_id=str(current_user.id),
     )
     logger.info(f"Minutes PDF exported | id={minutes_id} by={current_user.id}")

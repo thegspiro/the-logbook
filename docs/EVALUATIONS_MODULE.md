@@ -481,6 +481,18 @@ CSV, one row per evaluation with its grade, written with `SafeCsvWriter`. Each
 export is audited as `evaluation_period_exported`. The caller's own evaluation
 is left out of both, as the list leaves it out.
 
+### Grades by evaluator
+
+Below the period counts, a holder of `evaluations.view_all` sees how each
+evaluator's finalized reviews in the period fall across the five grades, beside
+the whole department's (`GET /evaluations/grade-spread?period_id=`). It is
+counted from the rows and grades `list_evaluations` gives the conduct list and
+the export, so the three agree, the caller's own evaluation left out as they
+leave it out; reviews are grouped by the evaluator they stand under today. A
+weighted form's percentage, or a form with no overall, has no place on the five
+grades and is counted as "Not on the five grades". The spread is shown and not
+judged: nothing flags an evaluator (owner decision 2026-11-22).
+
 ### Signed PDFs for a period
 
 Beside Export CSV, **Download signed PDFs** (`GET /evaluations/export-pdfs?period_id=`)
@@ -535,6 +547,7 @@ All under `/api/v1/evaluations`.
 | `GET /periods/{id}/reassign-options`, `GET /periods/{id}/reassign-preview`                                                    | `manage`                                                                                      |
 | `POST /periods/{id}/reassign`                                                                                                 | `manage`, with step-up                                                                        |
 | `GET /removed`                                                                                                                | `view_all`, `manage` or `delete`                                                              |
+| `GET /grade-spread?period_id=`                                                                                                | `view_all`                                                                                    |
 | `GET /export-pdfs?period_id=`                                                                                                 | `view_all`, with step-up                                                                      |
 | `GET /export?period_id=`                                                                                                      | `view_all`                                                                                    |
 | `GET /mine`, `/mine/live-data`, `/mine/removed`                                                                               | sign-in                                                                                       |

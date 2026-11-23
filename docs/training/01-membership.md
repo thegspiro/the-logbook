@@ -2399,9 +2399,37 @@ While a cover runs:
 **End cover** stops it now (the approver or an officer who manages leave);
 votes the stand-in already cast still count.
 
+**The stand-in is told** _(2026-11-22)_. The officer named gets an email and
+an in-app notice when the cover is set, when it is cleared (unless they
+cleared it themself), and the day after it ends. None of these says anything
+about a request or its reason.
+
+**Going on leave yourself?** When an approver's own leave is approved, the
+approval email and an in-app notice ask them to name a stand-in, and
+**Approver cover** says so too, with **Use these dates**: it fills **First day
+away** and **Last day away** from the leave and moves to **Stand-in**. A leave
+with no end date fills only the first day. Once a cover spans any of the
+leave's days, the prompt goes away.
+
 **Who decided, and when.** A decided request shows **Approved by** or
 **Denied by** the approver whose vote settled it, with the date, and a
 withdrawn one shows **Withdrawn on** the date.
+
+**The leave calendar** _(2026-11-22)_. Officers who manage leave see
+**Requests** and **Calendar** at the top of **Leave Requests**. **Calendar**
+shows one month: who is on recorded leave, whose request is still waiting
+(marked **(requested)**), and who is covering for an approver (**Olive Officer
+covers Blake Board**). Use **Previous month** and **Next month** to move. On a
+phone it lists the days that have anyone on them. Reasons are never shown.
+Each time the calendar is opened it is written to the audit log.
+
+**Export leave records.** Under the calendar, choose **From** and **To** (the
+month on screen to start with) and select **Download CSV**. The file lists
+every request, whatever its outcome, and every recorded leave in those dates:
+member, whether it is a request or a recorded leave, type, dates, status, who
+decided and when, when it was asked for, and any stand-in covering that
+member. It never includes reasons. One export covers at most five years, and
+each one is written to the audit log.
 
 **Leave requested on the schedule** _(2026-11-21)_. When you assign someone
 to a shift, the member list marks anyone with an undecided leave request

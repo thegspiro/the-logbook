@@ -151,6 +151,7 @@ from app.services.ballot_send_jobs import (
     latest_job,
     queue_automatic_send,
 )
+from app.services.document_provenance import report_number_for
 from app.services.election_attendance_service import (
     MAX_PERIOD_DAYS as MAX_ATTENDANCE_PERIOD_DAYS,
 )
@@ -2989,9 +2990,10 @@ async def download_certified_results(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
+    report_number = await report_number_for(db, current_user.organization_id)
     try:
         buf, error, filename = await service.build_certified_results_pdf(
-            election_id, current_user.organization_id
+            election_id, current_user.organization_id, report_number=report_number
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
@@ -3012,7 +3014,8 @@ async def download_certified_results(
         event_type="certified_results_downloaded",
         event_category="elections",
         severity="info",
-        event_data={"election_id": str(election_id)},
+        # The number is printed on every page, so a page traces back here.
+        event_data={"election_id": str(election_id), "report_number": report_number},
         user_id=str(current_user.id),
     )
     return StreamingResponse(
@@ -4042,11 +4045,13 @@ async def download_package_pdf(
         )
 
     service = ElectionService(db)
+    report_number = await report_number_for(db, current_user.organization_id)
     try:
         buf, error, filename = await service.build_pre_meeting_package_pdf(
             election_id,
             current_user.organization_id,
             include_ineligibility_detail=(variant == "full"),
+            report_number=report_number,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -4064,7 +4069,11 @@ async def download_package_pdf(
         event_type="pre_meeting_package_downloaded",
         event_category="elections",
         severity="info",
-        event_data={"election_id": str(election_id), "variant": variant},
+        event_data={
+            "election_id": str(election_id),
+            "variant": variant,
+            "report_number": report_number,
+        },
         user_id=str(current_user.id),
     )
 

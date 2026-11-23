@@ -285,6 +285,16 @@ class LeaveCoverPerson(BaseModel):
     name: str
 
 
+class LeaveCoverSuggestion(BaseModel):
+    """A leave of the caller's own that no cover spans yet: the dates to
+    offer when prompting them to name a stand-in. ``end_date`` is ``None`` for
+    an open-ended leave, which the caller chooses an end for."""
+
+    leave_id: str
+    start_date: date
+    end_date: Optional[date] = None
+
+
 class LeaveApproverCoverBoard(BaseModel):
     """The covers the caller may see, and whom they may set one for."""
 
@@ -294,4 +304,46 @@ class LeaveApproverCoverBoard(BaseModel):
     approvers: List[LeaveCoverPerson] = Field(default_factory=list)
     # Who may stand in: the members who manage leave.
     stand_ins: List[LeaveCoverPerson] = Field(default_factory=list)
+    # The caller's own leaves, as an approver, that still want a stand-in.
+    suggested: List[LeaveCoverSuggestion] = Field(default_factory=list)
     today: date
+
+
+# ---------------------------------------------------------------------------
+# Department leave calendar (2026-11-22)
+# ---------------------------------------------------------------------------
+
+
+class LeaveCalendarEntry(BaseModel):
+    """A recorded leave or a request still waiting, on the calendar.
+
+    Never the reason. ``end_date`` is ``None`` for an open-ended leave.
+    """
+
+    id: str
+    kind: str  # "leave" or "request"
+    member_id: str
+    member_name: str
+    leave_type: LeaveType
+    start_date: date
+    end_date: Optional[date] = None
+
+
+class LeaveCalendarCover(BaseModel):
+    id: str
+    approver_id: str
+    approver_name: str
+    stand_in_id: str
+    stand_in_name: str
+    start_date: date
+    end_date: date
+
+
+class LeaveCalendarResponse(BaseModel):
+    """One month: everything that touches any of its days."""
+
+    month_start: date
+    month_end: date
+    today: date
+    entries: List[LeaveCalendarEntry] = Field(default_factory=list)
+    covers: List[LeaveCalendarCover] = Field(default_factory=list)

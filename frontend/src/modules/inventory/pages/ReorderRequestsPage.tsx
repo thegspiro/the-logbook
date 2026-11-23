@@ -1190,29 +1190,35 @@ export const ReorderRequestsPage: React.FC = () => {
                 {requests.map((req) => (
                   <tr key={req.id} className="border-theme-surface-border hover:bg-theme-surface-hover border-b">
                     <td data-label="Item" className="px-4 py-3">
-                      <p className="text-theme-text-primary font-medium">{req.item_name}</p>
-                      {req.requester_name && <p className="text-theme-text-muted text-xs">by {req.requester_name}</p>}
+                      <div className="min-w-0">
+                        <p className="text-theme-text-primary font-medium">{req.item_name}</p>
+                        {req.requester_name && <p className="text-theme-text-muted text-xs">by {req.requester_name}</p>}
+                      </div>
                     </td>
                     <td data-label="Qty" className="text-theme-text-primary px-4 py-3">
-                      {req.quantity_requested}
-                      {req.quantity_received != null && (
-                        <span className="ml-1 text-xs text-green-700 dark:text-green-400">
-                          ({req.quantity_received} received)
-                        </span>
-                      )}
+                      <div className="min-w-0">
+                        {req.quantity_requested}
+                        {req.quantity_received != null && (
+                          <span className="ml-1 text-xs text-green-700 dark:text-green-400">
+                            ({req.quantity_received} received)
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td data-label="Vendor" className="px-4 py-3">
                       <VendorName record={req} />
                     </td>
                     <td data-label="Est. Cost" className="text-theme-text-primary px-4 py-3">
-                      {req.estimated_unit_cost != null
-                        ? formatCurrency(Number(req.estimated_unit_cost) * req.quantity_requested)
-                        : '—'}
-                      {req.actual_unit_cost != null && (
-                        <span className="text-theme-text-muted block text-xs">
-                          Actual: {formatCurrency(Number(req.actual_unit_cost) * req.quantity_requested)}
-                        </span>
-                      )}
+                      <div className="min-w-0">
+                        {req.estimated_unit_cost != null
+                          ? formatCurrency(Number(req.estimated_unit_cost) * req.quantity_requested)
+                          : '—'}
+                        {req.actual_unit_cost != null && (
+                          <span className="text-theme-text-muted block text-xs">
+                            Actual: {formatCurrency(Number(req.actual_unit_cost) * req.quantity_requested)}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td data-label="Status" className="px-4 py-3">
                       <span
@@ -1230,10 +1236,12 @@ export const ReorderRequestsPage: React.FC = () => {
                       </span>
                     </td>
                     <td data-label="Requested" className="text-theme-text-muted px-4 py-3 text-xs">
-                      {fmtDate(req.created_at)}
-                      {req.purchase_order_number && (
-                        <span className="text-theme-text-primary block">PO: {req.purchase_order_number}</span>
-                      )}
+                      <div className="min-w-0">
+                        {fmtDate(req.created_at)}
+                        {req.purchase_order_number && (
+                          <span className="text-theme-text-primary block">PO: {req.purchase_order_number}</span>
+                        )}
+                      </div>
                     </td>
                     <td data-label="" className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">

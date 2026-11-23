@@ -309,12 +309,14 @@ const BudgetVsActual: React.FC<{ years: FiscalYear[]; fiscalYearId: string; onYe
                     {data.rows.map((row) => (
                       <tr key={row.budgetId}>
                         <td data-label="Budget line" className={tdClass}>
-                          {lineName(row.categoryName, row.stationName)}
-                          {row.runningSpentDiffers && (
-                            <span className="text-theme-text-secondary block text-xs">
-                              The line&apos;s running total reads {formatCurrency(row.runningSpent ?? null)}
-                            </span>
-                          )}
+                          <div className="min-w-0">
+                            {lineName(row.categoryName, row.stationName)}
+                            {row.runningSpentDiffers && (
+                              <span className="text-theme-text-secondary block text-xs">
+                                The line&apos;s running total reads {formatCurrency(row.runningSpent ?? null)}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td data-label="Original" className={numClass}>
                           {formatCurrency(row.originalBudget)}
@@ -614,10 +616,12 @@ const PaymentsRegister: React.FC = () => {
                         {KIND_LABELS[row.kind] ?? row.kind}
                       </td>
                       <td data-label="Number" className={tdClass}>
-                        {row.number}
-                        {row.checkNumber && (
-                          <span className="text-theme-text-secondary block text-xs">Check {row.checkNumber}</span>
-                        )}
+                        <div className="min-w-0">
+                          {row.number}
+                          {row.checkNumber && (
+                            <span className="text-theme-text-secondary block text-xs">Check {row.checkNumber}</span>
+                          )}
+                        </div>
                       </td>
                       <td data-label="Payee" className={tdClass}>
                         {row.payee}
@@ -806,9 +810,11 @@ const FundBalances: React.FC = () => {
                   {data.funds.map((fund) => (
                     <tr key={fund.campaignId}>
                       <td data-label="Fund" className={tdClass}>
-                        <span className="font-medium">{fund.name}</span>
-                        {!fund.active && <span className="text-theme-text-secondary"> (closed)</span>}
-                        {fund.purpose && <p className="text-theme-text-secondary text-xs">{fund.purpose}</p>}
+                        <div className="min-w-0">
+                          <span className="font-medium">{fund.name}</span>
+                          {!fund.active && <span className="text-theme-text-secondary"> (closed)</span>}
+                          {fund.purpose && <p className="text-theme-text-secondary text-xs">{fund.purpose}</p>}
+                        </div>
                       </td>
                       <td data-label="Received" className={numClass}>
                         {formatCurrency(fund.received)}
@@ -918,8 +924,10 @@ const Advances: React.FC = () => {
                   {data.advances.map((advance) => (
                     <tr key={advance.id}>
                       <td data-label="Advance" className={tdClass}>
-                        <span className="font-medium">{advance.requestNumber}</span>
-                        {advance.purpose && <p className="text-theme-text-secondary text-xs">{advance.purpose}</p>}
+                        <div className="min-w-0">
+                          <span className="font-medium">{advance.requestNumber}</span>
+                          {advance.purpose && <p className="text-theme-text-secondary text-xs">{advance.purpose}</p>}
+                        </div>
                       </td>
                       <td data-label="Member" className={tdClass}>
                         {advance.memberName}
@@ -928,10 +936,12 @@ const Advances: React.FC = () => {
                         {advance.issuedAt ? formatDate(advance.issuedAt, tz) : '-'}
                       </td>
                       <td data-label="Due" className={tdClass}>
-                        {advance.dueAt ? formatDate(advance.dueAt, tz) : '-'}
-                        {advance.overdue && (
-                          <span className="block text-xs font-semibold text-red-700 dark:text-red-400">Overdue</span>
-                        )}
+                        <div className="min-w-0">
+                          {advance.dueAt ? formatDate(advance.dueAt, tz) : '-'}
+                          {advance.overdue && (
+                            <span className="block text-xs font-semibold text-red-700 dark:text-red-400">Overdue</span>
+                          )}
+                        </div>
                       </td>
                       <td data-label="Amount" className={numClass}>
                         {formatCurrency(advance.amount)}
@@ -1044,22 +1054,26 @@ const LateSubstantiation: React.FC = () => {
                           {row.memberName}
                         </td>
                         <td data-label="Expense" className={tdClass}>
-                          {row.description}
-                          <span className="text-theme-text-secondary block text-xs">
-                            {row.reportNumber}
-                            {row.budgetLine ? ` · ${row.budgetLine}` : ''}
-                          </span>
+                          <div className="min-w-0">
+                            {row.description}
+                            <span className="text-theme-text-secondary block text-xs">
+                              {row.reportNumber}
+                              {row.budgetLine ? ` · ${row.budgetLine}` : ''}
+                            </span>
+                          </div>
                         </td>
                         <td data-label="Incurred" className={tdClass}>
                           {formatCalendarDate(row.incurredOn)}
                         </td>
                         <td data-label="Submitted" className={tdClass}>
-                          {row.submittedOn ? formatCalendarDate(row.submittedOn) : '-'}
-                          {row.daysToSubmit != null && (
-                            <span className="text-theme-text-secondary block text-xs">
-                              {row.daysToSubmit} days later
-                            </span>
-                          )}
+                          <div className="min-w-0">
+                            {row.submittedOn ? formatCalendarDate(row.submittedOn) : '-'}
+                            {row.daysToSubmit != null && (
+                              <span className="text-theme-text-secondary block text-xs">
+                                {row.daysToSubmit} days later
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td data-label="Confirmed by" className={tdClass}>
                           {row.acknowledgedByName || '-'}
@@ -1151,12 +1165,16 @@ const ExpensesByMember: React.FC = () => {
                   {data.rows.map((row) => (
                     <tr key={row.memberId}>
                       <td data-label="Member" className={tdClass}>
-                        {row.memberName}
-                        {row.voidedChecks > 0 && (
-                          <span className="text-theme-text-secondary block text-xs">
-                            {row.voidedChecks === 1 ? 'One check voided' : `${String(row.voidedChecks)} checks voided`}
-                          </span>
-                        )}
+                        <div className="min-w-0">
+                          {row.memberName}
+                          {row.voidedChecks > 0 && (
+                            <span className="text-theme-text-secondary block text-xs">
+                              {row.voidedChecks === 1
+                                ? 'One check voided'
+                                : `${String(row.voidedChecks)} checks voided`}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td data-label="Reports paid" className={numClass}>
                         {row.reportCount}

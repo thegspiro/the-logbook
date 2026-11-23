@@ -58,10 +58,14 @@ def test_it_targets_event_requests():
 def test_the_chain_has_one_head_again():
     config = Config(str(_BACKEND / "alembic.ini"))
     config.set_main_option("script_location", str(_BACKEND / "alembic"))
-    heads = ScriptDirectory.from_config(config).get_heads()
-    # One head, whichever: a later migration moves it on, and pinning this
-    # revision as the head failed the first time one did.
-    assert len(heads) == 1
+    script = ScriptDirectory.from_config(config)
+    heads = script.get_heads()
+    assert len(heads) == 1, heads
+    # A later migration may sit on top; what matters is one head, with this
+    # revision still on its chain. Pinning the head to this id failed every
+    # branch that added a migration after it.
+    chain = {rev.revision for rev in script.iterate_revisions(heads[0], "base")}
+    assert "c4e7a9d2f1b8" in chain
 
 
 @pytest.fixture

@@ -83,6 +83,7 @@ from app.services.email_theme import (
     WRAP_STYLE,
     with_subline,
 )
+from app.utils.election_pdf_style import department_identity
 from app.utils.membership import (
     configured_tiers,
     member_standing,
@@ -6560,6 +6561,9 @@ class ElectionService:
         meta = {
             "org_name": organization.name if organization else "",
             "logo": organization.logo if organization else None,
+            # No report number: a per-download serial on a voting instrument,
+            # tied to an audit row, is not wanted (owner decision 2026-11-21).
+            "identity": department_identity(organization) or None,
             "generated_at": await self._org_local_time(
                 organization, datetime.now(timezone.utc)
             ),
@@ -6569,7 +6573,10 @@ class ElectionService:
         return buf, None, f"ballot_{safe_title}.pdf"
 
     async def build_certified_results_pdf(
-        self, election_id: UUID, organization_id: UUID | str
+        self,
+        election_id: UUID,
+        organization_id: UUID | str,
+        report_number: Optional[str] = None,
     ) -> Tuple[Optional[BytesIO], Optional[str], str]:
         """Render the certified results package for a CLOSED election.
 
@@ -6665,6 +6672,8 @@ class ElectionService:
         meta = {
             "org_name": organization.name if organization else "",
             "logo": organization.logo if organization else None,
+            "identity": department_identity(organization) or None,
+            "report_number": report_number,
             "generated_at": await self._org_local_time(
                 organization, datetime.now(timezone.utc)
             ),
@@ -9971,6 +9980,7 @@ class ElectionService:
         election_id: UUID,
         organization_id: UUID | str,
         include_ineligibility_detail: bool = False,
+        report_number: Optional[str] = None,
     ) -> Tuple[Optional[BytesIO], Optional[str], str]:
         """Assemble package data and render the PDF.
 
@@ -10125,6 +10135,8 @@ class ElectionService:
         meta = {
             "org_name": organization.name,
             "logo": organization.logo,
+            "identity": department_identity(organization) or None,
+            "report_number": report_number,
             "generated_at": datetime.now(timezone.utc).astimezone(tz),
         }
 
