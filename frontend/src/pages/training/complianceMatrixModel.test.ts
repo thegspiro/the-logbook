@@ -824,3 +824,50 @@ describe('an hours requirement with a monthly average', () => {
     expect(result.totalLabel).toBeNull();
   });
 });
+
+describe('a certification requirement', () => {
+  const certification = requirement({ requirement_type: 'certification', target: null, target_unit: null });
+
+  it('reads as on file with its expiry, as My Training does', () => {
+    const result = evaluateCell(cell({ expiry_date: dateOffset(300) }), certification, AS_OF);
+    expect(result.progressLabel).toBe('On file');
+    expect(result.dateLabel).toMatch(/^\(Expires [A-Z][a-z]{2} \d{1,2}, \d{4}\)$/);
+    expect(result.tone).toBe(CellTone.MET);
+  });
+
+  it('keeps the renewal warning tone while reading as on file', () => {
+    const result = evaluateCell(cell({ expiry_date: dateOffset(20) }), certification, AS_OF);
+    expect(result.progressLabel).toBe('On file');
+    expect(result.tone).toBe(CellTone.SOON);
+  });
+
+  it('says when a lapsed certificate expired', () => {
+    const result = evaluateCell(cell({ status: 'expired', expiry_date: '2026-03-14' }), certification, AS_OF);
+    expect(result.progressLabel).toBe('Expired');
+    expect(result.dateLabel).toBe('(Mar 14, 2026)');
+  });
+
+  it('reads as not recorded with no date, not the frequency window', () => {
+    const result = evaluateCell(
+      cell({ status: 'not_started', window_start: '2024-12-01', window_end: '2026-11-20' }),
+      certification,
+      AS_OF
+    );
+    expect(result.progressLabel).toBe('Not recorded');
+    expect(result.dateLabel).toBe('');
+  });
+
+  it('leaves a catch-up cell its deadline', () => {
+    const result = evaluateCell(cell({ status: 'catch_up', catch_up_deadline: '2027-01-31' }), certification, AS_OF);
+    expect(result.dateLabel).toBe('Due by Jan 31, 2027');
+  });
+
+  it('leaves other pass/fail requirements their existing wording', () => {
+    const result = evaluateCell(
+      cell({ status: 'not_started' }),
+      requirement({ requirement_type: 'skills_evaluation', target: null }),
+      AS_OF
+    );
+    expect(result.progressLabel).toBe('Nothing recorded');
+  });
+});

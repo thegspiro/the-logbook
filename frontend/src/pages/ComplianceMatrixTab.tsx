@@ -47,7 +47,9 @@ import {
   MEMBER_CLASS_ORDER,
   Standing,
   cellFor,
+  certificationExpiryText,
   evaluateMatrix,
+  isCertificationRequirement,
   parseClassFilter,
   rankMembers,
   requirementMeta,
@@ -376,7 +378,19 @@ const ComplianceMatrixTab: React.FC = () => {
   );
 
   const exportCsv = useCallback(() => {
-    const header = ['Member', 'Membership type', 'Member class', 'Standing', 'Met', 'Total', 'Percent'];
+    // One expiry column per certification requirement in view, so the export
+    // answers "whose CPR runs out first" without opening every member.
+    const certifications = requirements.filter(isCertificationRequirement);
+    const header = [
+      'Member',
+      'Membership type',
+      'Member class',
+      'Standing',
+      'Met',
+      'Total',
+      'Percent',
+      ...certifications.map((r) => `${r.name} expiry`),
+    ];
     const rows = evaluated.map((m) => [
       m.member.member_name,
       m.member.membership_type ?? '',
@@ -385,9 +399,10 @@ const ComplianceMatrixTab: React.FC = () => {
       m.met,
       m.total,
       m.pct ?? '',
+      ...certifications.map((r) => certificationExpiryText(cellFor(m, r.id))),
     ]);
     downloadCsv(buildCsv([header, ...rows]), 'compliance-matrix.csv');
-  }, [evaluated]);
+  }, [evaluated, requirements]);
 
   if (loading) {
     // SkeletonPage is itself the live region. Wrapping it in a second
