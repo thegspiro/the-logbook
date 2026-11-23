@@ -14429,6 +14429,172 @@ class Seeder:
             },
         )
 
+    BACKLOG04_PRESETS = {
+        "station_tour": [
+            {"role": "tour_guide", "count": 2},
+            {"role": "greeter", "count": 1},
+        ],
+        "fire_safety_demo": [
+            {"role": "demonstrator", "count": 2},
+            {"role": "educator", "count": 1},
+        ],
+    }
+
+    def seed_backlog_04_type_role_preset(self) -> str:
+        """Give two request types the roles they usually need.
+
+        Guide 04 pictures Event settings' Types & roles with Station Tour
+        reading "Usually needs 2 × Tour Guide, 1 × Greeter", beside Fire Safety
+        Demo opened for editing. Clear preset only appears on a type that has a
+        preset, so that one needs one too. A fresh department has none. A type
+        that already has a preset is left as it is, so one somebody changed on
+        the demo is kept.
+        """
+        settings = self.api.get("/events/settings")
+        types = pick(settings, "outreach_event_types") or []
+        missing = {
+            pick(t, "value")
+            for t in types
+            if pick(t, "value") in self.BACKLOG04_PRESETS and not pick(t, "default_roles")
+        }
+        if not missing:
+            return "already"
+        self.api.patch(
+            "/events/settings",
+            {
+                "outreach_event_types": [
+                    (
+                        {**t, "default_roles": self.BACKLOG04_PRESETS[pick(t, "value")]}
+                        if pick(t, "value") in missing
+                        else t
+                    )
+                    for t in types
+                ]
+            },
+        )
+        return f"set on {len(missing)}"
+
+    BACKLOG04_STAFFED_EVENT_TITLE = "Library fire safety story hour"
+    BACKLOG04_STAFFING_ROLES = [
+        {"role": "educator", "count": 2},
+        {"role": "demonstrator", "count": 2},
+        {"role": "greeter", "count": 1},
+    ]
+    # Three of the five places, so the card reads "3 of 5 signed up" with a
+    # role still short. Ordinary members, none a capture account.
+    BACKLOG04_VOLUNTEERS = (
+        ("isolberg", "educator"),
+        ("ytanaka", "educator"),
+        ("dokonkwo", "greeter"),
+    )
+
+    def seed_backlog_04_volunteer_staffing(self) -> str:
+        """An outreach event created directly, with its signup sheet part-filled.
+
+        Guide 04 pictures the Volunteer staffing card on an outreach event that
+        no public request is behind: "3 of 5 signed up", each role's count and
+        the names. The event is public education, which is what makes it
+        outreach, and three weeks out so it is still upcoming across a capture
+        run. The volunteers are seated by the administrator, the way an officer
+        adds someone from the shift, with the outreach role the sheet asks for.
+        Found again by title; a member already on the sheet is not added twice.
+        """
+        events = items(self.api.get("/events?limit=500"), "events")
+        event = next(
+            (e for e in events if pick(e, "title") == self.BACKLOG04_STAFFED_EVENT_TITLE),
+            None,
+        )
+        if event is None:
+            start = (NOW + timedelta(days=21)).replace(
+                hour=15, minute=0, second=0, microsecond=0
+            )
+            event = self.api.post(
+                "/events",
+                {
+                    "title": self.BACKLOG04_STAFFED_EVENT_TITLE,
+                    "description": (
+                        "Stories, a smoke alarm demonstration and a look at the "
+                        "gear, for families at the Oakville Public Library."
+                    ),
+                    "event_type": "public_education",
+                    "location": "Oakville Public Library",
+                    "start_datetime": iso(start),
+                    "end_datetime": iso(start + timedelta(hours=1)),
+                    "requires_rsvp": False,
+                    "is_mandatory": False,
+                    "send_reminders": False,
+                    "is_draft": False,
+                },
+            )
+        event_id = pick(event, "id")
+        staffing = self.api.get(f"/events/{event_id}/staffing")
+        if not pick(staffing, "shift_id"):
+            staffing = self.api.post(
+                f"/events/{event_id}/staffing",
+                {"roles": self.BACKLOG04_STAFFING_ROLES},
+            )
+        shift_id = pick(staffing, "shift_id")
+        path = f"/scheduling/shifts/{shift_id}/assignments"
+        aboard = {
+            str(pick(row, "user_id"))
+            for row in items(self.api.get(path), "assignments")
+        }
+        added = 0
+        for username, role in self.BACKLOG04_VOLUNTEERS:
+            user_id = self._user_id(username)
+            if user_id in aboard:
+                continue
+            self.api.post(path, {"user_id": user_id, "outreach_role": role})
+            added += 1
+        return f"{added} volunteers added"
+
+    BACKLOG04_CLOSEOUT_EVENT_TITLE = "Pre-K station tour"
+    BACKLOG04_CLOSEOUT_MATERIALS = [
+        {"item": "Junior firefighter helmets", "quantity": 22},
+        {"item": "Fire safety colouring books", "quantity": 18},
+    ]
+
+    def seed_backlog_04_outreach_closeout(self) -> str:
+        """Record how the pre-K station tour went.
+
+        Guide 04 pictures the How it went card filled in, with an outcome
+        note, one apparatus, two materials and photos taken with the host's
+        consent, and the Materials handed out card on Outreach Impact, which
+        appears only once an event in the period has recorded materials. The
+        tour is one of seed_outreach_history's past events. Left alone once a
+        note is recorded, so a close-out somebody edited is kept.
+        """
+        events = items(self.api.get("/events?limit=500"), "events")
+        event = next(
+            (e for e in events if pick(e, "title") == self.BACKLOG04_CLOSEOUT_EVENT_TITLE),
+            None,
+        )
+        if event is None:
+            return "no pre-k tour"
+        event_id = pick(event, "id")
+        detail = self.api.get(f"/events/{event_id}")
+        if pick(detail, "outreach_outcome_note"):
+            return "already"
+        options = items(self.api.get("/scheduling/apparatus-options"), "options")
+        engine = next(
+            (o for o in options if "engine" in str(pick(o, "name") or "").lower()),
+            options[0] if options else None,
+        )
+        self.api.put(
+            f"/events/{event_id}/outreach-closeout",
+            {
+                "outcome_note": (
+                    "Both pre-K classes came with their teachers. The children "
+                    "sat in the engine and tried on the helmets; the teachers "
+                    "asked about a visit for the kindergarten in the spring."
+                ),
+                "apparatus_ids": [str(pick(engine, "id"))] if engine else [],
+                "materials": self.BACKLOG04_CLOSEOUT_MATERIALS,
+                "photos": "consented",
+            },
+        )
+        return "recorded"
+
     def seed_event_request_pipeline(self) -> None:
         """A request at each stage, so every group on the Requests tab has a row.
 
@@ -22237,6 +22403,11 @@ class Seeder:
         self.step("event request", self.seed_event_request)
         self.step("event request pipeline", self.seed_event_request_pipeline)
         self.step("outreach history", self.seed_outreach_history)
+        self.step("backlog 04 type role preset", self.seed_backlog_04_type_role_preset)
+        self.step(
+            "backlog 04 volunteer staffing", self.seed_backlog_04_volunteer_staffing
+        )
+        self.step("backlog 04 outreach closeout", self.seed_backlog_04_outreach_closeout)
         self.step("elections", lambda: self.seed_elections(minutes))
         prospect_data = (
             self.step("prospective members", self.seed_prospective_members) or {}

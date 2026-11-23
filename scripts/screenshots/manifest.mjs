@@ -14058,14 +14058,149 @@ export const SHOTS = [
     // Schedule event action, a next step and a part-done checklist. Viewport,
     // not full page: the drawer is fixed to the viewport, and a full-page
     // capture would photograph the page scrolled behind it.
-    id: "04-99-event-request-drawer",
+    id: "04-102-event-request-page",
     doc: "04-events-meetings.md",
-    line: 2357,
-    anchor: "A request in progress open in the drawer",
-    alt: "A request in progress open in the drawer: the Schedule event, Email requester and More buttons under its title, the next step, and a part-done checklist",
+    line: 2994,
+    anchor: "An outreach request on its own page",
+    alt: "An outreach request on its own page: All requests above the title, the Schedule event, Email requester and More buttons, the next step, and a part-done checklist",
     route: "/events/admin?tab=requests",
     expect: "Next:",
     prepare: clickByName(/^Maple Street HOA/),
+  },
+  {
+    // The pre-K tour's close-out (seed_backlog_04_outreach_closeout): note,
+    // Engine 1, two materials and photos taken with consent. Both this and
+    // 04-107 answer one placeholder, which was replaced by hand, since
+    // apply_placeholders fills one image per placeholder.
+    id: "04-106-outreach-closeout",
+    doc: "04-events-meetings.md",
+    line: 3236,
+    anchor: "the **How it went** card on an outreach",
+    alt: "The How it went card on the pre-K station tour: the outcome note, Engine 1 ticked under Apparatus that attended, two materials handed out with their counts, and Photos taken, with the host's consent chosen",
+    route: "/events",
+    expect: "Apparatus that attended",
+    allowEmptyState:
+      '"No photos were taken" is one of the Photos choices, not an empty card.',
+    selector: "section[aria-labelledby='event-closeout-heading']",
+    prepare: async (page, helpers) => {
+      await openFirstFromApi(
+        "/events?limit=500",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Pre-K station tour",
+      )(page, helpers);
+      await page
+        .locator("section[aria-labelledby='event-closeout-heading']")
+        .getByText("Junior firefighter helmets")
+        .or(
+          page
+            .locator("section[aria-labelledby='event-closeout-heading'] input")
+            .first(),
+        )
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "04-107-materials-handed-out",
+    doc: "04-events-meetings.md",
+    line: 3237,
+    anchor: "**Materials handed out** card on",
+    alt: "The Materials handed out card on Outreach Impact for this year: each item recorded at an event's close-out with the total handed out",
+    route: "/events/admin?tab=community",
+    expect: "Materials handed out",
+    selector: "section[aria-labelledby='ce-materials-heading']",
+  },
+  {
+    // The seeder's own outreach event, made directly with no request behind
+    // it, its sheet three of five filled (seed_backlog_04_volunteer_staffing).
+    id: "04-105-event-volunteer-staffing",
+    doc: "04-events-meetings.md",
+    line: 3080,
+    anchor:
+      "**Volunteer staffing** card on an outreach event with an open sheet",
+    alt: "The Volunteer staffing card on an outreach event created directly: 3 of 5 signed up, each role with how many it needs and has, and the members who signed up with the role each took",
+    route: "/events",
+    expect: "3 of 5 signed up",
+    selector: "section[aria-labelledby='event-staffing-heading']",
+    prepare: openFirstFromApi(
+      "/events?limit=500",
+      (id) => `/events/${id}`,
+      "events",
+      (event) => event.title === "Library fire safety story hour",
+    ),
+  },
+  {
+    // Two types carry a role preset (seed_backlog_04_type_role_preset):
+    // Station Tour shows its summary, and Fire Safety Demo is opened for
+    // editing so Add a role, Clear preset and Save roles are on screen. Clear
+    // preset only renders on a type that has a preset. Opened, never saved.
+    id: "04-104-type-role-preset",
+    doc: "04-events-meetings.md",
+    line: 2862,
+    anchor: "with one type reading",
+    alt: "Event settings, Public Requests, Types & roles: Station Tour reading Usually needs 2 × Tour Guide, 1 × Greeter, and Fire Safety Demo open for editing with its Demonstrator and Educator rows, Add a role, Cancel, Clear preset and Save roles",
+    route: "/events/admin?tab=settings",
+    expect: "Usually needs 2 × Tour Guide, 1 × Greeter",
+    allowEmptyState:
+      '"No role preset" labels the types that have none, beside the two that do.',
+    selector:
+      "div.space-y-6:has(> div > h2:text-is('Request Types')) > div.space-y-2",
+    prepare: async (page) => {
+      const nav = page.getByRole("navigation", {
+        name: "Event settings sections",
+      });
+      await nav
+        .getByRole("button", { name: /^Public Requests/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: /^Types & roles/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", {
+          name: "Edit the roles a Fire Safety Demo usually needs",
+        })
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: "Clear preset" })
+        .waitFor({ timeout: 10_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // A phone request typed in, with no email: the confirmation box is
+    // unticked and greyed because it has nowhere to send. Never saved; the
+    // cleanup discards it. Tall enough that the panel shows from How it came
+    // in to the confirmation box without scrolling.
+    id: "04-103-new-request-dialog",
+    doc: "04-events-meetings.md",
+    line: 3041,
+    anchor: "dialog with **How it came in** set",
+    alt: "The New request dialog with How it came in set to Phone call, a requester name and phone filled in and no email, so Email the requester a confirmation is unticked and greyed with the line Needs an email address",
+    route: "/events/admin?tab=requests",
+    viewport: { width: 1440, height: 2200 },
+    expect: "Needs an email address",
+    selector: '[data-testid="modal-panel"]',
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "New request", exact: true })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.locator("#new-request-source").selectOption("phone");
+      await page.locator("#new-request-name").fill("Marisol Vega");
+      await page.locator("#new-request-phone").fill("(703) 555-0182");
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      const discard = page.getByRole("button", { name: "Discard changes" });
+      if (await discard.count()) await discard.click();
+    },
   },
   {
     // The outreach report on its default period, This year. The seeder's
