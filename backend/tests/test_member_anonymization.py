@@ -14,6 +14,7 @@ from app.api.v1.endpoints import users as users_endpoint
 from app.models.forms import Form, FormSubmission
 from app.models.inventory import MemberSizePreferences
 from app.models.medical_screening import ScreeningRecord, ScreeningType
+from app.models.meeting import Meeting, MeetingAttendee, MeetingType
 from app.models.membership_pipeline import (
     MembershipPipeline,
     MembershipPipelineStep,
@@ -42,6 +43,7 @@ from app.models.user import (
     user_positions,
 )
 from app.services import file_storage_service, member_anonymization_service
+from app.services.attendance_waiver_service import MEETING_WAIVER_TEXT
 from app.services.member_anonymization_service import MemberAnonymizationService
 from tests.fake_request import fake_request
 
@@ -1199,3 +1201,283 @@ class TestTrainingRecordUploads:
             assert type(event_data[key]) is int
         for value in event_data.values():
             assert "/" not in str(value)
+
+
+class TestFilesThatFailToDeleteAreQueued:
+    """Waiver and applicant documents: anonymisation drops the row whatever
+    happens to the file, because the member's link to it must not survive.
+    A file that then failed to delete was named by nothing at all and could
+    never be found again. It is queued on pending_file_deletions in the same
+    transaction, so the hourly sweep retries it (owner decision 2026-11-23,
+    batch A item 1)."""
+
+    @pytest.fixture
+    def root(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
+        monkeypatch.setattr(
+            file_storage_service, "_load_settings", AsyncMock(return_value={})
+        )
+        return tmp_path
+
+    @staticmethod
+    async def _queued(db, org_id) -> list[tuple[str, str, str]]:
+        from app.models.pending_file_deletion import PendingFileDeletion
+
+        rows = (
+            await db.execute(
+                select(
+                    PendingFileDeletion.path,
+                    PendingFileDeletion.area,
+                    PendingFileDeletion.reason,
+                ).where(PendingFileDeletion.organization_id == org_id)
+            )
+        ).all()
+        return sorted(tuple(r) for r in rows)
+
+    async def test_a_waiver_document_that_will_not_delete_is_queued(
+        self, db_session, root, monkeypatch
+    ):
+        from app.models.attendance_waiver import (
+            AttendanceWaiverAttachment,
+            AttendanceWaiverRequest,
+            AttendanceWaiverStatus,
+            AttendanceWaiverWorkflow,
+        )
+
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        request = AttendanceWaiverRequest(
+            organization_id=org.id,
+            workflow=AttendanceWaiverWorkflow.TRAINING_SESSION,
+            user_id=user.id,
+            event_title_snapshot="Company Drill",
+            event_start_snapshot=datetime(2026, 3, 4, 23, tzinfo=UTC),
+            session_date=date(2026, 3, 4),
+            status=AttendanceWaiverStatus.DENIED,
+            category="Medical",
+            submitted_at=datetime(2026, 3, 1, tzinfo=UTC),
+        )
+        db_session.add(request)
+        await db_session.flush()
+        note = root / str(org.id) / "attendance-waivers" / str(request.id) / "n.pdf"
+        note.parent.mkdir(parents=True)
+        note.write_bytes(b"%PDF-1.4 doctor's note")
+        db_session.add(
+            AttendanceWaiverAttachment(
+                organization_id=org.id,
+                request_id=request.id,
+                ordinal=1,
+                file_path=str(note),
+                mime_type="application/pdf",
+                file_size=10,
+                sha256="0" * 64,
+            )
+        )
+        await db_session.flush()
+        monkeypatch.setattr(
+            file_storage_service, "delete", AsyncMock(return_value=False)
+        )
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        remaining = (
+            await db_session.execute(
+                select(AttendanceWaiverAttachment.id).where(
+                    AttendanceWaiverAttachment.request_id == request.id
+                )
+            )
+        ).all()
+        assert remaining == []
+        assert await self._queued(db_session, str(org.id)) == [
+            (str(note), "attendance-waivers", "member_anonymization")
+        ]
+        assert summary["attendance_waiver_files_queued"] == 1
+
+    async def test_an_applicant_document_that_will_not_delete_is_queued(
+        self, db_session, root, monkeypatch
+    ):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        prospect = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Pat",
+            last_name="Firefighter",
+            email="pat-queued@example.org",
+            transferred_user_id=user.id,
+        )
+        db_session.add(prospect)
+        await db_session.flush()
+        licence = root / str(org.id) / "applicants" / str(prospect.id) / "id.jpg"
+        licence.parent.mkdir(parents=True)
+        licence.write_bytes(b"licence")
+        db_session.add(
+            ProspectDocument(
+                prospect_id=prospect.id,
+                document_type="id",
+                file_name="id.jpg",
+                file_path=str(licence),
+            )
+        )
+        await db_session.flush()
+        monkeypatch.setattr(
+            file_storage_service, "delete", AsyncMock(return_value=False)
+        )
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        documents = (
+            await db_session.execute(
+                select(ProspectDocument.id).where(
+                    ProspectDocument.prospect_id == prospect.id
+                )
+            )
+        ).all()
+        assert documents == []
+        assert await self._queued(db_session, str(org.id)) == [
+            (str(licence), "applicants", "member_anonymization")
+        ]
+        assert summary["applicant_files_queued"] == 1
+
+    async def test_a_file_that_deletes_queues_nothing(self, db_session, root):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        prospect = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Pat",
+            last_name="Firefighter",
+            email="pat-deleted@example.org",
+            transferred_user_id=user.id,
+        )
+        db_session.add(prospect)
+        await db_session.flush()
+        licence = root / str(org.id) / "applicants" / str(prospect.id) / "id.jpg"
+        licence.parent.mkdir(parents=True)
+        licence.write_bytes(b"licence")
+        db_session.add(
+            ProspectDocument(
+                prospect_id=prospect.id,
+                document_type="id",
+                file_name="id.jpg",
+                file_path=str(licence),
+            )
+        )
+        await db_session.flush()
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert not licence.exists()
+        assert await self._queued(db_session, str(org.id)) == []
+        assert summary["applicant_files_queued"] == 0
+
+
+class TestPathLessEntriesAreRelabelled:
+    """Old text-only attachments became ``{"file_name": ...}`` entries with
+    no stored file (migration 0c22a95b94b8). Their name is the uploader's
+    text, often the member's own name, and anonymisation relabelled only
+    entries naming a stored file (owner decision 2026-11-23, batch A item 2)."""
+
+    async def test_a_path_less_name_is_replaced_on_submissions_and_records(
+        self, db_session
+    ):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        submission = TrainingSubmission(
+            organization_id=org.id,
+            submitted_by=user.id,
+            course_name="CPR",
+            training_type="certification",
+            completion_date=date(2026, 1, 5),
+            hours_completed=1.0,
+            status=SubmissionStatus.APPROVED,
+            attachments=[{"id": "s-1", "file_name": "Pat_Firefighter_CPR.pdf"}],
+        )
+        record = TrainingRecord(
+            organization_id=org.id,
+            user_id=user.id,
+            course_name="CPR",
+            training_type="certification",
+            completion_date=date(2026, 1, 5),
+            hours_completed=1.0,
+            status=TrainingStatus.COMPLETED,
+            attachments=[
+                {"id": "r-1", "file_name": "Pat Firefighter card.JPG"},
+                {"id": "r-2", "file_name": "notes"},
+                "a bare string left over",
+            ],
+        )
+        db_session.add_all([submission, record])
+        await db_session.flush()
+
+        await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        await db_session.refresh(submission)
+        await db_session.refresh(record)
+        assert submission.attachments == [{"id": "s-1", "file_name": "certificate.pdf"}]
+        assert record.attachments[:2] == [
+            {"id": "r-1", "file_name": "attachment.jpg"},
+            {"id": "r-2", "file_name": "attachment"},
+        ]
+
+
+class TestExcusedMeetingsStayExcused:
+    """Every attendance reader counts a meeting as excused from a non-blank
+    ``waiver_reason``. Anonymisation cleared the column, which turned each
+    excused meeting into an absence (owner decision 2026-11-23, batch A
+    item 3)."""
+
+    async def _meeting(self, db, org, title):
+        meeting = Meeting(
+            organization_id=org.id,
+            title=title,
+            meeting_date=date(2026, 3, 1),
+            meeting_type=MeetingType.BUSINESS,
+        )
+        db.add(meeting)
+        await db.flush()
+        return meeting
+
+    async def test_a_waiver_keeps_neutral_wording_and_an_absence_stays_blank(
+        self, db_session
+    ):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        secretary = await _make_departed_member(db_session, org, deleted_at=None)
+        by_hand = await self._meeting(db_session, org, "By hand")
+        absent = await self._meeting(db_session, org, "Absent")
+        db_session.add_all(
+            [
+                MeetingAttendee(
+                    organization_id=org.id,
+                    meeting_id=by_hand.id,
+                    user_id=user.id,
+                    present=False,
+                    excused=True,
+                    waiver_reason="Pat's knee surgery recovery",
+                    waiver_granted_by=secretary.id,
+                    waiver_granted_at=datetime(2026, 3, 2, tzinfo=UTC),
+                ),
+                MeetingAttendee(
+                    organization_id=org.id,
+                    meeting_id=absent.id,
+                    user_id=user.id,
+                    present=False,
+                ),
+            ]
+        )
+        await db_session.flush()
+
+        await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        rows = dict(
+            (
+                await db_session.execute(
+                    select(Meeting.title, MeetingAttendee.waiver_reason)
+                    .join(Meeting, Meeting.id == MeetingAttendee.meeting_id)
+                    .where(MeetingAttendee.user_id == user.id)
+                )
+            ).all()
+        )
+        assert rows == {
+            "By hand": MEETING_WAIVER_TEXT,
+            "Absent": None,
+        }
