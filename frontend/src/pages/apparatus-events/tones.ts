@@ -16,6 +16,18 @@ export const TONE = {
   slate: 'border bg-theme-surface-secondary border-theme-surface-border text-theme-text-secondary',
 } as const;
 
+/**
+ * How full a night is, as a badge tone: green full, amber partly filled, red
+ * with nobody yet. The night list and the crew card's night chips both use it,
+ * so a night reads the same in each. It used to go red with two seats open, so
+ * a night one seat from full looked as urgent as an empty one.
+ */
+export const fillTone = (filled: number, total: number): string => {
+  if (total === 0) return TONE.slate;
+  if (filled >= total) return TONE.green;
+  return filled === 0 ? TONE.red : TONE.amber;
+};
+
 export const EVOC_MODE_LABEL: Record<ApparatusEventEvocMode, string> = {
   [ApparatusEventEvocMode.ENFORCE]: 'EVOC enforced',
   [ApparatusEventEvocMode.WARN]: 'EVOC warn only',

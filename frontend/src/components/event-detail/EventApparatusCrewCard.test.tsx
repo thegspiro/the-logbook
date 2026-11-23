@@ -168,7 +168,7 @@ describe('EventApparatusCrewCard', () => {
 
     expect(await screen.findByText('Outreach · not a shift')).toBeInTheDocument();
     expect(screen.getByText('Night 1 of 2 · from “Santamobile — Full” · 1 of 4 seats filled')).toBeInTheDocument();
-    const signUps = screen.getAllByRole('button', { name: /Sign me up/ });
+    const signUps = screen.getAllByRole('button', { name: /^Sign myself up as/ });
     expect(signUps).toHaveLength(3);
     expect(screen.queryByRole('button', { name: /Assign/ })).not.toBeInTheDocument();
 
@@ -182,7 +182,7 @@ describe('EventApparatusCrewCard', () => {
     renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
 
     await screen.findByText('Outreach · not a shift');
-    expect(screen.queryByRole('button', { name: /Sign me up/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Sign myself up/ })).not.toBeInTheDocument();
   });
 
   it('gives a coordinator assignment and night editing', async () => {
@@ -190,7 +190,7 @@ describe('EventApparatusCrewCard', () => {
     renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
 
     await screen.findByText('Outreach · not a shift');
-    expect(screen.getAllByRole('button', { name: 'Assign…' })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: /^Assign someone as/ })).toHaveLength(3);
     expect(screen.getByRole('button', { name: 'Change…' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Edit this night/ })).toBeInTheDocument();
@@ -201,7 +201,9 @@ describe('EventApparatusCrewCard', () => {
     renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
 
     expect(await screen.findByText(/crew’s hours are posted/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Sign me up|Assign|Edit this night/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Sign myself up|Assign someone|Change…|Edit this night/ })
+    ).not.toBeInTheDocument();
   });
 
   it('links the other nights of the run', async () => {
@@ -316,5 +318,22 @@ describe('EventApparatusCrewCard', () => {
     await user.selectOptions(category, '');
 
     expect(await screen.findByText(/hours won’t be credited/)).toBeInTheDocument();
+  });
+
+  it('draws each seat as the crew board does, with "Open position" for an empty one', async () => {
+    mockGetBoard.mockResolvedValue(board());
+    renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+    expect(await screen.findByText('J. Ramirez')).toBeInTheDocument();
+    expect(screen.getAllByText('Open position')).toHaveLength(3);
+  });
+
+  it('leaves where the hours go to the badges rather than repeating it below', async () => {
+    mockGetBoard.mockResolvedValue(board());
+    renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+    expect(await screen.findByText('Hours: Community Outreach')).toBeInTheDocument();
+    expect(screen.queryByText(/Admin Hours → Community Outreach/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/never count as shift hours/)).not.toBeInTheDocument();
   });
 });

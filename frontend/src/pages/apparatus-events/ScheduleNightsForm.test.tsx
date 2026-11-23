@@ -11,7 +11,7 @@ vi.mock('../../services/api', () => ({
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
-import { renderWithRouter } from '../../test/utils';
+import { nth, renderWithRouter } from '../../test/utils';
 import ScheduleNightsForm from './ScheduleNightsForm';
 import type { ApparatusEventTemplate } from '../../types/apparatusEvent';
 
@@ -39,8 +39,8 @@ describe('ScheduleNightsForm', () => {
 
     await user.clear(dateOf(1));
     await user.type(dateOf(1), '2026-12-18');
-    await user.clear(screen.getAllByLabelText('Hours')[0]!);
-    await user.type(screen.getAllByLabelText('Hours')[0]!, '2.5');
+    await user.clear(nth(screen.getAllByLabelText('Hours'), 0));
+    await user.type(nth(screen.getAllByLabelText('Hours'), 0), '2.5');
     await user.clear(screen.getByLabelText('More nights after the last one'));
     await user.type(screen.getByLabelText('More nights after the last one'), '3');
     await user.click(screen.getByRole('button', { name: 'Every day' }));

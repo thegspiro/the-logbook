@@ -18,7 +18,7 @@ import { ApparatusEventSeatType, type CrewBoard, type CrewSeat, type CrewUnit } 
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { formatCalendarDate, formatShortDateTime, toLocalDateString } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { EVOC_MODE_LABEL, EVOC_MODE_TONE, TONE } from '../../pages/apparatus-events/tones';
+import { EVOC_MODE_LABEL, EVOC_MODE_TONE, TONE, fillTone } from '../../pages/apparatus-events/tones';
 import AssignSeatDialog from './apparatus-crew/AssignSeatDialog';
 import EditNightDialog from './apparatus-crew/EditNightDialog';
 import SeatCallDialog from './apparatus-crew/SeatCallDialog';
@@ -92,11 +92,11 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
 
   const leave = async (seat: CrewSeat, label: string, mine: boolean) => {
     const ok = await confirm({
-      title: mine ? 'Leave this seat?' : `Clear ${label}?`,
+      title: mine ? 'Give up your spot?' : `Clear ${label}?`,
       message: mine
         ? `You come off the ${label} seat on this night, and your RSVP changes to not going.`
         : `${seat.user_name ?? 'This member'} comes off the ${label} seat, and their RSVP changes to not going.`,
-      confirmLabel: mine ? 'Leave seat' : 'Clear seat',
+      confirmLabel: mine ? 'Give up my spot' : 'Clear seat',
       cancelLabel: 'Keep it',
       variant: 'warning',
     });
@@ -107,7 +107,7 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
         mine
           ? apparatusEventService.releaseSeat(board.event_id, seat.id)
           : apparatusEventService.assignSeat(board.event_id, seat.id, null),
-      mine ? 'You left the seat' : 'Seat cleared'
+      mine ? 'You gave up your spot' : 'Seat cleared'
     );
   };
 
@@ -163,15 +163,22 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
               month: 'short',
               day: 'numeric',
             });
+            // Coloured by how full each night is, as in the night list; the
+            // night on screen is marked with a ring, not with red, which read
+            // as "this one needs people" whatever its count.
             return current ? (
-              <span key={night.event_id} className={`badge ${TONE.red}`} aria-current="page">
+              <span
+                key={night.event_id}
+                className={`badge ring-theme-text-primary ring-2 ring-offset-1 ${fillTone(night.filled, night.total)}`}
+                aria-current="page"
+              >
                 {day} · {night.filled}/{night.total}
               </span>
             ) : (
               <Link
                 key={night.event_id}
                 to={`/events/${night.event_id}`}
-                className={`badge hover:underline ${TONE.slate}`}
+                className={`badge hover:underline ${fillTone(night.filled, night.total)}`}
               >
                 {day} · {night.filled}/{night.total}
               </Link>
@@ -211,39 +218,92 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
                   return (
                     <li
                       key={seat.id}
-                      className={`grid gap-2 rounded-lg border p-3 sm:grid-cols-[6rem_minmax(0,1fr)_auto] sm:items-center sm:gap-3 ${
+                      // The same row the shift crew board and the volunteer
+                      // seat board draw (owner request, 2026-11-23): who holds
+                      // the seat, or that it is open, and the seat beneath.
+                      className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2.5 sm:p-3 ${
                         seat.user_id
-                          ? 'border-theme-surface-border'
-                          : 'border-theme-surface-border bg-theme-surface-secondary border-dashed'
+                          ? seat.is_me
+                            ? 'border-violet-500/30 bg-violet-500/5'
+                            : 'border-theme-surface-border bg-theme-surface-hover/30'
+                          : 'border-theme-surface-border bg-theme-surface-hover/10 border-dashed'
                       }`}
                     >
-                      <span className="text-theme-text-primary font-semibold">{label}</span>
-                      <div className="min-w-0 text-sm">
+                      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
                         {seat.user_id ? (
-                          <span className="text-theme-text-primary">
-                            {seat.user_name ?? 'A member'}
-                            {seat.is_me && <span className={`badge ml-2 ${TONE.blue}`}>You</span>}
-                            {seat.checked_in && (
-                              <span className={`badge ml-2 ${TONE.green}`}>
-                                <CheckCircle2 className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-                                Checked in
-                              </span>
-                            )}
-                          </span>
+                          <div
+                            className="bg-theme-surface-hover text-theme-text-primary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-medium"
+                            aria-hidden="true"
+                          >
+                            {(seat.user_name ?? '?').charAt(0).toUpperCase()}
+                          </div>
                         ) : (
-                          <span className="text-theme-text-muted">Open seat</span>
+                          <div
+                            className="border-theme-surface-border flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed"
+                            aria-hidden="true"
+                          >
+                            <UserPlus className="text-theme-text-muted h-3.5 w-3.5" />
+                          </div>
                         )}
-                        {seat.seat_type === ApparatusEventSeatType.DRIVER && (
-                          <span className={`badge ml-2 ${TONE.red}`}>Driver · EVOC</span>
-                        )}
-                        {seat.note && <p className="text-theme-text-muted mt-0.5 text-xs">{seat.note}</p>}
+                        <div className="min-w-0 text-sm">
+                          {seat.user_id ? (
+                            <p className="text-theme-text-primary font-medium">
+                              {seat.user_name ?? 'A member'}
+                              {seat.is_me && (
+                                <span className="ml-1 text-xs text-violet-700 dark:text-violet-300">(You)</span>
+                              )}
+                              {seat.checked_in && (
+                                <span className={`badge ml-2 ${TONE.green}`}>
+                                  <CheckCircle2 className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                                  Checked in
+                                </span>
+                              )}
+                            </p>
+                          ) : (
+                            <p className="text-theme-text-muted">{label}</p>
+                          )}
+                          <p className="text-theme-text-muted text-xs">
+                            {seat.user_id ? label : 'Open position'}
+                            {seat.seat_type === ApparatusEventSeatType.DRIVER && (
+                              <span className={`badge ml-2 ${TONE.red}`}>Driver · EVOC</span>
+                            )}
+                          </p>
+                          {seat.note && <p className="text-theme-text-muted mt-0.5 text-xs">{seat.note}</p>}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-2 sm:justify-end">
+                      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                        {seat.is_me && !closed && !seat.checked_in && (
+                          <button
+                            type="button"
+                            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium disabled:opacity-50 sm:px-3"
+                            disabled={busy}
+                            aria-label={`Give up my spot as ${label}`}
+                            onClick={() => void leave(seat, label, true)}
+                          >
+                            <UserMinus className="h-3 w-3" aria-hidden="true" />
+                            <span className="hidden sm:inline">Give up my spot</span>
+                            <span className="sm:hidden">Give up</span>
+                          </button>
+                        )}
+                        {board.can_manage && !closed && !seat.user_id && (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-lg border border-violet-500/30 px-2.5 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-500/10 disabled:opacity-50 sm:px-3 dark:text-violet-300"
+                            disabled={busy}
+                            aria-label={`Assign someone as ${label}`}
+                            onClick={() => setAssigning({ unit, seat, label })}
+                          >
+                            <UserPlus className="h-3 w-3" aria-hidden="true" />
+                            <span className="hidden sm:inline">Assign someone</span>
+                            <span className="sm:hidden">Assign</span>
+                          </button>
+                        )}
                         {!seat.user_id && canTake && (
                           <button
                             type="button"
-                            className="btn-primary btn-sm"
+                            className="inline-flex items-center gap-1 rounded-lg bg-violet-700 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-violet-800 disabled:opacity-50 sm:px-3"
                             disabled={busy}
+                            aria-label={`Sign myself up as ${label}`}
                             onClick={() =>
                               void act(
                                 seat.id,
@@ -252,35 +312,25 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
                               )
                             }
                           >
-                            <UserPlus className="h-4 w-4" aria-hidden="true" />
-                            Sign me up
+                            <UserPlus className="h-3 w-3" aria-hidden="true" />
+                            <span className="hidden sm:inline">Sign myself up</span>
+                            <span className="sm:hidden">Sign up</span>
                           </button>
                         )}
-                        {seat.is_me && !closed && !seat.checked_in && (
+                        {board.can_manage && !closed && seat.user_id && (
                           <button
                             type="button"
-                            className="btn-secondary btn-sm"
-                            disabled={busy}
-                            onClick={() => void leave(seat, label, true)}
-                          >
-                            <UserMinus className="h-4 w-4" aria-hidden="true" />
-                            Leave seat
-                          </button>
-                        )}
-                        {board.can_manage && !closed && (
-                          <button
-                            type="button"
-                            className="btn-secondary btn-sm"
+                            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-2.5 py-1.5 text-xs font-medium disabled:opacity-50 sm:px-3"
                             disabled={busy || seat.checked_in}
                             onClick={() => setAssigning({ unit, seat, label })}
                           >
-                            {seat.user_id ? 'Change…' : 'Assign…'}
+                            Change…
                           </button>
                         )}
                         {board.can_manage && !closed && seat.user_id && !seat.is_me && !seat.checked_in && (
                           <button
                             type="button"
-                            className="btn-secondary btn-sm"
+                            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-2.5 py-1.5 text-xs font-medium disabled:opacity-50 sm:px-3"
                             disabled={busy}
                             onClick={() => void leave(seat, label, false)}
                           >
@@ -297,10 +347,10 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
         })}
       </div>
 
+      {/* Where the hours go and that this is not a shift are the badges above. */}
       <p className="text-theme-text-muted mt-4 text-xs">
         Crew check in on the night like any event. Finalizing attendance on this page confirms the crew and posts their
-        hours to Admin Hours{board.admin_hours_category_name ? ` → ${board.admin_hours_category_name}` : ''}; they never
-        count as shift hours.
+        hours.
       </p>
 
       <AssignSeatDialog
