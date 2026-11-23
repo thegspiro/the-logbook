@@ -36,6 +36,7 @@ from app.schemas.apparatus_event import (
     DriverCandidatesResponse,
     EditorOptionsResponse,
     LastSeatCall,
+    MySeatRequest,
     NightPlanUpdate,
     NightSummary,
     ScheduleNightsRequest,
@@ -43,6 +44,8 @@ from app.schemas.apparatus_event import (
     SeatAssignmentRequest,
     SeatCallRequest,
     SeatCallResult,
+    SeatRequestDecline,
+    SeatRequestResponse,
     SeriesNight,
     TemplateSeatResponse,
     TemplateUnitResponse,
@@ -56,6 +59,7 @@ from app.services.apparatus_seat_call_service import (
     ApparatusSeatCallService,
     SeatCallNotSent,
 )
+from app.services.apparatus_seat_request_notices import send_seat_request_notices
 from app.services.event_service import attendance_is_finalized
 
 router = APIRouter()
@@ -143,6 +147,7 @@ async def _template_responses(
                 ),
                 evoc_mode=template.evoc_mode,
                 allow_self_signup=template.allow_self_signup,
+                require_signup_approval=template.require_signup_approval,
                 show_on_schedule=template.show_on_schedule,
                 duplicated_from_id=template.duplicated_from_id,
                 duplicated_from_name=sources.get(str(template.duplicated_from_id)),
@@ -179,11 +184,35 @@ async def _board(
     categories = await service.category_names(
         organization_id, [plan.admin_hours_category_id]
     )
+    waiting = await service.pending_requests(event_id, organization_id)
     member_names = await service.member_names(
-        organization_id, [s.user_id for u in plan.units for s in u.seats]
+        organization_id,
+        [s.user_id for u in plan.units for s in u.seats]
+        + ([r.user_id for r in waiting] if can_manage else []),
     )
     me = viewer.id
     my_seat_id = None
+    my_request = None
+    seat_names = {str(s.id): s.name for u in plan.units for s in u.seats}
+    requests_by_seat: Dict[str, List[SeatRequestResponse]] = {}
+    for request in waiting:
+        if str(request.user_id) == me:
+            my_request = MySeatRequest(
+                id=str(request.id),
+                seat_id=str(request.seat_id),
+                seat_name=seat_names.get(str(request.seat_id), ""),
+                requested_at=request.requested_at,
+            )
+        # Who else asked is the coordinator's business, not the membership's.
+        if can_manage:
+            requests_by_seat.setdefault(str(request.seat_id), []).append(
+                SeatRequestResponse(
+                    id=str(request.id),
+                    user_id=str(request.user_id),
+                    user_name=member_names.get(str(request.user_id)),
+                    requested_at=request.requested_at,
+                )
+            )
     units = []
     for unit in plan.units:
         seats = []
@@ -204,6 +233,7 @@ async def _board(
                     assignment_method=seat.assignment_method,
                     is_me=bool(seat.user_id) and str(seat.user_id) == me,
                     checked_in=bool(seat.user_id) and str(seat.user_id) in checked_in,
+                    requests=requests_by_seat.get(str(seat.id), []),
                 )
             )
         units.append(
@@ -236,6 +266,7 @@ async def _board(
         template_name=template_names.get(str(plan.template_id)),
         evoc_mode=plan.evoc_mode,
         allow_self_signup=plan.allow_self_signup,
+        require_signup_approval=plan.require_signup_approval,
         show_on_schedule=plan.show_on_schedule,
         admin_hours_category_id=plan.admin_hours_category_id,
         admin_hours_category_name=categories.get(str(plan.admin_hours_category_id)),
@@ -254,6 +285,7 @@ async def _board(
         ],
         units=units,
         my_seat_id=my_seat_id,
+        my_request=my_request,
         can_manage=can_manage,
         can_sign_up=viewer.can_sign_up,
         warnings=warnings or [],
@@ -604,6 +636,8 @@ async def claim_seat(
 ):
     """
     Take an open seat for yourself. A Driver seat follows the night's EVOC rule.
+    On a night whose self sign-ups need approval, this asks for the seat
+    instead, and the night's organizer and alternate are emailed.
 
     **Requires permission: apparatus_events.signup OR apparatus_events.manage**
     """
@@ -617,6 +651,7 @@ async def claim_seat(
         )
     except ValueError as exc:
         raise _bad_request(exc)
+    await send_seat_request_notices(service, viewer.organization_id)
     return await _board(service, event_id, viewer, outcome.warnings)
 
 
@@ -699,7 +734,123 @@ async def assign_seat(
         user_id=viewer.id,
         username=viewer.username,
     )
+    await send_seat_request_notices(service, viewer.organization_id)
     return await _board(service, event_id, viewer, outcome.warnings)
+
+
+def _request_or_404(outcome: SeatOutcome | None) -> SeatOutcome:
+    if outcome is None:
+        raise HTTPException(status_code=404, detail="Request not found")
+    return outcome
+
+
+@router.post(
+    "/events/{event_id}/requests/{request_id}/approve",
+    response_model=CrewBoardResponse,
+)
+async def approve_seat_request(
+    event_id: str,
+    request_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus_events.manage")),
+):
+    """
+    Put the member in the seat they asked for. Anyone else waiting on that
+    seat is declined, and every member affected is emailed.
+
+    **Requires permission: apparatus_events.manage**
+    """
+    viewer = _viewer(current_user)
+    service = ApparatusEventService(db)
+    try:
+        outcome = _request_or_404(
+            await service.approve_request(
+                event_id, request_id, viewer.organization_id, current_user
+            )
+        )
+    except ValueError as exc:
+        raise _bad_request(exc)
+    await log_audit_event(
+        db=db,
+        event_type="apparatus_event_seat_request_approved",
+        event_category="events",
+        severity="info",
+        event_data={"event_id": event_id, "request_id": request_id},
+        user_id=viewer.id,
+        username=viewer.username,
+    )
+    await send_seat_request_notices(service, viewer.organization_id)
+    return await _board(service, event_id, viewer, outcome.warnings)
+
+
+@router.post(
+    "/events/{event_id}/requests/{request_id}/decline",
+    response_model=CrewBoardResponse,
+)
+async def decline_seat_request(
+    event_id: str,
+    request_id: str,
+    data: SeatRequestDecline,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus_events.manage")),
+):
+    """
+    Decline a member's request for a seat, with an optional note the member
+    is emailed.
+
+    **Requires permission: apparatus_events.manage**
+    """
+    viewer = _viewer(current_user)
+    service = ApparatusEventService(db)
+    try:
+        _request_or_404(
+            await service.decline_request(
+                event_id, request_id, viewer.organization_id, current_user, data.note
+            )
+        )
+    except ValueError as exc:
+        raise _bad_request(exc)
+    await log_audit_event(
+        db=db,
+        event_type="apparatus_event_seat_request_declined",
+        event_category="events",
+        severity="info",
+        event_data={"event_id": event_id, "request_id": request_id},
+        user_id=viewer.id,
+        username=viewer.username,
+    )
+    await send_seat_request_notices(service, viewer.organization_id)
+    return await _board(service, event_id, viewer)
+
+
+@router.post(
+    "/events/{event_id}/requests/{request_id}/withdraw",
+    response_model=CrewBoardResponse,
+)
+async def withdraw_seat_request(
+    event_id: str,
+    request_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("apparatus_events.signup", "apparatus_events.manage")
+    ),
+):
+    """
+    Take back your own waiting request for a seat.
+
+    **Requires permission: apparatus_events.signup OR apparatus_events.manage**
+    """
+    viewer = _viewer(current_user)
+    service = ApparatusEventService(db)
+    try:
+        _request_or_404(
+            await service.withdraw_request(
+                event_id, request_id, viewer.organization_id, current_user
+            )
+        )
+    except ValueError as exc:
+        raise _bad_request(exc)
+    return await _board(service, event_id, viewer)
 
 
 @router.get(
@@ -772,6 +923,7 @@ async def update_night_plan(
         {"type": "apparatus_conflict", "message": c.reason, "severity": "warning"}
         for c in conflicts
     ]
+    await send_seat_request_notices(service, viewer.organization_id)
     return await _board(service, event_id, viewer, warnings)
 
 
@@ -812,10 +964,9 @@ async def remove_night_plan(
     **Requires permission: apparatus_events.manage**
     """
     viewer = _viewer(current_user)
+    service = ApparatusEventService(db)
     try:
-        removed = await ApparatusEventService(db).remove_plan(
-            event_id, viewer.organization_id
-        )
+        removed = await service.remove_plan(event_id, viewer.organization_id)
     except ValueError as exc:
         raise _bad_request(exc)
     if not removed:
@@ -829,6 +980,7 @@ async def remove_night_plan(
         user_id=viewer.id,
         username=viewer.username,
     )
+    await send_seat_request_notices(service, viewer.organization_id)
 
 
 @router.post("/events/{event_id}/seat-call", response_model=SeatCallResult)

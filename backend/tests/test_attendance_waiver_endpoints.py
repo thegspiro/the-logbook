@@ -112,7 +112,11 @@ class TestPolicy:
             resp = await client.get(f"{BASE}/policy")
         assert resp.status_code == 200, resp.text
         assert resp.json()["enabled"] is True
-        assert resp.json()["approver_position_ids"] == [dept.officer_pos]
+        # Who decides is for the manager who edits it (2026-11-23).
+        assert "approver_position_ids" not in resp.json()
+        async with as_user(dept.manager) as client:
+            managed = await client.get(f"{BASE}/policy")
+        assert managed.json()["approver_position_ids"] == [dept.officer_pos]
 
     async def test_saving_needs_training_manage(self, as_user, dept):
         body = {"enabled": True, "cap": 3, "categories": ["Medical"]}

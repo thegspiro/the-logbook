@@ -9,9 +9,32 @@ vi.mock('../services/api', () => ({
   userService: { getUsers: (...args: unknown[]) => getUsers(...args) as unknown },
 }));
 vi.mock('../hooks/useRanks', () => ({ useRanks: () => ({ formatRank: (rank: string) => rank }) }));
+// The category, program, phase and requirement lists a template's links are
+// picked from and checked against. Reset in the top-level beforeEach.
+const linkage = vi.hoisted(() => {
+  const initial: Record<string, unknown> = {};
+  return { value: initial };
+});
+vi.mock('../hooks/useTrainingLinkageData', () => ({
+  useTrainingLinkageData: () => linkage.value,
+}));
+const offering = (lists: {
+  categories?: unknown[];
+  programs?: unknown[];
+  phases?: unknown[];
+  requirements?: unknown[];
+}) => ({
+  categories: lists.categories ?? [],
+  programs: lists.programs ?? [],
+  phases: lists.phases ?? [],
+  requirements: lists.requirements ?? [],
+  requirementsLoaded: true,
+  loaded: { categories: true, requirements: true, programs: true, phasesFor: 'prog-1' },
+  settled: true,
+});
 
 import { EventTemplateForm } from './EventTemplateForm';
-import type { EventTemplate, EventTemplateCreate } from '../types/event';
+import type { EventTemplate, EventTemplateCreate, EventTemplateTrainingDetails } from '../types/event';
 
 // Every block starts from these; a block that needs others installs them in
 // its own beforeEach (pitfall #28).
@@ -20,6 +43,7 @@ beforeEach(() => {
   getCourses.mockResolvedValue([]);
   getUsers.mockReset();
   getUsers.mockResolvedValue([]);
+  linkage.value = offering({});
 });
 
 describe('EventTemplateForm reminder audience', () => {
@@ -320,6 +344,21 @@ describe('EventTemplateForm training details', () => {
     updated_at: '',
   };
   const OWEN = { id: 'm-owen', username: 'okitt', first_name: 'Owen', last_name: 'Kittredge', status: 'active' };
+  const PUMP_DETAILS: EventTemplateTrainingDetails = {
+    course_mode: 'library',
+    course_id: PUMP.id,
+    course_name: null,
+    course_code: null,
+    training_type: 'skills_practice',
+    credit_hours: 2,
+    credit_hours_source: 'course',
+    instructor_id: OWEN.id,
+    instructor: 'Owen Kittredge',
+    issues_certification: false,
+    certification_number_prefix: null,
+    issuing_agency: null,
+    expiration_months: null,
+  };
   const stored: EventTemplate = {
     id: 'tpl-1',
     organization_id: 'org-1',
@@ -338,21 +377,7 @@ describe('EventTemplateForm training details', () => {
     is_active: true,
     created_at: '',
     updated_at: '',
-    training_details: {
-      course_mode: 'library',
-      course_id: PUMP.id,
-      course_name: null,
-      course_code: null,
-      training_type: 'skills_practice',
-      credit_hours: 2,
-      credit_hours_source: 'course',
-      instructor_id: OWEN.id,
-      instructor: 'Owen Kittredge',
-      issues_certification: false,
-      certification_number_prefix: null,
-      issuing_agency: null,
-      expiration_months: null,
-    },
+    training_details: PUMP_DETAILS,
   };
 
   beforeEach(() => {
@@ -410,9 +435,89 @@ describe('EventTemplateForm training details', () => {
           certification_number_prefix: null,
           issuing_agency: null,
           expiration_months: null,
+          category_id: null,
+          program_id: null,
+          phase_id: null,
+          requirement_id: null,
+          attendance_requirement_ids: [],
+          counts_toward_certification: true,
+          auto_create_records: true,
+          require_completion_confirmation: false,
+          approval_deadline_days: 7,
         },
       })
     );
+  });
+
+  // Owner decision 2026-11-23: the links and completion settings are kept.
+  describe('links and completion settings', () => {
+    const CATEGORY = { id: 'cat-1', name: 'Pumps', active: true };
+    const PROGRAM = { id: 'prog-1', name: 'Driver/Operator', active: true };
+    const PHASE = { id: 'phase-1', program_id: 'prog-1', phase_number: 1, name: 'Phase 1' };
+    const ATTENDANCE = { id: 'att-1', name: 'Company drills', requirement_type: 'session_attendance', active: true };
+    const linked: EventTemplate = {
+      ...stored,
+      training_details: {
+        ...PUMP_DETAILS,
+        category_id: CATEGORY.id,
+        program_id: PROGRAM.id,
+        phase_id: PHASE.id,
+        attendance_requirement_ids: [ATTENDANCE.id],
+        counts_toward_certification: false,
+        auto_create_records: true,
+        require_completion_confirmation: true,
+        approval_deadline_days: 14,
+      },
+    };
+
+    it('opens a stored template on its links and saves them back', async () => {
+      linkage.value = offering({
+        categories: [CATEGORY],
+        programs: [PROGRAM],
+        phases: [PHASE],
+        requirements: [ATTENDANCE],
+      });
+      const onSubmit = vi.fn();
+      const user = userEvent.setup();
+      render(<EventTemplateForm initialData={linked} onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+      expect(await screen.findByRole('checkbox', { name: /Company drills/ })).toBeChecked();
+      await save(user);
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(sent(onSubmit).training_details).toEqual(
+        expect.objectContaining({
+          category_id: CATEGORY.id,
+          program_id: PROGRAM.id,
+          phase_id: PHASE.id,
+          attendance_requirement_ids: [ATTENDANCE.id],
+          counts_toward_certification: false,
+          require_completion_confirmation: true,
+          approval_deadline_days: 14,
+        })
+      );
+    });
+
+    it('leaves out a link no longer active, with a note', async () => {
+      linkage.value = offering({ categories: [], programs: [PROGRAM], phases: [PHASE], requirements: [] });
+      const onSubmit = vi.fn();
+      const user = userEvent.setup();
+      render(<EventTemplateForm initialData={linked} onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+      expect(
+        await screen.findByText("This template's category is no longer offered, so Category starts empty.")
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "One of this template's Counts toward attendance requirements is no longer active, so it is left unticked."
+        )
+      ).toBeInTheDocument();
+      await save(user);
+
+      expect(sent(onSubmit).training_details).toEqual(
+        expect.objectContaining({ category_id: null, program_id: PROGRAM.id, attendance_requirement_ids: [] })
+      );
+    });
   });
 
   it('leaves the key out of a new template of another type', async () => {

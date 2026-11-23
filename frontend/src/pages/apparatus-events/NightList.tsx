@@ -97,11 +97,18 @@ export const NightList: React.FC<{ scope: NightScope }> = ({ scope }) => {
             ) : row.attendance_finalized ? (
               <span className={`badge ${TONE.green}`}>Hours posted</span>
             ) : (
-              <span
-                className={`badge ${readinessTone(row.essential_filled, row.essential_total, row.filled, row.total)}`}
-              >
-                {readinessLabel(row.essential_filled, row.essential_total, row.filled, row.total)}
-              </span>
+              <>
+                {row.pending_requests > 0 && (
+                  <span className={`badge ${TONE.amber}`}>
+                    {row.pending_requests} {row.pending_requests === 1 ? 'request' : 'requests'} waiting
+                  </span>
+                )}
+                <span
+                  className={`badge ${readinessTone(row.essential_filled, row.essential_total, row.filled, row.total)}`}
+                >
+                  {readinessLabel(row.essential_filled, row.essential_total, row.filled, row.total)}
+                </span>
+              </>
             )}
             <ChevronRight className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
           </Link>

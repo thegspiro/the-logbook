@@ -83,6 +83,7 @@ class ApparatusEventTemplateBase(BaseModel):
     admin_hours_category_id: Optional[str] = Field(None, max_length=36)
     evoc_mode: ApparatusEventEvocMode = ApparatusEventEvocMode.ENFORCE
     allow_self_signup: bool = True
+    require_signup_approval: bool = False
     show_on_schedule: bool = True
     units: List[TemplateUnitSpec] = Field(..., min_length=1, max_length=MAX_UNITS)
 
@@ -177,6 +178,7 @@ class ApparatusEventTemplateResponse(UTCResponseBase):
     admin_hours_category_name: Optional[str] = None
     evoc_mode: ApparatusEventEvocMode
     allow_self_signup: bool
+    require_signup_approval: bool = False
     show_on_schedule: bool
     duplicated_from_id: Optional[str] = None
     duplicated_from_name: Optional[str] = None
@@ -268,6 +270,24 @@ class DriverWarning(BaseModel):
     severity: str = "warning"
 
 
+class SeatRequestResponse(UTCResponseBase):
+    """A member waiting for the coordinator's answer on a seat."""
+
+    id: str
+    user_id: str
+    user_name: Optional[str] = None
+    requested_at: datetime
+
+
+class MySeatRequest(UTCResponseBase):
+    """The viewer's own waiting request on this night."""
+
+    id: str
+    seat_id: str
+    seat_name: str
+    requested_at: datetime
+
+
 class CrewSeatResponse(BaseModel):
     id: str
     name: str
@@ -279,6 +299,9 @@ class CrewSeatResponse(BaseModel):
     assignment_method: Optional[ApparatusEventSeatMethod] = None
     is_me: bool = False
     checked_in: bool = False
+    # Coordinators only, oldest first; empty for a member, who sees their own
+    # request through ``CrewBoardResponse.my_request``.
+    requests: List[SeatRequestResponse] = Field(default_factory=list)
 
 
 class CrewUnitResponse(BaseModel):
@@ -321,6 +344,7 @@ class CrewBoardResponse(UTCResponseBase):
     template_name: Optional[str] = None
     evoc_mode: ApparatusEventEvocMode
     allow_self_signup: bool
+    require_signup_approval: bool = False
     show_on_schedule: bool
     admin_hours_category_id: Optional[str] = None
     admin_hours_category_name: Optional[str] = None
@@ -329,11 +353,23 @@ class CrewBoardResponse(UTCResponseBase):
     series: List[SeriesNight]
     units: List[CrewUnitResponse]
     my_seat_id: Optional[str] = None
+    my_request: Optional[MySeatRequest] = None
     can_manage: bool
     can_sign_up: bool
     warnings: List[DriverWarning] = Field(default_factory=list)
     # Coordinators only: a member has no use for it.
     last_seat_call: Optional[LastSeatCall] = None
+
+
+class SeatRequestDecline(BaseModel):
+    """The coordinator's optional reason, sent to the member."""
+
+    note: Optional[str] = Field(None, max_length=300)
+
+    @field_validator("note")
+    @classmethod
+    def _note(cls, value: Optional[str]) -> Optional[str]:
+        return _blank_to_none(value)
 
 
 class SeatCallRequest(MemberAudiencePayload):
@@ -423,6 +459,9 @@ class NightPlanUpdate(BaseModel):
 
     evoc_mode: ApparatusEventEvocMode
     allow_self_signup: bool
+    # Omitted leaves the night's setting as it is, so a client written before
+    # the setting existed cannot switch approval off by saving the night.
+    require_signup_approval: Optional[bool] = None
     show_on_schedule: bool
     admin_hours_category_id: Optional[str] = Field(None, max_length=36)
     units: List[NightUnitSpec] = Field(..., min_length=1, max_length=MAX_UNITS)
@@ -461,6 +500,7 @@ class NightSummary(UTCResponseBase):
     is_cancelled: bool
     attendance_finalized: bool
     checked_in: int
+    pending_requests: int = 0
 
 
 class CalendarOutreachItem(UTCResponseBase):

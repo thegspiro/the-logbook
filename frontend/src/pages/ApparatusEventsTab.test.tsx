@@ -47,6 +47,7 @@ const TEMPLATE: ApparatusEventTemplate = {
   admin_hours_category_name: 'Community Outreach',
   evoc_mode: ApparatusEventEvocMode.ENFORCE,
   allow_self_signup: true,
+  require_signup_approval: false,
   show_on_schedule: true,
   duplicated_from_id: null,
   duplicated_from_name: null,
