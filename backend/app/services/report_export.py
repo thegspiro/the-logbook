@@ -168,6 +168,8 @@ def render_report_pdf(
     generated_at: str,
     generated_by: Optional[str],
     parameters: Sequence[Tuple[str, str]],
+    identity: Optional[str] = None,
+    report_number: Optional[str] = None,
 ) -> bytes:
     banded = table.report_type == "call_volume" and len(table.columns) > _LANDSCAPE_FROM
     meta = ReportMeta(
@@ -183,6 +185,8 @@ def render_report_pdf(
             CONFIDENTIAL_MEMBER_RECORDS if table.contains_member_data else None
         ),
         wide=banded or len(table.columns) >= _LANDSCAPE_FROM,
+        identity=identity,
+        report_number=report_number,
     )
     width = meta.width
 

@@ -1722,6 +1722,7 @@ class ReportExportService:
         time zone, for a report's letterhead and footer. Plain values, so
         the layout can run off the event loop without touching the session."""
         from app.models.user import Organization
+        from app.utils.election_pdf_style import department_identity
 
         org = (
             await self.db.execute(
@@ -1731,6 +1732,7 @@ class ReportExportService:
         return {
             "org_name": org.name if org else None,
             "logo": org.logo if org else None,
+            "identity": department_identity(org) or None,
             "generated_at": format_in_org_timezone(
                 datetime.now(timezone.utc), org, "%Y-%m-%d %H:%M %Z"
             ),
@@ -1742,6 +1744,7 @@ class ReportExportService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         generated_by: Optional[str] = None,
+        report_number: Optional[str] = None,
     ) -> io.BytesIO:
         """Generate a compliance report as a PDF document.
 
@@ -1811,6 +1814,8 @@ class ReportExportService:
             header["generated_at"],
             logo=header["logo"],
             generated_by=generated_by,
+            identity=header["identity"],
+            report_number=report_number,
             parameters=[
                 ("Status graded as of", today.isoformat()),
                 ("Hours and records", f"{start_date} to {end_date}"),
@@ -1990,6 +1995,7 @@ class ReportExportService:
         end_date: Optional[date] = None,
         include_certifications: bool = True,
         generated_by: Optional[str] = None,
+        report_number: Optional[str] = None,
     ) -> io.BytesIO:
         """Generate an individual training history PDF.
 
@@ -2047,6 +2053,8 @@ class ReportExportService:
             header["generated_at"],
             logo=header["logo"],
             generated_by=generated_by,
+            identity=header["identity"],
+            report_number=report_number,
             parameters=[("Member", user_name), ("Period", period_label)],
             subject=f"Training record: {user_name}",
         )
@@ -2179,6 +2187,7 @@ class ReportExportService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         generated_by: Optional[str] = None,
+        report_number: Optional[str] = None,
     ) -> io.BytesIO:
         """Generate a combined PDF with one report section per member.
 
@@ -2251,6 +2260,8 @@ class ReportExportService:
             header["generated_at"],
             logo=header["logo"],
             generated_by=generated_by,
+            identity=header["identity"],
+            report_number=report_number,
             parameters=[("Period", period_label), ("Members", len(members))],
             subject="Training records, all members",
         )

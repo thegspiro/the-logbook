@@ -7,6 +7,7 @@ disclosure the audit trail has to show: who, which report, which parameters
 — and never the report's content.
 """
 
+import re
 import uuid
 from typing import Any
 
@@ -25,6 +26,7 @@ from app.core.database import get_db
 from app.models.audit import AuditLog
 from app.models.user import User
 from app.services.training_module_config_service import TrainingModuleConfigService
+from app.utils.report_number import REPORT_NUMBER_PATTERN
 from tests.minutes_support import _org, _user
 
 pytestmark = [pytest.mark.integration]
@@ -60,6 +62,15 @@ def _assert_attachment(response: Any, filename: str) -> None:
     )
 
 
+def _without_report_number(event_data: dict) -> dict:
+    """The audit payload less its report number, after checking the number
+    is well formed. The number is random by design, so it is checked by
+    shape here; test_report_export proves it matches the printed one."""
+    data = dict(event_data)
+    assert re.fullmatch(REPORT_NUMBER_PATTERN, data.pop("report_number"))
+    return data
+
+
 @pytest.mark.parametrize("report_type", ["compliance", "member_records"])
 async def test_training_report_pdf_export_is_audited(
     db_session: AsyncSession, report_type: str
@@ -84,7 +95,7 @@ async def test_training_report_pdf_export_is_audited(
     rows = await _audit_rows(db_session, "training_report_exported", officer)
     assert len(rows) == 1
     assert rows[0].organization_id == org_id
-    assert rows[0].event_data == {
+    assert _without_report_number(rows[0].event_data) == {
         "report_type": report_type,
         "format": "pdf",
         "subject_user_id": None,
@@ -185,7 +196,7 @@ async def test_equipment_check_pdf_export_is_audited(db_session: AsyncSession):
     _assert_attachment(response, "equipment_check_compliance.pdf")
     rows = await _audit_rows(db_session, "equipment_check_report_exported", viewer)
     assert len(rows) == 1
-    assert rows[0].event_data == {
+    assert _without_report_number(rows[0].event_data) == {
         "report_type": "compliance",
         "format": "pdf",
         "check_id": None,
@@ -206,7 +217,7 @@ async def test_inventory_impact_plan_pdf_export_is_audited(db_session: AsyncSess
 
     _assert_attachment(response, "impact-plan.pdf")
     rows = await _audit_rows(db_session, "inventory_impact_plan_exported", manager)
-    assert [r.event_data for r in rows] == [{"format": "pdf"}]
+    assert [_without_report_number(r.event_data) for r in rows] == [{"format": "pdf"}]
 
 
 async def test_equipment_check_csv_export_is_audited(db_session: AsyncSession):

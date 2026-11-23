@@ -21,6 +21,7 @@ from reportlab.platypus import Paragraph, Spacer
 
 from app.models.user import Organization
 from app.utils.check_types import describe_count, describe_status
+from app.utils.election_pdf_style import department_identity
 from app.utils.org_timezone import format_in_org_timezone
 from app.utils.pdf_report_kit import (
     ReportMeta,
@@ -75,6 +76,7 @@ def _meta(
     generated_by: Optional[str],
     parameters: List[Any],
     subtitle: Optional[str] = None,
+    report_number: Optional[str] = None,
 ) -> ReportMeta:
     return ReportMeta(
         title,
@@ -85,6 +87,8 @@ def _meta(
         parameters=parameters,
         subtitle=subtitle,
         subject="Equipment check report",
+        identity=department_identity(organization) or None,
+        report_number=report_number,
     )
 
 
@@ -94,6 +98,7 @@ def generate_compliance_pdf(
     date_to: Optional[str] = None,
     organization: Optional[Organization] = None,
     generated_by: Optional[str] = None,
+    report_number: Optional[str] = None,
 ) -> bytes:
     """Generate a compliance summary PDF."""
     meta = _meta(
@@ -101,6 +106,7 @@ def generate_compliance_pdf(
         organization,
         generated_by,
         [("Period", _period(date_from, date_to))],
+        report_number=report_number,
     )
     width = meta.width
 
@@ -221,6 +227,7 @@ def generate_failure_log_pdf(
     date_to: Optional[str] = None,
     organization: Optional[Organization] = None,
     generated_by: Optional[str] = None,
+    report_number: Optional[str] = None,
 ) -> bytes:
     """Generate a failure/deficiency log PDF."""
     meta = _meta(
@@ -231,6 +238,7 @@ def generate_failure_log_pdf(
             ("Period", _period(date_from, date_to)),
             ("Total failures", data.get("total", 0)),
         ],
+        report_number=report_number,
     )
     width = meta.width
 
@@ -267,6 +275,7 @@ def generate_check_detail_pdf(
     check: Dict[str, Any],
     organization: Optional[Organization] = None,
     generated_by: Optional[str] = None,
+    report_number: Optional[str] = None,
 ) -> bytes:
     """Generate an individual check report PDF
     (compartment-by-compartment results)."""
@@ -283,6 +292,7 @@ def generate_check_detail_pdf(
             ("Timing", check.get("check_timing") or "-"),
         ],
         subtitle=f"Result: {status_label}",
+        report_number=report_number,
     )
     width = meta.width
 

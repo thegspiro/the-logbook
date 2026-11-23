@@ -75,6 +75,7 @@ from app.schemas.equipment_check import (
     SupplyOverviewResponse,
     TemplateChangeLogListResponse,
 )
+from app.services.document_provenance import preparer_label, report_number_for
 from app.services.equipment_check_service import (
     EquipmentCheckConflictError,
     EquipmentCheckService,
@@ -1780,6 +1781,8 @@ async def export_pdf(
     organization = org_result.scalar_one_or_none()
     date_from_str = date_from.isoformat() if date_from else None
     date_to_str = date_to.isoformat() if date_to else None
+    report_number = await report_number_for(db, current_user.organization_id)
+    prepared_by = await preparer_label(db, current_user)
 
     if report_type == "compliance":
         data = await service.get_compliance_report(
@@ -1793,7 +1796,8 @@ async def export_pdf(
             date_from=date_from_str,
             date_to=date_to_str,
             organization=organization,
-            generated_by=current_user.full_name,
+            generated_by=prepared_by,
+            report_number=report_number,
         )
         filename = "equipment_check_compliance.pdf"
 
@@ -1813,7 +1817,8 @@ async def export_pdf(
             date_from=date_from_str,
             date_to=date_to_str,
             organization=organization,
-            generated_by=current_user.full_name,
+            generated_by=prepared_by,
+            report_number=report_number,
         )
         filename = "equipment_check_failures.pdf"
 
@@ -1872,7 +1877,8 @@ async def export_pdf(
             generate_check_detail_pdf,
             check_dict,
             organization=organization,
-            generated_by=current_user.full_name,
+            generated_by=prepared_by,
+            report_number=report_number,
         )
         filename = f"equipment_check_{check_id[:8]}.pdf"
 
@@ -1891,6 +1897,7 @@ async def export_pdf(
         apparatus_id=apparatus_id,
         date_from=date_from_str,
         date_to=date_to_str,
+        report_number=report_number,
     )
 
     return Response(

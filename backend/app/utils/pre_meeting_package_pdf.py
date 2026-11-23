@@ -208,6 +208,7 @@ def _layout(
             "Pre-Meeting Package",
             (data.get("election") or {}).get("title"),
             meta.get("logo"),
+            reference=meta.get("report_number"),
         ),
         # The canvas otherwise declares Helvetica, never embedded, on every page.
         initialFontName=BODY_FONT,
@@ -260,11 +261,20 @@ def _layout(
             "PRE-MEETING PACKAGE",
             [
                 Paragraph(esc(election.get("title")), styles["election"]),
-                Paragraph(f"Generated {esc(_fmt_dt(generated_at))}", styles["meta"]),
+                Paragraph(
+                    f"Generated {esc(_fmt_dt(generated_at))}"
+                    + (
+                        f" · Report No. {esc(meta['report_number'])}"
+                        if meta.get("report_number")
+                        else ""
+                    ),
+                    styles["meta"],
+                ),
             ],
             meta.get("logo"),
             styles,
             "Pre-Meeting Package",
+            identity=meta.get("identity"),
         ),
         Spacer(1, 8),
         HRFlowable(width="100%", thickness=2, color=INK),
