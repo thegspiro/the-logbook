@@ -459,6 +459,21 @@ test.describe('mobile accessibility', () => {
             continue;
           }
           await page.waitForTimeout(350);
+          // The theme lands in an effect after the page mounts, so every
+          // `transition-colors` element (badges, links, buttons, inputs)
+          // animates from the light palette into the one under test. Under a
+          // loaded runner WebKit draws few frames (Pitfall #38), and a fixed
+          // pause left dozens of those transitions running when axe measured,
+          // so it judged a colour halfway between two palettes: a badge or a
+          // link failing contrast on one run in ten. Wait for them to finish.
+          // Only transitions: a spinner's or a pulse's animation never ends.
+          await page
+            .waitForFunction(
+              () => !document.getAnimations().some((a) => a instanceof CSSTransition && a.playState === 'running'),
+              undefined,
+              { timeout: 5_000 }
+            )
+            .catch(() => {});
 
           // Everything but contrast is theme-independent, so the full rule sets
           // run once, in light. The other two themes measure contrast only.
