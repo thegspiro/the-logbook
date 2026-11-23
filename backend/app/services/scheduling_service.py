@@ -9999,15 +9999,23 @@ class SchedulingService:
         pre-shift work, scoped through ``Shift.organization_id``. The seat is
         read through a subquery on the member's own assignment so a shift is
         never counted twice, and is None when no seat was recorded.
+
+        The seat is an outer-joined derived table of one row per shift rather
+        than a correlated subquery: MySQL 8's ONLY_FULL_GROUP_BY rejects
+        grouping on a subquery that reads ``shifts.id`` (error 1055), which
+        MariaDB's default mode lets through.
         """
         uid = str(user_id)
-        seat = (
-            select(func.min(ShiftAssignment.position))
-            .where(ShiftAssignment.shift_id == Shift.id)
+        seats = (
+            select(
+                ShiftAssignment.shift_id.label("shift_id"),
+                func.min(ShiftAssignment.position).label("position"),
+            )
             .where(ShiftAssignment.user_id == uid)
-            .correlate(Shift)
-            .scalar_subquery()
+            .group_by(ShiftAssignment.shift_id)
+            .subquery()
         )
+        seat = seats.c.position
         year_col = func.year(Shift.shift_date)
         found: Dict[int, Dict[Optional[str], Dict[str, int]]] = {}
 
@@ -10029,6 +10037,7 @@ class SchedulingService:
                 func.coalesce(func.sum(ShiftAttendance.call_count), 0).label("calls"),
             )
             .join(Shift, ShiftAttendance.shift_id == Shift.id)
+            .outerjoin(seats, seats.c.shift_id == Shift.id)
             .where(ShiftAttendance.user_id == uid)
             .where(Shift.organization_id == str(organization_id))
             .where(Shift.is_finalized.is_(True))
@@ -10048,6 +10057,7 @@ class SchedulingService:
             Shift.organization_id == str(organization_id),
             Shift.is_finalized.is_(True),
             group_by=[year_col.label("year"), seat.label("position")],
+            outer_joins=[(seats, seats.c.shift_id == Shift.id)],
         ):
             _cell(row.year, row.position)["minutes"] += int(row.minutes or 0)
         return found
