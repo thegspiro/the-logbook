@@ -14,7 +14,7 @@ template included, and narrows the enum back. Requirements already reopened
 stay in progress either way.
 
 Revision ID: bfb747c095c3
-Revises: b6e3d1f47a29
+Revises: e3b8d61f4a27
 Create Date: 2026-11-23 06:51:00.000000
 """
 
@@ -25,13 +25,14 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "bfb747c095c3"
-down_revision: Union[str, None] = "b6e3d1f47a29"
+down_revision: Union[str, None] = "e3b8d61f4a27"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 _NEW_TEMPLATE_TYPES = ("program_requirement_reopened",)
 
-# EmailTemplateType as this revision finds it (b6e3d1f47a29's ALL_TYPES).
+# EmailTemplateType as this revision finds it (b6e3d1f47a29's ALL_TYPES;
+# e3b8d61f4a27 between them adds no template type).
 # Written out rather than imported so a later edit to the enum cannot rewrite
 # this step.
 _EXISTING_TEMPLATE_TYPES = (
