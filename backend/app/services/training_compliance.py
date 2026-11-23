@@ -201,12 +201,17 @@ def monthly_hours(
 class MonthlyPace:
     """A member's average hours a month against the department's monthly pace.
 
-    ``average`` is the hours earned in the months nothing excused, over the
-    number of those months, or None when every month so far was excused.
-    Hours earned on leave still count toward the requirement's total. They are
-    left out here because the figure is the member's pace while active:
-    dividing 26 hours, 23 of them earned on leave, by the active months alone
-    would read as 13 a month for a member who logged 3.
+    ``average`` is the member's pace while active: each month weighs its
+    unexcused share (``1 - waived_share``), so a month half excused counts as
+    half a month and its hours, and a fully excused month and its hours are
+    left out; None when every month so far was fully excused. Hours earned on
+    leave still count toward the requirement's total. A fully excused month's
+    are left out here because dividing 26 hours, 23 of them earned on leave,
+    by the active months alone would read as 13 a month for a member who
+    logged 3. A partly excused month's hours cannot be split by the day they
+    were earned, so all of them count against its active share. Dropping
+    every month with any excused share, as this once did, let a few days'
+    leave remove a whole month of work from the figure.
 
     ``needed`` is the requirement's unadjusted level over the months in its
     whole window (72 over 12 is 6). Leave lowers what a member owes, not the
@@ -231,12 +236,22 @@ def monthly_pace(
     The one definition: the compliance matrix and My Training both report it,
     so the two screens cannot print different averages for the same member.
     """
-    active = [r for r in rows if not r.get("waived")]
-    average = (
-        round(sum(float(r.get("hours") or 0) for r in active) / len(active), 2)
-        if active
-        else None
-    )
+    hours = 0.0
+    active_months = 0.0
+    for row in rows:
+        # A row flagged waived without a share predates the share: whole month.
+        if not row.get("waived"):
+            share = 0.0
+        elif row.get("waived_share") is None:
+            share = 1.0
+        else:
+            share = float(row["waived_share"])
+        weight = 1.0 - min(max(share, 0.0), 1.0)
+        if weight <= 0:
+            continue
+        hours += float(row.get("hours") or 0)
+        active_months += weight
+    average = round(hours / active_months, 2) if active_months > 0 else None
     months = (
         total_months_in_period(window_start, window_end)
         if window_start and window_end
