@@ -36,6 +36,7 @@ import {
   csvRows,
   eventDate,
   expectedText,
+  feedbackText,
   parseCommunityPeriod,
   reachText,
   typeGroups,
@@ -238,6 +239,15 @@ const CommunityEngagementTab: React.FC = () => {
           against={against}
         />
       </div>
+      {feedbackText(current, data.rating_scale_max) && (
+        <p className="text-theme-text-secondary mb-2 text-sm">
+          <span className="text-theme-text-primary font-medium">Requester feedback:</span>{' '}
+          {feedbackText(current, data.rating_scale_max)}
+          {previous && feedbackText(previous, data.rating_scale_max)
+            ? ` (${against ?? 'previously'}: ${feedbackText(previous, data.rating_scale_max)})`
+            : ''}
+        </p>
+      )}
       <p className="text-theme-text-muted mb-5 text-xs">
         {against ? `Changes compare with ${against}. ` : ''}
         People reached is the guests counted — a headcount recorded on the event, or else guest sign-ins — and, where

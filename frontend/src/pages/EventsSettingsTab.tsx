@@ -666,6 +666,7 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
             members={members}
             onUpdateDefaultAssignee={(u) => void updateDefaultAssignee(u)}
             onTogglePublicVisibility={() => void togglePublicVisibility()}
+            onSaveFeedback={(patch) => void savePipeline(patch, 'Failed to save the feedback form')}
             onAddTask={() => void addPipelineTask()}
             onRemoveTask={(id) => void removePipelineTask(id)}
             onReorderTask={(i, d) => void reorderTask(i, d)}

@@ -29,6 +29,7 @@ import {
   bucketLabel,
   changeFor,
   eventDate,
+  feedbackText,
   parseCommunityPeriod,
   periodRangeText,
   reachText,
@@ -205,6 +206,15 @@ const CommunityEngagementPrintPage: React.FC = () => {
       previous: previous ? formatNumber(previous.requests_completed) : undefined,
     },
   ];
+  // Listed only once a requester has answered: a row reading "no feedback"
+  // in every summary before the department asks for any is noise.
+  if ((current.feedback_responses ?? 0) > 0 || (previous?.feedback_responses ?? 0) > 0) {
+    headlines.push({
+      label: 'Requester feedback',
+      value: feedbackText(current, report.rating_scale_max) ?? 'None',
+      previous: previous ? (feedbackText(previous, report.rating_scale_max) ?? 'None') : undefined,
+    });
+  }
 
   return (
     <>

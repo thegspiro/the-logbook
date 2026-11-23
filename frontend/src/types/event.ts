@@ -1059,8 +1059,19 @@ export interface RequestPipelineSettings {
   accept_public_requests: boolean;
   /** Per-day ceiling on accepted public requests; counts valid submissions only. */
   public_daily_limit: number;
+  /** The form a requester is offered once their request is Completed; null asks nothing. */
+  feedback_form_id?: string | null;
+  /** The question on that form whose answer the report averages as the rating. */
+  feedback_rating_field_id?: string | null;
   tasks: PipelineTaskConfig[];
   email_triggers: Record<string, EmailTriggerConfig>;
+}
+
+/** A published form that can be the outreach feedback form, and its rating-capable questions. */
+export interface FeedbackFormOption {
+  id: string;
+  name: string;
+  rating_fields: { id: string; label: string }[];
 }
 
 export type EventRequestStatus =

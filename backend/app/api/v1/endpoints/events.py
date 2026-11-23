@@ -1462,20 +1462,22 @@ async def update_event_settings(
     # XC-1: the feedback form and its rating question are client-supplied ids
     # the public status page then serves, so both are checked against this
     # department, as the pair they will be after the save.
-    if {"feedback_form_id", "feedback_rating_field_id"} & set(pipeline_update):
-        stored_pipeline = current_events.get("request_pipeline") or {}
-        form_id = pipeline_update.get(
-            "feedback_form_id", stored_pipeline.get("feedback_form_id")
-        )
-        rating_id = pipeline_update.get(
-            "feedback_rating_field_id", stored_pipeline.get("feedback_rating_field_id")
-        )
-        if "feedback_form_id" in pipeline_update and (
-            "feedback_rating_field_id" not in pipeline_update
-        ):
-            # A new form cannot keep the old form's question.
-            rating_id = None
-            pipeline_update["feedback_rating_field_id"] = None
+    # Checked only when either value changes: the settings screen sends the
+    # whole pipeline on every save, and an unrelated save (a reordered task)
+    # must not fail because the chosen form has since been unpublished.
+    stored_pipeline = current_events.get("request_pipeline") or {}
+    form_id = pipeline_update.get(
+        "feedback_form_id", stored_pipeline.get("feedback_form_id")
+    )
+    rating_id = pipeline_update.get(
+        "feedback_rating_field_id", stored_pipeline.get("feedback_rating_field_id")
+    )
+    form_changed = form_id != stored_pipeline.get("feedback_form_id")
+    if form_changed and "feedback_rating_field_id" not in pipeline_update:
+        # A new form cannot keep the old form's question.
+        rating_id = None
+        pipeline_update["feedback_rating_field_id"] = None
+    if form_changed or rating_id != stored_pipeline.get("feedback_rating_field_id"):
         try:
             await OutreachFeedbackService(db).validate_settings(
                 str(current_user.organization_id), form_id, rating_id

@@ -670,6 +670,18 @@ export const eventService = {
     const response = await api.patch<import('../types/event').EventModuleSettings>('/events/settings', data);
     return response.data;
   },
+  /** Published forms that can be the outreach feedback form (events.manage). */
+  async getFeedbackFormOptions(): Promise<import('../types/event').FeedbackFormOption[]> {
+    const response = await api.get<import('../types/event').FeedbackFormOption[]>('/events/settings/feedback-forms');
+    return asArray(response.data);
+  },
+  /** Create the starter feedback form and make it the department's; repeats return the same form. */
+  async createStarterFeedbackForm(): Promise<{ form_id: string; form_name: string; rating_field_id: string | null }> {
+    const response = await api.post<{ form_id: string; form_name: string; rating_field_id: string | null }>(
+      '/events/settings/feedback-forms/starter'
+    );
+    return response.data;
+  },
   /** Positions by name, for the attendance-request fallback (events.manage). */
   async getFallbackPositionOptions(): Promise<import('../types/event').EventPositionOption[]> {
     const response = await api.get<import('../types/event').EventPositionOption[]>('/events/settings/position-options');

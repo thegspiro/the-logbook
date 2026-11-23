@@ -139,6 +139,10 @@ class Totals:
     members_involved: int
     requests_received: int
     requests_completed: int
+    # Requester feedback received in the period, and the mean of the ratings
+    # among it (None when no response carried one).
+    feedback_responses: int = 0
+    average_rating: Optional[float] = None
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -328,8 +332,36 @@ class CommunityEngagementService:
         )
         return int(received or 0), int(completed or 0)
 
+    async def _rating_scale_max(self, org: Optional[Organization]) -> Optional[int]:
+        from app.services.outreach_feedback_service import (
+            OutreachFeedbackService,
+            rating_scale_max,
+        )
+
+        if org is None:
+            return None
+        found = await OutreachFeedbackService(self.db).configured(org)
+        if found is None or found[1] is None:
+            return None
+        return rating_scale_max(found[1])
+
+    async def _feedback(
+        self, organization_id: str, start: Optional[datetime], end: datetime
+    ) -> tuple[int, Optional[float]]:
+        """Responses received in the period, and their average rating."""
+        from app.services.outreach_feedback_service import OutreachFeedbackService
+
+        responses, rated, total = await OutreachFeedbackService(self.db).rating_totals(
+            organization_id, start, end
+        )
+        return responses, (round(total / rated, 1) if rated else None)
+
     @staticmethod
-    def _totals(rows: list[EventReach], request_counts: tuple[int, int]) -> Totals:
+    def _totals(
+        rows: list[EventReach],
+        request_counts: tuple[int, int],
+        feedback: tuple[int, Optional[float]] = (0, None),
+    ) -> Totals:
         members: set[str] = set()
         for r in rows:
             members |= r.member_ids
@@ -343,6 +375,8 @@ class CommunityEngagementService:
             members_involved=len(members),
             requests_received=request_counts[0],
             requests_completed=request_counts[1],
+            feedback_responses=feedback[0],
+            average_rating=feedback[1],
         )
 
     @staticmethod
@@ -489,13 +523,17 @@ class CommunityEngagementService:
 
         rows = await self._held_events(organization_id, org, start, end)
         current = self._totals(
-            rows, await self._request_counts(organization_id, start, end)
+            rows,
+            await self._request_counts(organization_id, start, end),
+            await self._feedback(organization_id, start, end),
         )
         previous_totals: Optional[Totals] = None
         if previous is not None:
             prev_rows = await self._held_events(organization_id, org, *previous)
             previous_totals = self._totals(
-                prev_rows, await self._request_counts(organization_id, *previous)
+                prev_rows,
+                await self._request_counts(organization_id, *previous),
+                await self._feedback(organization_id, *previous),
             )
 
         upcoming = await self.db.scalar(
@@ -521,6 +559,7 @@ class CommunityEngagementService:
                 "expected": sum(r.expected or 0 for r in both),
             },
             "granularity": granularity,
+            "rating_scale_max": await self._rating_scale_max(org),
             "by_period": buckets,
             "by_type": self._by_type(rows),
             "materials": self._materials(rows),
