@@ -48,8 +48,13 @@ describe('AttendanceWaiverQueuePage — waiting on the member', () => {
   it('badges only the pending rows with a question open', async () => {
     const asked = request('p1', { info_requested_at: '2026-11-12T15:00:00Z', can_request_info: false });
     const plain = request('p2');
-    const page = { items: [asked, plain], total: 2, skip: 0, limit: 200 };
-    mockList.mockResolvedValue(page);
+    mockList.mockImplementation((params: { state?: string }) =>
+      Promise.resolve(
+        params.state === 'pending'
+          ? { items: [asked, plain], total: 2, skip: 0, limit: 50 }
+          : { items: [], total: 0, skip: 0, limit: 50 }
+      )
+    );
     renderWithRouter(<AttendanceWaiverQueuePage />);
 
     const waiting = await screen.findByRole('region', { name: 'Waiting for a decision (2)' });

@@ -36,4 +36,31 @@ describe('member profile TrainingSection', () => {
     expect(screen.getByText('Source: Target Solutions')).toBeInTheDocument();
     expect(screen.getByText('Source: The Logbook')).toBeInTheDocument();
   });
+
+  it('shows a former member as not graded, not as a grade', () => {
+    renderWithRouter(
+      <TrainingSection
+        userId="member-1"
+        trainings={[]}
+        trainingsLoading={false}
+        complianceSummary={{
+          user_id: 'member-1',
+          requirements_met: 0,
+          requirements_total: 0,
+          certs_expiring_soon: 0,
+          certs_expired: 0,
+          compliance_status: 'not_current_member',
+          compliance_label: 'Not a Current Member',
+          hours_this_year: 3,
+          active_certifications: 1,
+        }}
+        tz="America/New_York"
+      />
+    );
+
+    const badge = screen.getByText('Not a Current Member');
+    expect(badge.className).toContain('text-theme-text-muted');
+    expect(screen.getByText(/not a current member of the department/)).toBeInTheDocument();
+    expect(screen.queryByText('0/0')).not.toBeInTheDocument();
+  });
 });

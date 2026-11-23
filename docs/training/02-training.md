@@ -1387,6 +1387,16 @@ These actions credit pipeline progress without anyone editing the enrollment:
 > is processed again — a course synced twice, a report filed again, a
 > submission approved again — it is recognized and **not** credited twice.
 
+> **A correction can reopen a requirement** _(2026-11-23)_. If a shift report
+> is corrected, a training session is finalized again, or a credited record is
+> voided, and that leaves a member below a requirement they had completed, the
+> requirement goes back to **In Progress**. Training officers get an email and
+> a notification. Nothing else changes: certificates already issued stand, the
+> program stays completed if it was, and any phase the member reached is kept.
+> A correction that still leaves them at or above the target changes nothing.
+> A requirement a training officer marked **Verified** or **Waived** is never
+> reopened this way.
+
 ### Viewing Your Own Progress (Members)
 
 On **Training > My Training**, find your program in **Pipeline Progress** and
@@ -4918,10 +4928,10 @@ Details**; the course is on **Training Info**.
 > open, **Start from a Template** above the form offers the department's
 > active Training templates. Picking one fills the event's details and, when
 > the template saved them, **Training Info**: the course, training type,
-> credit hours, lead instructor and certification settings. It replaces what
-> was already typed. Requirement and program links, **Counts toward
-> attendance** and the completion settings are not saved on a template and
-> start on their defaults. If the template's course is no longer in the
+> credit hours, lead instructor and certification settings, and since
+> 2026-11-23 the requirement and program links, **Counts toward
+> attendance** and the completion settings. It replaces what was already
+> typed. A link no longer active is left out, with a note. If the template's course is no longer in the
 > Course Library, **Training Info** starts on **No course yet**; if its lead
 > instructor is no longer a current member, **Lead instructor** starts empty.
 > A note on **Training Info** says which. Templates are made and edited under

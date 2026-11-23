@@ -28,6 +28,7 @@ from app.models.event import (
     default_reminder_target,
 )
 from app.models.location import Location
+from app.models.pending_file_deletion import PendingDeletionReason
 from app.models.training import (
     ApprovalStatus,
     EnrollmentStatus,
@@ -62,7 +63,12 @@ from app.services.event_service import (
     attendance_is_finalized,
     attendance_locked_error,
 )
+from app.services.file_storage_service import StorageArea
 from app.services.location_service import LocationService
+from app.services.member_files import attachment_paths_by_area
+from app.services.pending_file_deletions import (
+    enqueue as enqueue_pending_file_deletions,
+)
 from app.services.training_compliance import (
     MandatoryTiers,
     mandatory_tiers_for_requirements,
@@ -2256,6 +2262,7 @@ class TrainingSessionService:
 
         changed = 0
         touched_courses: List[Tuple[str, str]] = []
+        orphaned: Dict[str, StorageArea] = {}
         for record in records:
             status = getattr(record.status, "value", record.status)
             if status == TrainingStatus.CANCELLED.value:
@@ -2268,6 +2275,14 @@ class TrainingSessionService:
                 and record.completion_date is None
             )
             if never_credited:
+                orphaned.update(
+                    attachment_paths_by_area(
+                        record.attachments,
+                        org,
+                        StorageArea.SELF_REPORTS,
+                        StorageArea.TRAINING_RECORDS,
+                    )
+                )
                 await self.db.delete(record)
             else:
                 label = f"'{event_title}'" if event_title else "the event"
@@ -2289,6 +2304,15 @@ class TrainingSessionService:
                 record.hours_completed = 0.0
                 record.updated_at = datetime.now(timezone.utc)
             changed += 1
+
+        if orphaned:
+            # Queued in the caller's transaction, so a rolled-back void leaves
+            # no row, and the hourly sweep removes each file once it commits.
+            # A file another row still names (a pending submission's
+            # certificate copied onto the placeholder) is kept by the sweep.
+            enqueue_pending_file_deletions(
+                self.db, org, orphaned, PendingDeletionReason.EVENT_RECORDS_VOIDED
+            )
 
         if touched_courses:
             await self.db.flush()
