@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**412 tables · 6453 columns · 1372 foreign keys**
+**413 tables · 6460 columns · 1376 foreign keys**
 
 ---
 
@@ -244,6 +244,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`event_request_activity`](#event_request_activity) | `EventRequestActivity` | 9 | Audit trail for event request pipeline actions. |
 | [`event_request_email_templates`](#event_request_email_templates) | `EventRequestEmailTemplate` | 12 | Reusable email templates for the event request pipeline. |
+| [`event_request_feedback`](#event_request_feedback) | `EventRequestFeedback` | 7 | A requester's answers to the department's feedback form, one per request. |
 | [`event_requests`](#event_requests) | `EventRequest` | 37 | Public outreach event request. |
 
 ### Events
@@ -3519,6 +3520,30 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_email_tpl_org` (`organization_id`)
+
+### `event_request_feedback`
+
+**EventRequestFeedback** · `app/models/event_request.py`
+
+> A requester's answers to the department's feedback form, one per request. Sent once a request is Completed, through the requester's status link. The answers themselves are a ``FormSubmission`` of the department's feedback form, so the Forms module's own screens can read them; this row ties that submission to the request. ``request_id`` is unique: the response is final once sent, and the constraint is what makes a second send (a double tap, a retried POST) a refusal rather than a second response (pitfall #36). ``rating`` is the answer to the question the department named as the rating, copied here when the response arrived, so the report's average does not move when the form is later edited or a question removed.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `request_id` | VARCHAR(36) | no | FK, UQ |  | → `event_requests.id` ON DELETE CASCADE |
+| `form_id` | VARCHAR(36) | yes | FK |  | → `forms.id` ON DELETE SET NULL |
+| `form_submission_id` | VARCHAR(36) | yes | FK |  | → `form_submissions.id` ON DELETE SET NULL |
+| `rating` | INTEGER | yes |  |  |  |
+| `submitted_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `idx_event_req_feedback_org_submitted` (`organization_id`, `submitted_at`)
+
+**Constraints**
+
+- UNIQUE `uq_event_request_feedback_request_id` (`request_id`)
 
 ### `event_requests`
 
@@ -14444,7 +14469,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (330 references)
+### → `organizations` (331 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14534,6 +14559,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `event_external_attendees` | `organization_id` | CASCADE | no |
 | `event_hour_mappings` | `organization_id` | CASCADE | no |
 | `event_request_email_templates` | `organization_id` | CASCADE | no |
+| `event_request_feedback` | `organization_id` | CASCADE | no |
 | `event_requests` | `organization_id` | CASCADE | no |
 | `event_rsvps` | `organization_id` | CASCADE | no |
 | `event_templates` | `organization_id` | CASCADE | no |
@@ -15246,6 +15272,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `evaluation_signatures` | `evaluation_id` | CASCADE | no |
 | `evaluation_steps` | `evaluation_id` | CASCADE | no |
 
+### → `forms` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_request_feedback` | `form_id` | SET NULL | yes |
+| `form_fields` | `form_id` | CASCADE | no |
+| `form_integrations` | `form_id` | CASCADE | no |
+| `form_submissions` | `form_id` | CASCADE | no |
+| `prospect_form_requests` | `form_id` | SET NULL | yes |
+
 ### → `history_documents` (5 references)
 
 | From table | Column | On delete | Nullable |
@@ -15302,14 +15338,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_template_equipment_checks` | `equipment_check_template_id` | CASCADE | no |
 | `template_change_logs` | `template_id` | CASCADE | no |
 
-### → `forms` (4 references)
+### → `form_submissions` (4 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `form_fields` | `form_id` | CASCADE | no |
-| `form_integrations` | `form_id` | CASCADE | no |
-| `form_submissions` | `form_id` | CASCADE | no |
-| `prospect_form_requests` | `form_id` | SET NULL | yes |
+| `event_request_feedback` | `form_submission_id` | SET NULL | yes |
+| `event_requests` | `form_submission_id` | SET NULL | yes |
+| `prospect_form_requests` | `submission_id` | SET NULL | yes |
+| `prospective_members` | `form_submission_id` | SET NULL | yes |
 
 ### → `grant_applications` (4 references)
 
@@ -15433,14 +15469,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `course_cohort_members` | `cohort_id` | CASCADE | no |
 | `course_cohort_missed_classes` | `cohort_id` | CASCADE | no |
 
-### → `form_submissions` (3 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `event_requests` | `form_submission_id` | SET NULL | yes |
-| `prospect_form_requests` | `submission_id` | SET NULL | yes |
-| `prospective_members` | `form_submission_id` | SET NULL | yes |
-
 ### → `inventory_vendors` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -15559,6 +15587,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `member_dues` | `dues_schedule_id` | CASCADE | no |
 | `zeffy_campaign_links` | `dues_schedule_id` | SET NULL | yes |
+
+### → `event_requests` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_request_activity` | `request_id` | CASCADE | no |
+| `event_request_feedback` | `request_id` | CASCADE | no |
 
 ### → `event_rsvps` (2 references)
 
@@ -15820,12 +15855,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `event_apparatus_seats` | `unit_id` | CASCADE | no |
-
-### → `event_requests` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `event_request_activity` | `request_id` | CASCADE | no |
 
 ### → `event_templates` (1 references)
 
