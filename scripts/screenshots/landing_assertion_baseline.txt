@@ -76,7 +76,6 @@
 02-75-compliance-forecast
 02-76-report-form-sections
 02-77-apparatus-skills
-02-78-my-training-toolbar
 02-79-training-attachments
 02-80-session-course-autopopulate
 02-81-session-quarter-hour
@@ -402,14 +401,10 @@
 19-21-candidates-as-member
 19-22-admin-hours-summary-year
 19-23-apparatus-crew-seats
-19-25-ballot-template-settings-before
-19-26-ballot-template-settings-after
 19-27-paper-ballot-over-roster
 19-28-station-board-messages
 19-29-training-session-linkage
 19-30-skill-point-deduction
-19-31-notification-before-action
-19-32-notification-after-action
 19-33-label-printers
 19-34-schedule-board-desktop
 19-35-schedule-board-phone
