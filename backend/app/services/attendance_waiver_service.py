@@ -2008,6 +2008,13 @@ class AttendanceWaiverService:
                     and r.status == AttendanceWaiverStatus.PENDING
                     and policy.attachment != "off"
                     and len(files.get(str(r.id), [])) < MAX_ATTACHMENTS,
+                    # The removal route's own rule (owner decision
+                    # 2026-11-23): the member, while pending, and never the
+                    # last document a policy requires.
+                    "can_remove_attachment": own
+                    and r.status == AttendanceWaiverStatus.PENDING
+                    and len(files.get(str(r.id), []))
+                    > (1 if policy.attachment == "required" else 0),
                     "attachments": [
                         {
                             "id": str(f.id),

@@ -11117,11 +11117,15 @@ was not among the questions the owner answered on 2026-11-01. Options:
 on session waiver requests (PDF, JPEG, PNG or HEIC, 10 MB each, three per
 request, kept 365 days) shipped with these gaps, each the narrower choice:
 
-- **A filed document cannot be removed by the member.** Once filed it stays
-  until the retention task deletes it. A member who filed the wrong file can
-  withdraw a pending request and ask again; the withdrawn request's documents
-  then age out with it. Allowing removal would have needed a rule for removing
-  the last document under a `required` policy, which nothing decided.
+- ~~**A filed document cannot be removed by the member.**~~ ✅ **Owner
+  decision 2026-11-23: it can, while the request is pending.** The request
+  page offers a remove button on each document to its member
+  (`DELETE /training/waivers/requests/{id}/attachments/{attachment_id}`,
+  submitter only, by entry id, a repeat changing nothing). Under a `required`
+  policy the last document cannot be removed: the member files the right one
+  first. The file is deleted after the commit through the shared reference
+  check (`member_files.remove_unreferenced_files`), and the removal is audited
+  by id.
 - **The uploader's filename is not kept at all**, not only hidden from
   downloads: a doctor's note's name can say what it is about. A decider sees
   `waiver-attachment-1.pdf`, its type, size and date.
