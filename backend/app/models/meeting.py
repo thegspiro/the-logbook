@@ -262,7 +262,6 @@ class MeetingAttendee(Base):
     )
 
     __table_args__ = (
-        Index("idx_meeting_attendees_meeting", "meeting_id"),
         Index("idx_meeting_attendees_user", "user_id"),
         Index("idx_meeting_attendees_organization", "organization_id"),
         # One row per member per meeting: a second row let a member be both
