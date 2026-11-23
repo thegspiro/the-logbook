@@ -770,8 +770,9 @@ export type RecurrencePattern =
   'daily' | 'weekly' | 'biweekly' | 'monthly' | 'monthly_weekday' | 'annually' | 'annually_weekday' | 'custom';
 
 /**
- * The training details a Training template stores (owner decision
- * 2026-11-20), as the backend's EventTemplateTrainingDetails settles them:
+ * The training details a Training template stores (owner decisions
+ * 2026-11-20 and 2026-11-23), as the backend's EventTemplateTrainingDetails
+ * settles them:
  * always complete, snake_case on the wire. The backend is the authority on
  * this shape; `toTemplateTrainingDetails` builds it for a save.
  */
@@ -789,6 +790,18 @@ export interface EventTemplateTrainingDetails {
   certification_number_prefix: string | null;
   issuing_agency: string | null;
   expiration_months: number | null;
+  // Kept since the owner decision of 2026-11-23. Optional because a template
+  // read from an older client's cache, or a test fixture, may lack them; the
+  // backend always answers them.
+  category_id?: string | null | undefined;
+  program_id?: string | null | undefined;
+  phase_id?: string | null | undefined;
+  requirement_id?: string | null | undefined;
+  attendance_requirement_ids?: string[] | undefined;
+  counts_toward_certification?: boolean | undefined;
+  auto_create_records?: boolean | undefined;
+  require_completion_confirmation?: boolean | undefined;
+  approval_deadline_days?: number | undefined;
 }
 
 export interface EventTemplate {

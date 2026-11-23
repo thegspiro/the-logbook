@@ -36,6 +36,7 @@ from app.services import email_templates_leave as _leave_templates
 from app.services import email_templates_leave_workflow as _leave_workflow_templates
 from app.services import email_templates_minutes as _minutes_templates
 from app.services import email_templates_outreach as _outreach_templates
+from app.services import email_templates_program_progress as _program_templates
 from app.services import email_templates_storefront as _storefront_templates
 from app.services.branding_service import email_logo_src
 from app.services.email_theme import (  # noqa: F401  (re-exported: many services import DEFAULT_CSS from here)
@@ -1067,6 +1068,7 @@ TEMPLATE_VARIABLES.update(_minutes_templates.TEMPLATE_VARIABLES)
 TEMPLATE_VARIABLES.update(_leave_templates.TEMPLATE_VARIABLES)
 TEMPLATE_VARIABLES.update(_leave_workflow_templates.TEMPLATE_VARIABLES)
 TEMPLATE_VARIABLES.update(_outreach_templates.TEMPLATE_VARIABLES)
+TEMPLATE_VARIABLES.update(_program_templates.TEMPLATE_VARIABLES)
 
 SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
     "welcome": _sample(
@@ -1820,6 +1822,9 @@ SAMPLE_CONTEXT.update(
 SAMPLE_CONTEXT.update(
     {key: _sample(value) for key, value in _outreach_templates.SAMPLE_CONTEXT.items()}
 )
+SAMPLE_CONTEXT.update(
+    {key: _sample(value) for key, value in _program_templates.SAMPLE_CONTEXT.items()}
+)
 
 # The sample links' placeholder host. Only the host is replaced: each path is
 # the one the real sender builds (``/events/{id}``, ``/training/approve/…``),
@@ -1915,6 +1920,7 @@ TEST_RECIPIENT_FIELDS.update(_election_templates.TEST_RECIPIENT_FIELDS)
 TEST_RECIPIENT_FIELDS.update(_leave_templates.TEST_RECIPIENT_FIELDS)
 TEST_RECIPIENT_FIELDS.update(_leave_workflow_templates.TEST_RECIPIENT_FIELDS)
 TEST_RECIPIENT_FIELDS.update(_outreach_templates.TEST_RECIPIENT_FIELDS)
+TEST_RECIPIENT_FIELDS.update(_program_templates.TEST_RECIPIENT_FIELDS)
 
 _DATE_TIME = "%B %d, %Y at %I:%M %p"
 _DATE = "%B %d, %Y"
@@ -5276,6 +5282,7 @@ class EmailTemplateService:
         | _minutes_templates.RAW_HTML_VARIABLES
         | _leave_workflow_templates.RAW_HTML_VARIABLES
         | _outreach_templates.RAW_HTML_VARIABLES
+        | _program_templates.RAW_HTML_VARIABLES
     )
 
     def _replace_variables(
@@ -5839,6 +5846,9 @@ class EmailTemplateService:
         # The guest headcount reminder after an outreach event; see
         # email_templates_outreach.py.
         *_outreach_templates.DEFAULT_TEMPLATE_DEFS,
+        # A completed program requirement reopened by a correction; see
+        # email_templates_program_progress.py.
+        *_program_templates.DEFAULT_TEMPLATE_DEFS,
     ]
 
     # Stamp each definition with the colourway build_shell recorded for its

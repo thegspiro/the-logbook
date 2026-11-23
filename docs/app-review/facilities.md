@@ -12,6 +12,153 @@ it. See `docs/security-review/FAC-12-facilities.md`.
 
 ---
 
+## Pass 6 (2026-11-23) — the backend's business logic, and the frontend since pass 5
+
+**Backend:** `endpoints/facilities.py` (4,401 L, **102** routes — was 98),
+`services/facilities_service.py` (3,746 L); 16 commits since pass 5
+**Frontend:** `modules/facilities/` — the 45 commits since pass 5 (42 files)
+**Docs:** none exists — see the documentation gap below
+
+### Scope
+
+Pass 5 reviewed the frontend and deliberately left the backend to the security
+review (`docs/security-review/FAC-12-facilities.md`), which covers access
+control, tenancy and uploads — not whether the module computes the right
+thing. Pass 6 read the backend for **business-logic correctness** in depth
+(every entity: types, statuses, maintenance, inspections, systems, rooms,
+contacts, utilities, compliance, the dashboard counts and the scheduled task),
+and read every frontend file changed since pass 5 in full. Both reads were
+delegated; every finding below was re-checked against the code. Not read: the
+photo and document endpoints (the security review's ground), most migrations,
+`facilitiesStore` beyond its detail and update actions.
+
+### Verified good ✅
+
+- **102 routes, all permission-gated** — enumerated mechanically; the four new
+  since pass 5 included. One gate passes a constant tuple rather than literal
+  strings, which a literal-matching count misses.
+- **Every update path uses `apply_updates` or `reject_null_for_required`** (22
+  call sites, 0 raw `setattr` loops), and every service `ValueError` maps to 400.
+- **Overdue logic** recomputes `is_overdue` against the department's date on
+  create and update; `run_mark_overdue_maintenance` runs per organization in its
+  own timezone and only flips False to True with a guarded UPDATE, so a second
+  run is a no-op (pitfall #36).
+- **Utilities are `Decimal`** and readings are per-period usage, not cumulative
+  meter values, so no monotonicity question arises.
+- **Frontend:** every update sends cleared fields as `null` and never nulls a
+  NOT NULL column; the detail page renders only a facility whose id matches the
+  URL and the store drops stale responses by sequence; paged hooks guard with a
+  request sequence; no value is read back out of a state updater.
+
+### FAC2-7 — MED — The facilities dashboard counted, and opened, a different set of inspections — ✅ FIXED
+
+`get_dashboard_counts` and the dashboard preview counted upcoming inspections
+without the archived-facility filter the main dashboard tile and
+`page_inspections(due_within_days)` both apply, and both of the card's links
+opened the unfiltered inspections list. An archived station's inspection
+inflated the card above the main dashboard, and the click showed every
+inspection ever recorded (pitfall #29). The count and preview now use the same
+population, and the links open `?dueWithin=30`. A backend test (the card, the
+preview and the list must agree; 2 vs 1 on the unfixed code) and a frontend test
+(the link) failed first.
+
+### FAC2-8 — MED — Changing a record's facility on edit was silently dropped — ✅ FIXED (the dialog) / 🚩 FLAGGED (moving records)
+
+The cross-facility Maintenance and Inspections lists showed an editable Facility
+picker in the edit dialog and sent `facility_id`, but neither Update schema has
+the field, so the server ignored it and answered "Record updated" while the
+record stayed put. A record on an archived facility also showed "Select
+facility…", since the picker lists only active ones. Edit now shows the
+record's facility as text (archived ones included) and offers the picker only on
+create. Two page tests (one per list) failed on the unfixed code. Whether a
+record should be **movable** between facilities is the owner's call
+(KNOWN_LIMITATIONS).
+
+### FAC2-9 — LOW — A maintenance record's system could belong to another facility — ✅ FIXED
+
+Create and update checked only that `system_id` was in the department, so a
+Station 1 work order could be filed against Station 2's HVAC. A new
+`_assert_system_on_facility` refuses it with a 400; three integration tests (two
+refusals that failed on the unfixed code, one acceptance).
+
+### FAC2-10 — LOW — `list_rooms(floor=0)` returned every floor — ✅ FIXED
+
+`if floor:` read a ground floor numbered 0 as no filter. Now `is not None`; the
+test (floor 0 and a basement at -1) failed on the unfixed code.
+
+### Flagged for the owner
+
+- **FAC2-11 — MED — Inspections redone early still count as upcoming, and
+  missed dates drop off every tile.** Each inspection keeps its own
+  `next_inspection_date` and recording the next one does not retire it, so the
+  earlier row stays "upcoming"; every window starts at today, so a date that
+  passes without the work vanishes from the dashboards instead of turning
+  overdue. Compliance checklists can be created and deleted but not completed
+  from any screen, so they age out the same way. Which inspection is current,
+  and what an overdue one looks like, are product decisions.
+- **FAC2-12 — LOW — Stored intervals nothing reads (pitfall #19).** Maintenance
+  types carry seeded NFPA intervals, systems a "test every N days", and nothing
+  schedules the next occurrence or computes a next test; completing a system's
+  maintenance does not update its last-serviced date. The apparatus module has
+  the same shape (AP2-15's neighbour).
+- **FAC2-13 — LOW — Renaming or archiving a facility leaves its rooms' Locations
+  stale.** Only room create, update and delete sync the linked Location, so a
+  rename keeps the old building name and address on every room, and an
+  archived facility's rooms stay in the Events and Storage pickers.
+
+### Open (LOW, not fixed this pass)
+
+- The list pager disappears when the last row on the last page is deleted or
+  completed: the page is not clamped to the new total, so the screen reads
+  empty with no way back to page 1.
+- A record filed under a deactivated maintenance type shows a blank type (reuse
+  `withRetainedOption`); a failed types load reads as "No maintenance types are
+  set up yet".
+- Completion details: reopening leaves `completed_date`/`completed_by`;
+  creating a record already completed sets no `completed_by`; compliance updates
+  stamp neither; an update can clear a historic record's `occurred_date`, which
+  create refuses.
+- No cross-field date validation anywhere (due before scheduled, next inspection
+  before the inspection, period end before start, and five more); the frontend
+  describes a server refusal the server never sends.
+- `isPastDate` compares a calendar date as UTC midnight, so a checklist or
+  warranty turns red the evening before in US zones.
+- A hidden corrective-action deadline still saves when the actions are cleared;
+  two Add buttons (Systems, Contacts) skip the discard guard.
+- Delete-only and create-only holders are offered less than the backend allows
+  (no Delete on the maintenance list; no New Inspection for `facilities.create`).
+- `cost` and `estimatedCost` arrive as strings while typed as numbers; the
+  detail header still paints status text in the status colour (2.87:1 was fixed
+  on the dashboard card only).
+- Smaller: restoring a system via update leaves `archived_at`; inactive types
+  and statuses are accepted on create; the `system_id` filter is never passed;
+  `list_rooms` pages without an id tie-break; a `due_within_days` description is
+  inaccurate.
+
+### Documentation gap
+
+**Facilities has no feature documentation at all** — no `docs/FACILITIES_MODULE.md`
+and no `wiki/Module-Facilities.md`; `docs/FEATURE_DOC_COVERAGE.md` has listed it
+among the six with nothing since 2026-10-08, and that is still true. 102 routes,
+nine permission strings, eleven entities and a scheduled task have no single
+place stating their shapes and gates. Writing it is a pass of its own, as it was
+for apparatus and inventory.
+
+### Completion gate (pass 6)
+
+| Check                         | Result                                                                         |
+| ----------------------------- | ------------------------------------------------------------------------------ |
+| `npm run typecheck`           | ✅ 0                                                                           |
+| `npm run lint`                | ✅ 0 errors, 0 warnings                                                        |
+| `flake8 app/ tests/`          | ✅ 0                                                                           |
+| `black --check` / isort       | ✅ clean                                                                       |
+| mypy ratchet                  | ✅ 0 errors, matching the baseline                                             |
+| backend tests                 | ✅ **328 passed, 1 skipped** (`-k facilit`), including the four new test files |
+| frontend tests                | ✅ **facilities module 218 passed** (26 files)                                 |
+| marker routing (pitfall #30b) | ✅ every new backend test module is `integration`                              |
+
+---
+
 ## Pass 5 (2026-10-11) — the frontend, reviewed for the first time: 2 fixed, 2 flagged
 
 ### Scope, stated plainly

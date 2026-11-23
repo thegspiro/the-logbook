@@ -67,6 +67,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 7:40 AM — ask the officer running an outreach event that ended yesterday to record its guest headcount
 40 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=guest_headcount_reminders
 
+# Every 15 minutes — decline apparatus seat requests left unanswered when the night starts
+*/15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=apparatus_seat_request_lapse
+
 # Every 30 minutes — post-shift validation notifications
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=post_shift_validation
 
@@ -507,6 +510,16 @@ SCHEDULE = {
         "frequency": "every 30 minutes",
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
+    },
+    "apparatus_seat_request_lapse": {
+        "description": (
+            "Decline seat requests on apparatus nights that nobody answered "
+            "before the night started, was cancelled or was finalized, and "
+            "email each member that their request lapsed"
+        ),
+        "frequency": "every 15 minutes",
+        "recommended_time": "*/15",
+        "cron": "*/15 * * * *",
     },
     "guest_headcount_reminders": {
         "description": (
@@ -2027,6 +2040,29 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
         "total_emails_sent": total_emails,
         "organizations": results,
     }
+
+
+async def run_apparatus_seat_request_lapse(db: AsyncSession) -> Dict[str, Any]:
+    """Close seat requests left waiting past their night's start.
+
+    Approval and decline are refused once a night starts, so a request still
+    waiting then can never be answered; without this sweep the member would
+    never hear that they are not on the crew. Each request is closed and
+    committed before its email goes out, so a second run finds nothing to
+    send (see ``ApparatusEventService.lapse_unanswered_requests``).
+    """
+    from app.services.apparatus_event_service import ApparatusEventService
+    from app.services.apparatus_seat_request_notices import (
+        send_seat_request_notices,
+    )
+
+    async def _process(db_session, org):
+        service = ApparatusEventService(db_session)
+        lapsed = await service.lapse_unanswered_requests(str(org.id))
+        await send_seat_request_notices(service, str(org.id))
+        return lapsed
+
+    return await _for_each_org(db, "apparatus_seat_request_lapse", _process)
 
 
 async def run_guest_headcount_reminders(db: AsyncSession) -> Dict[str, Any]:
@@ -8819,6 +8855,7 @@ TASK_RUNNERS = {
     "inventory_notifications": run_inventory_notifications,
     "event_reminders": run_event_reminders,
     "post_event_validation": run_post_event_validation,
+    "apparatus_seat_request_lapse": run_apparatus_seat_request_lapse,
     "guest_headcount_reminders": run_guest_headcount_reminders,
     "post_shift_validation": run_post_shift_validation,
     "shift_reminders": run_shift_reminders,
@@ -8920,6 +8957,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "shift_auto_checkout": 900,
     "publish_scheduled_messages": 900,
     "storefront_window_lifecycle": 900,
+    # Each request lapses once: only a still-pending one is picked up.
+    "apparatus_seat_request_lapse": 900,
     # Idempotent per (department, NWS alert id); see weather_alert_service.
     "weather_alert_poll": 900,
     # Every 30 minutes

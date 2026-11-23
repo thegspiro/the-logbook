@@ -58,6 +58,29 @@ def confined_attachment_paths(
     return [path for path in paths if path]
 
 
+def attachment_paths_by_area(
+    attachments: Optional[Iterable[Any]], organization_id: Any, *areas: StorageArea
+) -> dict[str, StorageArea]:
+    """Each entry's confined path with the first of *areas* that confines it,
+    in the shape ``pending_file_deletions.enqueue`` takes.
+
+    Give the areas in :func:`upload_relocation.candidate_areas` order (for a
+    training record, ``SELF_REPORTS`` before ``TRAINING_RECORDS``): the legacy
+    self-reports root sits inside the legacy training-records root, so the
+    first match is the one answer, as in :func:`collect_member_files`.
+    """
+    found: dict[str, StorageArea] = {}
+    if not isinstance(attachments, list):
+        return found
+    for attachment in attachments:
+        for area in areas:
+            path = confined_attachment_path(attachment, organization_id, area)
+            if path:
+                found.setdefault(path, area)
+                break
+    return found
+
+
 @dataclass
 class MemberFiles:
     """Every stored file a member's rows name, as plain strings.
