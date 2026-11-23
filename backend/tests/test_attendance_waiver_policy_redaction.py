@@ -74,7 +74,9 @@ async def dept(db_session):
     )
 
 
-@pytest.mark.parametrize(("url", "category"), [(TRAINING, "Medical"), (MEETINGS, "Work")])
+@pytest.mark.parametrize(
+    ("url", "category"), [(TRAINING, "Medical"), (MEETINGS, "Work")]
+)
 async def test_a_member_reads_the_form_policy_without_the_routing(
     as_user, dept, url, category
 ):
