@@ -175,6 +175,31 @@ and two more pull requests (#4323, #4324) each proposed the three-way merge.
 including the case above: a branch whose chain is valid alone and forked once
 merged.
 
+**A fork that lands on `main` opens an issue** _(2026-11-23)_. Migration
+Chain goes red on the push to `main`, and a red run on `main` is seen by
+nobody: `main` sat forked on 2026-11-14, -15 and -20 while more pull requests
+merged. The up-to-date rule above stops most forks, but not a merge that
+bypasses it, nor any merge while the setting is off, as it was from 2026-11-16
+to 2026-11-22. So the **Migration Fork Alert** workflow
+(`.github/workflows/migration-fork-alert.yml`, logic in
+`scripts/migration_fork_alert.py`) runs `validate_migrations.py --strict` on
+every push to `main`. While `main` has more than one head it fails, and opens
+one issue labelled `migration-fork` naming the heads and the exact
+`alembic merge` command, or updates the one already open (with a comment only
+when the set of heads changes). Once `main` has one head again it closes the
+issue. Runs are serialized, so two quick pushes cannot open two issues. The
+issue is a prompt to follow the five steps above, not a fix: one merge
+revision, on its own branch.
+
+**It does not open the merge-revision pull request itself, on purpose.** A
+pull request opened with the workflow's `GITHUB_TOKEN` does not trigger CI, so
+it could not pass the required checks without someone pushing to it by hand.
+It would also add another writer to the chain. Forks have repeatedly been made
+worse by several writers answering the same one (the 2026-11-14 fork drew three
+merge revisions), and an automatic one would race the sessions that already
+answer. The workflow needs `issues: write` and `contents: read` and nothing
+more.
+
 ---
 
 ## A Migration Must Tolerate a Table Only `create_all` Builds

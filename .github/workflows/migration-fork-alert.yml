@@ -1,0 +1,49 @@
+name: Migration Fork Alert
+
+# The Migration Chain job in ci.yml goes red on main when a merge forks the
+# Alembic chain, and a red run on main is seen by nobody: main forked on
+# 2026-11-14, -15 and -20 and stayed forked while more pull requests merged.
+# The owner decided on 2026-11-16 not to require branches to be up to date
+# before merging (docs/rules/migrations.md), so a fork can still land. This
+# turns it into one issue, updated while the fork lasts and closed once main
+# has one head again. scripts/migration_fork_alert.py holds the logic.
+#
+# It does not open a merge-revision pull request: one opened with
+# GITHUB_TOKEN does not trigger CI, and it would be one more writer racing the
+# sessions that already answer a fork with their own merge revision.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialized, not cancelled, so two pushes cannot both find no issue and both
+# open one (pitfall #36). A newer push replaces a pending older one, which is
+# right: only the latest main matters.
+concurrency:
+  group: migration-fork-alert
+  cancel-in-progress: false
+
+jobs:
+  alert:
+    name: Report a forked migration chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      # Runs backend/scripts/validate_migrations.py --strict and fails the job
+      # while main has more than one head.
+      - name: Check main's migration heads
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/migration_fork_alert.py

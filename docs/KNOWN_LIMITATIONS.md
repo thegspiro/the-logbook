@@ -84,7 +84,9 @@ and the two fixes became two heads until #4560 joined them.
   2026-11-22 while GitHub reported it behind `main`, so the rule as configured
   that day did not stop the repository owner's merge. The ruleset's bypass
   list was not read when this was written. If the owner can bypass, the rule
-  holds only for as long as the owner chooses not to.
+  holds only for as long as the owner chooses not to. Since 2026-11-23 a
+  fork that lands this way opens a `migration-fork` issue (the Migration Fork
+  Alert workflow), which closes itself once `main` has one head again.
 - **When `main` is forked, only the pull request that carries the merge
   revision can merge.** Every other branch brought up to date takes the fork in
   and fails Migration Chain. Merge the fix first, then update the rest. The fix
