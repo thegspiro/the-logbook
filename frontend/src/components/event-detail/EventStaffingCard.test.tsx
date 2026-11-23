@@ -31,14 +31,19 @@ vi.mock('../../services/api', () => ({
 
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
+import { ConfirmProvider } from '../../contexts/ConfirmContext';
 import EventStaffingCard from './EventStaffingCard';
 
 const EMPTY = { slots_total: 0, slots_filled: 0, roles: [], volunteers: [], request_id: null };
 
+// ConfirmProvider as the app root mounts it: the seat board asks before a
+// member gives their spot up.
 const renderCard = () =>
   render(
     <MemoryRouter>
-      <EventStaffingCard eventId="ev-1" />
+      <ConfirmProvider>
+        <EventStaffingCard eventId="ev-1" />
+      </ConfirmProvider>
     </MemoryRouter>
   );
 

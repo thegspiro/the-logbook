@@ -108,7 +108,7 @@ const EventStaffingCard: React.FC<EventStaffingCardProps> = ({ eventId, isPast =
         </p>
       )}
       {staffing?.shift_id ? (
-        <VolunteerSeatBoard eventId={eventId} isPast={isPast} onSignedUp={load} />
+        <VolunteerSeatBoard eventId={eventId} isPast={isPast} onChanged={load} />
       ) : staffing?.request_id ? (
         <p className="text-theme-text-secondary text-sm">
           Volunteer signups are not open yet.{' '}
