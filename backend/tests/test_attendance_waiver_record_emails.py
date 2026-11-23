@@ -37,11 +37,11 @@ from app.services.event_service import EventService
 from tests.waiver_request_support import (
     assign,
     load,
+    make_meeting_event,
     make_member,
     make_org,
     make_position,
     make_requirement,
-    make_meeting_event,
     make_session,
     set_meeting_policy,
     set_policy,
