@@ -7350,15 +7350,16 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   the training-enhancements module, the `competency_matrices` table and its
   endpoints, are a different feature and are unchanged. Test:
   `tests/test_competency_matrix_endpoint_retired.py`.
-- **Profiles: admin hours choose their own profile — open, owner question
-  2026-11-21.** A member's admin-hours targets come from the highest-priority
-  matching profile that _carries_ admin hours (ties now resolved as grading
-  resolves them), not from the profile that grades their training. A member
-  whose grading profile has no admin hours therefore takes targets from a
-  lower-priority profile. `admin_hours_service.get_user_hours_compliance` also
-  matches profiles with its own rules, which lack grading's "junior" chip
-  handling. Whether admin hours should follow the grading profile is not
-  decided.
+- **Profiles: admin hours follow the grading profile — ✅ resolved (owner
+  decision 2026-11-23).** A member's admin-hours targets come from the profile
+  that grades their training, when it sets admin hours; when it sets none, from
+  the highest-priority matching profile that does, the rule that held before.
+  `training_compliance.admin_hours_profile` is the one resolver, built on the
+  same `matching_profiles` list grading takes its profile from, so the
+  tie-break and the "junior" chip are grading's own. A junior member under a
+  "junior" profile used to take targets from the profile matching their legacy
+  "probationary" type instead. Tests:
+  `tests/test_admin_hours_follow_grading_profile.py`.
 - **The compliance exports grade Met / Not Met from the report period's
   records only — fixed (owner decision 2026-11-21: status as of today).**
   Confirmed by running before the fix: a certification completed on 1 March
