@@ -7,6 +7,7 @@ import {
   markRevalidating,
   clearRevalidating,
   invalidateByPrefix,
+  invalidateAfterMutation,
   getResourcePrefix,
   isCacheable,
   clearCache,
@@ -853,5 +854,35 @@ describe('apiCache', () => {
       const fresh = getCached('/events/1');
       expect(fresh).toEqual(expect.objectContaining({ fresh: true, data: { v: 2 } }));
     });
+  });
+});
+
+describe('invalidateAfterMutation', () => {
+  beforeEach(() => {
+    clearCache();
+  });
+
+  it('clears the mutated resource and the resources it is known to change', () => {
+    setCache(getCacheKey('/scheduling/shifts'), [1]);
+    setCache(getCacheKey('/events/ev-1'), { id: 'ev-1' });
+    setCache(getCacheKey('/dashboard/operations'), { shifts: 1 });
+    setCache(getCacheKey('/apparatus'), [1]);
+
+    invalidateAfterMutation('/scheduling/shifts/sh-1/signup');
+
+    expect(getCached(getCacheKey('/scheduling/shifts'))).toBeNull();
+    expect(getCached(getCacheKey('/events/ev-1'))).toBeNull();
+    expect(getCached(getCacheKey('/dashboard/operations'))).toBeNull();
+    expect(getCached(getCacheKey('/apparatus'))).not.toBeNull();
+  });
+
+  it('clears only its own resource when nothing else is listed', () => {
+    setCache(getCacheKey('/apparatus/a-1'), { id: 'a-1' });
+    setCache(getCacheKey('/events/ev-1'), { id: 'ev-1' });
+
+    invalidateAfterMutation('/apparatus/a-1');
+
+    expect(getCached(getCacheKey('/apparatus/a-1'))).toBeNull();
+    expect(getCached(getCacheKey('/events/ev-1'))).not.toBeNull();
   });
 });

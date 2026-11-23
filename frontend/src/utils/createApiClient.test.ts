@@ -400,3 +400,50 @@ describe('createApiClient', () => {
     });
   });
 });
+
+describe('createApiClient and the shared response cache', () => {
+  // The global client's cache, imported for real: the point is that a write
+  // through a module client clears what the global client would serve.
+  const cacheKey = async (url: string) => (await import('./apiCache')).getCacheKey(url);
+
+  beforeEach(async () => {
+    (await import('./apiCache')).clearCache();
+  });
+
+  it('clears the event a volunteer signup changed, which it used to leave cached', async () => {
+    const { setCache, getCached } = await import('./apiCache');
+    setCache(await cacheKey('/events/ev-1'), { volunteer_signup: { signed_up: false } });
+    setCache(await cacheKey('/users/u-1'), { name: 'untouched' });
+
+    const api = withAdapter(createApiClient(), okAdapter([]));
+    await api.post('/scheduling/shifts/sh-1/signup', { outreach_role: 'tour_guide' });
+
+    expect(getCached(await cacheKey('/events/ev-1'))).toBeNull();
+    expect(getCached(await cacheKey('/users/u-1'))).not.toBeNull();
+  });
+
+  it('leaves the cache alone on a read', async () => {
+    const { setCache, getCached } = await import('./apiCache');
+    setCache(await cacheKey('/events/ev-1'), { ok: true });
+
+    const api = withAdapter(createApiClient(), okAdapter([]));
+    await api.get('/scheduling/shifts/sh-1');
+
+    expect(getCached(await cacheKey('/events/ev-1'))).not.toBeNull();
+  });
+});
+
+describe('toCachePath', () => {
+  it('maps a module request onto the global client path', async () => {
+    const { toCachePath } = await import('./createApiClient');
+    expect(toCachePath('/api/v1', '/scheduling/shifts/1/signup')).toBe('/scheduling/shifts/1/signup');
+    expect(toCachePath('/api/v1/', 'events/1')).toBe('/events/1');
+    expect(toCachePath('/api/v1/portal', '/forms/1')).toBe('/portal/forms/1');
+  });
+
+  it('has no path for a client outside the cached API', async () => {
+    const { toCachePath } = await import('./createApiClient');
+    expect(toCachePath('/api/public/v1', '/forms/1')).toBeNull();
+    expect(toCachePath('/api/v1', undefined)).toBeNull();
+  });
+});

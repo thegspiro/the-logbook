@@ -332,6 +332,38 @@ export function invalidateByPrefix(prefix: string): void {
 }
 
 /**
+ * Resources a mutation changes beyond its own, by the mutated URL's prefix.
+ *
+ * Invalidation is otherwise by first path segment, which misses a write whose
+ * effect lands on another resource: a volunteer signup is a POST under
+ * `/scheduling`, yet it fills a seat on an outreach event and marks the member
+ * going, so `/events/{id}` and the dashboard's outreach and operations widgets
+ * kept answering from cache. Add an entry when a write is found to change
+ * another resource; an extra invalidation only costs a refetch.
+ */
+const RELATED_PREFIXES: Readonly<Record<string, readonly string[]>> = {
+  // Signups, assignments, swaps and closes: event RSVPs and outreach staffing,
+  // and the operations and community-engagement widgets.
+  '/scheduling': ['/events', '/dashboard'],
+  // Scheduling, postponing or cancelling a request creates, moves or cancels
+  // its calendar event.
+  '/event-requests': ['/events', '/dashboard'],
+};
+
+/**
+ * Invalidate what a successful POST/PUT/PATCH/DELETE to `url` changed: its own
+ * resource and any listed in RELATED_PREFIXES. Called by the global client and
+ * by every module client (`createApiClient`), which share this one cache.
+ */
+export function invalidateAfterMutation(url: string): void {
+  const prefix = getResourcePrefix(url);
+  invalidateByPrefix(prefix);
+  for (const related of RELATED_PREFIXES[prefix] ?? []) {
+    invalidateByPrefix(related);
+  }
+}
+
+/**
  * Extract the base resource path for cache invalidation.
  * E.g. "/events/123/rsvp" → "/events", "/users/123" → "/users"
  */
