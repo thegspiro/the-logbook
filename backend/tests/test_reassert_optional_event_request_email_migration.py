@@ -59,7 +59,9 @@ def test_the_chain_has_one_head_again():
     config = Config(str(_BACKEND / "alembic.ini"))
     config.set_main_option("script_location", str(_BACKEND / "alembic"))
     heads = ScriptDirectory.from_config(config).get_heads()
-    assert heads == ["c4e7a9d2f1b8"]
+    # One head, whichever: a later migration moves it on, and pinning this
+    # revision as the head failed the first time one did.
+    assert len(heads) == 1
 
 
 @pytest.fixture

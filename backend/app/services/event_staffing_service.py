@@ -88,7 +88,8 @@ def seat_board(state: dict[str, Any], user_id: str) -> dict[str, Any]:
     """One row per seat on a signup sheet, as the shift crew board lays seats out.
 
     Built from ``get_staffing_state``: each role's holders in signup order, then
-    its open seats, in the order the sheet asks for roles. A role somebody
+    its open seats, essential roles first and otherwise in the order the sheet
+    asks for them. A role somebody
     holds that the sheet no longer asks for is listed after them (its total is
     zero), so the person is still shown as coming.
     """
@@ -97,7 +98,10 @@ def seat_board(state: dict[str, Any], user_id: str) -> dict[str, Any]:
         holders.setdefault(volunteer["outreach_role"] or "", []).append(volunteer)
 
     seats: list[dict[str, Any]] = []
-    for role in state["roles"]:
+    # Essential roles first (owner decision, 2026-11-23), so the seats the day
+    # cannot run without are read before the optional ones; sheet order
+    # otherwise, as sorted() is stable.
+    for role in sorted(state["roles"], key=lambda r: not r["essential"]):
         taken = holders.get(role["role"], [])
         for volunteer in taken:
             seats.append(
@@ -106,6 +110,7 @@ def seat_board(state: dict[str, Any], user_id: str) -> dict[str, Any]:
                     "label": role["label"],
                     "member_name": volunteer["member_name"],
                     "is_me": str(volunteer["user_id"]) == str(user_id),
+                    "essential": role["essential"],
                 }
             )
         for _ in range(max(role["total"] - len(taken), 0)):
@@ -115,6 +120,7 @@ def seat_board(state: dict[str, Any], user_id: str) -> dict[str, Any]:
                     "label": role["label"],
                     "member_name": None,
                     "is_me": False,
+                    "essential": role["essential"],
                 }
             )
     mine = next(

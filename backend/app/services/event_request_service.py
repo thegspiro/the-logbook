@@ -1107,6 +1107,8 @@ async def get_staffing_state(
         "shift_id": None,
         "shift_date": None,
         "slots_total": 0,
+        "essential_total": 0,
+        "essential_filled": 0,
         "slots_filled": 0,
         "roles": [],
         "volunteers": [],
@@ -1171,6 +1173,7 @@ async def get_staffing_state(
             "total": entry["count"],
             "filled": min(filled_by_role.get(entry["role"], 0), entry["count"]),
             "remaining": max(entry["count"] - filled_by_role.get(entry["role"], 0), 0),
+            "essential": entry["essential"],
         }
         for entry in needed
     ]
@@ -1188,6 +1191,8 @@ async def get_staffing_state(
                 "total": 0,
                 "filled": count,
                 "remaining": 0,
+                # Not asked for, so nothing the day depends on.
+                "essential": False,
             }
         )
 
@@ -1197,6 +1202,10 @@ async def get_staffing_state(
         "shift_date": shift.start_time,
         "slots_total": len(positions),
         "slots_filled": len(volunteers),
+        # Seats in the roles marked essential (owner decision, 2026-11-23):
+        # the day is staffed when these two match, whatever the rest hold.
+        "essential_total": sum(r["total"] for r in roles if r["essential"]),
+        "essential_filled": sum(r["filled"] for r in roles if r["essential"]),
         "roles": roles,
         "volunteers": volunteers,
         "volunteer_call_sent_at": getattr(

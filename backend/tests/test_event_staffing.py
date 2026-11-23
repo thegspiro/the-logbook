@@ -135,8 +135,8 @@ class TestOpeningASheet:
         assert shift.open_to_all_members is True
         assert shift.start_time.replace(tzinfo=timezone.utc) == START
         assert event.staffing_roles == [
-            {"role": "educator", "count": 2},
-            {"role": "greeter", "count": 1},
+            {"role": "educator", "count": 2, "essential": True},
+            {"role": "greeter", "count": 1, "essential": True},
         ]
 
         read_back = await get_event_staffing_sheet(
@@ -695,6 +695,54 @@ class TestTheSeatBoard:
         assert mine["seats"][0]["is_me"] is True
         assert mine["signed_up"] is True
         assert mine["my_role_label"] == "Educator"
+
+    async def test_essential_roles_come_first_and_are_counted_alone(self, db_session):
+        from app.services.event_request_service import get_staffing_state
+        from app.services.scheduling_service import SchedulingService
+
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        with patch(
+            "app.api.v1.endpoints.events.log_audit_event",
+            AsyncMock(return_value=None),
+        ):
+            await open_event_staffing_sheet(
+                event_id=uuid.UUID(event.id),
+                data=EventRequestStaffingCreate(
+                    roles=[
+                        {"role": "greeter", "count": 1, "essential": False},
+                        {"role": "educator", "count": 2},
+                    ]
+                ),
+                db=db_session,
+                current_user=officer,
+            )
+        shift = await _sheet(db_session, event)
+        jordan = await _member(db_session, org, "jordan")
+        _, error = await SchedulingService(db_session).create_assignment(
+            org.id,
+            shift.id,
+            {
+                "user_id": jordan.id,
+                "position": "volunteer",
+                "outreach_role": "educator",
+            },
+            jordan.id,
+        )
+        assert error is None, error
+
+        board = await self._board(db_session, event, officer)
+        assert [
+            (s["role"], s["member_name"], s["essential"]) for s in board["seats"]
+        ] == [
+            ("educator", "Jordan Member", True),
+            ("educator", None, True),
+            ("greeter", None, False),
+        ]
+
+        state = await get_staffing_state(db_session, event, org)
+        assert (state["essential_filled"], state["essential_total"]) == (1, 2)
+        assert (state["slots_filled"], state["slots_total"]) == (1, 3)
 
     async def test_no_sheet_is_not_found(self, db_session):
         org, officer = await _dept(db_session)

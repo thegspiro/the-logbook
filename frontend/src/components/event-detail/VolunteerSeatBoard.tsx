@@ -25,6 +25,7 @@ import { useConfirm } from '../../contexts/ConfirmContext';
 import { useAuthStore } from '../../stores/authStore';
 import type { EventVolunteerSeat, EventVolunteerSeatBoard } from '../../types/event';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { readinessTone } from '../../pages/apparatus-events/tones';
 
 interface VolunteerSeatBoardProps {
   eventId: string;
@@ -180,12 +181,25 @@ const VolunteerSeatBoard: React.FC<VolunteerSeatBoardProps> = ({ eventId, isPast
 
   const filled = board.seats.filter((seat) => seat.member_name).length;
   const open = board.seats.length - filled;
+  // Essential seats decide whether the day is staffed (owner decision,
+  // 2026-11-23); the count only splits out when some seats are optional.
+  const essential = board.seats.filter((seat) => seat.essential !== false);
+  const essentialFilled = essential.filter((seat) => seat.member_name).length;
+  const splitsOut = essential.length > 0 && essential.length < board.seats.length;
   const canSignUp = !board.signed_up && !isPast;
 
   return (
     <div className="space-y-2">
       <p className="text-theme-text-secondary flex justify-between gap-3 text-sm">
-        <span>
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs font-medium ${readinessTone(
+            essentialFilled,
+            essential.length,
+            filled,
+            board.seats.length
+          )}`}
+        >
+          {splitsOut ? `Essential ${essentialFilled}/${essential.length} · ` : ''}
           {filled} of {board.seats.length} signed up
         </span>
         {open > 0 && <span className="font-medium text-amber-800 dark:text-amber-300">{open} open</span>}
@@ -217,7 +231,10 @@ const VolunteerSeatBoard: React.FC<VolunteerSeatBoardProps> = ({ eventId, isPast
                         {seat.member_name}
                         {seat.is_me && <span className="ml-1 text-xs text-violet-700 dark:text-violet-300">(You)</span>}
                       </p>
-                      <p className="text-theme-text-muted text-xs">{seat.label}</p>
+                      <p className="text-theme-text-muted text-xs">
+                        {seat.label}
+                        {seat.essential === false && ' (optional)'}
+                      </p>
                     </div>
                   </>
                 ) : (
@@ -230,7 +247,9 @@ const VolunteerSeatBoard: React.FC<VolunteerSeatBoardProps> = ({ eventId, isPast
                     </div>
                     <div className="min-w-0">
                       <p className="text-theme-text-muted text-sm">{seat.label}</p>
-                      <p className="text-theme-text-muted text-xs">Open position</p>
+                      <p className="text-theme-text-muted text-xs">
+                        {seat.essential === false ? 'Optional position' : 'Open position'}
+                      </p>
                     </div>
                   </>
                 )}

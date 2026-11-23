@@ -178,6 +178,8 @@ class OutreachRoleNeed(BaseModel):
 
     role: str = Field(..., min_length=1, max_length=100)
     count: int = Field(..., ge=1, le=50)
+    # Must be filled for the day to count as staffed. Omitted: essential.
+    essential: bool = True
 
 
 class OutreachEventType(BaseModel):
@@ -597,6 +599,7 @@ class EventVolunteerRole(BaseModel):
     total: int
     filled: int
     remaining: int
+    essential: bool = True
 
 
 class EventVolunteerSignup(BaseModel):
@@ -617,6 +620,7 @@ class EventVolunteerSeat(BaseModel):
     # Who holds it; None for an open seat.
     member_name: Optional[str] = None
     is_me: bool = False
+    essential: bool = True
 
 
 class EventVolunteerSeatBoard(BaseModel):

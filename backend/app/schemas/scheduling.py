@@ -197,6 +197,7 @@ class OutreachRoleSlot(UTCResponseBase):
     total: int
     filled: int
     remaining: int
+    essential: bool = True
 
     model_config = _response_config
 

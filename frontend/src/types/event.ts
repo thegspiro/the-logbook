@@ -1248,6 +1248,8 @@ export interface OutreachRole {
 export interface StaffingRoleNeed {
   role: string;
   count: number;
+  /** Must be filled for the day to count as staffed; absent means essential. */
+  essential?: boolean | undefined;
 }
 
 /** One role on a signup sheet, and how full it is. */
@@ -1257,6 +1259,8 @@ export interface StaffingRoleStatus {
   total: number;
   filled: number;
   remaining: number;
+  /** Absent from an older backend, which treated every role as essential. */
+  essential?: boolean;
 }
 
 /** One member who has signed up to cover an outreach event. */
@@ -1276,6 +1280,9 @@ export interface EventRequestStaffing {
   shift_date?: string;
   slots_total: number;
   slots_filled: number;
+  /** Seats in the essential roles alone; the day is staffed when these match. */
+  essential_total?: number;
+  essential_filled?: number;
   roles: StaffingRoleStatus[];
   volunteers: EventRequestVolunteer[];
   volunteer_call_sent_at?: string;
@@ -1313,6 +1320,8 @@ export interface EventVolunteerSeat {
   label: string;
   member_name?: string | null;
   is_me: boolean;
+  /** Absent from an older backend, which treated every seat as essential. */
+  essential?: boolean;
 }
 
 /** An outreach event's signup sheet seat by seat, laid out like a shift's crew board. */

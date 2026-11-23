@@ -24,7 +24,11 @@ interface OutreachRoleSignupProps {
 
 const OutreachRoleSignup: React.FC<OutreachRoleSignupProps> = ({ shiftId, roles, onSignedUp }) => {
   const selectId = useId();
-  const open = roles.filter((r) => r.remaining > 0);
+  // Essential roles first (owner decision, 2026-11-23): the default is a seat
+  // the day cannot run without. Array.prototype.sort is stable.
+  const open = roles
+    .filter((r) => r.remaining > 0)
+    .sort((a, b) => Number(a.essential === false) - Number(b.essential === false));
   const [role, setRole] = useState(open[0]?.role ?? '');
   const [busy, setBusy] = useState(false);
 
@@ -64,7 +68,7 @@ const OutreachRoleSignup: React.FC<OutreachRoleSignupProps> = ({ shiftId, roles,
           >
             {open.map((r) => (
               <option key={r.role} value={r.role}>
-                {r.label} ({r.remaining} needed)
+                {r.label} ({r.essential === false ? `${r.remaining} open, optional` : `${r.remaining} needed`})
               </option>
             ))}
           </select>

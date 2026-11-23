@@ -12,6 +12,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { readinessLabel, readinessTone } from './apparatus-events/tones';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { PromptDialog } from '../components/ux/PromptDialog';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
@@ -1234,6 +1235,16 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
                                 }}
                                 className="form-input w-20 text-sm"
                               />
+                              <label className="text-theme-text-secondary flex shrink-0 items-center gap-1.5 text-sm">
+                                <input
+                                  type="checkbox"
+                                  className="form-checkbox"
+                                  checked={need.essential !== false}
+                                  onChange={(e) => updateRoleNeed(idx, { essential: e.target.checked })}
+                                  aria-label={`Role ${idx + 1} is essential`}
+                                />
+                                Essential
+                              </label>
                               <button
                                 type="button"
                                 onClick={() => removeRoleNeed(idx)}
@@ -1271,29 +1282,56 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
 
                     {!staffingLoading && staffing?.shift_id && (
                       <div className="card space-y-3 p-4">
-                        <p className="text-theme-text-primary text-sm font-medium">
-                          {staffing.slots_filled} of {staffing.slots_total} filled
+                        <p>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${readinessTone(
+                              staffing.essential_filled ?? staffing.slots_filled,
+                              staffing.essential_total ?? staffing.slots_total,
+                              staffing.slots_filled,
+                              staffing.slots_total
+                            )}`}
+                          >
+                            {readinessLabel(
+                              staffing.essential_filled ?? staffing.slots_filled,
+                              staffing.essential_total ?? staffing.slots_total,
+                              staffing.slots_filled,
+                              staffing.slots_total
+                            )}
+                          </span>
                         </p>
                         {staffing.roles.length > 0 && (
                           <ul className="space-y-1">
-                            {staffing.roles.map((role) => (
-                              <li
-                                key={role.role}
-                                className="text-theme-text-secondary flex items-center justify-between gap-3 text-sm"
-                              >
-                                <span className="text-theme-text-primary">{role.label}</span>
-                                <span
-                                  className={
-                                    role.remaining > 0
-                                      ? 'text-amber-700 dark:text-amber-400'
-                                      : 'text-emerald-700 dark:text-emerald-400'
-                                  }
+                            {[...staffing.roles]
+                              .sort((a, b) => Number(a.essential === false) - Number(b.essential === false))
+                              .map((role) => (
+                                <li
+                                  key={role.role}
+                                  className="text-theme-text-secondary flex items-center justify-between gap-3 text-sm"
                                 >
-                                  {role.filled} of {role.total}
-                                  {role.remaining > 0 ? ` — ${role.remaining} still needed` : ' — covered'}
-                                </span>
-                              </li>
-                            ))}
+                                  <span className="text-theme-text-primary">
+                                    {role.label}
+                                    {role.essential === false && (
+                                      <span className="text-theme-text-muted"> (optional)</span>
+                                    )}
+                                  </span>
+                                  <span
+                                    className={
+                                      role.remaining === 0
+                                        ? 'text-emerald-700 dark:text-emerald-400'
+                                        : role.essential === false
+                                          ? 'text-theme-text-secondary'
+                                          : 'text-amber-700 dark:text-amber-400'
+                                    }
+                                  >
+                                    {role.filled} of {role.total}
+                                    {role.remaining > 0
+                                      ? role.essential === false
+                                        ? ` — ${role.remaining} open`
+                                        : ` — ${role.remaining} still needed`
+                                      : ' — covered'}
+                                  </span>
+                                </li>
+                              ))}
                           </ul>
                         )}
                         {staffing.volunteers.length === 0 ? (

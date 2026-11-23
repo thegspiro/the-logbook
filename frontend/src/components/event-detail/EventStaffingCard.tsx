@@ -146,7 +146,7 @@ const EventStaffingCard: React.FC<EventStaffingCardProps> = ({ eventId, isPast =
               </div>
             )}
             {needs.map((need, index) => (
-              <div key={need.role} className="flex items-center gap-2">
+              <div key={need.role} className="flex flex-wrap items-center gap-2">
                 <select
                   value={need.role}
                   onChange={(e) => update(index, { role: e.target.value })}
@@ -174,6 +174,16 @@ const EventStaffingCard: React.FC<EventStaffingCardProps> = ({ eventId, isPast =
                   aria-label={`How many for role ${index + 1}`}
                   className="form-input w-20"
                 />
+                <label className="text-theme-text-secondary flex shrink-0 items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={need.essential !== false}
+                    onChange={(e) => update(index, { essential: e.target.checked })}
+                    aria-label={`Role ${index + 1} is essential`}
+                  />
+                  Essential
+                </label>
                 <button
                   type="button"
                   onClick={() => setNeeds((prev) => prev.filter((_, i) => i !== index))}

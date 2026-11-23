@@ -82,6 +82,25 @@ describe('EventVolunteerSignupCard', () => {
     expect(getVolunteerSeats).toHaveBeenCalledWith('ev-1');
   });
 
+  it('counts essential seats first and marks the optional ones', async () => {
+    getVolunteerSeats.mockResolvedValue(
+      board({
+        seats: [
+          { role: 'tour_guide', label: 'Tour Guide', member_name: 'Gabriel Spiro', is_me: false, essential: true },
+          { role: 'tour_guide', label: 'Tour Guide', member_name: null, is_me: false, essential: true },
+          { role: 'greeter', label: 'Greeter', member_name: 'Lee Park', is_me: false, essential: false },
+          { role: 'educator', label: 'Educator', member_name: null, is_me: false, essential: false },
+        ],
+      })
+    );
+    renderWithRouter(<EventVolunteerSignupCard eventId="ev-1" isPast={false} />);
+
+    expect(await screen.findByText('Essential 1/2 · 2 of 4 signed up')).toBeInTheDocument();
+    expect(screen.getByText('Open position')).toBeInTheDocument();
+    expect(screen.getByText('Optional position')).toBeInTheDocument();
+    expect(screen.getByText('Greeter (optional)')).toBeInTheDocument();
+  });
+
   it("signs the member up for that seat's role and re-reads the seats", async () => {
     const user = userEvent.setup();
     renderWithRouter(<EventVolunteerSignupCard eventId="ev-1" isPast={false} />);
