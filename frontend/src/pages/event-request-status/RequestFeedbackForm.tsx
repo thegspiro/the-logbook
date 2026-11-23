@@ -11,7 +11,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import FieldRenderer from '../../components/forms/FieldRenderer';
 import { toFieldDefinition } from '../../components/forms/publicFormFields';
-import { eventRequestService } from '../../services/api';
+import { outreachFeedbackService } from '../../services/outreachFeedbackServices';
 import type { PublicFeedbackForm } from '../../types/event';
 import { getVisibleFieldIds } from '../../utils/formVisibility';
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
@@ -33,7 +33,7 @@ const RequestFeedbackForm: React.FC<Props> = ({ token, onSent }) => {
 
   useEffect(() => {
     let cancelled = false;
-    eventRequestService
+    outreachFeedbackService
       .getPublicFeedbackForm(token)
       .then((result) => {
         if (!cancelled) setForm(result);
@@ -83,7 +83,7 @@ const RequestFeedbackForm: React.FC<Props> = ({ token, onSent }) => {
     const answers = Object.fromEntries(Object.entries(values).filter(([id]) => visibleIds.has(id)));
     setSending(true);
     try {
-      await eventRequestService.sendPublicFeedback(token, answers);
+      await outreachFeedbackService.sendPublicFeedback(token, answers);
       onSent();
     } catch (err: unknown) {
       if (toAppError(err).status === 409) onSent();

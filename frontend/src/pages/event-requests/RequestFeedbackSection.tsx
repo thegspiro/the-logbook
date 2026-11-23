@@ -8,8 +8,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { MessageSquareHeart } from 'lucide-react';
-import { eventRequestService } from '../../services/api';
+import { MessageSquare } from 'lucide-react';
+import { outreachFeedbackService } from '../../services/outreachFeedbackServices';
 import type { EventRequestFeedback } from '../../types/event';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDateTime } from '../../utils/dateFormatting';
@@ -24,7 +24,7 @@ const RequestFeedbackSection: React.FC<{ requestId: string }> = ({ requestId }) 
     let cancelled = false;
     setFeedback(undefined);
     setError(null);
-    eventRequestService
+    outreachFeedbackService
       .getRequestFeedback(requestId)
       .then((result) => {
         if (!cancelled) setFeedback(result);
@@ -43,7 +43,7 @@ const RequestFeedbackSection: React.FC<{ requestId: string }> = ({ requestId }) 
         id={`feedback-${requestId}`}
         className="text-theme-text-muted mb-3 flex items-center gap-2 text-xs font-semibold tracking-wider uppercase"
       >
-        <MessageSquareHeart className="h-4 w-4" aria-hidden="true" />
+        <MessageSquare className="h-4 w-4" aria-hidden="true" />
         Requester feedback
       </h3>
       {error ? (

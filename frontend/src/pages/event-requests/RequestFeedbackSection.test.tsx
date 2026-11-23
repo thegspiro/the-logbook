@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 const getRequestFeedback = vi.fn();
-vi.mock('../../services/api', () => ({
-  eventRequestService: { getRequestFeedback: (...args: unknown[]) => getRequestFeedback(...args) as unknown },
+vi.mock('../../services/outreachFeedbackServices', () => ({
+  outreachFeedbackService: { getRequestFeedback: (...args: unknown[]) => getRequestFeedback(...args) as unknown },
 }));
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
 

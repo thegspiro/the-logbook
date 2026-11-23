@@ -670,18 +670,6 @@ export const eventService = {
     const response = await api.patch<import('../types/event').EventModuleSettings>('/events/settings', data);
     return response.data;
   },
-  /** Published forms that can be the outreach feedback form (events.manage). */
-  async getFeedbackFormOptions(): Promise<import('../types/event').FeedbackFormOption[]> {
-    const response = await api.get<import('../types/event').FeedbackFormOption[]>('/events/settings/feedback-forms');
-    return asArray(response.data);
-  },
-  /** Create the starter feedback form and make it the department's; repeats return the same form. */
-  async createStarterFeedbackForm(): Promise<{ form_id: string; form_name: string; rating_field_id: string | null }> {
-    const response = await api.post<{ form_id: string; form_name: string; rating_field_id: string | null }>(
-      '/events/settings/feedback-forms/starter'
-    );
-    return response.data;
-  },
   /** Positions by name, for the attendance-request fallback (events.manage). */
   async getFallbackPositionOptions(): Promise<import('../types/event').EventPositionOption[]> {
     const response = await api.get<import('../types/event').EventPositionOption[]>('/events/settings/position-options');
@@ -926,28 +914,6 @@ export const eventRequestService = {
     const response = await api.patch<{ message: string; status: string }>(
       `/event-requests/${requestId}/postpone`,
       data
-    );
-    return response.data;
-  },
-  async getPublicFeedbackForm(token: string): Promise<import('../types/event').PublicFeedbackForm> {
-    const response = await api.get<import('../types/event').PublicFeedbackForm>(
-      `/event-requests/status/${token}/feedback`
-    );
-    return response.data;
-  },
-  async sendPublicFeedback(
-    token: string,
-    data: Record<string, string>
-  ): Promise<{ submitted_at: string; message: string }> {
-    const response = await api.post<{ submitted_at: string; message: string }>(
-      `/event-requests/status/${token}/feedback`,
-      { data }
-    );
-    return response.data;
-  },
-  async getRequestFeedback(requestId: string): Promise<import('../types/event').EventRequestFeedback | null> {
-    const response = await api.get<import('../types/event').EventRequestFeedback | null>(
-      `/event-requests/${requestId}/feedback`
     );
     return response.data;
   },

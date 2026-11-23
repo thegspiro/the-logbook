@@ -10,8 +10,8 @@ vi.mock('../../hooks/useRanks', () => ({
 }));
 // The section holds the feedback form setting, which loads the department's
 // published forms; none are needed for the coordinator tests here.
-vi.mock('../../services/api', () => ({
-  eventService: { getFeedbackFormOptions: () => Promise.resolve([]) },
+vi.mock('../../services/outreachFeedbackServices', () => ({
+  outreachFeedbackService: { getFeedbackFormOptions: () => Promise.resolve([]) },
 }));
 
 const members: OrgMember[] = [

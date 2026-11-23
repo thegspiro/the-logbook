@@ -6,8 +6,8 @@ import type { RequestPipelineSettings } from '../../types/event';
 
 const getFeedbackFormOptions = vi.fn();
 const createStarterFeedbackForm = vi.fn();
-vi.mock('../../services/api', () => ({
-  eventService: {
+vi.mock('../../services/outreachFeedbackServices', () => ({
+  outreachFeedbackService: {
     getFeedbackFormOptions: (...args: unknown[]) => getFeedbackFormOptions(...args) as unknown,
     createStarterFeedbackForm: (...args: unknown[]) => createStarterFeedbackForm(...args) as unknown,
   },

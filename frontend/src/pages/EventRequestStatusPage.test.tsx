@@ -7,9 +7,14 @@ const checkPublicStatus = vi.fn();
 vi.mock('../services/api', () => ({
   eventRequestService: {
     checkPublicStatus: (...args: unknown[]) => checkPublicStatus(...args) as unknown,
+    getOutreachTypeLabels: () => Promise.resolve({ fire_safety_demo: 'Fire Safety Demo' }),
+  },
+}));
+
+vi.mock('../services/outreachFeedbackServices', () => ({
+  outreachFeedbackService: {
     getPublicFeedbackForm: () =>
       Promise.resolve({ form_name: 'Outreach feedback', contact_name: 'Pat Rivera', fields: [] }),
-    getOutreachTypeLabels: () => Promise.resolve({ fire_safety_demo: 'Fire Safety Demo' }),
   },
 }));
 

@@ -10,8 +10,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { MessageSquareHeart } from 'lucide-react';
-import { eventService } from '../../services/api';
+import { MessageSquare } from 'lucide-react';
+import { outreachFeedbackService } from '../../services/outreachFeedbackServices';
 import type { FeedbackFormOption, RequestPipelineSettings } from '../../types/event';
 import { getErrorMessage } from '../../utils/errorHandling';
 
@@ -29,7 +29,7 @@ const FeedbackFormSetting: React.FC<Props> = ({ pipeline, saving, onSave }) => {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      setOptions(await eventService.getFeedbackFormOptions());
+      setOptions(await outreachFeedbackService.getFeedbackFormOptions());
     } catch (err: unknown) {
       setLoadError(getErrorMessage(err, 'The forms could not be loaded'));
     }
@@ -46,7 +46,7 @@ const FeedbackFormSetting: React.FC<Props> = ({ pipeline, saving, onSave }) => {
   const createStarter = async () => {
     setCreating(true);
     try {
-      const made = await eventService.createStarterFeedbackForm();
+      const made = await outreachFeedbackService.createStarterFeedbackForm();
       await load();
       // The server already saved the choice; mirror it so the screen agrees.
       onSave({ feedback_form_id: made.form_id, feedback_rating_field_id: made.rating_field_id });
@@ -61,7 +61,7 @@ const FeedbackFormSetting: React.FC<Props> = ({ pipeline, saving, onSave }) => {
   return (
     <div className="border-theme-surface-border border-t py-3">
       <div className="mb-1 flex items-center gap-2">
-        <MessageSquareHeart className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
+        <MessageSquare className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
         <p className="text-theme-text-primary text-sm font-medium">Feedback From Requesters</p>
       </div>
       <p className="text-theme-text-muted mb-3 text-xs">

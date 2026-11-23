@@ -5,8 +5,8 @@ import type { PublicFeedbackForm } from '../../types/event';
 
 const getPublicFeedbackForm = vi.fn();
 const sendPublicFeedback = vi.fn();
-vi.mock('../../services/api', () => ({
-  eventRequestService: {
+vi.mock('../../services/outreachFeedbackServices', () => ({
+  outreachFeedbackService: {
     getPublicFeedbackForm: (...args: unknown[]) => getPublicFeedbackForm(...args) as unknown,
     sendPublicFeedback: (...args: unknown[]) => sendPublicFeedback(...args) as unknown,
   },
