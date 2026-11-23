@@ -918,6 +918,21 @@ read-only roster with filters, not a form. Not converted, and still listed in
 reports, eligibility, outside apparatus, notifications, platoons, and the
 defaults cards under the footer's Save Settings).
 
+**Rolled out further on 2026-11-23** (training batch E, part 1): the
+requirement editor, opened from Training Admin's requirements page and from
+Programs' Requirements tab, and the skill template builder. The same rules
+apply. A new requirement or template is created only once every flagged field
+is fixed. An edited requirement saved for everyone saves the rest; a refused
+target keeps the stored type and target together, and a save for new members
+only, which makes a new copy, saves whole or not at all. An edited template
+saves its settings and keeps the stored sheet while any section or criterion
+is flagged, because the sheet is replaced whole on every save; Publish stays
+refused until every error is fixed. Default taken: the builder's sheet rules
+the API does not enforce (a checklist step with no item, a statement with no
+text, a deduction with no points to come off) still hold the sheet back on
+Save, not only on Publish, as they did before; making them Publish-only would
+let a draft store steps that score nothing, and is the owner's to decide.
+
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
 
