@@ -132,6 +132,7 @@ from app.schemas.attendance_waiver import (
     POLICY_SECTION,
     AttendanceWaiverPolicy,
     CapPeriod,
+    QueueState,
     policy_from_settings,
 )
 from app.services.attendance_waiver_email_service import (
@@ -1880,8 +1881,14 @@ class AttendanceWaiverService:
         status: Optional[AttendanceWaiverStatus] = None,
         skip: int = 0,
         limit: int = 50,
+        state: Optional[QueueState] = None,
     ) -> Tuple[List[AttendanceWaiverRequest], int]:
-        """The requests ``actor`` may decide or has decided, newest first."""
+        """The requests ``actor`` may decide or has decided, newest first.
+
+        ``state`` "pending" or "decided" (every other status) splits the queue
+        here, so each list's ``total`` and pages count only its own rows; a
+        client dropping pending rows from an unfiltered page came up short.
+        """
         org_id = str(organization_id)
         policy = await self.get_policy(org_id)
         pool = await self._pool(org_id, policy)
@@ -1893,6 +1900,14 @@ class AttendanceWaiverService:
         ]
         if status is not None:
             conditions.append(AttendanceWaiverRequest.status == status)
+        if state == "pending":
+            conditions.append(
+                AttendanceWaiverRequest.status == AttendanceWaiverStatus.PENDING
+            )
+        elif state == "decided":
+            conditions.append(
+                AttendanceWaiverRequest.status != AttendanceWaiverStatus.PENDING
+            )
         total = (
             await self.db.execute(
                 select(func.count(AttendanceWaiverRequest.id)).where(*conditions)

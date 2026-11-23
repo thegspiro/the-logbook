@@ -48,7 +48,13 @@ describe('AttendanceWaiverQueuePage — a moved session', () => {
   it('badges the rows that wait on their member to confirm the new date', async () => {
     const waiting = request('w1', { reconfirm_requested_at: '2026-11-13T12:00:00Z', can_decide: false });
     const ready = request('r1');
-    mockList.mockResolvedValue({ items: [waiting, ready], total: 2, skip: 0, limit: 200 });
+    mockList.mockImplementation((params: { state?: string }) =>
+      Promise.resolve(
+        params.state === 'pending'
+          ? { items: [waiting, ready], total: 2, skip: 0, limit: 50 }
+          : { items: [], total: 0, skip: 0, limit: 50 }
+      )
+    );
     renderWithRouter(<AttendanceWaiverQueuePage />);
 
     const waitingRow = await screen.findByRole('link', { name: /Member w1/ });

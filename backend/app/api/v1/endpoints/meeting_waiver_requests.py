@@ -74,6 +74,7 @@ from app.schemas.attendance_waiver import (
     AttendanceWaiverRequestPage,
     AttendanceWaiverRequestResponse,
     AttendanceWaiverSubmit,
+    QueueState,
     member_policy,
 )
 from app.services.attendance_waiver_service import AttendanceWaiverService
@@ -249,6 +250,7 @@ async def list_my_meeting_waiver_requests(
 @router.get("", response_model=AttendanceWaiverRequestPage)
 async def list_meeting_waiver_requests(
     status_filter: Optional[AttendanceWaiverStatus] = Query(None, alias="status"),
+    state: Optional[QueueState] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=MAX_PAGE),
     db: AsyncSession = Depends(get_db),
@@ -256,14 +258,15 @@ async def list_meeting_waiver_requests(
 ):
     """
     The business-meeting requests the caller may decide or has decided,
-    newest first, filtered by status.
+    newest first, filtered by status, or by ``state``: "pending" or
+    "decided" (every other status), with ``total`` counting only that state.
 
     **Authentication required**
     """
     service = _service(db)
     org_id = str(current_user.organization_id)
     requests, total = await service.list_for_decider(
-        org_id, current_user, status_filter, skip=skip, limit=limit
+        org_id, current_user, status_filter, skip=skip, limit=limit, state=state
     )
     return AttendanceWaiverRequestPage(
         items=[

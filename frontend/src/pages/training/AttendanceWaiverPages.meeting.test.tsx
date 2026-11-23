@@ -65,7 +65,14 @@ describe('the waiver queue on the meeting workflow', () => {
   beforeEach(() => {
     meeting.list.mockReset();
     training.list.mockReset();
-    meeting.list.mockResolvedValue({ items: [request()], total: 1, skip: 0, limit: 50 });
+    // The queue asks for pending and decided separately (`state`).
+    meeting.list.mockImplementation((params: { state?: string }) =>
+      Promise.resolve(
+        params.state === 'pending'
+          ? { items: [request()], total: 1, skip: 0, limit: 50 }
+          : { items: [], total: 0, skip: 0, limit: 50 }
+      )
+    );
   });
 
   it('lists the meeting API’s requests and links each to its meeting decision page', async () => {

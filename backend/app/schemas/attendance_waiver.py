@@ -51,6 +51,9 @@ DeadlinePreset = Literal["before_start", "24h_after_end", "7d_after_end"]
 CapPeriod = Literal["calendar_year", "rolling_12_months"]
 ReasonTextMode = Literal["off", "optional", "required"]
 AttachmentMode = Literal["off", "optional", "required"]
+# The approver queue's two lists: waiting for a decision, and everything else
+# (approved, denied, and closed without a decision).
+QueueState = Literal["pending", "decided"]
 
 # Owner decisions, 2026-11-10: PDF, JPEG, PNG or HEIC; 10 MB each; at most
 # three per request; kept 365 days after the decision unless the department
