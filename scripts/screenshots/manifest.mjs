@@ -9201,6 +9201,75 @@ export const SHOTS = [
 
   // ── 02 Training ─────────────────────────────────────────────────────
   {
+    // This year's review for Ingrid Solberg (seed_backlog_02_evaluations),
+    // drafted on the template version with a calibration step, which shows
+    // Assign while pending. The dialog is opened and nothing is chosen.
+    id: "02-144-evaluation-step-assign",
+    doc: "02-training.md",
+    line: 5800,
+    anchor: "__placed-by-hand-02-144__",
+    alt: "An evaluation's page with the Who takes “Calibration” dialog open from the Assign button on the step list's Calibration step: who can and cannot be named, the Completed by list still on No one named, and Cancel beside a greyed button",
+    route: "/reports/evaluations",
+    viewport: { width: 1440, height: 1000 },
+    expect: "Who takes “Calibration”",
+    allowEmptyState:
+      '"No longer applies" belongs to the evaluation form behind the dialog, not an empty page.',
+    prepare: async (page, helpers) => {
+      await openFirstFromApi(
+        "/evaluations",
+        (id) => `/reports/evaluations/${id}`,
+        "evaluations",
+        (e) => e.member?.name === "Ingrid Solberg" && e.period_name === "2026",
+      )(page, helpers);
+      await page
+        .getByRole("button", { name: "Assign Calibration" })
+        .click({ timeout: 20_000 });
+      await page.getByText("Who takes “Calibration”").waitFor();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // The same review's Last review card: last year's finalized review for
+    // the same member on the same form, with the goal it set.
+    id: "02-145-evaluation-last-review",
+    doc: "02-training.md",
+    line: 5824,
+    anchor: "__placed-by-hand-02-145__",
+    alt: "The Last review card on this year's evaluation: last year's period, its overall grade and each section's grade, the goal set then under Goals set then, and Open the last review",
+    route: "/reports/evaluations",
+    expect: "Goals set then",
+    selector: "section[aria-labelledby='previous-review-heading']",
+    prepare: openFirstFromApi(
+      "/evaluations",
+      (id) => `/reports/evaluations/${id}`,
+      "evaluations",
+      (e) => e.member?.name === "Ingrid Solberg" && e.period_name === "2026",
+    ),
+  },
+  {
+    // Last year's period chosen: three of its four reviews finalized, with
+    // their grades, as the administrator, who holds evaluations.view_all.
+    id: "02-146-evaluation-period-results",
+    doc: "02-training.md",
+    line: 5843,
+    anchor: "__placed-by-hand-02-146__",
+    alt: "Evaluations I conduct with the 2025 period chosen: the Period results card reading 3 of 4 complete with how many stand at each grade and Export CSV, above the list with its Overall grade column, blank for the review still in progress",
+    route: "/reports/evaluations/conduct",
+    viewport: { width: 1440, height: 1200 },
+    expect: "Period results",
+    prepare: async (page) => {
+      await page
+        .locator("#evaluation-period")
+        .selectOption({ label: "2025" }, { timeout: 20_000 });
+      await page.getByText("Period results").waitFor();
+      await page.waitForTimeout(800);
+    },
+  },
+  {
     id: "02-01-my-training",
     expect: "Required Training",
     doc: "02-training.md",

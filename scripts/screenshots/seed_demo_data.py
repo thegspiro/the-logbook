@@ -8262,6 +8262,242 @@ class Seeder:
             self._stage_closeout_attendance(shift_id, crew, start_at, end_at)
         return shift
 
+    EVALUATION_TEMPLATE = "Annual Member Evaluation"
+    EVALUATION_LAST_PERIOD = "2025"
+    EVALUATION_THIS_PERIOD = "2026"
+    # (username, rating for the plainly rated items, rating for the three
+    # data-backed ones, finalize). Different ratings give different grades on
+    # Period results; the fourth stays in progress, so it reads 3 of 4.
+    EVALUATION_LAST_YEAR = (
+        ("isolberg", 4, 4, True),
+        ("smarchetti", 3, 3, True),
+        ("mbell", 3, 2, True),
+        ("ytanaka", 3, 3, False),
+    )
+    # This year's review, in progress, whose page carries Assign on its
+    # calibration step and the Last review card from last year's.
+    EVALUATION_REVIEWED_MEMBER = "isolberg"
+    EVALUATION_GOAL_TEXT = "Complete the driver-operator course before summer."
+
+    def _evaluation_part(self, plain: int, data: int, goal: str) -> dict:
+        """An evaluator's part for the annual starter, complete enough to submit.
+
+        No item is rated 1, 2 or 5 where the form asks for an example then, and
+        the three items with a figure behind them carry a justification, which
+        a rating that differs from the suggested one requires.
+        """
+        reason = "Discussed with the member at the review."
+        answers = {
+            "training_participation": {"rating": data, "justification": reason},
+            "training_requirements": {"rating": data, "justification": reason},
+            "meeting_attendance": {"rating": data, "justification": reason},
+            "certifications": {"text": "EMT and CPR current all year."},
+            "scene_performance": {"rating": plain},
+            "safety": {"rating": max(plain, 3)},
+            "duty_participation": {"rating": plain},
+            "teamwork": {"rating": plain},
+            "conduct": {"rating": plain},
+            "strengths": {"text": "Steady on the fireground and a good teacher."},
+            "development_areas": {"text": "Take on more of the station paperwork."},
+            "goals": {
+                "goals": [
+                    {
+                        "id": "goal-1",
+                        "text": goal,
+                        "target_date": f"{TODAY.year}-06-30",
+                    }
+                ]
+            },
+        }
+        return {"content": {"answers": answers}}
+
+    def _evaluation_steps(self, evaluation_id: str) -> tuple[dict, dict[str, str]]:
+        detail = self.api.get(f"/evaluations/{evaluation_id}")
+        steps = {
+            str(pick(st, "key")): str(pick(st, "status"))
+            for st in pick(detail, "steps") or []
+        }
+        return detail, steps
+
+    def seed_backlog_02_evaluations(self) -> dict[str, str]:
+        """Annual evaluations for guide 02's Assign, Last review and Period results.
+
+        Nothing else seeds the evaluations module. The annual starter is
+        published as version 1 and last year's reviews are taken through it to
+        finalized: the administrator writes and submits the evaluator part (the
+        member's self-evaluation is skipped, its deadline long past), then each
+        member signs their acknowledgement in their own session, which only
+        they can. Version 2 adds a calibration step, because Assign shows only
+        on a calibration or approval step and the starter has neither, and
+        this year's review for one of them is drafted on it and left in
+        progress. Every part is found again before it is made, so a re-run
+        carries on where an earlier one stopped and adds nothing once done.
+        """
+        result: dict[str, str] = {}
+        templates = items(self.api.get("/evaluations/templates"), "templates")
+        template = next(
+            (t for t in templates if pick(t, "name") == self.EVALUATION_TEMPLATE), None
+        )
+        if template is None:
+            template = self.api.post(
+                "/evaluations/templates",
+                {
+                    "name": self.EVALUATION_TEMPLATE,
+                    "kind": "annual",
+                    "starter": "annual_member",
+                },
+            )
+            self._publish_evaluation_template(str(pick(template, "id")))
+            result["template"] = "published"
+        template_id = str(pick(template, "id"))
+
+        periods = {
+            pick(pr, "name"): pr
+            for pr in items(self.api.get("/evaluations/periods"), "periods")
+        }
+        for name, year in (
+            (self.EVALUATION_LAST_PERIOD, TODAY.year - 1),
+            (self.EVALUATION_THIS_PERIOD, TODAY.year),
+        ):
+            if name not in periods:
+                periods[name] = self.api.post(
+                    "/evaluations/periods",
+                    {
+                        "name": name,
+                        "start_date": f"{year}-01-01",
+                        "end_date": f"{year}-12-31",
+                    },
+                )
+        admin_id = str(pick(self.api.get("/auth/me"), "id"))
+        existing = items(self.api.get("/evaluations"), "evaluations")
+
+        def find(member_id: str, period: dict) -> dict | None:
+            return next(
+                (
+                    e
+                    for e in existing
+                    if str(pick(pick(e, "member") or {}, "id")) == member_id
+                    and str(pick(e, "period_id")) == str(pick(period, "id"))
+                ),
+                None,
+            )
+
+        last_period = periods[self.EVALUATION_LAST_PERIOD]
+        for username, plain, data, finalize in self.EVALUATION_LAST_YEAR:
+            member_id = self._user_id(username)
+            evaluation = find(member_id, last_period)
+            if evaluation is None:
+                evaluation = self.api.post(
+                    "/evaluations",
+                    {
+                        "member_id": member_id,
+                        "period_id": pick(last_period, "id"),
+                        "evaluator_id": admin_id,
+                        "template_id": template_id,
+                    },
+                )
+            evaluation_id = str(pick(evaluation, "id"))
+            detail, steps = self._evaluation_steps(evaluation_id)
+            if pick(detail, "status") == "finalized":
+                continue
+            if steps.get("evaluator") == "open":
+                goal = (
+                    self.EVALUATION_GOAL_TEXT
+                    if username == self.EVALUATION_REVIEWED_MEMBER
+                    else "Keep up the training hours."
+                )
+                self.api.put(
+                    f"/evaluations/{evaluation_id}/parts/evaluator",
+                    self._evaluation_part(plain, data, goal),
+                )
+                if not finalize:
+                    result[username] = "left in progress"
+                    continue
+                self.api.post(
+                    f"/evaluations/{evaluation_id}/parts/evaluator/submit", {}
+                )
+                detail, steps = self._evaluation_steps(evaluation_id)
+            if finalize and steps.get("member_acknowledgement") == "open":
+                member_api = Api(self.base_url)
+                member_api.login_as(username, DEMO_MEMBER_PASSWORD)
+                member_api.step_up()
+                me = member_api.get("/auth/me")
+                member_api.post(
+                    f"/evaluations/{evaluation_id}/sign",
+                    {
+                        "signed_name": (
+                            f"{pick(me, 'first_name')} {pick(me, 'last_name')}"
+                        ),
+                        "disposition": "acknowledged",
+                        "intent_confirmed": True,
+                    },
+                )
+                result[username] = "finalized"
+
+        if self._add_evaluation_calibration(template_id):
+            result["template v2"] = "calibration added"
+
+        this_period = periods[self.EVALUATION_THIS_PERIOD]
+        reviewed_id = self._user_id(self.EVALUATION_REVIEWED_MEMBER)
+        if find(reviewed_id, this_period) is None:
+            self.api.post(
+                "/evaluations",
+                {
+                    "member_id": reviewed_id,
+                    "period_id": pick(this_period, "id"),
+                    "evaluator_id": admin_id,
+                    "template_id": template_id,
+                },
+            )
+            result["this year"] = "drafted"
+        return result or {"evaluations": "already"}
+
+    def _publish_evaluation_template(self, template_id: str) -> None:
+        # A draft that is not ready answers 200 with published false and its
+        # errors, so the answer has to be read, not just the status.
+        outcome = self.api.post(f"/evaluations/templates/{template_id}/publish", {})
+        if not pick(outcome, "published"):
+            raise ApiError(
+                "POST",
+                f"/evaluations/templates/{template_id}/publish",
+                400,
+                str(pick(outcome, "errors")),
+            )
+
+    def _add_evaluation_calibration(self, template_id: str) -> bool:
+        """Publish a version with a calibration step after the evaluator's.
+
+        Named "calibration": the evaluation page finds the step by that key.
+        Due with the evaluator's step, since due days may not go down from one
+        step to the next. False when the published version already has one.
+        """
+        detail = self.api.get(f"/evaluations/templates/{template_id}")
+        published = pick(detail, "published") or {}
+        workflow = dict(pick(published, "workflow") or {})
+        steps = list(pick(workflow, "steps") or [])
+        if any(pick(st, "type") == "calibration" for st in steps):
+            return False
+        at = next(i for i, st in enumerate(steps) if pick(st, "key") == "evaluator")
+        steps.insert(
+            at + 1,
+            {
+                "key": "calibration",
+                "type": "calibration",
+                "label": "Calibration",
+                "actor": {"kind": "view_all"},
+                "due_days": pick(steps[at], "due_days"),
+            },
+        )
+        self.api.put(
+            f"/evaluations/templates/{template_id}/draft",
+            {
+                "definition": pick(published, "definition"),
+                "workflow": {**workflow, "steps": steps},
+            },
+        )
+        self._publish_evaluation_template(template_id)
+        return True
+
     OFFICER_CLOSEOUT_NOTE = "Shift officer close-out fixture"
     # A firefighter running the shift: Shift Officer without scheduling.manage,
     # which every officer rank in the demo holds. Must match
@@ -22417,6 +22653,7 @@ class Seeder:
         )
         self.step("guide 03 scheduling states", self.seed_guide03_scheduling)
         self.step("backlog 03 officer close-out", self.seed_backlog_03_officer_closeout)
+        self.step("backlog 02 evaluations", self.seed_backlog_02_evaluations)
         self.step("label printers", self.seed_label_printers)
         self.step("id cards", self.seed_id_cards)
         self.step("card taps", self.seed_card_taps)

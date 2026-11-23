@@ -5807,6 +5807,8 @@ back**. Each change is recorded in the audit log. An amendment starts its new
 revision with no one named. A position holder replaced by a name no longer sees
 the evaluation unless they have another part in it.
 
+![An evaluation's page with the Who takes “Calibration” dialog open from the Assign button on the step list's Calibration step: who can and cannot be named, the Completed by list still on No one named, and Cancel beside a greyed button](./images/02-144-evaluation-step-assign.png)
+
 > **After the upgrade:** an evaluation already waiting on an approval whose
 > only position holder is its own evaluator stays open until a manager names
 > someone.
@@ -5826,6 +5828,8 @@ evaluator who is not allowed to read last year's review (because someone else
 wrote it and they do not hold `evaluations.view_all`) does not get it. The card
 is not printed on the PDF, which records this review alone.
 
+![The Last review card on this year's evaluation: last year's period, its overall grade and each section's grade, the goal set then under Goals set then, and Open the last review](./images/02-145-evaluation-last-review.png)
+
 ### Period results and export _(2026-11-20)_
 
 On **Evaluations I conduct** / **All evaluations**, a **Period** list beside
@@ -5843,6 +5847,8 @@ On **Evaluations I conduct** / **All evaluations**, a **Period** list beside
 `evaluations.manage` alone does not show grades: a manager runs the process
 without reading what is in the evaluations. Your own evaluation is left out of
 both the list and the export.
+
+![Evaluations I conduct with the 2025 period chosen: the Period results card reading 3 of 4 complete with how many stand at each grade and Export CSV, above the list with its Overall grade column, blank for the review still in progress](./images/02-146-evaluation-period-results.png)
 
 ### Figures on the form _(2026-11-14)_
 
