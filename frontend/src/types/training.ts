@@ -2395,6 +2395,12 @@ export interface RequirementDetail {
    * certificate never expires, and for every other type.
    */
   expiry_date?: string | null;
+  /**
+   * True when the department withholds certification status from members:
+   * `expiry_date`, `cert_expired` and `blocks_activity` were left out, so a
+   * certification reads as its count rather than as a state.
+   */
+  certification_status_hidden?: boolean;
   blocks_activity?: boolean;
   /**
    * Set while an existing member's catch-up period runs and the requirement is

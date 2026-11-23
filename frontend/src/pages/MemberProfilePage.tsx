@@ -20,6 +20,7 @@ import {
   userService,
   organizationService,
   trainingService,
+  trainingModuleConfigService,
   inventoryService,
   memberStatusService,
 } from '../services/api';
@@ -54,7 +55,7 @@ import type {
   EmergencyContact,
   UserProfileUpdate,
 } from '../types/user';
-import type { TrainingRecord, ComplianceSummary } from '../types/training';
+import type { TrainingRecord, ComplianceSummary, RequirementDetail } from '../types/training';
 import { AVAILABLE_MODULES } from '../types/modules';
 import { MAX_AVATAR_SIZE } from '../constants/config';
 import { ANONYMIZABLE_STATUSES, SEPARATED_STATUSES, UserStatus } from '../constants/enums';
@@ -185,6 +186,7 @@ export const MemberProfilePage: React.FC = () => {
   const [trainings, setTrainings] = useState<TrainingRecord[]>([]);
   const [trainingsLoading, setTrainingsLoading] = useState(false);
   const [complianceSummary, setComplianceSummary] = useState<ComplianceSummary | null>(null);
+  const [memberRequirements, setMemberRequirements] = useState<RequirementDetail[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [activeLeaves, setActiveLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
@@ -284,6 +286,22 @@ export const MemberProfilePage: React.FC = () => {
     }
   }, []);
 
+  // The member's graded requirements, for the certifications list. On one's
+  // own profile they come from My Training's endpoint, which applies the
+  // department's visibility settings; an officer reads the member through the
+  // training.manage endpoint the officer's member view uses. A failure only
+  // hides the list.
+  const fetchMemberRequirements = React.useCallback(async (uid: string, self: boolean) => {
+    try {
+      const details = self
+        ? ((await trainingModuleConfigService.getMyTraining()).requirements_detail ?? [])
+        : (await trainingModuleConfigService.getMemberRequirements(uid)).requirements_detail;
+      setMemberRequirements(details);
+    } catch {
+      setMemberRequirements([]);
+    }
+  }, []);
+
   const fetchLeaves = React.useCallback(async (uid: string) => {
     try {
       const data = await memberStatusService.getMemberLeaves(uid);
@@ -349,6 +367,7 @@ export const MemberProfilePage: React.FC = () => {
       if (trainingEnabled && canViewTargetTraining) {
         void fetchTrainingRecords(userId);
         void fetchComplianceSummary(userId);
+        void fetchMemberRequirements(userId, isSelf);
       }
     }
   }, [
@@ -363,6 +382,7 @@ export const MemberProfilePage: React.FC = () => {
     fetchLeaves,
     fetchAdminHours,
     fetchTrainingRecords,
+    fetchMemberRequirements,
     fetchComplianceSummary,
   ]);
 
@@ -1044,6 +1064,7 @@ export const MemberProfilePage: React.FC = () => {
                   trainings={trainings}
                   trainingsLoading={trainingsLoading}
                   complianceSummary={complianceSummary}
+                  requirements={memberRequirements}
                   tz={tz}
                 />
               )}
