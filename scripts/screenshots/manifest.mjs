@@ -22530,7 +22530,7 @@ export const SHOTS = [
     line: 548,
     anchor:
       "Scheduling Admin → Settings → Outside Apparatus → one department with two units",
-    alt: "Scheduling Settings on Outside Apparatus: Township Fire Company with Engine 21 on and Tanker 23 switched off, a second department below, each department with its edit, merge and delete buttons, and the Add a department field",
+    alt: "Scheduling Settings on Outside Apparatus: the Add a department field above Lakeside Volunteer Rescue with Ambulance 58, and Township Fire Company with Engine 21 on and Tanker 23 switched off and marked hidden from members; each department has its on/off switch, edit, merge and delete buttons and an Evaluate shifts box",
     route: "/scheduling/admin/settings/outside-apparatus",
     fullPage: true,
     expect: "Tanker 23",
@@ -22861,8 +22861,8 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 5007,
     anchor:
-      "A draft import's Rows tab on Need attention: two of Gary Whitmore's E-2 rows",
-    alt: "A draft import's Rows tab on Need attention, filtered to Overlapping times: Gary Whitmore's two E-2 rows, the night shift and the next morning's 06:00 entry, each with its date, start and end as boxes and a Save button",
+      "A draft import's Rows tab on Need attention: two of Sofia Marchetti's E-2 rows",
+    alt: "A draft import's Rows tab on Need attention, filtered to Overlapping times: Sofia Marchetti's two E-2 rows, the night shift and the next morning's 06:00 entry, each with its date, start and end as boxes and a Save button",
     route: "/scheduling/admin/history-import",
     fullPage: true,
     expect: { selector: 'form[aria-label^="Date and times for line"]' },

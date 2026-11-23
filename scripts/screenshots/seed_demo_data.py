@@ -9238,10 +9238,12 @@ class Seeder:
         has but under a name it does not, for adding a unit under a picked
         department. Two more put a crew on E-1 half an hour off the shift
         ``_seed_history_import_existing_shift`` scheduled, for the Shifts
-        tab's "Add to that shift" question, and one gives Gary Whitmore a
-        second E-2 row that overlaps his night shift, for the Rows tab's inline
-        Save times. Each is on a member already in the file, so the Members
-        tab is unchanged.
+        tab's "Add to that shift" question, and one gives Sofia Marchetti a
+        second E-2 row that overlaps her night shift, for the Rows tab's inline
+        date and time editor. It has to be a member the file matches: rows on
+        an unmatched name (Gary Whitmore, no longer on the roster) are never
+        joined, so they cannot overlap. Each is on a member already in the
+        file, so the Members tab is unchanged.
         """
         drafts = items(self.api.get("/scheduling/history-import"), "imports")
         if any(
@@ -9375,10 +9377,10 @@ class Seeder:
                 "2",
             ),
             (
-                "Gary Whitmore",
+                "Sofia Marchetti",
                 "E-2",
                 "",
-                "Firefighter",
+                "Driver",
                 "2026-08-06",
                 "06:00",
                 "10:00",

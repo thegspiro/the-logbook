@@ -738,7 +738,7 @@ You need to be able to manage schedules for both of these.
   decide each of them. Shifts an officer imports from a shift history file
   count as before.
 
-![Scheduling Settings on Outside Apparatus: Township Fire Company with Engine 21 on and Tanker 23 switched off, a second department below, and the Add a department field](./images/03-110-outside-apparatus-settings.png)
+![Scheduling Settings on Outside Apparatus: the Add a department field above Lakeside Volunteer Rescue with Ambulance 58, and Township Fire Company with Engine 21 on and Tanker 23 switched off and marked hidden from members; each department has its on/off switch, edit, merge and delete buttons and an Evaluate shifts box](./images/03-110-outside-apparatus-settings.png)
 
 ![Member Hours scrolled to Outside apparatus staffed, one row per outside unit with its shifts, hours and members, and below it Shifts with other departments with a Reject button on each counted row](./images/03-111-member-hours-outside-tables.png)
 
@@ -5004,9 +5004,7 @@ rather than starting from zero. It needs `scheduling.manage`.
    step** under its shift hours step. See
    [Integrations > Undoing a step](./16-integrations.md#undoing-a-step).
 
-<!-- Screenshot needed:
-A draft import's Rows tab on Need attention: two of Gary Whitmore's E-2 rows flagged for overlapping times, their date, start and end as boxes with Save
--->
+![A draft import's Rows tab on Need attention, filtered to Overlapping times: Sofia Marchetti's two E-2 rows, the night shift and the next morning's 06:00 entry, each with its date, start and end as boxes and a Save button](./images/03-141-history-import-rows-overlap.png)
 
 How it reads your file: an end time at or before the start time means the shift
 crossed midnight; back-to-back entries for one member on one unit with a gap of
@@ -5027,9 +5025,7 @@ that shift shows "Decided: add to the shift already on the schedule" (or
 so a wrong click no longer means discarding the draft and its other decisions.
 A match of 90% or more is joined without asking and has nothing to undo.
 
-<!-- Screenshot needed:
-A draft import's Shifts tab: the E-1 shift a 75% match for the one already on the schedule, answered Add to that shift, reading "You chose to add these members to that shift." with Undo
--->
+![A draft import's Shifts tab: the proposed E-1 shift on August 7, a 75% match for the shift already on the schedule, answered Add to that shift and now reading "You chose to add these members to that shift." with an Undo link](./images/03-139-history-import-existing-undo.png)
 
 **Remembered decisions.** Departments usually import over several files from the
 same old system. Once an import is committed, its member, unit and position
