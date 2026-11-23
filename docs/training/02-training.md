@@ -1387,6 +1387,16 @@ These actions credit pipeline progress without anyone editing the enrollment:
 > is processed again — a course synced twice, a report filed again, a
 > submission approved again — it is recognized and **not** credited twice.
 
+> **A correction can reopen a requirement** _(2026-11-23)_. If a shift report
+> is corrected, a training session is finalized again, or a credited record is
+> voided, and that leaves a member below a requirement they had completed, the
+> requirement goes back to **In Progress**. Training officers get an email and
+> a notification. Nothing else changes: certificates already issued stand, the
+> program stays completed if it was, and any phase the member reached is kept.
+> A correction that still leaves them at or above the target changes nothing.
+> A requirement a training officer marked **Verified** or **Waived** is never
+> reopened this way.
+
 ### Viewing Your Own Progress (Members)
 
 On **Training > My Training**, find your program in **Pipeline Progress** and

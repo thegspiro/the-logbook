@@ -4951,11 +4951,26 @@ recorded here rather than built.
    and the credit waits. This also corrects the claim above: re-approval did
    **not** restate the credit (the ledger's idempotency skipped the new
    figure); it does now, through the same restating calculation. Covered by
-   `tests/test_shift_report_credit_restatement.py`. **Residual:** (a) the
-   ledger's numeric reversal never reopens a completed requirement, so an
-   edit that lowers hours below a target the report had met restates the
-   value and percentage but leaves the requirement completed (common to every
-   feed that restates, including a re-finalized training session); (b) the
+   `tests/test_shift_report_credit_restatement.py`. **Residual:** (a) ✅
+   **resolved, owner decision 2026-11-23 ("lowered hours reopen a completed
+   program requirement").** A correction that takes a member below a
+   requirement they had completed — a shift report edited, a training session
+   re-finalized, a credited record voided — moves the requirement back to in
+   progress and clears `completed_at`
+   (`TrainingProgramService._reopen_if_below_target`), and the training
+   officers get the **Program Requirement Reopened** email (migration
+   `bfb747c095c3`) and a bell notice, once per reopening. **Nothing else is
+   changed:** certificates already issued stand, the enrollment stays
+   completed (the rollup's own reopen is skipped for these corrections, where
+   before this change it reopened a completed enrollment whose average fell),
+   and a phase the member advanced to is kept; the notice says so. A drop
+   that stays at or above the target changes nothing, and a later restore
+   completes the requirement again. _Defaults taken:_ only a COMPLETED row
+   reopens — VERIFIED and WAIVED are an officer's decision and stand; a
+   requirement with no numeric target (a certification, a checklist) is never
+   reopened this way; the officers told are those holding a training-officer
+   role, with no SMS. Tests: `tests/test_program_requirement_reopen.py`.
+   (b) the
    edit and the restatement share one request and session but not one
    database transaction, because the shared progress updater commits per
    requirement, as it does on approval; (c) competency is not stepped back
