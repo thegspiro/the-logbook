@@ -917,6 +917,28 @@ export const eventRequestService = {
     );
     return response.data;
   },
+  async getPublicFeedbackForm(token: string): Promise<import('../types/event').PublicFeedbackForm> {
+    const response = await api.get<import('../types/event').PublicFeedbackForm>(
+      `/event-requests/status/${token}/feedback`
+    );
+    return response.data;
+  },
+  async sendPublicFeedback(
+    token: string,
+    data: Record<string, string>
+  ): Promise<{ submitted_at: string; message: string }> {
+    const response = await api.post<{ submitted_at: string; message: string }>(
+      `/event-requests/status/${token}/feedback`,
+      { data }
+    );
+    return response.data;
+  },
+  async getRequestFeedback(requestId: string): Promise<import('../types/event').EventRequestFeedback | null> {
+    const response = await api.get<import('../types/event').EventRequestFeedback | null>(
+      `/event-requests/${requestId}/feedback`
+    );
+    return response.data;
+  },
   async publicCancelRequest(
     token: string,
     data: { reason?: string | undefined }

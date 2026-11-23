@@ -22,6 +22,7 @@ from pydantic import (
 from app.models.event_request import STAFF_ENTERED_SOURCES
 from app.schemas.base import UTCResponseBase, as_utc
 from app.schemas.member_audience import MemberAudiencePayload
+from app.schemas.membership_pipeline import PublicFollowUpFormField
 from app.services.member_audience import AudienceFilter
 
 
@@ -585,6 +586,41 @@ class EventRequestPublicStatus(UTCResponseBase):
     # Optionally visible pipeline progress (configurable per department)
     task_progress: Optional[Dict[str, Any]] = None
     can_cancel: bool = True
+    # Whether the requester can still send feedback (a Completed request, a
+    # feedback form set and published, none sent yet), and whether they have.
+    feedback_offered: bool = False
+    feedback_sent: bool = False
     # The department's IANA timezone. The requester's browser may be anywhere,
     # and the scheduled time is the department's local time.
     timezone: Optional[str] = None
+
+
+class PublicFeedbackForm(UTCResponseBase):
+    """The department's feedback form, as a requester's status page shows it."""
+
+    form_name: str
+    form_description: Optional[str] = None
+    organization_name: Optional[str] = None
+    contact_name: str
+    fields: List[PublicFollowUpFormField]
+
+
+class PublicFeedbackSent(UTCResponseBase):
+    submitted_at: datetime
+    message: str = "Thank you. Your feedback has been sent to the department."
+
+
+class FeedbackAnswer(BaseModel):
+    question: str
+    answer: str
+
+
+class EventRequestFeedbackResponse(UTCResponseBase):
+    """A request's feedback, as officers read it on the request."""
+
+    rating: Optional[int] = None
+    submitted_at: datetime
+    form_name: Optional[str] = None
+    answers: List[FeedbackAnswer]
+    # Answers to questions marked Sensitive stay with the submission in Forms.
+    sensitive_answers: int = 0

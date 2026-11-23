@@ -1333,6 +1333,29 @@ export interface EventRequestPublicStatus {
   decline_reason?: string;
   task_progress?: TaskProgressPublic;
   can_cancel: boolean;
+  /** A Completed request whose department asks for feedback, not yet given. */
+  feedback_offered?: boolean;
+  /** The requester has already sent their one response. */
+  feedback_sent?: boolean;
   /** The department's IANA timezone, which the page shows times in. */
   timezone?: string | null;
+}
+
+/** The department's feedback form, as the requester's status page shows it. */
+export interface PublicFeedbackForm {
+  form_name: string;
+  form_description?: string | null;
+  organization_name?: string | null;
+  contact_name: string;
+  fields: import('../components/forms/publicFormFields').PublicFormField[];
+}
+
+/** A request's feedback, as officers read it on the request. */
+export interface EventRequestFeedback {
+  rating: number | null;
+  submitted_at: string;
+  form_name: string | null;
+  answers: { question: string; answer: string }[];
+  /** Answers to Sensitive questions, kept with the submission in Forms. */
+  sensitive_answers: number;
 }

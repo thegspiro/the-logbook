@@ -12,13 +12,14 @@
  * - Postponed state display
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { ClipboardList, Clock, CheckCircle, XCircle, Calendar, Loader2, Pause } from 'lucide-react';
 import { eventRequestService } from '../services/api';
 import { formatCalendarDate, formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { EventRequestPublicStatus, EventRequestStatus } from '../types/event';
+import RequestFeedbackForm from './event-request-status/RequestFeedbackForm';
 
 const STATUS_STEPS: { key: EventRequestStatus; label: string; icon: React.ElementType }[] = [
   { key: 'submitted', label: 'Submitted', icon: ClipboardList },
@@ -86,6 +87,11 @@ const EventRequestStatusPage: React.FC = () => {
   const getOutreachLabel = (value: string): string => {
     return outreachLabels[value] || value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   };
+
+  // Stable, so the feedback form's load effect does not re-run on each render.
+  const markFeedbackSent = useCallback(() => {
+    setData((prev) => (prev ? { ...prev, feedback_offered: false, feedback_sent: true } : prev));
+  }, []);
 
   const handleCancel = async () => {
     if (!token) return;
@@ -315,6 +321,21 @@ const EventRequestStatusPage: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* Feedback, once the request is complete */}
+          {data.feedback_offered && token && (
+            <div className="border-theme-surface-border border-t p-6">
+              <RequestFeedbackForm token={token} onSent={markFeedbackSent} />
+            </div>
+          )}
+          {data.feedback_sent && (
+            <div className="border-theme-surface-border border-t p-6">
+              <p className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                <CheckCircle className="text-theme-accent-green h-4 w-4 shrink-0" aria-hidden="true" />
+                Thank you for your feedback. It has been sent to the department.
+              </p>
+            </div>
+          )}
 
           {/* Cancel action */}
           {data.can_cancel && !isTerminal && (
