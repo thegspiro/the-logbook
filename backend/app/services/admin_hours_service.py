@@ -28,11 +28,11 @@ from app.models.event import Event
 from app.models.user import Organization, User
 from app.services.import_provenance import admin_hours_imported, label_for
 from app.services.separation_of_duties import assert_different_person
+from app.services.training_compliance import admin_hours_profile
 from app.utils.admin_hours_settings import (
     load_admin_hours_review_settings,
     resync_growth_needs_review,
 )
-from app.utils.compliance_profiles import ordered_profiles
 from app.utils.csv_export import SafeCsvChunks, collect_csv
 from app.utils.hours import hours_from_minutes
 from app.utils.member_names import format_display_name
@@ -2344,7 +2344,7 @@ class AdminHoursService:
 
         Returns a list of requirement progress items with hours logged vs required.
         """
-        from app.models.compliance_config import ComplianceConfig, ComplianceProfile
+        from app.models.compliance_config import ComplianceConfig
         from app.models.user import User as UserModel
 
         # Get user to check membership type and roles.
@@ -2383,31 +2383,12 @@ class AdminHoursService:
         if not config:
             return []
 
-        # Find applicable profiles for this user
-        user_membership = user.membership_type
-        user_position_ids = [str(p.id) for p in (user.positions or [])]
-
-        applicable_profiles: List[ComplianceProfile] = []
-        for profile in config.profiles:
-            if not profile.is_active:
-                continue
-            if not profile.admin_hours_requirements:
-                continue
-
-            types = profile.membership_types or []
-            roles = profile.role_ids or []
-            matches_type = not types or user_membership in types
-            matches_role = not roles or any(r in user_position_ids for r in roles)
-            if matches_type and matches_role:
-                applicable_profiles.append(profile)
-
-        if not applicable_profiles:
+        # The profile that grades the member's training, or the next matching
+        # one with admin hours when it sets none (owner decision 2026-11-23).
+        # One resolver with grading: the same tie-break and "junior" chip.
+        best_profile = admin_hours_profile(user, config.profiles)
+        if best_profile is None:
             return []
-
-        # The first in the order grading resolves profiles in (higher
-        # priority, then older, then smaller id), so a tie is settled the same
-        # way here as on every compliance screen.
-        best_profile = ordered_profiles(applicable_profiles)[0]
         requirements = best_profile.admin_hours_requirements or []
 
         # A quarterly requirement only has a meaningful "current quarter" —
