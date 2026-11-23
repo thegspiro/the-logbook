@@ -11355,9 +11355,13 @@ each case):
   `user_anonymized` audit event). A later permanent delete of the anonymised
   member collects these kept entries again, which is the one retry path.
   `remove_member_attachments` and the applicant-document step drop the row
-  whatever happens to the file; this step does not, because anonymisation
-  refuses to run twice and a dropped reference would leave a file nothing
-  could find again. Nothing else retries these: retention
+  whatever happens to the file, and since 2026-11-23 (batch A item 1) queue a
+  file that would not delete on `pending_file_deletions` in the same
+  transaction, for the hourly sweep (`member_anonymization`, counted as
+  `attendance_waiver_files_queued` / `applicant_files_queued`). This step
+  keeps its entry instead, because anonymisation refuses to run twice and the
+  entry is how a later permanent delete finds the file. Nothing else retries
+  these kept entries: retention
   (`attachment_retention_days`) is opt-in and covers self-report certificates
   only, so a department that has not set it keeps the file until someone
   removes it by hand.
@@ -11441,11 +11445,33 @@ each case):
   lost 204 must not show the member a failure. **Still open:** a legacy index
   without `?expected_id=` keeps the old behaviour and is deprecated; the
   shipped screens send the id whenever the entry has one.
-- **File names on path-less entries survive anonymisation.** The
-  anonymisation step relabels only entries naming a stored file, so a
-  `{"file_name": ...}` entry with no `file_path` (what the 2026-11-20
-  migration made of the old bare strings) keeps the uploader's filename, which
-  can be the member's name, on their submissions and records.
+- ~~**File names on path-less entries survive anonymisation.**~~ **Resolved
+  2026-11-23** (batch A item 2): a `{"file_name": ...}` entry with no
+  `file_path` gets the same neutral label as a stored one (`certificate` on a
+  submission, `attachment` on a record, a plausible extension kept).
+  Migration `1f3a6c2d9e40` relabelled the entries of members anonymised
+  before; the names it replaced cannot be recovered.
+- ~~**Anonymisation turned excused meetings into absences.**~~ **Resolved
+  2026-11-23** (batch A item 3): it cleared `meeting_attendees.waiver_reason`,
+  which every attendance reader takes as the excusal. It now writes the
+  standard `Excused: approved request` with no category in its place.
+  Migration `1f3a6c2d9e40` restored the wording on rows of members anonymised
+  before, where `waiver_granted_at` or `waiver_request_id` shows a waiver.
+- ~~**Three workflows deleted training rows and left their files.**~~
+  **Resolved 2026-11-23** (batch A item 4): `void_event_records` deleting a
+  never-credited record, the historical import undo deleting imported records
+  and its drills' events, and a member deleting a submission now queue the
+  files those rows named on `pending_file_deletions` in the delete's own
+  transaction (`event_records_voided`, `historical_import_undone`,
+  `submission_deleted`). The submission delete processes its rows right after
+  the commit; the other two leave them to the hourly sweep. A file another row
+  still names is kept.
+- **Deleting an event leaves its attachment files.** `EventService.delete_event`
+  and the series delete remove the row and every `events.attachments` file it
+  named stays on the volume, named by nothing. Found while closing the drill
+  undo above, which now queues them for the drills it deletes; the ordinary
+  event delete was out of that change's scope. Open for an owner decision on
+  whether event deletes should queue their files the same way.
 - ~~**A training record's own uploaded file has no removal route.**~~
   **Resolved 2026-11-21** (owner decision 2026-11-21, (d)):
   `DELETE /training/records/{id}/attachments/{entry}` and a Remove button in
