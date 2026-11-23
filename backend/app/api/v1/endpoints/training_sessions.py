@@ -21,6 +21,7 @@ from app.api.dependencies import (
     require_permission,
     user_has_permission,
 )
+from app.api.draft_visibility import event_visible_clause
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -778,6 +779,9 @@ async def list_training_sessions_calendar(
     but can be filtered by hall coordinators via the events endpoint's
     `exclude_event_types=training` parameter.
 
+    A draft event's session is listed only to a caller who may see the draft:
+    `events.manage`, or `training.manage` for a Training event.
+
     **Authentication required**
     """
     query = (
@@ -787,6 +791,11 @@ async def list_training_sessions_calendar(
         .where(Event.is_cancelled == False)  # noqa: E712
         .options(selectinload(TrainingSession.event))
     )
+    # A draft's title and time are for those who may see the draft itself
+    # (owner decision 2026-11-23), the same rule GET /events/{id} applies.
+    visible = event_visible_clause(current_user)
+    if visible is not None:
+        query = query.where(visible)
 
     if start_after:
         query = query.where(Event.start_datetime >= start_after)

@@ -36,6 +36,7 @@ from app.api.dependencies import (
     require_permission,
     user_has_permission,
 )
+from app.api.draft_visibility import event_visible_clause
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -383,18 +384,23 @@ async def get_training_dashboard_summary(
         or 0
     )
 
-    session_rows = (
-        await db.execute(
-            select(TrainingSession, Event)
-            .join(Event, TrainingSession.event_id == Event.id)
-            .where(
-                TrainingSession.organization_id == org_id,
-                Event.start_datetime >= now,
-                Event.max_attendees.isnot(None),
-            )
-            .order_by(Event.start_datetime)
-            .limit(5)
+    capacity_query = (
+        select(TrainingSession, Event)
+        .join(Event, TrainingSession.event_id == Event.id)
+        .where(
+            TrainingSession.organization_id == org_id,
+            Event.start_datetime >= now,
+            Event.max_attendees.isnot(None),
         )
+    )
+    # The same draft rule as the training calendar (owner decision
+    # 2026-11-23): a training manager sees a Training draft, not another
+    # type's draft that kept a session.
+    visible = event_visible_clause(current_user)
+    if visible is not None:
+        capacity_query = capacity_query.where(visible)
+    session_rows = (
+        await db.execute(capacity_query.order_by(Event.start_datetime).limit(5))
     ).all()
     capacities = []
     for session, event in session_rows:
