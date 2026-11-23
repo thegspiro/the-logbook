@@ -199,6 +199,7 @@ _PLAIN_COLUMNS = [
     ("history_documents", "document_id", ["research_notes"]),
     ("history_apparatus", "id", ["research_notes"]),
     ("history_events", "id", ["research_notes"]),
+    ("history_articles", "id", ["research_notes"]),
     ("integrations", "id", ["encrypted_config"]),
     (
         "quickbooks_connections",

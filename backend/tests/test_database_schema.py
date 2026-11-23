@@ -514,6 +514,10 @@ class TestColumnConstraints:
             # period carries created_at, and a period's titles are rewritten
             # as a set on every save, so a separate stamp would equal it.
             "historical_member_period_titles",
+            # An article's body, in order. Rewritten as a set on every save
+            # for the same reason; the article carries created_at and
+            # updated_at, and its revisions record each body.
+            "history_article_blocks",
         }
         # Common timestamp column names
         timestamp_names = {

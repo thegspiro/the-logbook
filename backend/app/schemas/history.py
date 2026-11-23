@@ -409,7 +409,7 @@ class PositionOption(BaseModel):
 
 
 class ClearanceSubmit(BaseModel):
-    record_type: Literal["member", "media", "document", "apparatus", "event"]
+    record_type: Literal["member", "media", "document", "apparatus", "event", "article"]
     record_id: str
     purpose: ClearancePurpose = ClearancePurpose.PUBLIC
 
@@ -432,14 +432,15 @@ class ClearanceReview(BaseModel):
     """A request with the record as members would read it, for its reviewers."""
 
     request: ClearanceRequestResponse
-    #: A person, a photo/media item, a document, an apparatus or an event, as
-    #: members would read it; which one is ``request.record_type``.
+    #: A person, a photo/media item, a document, an apparatus, an event or an
+    #: article, as members would read it; which one is ``request.record_type``.
     record: Union[
         HistoricalMemberMemberView,
         "MediaMemberView",
         "DocumentMemberView",
         "ApparatusMemberView",
         "EventMemberView",
+        "ArticleMemberView",
     ]
 
 
@@ -1334,6 +1335,142 @@ class TimelineEntry(BaseModel):
 class TimelineDecade(BaseModel):
     decade: int
     count: int
+
+
+# --- Phase 6: articles ---
+
+ArticleBlockKindValue = Literal["text", "photo"]
+ArticlePhotoSizeValue = Literal["full", "half"]
+
+
+class ArticleSummary(BaseModel):
+    id: str
+    title: str
+    subtitle: Optional[str]
+    byline: Optional[str]
+    summary: Optional[str]
+    #: Only when the caller may see the cover photo.
+    cover: Optional[MediaSummary]
+    publication_level: PublicationLevel
+    updated_at: datetime
+
+
+class ArticleList(BaseModel):
+    items: list[ArticleSummary]
+    total: int
+
+
+class ArticleBlockView(BaseModel):
+    id: str
+    kind: ArticleBlockKindValue
+    #: A text block's sanitized HTML.
+    html: Optional[str]
+    #: A photo block's photo, when the caller may see it. In the editor's
+    #: view a photo since deleted or withdrawn is kept with ``media`` empty.
+    media: Optional[MediaSummary]
+    media_id: Optional[str] = None
+    caption: Optional[str]
+    size: ArticlePhotoSizeValue
+
+
+class ArticleMemberLink(BaseModel):
+    member_id: str
+    display_name: str
+
+
+class ArticleSource(BaseModel):
+    """An archive item the article draws on, for its Sources list."""
+
+    kind: Literal["document", "event", "photo"]
+    id: str
+    title: str
+
+
+class _ArticleCatalogue(BaseModel):
+    id: str
+    title: str
+    subtitle: Optional[str]
+    byline: Optional[str]
+    summary: Optional[str]
+    cover: Optional[MediaSummary]
+    citations: list[str]
+    publication_level: PublicationLevel
+    updated_at: datetime
+    blocks: list[ArticleBlockView]
+    #: Each link only where the caller may read the record it points at.
+    members: list[ArticleMemberLink]
+    events: list[EventSummary]
+    apparatus: list[ApparatusTag]
+    documents: list[DocumentSummary]
+    sources: list[ArticleSource]
+
+
+class ArticleMemberView(_ArticleCatalogue):
+    view: Literal["member"] = "member"
+
+
+class ArticleFullView(_ArticleCatalogue):
+    view: Literal["full"] = "full"
+    cover_media_id: Optional[str]
+    research_notes: Optional[str]
+    published_at: Optional[datetime]
+    revision_number: int
+    public_revision_number: Optional[int]
+    public_changes_pending: bool
+    #: Titles of the photos it shows that are not public; it cannot go for
+    #: public clearance until this is empty.
+    photos_not_public: list[str]
+    clearance_required: bool
+    cleared_for_public: bool
+    clearance: Optional[ClearanceRequestResponse]
+    can_edit: bool
+    can_publish: bool
+    created_at: datetime
+
+
+ArticleView = Union[ArticleFullView, ArticleMemberView]
+
+
+class ArticleBlockWrite(BaseModel):
+    kind: ArticleBlockKindValue
+    #: Sanitized on the server; the length is checked there too, so an
+    #: oversized block gets a message rather than a 422.
+    html: Optional[str] = Field(default=None, max_length=200_000)
+    media_id: Optional[str] = Field(default=None, max_length=36)
+    caption: Optional[str] = Field(default=None, max_length=500)
+    size: Optional[ArticlePhotoSizeValue] = None
+
+
+class _ArticleLinks(BaseModel):
+    """The body and links an article write may set. Each that is sent
+    replaces what is there; one that is omitted is left alone."""
+
+    blocks: Optional[list[ArticleBlockWrite]] = Field(default=None, max_length=200)
+    member_ids: Optional[list[str]] = Field(default=None, max_length=500)
+    event_ids: Optional[list[str]] = Field(default=None, max_length=500)
+    apparatus_ids: Optional[list[str]] = Field(default=None, max_length=200)
+    document_ids: Optional[list[str]] = Field(default=None, max_length=500)
+
+
+class _ArticleFields(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    subtitle: Optional[str] = Field(default=None, max_length=300)
+    byline: Optional[str] = Field(default=None, max_length=200)
+    summary: Optional[str] = Field(default=None, max_length=2000)
+    cover_media_id: Optional[str] = Field(default=None, max_length=36)
+    citations: Optional[list[str]] = Field(default=None, max_length=100)
+    research_notes: Optional[str] = _TEXT
+
+
+class ArticleCreate(_ArticleFields, _ArticleLinks):
+    title: str = Field(min_length=1, max_length=200)
+
+
+class ArticleUpdate(_ArticleFields, _ArticleLinks):
+    #: Forced to substantial when anything a reader sees changes, its body
+    #: and links included.
+    edit_kind: EditKind = "minor"
+    edit_note: Optional[str] = Field(default=None, max_length=2000)
 
 
 ClearanceReview.model_rebuild()

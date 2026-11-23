@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**412 tables · 6453 columns · 1372 foreign keys**
+**418 tables · 6498 columns · 1387 foreign keys**
 
 ---
 
@@ -383,6 +383,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`history_apparatus`](#history_apparatus) | `HistoryApparatus` | 35 | A truck, wagon or engine in the department's history. |
 | [`history_apparatus_designations`](#history_apparatus_designations) | `HistoryApparatusDesignation` | 12 | One period under one unit number: Engine 1 from 1924, Engine 3 from |
 | [`history_apparatus_types`](#history_apparatus_types) | `HistoryApparatusType` | 9 | One entry in a department's managed list of apparatus types (engine, |
+| [`history_article_apparatus`](#history_article_apparatus) | `HistoryArticleApparatus` | 4 | An apparatus an article is about or mentions. |
+| [`history_article_blocks`](#history_article_blocks) | `HistoryArticleBlock` | 8 | One block of an article, in order: sanitized text (the minutes' HTML |
+| [`history_article_documents`](#history_article_documents) | `HistoryArticleDocument` | 4 | A document an article draws on. |
+| [`history_article_events`](#history_article_events) | `HistoryArticleEvent` | 4 | An event an article tells of. |
+| [`history_article_members`](#history_article_members) | `HistoryArticleMember` | 4 | A past member an article is about or mentions. |
+| [`history_articles`](#history_articles) | `HistoryArticle` | 21 | A written piece: a station's history, a past chief's profile, the story |
 | [`history_clearance_decisions`](#history_clearance_decisions) | `HistoryClearanceDecision` | 9 | One step's decision on one request. |
 | [`history_clearance_requests`](#history_clearance_requests) | `HistoryClearanceRequest` | 12 | One submission of one revision through the clearance list. |
 | [`history_clearance_steps`](#history_clearance_steps) | `HistoryClearanceStep` | 7 | One step in a department's clearance list, in order. |
@@ -6266,6 +6272,135 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - UNIQUE `uq_history_apparatus_type_key` (`organization_id`, `name_key`)
+
+### `history_article_apparatus`
+
+**HistoryArticleApparatus** · `app/models/history.py`
+
+> An apparatus an article is about or mentions.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `article_id` | VARCHAR(36) | no | PK, FK |  | → `history_articles.id` ON DELETE CASCADE |
+| `apparatus_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `history_apparatus.id` ON DELETE CASCADE |
+| `position` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_article_apparatus_apparatus` (`apparatus_id`)
+
+### `history_article_blocks`
+
+**HistoryArticleBlock** · `app/models/history.py`
+
+> One block of an article, in order: sanitized text (the minutes' HTML subset) or an archive photo with its caption. ``media_id`` is SET NULL so deleting a photo from the archive leaves the block in place with no photo, which every reader's view skips, rather than silently renumbering the article.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `article_id` | VARCHAR(36) | no | FK |  | → `history_articles.id` ON DELETE CASCADE |
+| `position` | INTEGER | no |  |  |  |
+| `kind` | ENUM(`text`, `photo`) | no |  |  |  |
+| `html` | MEDIUMTEXT | yes |  |  |  |
+| `media_id` | VARCHAR(36) | yes | FK, IDX |  | → `history_media.id` ON DELETE SET NULL |
+| `caption` | VARCHAR(500) | yes |  |  |  |
+| `size` | ENUM(`full`, `half`) | no |  | `'full'` |  |
+
+**Indexes**
+
+- `ix_history_article_blocks_media` (`media_id`)
+
+**Constraints**
+
+- UNIQUE `uq_history_article_blocks_position` (`article_id`, `position`)
+
+### `history_article_documents`
+
+**HistoryArticleDocument** · `app/models/history.py`
+
+> A document an article draws on.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `article_id` | VARCHAR(36) | no | PK, FK |  | → `history_articles.id` ON DELETE CASCADE |
+| `document_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `history_documents.document_id` ON DELETE CASCADE |
+| `position` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_article_documents_document` (`document_id`)
+
+### `history_article_events`
+
+**HistoryArticleEvent** · `app/models/history.py`
+
+> An event an article tells of.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `article_id` | VARCHAR(36) | no | PK, FK |  | → `history_articles.id` ON DELETE CASCADE |
+| `event_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `history_events.id` ON DELETE CASCADE |
+| `position` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_article_events_event` (`event_id`)
+
+### `history_article_members`
+
+**HistoryArticleMember** · `app/models/history.py`
+
+> A past member an article is about or mentions.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `article_id` | VARCHAR(36) | no | PK, FK |  | → `history_articles.id` ON DELETE CASCADE |
+| `member_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `historical_members.id` ON DELETE CASCADE |
+| `position` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_article_members_member` (`member_id`)
+
+### `history_articles`
+
+**HistoryArticle** · `app/models/history.py`
+
+> A written piece: a station's history, a past chief's profile, the story of a fire. Its body is an ordered list of blocks (text or an archive photo), so a photo is referenced by id and every reader's view and every export can check whether that reader may see it; the HTML allowlist never carries an image. Published like an event, under ``record_type = "article"``. ``byline`` is free text because a piece may be by a retired member with no account. ``citations`` holds the Historian's own references, in order; the archive items the article links to are listed beside them, not stored here. ``search_text`` is the plain text of the title, summary and text blocks, settled on every save so a search never parses HTML per row.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `title` | VARCHAR(200) | no |  |  |  |
+| `subtitle` | VARCHAR(300) | yes |  |  |  |
+| `byline` | VARCHAR(200) | yes |  |  |  |
+| `summary` | TEXT | yes |  |  |  |
+| `cover_media_id` | VARCHAR(36) | yes | FK, IDX |  | → `history_media.id` ON DELETE SET NULL |
+| `citations` | JSON | yes |  |  |  |
+| `search_text` | MEDIUMTEXT | yes |  |  |  |
+| `research_notes` | TEXT | yes |  |  |  |
+| `publication_level` | ENUM(`draft`, `members`, `public`) | no |  | `'draft'` |  |
+| `published_at` | DATETIME | yes |  |  |  |
+| `published_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `public_snapshot` | JSON | yes |  |  |  |
+| `public_revision_number` | INTEGER | yes |  |  |  |
+| `substantial_revision_number` | INTEGER | no |  | `1` |  |
+| `revision_number` | INTEGER | no |  | `1` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_articles_cover` (`cover_media_id`)
+- `ix_history_articles_org_level` (`organization_id`, `publication_level`)
+- `ix_history_articles_org_updated` (`organization_id`, `updated_at`)
 
 ### `history_clearance_decisions`
 
@@ -13941,7 +14076,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (498 references)
+### → `users` (501 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14148,6 +14283,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `history_apparatus` | `published_by` | SET NULL | yes |
 | `history_apparatus` | `updated_by` | SET NULL | yes |
 | `history_apparatus_types` | `created_by` | SET NULL | yes |
+| `history_articles` | `created_by` | SET NULL | yes |
+| `history_articles` | `published_by` | SET NULL | yes |
+| `history_articles` | `updated_by` | SET NULL | yes |
 | `history_clearance_decisions` | `decided_by` | SET NULL | yes |
 | `history_clearance_requests` | `submitted_by` | SET NULL | yes |
 | `history_document_apparatus_tags` | `created_by` | SET NULL | yes |
@@ -14444,7 +14582,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (330 references)
+### → `organizations` (331 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14587,6 +14725,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `history_albums` | `organization_id` | CASCADE | no |
 | `history_apparatus` | `organization_id` | CASCADE | no |
 | `history_apparatus_types` | `organization_id` | CASCADE | no |
+| `history_articles` | `organization_id` | CASCADE | no |
 | `history_clearance_requests` | `organization_id` | CASCADE | no |
 | `history_clearance_steps` | `organization_id` | CASCADE | no |
 | `history_document_types` | `organization_id` | CASCADE | no |
@@ -15070,6 +15209,32 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `purchase_requests` | `fund_campaign_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `fundraising_campaign_id` | SET NULL | yes |
 
+### → `historical_members` (8 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `historical_member_relations` | `member_id` | CASCADE | no |
+| `historical_member_relations` | `related_member_id` | CASCADE | no |
+| `historical_member_service_periods` | `member_id` | CASCADE | no |
+| `history_article_members` | `member_id` | CASCADE | no |
+| `history_document_tags` | `member_id` | CASCADE | no |
+| `history_event_members` | `member_id` | CASCADE | no |
+| `history_import_rows` | `target_member_id` | SET NULL | yes |
+| `history_media_tags` | `member_id` | CASCADE | no |
+
+### → `history_media` (8 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `history_album_items` | `media_id` | CASCADE | no |
+| `history_albums` | `cover_media_id` | SET NULL | yes |
+| `history_article_blocks` | `media_id` | SET NULL | yes |
+| `history_articles` | `cover_media_id` | SET NULL | yes |
+| `history_event_media` | `media_id` | CASCADE | no |
+| `history_media_apparatus_tags` | `media_id` | CASCADE | no |
+| `history_media_files` | `media_id` | CASCADE | no |
+| `history_media_tags` | `media_id` | CASCADE | no |
+
 ### → `external_training_providers` (7 references)
 
 | From table | Column | On delete | Nullable |
@@ -15081,18 +15246,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `external_user_mappings` | `provider_id` | CASCADE | no |
 | `training_records` | `external_provider_id` | SET NULL | yes |
 | `xapi_statements` | `source_provider_id` | SET NULL | yes |
-
-### → `historical_members` (7 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `historical_member_relations` | `member_id` | CASCADE | no |
-| `historical_member_relations` | `related_member_id` | CASCADE | no |
-| `historical_member_service_periods` | `member_id` | CASCADE | no |
-| `history_document_tags` | `member_id` | CASCADE | no |
-| `history_event_members` | `member_id` | CASCADE | no |
-| `history_import_rows` | `target_member_id` | SET NULL | yes |
-| `history_media_tags` | `member_id` | CASCADE | no |
 
 ### → `inventory_categories` (7 references)
 
@@ -15162,16 +15315,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `expense_reports` | `fiscal_year_id` | CASCADE | no |
 | `purchase_requests` | `fiscal_year_id` | CASCADE | no |
 
-### → `history_media` (6 references)
+### → `history_documents` (6 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `history_album_items` | `media_id` | CASCADE | no |
-| `history_albums` | `cover_media_id` | SET NULL | yes |
-| `history_event_media` | `media_id` | CASCADE | no |
-| `history_media_apparatus_tags` | `media_id` | CASCADE | no |
-| `history_media_files` | `media_id` | CASCADE | no |
-| `history_media_tags` | `media_id` | CASCADE | no |
+| `history_album_documents` | `document_id` | CASCADE | no |
+| `history_article_documents` | `document_id` | CASCADE | no |
+| `history_document_apparatus_tags` | `document_id` | CASCADE | no |
+| `history_document_files` | `document_id` | CASCADE | no |
+| `history_document_tags` | `document_id` | CASCADE | no |
+| `history_event_documents` | `document_id` | CASCADE | no |
 
 ### → `membership_pipeline_steps` (6 references)
 
@@ -15246,15 +15399,35 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `evaluation_signatures` | `evaluation_id` | CASCADE | no |
 | `evaluation_steps` | `evaluation_id` | CASCADE | no |
 
-### → `history_documents` (5 references)
+### → `history_apparatus` (5 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `history_album_documents` | `document_id` | CASCADE | no |
-| `history_document_apparatus_tags` | `document_id` | CASCADE | no |
-| `history_document_files` | `document_id` | CASCADE | no |
-| `history_document_tags` | `document_id` | CASCADE | no |
-| `history_event_documents` | `document_id` | CASCADE | no |
+| `history_apparatus_designations` | `apparatus_id` | CASCADE | no |
+| `history_article_apparatus` | `apparatus_id` | CASCADE | no |
+| `history_document_apparatus_tags` | `apparatus_id` | CASCADE | no |
+| `history_event_apparatus` | `apparatus_id` | CASCADE | no |
+| `history_media_apparatus_tags` | `apparatus_id` | CASCADE | no |
+
+### → `history_articles` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `history_article_apparatus` | `article_id` | CASCADE | no |
+| `history_article_blocks` | `article_id` | CASCADE | no |
+| `history_article_documents` | `article_id` | CASCADE | no |
+| `history_article_events` | `article_id` | CASCADE | no |
+| `history_article_members` | `article_id` | CASCADE | no |
+
+### → `history_events` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `history_article_events` | `event_id` | CASCADE | no |
+| `history_event_apparatus` | `event_id` | CASCADE | no |
+| `history_event_documents` | `event_id` | CASCADE | no |
+| `history_event_media` | `event_id` | CASCADE | no |
+| `history_event_members` | `event_id` | CASCADE | no |
 
 ### → `suggestions` (5 references)
 
@@ -15328,24 +15501,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `historical_staffing_files` | `historical_import_id` | CASCADE | no |
 | `imported_source_records` | `historical_import_id` | SET NULL | yes |
 | `shift_history_imports` | `historical_import_id` | SET NULL | yes |
-
-### → `history_apparatus` (4 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `history_apparatus_designations` | `apparatus_id` | CASCADE | no |
-| `history_document_apparatus_tags` | `apparatus_id` | CASCADE | no |
-| `history_event_apparatus` | `apparatus_id` | CASCADE | no |
-| `history_media_apparatus_tags` | `apparatus_id` | CASCADE | no |
-
-### → `history_events` (4 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `history_event_apparatus` | `event_id` | CASCADE | no |
-| `history_event_documents` | `event_id` | CASCADE | no |
-| `history_event_media` | `event_id` | CASCADE | no |
-| `history_event_members` | `event_id` | CASCADE | no |
 
 ### → `history_sources` (4 references)
 
@@ -16173,6 +16328,11 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `history_album_documents` | `history_albums`, `history_documents` |
 | `history_album_items` | `history_albums`, `history_media` |
 | `history_apparatus_designations` | `history_apparatus`, `history_stations` |
+| `history_article_apparatus` | `history_apparatus`, `history_articles` |
+| `history_article_blocks` | `history_articles`, `history_media` |
+| `history_article_documents` | `history_articles`, `history_documents` |
+| `history_article_events` | `history_articles`, `history_events` |
+| `history_article_members` | `historical_members`, `history_articles` |
 | `history_clearance_decisions` | `history_clearance_requests`, `users` |
 | `history_document_apparatus_tags` | `history_apparatus`, `history_documents`, `users` |
 | `history_document_files` | `history_documents` |

@@ -2029,3 +2029,284 @@ class HistoryDocumentApparatusTag(Base):
     apparatus: Mapped["HistoryApparatus"] = relationship("HistoryApparatus")
 
     __table_args__ = (Index("ix_history_document_apparatus_apparatus", "apparatus_id"),)
+
+
+# --- Phase 6: articles ---
+
+
+class ArticleBlockKind(str, enum.Enum):
+    """What one block of an article holds."""
+
+    TEXT = "text"
+    PHOTO = "photo"
+
+
+class ArticlePhotoSize(str, enum.Enum):
+    """How wide a photo block is printed and shown."""
+
+    FULL = "full"
+    HALF = "half"
+
+
+class HistoryArticle(Base):
+    """A written piece: a station's history, a past chief's profile, the story
+    of a fire. Its body is an ordered list of blocks (text or an archive photo),
+    so a photo is referenced by id and every reader's view and every export can
+    check whether that reader may see it; the HTML allowlist never carries an
+    image.
+
+    Published like an event, under ``record_type = "article"``. ``byline`` is
+    free text because a piece may be by a retired member with no account.
+    ``citations`` holds the Historian's own references, in order; the archive
+    items the article links to are listed beside them, not stored here.
+    ``search_text`` is the plain text of the title, summary and text blocks,
+    settled on every save so a search never parses HTML per row.
+    """
+
+    __tablename__ = "history_articles"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    subtitle: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    byline: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    cover_media_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("history_media.id", ondelete="SET NULL"), nullable=True
+    )
+    citations: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    search_text: Mapped[Optional[str]] = mapped_column(_LONG_TEXT, nullable=True)
+    research_notes: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+
+    publication_level: Mapped[PublicationLevel] = mapped_column(
+        _enum(PublicationLevel), nullable=False, default=PublicationLevel.DRAFT
+    )
+    published_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    published_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    public_snapshot: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+    public_revision_number: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    substantial_revision_number: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    revision_number: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    cover_media: Mapped[Optional["HistoryMedia"]] = relationship("HistoryMedia")
+    blocks: Mapped[list["HistoryArticleBlock"]] = relationship(
+        "HistoryArticleBlock",
+        back_populates="article",
+        cascade="all, delete-orphan",
+        order_by="HistoryArticleBlock.position",
+    )
+    members: Mapped[list["HistoryArticleMember"]] = relationship(
+        "HistoryArticleMember",
+        back_populates="article",
+        cascade="all, delete-orphan",
+        order_by="HistoryArticleMember.position",
+    )
+    event_links: Mapped[list["HistoryArticleEvent"]] = relationship(
+        "HistoryArticleEvent",
+        back_populates="article",
+        cascade="all, delete-orphan",
+        order_by="HistoryArticleEvent.position",
+    )
+    apparatus_links: Mapped[list["HistoryArticleApparatus"]] = relationship(
+        "HistoryArticleApparatus",
+        back_populates="article",
+        cascade="all, delete-orphan",
+        order_by="HistoryArticleApparatus.position",
+    )
+    document_links: Mapped[list["HistoryArticleDocument"]] = relationship(
+        "HistoryArticleDocument",
+        back_populates="article",
+        cascade="all, delete-orphan",
+        order_by="HistoryArticleDocument.position",
+    )
+
+    __table_args__ = (
+        Index("ix_history_articles_org_level", "organization_id", "publication_level"),
+        Index("ix_history_articles_org_updated", "organization_id", "updated_at"),
+        Index("ix_history_articles_cover", "cover_media_id"),
+    )
+
+
+class HistoryArticleBlock(Base):
+    """One block of an article, in order: sanitized text (the minutes' HTML
+    subset) or an archive photo with its caption.
+
+    ``media_id`` is SET NULL so deleting a photo from the archive leaves the
+    block in place with no photo, which every reader's view skips, rather
+    than silently renumbering the article.
+    """
+
+    __tablename__ = "history_article_blocks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    article_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_articles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[ArticleBlockKind] = mapped_column(
+        _enum(ArticleBlockKind), nullable=False
+    )
+    html: Mapped[Optional[str]] = mapped_column(_LONG_TEXT, nullable=True)
+    media_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("history_media.id", ondelete="SET NULL"), nullable=True
+    )
+    caption: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    size: Mapped[ArticlePhotoSize] = mapped_column(
+        _enum(ArticlePhotoSize), nullable=False, default=ArticlePhotoSize.FULL
+    )
+
+    article: Mapped["HistoryArticle"] = relationship(
+        "HistoryArticle", back_populates="blocks"
+    )
+    media: Mapped[Optional["HistoryMedia"]] = relationship("HistoryMedia")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "article_id", "position", name="uq_history_article_blocks_position"
+        ),
+        Index("ix_history_article_blocks_media", "media_id"),
+    )
+
+
+class HistoryArticleMember(Base):
+    """A past member an article is about or mentions."""
+
+    __tablename__ = "history_article_members"
+
+    article_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_articles.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    member_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("historical_members.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    article: Mapped["HistoryArticle"] = relationship(
+        "HistoryArticle", back_populates="members"
+    )
+    member: Mapped["HistoricalMember"] = relationship("HistoricalMember")
+
+    __table_args__ = (Index("ix_history_article_members_member", "member_id"),)
+
+
+class HistoryArticleEvent(Base):
+    """An event an article tells of."""
+
+    __tablename__ = "history_article_events"
+
+    article_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_articles.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    event_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_events.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    article: Mapped["HistoryArticle"] = relationship(
+        "HistoryArticle", back_populates="event_links"
+    )
+    event: Mapped["HistoryEvent"] = relationship("HistoryEvent")
+
+    __table_args__ = (Index("ix_history_article_events_event", "event_id"),)
+
+
+class HistoryArticleApparatus(Base):
+    """An apparatus an article is about or mentions."""
+
+    __tablename__ = "history_article_apparatus"
+
+    article_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_articles.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    apparatus_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_apparatus.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    article: Mapped["HistoryArticle"] = relationship(
+        "HistoryArticle", back_populates="apparatus_links"
+    )
+    apparatus: Mapped["HistoryApparatus"] = relationship("HistoryApparatus")
+
+    __table_args__ = (Index("ix_history_article_apparatus_apparatus", "apparatus_id"),)
+
+
+class HistoryArticleDocument(Base):
+    """A document an article draws on."""
+
+    __tablename__ = "history_article_documents"
+
+    article_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_articles.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    document_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_documents.document_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    article: Mapped["HistoryArticle"] = relationship(
+        "HistoryArticle", back_populates="document_links"
+    )
+    history_document: Mapped["HistoryDocument"] = relationship("HistoryDocument")
+
+    __table_args__ = (Index("ix_history_article_documents_document", "document_id"),)
