@@ -1303,12 +1303,24 @@ class EventTemplateTrainingDetailsBase(BaseModel):
     certification_number_prefix: Optional[str] = None
     issuing_agency: Optional[str] = None
     expiration_months: Optional[int] = None
+    # Kept since 2026-11-23; a template saved before then reads the defaults.
+    category_id: Optional[str] = None
+    program_id: Optional[str] = None
+    phase_id: Optional[str] = None
+    requirement_id: Optional[str] = None
+    attendance_requirement_ids: List[str] = Field(default_factory=list)
+    counts_toward_certification: bool = True
+    auto_create_records: bool = True
+    require_completion_confirmation: bool = False
+    approval_deadline_days: int = 7
 
 
 class EventTemplateTrainingDetails(BaseModel):
-    """The training details a Training template saves (owner decision
-    2026-11-20): the course, training type, credit hours and their source,
-    lead instructor and certification settings, and nothing else.
+    """The training details a Training template saves: the course, training
+    type, credit hours and their source, lead instructor and certification
+    settings (owner decision 2026-11-20), and since 2026-11-23 also the
+    category, program and phase, the requirement link, Counts toward
+    attendance and the completion and sign-off settings.
 
     The one canonical stored shape of ``event_templates.training_details``
     (pitfall #20). The validator settles every combination into it, and the
@@ -1319,8 +1331,11 @@ class EventTemplateTrainingDetails(BaseModel):
     class is the authority, and that one must not refuse anything this one
     accepts.
 
-    Unknown keys are refused, so a requirement, category or attendance link
-    (none of which a template carries) is a 422 rather than silently dropped.
+    Unknown keys are refused, so a field a template does not carry is a 422
+    rather than silently dropped. The linked ids are checked to be the
+    department's when saved (pitfall #14c), and against what is still active
+    when the template is applied, where one no longer offered is dropped with
+    a note.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1338,6 +1353,16 @@ class EventTemplateTrainingDetails(BaseModel):
     certification_number_prefix: Optional[CertificationNumberPrefix] = None
     issuing_agency: Optional[IssuingAgency] = None
     expiration_months: Optional[ExpirationMonths] = None
+    category_id: Optional[UUID] = None
+    program_id: Optional[UUID] = None
+    phase_id: Optional[UUID] = None
+    requirement_id: Optional[UUID] = None
+    # The same cap TrainingSessionAttach puts on a session's.
+    attendance_requirement_ids: List[UUID] = Field(default_factory=list, max_length=50)
+    counts_toward_certification: bool = True
+    auto_create_records: bool = True
+    require_completion_confirmation: bool = False
+    approval_deadline_days: int = Field(default=7, ge=1, le=30)
 
     @field_validator(
         "course_name",
@@ -1392,6 +1417,15 @@ class EventTemplateTrainingDetails(BaseModel):
             self.certification_number_prefix = None
             self.issuing_agency = None
             self.expiration_months = None
+
+        # Each requirement once, in the order picked.
+        self.attendance_requirement_ids = list(
+            dict.fromkeys(self.attendance_requirement_ids)
+        )
+        # The deadline only means something with sign-off, which is the only
+        # time the form shows it; settled to the default otherwise.
+        if not self.require_completion_confirmation:
+            self.approval_deadline_days = 7
         return self
 
 
