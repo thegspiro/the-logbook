@@ -963,3 +963,32 @@ class TestDashboardCardAgreesWithMatrix:
         at_risk = {r["requirement_id"]: r for r in card["requirements_at_risk"]}
         assert at_risk[hazmat]["applicable_members"] == 1
         assert at_risk[officer]["applicable_members"] == 2
+
+    async def test_card_reads_the_hub_figure_to_one_decimal(
+        self, db_session: AsyncSession
+    ):
+        """Two of three compliant is 66.7% on the Admin hub, which reads
+        OrgComplianceTally.pct. The card rounded the same tally to a whole
+        number and read 67%, so one department showed two figures."""
+        from app.api.v1.endpoints.training import get_training_dashboard_summary
+        from app.models.user import User
+        from app.services.training_compliance import compute_org_compliance_tally
+
+        org_id = await _insert_org(db_session)
+        await _insert_hours_req(db_session, org_id, name="Company Hours")
+        for last_name, hours in (("Aoki", 30.0), ("Byrne", 30.0), ("Cole", 0.0)):
+            user_id = await _insert_member(db_session, org_id, last_name=last_name)
+            if hours:
+                await _insert_record(
+                    db_session, org_id, user_id, hours=hours, completion_date=_today()
+                )
+
+        caller = User(id=_uid(), organization_id=org_id)
+        card = await get_training_dashboard_summary(
+            expiration_days=90, db=db_session, current_user=caller
+        )
+        tally = await compute_org_compliance_tally(db_session, org_id)
+
+        assert (tally.compliant, tally.graded) == (2, 3)
+        assert tally.pct == 66.7
+        assert card["stats"]["compliance_percentage"] == 66.7

@@ -162,6 +162,26 @@ test.describe('Inventory import preview fits its card', () => {
   for (const viewport of VIEWPORTS) {
     test(`/inventory/import — ${viewport.name}`, async ({ page }) => {
       await openSignedIn(page, viewport);
+      // The preview asks the server to check every row (a dry run) and shows
+      // its report beside the table; answer it with one, long messages and all.
+      await page.route('**/api/v1/inventory/items/import**', (route) =>
+        route.fulfill(
+          json({
+            imported: 3,
+            failed: 1,
+            total_rows: 4,
+            errors: [
+              {
+                row: 5,
+                error:
+                  "Serial number 'MSA-G1-2026-NORTHWEST-00448213' is already in use by another item in this organization",
+              },
+            ],
+            warnings: ["Row 2: Category 'Respiratory Protection Equipment' not found — item imported without category"],
+            dry_run: true,
+          })
+        )
+      );
       await page.goto('/inventory/import');
       await page.getByTestId('csv-file-input').setInputFiles({
         name: 'inventory.csv',
@@ -171,6 +191,7 @@ test.describe('Inventory import preview fits its card', () => {
 
       const table = tableWithHeader(page, 'Tracking');
       await table.waitFor();
+      await expect(page.getByText('3 of 4 rows will import. 1 will be skipped:')).toBeVisible();
       await expectTableFitsItsCard(table, 'Inventory import preview');
     });
   }

@@ -142,3 +142,78 @@ describe('ImportInventory', () => {
     });
   });
 });
+
+// W43-5: the preview listed a nameless row, an unknown category and a negative
+// quantity without comment; the problems appeared only after Import.
+describe('ImportInventory — checking the rows before import', () => {
+  const sheet = 'Name,Category,Quantity\nTurnout coat,Turnout Gear,1\n,Turnout Gear,1\nGloves,Headgear,-3\n';
+  const file = () => new File([sheet], 'items.csv', { type: 'text/csv' });
+  const report = {
+    imported: 1,
+    failed: 2,
+    total_rows: 3,
+    errors: [
+      { row: 3, error: "Missing required 'Name' column value" },
+      { row: 4, error: "Quantity cannot be negative: '-3'" },
+    ],
+    warnings: ["Row 4: Category 'Headgear' not found — item imported without category"],
+    dry_run: true,
+  };
+
+  beforeEach(() => {
+    mockImportItemsCsv.mockReset();
+    mockImportItemsCsv.mockResolvedValue(report);
+  });
+
+  it('asks the server for a dry run and lists the rows it will skip', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ImportInventory />);
+
+    const chosen = file();
+    await user.upload(screen.getByTestId<HTMLInputElement>('csv-file-input'), chosen);
+
+    expect(await screen.findByText('1 of 3 rows will import. 2 will be skipped:')).toBeInTheDocument();
+    expect(mockImportItemsCsv).toHaveBeenCalledWith(chosen, { dryRun: true });
+    expect(screen.getByText("Row 3: Missing required 'Name' column value")).toBeInTheDocument();
+    expect(screen.getByText("Row 4: Quantity cannot be negative: '-3'")).toBeInTheDocument();
+    expect(screen.getByText(/Category 'Headgear' not found/)).toBeInTheDocument();
+  });
+
+  it('says so when every row passes', async () => {
+    mockImportItemsCsv.mockResolvedValue({ ...report, imported: 3, failed: 0, errors: [], warnings: [] });
+    const user = userEvent.setup();
+    renderWithRouter(<ImportInventory />);
+
+    await user.upload(screen.getByTestId<HTMLInputElement>('csv-file-input'), file());
+
+    expect(await screen.findByText('All 3 rows passed the checks.')).toBeInTheDocument();
+    expect(screen.queryByText('Rows that will be skipped')).not.toBeInTheDocument();
+  });
+
+  // The e2e harness answers an unmocked call with {}; the page read
+  // rowCheck.errors.length off it and took the preview down with it.
+  it('treats a response without the report shape as a failed check, not a crash', async () => {
+    mockImportItemsCsv.mockResolvedValueOnce({});
+    const user = userEvent.setup();
+    renderWithRouter(<ImportInventory />);
+
+    await user.upload(screen.getByTestId<HTMLInputElement>('csv-file-input'), file());
+
+    expect(await screen.findByText(/could not be checked before import/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Import 3 Items/ })).toBeInTheDocument();
+  });
+
+  it('still lets the officer import when the check could not run', async () => {
+    mockImportItemsCsv.mockRejectedValueOnce(new Error('offline'));
+    const user = userEvent.setup();
+    renderWithRouter(<ImportInventory />);
+
+    const chosen = file();
+    await user.upload(screen.getByTestId<HTMLInputElement>('csv-file-input'), chosen);
+
+    expect(await screen.findByText(/could not be checked before import/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Import 3 Items/ }));
+    // The import itself is not a dry run.
+    expect(mockImportItemsCsv).toHaveBeenLastCalledWith(chosen);
+  });
+});

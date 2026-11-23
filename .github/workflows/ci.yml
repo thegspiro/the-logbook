@@ -266,9 +266,14 @@ jobs:
       # other script test rather than split across jobs. Without this line they
       # would fail here on the import, which is the correct failure: a test that
       # skips when its dependency is missing is a test that never runs.
+      #
+      # alembic and sqlalchemy are for test_rejoin_migration_heads.py, which
+      # reads throwaway migration chains the way the Rejoin Migration Heads
+      # workflow reads main's. Pinned to backend/requirements.txt; that test
+      # fails if this line and the workflow's drift from it.
       - name: Install script-test dependencies
         if: "!cancelled()"
-        run: pip install 'PyYAML==6.0.2' 'Pillow==13.0.0'
+        run: pip install 'PyYAML==6.0.2' 'Pillow==13.0.0' 'alembic==1.20.1' 'sqlalchemy==2.1.8'
 
       - name: Run repo-root script tests
         if: "!cancelled()"
