@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**412 tables · 6453 columns · 1372 foreign keys**
+**413 tables · 6459 columns · 1375 foreign keys**
 
 ---
 
@@ -849,6 +849,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`renewal_tasks`](#renewal_tasks) | `RenewalTask` | 18 | Renewal Task model |
 | [`requirement_progress`](#requirement_progress) | `RequirementProgress` | 18 | Requirement Progress model |
 | [`requirement_progress_credits`](#requirement_progress_credits) | `RequirementProgressCredit` | 10 | Idempotency ledger for automated requirement-progress credit. |
+| [`rolling_requirement_last_met`](#rolling_requirement_last_met) | `RollingRequirementLastMet` | 6 | The last day the daily compliance-notice task found a member meeting a |
 | [`self_report_configs`](#self_report_configs) | `SelfReportConfig` | 15 | Self-Report Configuration model |
 | [`shift_assignments`](#shift_assignments) | `ShiftAssignment` | 15 | Assigns a specific member to a specific shift with a designated position. |
 | [`shift_attendance`](#shift_attendance) | `ShiftAttendance` | 8 | Shift Attendance model (Framework) |
@@ -12294,6 +12295,29 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_progress_credit_source` (`progress_id`, `source_type`, `source_id`)
 
+### `rolling_requirement_last_met`
+
+**RollingRequirementLastMet** · `app/models/training.py`
+
+> The last day the daily compliance-notice task found a member meeting a rolling requirement. A rolling requirement has no period to key a non-compliance notice on: its window ends on the grading day. Keying the notice on the requirement alone stopped the daily repeat (#4482) but told a member only once ever. The notice key carries this date instead (owner decision 2026-11-23), so every day of one lapse shares a key and a lapse after a recovery has a new one. Written by ``compliance_member_notices`` only; one row per member and requirement, moved forward on each run that finds the requirement met.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `requirement_id` | VARCHAR(36) | no | FK |  | → `training_requirements.id` ON DELETE CASCADE |
+| `last_met_on` | DATE | no |  |  |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_rolling_requirement_last_met_organization_id` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_rolling_last_met_user_req` (`user_id`, `requirement_id`)
+
 ### `self_report_configs`
 
 **SelfReportConfig** · `app/models/training.py`
@@ -13941,7 +13965,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (498 references)
+### → `users` (499 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14330,6 +14354,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `requirement_progress_credits` | `applied_by` | SET NULL | yes |
 | `return_requests` | `requester_id` | CASCADE | no |
 | `return_requests` | `reviewed_by` | SET NULL | yes |
+| `rolling_requirement_last_met` | `user_id` | CASCADE | no |
 | `rsvp_history` | `changed_by` | SET NULL | yes |
 | `rsvp_history` | `user_id` | CASCADE | no |
 | `saved_ballot_templates` | `created_by` | SET NULL | yes |
@@ -14444,7 +14469,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (330 references)
+### → `organizations` (331 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14702,6 +14727,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `reorder_receipts` | `organization_id` | CASCADE | no |
 | `reorder_requests` | `organization_id` | CASCADE | no |
 | `return_requests` | `organization_id` | CASCADE | no |
+| `rolling_requirement_last_met` | `organization_id` | CASCADE | no |
 | `saved_ballot_templates` | `organization_id` | CASCADE | no |
 | `saved_reports` | `organization_id` | CASCADE | no |
 | `scheduled_emails` | `organization_id` | CASCADE | no |
@@ -14936,6 +14962,24 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_forwards` | `position_id` | CASCADE | yes |
 | `user_positions` | `position_id` | CASCADE | no |
 
+### → `training_requirements` (13 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_classes` | `requirement_id` | SET NULL | yes |
+| `course_cohort_classes` | `requirement_id` | SET NULL | yes |
+| `knowledge_test_attempts` | `requirement_id` | SET NULL | yes |
+| `knowledge_tests` | `requirement_id` | SET NULL | yes |
+| `program_requirements` | `requirement_id` | CASCADE | no |
+| `recertification_pathways` | `source_requirement_id` | CASCADE | yes |
+| `requirement_progress` | `requirement_id` | CASCADE | no |
+| `rolling_requirement_last_met` | `requirement_id` | CASCADE | no |
+| `skill_templates` | `requirement_id` | SET NULL | yes |
+| `skill_tests` | `requirement_id` | SET NULL | yes |
+| `training_requirement_overrides` | `requirement_id` | CASCADE | no |
+| `training_session_requirements` | `requirement_id` | CASCADE | no |
+| `training_sessions` | `requirement_id` | SET NULL | yes |
+
 ### → `training_courses` (12 references)
 
 | From table | Column | On delete | Nullable |
@@ -14952,23 +14996,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_effectiveness_evaluations` | `course_id` | SET NULL | yes |
 | `training_records` | `course_id` | SET NULL | yes |
 | `training_sessions` | `course_id` | SET NULL | yes |
-
-### → `training_requirements` (12 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `course_classes` | `requirement_id` | SET NULL | yes |
-| `course_cohort_classes` | `requirement_id` | SET NULL | yes |
-| `knowledge_test_attempts` | `requirement_id` | SET NULL | yes |
-| `knowledge_tests` | `requirement_id` | SET NULL | yes |
-| `program_requirements` | `requirement_id` | CASCADE | no |
-| `recertification_pathways` | `source_requirement_id` | CASCADE | yes |
-| `requirement_progress` | `requirement_id` | CASCADE | no |
-| `skill_templates` | `requirement_id` | SET NULL | yes |
-| `skill_tests` | `requirement_id` | SET NULL | yes |
-| `training_requirement_overrides` | `requirement_id` | CASCADE | no |
-| `training_session_requirements` | `requirement_id` | CASCADE | no |
-| `training_sessions` | `requirement_id` | SET NULL | yes |
 
 ### → `meeting_minutes` (11 references)
 

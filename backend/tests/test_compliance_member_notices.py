@@ -114,6 +114,18 @@ class TestRollingRequirements:
         )
         assert today_key == tomorrow_key
 
+    def test_its_unmet_key_carries_the_last_met_date(self):
+        """Fixed for one lapse, different for the next (owner decision
+        2026-11-23); bare without a recorded date, as before."""
+        req = _rolling_req()
+        ev = _ev("in_progress", TODAY)
+        first = notices._unmet_key(req, ev, date(2026, 3, 11))
+        assert first == f"{req.id}|met:2026-03-11"
+        assert notices._unmet_key(req, ev, date(2026, 9, 2)) != first
+        assert notices._unmet_key(req, ev) == str(req.id)
+        # A dated key is never read as the bare one already told.
+        assert not notices._already_noticed(first, {str(req.id)})
+
 
 # ---------------------------------------------------------------------------
 # The task against the database, with the grading itself stubbed: who is
@@ -463,3 +475,84 @@ class TestRollingRequirementOnConsecutiveDays:
 
         monkeypatch.setattr(notices, "org_today", lambda _org: date(2026, 11, 20))
         assert await notices.send_member_compliance_notices(db_session, org) == 0
+
+
+@pytest.mark.integration
+class TestRollingRequirementLapsesAgain:
+    """Owner decision 2026-11-23: a member who meets a rolling requirement and
+    later falls short of it again is told again, once.
+
+    The notice key for a rolling requirement carries the last day the task
+    saw the member meet it. Each lapse therefore has its own key, while the
+    days of one lapse share one (the daily-repeat fix of #4482, pitfall 36).
+    """
+
+    async def _department(self, db_session):
+        from app.models.training import (
+            DueDateType,
+            RequirementFrequency,
+            RequirementType,
+            TrainingRequirement,
+        )
+
+        org, member = await _department(db_session, days=())
+        db_session.add(
+            TrainingRequirement(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                name="Rolling CE Hours",
+                requirement_type=RequirementType.HOURS,
+                required_hours=12.0,
+                frequency=RequirementFrequency.ANNUAL,
+                due_date_type=DueDateType.ROLLING,
+                rolling_period_months=12,
+                applies_to_all=True,
+                active=True,
+            )
+        )
+        await db_session.flush()
+        return org, member
+
+    async def _run(self, db_session, monkeypatch, org, day: date) -> int:
+        monkeypatch.setattr(notices, "org_today", lambda _org: day)
+        return await notices.send_member_compliance_notices(db_session, org)
+
+    async def test_a_second_lapse_after_a_recovery_is_emailed_once(
+        self, db_session, mailer, monkeypatch
+    ):
+        from app.models.training import TrainingRecord, TrainingStatus, TrainingType
+
+        org, member = await self._department(db_session)
+
+        # First lapse: one email, however often the task runs.
+        assert await self._run(db_session, monkeypatch, org, date(2026, 3, 1)) == 1
+        assert await self._run(db_session, monkeypatch, org, date(2026, 3, 1)) == 0
+        assert await self._run(db_session, monkeypatch, org, date(2026, 3, 2)) == 0
+
+        # The member catches up and meets it on two days' runs.
+        db_session.add(
+            TrainingRecord(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                user_id=member.id,
+                course_name="Company Drill",
+                training_type=TrainingType.CONTINUING_EDUCATION,
+                status=TrainingStatus.COMPLETED,
+                completion_date=date(2026, 3, 5),
+                hours_completed=12.0,
+            )
+        )
+        await db_session.flush()
+        assert await self._run(db_session, monkeypatch, org, date(2026, 3, 10)) == 0
+        assert await self._run(db_session, monkeypatch, org, date(2026, 3, 11)) == 0
+
+        # A year on, the drill has left the rolling window: a second lapse,
+        # and a second email.
+        assert await self._run(db_session, monkeypatch, org, date(2027, 4, 1)) == 1
+        # Running twice again sends nothing more.
+        assert await self._run(db_session, monkeypatch, org, date(2027, 4, 1)) == 0
+        assert await self._run(db_session, monkeypatch, org, date(2027, 4, 2)) == 0
+
+        assert [s["subject"] for s in mailer.sends] == [
+            "You are not currently meeting your training requirements"
+        ] * 2

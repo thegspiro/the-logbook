@@ -7382,16 +7382,19 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   due date from `TrainingService.evaluate_requirement_detail`, the only
   evaluator that computes one; it decides no status. Tests:
   `tests/test_compliance_export_period.py`.
-- **Compliance emails: a rolling requirement is in one non-compliance notice
-  per member, ever — open, found 2026-11-21.** A rolling requirement's window
-  ends on the grading day, which made both member emails repeat daily (the
-  reminder called it "due today", and the notice's key moved with the date).
-  The fix gives a rolling requirement no deadline reminder and keys its notice
-  on the requirement alone (`compliance_member_notices.py`). The cost: a member
-  who meets it, and months later falls short again, is not told again unless
-  the same notice is triggered by some other requirement, which then lists it.
-  Telling them again needs a recorded "met again" date to key on, which the
-  task does not keep. Tests: `tests/test_compliance_member_notices.py`.
+- **Compliance emails: a repeat lapse on a rolling requirement is emailed
+  again — ✅ resolved (owner decision 2026-11-23).** A rolling requirement's
+  window ends on the grading day, which made both member emails repeat daily;
+  the 2026-11-21 fix gave it no deadline reminder and keyed its notice on the
+  requirement alone, so a member was told once ever. The daily task now records
+  the last day it finds each member meeting each rolling requirement
+  (`rolling_requirement_last_met`, migration `07abf8e6553b`) and keys the notice
+  on that date: every day of one lapse shares a key, and a lapse after a
+  recovery is emailed once more. **Residual:** the dates start with the first
+  run after the upgrade, so a member already told about a rolling requirement
+  they are still short of on upgrade day keeps the bare key, and is told again
+  only after they next meet it and lapse; rolling requirements still get no deadline reminder. Tests:
+  `tests/test_compliance_member_notices.py` (`TestRollingRequirementLapsesAgain`).
 - **The Compliance Officer dashboard's forecast summary cards keep fixed
   colour bands — ✅ resolved 2026-11-21 (owner direction: follow the
   department's and the member's thresholds).** Each member's 30/60/90-day
