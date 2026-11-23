@@ -6304,6 +6304,35 @@ class SchedulingService:
             await self.db.rollback()
             return None, str(e)
 
+    async def _sync_outreach_after_swap(
+        self,
+        organization_id: UUID | str,
+        vacated: Sequence[Tuple[Any, Any]],
+        joined_shift_ids: Sequence[Any] = (),
+    ) -> None:
+        """Settle outreach RSVPs after a swap has committed.
+
+        A swap trades a seat by rewriting its ``user_id`` (or ``shift_id``),
+        so the member who gave it up has no row left on that shift for the
+        sync to read: ``vacated`` names them, ``(shift_id, user_id)`` per seat
+        given up. ``joined_shift_ids`` are shifts a member arrived on that
+        nobody left. Every shift is synced once; non-outreach shifts are
+        skipped inside ``_sync_outreach_rsvps``.
+        """
+        removed: Dict[str, List[str]] = {}
+        for shift_id, user_id in vacated:
+            if shift_id:
+                users = removed.setdefault(str(shift_id), [])
+                if user_id:
+                    users.append(str(user_id))
+        for shift_id in joined_shift_ids:
+            if shift_id:
+                removed.setdefault(str(shift_id), [])
+        for shift_id, users in removed.items():
+            await self._sync_outreach_rsvps(
+                shift_id, organization_id, removed_user_ids=users
+            )
+
     async def _sync_outreach_rsvps(
         self,
         shift_id: UUID | str,
@@ -7598,6 +7627,17 @@ class SchedulingService:
             await self._cancel_swaps_for_vacated_seats(
                 organization_id, vacated, exclude_request_id=swap_request.id
             )
+            # A one-way move also lands the member on the requested shift,
+            # which ``vacated`` (seats given up) does not name.
+            await self._sync_outreach_after_swap(
+                organization_id,
+                vacated,
+                joined_shift_ids=(
+                    [swap_request.requesting_shift_id]
+                    if status == SwapRequestStatus.APPROVED
+                    else []
+                ),
+            )
 
             return swap_request, None
         except CodedValueError:
@@ -7763,11 +7803,13 @@ class SchedulingService:
                 swap_request, organization_id, accepted=True
             )
             await self.db.commit()
+            handed_over = [
+                (swap_request.offering_shift_id, swap_request.requesting_user_id)
+            ]
             await self._cancel_swaps_for_vacated_seats(
-                organization_id,
-                [(swap_request.offering_shift_id, swap_request.requesting_user_id)],
-                exclude_request_id=swap_request.id,
+                organization_id, handed_over, exclude_request_id=swap_request.id
             )
+            await self._sync_outreach_after_swap(organization_id, handed_over)
             return swap_request, None
         except UnknownSeatError:
             # Not flattened like the other curated refusals: the endpoint
@@ -8279,11 +8321,13 @@ class SchedulingService:
                 swap_request, organization_id, accepted=True
             )
             await self.db.commit()
+            handed_over = [
+                (swap_request.offering_shift_id, swap_request.requesting_user_id)
+            ]
             await self._cancel_swaps_for_vacated_seats(
-                organization_id,
-                [(swap_request.offering_shift_id, swap_request.requesting_user_id)],
-                exclude_request_id=swap_request.id,
+                organization_id, handed_over, exclude_request_id=swap_request.id
             )
+            await self._sync_outreach_after_swap(organization_id, handed_over)
             return swap_request, None
         except UnknownSeatError:
             # Not flattened like the other curated refusals: the endpoint
