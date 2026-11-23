@@ -25,11 +25,15 @@ from app.services.dashboard_widget_service import is_outreach_event
 from app.services.event_request_service import (
     create_outreach_shift,
     describe_roles,
+    email_volunteer_call,
     get_live_staffing_shift,
     get_staffing_state,
     outreach_timezone,
+    roles_still_needed,
     validate_staffing_roles,
+    volunteer_call_recipients,
 )
+from app.services.member_audience import AudienceFilter
 
 
 async def linked_request(db: AsyncSession, event: Event) -> Optional[EventRequest]:
@@ -154,6 +158,73 @@ async def open_event_staffing(
     event.staffing_shift_id = str(shift.id)
     event.staffing_roles = roles
     return None
+
+
+async def send_event_volunteer_call(
+    db: AsyncSession,
+    event: Event,
+    org: Optional[Organization],
+    message: Optional[str] = None,
+    audience: Optional[AudienceFilter] = None,
+) -> dict[str, Any]:
+    """Email the membership asking who can help with this event's own sheet.
+
+    The same call a request's sheet sends (``send_volunteer_call``), worded
+    from the event: its title, its time, its location and the roles still
+    open. Only an event that staffs itself sends one — an event scheduled from
+    a request is called for from the request, which keeps that call's record.
+    Raises ``ValueError`` with the reason it cannot be sent; the caller
+    commits and audits.
+    """
+    if event.is_cancelled:
+        raise ValueError("This event was cancelled.")
+    if await linked_request(db, event) is not None:
+        raise ValueError(
+            "This event came from a public request. Email the membership from "
+            "the request, where its staffing is kept."
+        )
+    if not event.staffing_shift_id:
+        raise ValueError("Open volunteer signups before asking the membership.")
+    end = event.end_datetime or event.start_datetime
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+    if end <= datetime.now(timezone.utc):
+        raise ValueError("This event has already happened.")
+
+    audience = audience or AudienceFilter()
+    recipients, skipped = await volunteer_call_recipients(
+        db, org, str(event.organization_id), audience
+    )
+
+    detail_rows: list[tuple[str, str]] = []
+    still_needed = await roles_still_needed(db, event, org)
+    if still_needed:
+        detail_rows.append(("Roles needed", still_needed))
+    where = event.location or event.location_details
+    if where:
+        detail_rows.append(("Where", where))
+
+    await email_volunteer_call(
+        org,
+        recipients,
+        label=event.title,
+        requester=None,
+        start=event.start_datetime,
+        detail_rows=detail_rows,
+        sheet_open=True,
+        message=message,
+        db=db,
+    )
+
+    sent_at = datetime.now(timezone.utc)
+    event.volunteer_call_sent_at = sent_at
+    sent = len(recipients)
+    return {
+        "message": f"Volunteer call emailed to {sent} members.",
+        "recipients": sent,
+        "skipped_opted_out": skipped,
+        "volunteer_call_sent_at": sent_at,
+    }
 
 
 async def move_event_staffing(
