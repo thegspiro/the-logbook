@@ -1907,6 +1907,38 @@ async function restoreLeaveRequests() {
   }
 }
 
+/**
+ * Answer My Training's summary with the real response, changed by `edit`.
+ * The requirement cards are the live component; only the requirements they
+ * are given differ. Used where the state pictured would otherwise need new
+ * requirements seeded department-wide, which would add columns to the
+ * compliance matrix and rows to every requirement list other shots picture.
+ */
+function routeMyTrainingSummary(edit) {
+  return async (page) => {
+    await page.route(
+      /\/api\/v1\/training\/module-config\/my-training(\?.*)?$/,
+      async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        await route.fulfill({ response, json: edit(body) });
+      },
+    );
+  };
+}
+
+/** A requirement card's fields that every mocked card shares. */
+function mockRequirement(fields) {
+  return {
+    description: "",
+    days_until_due: null,
+    due_date: null,
+    waived_months: 0,
+    blocks_activity: false,
+    ...fields,
+  };
+}
+
 function withShiftSignoffs(prepare) {
   return async (page) => {
     const config = await apiFromPage(
@@ -9257,6 +9289,196 @@ export const SHOTS = [
   },
 
   // ── 02 Training ─────────────────────────────────────────────────────
+  {
+    // A new profile typed in, not saved: priority 10, the same as Line
+    // Officers, so the tie warning shows, with one requirement ticked under
+    // Required and another under Optional. Cancel discards it.
+    id: "08-124-profile-priority-tie-warning",
+    doc: "08-admin-reports.md",
+    line: 2773,
+    anchor: "__placed-by-hand-08-124__",
+    alt: "A new compliance profile being filled in: Priority 10 with the amber warning that Line Officers also has priority 10 and which profile grades a member who matches both, and the Required and Optional requirement lists with one ticked in each",
+    route: "/training/compliance-config?tab=profiles",
+    viewport: { width: 1440, height: 2600 },
+    expect: "also has priority 10",
+    selector: "div.card:has(#compliance-priority)",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Add Profile" })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.locator("#compliance-profile-name").fill("Drivers");
+      await page.locator("#compliance-priority").fill("10");
+      const pick = async (list, name) => {
+        await page
+          .locator(`div:has(> label:text-is('${list}'))`)
+          .locator("label")
+          .filter({ hasText: name })
+          .first()
+          .locator("input[type='checkbox']")
+          .check();
+      };
+      await pick(
+        "Required Training Requirements",
+        "Annual Minimum Training Hours",
+      );
+      await pick("Optional Requirements", "CPR Certification Current");
+      await page.getByText("also has priority 10").waitFor();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page
+        .locator("div.card:has(#compliance-priority)")
+        .getByRole("button", { name: "Cancel" })
+        .click();
+    },
+  },
+  {
+    // Nothing is created: the officer starter is chosen and the dialog is
+    // left open with no rank ticked, so Create and open builder is greyed.
+    id: "02-147-evaluation-officer-starter",
+    doc: "02-training.md",
+    line: 5720,
+    anchor: "__placed-by-hand-02-147__",
+    alt: "The New template dialog with Annual Evaluation with Officer Sections chosen as the starter: the Officer ranks tick boxes, none ticked yet, and Create and open builder greyed out until one is",
+    route: "/reports/evaluations",
+    viewport: { width: 1440, height: 1800 },
+    expect: "Officer ranks",
+    selector: '[data-testid="modal-panel"]',
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "New template", exact: true })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .locator("#template-starter")
+        .selectOption({ label: "Annual Evaluation with Officer Sections" });
+      await page.getByText("Officer ranks", { exact: true }).waitFor();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      const discard = page.getByRole("button", { name: "Discard changes" });
+      if (await discard.count()) await discard.click();
+    },
+  },
+  {
+    // The demo member's own hours requirement: the monthly average leads,
+    // the total sits beneath it. Real data, no mock.
+    id: "02-148-requirement-card-hours-average",
+    doc: "02-training.md",
+    line: 210,
+    anchor: "__placed-by-hand-02-148__",
+    alt: "An hours requirement card on My Training: Annual Minimum Training Hours leading with the monthly average against the monthly pace needed, the total in hours on the line beneath, and its progress bar",
+    route: "/training/my-training",
+    auth: "member",
+    expect: "hrs/mo avg",
+    selector: "div.card:has-text('hrs/mo avg')",
+  },
+  {
+    // Three certification requirements in their three states. Mocked: the
+    // demo department has one certification requirement, and seeding two more
+    // would add them to every requirement list and matrix other shots show.
+    id: "02-149-requirement-card-certification-states",
+    doc: "02-training.md",
+    line: 222,
+    anchor: "__placed-by-hand-02-149__",
+    alt: "Three certification requirement cards on My Training: Expired with the date it lapsed and Expired — Renew ASAP, Not recorded with its No certification on file warning, and On file with the date it expires",
+    route: "/training/my-training",
+    auth: "member",
+    expect: "Not recorded",
+    selector: "div.card-secondary:has(h2:text-is('Training Requirements'))",
+    beforeNavigate: routeMyTrainingSummary((body) => {
+      const today = new Date();
+      const iso = (days) =>
+        new Date(today.getTime() + days * 86_400_000)
+          .toISOString()
+          .slice(0, 10);
+      return {
+        ...body,
+        leaves_of_absence: [],
+        requirements_detail: [
+          mockRequirement({
+            id: "mock-cert-on-file",
+            name: "CPR / BLS Provider",
+            requirement_type: "certification",
+            frequency: "biennial",
+            required_hours: 1,
+            completed_hours: 1,
+            progress_percentage: 100,
+            is_met: true,
+            expiry_date: iso(410),
+          }),
+          mockRequirement({
+            id: "mock-cert-expired",
+            name: "Hazmat Operations",
+            requirement_type: "certification",
+            frequency: "annual",
+            required_hours: 1,
+            completed_hours: 0,
+            progress_percentage: 0,
+            is_met: false,
+            cert_expired: true,
+            blocks_activity: true,
+            expiry_date: iso(-23),
+          }),
+          mockRequirement({
+            id: "mock-cert-missing",
+            name: "Driver Operator — Pumper",
+            requirement_type: "certification",
+            frequency: "one_time",
+            required_hours: 1,
+            completed_hours: 0,
+            progress_percentage: 0,
+            is_met: false,
+            blocks_activity: true,
+            expiry_date: null,
+          }),
+        ],
+        optional_requirements_detail: [],
+      };
+    }),
+  },
+  {
+    // The Optional group, with one optional requirement met and one not.
+    // Mocked: no seeded compliance profile lists optional requirements.
+    id: "02-150-optional-requirements-group",
+    doc: "02-training.md",
+    line: 229,
+    anchor: "__placed-by-hand-02-150__",
+    alt: "The Optional group under Training Requirements on My Training: the line saying the department lists these and they do not count toward compliance, and two cards with the Optional badge, one complete and one reading Not required for compliance",
+    route: "/training/my-training",
+    auth: "member",
+    expect: "Not required for compliance",
+    selector: "div.mt-4:has(> h3:text-is('Optional'))",
+    beforeNavigate: routeMyTrainingSummary((body) => ({
+      ...body,
+      optional_requirements_detail: [
+        mockRequirement({
+          id: "mock-optional-open",
+          name: "Rope Rescue Awareness",
+          requirement_type: "courses",
+          frequency: "one_time",
+          required_hours: 1,
+          completed_hours: 0,
+          progress_percentage: 0,
+          is_met: false,
+        }),
+        mockRequirement({
+          id: "mock-optional-met",
+          name: "Wildland Fire Behavior (S-190)",
+          requirement_type: "courses",
+          frequency: "one_time",
+          required_hours: 1,
+          completed_hours: 1,
+          progress_percentage: 100,
+          is_met: true,
+        }),
+      ],
+    })),
+  },
   {
     id: "02-01-my-training",
     expect: "Required Training",
