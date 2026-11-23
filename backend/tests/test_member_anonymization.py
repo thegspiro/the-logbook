@@ -1366,3 +1366,52 @@ class TestFilesThatFailToDeleteAreQueued:
         assert not licence.exists()
         assert await self._queued(db_session, str(org.id)) == []
         assert summary["applicant_files_queued"] == 0
+
+
+class TestPathLessEntriesAreRelabelled:
+    """Old text-only attachments became ``{"file_name": ...}`` entries with
+    no stored file (migration 0c22a95b94b8). Their name is the uploader's
+    text, often the member's own name, and anonymisation relabelled only
+    entries naming a stored file (owner decision 2026-11-23, batch A item 2)."""
+
+    async def test_a_path_less_name_is_replaced_on_submissions_and_records(
+        self, db_session
+    ):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        submission = TrainingSubmission(
+            organization_id=org.id,
+            submitted_by=user.id,
+            course_name="CPR",
+            training_type="certification",
+            completion_date=date(2026, 1, 5),
+            hours_completed=1.0,
+            status=SubmissionStatus.APPROVED,
+            attachments=[{"id": "s-1", "file_name": "Pat_Firefighter_CPR.pdf"}],
+        )
+        record = TrainingRecord(
+            organization_id=org.id,
+            user_id=user.id,
+            course_name="CPR",
+            training_type="certification",
+            completion_date=date(2026, 1, 5),
+            hours_completed=1.0,
+            status=TrainingStatus.COMPLETED,
+            attachments=[
+                {"id": "r-1", "file_name": "Pat Firefighter card.JPG"},
+                {"id": "r-2", "file_name": "notes"},
+                "a bare string left over",
+            ],
+        )
+        db_session.add_all([submission, record])
+        await db_session.flush()
+
+        await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        await db_session.refresh(submission)
+        await db_session.refresh(record)
+        assert submission.attachments == [{"id": "s-1", "file_name": "certificate.pdf"}]
+        assert record.attachments[:2] == [
+            {"id": "r-1", "file_name": "attachment.jpg"},
+            {"id": "r-2", "file_name": "attachment"},
+        ]
