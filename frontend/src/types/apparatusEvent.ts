@@ -51,6 +51,7 @@ export interface ApparatusEventTemplatePayload {
   admin_hours_category_id?: string | undefined;
   evoc_mode: ApparatusEventEvocMode;
   allow_self_signup: boolean;
+  require_signup_approval: boolean;
   show_on_schedule: boolean;
   units: TemplateUnitSpec[];
   duplicated_from_id?: string | undefined;
@@ -85,6 +86,7 @@ export interface ApparatusEventTemplate {
   admin_hours_category_name: string | null;
   evoc_mode: ApparatusEventEvocMode;
   allow_self_signup: boolean;
+  require_signup_approval: boolean;
   show_on_schedule: boolean;
   duplicated_from_id: string | null;
   duplicated_from_name: string | null;
@@ -157,6 +159,22 @@ export interface DriverWarning {
   severity: string;
 }
 
+/** A member waiting for the coordinator's answer on a seat. */
+export interface SeatRequest {
+  id: string;
+  user_id: string;
+  user_name: string | null;
+  requested_at: string;
+}
+
+/** The viewer's own waiting request on a night. */
+export interface MySeatRequest {
+  id: string;
+  seat_id: string;
+  seat_name: string;
+  requested_at: string;
+}
+
 export interface CrewSeat {
   id: string;
   name: string;
@@ -167,6 +185,8 @@ export interface CrewSeat {
   assignment_method: ApparatusEventSeatMethod | null;
   is_me: boolean;
   checked_in: boolean;
+  /** Coordinators only, oldest first; always empty for a member. */
+  requests: SeatRequest[];
 }
 
 export interface CrewUnit {
@@ -198,6 +218,8 @@ export interface CrewBoard {
   template_name: string | null;
   evoc_mode: ApparatusEventEvocMode;
   allow_self_signup: boolean;
+  /** A sign-up asks for the seat; a coordinator approves or declines it. */
+  require_signup_approval: boolean;
   show_on_schedule: boolean;
   admin_hours_category_id: string | null;
   admin_hours_category_name: string | null;
@@ -206,6 +228,7 @@ export interface CrewBoard {
   series: SeriesNight[];
   units: CrewUnit[];
   my_seat_id: string | null;
+  my_request: MySeatRequest | null;
   can_manage: boolean;
   can_sign_up: boolean;
   warnings: DriverWarning[];
@@ -269,6 +292,7 @@ export interface NightUnitSpec {
 export interface NightPlanPayload {
   evoc_mode: ApparatusEventEvocMode;
   allow_self_signup: boolean;
+  require_signup_approval: boolean;
   show_on_schedule: boolean;
   admin_hours_category_id?: string | null | undefined;
   units: NightUnitSpec[];
@@ -292,6 +316,7 @@ export interface NightSummary {
   is_cancelled: boolean;
   attendance_finalized: boolean;
   checked_in: number;
+  pending_requests: number;
 }
 
 export interface CalendarOutreachItem {

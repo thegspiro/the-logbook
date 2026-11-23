@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**412 tables · 6454 columns · 1372 foreign keys**
+**413 tables · 6467 columns · 1377 foreign keys**
 
 ---
 
@@ -111,10 +111,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`apparatus_event_seat_calls`](#apparatus_event_seat_calls) | `ApparatusEventSeatCall` | 9 | One "email members about open seats" send for a run of nights. |
+| [`apparatus_event_seat_requests`](#apparatus_event_seat_requests) | `ApparatusEventSeatRequest` | 11 | A member asking for a seat on a night that needs the coordinator's |
 | [`apparatus_event_template_seats`](#apparatus_event_template_seats) | `ApparatusEventTemplateSeat` | 8 | A named job on a template's apparatus, ``count`` seats wide ("Elf", |
 | [`apparatus_event_template_units`](#apparatus_event_template_units) | `ApparatusEventTemplateUnit` | 5 | One apparatus on a template, with its seats. |
-| [`apparatus_event_templates`](#apparatus_event_templates) | `ApparatusEventTemplate` | 17 | A reusable plan for an apparatus event, scheduled onto any number of |
-| [`event_apparatus_plans`](#event_apparatus_plans) | `EventApparatusPlan` | 10 | Marks an ``Event`` as an apparatus night and carries the rules copied |
+| [`apparatus_event_templates`](#apparatus_event_templates) | `ApparatusEventTemplate` | 18 | A reusable plan for an apparatus event, scheduled onto any number of |
+| [`event_apparatus_plans`](#event_apparatus_plans) | `EventApparatusPlan` | 11 | Marks an ``Event`` as an apparatus night and carries the rules copied |
 | [`event_apparatus_seats`](#event_apparatus_seats) | `EventApparatusSeat` | 12 | One seat on one night's apparatus — open when ``user_id`` is NULL. |
 | [`event_apparatus_units`](#event_apparatus_units) | `EventApparatusUnit` | 7 | One apparatus committed to one night. |
 
@@ -2071,6 +2072,32 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `ix_apparatus_event_seat_calls_series` (`organization_id`, `series_id`, `sent_at`)
 
+### `apparatus_event_seat_requests`
+
+**ApparatusEventSeatRequest** · `app/models/apparatus_event.py`
+
+> A member asking for a seat on a night that needs the coordinator's approval. The seat stays open while requests wait, so several members can ask for the same one; approving one declines the rest.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `event_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `events.id` ON DELETE CASCADE |
+| `seat_id` | VARCHAR(36) | no | FK, IDX |  | → `event_apparatus_seats.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `status` | VARCHAR(20) | no |  | `pending` |  |
+| `pending_user_id` | VARCHAR(36) | yes |  |  |  |
+| `requested_at` | DATETIME | no |  | `now()` |  |
+| `decided_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `decided_at` | DATETIME | yes |  |  |  |
+| `decision_note` | VARCHAR(300) | yes |  |  |  |
+
+**Indexes**
+
+- `ix_apparatus_event_seat_requests_org_status` (`organization_id`, `status`)
+- `ix_apparatus_event_seat_requests_seat` (`seat_id`, `status`)
+- UNIQUE `ux_apparatus_event_seat_requests_pending` (`event_id`, `pending_user_id`)
+
 ### `apparatus_event_template_seats`
 
 **ApparatusEventTemplateSeat** · `app/models/apparatus_event.py`
@@ -2129,6 +2156,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `admin_hours_category_id` | VARCHAR(36) | yes | FK |  | → `admin_hours_categories.id` ON DELETE SET NULL |
 | `evoc_mode` | VARCHAR(20) | no |  | `enforce` |  |
 | `allow_self_signup` | BOOL | no |  | `1` |  |
+| `require_signup_approval` | BOOL | no |  | `0` |  |
 | `show_on_schedule` | BOOL | no |  | `1` |  |
 | `duplicated_from_id` | VARCHAR(36) | yes | FK |  | → `apparatus_event_templates.id` ON DELETE SET NULL |
 | `is_archived` | BOOL | no |  | `0` |  |
@@ -2156,6 +2184,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `admin_hours_category_id` | VARCHAR(36) | yes | FK |  | → `admin_hours_categories.id` ON DELETE SET NULL |
 | `evoc_mode` | VARCHAR(20) | no |  | `enforce` |  |
 | `allow_self_signup` | BOOL | no |  | `1` |  |
+| `require_signup_approval` | BOOL | no |  | `0` |  |
 | `show_on_schedule` | BOOL | no |  | `1` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
@@ -13941,7 +13970,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (498 references)
+### → `users` (500 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13963,6 +13992,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus_documents` | `uploaded_by` | SET NULL | yes |
 | `apparatus_equipment` | `assigned_by` | SET NULL | yes |
 | `apparatus_event_seat_calls` | `sent_by` | SET NULL | yes |
+| `apparatus_event_seat_requests` | `decided_by` | SET NULL | yes |
+| `apparatus_event_seat_requests` | `user_id` | CASCADE | no |
 | `apparatus_event_templates` | `created_by` | SET NULL | yes |
 | `apparatus_fuel_logs` | `recorded_by` | SET NULL | yes |
 | `apparatus_location_history` | `created_by` | SET NULL | yes |
@@ -14444,7 +14475,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (330 references)
+### → `organizations` (331 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14460,6 +14491,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus_documents` | `organization_id` | CASCADE | no |
 | `apparatus_equipment` | `organization_id` | CASCADE | no |
 | `apparatus_event_seat_calls` | `organization_id` | CASCADE | no |
+| `apparatus_event_seat_requests` | `organization_id` | CASCADE | no |
 | `apparatus_event_templates` | `organization_id` | CASCADE | no |
 | `apparatus_fuel_logs` | `organization_id` | CASCADE | no |
 | `apparatus_location_history` | `organization_id` | CASCADE | no |
@@ -14806,6 +14838,32 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `return_requests` | `item_id` | CASCADE | no |
 | `store_products` | `inventory_item_id` | SET NULL | yes |
 
+### → `events` (21 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `admin_hours_entries` | `source_event_id` | SET NULL | yes |
+| `apparatus_event_seat_requests` | `event_id` | CASCADE | no |
+| `attendance_waiver_requests` | `event_id` | SET NULL | yes |
+| `course_cohort_classes` | `event_id` | SET NULL | yes |
+| `elections` | `event_id` | SET NULL | yes |
+| `event_apparatus_plans` | `event_id` | CASCADE | no |
+| `event_apparatus_seats` | `event_id` | CASCADE | no |
+| `event_apparatus_units` | `event_id` | CASCADE | no |
+| `event_attendance_petitions` | `event_id` | CASCADE | no |
+| `event_external_attendees` | `event_id` | CASCADE | no |
+| `event_requests` | `event_id` | SET NULL | yes |
+| `event_rsvps` | `event_id` | CASCADE | no |
+| `events` | `recurrence_parent_id` | RESTRICT | yes |
+| `fundraising_events` | `event_id` | SET NULL | yes |
+| `meeting_minutes` | `event_id` | SET NULL | yes |
+| `meetings` | `event_id` | SET NULL | yes |
+| `prospect_event_links` | `event_id` | CASCADE | no |
+| `rsvp_history` | `event_id` | CASCADE | no |
+| `training_approvals` | `event_id` | CASCADE | no |
+| `training_records` | `source_event_id` | SET NULL | yes |
+| `training_sessions` | `event_id` | CASCADE | no |
+
 ### → `apparatus` (20 references)
 
 | From table | Column | On delete | Nullable |
@@ -14830,31 +14888,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_checkoffs` | `apparatus_id` | SET NULL | yes |
 | `training_records` | `apparatus_id` | SET NULL | yes |
 | `training_sessions` | `apparatus_id` | SET NULL | yes |
-
-### → `events` (20 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `admin_hours_entries` | `source_event_id` | SET NULL | yes |
-| `attendance_waiver_requests` | `event_id` | SET NULL | yes |
-| `course_cohort_classes` | `event_id` | SET NULL | yes |
-| `elections` | `event_id` | SET NULL | yes |
-| `event_apparatus_plans` | `event_id` | CASCADE | no |
-| `event_apparatus_seats` | `event_id` | CASCADE | no |
-| `event_apparatus_units` | `event_id` | CASCADE | no |
-| `event_attendance_petitions` | `event_id` | CASCADE | no |
-| `event_external_attendees` | `event_id` | CASCADE | no |
-| `event_requests` | `event_id` | SET NULL | yes |
-| `event_rsvps` | `event_id` | CASCADE | no |
-| `events` | `recurrence_parent_id` | RESTRICT | yes |
-| `fundraising_events` | `event_id` | SET NULL | yes |
-| `meeting_minutes` | `event_id` | SET NULL | yes |
-| `meetings` | `event_id` | SET NULL | yes |
-| `prospect_event_links` | `event_id` | CASCADE | no |
-| `rsvp_history` | `event_id` | CASCADE | no |
-| `training_approvals` | `event_id` | CASCADE | no |
-| `training_records` | `source_event_id` | SET NULL | yes |
-| `training_sessions` | `event_id` | CASCADE | no |
 
 ### → `facilities` (18 references)
 
@@ -15814,6 +15847,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `event_apparatus_units` | `plan_id` | CASCADE | no |
+
+### → `event_apparatus_seats` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `apparatus_event_seat_requests` | `seat_id` | CASCADE | no |
 
 ### → `event_apparatus_units` (1 references)
 

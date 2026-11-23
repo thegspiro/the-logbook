@@ -1080,6 +1080,16 @@ Administration → Community Outreach → Apparatus Events**
   driver exceptions as shift driver assignment.
 - **Hours**: check in as usual, then **Finalize Attendance**. A night's
   category **replaces** the event type's Admin Hours mapping — never both.
+- **Coordinator approves self sign-ups** (per template, copied to each night,
+  changeable in Edit this night): **Sign me up** becomes **Ask for this seat**
+  and records an `apparatus_event_seat_requests` row while the seat stays
+  open. Several members may ask for one seat; **Approve** seats one and
+  declines the rest (`POST …/events/{id}/requests/{rid}/approve`, `/decline`
+  with an optional note, `/withdraw` by the member). The organizer and
+  alternate holding `apparatus_events.manage` are emailed each request
+  (Event officer duties). The member is emailed the answer (Event changes).
+  `apparatus_seat_request_lapse` (every 15 minutes) declines anything still
+  waiting once a night starts or is cancelled.
 - **Email members** on the crew card emails chosen members about the run's
   open seats: one email listing every upcoming night a member can still take
   a seat on (`POST /apparatus-events/events/{id}/seat-call`). Each send is
