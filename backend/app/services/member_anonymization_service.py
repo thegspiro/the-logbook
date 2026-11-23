@@ -87,6 +87,7 @@ from app.models.membership_pipeline import (
     ProspectiveMember,
     ProspectStepProgress,
 )
+from app.models.pending_file_deletion import PendingDeletionReason
 from app.models.training import (
     ExternalUserMapping,
     ShiftTimeOff,
@@ -111,6 +112,9 @@ from app.services.member_files import (
 )
 from app.services.membership_pipeline_service import prospect_document_path
 from app.services.passkey_service import delete_all_passkeys
+from app.services.pending_file_deletions import (
+    enqueue as enqueue_pending_file_deletions,
+)
 from app.services.upload_relocation import areas_for
 from app.utils.sql_results import rows_affected
 
@@ -291,9 +295,11 @@ class MemberAnonymizationService:
         counts["attendance_waiver_notes_scrubbed"] = rows_affected(result) or 0
         # The documents filed with those requests (doctor's notes, mostly):
         # files and rows both go, the requests stay.
+        waiver_queued: list[str] = []
         counts["attendance_waiver_attachments_deleted"] = (
-            await remove_member_attachments(self.db, user)
+            await remove_member_attachments(self.db, user, queued=waiver_queued)
         )
+        counts["attendance_waiver_files_queued"] = len(waiver_queued)
 
         # --- RSVP quasi-health fields ----------------------------------
         result = await self.db.execute(
@@ -328,6 +334,7 @@ class MemberAnonymizationService:
         counts["form_submissions_scrubbed"] = prospect_counts["form_submissions"]
         counts["step_progress_scrubbed"] = prospect_counts["step_progress"]
         counts["prospect_activity_scrubbed"] = prospect_counts["activity"]
+        counts["applicant_files_queued"] = prospect_counts["files_queued"]
 
         # --- uploaded training files -----------------------------------
         # Last, so the files go as late as possible before the endpoint's
@@ -460,6 +467,11 @@ class MemberAnonymizationService:
         form_submissions_scrubbed = 0
         step_progress_scrubbed = 0
         activity_scrubbed = 0
+        # Applicant documents whose file would not delete. Their rows go
+        # anyway, so the files are queued for the hourly sweep in this
+        # transaction, rather than left named by nothing (owner decision
+        # 2026-11-23).
+        retry: dict[str, StorageArea] = {}
         for prospect in prospects:
             # Rows linked to BOTH user_id and prospect_id were already
             # scrubbed (and counted) by the user-scoped update in
@@ -640,8 +652,8 @@ class MemberAnonymizationService:
                 confined = prospect_document_path(
                     doc.file_path, prospect.organization_id
                 )
-                # Best effort: already gone or unreachable, the row still goes.
-                await file_storage.delete_quietly(confined)
+                if confined and not await file_storage.delete(confined):
+                    retry[confined] = StorageArea.APPLICANTS
             await self.db.execute(
                 delete(ProspectDocument).where(
                     ProspectDocument.prospect_id == prospect.id
@@ -653,6 +665,14 @@ class MemberAnonymizationService:
             "form_submissions": form_submissions_scrubbed,
             "step_progress": step_progress_scrubbed,
             "activity": activity_scrubbed,
+            "files_queued": len(
+                enqueue_pending_file_deletions(
+                    self.db,
+                    str(user.organization_id),
+                    retry,
+                    PendingDeletionReason.MEMBER_ANONYMIZATION,
+                )
+            ),
         }
 
 

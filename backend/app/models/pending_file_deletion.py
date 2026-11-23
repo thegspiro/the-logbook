@@ -19,6 +19,9 @@ from app.core.utils import generate_uuid
 
 class PendingDeletionReason(str, Enum):
     MEMBER_HARD_DELETE = "member_hard_delete"
+    # A file anonymisation could not delete after dropping the row that named
+    # it (a waiver or applicant document).
+    MEMBER_ANONYMIZATION = "member_anonymization"
 
 
 class PendingFileDeletion(Base):

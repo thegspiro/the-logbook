@@ -1199,3 +1199,170 @@ class TestTrainingRecordUploads:
             assert type(event_data[key]) is int
         for value in event_data.values():
             assert "/" not in str(value)
+
+
+class TestFilesThatFailToDeleteAreQueued:
+    """Waiver and applicant documents: anonymisation drops the row whatever
+    happens to the file, because the member's link to it must not survive.
+    A file that then failed to delete was named by nothing at all and could
+    never be found again. It is queued on pending_file_deletions in the same
+    transaction, so the hourly sweep retries it (owner decision 2026-11-23,
+    batch A item 1)."""
+
+    @pytest.fixture
+    def root(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
+        monkeypatch.setattr(
+            file_storage_service, "_load_settings", AsyncMock(return_value={})
+        )
+        return tmp_path
+
+    @staticmethod
+    async def _queued(db, org_id) -> list[tuple[str, str, str]]:
+        from app.models.pending_file_deletion import PendingFileDeletion
+
+        rows = (
+            await db.execute(
+                select(
+                    PendingFileDeletion.path,
+                    PendingFileDeletion.area,
+                    PendingFileDeletion.reason,
+                ).where(PendingFileDeletion.organization_id == org_id)
+            )
+        ).all()
+        return sorted(tuple(r) for r in rows)
+
+    async def test_a_waiver_document_that_will_not_delete_is_queued(
+        self, db_session, root, monkeypatch
+    ):
+        from app.models.attendance_waiver import (
+            AttendanceWaiverAttachment,
+            AttendanceWaiverRequest,
+            AttendanceWaiverStatus,
+            AttendanceWaiverWorkflow,
+        )
+
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        request = AttendanceWaiverRequest(
+            organization_id=org.id,
+            workflow=AttendanceWaiverWorkflow.TRAINING_SESSION,
+            user_id=user.id,
+            event_title_snapshot="Company Drill",
+            event_start_snapshot=datetime(2026, 3, 4, 23, tzinfo=UTC),
+            session_date=date(2026, 3, 4),
+            status=AttendanceWaiverStatus.DENIED,
+            category="Medical",
+            submitted_at=datetime(2026, 3, 1, tzinfo=UTC),
+        )
+        db_session.add(request)
+        await db_session.flush()
+        note = root / str(org.id) / "attendance-waivers" / str(request.id) / "n.pdf"
+        note.parent.mkdir(parents=True)
+        note.write_bytes(b"%PDF-1.4 doctor's note")
+        db_session.add(
+            AttendanceWaiverAttachment(
+                organization_id=org.id,
+                request_id=request.id,
+                ordinal=1,
+                file_path=str(note),
+                mime_type="application/pdf",
+                file_size=10,
+                sha256="0" * 64,
+            )
+        )
+        await db_session.flush()
+        monkeypatch.setattr(
+            file_storage_service, "delete", AsyncMock(return_value=False)
+        )
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        remaining = (
+            await db_session.execute(
+                select(AttendanceWaiverAttachment.id).where(
+                    AttendanceWaiverAttachment.request_id == request.id
+                )
+            )
+        ).all()
+        assert remaining == []
+        assert await self._queued(db_session, str(org.id)) == [
+            (str(note), "attendance-waivers", "member_anonymization")
+        ]
+        assert summary["attendance_waiver_files_queued"] == 1
+
+    async def test_an_applicant_document_that_will_not_delete_is_queued(
+        self, db_session, root, monkeypatch
+    ):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        prospect = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Pat",
+            last_name="Firefighter",
+            email="pat-queued@example.org",
+            transferred_user_id=user.id,
+        )
+        db_session.add(prospect)
+        await db_session.flush()
+        licence = root / str(org.id) / "applicants" / str(prospect.id) / "id.jpg"
+        licence.parent.mkdir(parents=True)
+        licence.write_bytes(b"licence")
+        db_session.add(
+            ProspectDocument(
+                prospect_id=prospect.id,
+                document_type="id",
+                file_name="id.jpg",
+                file_path=str(licence),
+            )
+        )
+        await db_session.flush()
+        monkeypatch.setattr(
+            file_storage_service, "delete", AsyncMock(return_value=False)
+        )
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        documents = (
+            await db_session.execute(
+                select(ProspectDocument.id).where(
+                    ProspectDocument.prospect_id == prospect.id
+                )
+            )
+        ).all()
+        assert documents == []
+        assert await self._queued(db_session, str(org.id)) == [
+            (str(licence), "applicants", "member_anonymization")
+        ]
+        assert summary["applicant_files_queued"] == 1
+
+    async def test_a_file_that_deletes_queues_nothing(self, db_session, root):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        prospect = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Pat",
+            last_name="Firefighter",
+            email="pat-deleted@example.org",
+            transferred_user_id=user.id,
+        )
+        db_session.add(prospect)
+        await db_session.flush()
+        licence = root / str(org.id) / "applicants" / str(prospect.id) / "id.jpg"
+        licence.parent.mkdir(parents=True)
+        licence.write_bytes(b"licence")
+        db_session.add(
+            ProspectDocument(
+                prospect_id=prospect.id,
+                document_type="id",
+                file_name="id.jpg",
+                file_path=str(licence),
+            )
+        )
+        await db_session.flush()
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert not licence.exists()
+        assert await self._queued(db_session, str(org.id)) == []
+        assert summary["applicant_files_queued"] == 0
