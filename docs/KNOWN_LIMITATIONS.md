@@ -1693,6 +1693,11 @@ limitation:
   `training.manage` holder can no longer excuse their own training this way**;
   another officer must be given the permission, or the leave-request route
   used.
+  Owner confirmed 2026-11-23: no exception for a lone Chief. The Waivers
+  page now says so as soon as an officer picks themselves, links to Leave
+  Requests and keeps the form from submitting, and it offers no Edit on the
+  officer's own leave. Leave, overrides and training waivers share one check,
+  `is_own_grant` in `app/utils/separation_of_duties.py`.
 - ~~**An applicant's edited email or name and birth date can make a coordinator's
   self-access guard hide their file (ADV2-10).**~~ ✅ Resolved 2026-11-21
   (owner: trust only `transferred_user_id` once the applicant edits). An
@@ -8798,6 +8803,15 @@ retries. It needs two departments booking in the same few milliseconds, and it
 fails loudly rather than double-booking. The same residual exists for the
 store's per-department lock, and for program enrollment, which takes the same
 kind of lock (scope `program_enrollment`) around its duplicate check.
+
+**Series edits (2026-11-23).** A "this and all future events" edit that moves
+the times or changes the room now checks each moved occurrence at its new slot
+and refuses the save, naming the clashing bookings. It ignores the occurrences
+it is moving, since they vacate their old slots. **Default taken:** earlier
+occurrences of the same series, which the edit does not move, still count as
+bookings, so a shift that lands a moved occurrence on an earlier one is refused. An
+edit that moves no occurrence is not refused over a clash already there
+(`tests/test_event_series_room_overlap.py`).
 
 ## Prospects — Seven Drawer Fields Have Readers and No Producer (2026-09-24, resolved 2026-09-24)
 

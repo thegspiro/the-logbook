@@ -1642,6 +1642,60 @@ class EventService:
 
         return event
 
+    async def _refuse_series_room_clashes(
+        self,
+        occurrences: List[Event],
+        update_data: Dict[str, Any],
+        organization_id: UUID | str,
+        move: Optional[Tuple[timedelta, timedelta, Any]],
+    ) -> None:
+        """Refuse a series edit that would put an occurrence on a booked room.
+
+        update_event checks the one event it moves; a series edit moves every
+        later occurrence by the anchor's shift, or into a new room, so each is
+        checked at its own new time and room. The series' own occurrences are
+        excluded: they are all moving, so their stored slots are about to be
+        vacated. An occurrence whose room and times are both unchanged is not
+        checked, so an edit is never refused over a clash it did not create.
+        *move* is ``(shift, length, tz)`` when the times change.
+        """
+        location_service = LocationService(self.db)
+        own_ids = [str(e.id) for e in occurrences]
+        clashes: Dict[str, Event] = {}
+        clashing_occurrences = 0
+        for occurrence in occurrences:
+            room = update_data.get("location_id", occurrence.location_id)
+            if not room:
+                continue
+            start, end = occurrence.start_datetime, occurrence.end_datetime
+            if move is not None:
+                shift, length, tz = move
+                start_wall = _wall_time(start, tz) + shift
+                start = _stored_time(start_wall, tz)
+                end = _stored_time(start_wall + length, tz)
+            elif str(room) == str(occurrence.location_id):
+                continue
+            overlapping = await location_service.check_overlapping_events(
+                location_id=room,
+                organization_id=str(organization_id),
+                start_datetime=start,
+                end_datetime=end,
+                exclude_event_ids=own_ids,
+            )
+            if overlapping:
+                clashing_occurrences += 1
+                for booking in overlapping:
+                    clashes.setdefault(str(booking.id), booking)
+        if clashes:
+            titles = ", ".join(f'"{e.title}"' for e in list(clashes.values())[:3])
+            more = len(clashes) - 3
+            raise ValueError(
+                "Location is already booked during this time for "
+                f"{clashing_occurrences} of {len(occurrences)} occurrences in "
+                f"this series. Conflicting event(s): {titles}"
+                + (f" and {more} more" if more > 0 else "")
+            )
+
     async def update_future_events(
         self,
         event_id: UUID,
@@ -1683,6 +1737,17 @@ class EventService:
         # Determine the series parent id
         parent_id = anchor.recurrence_parent_id or anchor.id
 
+        # An edit that can move occurrences checks each one's room below.
+        # Room bookings are locked before the occurrence rows, the order
+        # update_event uses (EV-26), so this edit and a single edit of an
+        # event in the same room cannot each hold a lock the other waits on.
+        update_data = event_data.model_dump(exclude_unset=True)
+        may_book_room = bool(
+            {"start_datetime", "end_datetime", "location_id"} & update_data.keys()
+        )
+        if may_book_room:
+            await LocationService(self.db).lock_room_bookings(str(organization_id))
+
         # Query all events in the series with start_datetime >= anchor's start
         result = await self.db.execute(
             select(Event)
@@ -1707,7 +1772,6 @@ class EventService:
                 "so it can only be edited by an event manager."
             )
 
-        update_data = event_data.model_dump(exclude_unset=True)
         training_details = _training_details_from(update_data)
 
         # The times are the anchor's, not the series'. Written verbatim, as the
@@ -1843,6 +1907,14 @@ class EventService:
             self.db
         ).get_location(update_data["location_id"], str(organization_id)):
             raise ValueError("Location not found")
+
+        if may_book_room:
+            await self._refuse_series_room_clashes(
+                list(future_events),
+                update_data,
+                organization_id,
+                (shift, length, tz) if times_change else None,
+            )
 
         now = datetime.now(dt_timezone.utc)
         updated_count = 0
