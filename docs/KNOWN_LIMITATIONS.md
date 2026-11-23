@@ -11304,9 +11304,10 @@ deleting an event) and the moved-start one.
   correction to a session already held — or one that keeps the same local
   date, such as 19:00 fixed to 19:30 — should reopen the decision at all. Not
   reopening it would change the 2026-11-13 decision, so it was not done here.
-- **`idx_meeting_attendees_meeting` is now a prefix of the new unique
-  `(meeting_id, user_id)` index** and could be dropped; it was left to keep
-  the migration to what the feature needs.
+- ~~**`idx_meeting_attendees_meeting` is now a prefix of the new unique
+  `(meeting_id, user_id)` index** and could be dropped.~~ ✅ Resolved
+  2026-11-23: `b37218495d33` drops it wherever another index leads on
+  `meeting_id` (otherwise MySQL needs it for the foreign key, and it stays).
 
 ## Training — Shift Evaluations: What the 2026-11-13 Review Left Open
 

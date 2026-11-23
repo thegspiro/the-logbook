@@ -9242,7 +9242,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_meeting_attendees_meeting` (`meeting_id`)
 - `idx_meeting_attendees_organization` (`organization_id`)
 - `idx_meeting_attendees_user` (`user_id`)
 - `idx_meeting_attendees_waiver_request` (`waiver_request_id`)

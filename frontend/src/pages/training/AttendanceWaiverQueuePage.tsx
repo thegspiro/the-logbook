@@ -10,8 +10,8 @@
  * One page serves both workflows (`workflow`): training sessions at
  * `/attendance-waivers`, business meetings at `/meetings/waiver-requests`.
  *
- * Pending requests come first, every one of them; decided ones follow, a page
- * at a time. Each row opens the decision page the approver's email links to.
+ * Pending requests come first and decided ones follow, each list a page at a
+ * time; the server splits them (`state`), so each pages on its own count. Each row opens the decision page the approver's email links to.
  *
  * Also rendered inside the Training Admin hub (`embedded`), without its own
  * page header.
@@ -35,9 +35,15 @@ import { awaitsReconfirmation, closesUndecidedText } from '../../utils/attendanc
 import { TRAINING_WAIVER_WORKFLOW, type AttendanceWaiverWorkflow } from '../../utils/attendanceWaiverWorkflows';
 import { useWaiverAttentionStore } from '../../hooks/useWaiverAttention';
 
-/** The backend's largest page (`MAX_PAGE`): every pending request in one call. */
-const PENDING_LIMIT = 200;
-const DECIDED_PAGE = 50;
+const QUEUE_PAGE = 50;
+
+/** One of the queue's two lists, loaded a page at a time. */
+interface QueueList {
+  items: AttendanceWaiverRequest[];
+  total: number;
+}
+
+const EMPTY_LIST: QueueList = { items: [], total: 0 };
 
 const RequestRow: React.FC<{ request: AttendanceWaiverRequest; timezone: string; path: string }> = ({
   request,
@@ -93,26 +99,18 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
   const tz = useTimezone();
   const { service } = workflow;
   const refreshAttention = useWaiverAttentionStore((s) => s.refresh);
-  const [pending, setPending] = useState<AttendanceWaiverRequest[]>([]);
-  const [pendingTotal, setPendingTotal] = useState(0);
-  const [decided, setDecided] = useState<AttendanceWaiverRequest[]>([]);
-  const [nextSkip, setNextSkip] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
+  const [pending, setPending] = useState<QueueList>(EMPTY_LIST);
+  // Decided also holds the requests that closed without a decision
+  // (withdrawn, voided, expired), each labelled by its status badge.
+  const [decided, setDecided] = useState<QueueList>(EMPTY_LIST);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState<'pending' | 'decided' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // The decided list is the unfiltered list with the pending rows left out:
-  // the API filters by one status at a time, and decided means several. It
-  // also holds the requests that closed without a decision (withdrawn,
-  // voided, expired), each labelled by its status badge.
-  const loadDecided = useCallback(
-    async (skip: number) => {
-      const page = await service.list({ skip, limit: DECIDED_PAGE });
-      const rows = page.items.filter((r) => r.status !== AttendanceWaiverStatus.PENDING);
-      setDecided((current) => (skip === 0 ? rows : [...current, ...rows]));
-      setNextSkip(skip + page.items.length);
-      setHasMore(skip + page.items.length < page.total);
+  const fetchPage = useCallback(
+    async (state: 'pending' | 'decided', skip: number): Promise<QueueList> => {
+      const page = await service.list({ state, skip, limit: QUEUE_PAGE });
+      return { items: page.items, total: page.total };
     },
     [service]
   );
@@ -121,16 +119,12 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
     let cancelled = false;
     const load = async () => {
       try {
-        const page = await service.list({
-          status: AttendanceWaiverStatus.PENDING,
-          limit: PENDING_LIMIT,
-        });
+        const [waiting, closed] = await Promise.all([fetchPage('pending', 0), fetchPage('decided', 0)]);
         if (cancelled) return;
-        setPending(page.items);
-        setPendingTotal(page.total);
+        setPending(waiting);
+        setDecided(closed);
         // The navigation's waiting count follows what this queue shows.
         void refreshAttention(workflow.key);
-        await loadDecided(0);
       } catch (err: unknown) {
         if (!cancelled) setError(getErrorMessage(err, 'Waiver requests could not be loaded.'));
       } finally {
@@ -141,18 +135,33 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
     return () => {
       cancelled = true;
     };
-  }, [loadDecided, service, refreshAttention, workflow.key]);
+  }, [fetchPage, refreshAttention, workflow.key]);
 
-  const showMore = async () => {
-    setLoadingMore(true);
+  const showMore = async (state: 'pending' | 'decided') => {
+    const current = state === 'pending' ? pending : decided;
+    const set = state === 'pending' ? setPending : setDecided;
+    setLoadingMore(state);
     try {
-      await loadDecided(nextSkip);
+      const next = await fetchPage(state, current.items.length);
+      set({ items: [...current.items, ...next.items], total: next.total });
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'More requests could not be loaded.'));
     } finally {
-      setLoadingMore(false);
+      setLoadingMore(null);
     }
   };
+
+  const showMoreButton = (state: 'pending' | 'decided', list: QueueList, label: string) =>
+    list.items.length < list.total && (
+      <button
+        type="button"
+        onClick={() => void showMore(state)}
+        disabled={loadingMore !== null}
+        className="btn-secondary mt-2 text-sm font-medium disabled:opacity-50"
+      >
+        {loadingMore === state ? 'Loading...' : label}
+      </button>
+    );
 
   let body: React.ReactNode;
   if (loading) {
@@ -168,7 +177,7 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
         {error}
       </div>
     );
-  } else if (pending.length === 0 && decided.length === 0) {
+  } else if (pending.items.length === 0 && decided.items.length === 0) {
     body = (
       <EmptyState
         icon={CalendarX}
@@ -181,45 +190,32 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
       <div className="space-y-6">
         <section aria-labelledby="waiver-queue-pending">
           <h2 id="waiver-queue-pending" className="text-theme-text-primary mb-2 text-lg font-semibold">
-            Waiting for a decision ({pendingTotal})
+            Waiting for a decision ({pending.total})
           </h2>
-          {pending.length === 0 ? (
+          {pending.items.length === 0 ? (
             <p className="text-theme-text-secondary text-sm">Nothing is waiting for you.</p>
           ) : (
             <ul className="card divide-theme-surface-border divide-y">
-              {pending.map((request) => (
+              {pending.items.map((request) => (
                 <RequestRow key={request.id} request={request} timezone={tz} path={workflow.requestPath(request.id)} />
               ))}
             </ul>
           )}
-          {pendingTotal > pending.length && (
-            <p className="text-theme-text-muted mt-2 text-sm">
-              Showing the newest {pending.length} of {pendingTotal}. Decide these to see the rest.
-            </p>
-          )}
+          {showMoreButton('pending', pending, 'Show more waiting requests')}
         </section>
 
-        {decided.length > 0 && (
+        {decided.items.length > 0 && (
           <section aria-labelledby="waiver-queue-decided">
             <h2 id="waiver-queue-decided" className="text-theme-text-primary mb-2 text-lg font-semibold">
               Decided and closed
             </h2>
             <ul className="card divide-theme-surface-border divide-y">
-              {decided.map((request) => (
+              {decided.items.map((request) => (
                 <RequestRow key={request.id} request={request} timezone={tz} path={workflow.requestPath(request.id)} />
               ))}
             </ul>
+            {showMoreButton('decided', decided, 'Show more decided requests')}
           </section>
-        )}
-        {hasMore && (
-          <button
-            type="button"
-            onClick={() => void showMore()}
-            disabled={loadingMore}
-            className="btn-secondary text-sm font-medium disabled:opacity-50"
-          >
-            {loadingMore ? 'Loading...' : 'Show more'}
-          </button>
         )}
       </div>
     );
