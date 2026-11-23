@@ -9161,11 +9161,22 @@ single-page form. What it changes, and what it leaves:
   `event_templates.training_details`, and picking it fills Training Info as
   well as the event. The Event Templates editor has a Training Details
   section for them, and Save as Template on a Training event saves its
-  session's. Still not carried, because they were not in the owner's list:
+  session's. ~~Still not carried, because they were not in the owner's list:
   the category, program, phase and requirement links, Counts toward
   attendance, and the completion settings (counts toward certification,
   auto-create records, completion sign-off and its deadline); they start on
-  their defaults. A template whose library course is no longer in the Course
+  their defaults.~~ **Resolved 2026-11-23 (owner decision, "Templates keep
+  more fields"):** a Training template now also keeps the category, program
+  and phase, the requirement link, Counts toward attendance and the
+  completion and sign-off settings. Each linked id is checked to be the
+  department's when saved; applying the template drops any category,
+  program, phase or requirement no longer active (or a phase no longer in
+  its program), with a note, rather than refusing the create
+  (`tests/test_event_template_training_details.py`,
+  `trainingDetailsModel.test.ts`, `CreateTrainingSessionPage.test.tsx`).
+  **Still true:** Save as Template from a library-course event stores the
+  session's hours as typed (`manual`), so a later change to the course's
+  hours does not reach the template. A template whose library course is no longer in the Course
   Library opens on No course yet, and one whose lead instructor is no longer
   a current member opens with Lead instructor empty, each with a note on
   Training Info. The entry below still applies to an event made from a
