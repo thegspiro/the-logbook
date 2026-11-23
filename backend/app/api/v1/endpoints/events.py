@@ -3332,20 +3332,24 @@ async def get_event_staffing_sheet(
 async def get_event_volunteer_seats(
     event_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # events.view, which every member holds (_LINE_MEMBER_PERMISSIONS): the
+    # board names members, so it is not left to sign-in alone.
+    current_user: User = Depends(require_permission("events.view")),
 ):
     """
     The event's volunteer signup sheet seat by seat, for signing up from the
     event page: each seat's role and who holds it, or that it is open.
 
-    Any member who may view the event, as on the shift's crew board in
-    Scheduling, which shows the same names. A draft answers 404 to a
+    Any member holding ``events.view`` (every member does) who may view the
+    event, as on the shift's crew board in Scheduling, which shows the same
+    names. A draft answers 404 to a
     non-organizer, as the event itself does; so does an event with no live
     sheet, or a cancelled one. Signing up goes through the scheduling signup
     endpoint. Under ``/staffing`` so the client never caches it: it names
     members, and a cached copy would hide a signup.
 
     **Authentication required**
+    **Requires permission: events.view**
     """
     event, org = await _staffed_event(db, current_user, event_id)
     if event.is_draft and not user_has_permission(current_user, "events.manage"):
