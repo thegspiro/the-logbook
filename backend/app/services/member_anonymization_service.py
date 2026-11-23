@@ -104,6 +104,7 @@ from app.models.user import (
 )
 from app.services import file_storage_service as file_storage
 from app.services.attendance_waiver_attachments import remove_member_attachments
+from app.services.attendance_waiver_service import MEETING_WAIVER_TEXT
 from app.services.file_storage_service import StorageArea
 from app.services.member_files import (
     collect_member_files,
@@ -261,10 +262,21 @@ class MemberAnonymizationService:
             )
             counts[f"{label}_scrubbed"] = rows_affected(result) or 0
 
+        # A waiver's reason may be the Secretary's free text about the member,
+        # so it goes; the excusal does not. Every reader decides "excused"
+        # from a non-blank waiver_reason, so clearing it would turn excused
+        # meetings into absences and drop the member's attendance figure.
+        # Neutral wording with no category keeps the session excused and
+        # says nothing about why. Migration 1f3a6c2d9e40 repairs members
+        # anonymised before this, whose reason is already gone, from the
+        # grant timestamp and request link every waiver writes beside it.
         result = await self.db.execute(
             update(MeetingAttendee)
-            .where(MeetingAttendee.user_id == user.id)
-            .values(waiver_reason=None)
+            .where(
+                MeetingAttendee.user_id == user.id,
+                MeetingAttendee.waiver_reason.is_not(None),
+            )
+            .values(waiver_reason=MEETING_WAIVER_TEXT)
         )
         counts["meeting_waiver_reasons_scrubbed"] = rows_affected(result) or 0
 

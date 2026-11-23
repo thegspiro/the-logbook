@@ -14,6 +14,7 @@ from app.api.v1.endpoints import users as users_endpoint
 from app.models.forms import Form, FormSubmission
 from app.models.inventory import MemberSizePreferences
 from app.models.medical_screening import ScreeningRecord, ScreeningType
+from app.models.meeting import Meeting, MeetingAttendee, MeetingType
 from app.models.membership_pipeline import (
     MembershipPipeline,
     MembershipPipelineStep,
@@ -42,6 +43,7 @@ from app.models.user import (
     user_positions,
 )
 from app.services import file_storage_service, member_anonymization_service
+from app.services.attendance_waiver_service import MEETING_WAIVER_TEXT
 from app.services.member_anonymization_service import MemberAnonymizationService
 from tests.fake_request import fake_request
 
@@ -1415,3 +1417,67 @@ class TestPathLessEntriesAreRelabelled:
             {"id": "r-1", "file_name": "attachment.jpg"},
             {"id": "r-2", "file_name": "attachment"},
         ]
+
+
+class TestExcusedMeetingsStayExcused:
+    """Every attendance reader counts a meeting as excused from a non-blank
+    ``waiver_reason``. Anonymisation cleared the column, which turned each
+    excused meeting into an absence (owner decision 2026-11-23, batch A
+    item 3)."""
+
+    async def _meeting(self, db, org, title):
+        meeting = Meeting(
+            organization_id=org.id,
+            title=title,
+            meeting_date=date(2026, 3, 1),
+            meeting_type=MeetingType.BUSINESS,
+        )
+        db.add(meeting)
+        await db.flush()
+        return meeting
+
+    async def test_a_waiver_keeps_neutral_wording_and_an_absence_stays_blank(
+        self, db_session
+    ):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        secretary = await _make_departed_member(db_session, org, deleted_at=None)
+        by_hand = await self._meeting(db_session, org, "By hand")
+        absent = await self._meeting(db_session, org, "Absent")
+        db_session.add_all(
+            [
+                MeetingAttendee(
+                    organization_id=org.id,
+                    meeting_id=by_hand.id,
+                    user_id=user.id,
+                    present=False,
+                    excused=True,
+                    waiver_reason="Pat's knee surgery recovery",
+                    waiver_granted_by=secretary.id,
+                    waiver_granted_at=datetime(2026, 3, 2, tzinfo=UTC),
+                ),
+                MeetingAttendee(
+                    organization_id=org.id,
+                    meeting_id=absent.id,
+                    user_id=user.id,
+                    present=False,
+                ),
+            ]
+        )
+        await db_session.flush()
+
+        await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        rows = dict(
+            (
+                await db_session.execute(
+                    select(Meeting.title, MeetingAttendee.waiver_reason)
+                    .join(Meeting, Meeting.id == MeetingAttendee.meeting_id)
+                    .where(MeetingAttendee.user_id == user.id)
+                )
+            ).all()
+        )
+        assert rows == {
+            "By hand": MEETING_WAIVER_TEXT,
+            "Absent": None,
+        }
