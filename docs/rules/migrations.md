@@ -125,7 +125,7 @@ That keeps the chain linear. Re-pointing is only safe while your revision
 exists on your branch alone: no database has stamped it, so nothing records
 the old parent. **Once both forks are on `main`, re-pointing is no longer an
 option** — an installation may have applied either one — and the fix is a
-merge revision (`alembic merge -m "merge heads" <head1> <head2>`) on a new
+merge revision (`python3 scripts/rejoin_migration_heads.py --write`) on a new
 branch.
 
 **The hook narrows the window; it does not close it.** Two branches can each
@@ -163,8 +163,11 @@ and two more pull requests (#4323, #4324) each proposed the three-way merge.
 2. **Look for an open pull request that already merges those heads** — one
    adding a file under `backend/alembic/versions/` whose `down_revision` is a
    tuple of them. If there is one, review it rather than writing a second.
-3. **Merge every head in one revision** (`alembic merge -m "…" <head1> <head2>
-<head3>`), never a pair at a time.
+3. **Merge every head in one revision**, never a pair at a time, with
+   `python3 scripts/rejoin_migration_heads.py --write` rather than
+   `alembic merge`. The script derives the revision id from the heads, so two
+   sessions that rejoin the same heads write the same file, and the second
+   copy merges as no change instead of forking `main` again.
 4. **Put it on its own small branch**, not inside a feature pull request. A merge
    revision carried by a large change waits on that change's review, and `main`
    stays broken while it does.
@@ -174,6 +177,27 @@ and two more pull requests (#4323, #4324) each proposed the three-way merge.
 `scripts/test_check_migration_heads.py` covers the script and the hook,
 including the case above: a branch whose chain is valid alone and forked once
 merged.
+
+**A workflow rejoins `main` on its own** _(2026-11-23)_. The Rejoin Migration
+Heads workflow (`.github/workflows/rejoin-migration-heads.yml`) runs
+`scripts/rejoin_migration_heads.py` on every push to `main`. When the chain has
+more than one head it opens a pull request on an `automation/rejoin-heads-…`
+branch holding only the merge revision, with auto-merge on (owner decision,
+2026-11-23), so the fix lands within one CI run and nobody has to notice first.
+It also:
+
+- **starts CI on that branch itself.** A pull request opened with the
+  workflow's own token starts no workflow, and `main` requires CI Success and
+  Migration Chain, so the workflow dispatches `ci.yml` on the branch.
+- **closes a rejoin pull request `main` no longer needs**, when `main` has a
+  single head again, and **one a newer head made wrong**, since a merge of
+  only some of today's heads would fork `main` again if it landed.
+- **brings its open pull request up to date** when `main` moves on, so the
+  "up to date" rule does not hold its auto-merge.
+
+So when `main` forks, look for that pull request before writing a merge
+revision of your own; if you do write one, write it with the script, and it is
+the same file.
 
 ---
 
