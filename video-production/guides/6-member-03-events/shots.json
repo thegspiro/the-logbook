@@ -1,0 +1,105 @@
+{
+  "kind": "guide",
+  "script": "docs/youtube-scripts/06-member-guide.md — CHAPTER 3",
+  "series": "Member Guide",
+  "chapter": "Chapter 3",
+  "title": "Events & RSVPs",
+  "callout": "Answer in seconds, check in at the door",
+  "endCard": {
+    "headline": "Try The Logbook",
+    "sub": "Free & Open Source",
+    "url": "github.com/thegspiro/the-logbook"
+  },
+  "screen": {
+    "width": 1180,
+    "height": 820
+  },
+  "shots": [
+    {
+      "id": "intro",
+      "section": "Viewing events",
+      "say": "Drills, meetings, training and fundraisers all live on the Events page. Here is how to find them, answer them, and check in."
+    },
+    {
+      "id": "cards",
+      "say": "Each card shows when the event is, where it is, and how many people are going."
+    },
+    {
+      "id": "badge",
+      "say": "Some drills carry the Counts toward attendance badge, beside Mandatory. Your department grades a training requirement on how many of these you attend, so turning up is what counts."
+    },
+    {
+      "id": "calendar",
+      "say": "Switch to the calendar to see the month at a glance, then back to the list."
+    },
+    {
+      "id": "open",
+      "section": "Answering an RSVP",
+      "say": "Open an event for the full details, then press RSVP Now."
+    },
+    {
+      "id": "choose",
+      "say": "Choose Going or Not Going. Some events also offer Maybe. You can add a note, then submit."
+    },
+    {
+      "id": "answered",
+      "say": "Done. Your officers can see you're coming, and you can change your answer until the RSVP deadline."
+    },
+    {
+      "id": "closed",
+      "say": "Once the deadline passes, or the event ends, the RSVP button goes away. Missed it? Check in when you get there."
+    },
+    {
+      "id": "full",
+      "section": "When an event is full",
+      "say": "Some events have a limit on how many can go. When every spot is taken, the event shows as full."
+    },
+    {
+      "id": "waitlist",
+      "say": "Answering Going then puts you on the waitlist, and your RSVP shows your place in line."
+    },
+    {
+      "id": "promote",
+      "say": "If a spot opens up, you're moved to Going automatically. You'll get a notification in the app, and an email too, unless you've turned that email off."
+    },
+    {
+      "id": "qr",
+      "section": "Checking in",
+      "say": "At the event, an officer puts up a check-in code by the door."
+    },
+    {
+      "id": "checkin",
+      "say": "Scan it with your phone's camera, and the event's check-in page opens. Press Check In to This Event."
+    },
+    {
+      "id": "checked",
+      "say": "You're checked in. No paper sign-in sheet, and no line."
+    },
+    {
+      "id": "early",
+      "say": "Your arrival time is recorded exactly as it happened. Arrive long before the start, and your credit still counts from the scheduled start time."
+    },
+    {
+      "id": "petition",
+      "section": "If you weren't checked in",
+      "say": "If an event is over and you never got checked in, open it and press I was there."
+    },
+    {
+      "id": "form",
+      "say": "Say why there's no check-in, and when you arrived and left if you know. The organizer is told, and confirms or declines your request."
+    },
+    {
+      "id": "waiting",
+      "say": "While it's waiting, you can withdraw it and send a corrected one. You can ask for up to thirty days after the event."
+    },
+    {
+      "id": "past",
+      "section": "Your past events",
+      "say": "To look back, switch Events to Past. A mandatory event with no check-in on record is marked, so you can see what still needs sorting out."
+    },
+    {
+      "id": "outro",
+      "say": "That's events. Next, your training and certifications."
+    }
+  ]
+}
