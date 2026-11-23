@@ -183,6 +183,19 @@ member count, add a note and press **Send email**.
 > members that is before you send. One email lists every night that still
 > has an open seat. Members who turned off volunteer call emails are skipped.
 
+### Not in the 2026-11-17 recording: approving sign-ups
+
+**Coordinator approves self sign-ups** was added on 2026-11-23. To cover it,
+record one more scene: tick the setting in the template editor, then show a
+night as a member pressing **Ask for this seat**, and the same night as a
+coordinator with the request under the seat and **Approve** pressed.
+
+> If you'd rather choose the crew yourself, tick Coordinator approves self
+> sign-ups. Members then ask for a seat instead of taking it, and you're
+> emailed. Several can ask for the same seat — approve one, and the others
+> are told it went to someone else. Anything you haven't answered by the
+> start of the night is declined automatically.
+
 ### Scene 8 shows the old request panel
 
 Since 2026-11-21 a request opens on a page of its own rather than in a panel

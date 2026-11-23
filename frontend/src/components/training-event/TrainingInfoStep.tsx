@@ -79,12 +79,12 @@ interface TrainingInfoStepProps {
    */
   templateNotes?: readonly string[] | undefined;
   /**
-   * `template`: the Event Templates editor's Training Details section. It
-   * draws only what a template carries (owner decision 2026-11-20) — the
-   * course, type, hours, instructor and certification — and leaves out the
-   * requirement and program links, Counts toward attendance and the
-   * completion settings, under its own sub-heading. One set of controls for
-   * both screens, so their field ids and 422 mappings cannot drift.
+   * `template`: the Event Templates editor's Training Details section, under
+   * its own sub-heading. Since the owner decision of 2026-11-23 a template
+   * carries every field this step draws, so the variant changes only the
+   * headings and the attendance note, which speak of the sessions made from
+   * the template. One set of controls for both screens, so their field ids
+   * and 422 mappings cannot drift.
    */
   variant?: 'session' | 'template' | undefined;
 }
@@ -205,6 +205,13 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
           ? 'From the course.'
           : undefined;
 
+  // Whom the Counts toward attendance note speaks of.
+  const attendanceScope = forTemplate
+    ? { each: 'each session made from this template', one: 'a session', none: 'sessions made from it count' }
+    : isSeries
+      ? { each: 'each session in the series', one: 'a session', none: 'the series counts' }
+      : { each: 'this session', one: 'the session', none: 'this session counts' };
+
   const linkageValue: TrainingLinkageValue = {
     category_id: value.category_id || undefined,
     program_id: value.program_id || undefined,
@@ -221,8 +228,8 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
             Training Details
           </h3>
           <p className="text-theme-text-muted mt-1 text-sm">
-            Picking this template fills these into Training Info. Requirement and program links, Counts toward
-            attendance and the completion settings are chosen on each session.
+            Picking this template fills these into Training Info, where each can still be changed. A category, program,
+            phase or requirement no longer active when it is picked is left out, with a note.
           </p>
         </div>
       ) : (
@@ -483,69 +490,66 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
       </fieldset>
 
       {/* === Requirement & Program Linkage === */}
-      {!forTemplate && (
-        <div className="border-theme-surface-border space-y-4 border-t pt-6">
-          <div>
-            <h3 className="text-theme-text-primary flex items-center gap-2 font-semibold">
-              <Link2 className="h-5 w-5 text-red-700" aria-hidden="true" />
-              Connect to Requirements &amp; Programs
-            </h3>
-            <p className="text-theme-text-muted mt-1 text-sm">
-              Optional: link this session so attendance automatically counts toward department requirements and training
-              pipeline progress.
-            </p>
-          </div>
-
-          <fieldset disabled={locked} className="min-w-0">
-            <TrainingLinkageFields
-              data={linkageData}
-              value={linkageValue}
-              onChange={(patch) => {
-                const next: Partial<TrainingDetailsForm> = {};
-                if ('category_id' in patch) next.category_id = patch.category_id ?? '';
-                if ('program_id' in patch) next.program_id = patch.program_id ?? '';
-                if ('phase_id' in patch) next.phase_id = patch.phase_id ?? '';
-                if ('requirement_id' in patch) next.requirement_id = patch.requirement_id ?? '';
-                onChange(next);
-              }}
-              selectedCourse={selectedCourse}
-              readOnly={locked}
-            />
-          </fieldset>
-
-          {/* Shown while anything is linked, even with nothing left to offer:
-            a link to a deactivated requirement is kept by every save. */}
-          {(attendanceRequirements(linkageData.requirements).length > 0 ||
-            value.attendance_requirement_ids.length > 0) && (
-            <fieldset aria-describedby="training-attendance-note">
-              <legend className="text-theme-text-primary text-sm font-semibold">Counts toward attendance</legend>
-              <p id="training-attendance-note" className="text-theme-text-muted mt-1 mb-3 text-sm">
-                Attendance at {isSeries ? 'each session in the series' : 'this session'} counts toward the ticked
-                requirements&apos; percentages. It does not make attending mandatory; that is set under Mandatory
-                attendance on the Settings step, which uses these ticks to suggest who. An approved attendance waiver
-                leaves {isSeries ? 'a session' : 'the session'} out of that member&apos;s percentage. Leave all unticked
-                and {isSeries ? 'the series counts' : 'this session counts'} toward no attendance requirement.
-              </p>
-              <AttendanceRequirementChecklist
-                requirements={linkageData.requirements}
-                value={value.attendance_requirement_ids}
-                onChange={(next) => onChange({ attendance_requirement_ids: next })}
-                disabled={checklistLocked}
-                retired={Object.entries(retiredAttendanceNames).map(([id, name]) => ({ id, name }))}
-              />
-              {access === 'finalized' && (
-                <p className="text-theme-text-muted mt-3 text-sm">
-                  Saving re-grades this session against the ticked requirements. Members&apos; training records and
-                  hours do not change.
-                </p>
-              )}
-              {checklistLocked && value.attendance_requirement_ids.length > 0 && (
-                <p className="text-theme-text-muted mt-3 text-sm">Linked by an event manager.</p>
-              )}
-            </fieldset>
-          )}
+      <div className="border-theme-surface-border space-y-4 border-t pt-6">
+        <div>
+          <h3 className="text-theme-text-primary flex items-center gap-2 font-semibold">
+            <Link2 className="h-5 w-5 text-red-700" aria-hidden="true" />
+            Connect to Requirements &amp; Programs
+          </h3>
+          <p className="text-theme-text-muted mt-1 text-sm">
+            Optional: link this session so attendance automatically counts toward department requirements and training
+            pipeline progress.
+          </p>
         </div>
-      )}
+
+        <fieldset disabled={locked} className="min-w-0">
+          <TrainingLinkageFields
+            data={linkageData}
+            value={linkageValue}
+            onChange={(patch) => {
+              const next: Partial<TrainingDetailsForm> = {};
+              if ('category_id' in patch) next.category_id = patch.category_id ?? '';
+              if ('program_id' in patch) next.program_id = patch.program_id ?? '';
+              if ('phase_id' in patch) next.phase_id = patch.phase_id ?? '';
+              if ('requirement_id' in patch) next.requirement_id = patch.requirement_id ?? '';
+              onChange(next);
+            }}
+            selectedCourse={selectedCourse}
+            readOnly={locked}
+          />
+        </fieldset>
+
+        {/* Shown while anything is linked, even with nothing left to offer:
+            a link to a deactivated requirement is kept by every save. */}
+        {(attendanceRequirements(linkageData.requirements).length > 0 ||
+          value.attendance_requirement_ids.length > 0) && (
+          <fieldset aria-describedby="training-attendance-note">
+            <legend className="text-theme-text-primary text-sm font-semibold">Counts toward attendance</legend>
+            <p id="training-attendance-note" className="text-theme-text-muted mt-1 mb-3 text-sm">
+              Attendance at {attendanceScope.each} counts toward the ticked requirements&apos; percentages. It does not
+              make attending mandatory; that is set under Mandatory attendance on the Settings step, which uses these
+              ticks to suggest who. An approved attendance waiver leaves {attendanceScope.one} out of that member&apos;s
+              percentage. Leave all unticked and {attendanceScope.none} toward no attendance requirement.
+            </p>
+            <AttendanceRequirementChecklist
+              requirements={linkageData.requirements}
+              value={value.attendance_requirement_ids}
+              onChange={(next) => onChange({ attendance_requirement_ids: next })}
+              disabled={checklistLocked}
+              retired={Object.entries(retiredAttendanceNames).map(([id, name]) => ({ id, name }))}
+            />
+            {access === 'finalized' && (
+              <p className="text-theme-text-muted mt-3 text-sm">
+                Saving re-grades this session against the ticked requirements. Members&apos; training records and hours
+                do not change.
+              </p>
+            )}
+            {checklistLocked && value.attendance_requirement_ids.length > 0 && (
+              <p className="text-theme-text-muted mt-3 text-sm">Linked by an event manager.</p>
+            )}
+          </fieldset>
+        )}
+      </div>
 
       {/* === Certification === */}
       <fieldset disabled={locked} className="border-theme-surface-border min-w-0 space-y-4 border-t pt-6">
@@ -637,17 +641,15 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
       </fieldset>
 
       {/* === Training completion === */}
-      {!forTemplate && (
-        <fieldset disabled={locked} className="border-theme-surface-border min-w-0 space-y-4 border-t pt-6">
-          <div>
-            <h3 className="text-theme-text-primary font-semibold">Training completion</h3>
-            <p className="text-theme-text-muted mt-1 text-sm">
-              How members&apos; training records are created and signed off.
-            </p>
-          </div>
-          <TrainingSettingsFields value={value} onChange={onChange} errors={errors} disabled={locked} />
-        </fieldset>
-      )}
+      <fieldset disabled={locked} className="border-theme-surface-border min-w-0 space-y-4 border-t pt-6">
+        <div>
+          <h3 className="text-theme-text-primary font-semibold">Training completion</h3>
+          <p className="text-theme-text-muted mt-1 text-sm">
+            How members&apos; training records are created and signed off.
+          </p>
+        </div>
+        <TrainingSettingsFields value={value} onChange={onChange} errors={errors} disabled={locked} />
+      </fieldset>
     </section>
   );
 };

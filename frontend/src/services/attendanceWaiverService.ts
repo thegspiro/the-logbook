@@ -130,9 +130,16 @@ export const createAttendanceWaiverService = (BASE: string, { takesDocuments }: 
     return asArray(response.data).map(normalizeRequest);
   },
 
-  /** The requests the caller may decide or has decided. */
+  /** The requests the caller may decide or has decided. `state` splits them on
+   *  the server: `pending`, or `decided` (every other status), so `total` and
+   *  the pages count only that list. */
   async list(
-    params: { status?: AttendanceWaiverStatus | undefined; skip?: number; limit?: number } = {}
+    params: {
+      status?: AttendanceWaiverStatus | undefined;
+      state?: 'pending' | 'decided' | undefined;
+      skip?: number;
+      limit?: number;
+    } = {}
   ): Promise<AttendanceWaiverRequestPage> {
     const response = await api.get<AttendanceWaiverRequestPage>(BASE, { params });
     return normalizePage(response.data);

@@ -143,10 +143,43 @@ for it.
 
 - **"Email the membership that seats are open"** — built 2026-11-20 as
   **Email members** on the crew card; see "Open-seat email" below.
-- **"Coordinator approves self sign-ups."** A claimed seat is taken at once.
-  An approval step needs a pending state on the seat and a reviewer's screen.
+- **"Coordinator approves self sign-ups."** — built 2026-11-23 as a
+  per-template setting; see "Self sign-up approval" below.
 - **"Message crew"** on the night. The existing event reminders reach a
   night's RSVPs, which every seat holder has.
+
+### Self sign-up approval (owner decisions of 2026-11-23)
+
+**Coordinator approves self sign-ups** is a template setting, copied to each
+night it schedules and changeable in **Edit this night**. While it is on,
+**Sign me up** reads **Ask for this seat**. The seat stays open, so several
+members can ask for the same one. Approving one member declines the others.
+The night's organizer and alternate are emailed each request ("Event officer
+duties"), and the member is emailed the answer ("Event changes and
+cancellations"). A request nobody answers is declined when the night starts,
+by the `apparatus_seat_request_lapse` task every 15 minutes. Choices made
+without a ruling:
+
+- **One waiting request per member per night.** A member who wants a
+  different seat withdraws the first request. This matches the one seat per
+  night a member can hold.
+- **The organizer and alternate are told only if they hold
+  `apparatus_events.manage`**, because only they can answer. Failing both,
+  the event's creator is told, if they hold it. When nobody qualifies, the
+  request still waits on the crew card and in the nights list, with no
+  email. Nights scheduled from a template make the person who scheduled them
+  the organizer.
+- **No bell notification.** Email is the channel of record (pitfall #18), and
+  the crew card and nights list show what is waiting.
+- **Switching approval off leaves waiting requests decidable.** They stay on
+  the card for the coordinator. A member who then signs up takes the seat at
+  once, and anyone waiting on that seat is declined.
+- **Lapsing has up to 15 minutes of delay.** Approval is refused from the
+  night's start, so a late answer is never possible, but the "not answered"
+  email can arrive up to a quarter of an hour after the start.
+- **At most once, not at least once.** Each request is closed and committed
+  before its email goes out. A crash between the two loses that member's
+  email; the request is gone from the card either way (pitfall #36).
 
 ### Boundaries chosen without a ruling
 
@@ -4951,11 +4984,26 @@ recorded here rather than built.
    and the credit waits. This also corrects the claim above: re-approval did
    **not** restate the credit (the ledger's idempotency skipped the new
    figure); it does now, through the same restating calculation. Covered by
-   `tests/test_shift_report_credit_restatement.py`. **Residual:** (a) the
-   ledger's numeric reversal never reopens a completed requirement, so an
-   edit that lowers hours below a target the report had met restates the
-   value and percentage but leaves the requirement completed (common to every
-   feed that restates, including a re-finalized training session); (b) the
+   `tests/test_shift_report_credit_restatement.py`. **Residual:** (a) ✅
+   **resolved, owner decision 2026-11-23 ("lowered hours reopen a completed
+   program requirement").** A correction that takes a member below a
+   requirement they had completed — a shift report edited, a training session
+   re-finalized, a credited record voided — moves the requirement back to in
+   progress and clears `completed_at`
+   (`TrainingProgramService._reopen_if_below_target`), and the training
+   officers get the **Program Requirement Reopened** email (migration
+   `bfb747c095c3`) and a bell notice, once per reopening. **Nothing else is
+   changed:** certificates already issued stand, the enrollment stays
+   completed (the rollup's own reopen is skipped for these corrections, where
+   before this change it reopened a completed enrollment whose average fell),
+   and a phase the member advanced to is kept; the notice says so. A drop
+   that stays at or above the target changes nothing, and a later restore
+   completes the requirement again. _Defaults taken:_ only a COMPLETED row
+   reopens — VERIFIED and WAIVED are an officer's decision and stand; a
+   requirement with no numeric target (a certification, a checklist) is never
+   reopened this way; the officers told are those holding a training-officer
+   role, with no SMS. Tests: `tests/test_program_requirement_reopen.py`.
+   (b) the
    edit and the restatement share one request and session but not one
    database transaction, because the shared progress updater commits per
    requirement, as it does on approval; (c) competency is not stepped back
@@ -9164,11 +9212,22 @@ single-page form. What it changes, and what it leaves:
   `event_templates.training_details`, and picking it fills Training Info as
   well as the event. The Event Templates editor has a Training Details
   section for them, and Save as Template on a Training event saves its
-  session's. Still not carried, because they were not in the owner's list:
+  session's. ~~Still not carried, because they were not in the owner's list:
   the category, program, phase and requirement links, Counts toward
   attendance, and the completion settings (counts toward certification,
   auto-create records, completion sign-off and its deadline); they start on
-  their defaults. A template whose library course is no longer in the Course
+  their defaults.~~ **Resolved 2026-11-23 (owner decision, "Templates keep
+  more fields"):** a Training template now also keeps the category, program
+  and phase, the requirement link, Counts toward attendance and the
+  completion and sign-off settings. Each linked id is checked to be the
+  department's when saved; applying the template drops any category,
+  program, phase or requirement no longer active (or a phase no longer in
+  its program), with a note, rather than refusing the create
+  (`tests/test_event_template_training_details.py`,
+  `trainingDetailsModel.test.ts`, `CreateTrainingSessionPage.test.tsx`).
+  **Still true:** Save as Template from a library-course event stores the
+  session's hours as typed (`manual`), so a later change to the course's
+  hours does not reach the template. A template whose library course is no longer in the Course
   Library opens on No course yet, and one whose lead instructor is no longer
   a current member opens with Lead instructor empty, each with a note on
   Training Info. The entry below still applies to an event made from a
@@ -11281,9 +11340,10 @@ deleting an event) and the moved-start one.
   correction to a session already held — or one that keeps the same local
   date, such as 19:00 fixed to 19:30 — should reopen the decision at all. Not
   reopening it would change the 2026-11-13 decision, so it was not done here.
-- **`idx_meeting_attendees_meeting` is now a prefix of the new unique
-  `(meeting_id, user_id)` index** and could be dropped; it was left to keep
-  the migration to what the feature needs.
+- ~~**`idx_meeting_attendees_meeting` is now a prefix of the new unique
+  `(meeting_id, user_id)` index** and could be dropped.~~ ✅ Resolved
+  2026-11-23: `b37218495d33` drops it wherever another index leads on
+  `meeting_id` (otherwise MySQL needs it for the foreign key, and it stays).
 
 ## Training — Shift Evaluations: What the 2026-11-13 Review Left Open
 
@@ -11448,9 +11508,13 @@ each case; confirmed by the owner 2026-11-23):
   `user_anonymized` audit event). A later permanent delete of the anonymised
   member collects these kept entries again, which is the one retry path.
   `remove_member_attachments` and the applicant-document step drop the row
-  whatever happens to the file; this step does not, because anonymisation
-  refuses to run twice and a dropped reference would leave a file nothing
-  could find again. Nothing else retries these: retention
+  whatever happens to the file, and since 2026-11-23 (batch A item 1) queue a
+  file that would not delete on `pending_file_deletions` in the same
+  transaction, for the hourly sweep (`member_anonymization`, counted as
+  `attendance_waiver_files_queued` / `applicant_files_queued`). This step
+  keeps its entry instead, because anonymisation refuses to run twice and the
+  entry is how a later permanent delete finds the file. Nothing else retries
+  these kept entries: retention
   (`attachment_retention_days`) is opt-in and covers self-report certificates
   only, so a department that has not set it keeps the file until someone
   removes it by hand.
@@ -11535,11 +11599,33 @@ each case; confirmed by the owner 2026-11-23):
   lost 204 must not show the member a failure. **Still open:** a legacy index
   without `?expected_id=` keeps the old behaviour and is deprecated; the
   shipped screens send the id whenever the entry has one.
-- **File names on path-less entries survive anonymisation.** The
-  anonymisation step relabels only entries naming a stored file, so a
-  `{"file_name": ...}` entry with no `file_path` (what the 2026-11-20
-  migration made of the old bare strings) keeps the uploader's filename, which
-  can be the member's name, on their submissions and records.
+- ~~**File names on path-less entries survive anonymisation.**~~ **Resolved
+  2026-11-23** (batch A item 2): a `{"file_name": ...}` entry with no
+  `file_path` gets the same neutral label as a stored one (`certificate` on a
+  submission, `attachment` on a record, a plausible extension kept).
+  Migration `1f3a6c2d9e40` relabelled the entries of members anonymised
+  before; the names it replaced cannot be recovered.
+- ~~**Anonymisation turned excused meetings into absences.**~~ **Resolved
+  2026-11-23** (batch A item 3): it cleared `meeting_attendees.waiver_reason`,
+  which every attendance reader takes as the excusal. It now writes the
+  standard `Excused: approved request` with no category in its place.
+  Migration `1f3a6c2d9e40` restored the wording on rows of members anonymised
+  before, where `waiver_granted_at` or `waiver_request_id` shows a waiver.
+- ~~**Three workflows deleted training rows and left their files.**~~
+  **Resolved 2026-11-23** (batch A item 4): `void_event_records` deleting a
+  never-credited record, the historical import undo deleting imported records
+  and its drills' events, and a member deleting a submission now queue the
+  files those rows named on `pending_file_deletions` in the delete's own
+  transaction (`event_records_voided`, `historical_import_undone`,
+  `submission_deleted`). The submission delete processes its rows right after
+  the commit; the other two leave them to the hourly sweep. A file another row
+  still names is kept.
+- **Deleting an event leaves its attachment files.** `EventService.delete_event`
+  and the series delete remove the row and every `events.attachments` file it
+  named stays on the volume, named by nothing. Found while closing the drill
+  undo above, which now queues them for the drills it deletes; the ordinary
+  event delete was out of that change's scope. Open for an owner decision on
+  whether event deletes should queue their files the same way.
 - ~~**A training record's own uploaded file has no removal route.**~~
   **Resolved 2026-11-21** (owner decision 2026-11-21, (d)):
   `DELETE /training/records/{id}/attachments/{entry}` and a Remove button in

@@ -25,6 +25,7 @@ from app.models.attendance_waiver import (
 )
 from app.models.meeting import Meeting, MeetingAttendee, MeetingStatus, MeetingType
 from app.models.user import Organization, User
+from app.services.attendance_waiver_service import MEETING_WAIVER_TEXT
 from app.services.data_export_service import DataExportService
 from app.services.member_anonymization_service import MemberAnonymizationService
 
@@ -232,7 +233,7 @@ async def test_the_export_carries_meeting_requests_and_their_waiver(db_session):
     json.dumps(export)
 
 
-async def test_anonymizing_clears_a_meeting_request_and_its_waiver_text(
+async def test_anonymizing_clears_a_meeting_request_and_neutralises_its_waiver_text(
     db_session,
 ):
     org = await _org(db_session)
@@ -258,6 +259,8 @@ async def test_anonymizing_clears_a_meeting_request_and_its_waiver_text(
             .execution_options(populate_existing=True)
         )
     ).scalar_one()
-    assert attendee.waiver_reason is None
+    # Standard wording without the category: still excused for every
+    # attendance reader, saying nothing about why (owner decision 2026-11-23).
+    assert attendee.waiver_reason == MEETING_WAIVER_TEXT
     # The link stays: it is the record that the meeting was excused.
     assert attendee.waiver_request_id == request.id

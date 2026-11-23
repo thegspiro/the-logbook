@@ -5,6 +5,9 @@ const mockAssign = vi.fn();
 const mockRemovePlan = vi.fn();
 const mockEditorOptions = vi.fn();
 const mockSendSeatCall = vi.fn();
+const mockApprove = vi.fn();
+const mockDecline = vi.fn();
+const mockWithdraw = vi.fn();
 const mockAudienceOptions = vi.fn();
 const mockAudiencePreview = vi.fn();
 
@@ -16,6 +19,9 @@ vi.mock('../../services/api', () => ({
     assignSeat: (...args: unknown[]) => mockAssign(...args) as unknown,
     removePlan: (...args: unknown[]) => mockRemovePlan(...args) as unknown,
     sendSeatCall: (...args: unknown[]) => mockSendSeatCall(...args) as unknown,
+    approveRequest: (...args: unknown[]) => mockApprove(...args) as unknown,
+    declineRequest: (...args: unknown[]) => mockDecline(...args) as unknown,
+    withdrawRequest: (...args: unknown[]) => mockWithdraw(...args) as unknown,
     getAssignableMembers: () => Promise.resolve([]),
     getDriverCandidates: () => Promise.resolve(null),
     getEditorOptions: (...args: unknown[]) => mockEditorOptions(...args) as unknown,
@@ -34,7 +40,12 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AxiosError, type AxiosResponse } from 'axios';
 import { nth, renderWithRouter } from '../../test/utils';
-import { ApparatusEventEvocMode, ApparatusEventSeatType, type CrewBoard } from '../../types/apparatusEvent';
+import {
+  ApparatusEventEvocMode,
+  ApparatusEventSeatType,
+  type CrewBoard,
+  type SeatRequest,
+} from '../../types/apparatusEvent';
 import EventApparatusCrewCard from './EventApparatusCrewCard';
 import { seatLabels } from './apparatus-crew/seatLabels';
 
@@ -54,6 +65,7 @@ const board = (overrides: Partial<CrewBoard> = {}): CrewBoard => ({
   template_name: 'Santamobile — Full',
   evoc_mode: ApparatusEventEvocMode.ENFORCE,
   allow_self_signup: true,
+  require_signup_approval: false,
   show_on_schedule: true,
   admin_hours_category_id: 'cat-1',
   admin_hours_category_name: 'Community Outreach',
@@ -81,6 +93,7 @@ const board = (overrides: Partial<CrewBoard> = {}): CrewBoard => ({
           assignment_method: 'self_signup',
           is_me: false,
           checked_in: false,
+          requests: [],
         },
         {
           id: 'seat-santa',
@@ -92,6 +105,7 @@ const board = (overrides: Partial<CrewBoard> = {}): CrewBoard => ({
           assignment_method: null,
           is_me: false,
           checked_in: false,
+          requests: [],
         },
         {
           id: 'seat-elf-1',
@@ -103,6 +117,7 @@ const board = (overrides: Partial<CrewBoard> = {}): CrewBoard => ({
           assignment_method: null,
           is_me: false,
           checked_in: false,
+          requests: [],
         },
         {
           id: 'seat-elf-2',
@@ -114,17 +129,34 @@ const board = (overrides: Partial<CrewBoard> = {}): CrewBoard => ({
           assignment_method: null,
           is_me: false,
           checked_in: false,
+          requests: [],
         },
       ],
     },
   ],
   my_seat_id: null,
+  my_request: null,
   can_manage: false,
   can_sign_up: true,
   warnings: [],
   last_seat_call: null,
   ...overrides,
 });
+
+const REQUESTS: SeatRequest[] = [
+  { id: 'req-1', user_id: 'u-kim', user_name: 'A. Kim', requested_at: FUTURE_START },
+  { id: 'req-2', user_id: 'u-lee', user_name: 'B. Lee', requested_at: FUTURE_START },
+];
+
+/** The board with *requests* waiting on the Santa seat. */
+const withRequests = (requests: SeatRequest[], overrides: Partial<CrewBoard> = {}): CrewBoard => {
+  const base = board({ require_signup_approval: true, ...overrides });
+  const unit = nth(base.units, 0);
+  return {
+    ...base,
+    units: [{ ...unit, seats: unit.seats.map((s) => (s.id === 'seat-santa' ? { ...s, requests } : s)) }],
+  };
+};
 
 describe('EventApparatusCrewCard', () => {
   beforeEach(() => {
@@ -136,6 +168,9 @@ describe('EventApparatusCrewCard', () => {
     mockEditorOptions.mockReset();
     mockEditorOptions.mockResolvedValue({ apparatus: [], categories: [], mapped_event_types: [] });
     mockSendSeatCall.mockReset();
+    mockApprove.mockReset();
+    mockDecline.mockReset();
+    mockWithdraw.mockReset();
     mockAudienceOptions.mockReset();
     mockAudiencePreview.mockReset();
     mockAudienceOptions.mockResolvedValue({
@@ -316,5 +351,90 @@ describe('EventApparatusCrewCard', () => {
     await user.selectOptions(category, '');
 
     expect(await screen.findByText(/hours won’t be credited/)).toBeInTheDocument();
+  });
+
+  describe('when sign-ups need approval', () => {
+    it('asks for a seat instead of taking it, and says so', async () => {
+      mockGetBoard.mockResolvedValue(board({ require_signup_approval: true }));
+      mockClaim.mockResolvedValue(
+        board({
+          require_signup_approval: true,
+          my_request: { id: 'req-9', seat_id: 'seat-santa', seat_name: 'Santa', requested_at: FUTURE_START },
+        })
+      );
+      const user = userEvent.setup();
+      renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+      expect(await screen.findByText('Sign-ups need approval')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Sign me up/ })).not.toBeInTheDocument();
+      await user.click(nth(screen.getAllByRole('button', { name: /Ask for this seat/ }), 0));
+
+      expect(mockClaim).toHaveBeenCalledWith('night-1', 'seat-santa');
+      expect(await screen.findByText('Your request is waiting')).toBeInTheDocument();
+      expect(screen.getByText(/You asked for the Santa seat/)).toBeInTheDocument();
+      // One waiting request per night: no second seat is offered.
+      expect(screen.queryByRole('button', { name: /Ask for this seat/ })).not.toBeInTheDocument();
+    });
+
+    it('lets the member withdraw their request', async () => {
+      const mine = { id: 'req-9', seat_id: 'seat-santa', seat_name: 'Santa', requested_at: FUTURE_START };
+      mockGetBoard.mockResolvedValue(board({ require_signup_approval: true, my_request: mine }));
+      mockWithdraw.mockResolvedValue(board({ require_signup_approval: true }));
+      const user = userEvent.setup();
+      renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+      await user.click(await screen.findByRole('button', { name: 'Withdraw request' }));
+
+      expect(mockWithdraw).toHaveBeenCalledWith('night-1', 'req-9');
+      expect(await screen.findAllByRole('button', { name: /Ask for this seat/ })).toHaveLength(3);
+    });
+
+    it('shows a coordinator who is waiting, and approves one', async () => {
+      mockGetBoard.mockResolvedValue(withRequests(REQUESTS, { can_manage: true }));
+      mockApprove.mockResolvedValue(board({ can_manage: true, require_signup_approval: true }));
+      const user = userEvent.setup();
+      renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+      expect(await screen.findByText('2 requests waiting')).toBeInTheDocument();
+      expect(screen.getByText('A. Kim')).toBeInTheDocument();
+      expect(screen.getByText('B. Lee')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Approve B. Lee for Santa' }));
+
+      expect(mockApprove).toHaveBeenCalledWith('night-1', 'req-2');
+    });
+
+    it('declines with the coordinator’s note', async () => {
+      mockGetBoard.mockResolvedValue(withRequests(REQUESTS, { can_manage: true }));
+      mockDecline.mockResolvedValue(withRequests([nth(REQUESTS, 1)], { can_manage: true }));
+      const user = userEvent.setup();
+      renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+      await user.click(await screen.findByRole('button', { name: 'Decline A. Kim for Santa' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.type(within(dialog).getByRole('textbox'), 'Santa is already booked.');
+      await user.click(within(dialog).getByRole('button', { name: 'Decline request' }));
+
+      expect(mockDecline).toHaveBeenCalledWith('night-1', 'req-1', 'Santa is already booked.');
+      await waitFor(() => expect(screen.queryByText('A. Kim')).not.toBeInTheDocument());
+    });
+
+    it('offers no answer once the night has started', async () => {
+      const started = new Date(Date.now() - 600_000).toISOString();
+      mockGetBoard.mockResolvedValue(withRequests(REQUESTS, { can_manage: true, start_datetime: started }));
+      renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+      expect(await screen.findByText('A. Kim')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Approve/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Ask for this seat/ })).not.toBeInTheDocument();
+    });
+
+    it('shows a member nobody else’s request', async () => {
+      mockGetBoard.mockResolvedValue(withRequests([], { can_manage: false }));
+      renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+      await screen.findByText('Sign-ups need approval');
+      expect(screen.queryByText(/requests? waiting/)).not.toBeInTheDocument();
+    });
   });
 });
