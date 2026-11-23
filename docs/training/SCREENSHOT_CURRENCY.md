@@ -1,5 +1,71 @@
 # Screenshot currency
 
+## Captured 2026-11-22 — the shots still failing after the 2026-11-21 pass
+
+The 2026-11-21 capture left 95 shots failing, and three rows open: `14-22`,
+`19-25` and `19-26`. This pass repaired 93 of the 95 and closed all three. Each
+shot was re-run on its own against the same demo department and checked by eye.
+
+**Open rows closed.**
+
+| Image | Disposition | Notes |
+| --- | --- | --- |
+| `14-22-ballot-template-picker` | Re-shot | The Use Template picker opens in view since #4532 |
+| `19-25`, `19-26` | Re-shot as two pairs | `19-25` / `19-26` are now the ballot page before and after a saved ballot is applied. `19-44-voting-method-before` / `19-45-voting-method-after` are the Overview tab's Voting Method card. Guide 14 shows all four |
+| `02-78-my-training-toolbar` | Retired | Its toolbar is gone from My Training; image, manifest entry and baseline line removed |
+
+**Why the 93 were failing, by cause.** Most were the harness, not the app:
+
+- **Session expiry.** A run lasts two hours or more, and the backend signs a
+  session out after 15 idle minutes. Each signed-in context is now rebuilt
+  once it has been idle for 12 minutes (`scripts/test_screenshot_session_idle.py`).
+- **Step-up.** Admin writes now answer 403 `LB-AUTH-013` until the session is
+  confirmed. Calls from the administrator's page step up and retry once. A
+  member's session steps up with its own passkey, never the administrator's
+  code. `00-34` runs in a session of its own (`auth: "admin-unconfirmed"`): a
+  confirmed session saves the switch it pictures, which turned **Allow
+  passkeys** off for the department and failed every passkey shot after it.
+  Its cleanup now restores the policy itself.
+- **UI drift.** Reset Password and Reset MFA moved into each roster row's
+  menu. Pattern cards fold behind **Details**. Planning sections became links
+  rather than tabs. Headings changed level. Some tables reflow into cards at
+  1440px, so their shots are wider. The follow-up answers endpoint moved under
+  `/interview/`, so the mock stopped matching. Each shot was retargeted, and
+  its alt rewritten where the screen changed.
+- **Seed data.** Fixed in `seed_demo_data.py`:
+  - **Internship pipeline:** its shifts and crew.
+  - **Shift reminder:** the administrator's seat.
+  - **Utility 1 Walkaround:** its Present lines, stored as `function` before
+    `presence` existed, are set back and the template republished.
+  - **Attendance-validation event:** finalizing now sets
+    `attendance_finalized_at`, so the event is reopened rather than having its
+    `custom_fields` emptied (`scripts/test_seed_walkaround_presence.py`,
+    `scripts/test_seed_validation_event_reopen.py`).
+- **State a shot needs at run time.** `03-114` needs a shift of the
+  secretary's that is under way. When none of their rotation shifts is
+  running, it makes a four-hour shift, then checks the secretary out and
+  cancels it in cleanup.
+- **The inbox groups notifications.** `19-31` / `19-32` were taken against an
+  inbox that showed each notification as its own card, and `19-32` finalized
+  whichever event had the newest prompt. That had become the check-in
+  monitor's in-progress drill. The pair now frames the attendance validations
+  stack opened, and finalizes the seeder's own event by its title.
+- **The roster count is no longer the cap.** `19-27`'s over-count refusal is
+  now measured against the members eligible for the race (8 for Captain), not
+  the 22 on the roster. The caption in guide 14 says so.
+
+**Still failing (2).** Each keeps its committed image:
+
+- `11-28-budget-picker-inactive`: a product bug. Editing a purchase request
+  that is linked to a budget shows **No budget linked**, because the form is
+  reset before the budget options load. It is being fixed separately.
+- `15-02-board-truncated`: needs the opt-in `--bulk-prospects` seed, which
+  this pass did not run because 200 extra applicants would change every other
+  guide 15 shot. See `scripts/screenshots/README.md`.
+
+**Re-seeding after a capture** still fails at the steps the 2026-11-21 section
+lists. That fix is a pull request of its own.
+
 ## Captured 2026-11-21 — the Replace and Check rows of every open queue
 
 Taken on a demo department seeded from `main` at `b0187eae`, with malware

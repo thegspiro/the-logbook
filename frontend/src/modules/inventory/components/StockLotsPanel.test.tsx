@@ -147,4 +147,28 @@ describe('StockLotsPanel adjusting a lot quantity', () => {
     await waitFor(() => expect(mockUpdateItemLot).toHaveBeenCalledTimes(3));
     expect(mockUpdateItemLot.mock.calls.map((call) => (call[1] as { quantity: number }).quantity)).toEqual([6, 7, 8]);
   });
+
+  // The +/- buttons are on screen from the commit that renders the lots, but
+  // the ref a press reads was filled by a passive effect, which React runs in
+  // a later task. A press in between found no lot and was dropped without a
+  // word. A loaded CI runner widened the gap enough to fail the test above.
+  // The MutationObserver presses in the microtask after the commit, before
+  // any scheduled task, which is the earliest a person's tap could land.
+  it('saves a press made as soon as the lots appear', async () => {
+    const pressed = new Promise<void>((resolve) => {
+      const observer = new MutationObserver(() => {
+        const decrease = screen.queryByRole('button', { name: 'Decrease lot TQ-A' });
+        if (!decrease) return;
+        observer.disconnect();
+        fireEvent.click(decrease);
+        resolve();
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    });
+    renderWithRouter(<StockLotsPanel itemId="item-1" canManage />);
+
+    await pressed;
+
+    await waitFor(() => expect(mockUpdateItemLot).toHaveBeenCalledWith('a', { quantity: 4 }));
+  });
 });
