@@ -728,36 +728,40 @@ const ReviewRows: React.FC<ReviewRowsProps> = ({
                       </>
                     )}
                     <td data-label="Status" className="px-3 py-2">
-                      {state ?? (
-                        <ul className="space-y-2">
-                          {issues.map((issue, index) => {
-                            const comparable =
-                              issue.row_ids.length > 1 && issue.row_ids.length <= 10 && focus?.label !== issue.message;
-                            return (
-                              <li key={`${issue.code}-${index}`}>
-                                <span className="text-red-700 dark:text-red-400">{issue.message}</span>
-                                {comparable && (
-                                  <>
-                                    {' '}
-                                    <button
-                                      type="button"
-                                      className="text-theme-text-secondary underline"
-                                      onClick={() => {
-                                        setPage(1);
-                                        onFocus({ label: issue.message, rowIds: issue.row_ids });
-                                      }}
-                                    >
-                                      Compare lines
-                                    </button>
-                                  </>
-                                )}
-                                <IssueDecisions issue={issue} rowId={row.id} {...actions} />
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                      <RowState row={row} shift={shiftOf(row)} {...actions} />
+                      <div className="min-w-0">
+                        {state ?? (
+                          <ul className="space-y-2">
+                            {issues.map((issue, index) => {
+                              const comparable =
+                                issue.row_ids.length > 1 &&
+                                issue.row_ids.length <= 10 &&
+                                focus?.label !== issue.message;
+                              return (
+                                <li key={`${issue.code}-${index}`}>
+                                  <span className="text-red-700 dark:text-red-400">{issue.message}</span>
+                                  {comparable && (
+                                    <>
+                                      {' '}
+                                      <button
+                                        type="button"
+                                        className="text-theme-text-secondary underline"
+                                        onClick={() => {
+                                          setPage(1);
+                                          onFocus({ label: issue.message, rowIds: issue.row_ids });
+                                        }}
+                                      >
+                                        Compare lines
+                                      </button>
+                                    </>
+                                  )}
+                                  <IssueDecisions issue={issue} rowId={row.id} {...actions} />
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                        <RowState row={row} shift={shiftOf(row)} {...actions} />
+                      </div>
                     </td>
                     <td data-label="Actions" className="px-3 py-2">
                       <div className="flex justify-end gap-2">

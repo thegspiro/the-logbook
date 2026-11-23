@@ -8,6 +8,7 @@ import { asArray, expectArray } from '../utils/asArray';
 import type {
   LeaveApproverCoverBoard,
   LeaveApproverCoverCreate,
+  LeaveCalendar,
   LeaveEndedEarly,
   LeaveRequest,
   LeaveRequestCreate,
@@ -23,6 +24,7 @@ const coverBoard = (data: LeaveApproverCoverBoard): LeaveApproverCoverBoard => (
   covers: asArray(data?.covers),
   approvers: asArray(data?.approvers),
   stand_ins: asArray(data?.stand_ins),
+  suggested: asArray(data?.suggested),
   today: data?.today ?? '',
 });
 
@@ -123,5 +125,24 @@ export const leaveRequestService = {
   async clearCover(id: string): Promise<LeaveApproverCoverBoard> {
     const response = await api.delete<LeaveApproverCoverBoard>(`/users/leave-requests/covers/${id}`);
     return coverBoard(response.data);
+  },
+
+  /** One month of the department's leave, as "YYYY-MM". Managers only. */
+  async getCalendar(month: string): Promise<LeaveCalendar> {
+    const response = await api.get<LeaveCalendar>('/users/leave-requests/calendar', { params: { month } });
+    return {
+      ...response.data,
+      entries: asArray(response.data?.entries),
+      covers: asArray(response.data?.covers),
+    };
+  },
+
+  /** Requests and recorded leaves over a range, as CSV. Managers only. */
+  async exportRecords(start: string, end: string): Promise<Blob> {
+    const response = await api.get<Blob>('/users/leave-requests/export', {
+      params: { start, end },
+      responseType: 'blob',
+    });
+    return response.data;
   },
 };

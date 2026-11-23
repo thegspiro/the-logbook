@@ -316,23 +316,25 @@ const ErrorMonitoringPage: React.FC = () => {
                         {formatDateTime(error.timestamp, tz)}
                       </td>
                       <td data-label="Error Type" className="px-6 py-4">
-                        <span
-                          className={`inline-flex rounded-full px-2 py-1 text-xs leading-5 font-semibold ${
-                            error.errorType?.startsWith('BACKEND_')
-                              ? 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
-                              : 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300'
-                          }`}
-                        >
-                          {error.errorType}
-                        </span>
-                        {/* A collapsed burst reports once with a count. Without
+                        <div className="min-w-0">
+                          <span
+                            className={`inline-flex rounded-full px-2 py-1 text-xs leading-5 font-semibold ${
+                              error.errorType?.startsWith('BACKEND_')
+                                ? 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
+                                : 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300'
+                            }`}
+                          >
+                            {error.errorType}
+                          </span>
+                          {/* A collapsed burst reports once with a count. Without
                           showing it, "one error" and "one error that happened
                           400 times in a minute" look identical. */}
-                        {typeof error.context.occurrences === 'number' && error.context.occurrences > 1 && (
-                          <span className="text-theme-text-muted ml-2 text-xs font-semibold">
-                            ×{error.context.occurrences}
-                          </span>
-                        )}
+                          {typeof error.context.occurrences === 'number' && error.context.occurrences > 1 && (
+                            <span className="text-theme-text-muted ml-2 text-xs font-semibold">
+                              ×{error.context.occurrences}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td data-label="Source" className="text-theme-text-secondary px-6 py-4 text-xs whitespace-nowrap">
                         {sourceLabel(error)}

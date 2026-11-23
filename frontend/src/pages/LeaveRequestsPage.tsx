@@ -31,6 +31,7 @@ import {
 import { useLeaveRequestNavStore } from '../hooks/useLeaveRequestNav';
 import EndLeaveEarly from '../components/members/EndLeaveEarly';
 import ApproverCover from '../components/members/ApproverCover';
+import LeaveCalendar from '../components/members/LeaveCalendar';
 
 // The kinds a member asks for. Administrative and new-member leave are an
 // officer's to record, not a member's to request.
@@ -116,6 +117,9 @@ const LeaveRequestsPage: React.FC = () => {
   const [myLeaves, setMyLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
   const [toDecide, setToDecide] = useState<LeaveRequest[]>([]);
   const [showDecided, setShowDecided] = useState(false);
+  // The department calendar is for those who manage leave; everyone else has
+  // only the requests view, and never sees the switch.
+  const [view, setView] = useState<'requests' | 'calendar'>('requests');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -266,276 +270,303 @@ const LeaveRequestsPage: React.FC = () => {
         Ask for a leave of absence, and see where your requests stand.
       </p>
 
-      {loadError && (
-        <div className="alert-warning text-theme-alert-warning-text mb-4 text-sm" role="alert">
-          {loadError}
+      {managesLeave && (
+        <div className="mb-6 flex gap-2" role="group" aria-label="View">
+          <button
+            type="button"
+            className={view === 'requests' ? 'btn-primary' : 'btn-secondary'}
+            aria-pressed={view === 'requests'}
+            onClick={() => setView('requests')}
+          >
+            Requests
+          </button>
+          <button
+            type="button"
+            className={view === 'calendar' ? 'btn-primary' : 'btn-secondary'}
+            aria-pressed={view === 'calendar'}
+            onClick={() => setView('calendar')}
+          >
+            Calendar
+          </button>
         </div>
       )}
 
-      {(toDecide.length > 0 || managesLeave) && (
-        <section className="card mb-6 p-4" aria-labelledby="to-decide-heading">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 id="to-decide-heading" className="text-theme-text-primary font-semibold">
-              To decide
-            </h2>
-            {managesLeave && (
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="form-checkbox"
-                  checked={showDecided}
-                  onChange={(e) => setShowDecided(e.target.checked)}
-                />
-                Show decided requests
-              </label>
-            )}
-          </div>
-          {toDecide.length === 0 ? (
-            <p className="text-theme-text-muted text-sm">Nothing is waiting on a decision.</p>
-          ) : (
-            <ul className="space-y-3">
-              {toDecide.map((r) => (
-                <li key={r.id} className="border-theme-surface-border rounded-md border p-3">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <p className="text-theme-text-primary font-medium">{r.member_name}</p>
-                      <p className="text-theme-text-secondary text-sm">
-                        {typeLabel(r.leave_type)}: {dates(r)}
-                      </p>
-                      <p className="text-theme-text-muted text-xs">Asked {formatDate(r.created_at, tz)}</p>
-                    </div>
-                    <StatusBadge status={r.status} />
-                  </div>
-                  {r.reason && (
-                    <p className="text-theme-text-secondary mt-2 text-sm whitespace-pre-line">
-                      <span className="font-medium">Reason: </span>
-                      {r.reason}
-                    </p>
-                  )}
-                  <p className="text-theme-text-muted mt-2 text-xs">{tallyLine(r) || decidedLine(r, tz)}</p>
-                  <Votes request={r} />
-                  <LeaveRequestDetails request={r} audience="approver" />
-                  {r.can_vote && (
-                    <div className="mt-3 space-y-2">
-                      <label className="form-label" htmlFor={`note-${r.id}`}>
-                        Note to the member (optional)
-                      </label>
-                      <textarea
-                        id={`note-${r.id}`}
-                        className="form-input"
-                        rows={2}
-                        maxLength={1000}
-                        value={notes[r.id] ?? ''}
-                        onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))}
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          className="btn-primary"
-                          disabled={busy === r.id}
-                          onClick={() => void vote(r, 'approve')}
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          disabled={busy === r.id}
-                          onClick={() => void vote(r, 'deny')}
-                        >
-                          Deny
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  <LeaveApproverActions
-                    request={r}
-                    busy={busy === r.id}
-                    onAsk={(text) =>
-                      act(
-                        r.id,
-                        () => leaveRequestService.askQuestion(r.id, text),
-                        'Your question was sent. Voting waits for the answer.',
-                        'Your question was not sent.'
-                      )
-                    }
-                    onPropose={(start, end, note) =>
-                      act(
-                        r.id,
-                        () => leaveRequestService.proposeChanges(r.id, start, end, note),
-                        'The changed dates were sent to the member.',
-                        'The changed dates were not sent.'
-                      )
-                    }
-                  />
-                  {r.my_vote && r.status === LeaveRequestStatus.PENDING && (
-                    <p className="text-theme-text-muted mt-2 text-xs">
-                      You {r.my_vote === 'approve' ? 'approved' : 'denied'} it; waiting on the other approvers.
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
+      {managesLeave && view === 'calendar' ? (
+        <LeaveCalendar />
+      ) : (
+        <>
+          {loadError && (
+            <div className="alert-warning text-theme-alert-warning-text mb-4 text-sm" role="alert">
+              {loadError}
+            </div>
           )}
-        </section>
-      )}
 
-      {enabled === false && (
-        <div className="card mb-6 p-4 text-sm" role="status">
-          Your department records leave through its officers rather than taking requests here. Speak to the officer who
-          manages leave.
-        </div>
-      )}
-
-      {enabled && <ApproverCover />}
-
-      {enabled && <EndLeaveEarly leaves={myLeaves} today={today} onEnded={load} />}
-
-      {enabled && (
-        <section className="card mb-6 p-4" aria-labelledby="ask-heading">
-          <h2 id="ask-heading" className="text-theme-text-primary mb-3 font-semibold">
-            Ask for leave
-          </h2>
-          <form className="space-y-4" onSubmit={(e) => void submit(e)}>
-            <div>
-              <label className="form-label" htmlFor="leave-request-type">
-                Kind of leave
-              </label>
-              <select
-                id="leave-request-type"
-                className="form-input"
-                value={form.leave_type}
-                onChange={(e) => setForm({ ...form, leave_type: e.target.value })}
-              >
-                {REQUEST_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="form-label" htmlFor="leave-request-start">
-                  First day
-                </label>
-                <input
-                  id="leave-request-start"
-                  type="date"
-                  className="form-input"
-                  required
-                  value={form.start_date}
-                  onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-                />
-              </div>
-              {!openEnded && (
-                <div>
-                  <label className="form-label" htmlFor="leave-request-end">
-                    Last day
+          {(toDecide.length > 0 || managesLeave) && (
+            <section className="card mb-6 p-4" aria-labelledby="to-decide-heading">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 id="to-decide-heading" className="text-theme-text-primary font-semibold">
+                  To decide
+                </h2>
+                {managesLeave && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={showDecided}
+                      onChange={(e) => setShowDecided(e.target.checked)}
+                    />
+                    Show decided requests
                   </label>
-                  <input
-                    id="leave-request-end"
-                    type="date"
-                    className="form-input"
-                    required
-                    min={form.start_date || undefined}
-                    value={form.end_date}
-                    onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-                  />
-                </div>
+                )}
+              </div>
+              {toDecide.length === 0 ? (
+                <p className="text-theme-text-muted text-sm">Nothing is waiting on a decision.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {toDecide.map((r) => (
+                    <li key={r.id} className="border-theme-surface-border rounded-md border p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="text-theme-text-primary font-medium">{r.member_name}</p>
+                          <p className="text-theme-text-secondary text-sm">
+                            {typeLabel(r.leave_type)}: {dates(r)}
+                          </p>
+                          <p className="text-theme-text-muted text-xs">Asked {formatDate(r.created_at, tz)}</p>
+                        </div>
+                        <StatusBadge status={r.status} />
+                      </div>
+                      {r.reason && (
+                        <p className="text-theme-text-secondary mt-2 text-sm whitespace-pre-line">
+                          <span className="font-medium">Reason: </span>
+                          {r.reason}
+                        </p>
+                      )}
+                      <p className="text-theme-text-muted mt-2 text-xs">{tallyLine(r) || decidedLine(r, tz)}</p>
+                      <Votes request={r} />
+                      <LeaveRequestDetails request={r} audience="approver" />
+                      {r.can_vote && (
+                        <div className="mt-3 space-y-2">
+                          <label className="form-label" htmlFor={`note-${r.id}`}>
+                            Note to the member (optional)
+                          </label>
+                          <textarea
+                            id={`note-${r.id}`}
+                            className="form-input"
+                            rows={2}
+                            maxLength={1000}
+                            value={notes[r.id] ?? ''}
+                            onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))}
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              className="btn-primary"
+                              disabled={busy === r.id}
+                              onClick={() => void vote(r, 'approve')}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              disabled={busy === r.id}
+                              onClick={() => void vote(r, 'deny')}
+                            >
+                              Deny
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      <LeaveApproverActions
+                        request={r}
+                        busy={busy === r.id}
+                        onAsk={(text) =>
+                          act(
+                            r.id,
+                            () => leaveRequestService.askQuestion(r.id, text),
+                            'Your question was sent. Voting waits for the answer.',
+                            'Your question was not sent.'
+                          )
+                        }
+                        onPropose={(start, end, note) =>
+                          act(
+                            r.id,
+                            () => leaveRequestService.proposeChanges(r.id, start, end, note),
+                            'The changed dates were sent to the member.',
+                            'The changed dates were not sent.'
+                          )
+                        }
+                      />
+                      {r.my_vote && r.status === LeaveRequestStatus.PENDING && (
+                        <p className="text-theme-text-muted mt-2 text-xs">
+                          You {r.my_vote === 'approve' ? 'approved' : 'denied'} it; waiting on the other approvers.
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               )}
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="form-checkbox"
-                checked={openEnded}
-                onChange={(e) => setOpenEnded(e.target.checked)}
-              />
-              I don&rsquo;t know the last day yet
-            </label>
-            <div>
-              <label className="form-label" htmlFor="leave-request-reason">
-                Reason (optional)
-              </label>
-              <textarea
-                id="leave-request-reason"
-                className="form-input"
-                rows={3}
-                maxLength={2000}
-                aria-describedby="leave-request-reason-help"
-                value={form.reason}
-                onChange={(e) => setForm({ ...form, reason: e.target.value })}
-              />
-              <p id="leave-request-reason-help" className="text-theme-text-muted mt-1 text-xs">
-                Only the approvers read this, after signing in. It is never emailed.
-              </p>
-            </div>
-            <button type="submit" className="btn-primary" disabled={submitting || !form.start_date}>
-              {submitting ? 'Sending…' : 'Send request'}
-            </button>
-          </form>
-        </section>
-      )}
+            </section>
+          )}
 
-      <section className="card p-4" aria-labelledby="mine-heading">
-        <h2 id="mine-heading" className="text-theme-text-primary mb-3 font-semibold">
-          Your requests
-        </h2>
-        {mine.length === 0 ? (
-          <p className="text-theme-text-muted text-sm">You have not asked for leave here.</p>
-        ) : (
-          <ul className="space-y-3">
-            {mine.map((r) => (
-              <li key={r.id} className="border-theme-surface-border rounded-md border p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="text-theme-text-primary text-sm font-medium">
-                      {typeLabel(r.leave_type)}: {dates(r)}
-                    </p>
-                    <p className="text-theme-text-muted text-xs">Asked {formatDate(r.created_at, tz)}</p>
-                  </div>
-                  <StatusBadge status={r.status} />
-                </div>
-                <p className="text-theme-text-muted mt-2 text-xs">{tallyLine(r) || decidedLine(r, tz)}</p>
-                {r.routed_to_chief && r.status === LeaveRequestStatus.PENDING && (
-                  <p className="text-theme-text-muted mt-1 text-xs">
-                    As an approver yourself, your request goes to the Chief.
-                  </p>
-                )}
-                <Votes request={r} />
-                <LeaveRequestDetails request={r} audience="member" />
-                <LeaveMemberActions
-                  request={r}
-                  busy={busy === r.id}
-                  onAnswer={(text) =>
-                    act(
-                      r.id,
-                      () => leaveRequestService.answer(r.id, text),
-                      'Your answer was sent. Voting resumes.',
-                      'Your answer was not sent.'
-                    )
-                  }
-                  onRespond={(accept) => respondToChanges(r, accept)}
-                />
-                {r.status === LeaveRequestStatus.PENDING && (
-                  <button
-                    type="button"
-                    className="btn-secondary mt-3"
-                    disabled={busy === r.id}
-                    onClick={() => void withdraw(r)}
+          {enabled === false && (
+            <div className="card mb-6 p-4 text-sm" role="status">
+              Your department records leave through its officers rather than taking requests here. Speak to the officer
+              who manages leave.
+            </div>
+          )}
+
+          {enabled && <ApproverCover />}
+
+          {enabled && <EndLeaveEarly leaves={myLeaves} today={today} onEnded={load} />}
+
+          {enabled && (
+            <section className="card mb-6 p-4" aria-labelledby="ask-heading">
+              <h2 id="ask-heading" className="text-theme-text-primary mb-3 font-semibold">
+                Ask for leave
+              </h2>
+              <form className="space-y-4" onSubmit={(e) => void submit(e)}>
+                <div>
+                  <label className="form-label" htmlFor="leave-request-type">
+                    Kind of leave
+                  </label>
+                  <select
+                    id="leave-request-type"
+                    className="form-input"
+                    value={form.leave_type}
+                    onChange={(e) => setForm({ ...form, leave_type: e.target.value })}
                   >
-                    Withdraw
-                  </button>
-                )}
-                {r.status === LeaveRequestStatus.APPROVED && r.end_date && r.end_date < today && (
-                  <p className="text-theme-text-muted mt-2 text-xs">This leave has ended.</p>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                    {REQUEST_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="form-label" htmlFor="leave-request-start">
+                      First day
+                    </label>
+                    <input
+                      id="leave-request-start"
+                      type="date"
+                      className="form-input"
+                      required
+                      value={form.start_date}
+                      onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                    />
+                  </div>
+                  {!openEnded && (
+                    <div>
+                      <label className="form-label" htmlFor="leave-request-end">
+                        Last day
+                      </label>
+                      <input
+                        id="leave-request-end"
+                        type="date"
+                        className="form-input"
+                        required
+                        min={form.start_date || undefined}
+                        value={form.end_date}
+                        onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                      />
+                    </div>
+                  )}
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={openEnded}
+                    onChange={(e) => setOpenEnded(e.target.checked)}
+                  />
+                  I don&rsquo;t know the last day yet
+                </label>
+                <div>
+                  <label className="form-label" htmlFor="leave-request-reason">
+                    Reason (optional)
+                  </label>
+                  <textarea
+                    id="leave-request-reason"
+                    className="form-input"
+                    rows={3}
+                    maxLength={2000}
+                    aria-describedby="leave-request-reason-help"
+                    value={form.reason}
+                    onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                  />
+                  <p id="leave-request-reason-help" className="text-theme-text-muted mt-1 text-xs">
+                    Only the approvers read this, after signing in. It is never emailed.
+                  </p>
+                </div>
+                <button type="submit" className="btn-primary" disabled={submitting || !form.start_date}>
+                  {submitting ? 'Sending…' : 'Send request'}
+                </button>
+              </form>
+            </section>
+          )}
+
+          <section className="card p-4" aria-labelledby="mine-heading">
+            <h2 id="mine-heading" className="text-theme-text-primary mb-3 font-semibold">
+              Your requests
+            </h2>
+            {mine.length === 0 ? (
+              <p className="text-theme-text-muted text-sm">You have not asked for leave here.</p>
+            ) : (
+              <ul className="space-y-3">
+                {mine.map((r) => (
+                  <li key={r.id} className="border-theme-surface-border rounded-md border p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-theme-text-primary text-sm font-medium">
+                          {typeLabel(r.leave_type)}: {dates(r)}
+                        </p>
+                        <p className="text-theme-text-muted text-xs">Asked {formatDate(r.created_at, tz)}</p>
+                      </div>
+                      <StatusBadge status={r.status} />
+                    </div>
+                    <p className="text-theme-text-muted mt-2 text-xs">{tallyLine(r) || decidedLine(r, tz)}</p>
+                    {r.routed_to_chief && r.status === LeaveRequestStatus.PENDING && (
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        As an approver yourself, your request goes to the Chief.
+                      </p>
+                    )}
+                    <Votes request={r} />
+                    <LeaveRequestDetails request={r} audience="member" />
+                    <LeaveMemberActions
+                      request={r}
+                      busy={busy === r.id}
+                      onAnswer={(text) =>
+                        act(
+                          r.id,
+                          () => leaveRequestService.answer(r.id, text),
+                          'Your answer was sent. Voting resumes.',
+                          'Your answer was not sent.'
+                        )
+                      }
+                      onRespond={(accept) => respondToChanges(r, accept)}
+                    />
+                    {r.status === LeaveRequestStatus.PENDING && (
+                      <button
+                        type="button"
+                        className="btn-secondary mt-3"
+                        disabled={busy === r.id}
+                        onClick={() => void withdraw(r)}
+                      >
+                        Withdraw
+                      </button>
+                    )}
+                    {r.status === LeaveRequestStatus.APPROVED && r.end_date && r.end_date < today && (
+                      <p className="text-theme-text-muted mt-2 text-xs">This leave has ended.</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
     </div>
   );
 };

@@ -871,11 +871,7 @@ async def run_request_upkeep(db: AsyncSession, org: Organization) -> int:
     A request a departed approver left decided is settled and its member told,
     as a vote would have; the rest that still wait are reminded about.
     """
-    from app.services.leave_of_absence_notices import (
-        RECORDED,
-        UPDATED,
-        deliver_leave_notice,
-    )
+    from app.services.leave_of_absence_notices import RECORDED, UPDATED
 
     org_id = str(org.id)
     service = LeaveRequestService(db)
@@ -884,7 +880,7 @@ async def run_request_upkeep(db: AsyncSession, org: Organization) -> int:
         done += 1
         if request.status == LeaveRequestStatus.APPROVED and request.leave_id:
             extended = request.extends_leave_id == request.leave_id
-            await deliver_leave_notice(
+            await deliver_approval_notice(
                 db,
                 org_id,
                 str(request.leave_id),
@@ -899,7 +895,8 @@ async def run_request_upkeep(db: AsyncSession, org: Organization) -> int:
         elif request.status == LeaveRequestStatus.DENIED:
             await notify_request_denied(db, org_id, str(request.id), None)
     reminded = await send_request_reminders(db, org)
-    return done + reminded + await send_request_escalations(db, org)
+    escalated = await send_request_escalations(db, org)
+    return done + reminded + escalated + await send_cover_endings(db, org)
 
 
 # ----------------------------------------------------------------------
@@ -989,3 +986,304 @@ async def send_leave_ended_early(
             )
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("Leave ended early notice failed: {}", exc)
+
+
+# ----------------------------------------------------------------------
+# An approver's stand-in (2026-11-22)
+# ----------------------------------------------------------------------
+
+KIND_COVER_NAMED = "cover_named"
+KIND_COVER_CLEARED = "cover_cleared"
+KIND_COVER_ENDED = "cover_ended"
+
+# A cover that ended this many days ago or less is still told it ended, so a
+# day the upkeep did not run does not lose the notice; an older one never is,
+# so the first run after an upgrade does not reach back over every cover.
+COVER_ENDED_LOOKBACK_DAYS = 7
+
+
+async def _users(db: AsyncSession, org_id: str, *ids: Optional[str]) -> dict:
+    wanted = [str(i) for i in ids if i]
+    if not wanted:
+        return {}
+    rows = (
+        await db.execute(
+            select(User).where(User.id.in_(wanted), User.organization_id == org_id)
+        )
+    ).scalars()
+    return {str(u.id): u for u in rows}
+
+
+async def _tell_stand_in(
+    db: AsyncSession,
+    org_id: str,
+    kind: str,
+    cover_id: str,
+    stand_in_id: str,
+    approver_id: str,
+    start: date,
+    end: date,
+    template_type: EmailTemplateType,
+    bell_subject: str,
+    bell_message: str,
+    extra: dict,
+) -> bool:
+    """One notice to a stand-in, once per cover and kind (pitfall #36).
+
+    Claimed and committed before anything is sent, so a re-run or a second
+    worker finds the claim and sends nothing: at most once. A crash between
+    the claim and the email loses that email, while the bell notice, already
+    committed, still tells them.
+    """
+    users = await _users(db, org_id, stand_in_id, approver_id)
+    stand_in = users.get(str(stand_in_id))
+    if stand_in is None or not stand_in.is_active:
+        return False
+    claim = await _claim(db, org_id, kind, str(cover_id))
+    if claim is None:
+        return False
+    _bell(
+        db,
+        org_id,
+        stand_in,
+        bell_subject,
+        bell_message,
+        str(cover_id),
+        metadata_key="leave_cover_id",
+    )
+    await _commit_bells(db)
+    org = await db.get(Organization, org_id)
+    return await _send(
+        db,
+        org,
+        stand_in,
+        EmailKind.MEMBERSHIP_ADMIN,
+        template_type,
+        {
+            "recipient_name": _name(stand_in),
+            "approver_name": _name(users.get(str(approver_id)), "an approver"),
+            "start_date": _date(start),
+            "end_date": _date(end),
+            "requests_url": _url(REQUESTS_PATH),
+            **extra,
+        },
+    )
+
+
+async def notify_cover_named(
+    db: AsyncSession, organization_id: str, cover_id: str, set_by_id: str
+) -> bool:
+    """Tell an officer they were named to decide in an approver's place."""
+    from app.models.leave_request import LeaveApproverCover
+
+    org_id = str(organization_id)
+    cover = (
+        await db.execute(
+            select(LeaveApproverCover).where(
+                LeaveApproverCover.id == str(cover_id),
+                LeaveApproverCover.organization_id == org_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if cover is None:
+        return False
+    setter = (await _users(db, org_id, set_by_id)).get(str(set_by_id))
+    approver = (await _users(db, org_id, cover.approver_id)).get(str(cover.approver_id))
+    approver_name = _name(approver, "an approver")
+    return await _tell_stand_in(
+        db,
+        org_id,
+        KIND_COVER_NAMED,
+        str(cover.id),
+        str(cover.stand_in_id),
+        str(cover.approver_id),
+        cover.start_date,
+        cover.end_date,
+        EmailTemplateType.LEAVE_COVER_NAMED,
+        f"You are covering leave requests for {approver_name}",
+        f"From {_date(cover.start_date)} to {_date(cover.end_date)} you decide "
+        f"leave requests in {approver_name}'s place.",
+        {"set_by_name": _name(setter, "An officer")},
+    )
+
+
+async def notify_cover_cleared(
+    db: AsyncSession,
+    organization_id: str,
+    cover: dict,
+    cleared_by_id: str,
+) -> bool:
+    """Tell the stand-in their cover was cleared.
+
+    ``cover`` is the cleared row's fields, taken before it was deleted:
+    ``id``, ``approver_id``, ``stand_in_id``, ``start_date``, ``end_date``.
+    Not sent when the stand-in cleared it themself.
+    """
+    org_id = str(organization_id)
+    if str(cleared_by_id) == str(cover["stand_in_id"]):
+        return False
+    users = await _users(db, org_id, cleared_by_id, cover["approver_id"])
+    approver_name = _name(users.get(str(cover["approver_id"])), "an approver")
+    return await _tell_stand_in(
+        db,
+        org_id,
+        KIND_COVER_CLEARED,
+        str(cover["id"]),
+        str(cover["stand_in_id"]),
+        str(cover["approver_id"]),
+        cover["start_date"],
+        cover["end_date"],
+        EmailTemplateType.LEAVE_COVER_CLEARED,
+        f"Your cover for {approver_name} was cleared",
+        f"You no longer decide leave requests in {approver_name}'s place. "
+        "Votes you already cast keep counting.",
+        {"cleared_by_name": _name(users.get(str(cleared_by_id)), "An officer")},
+    )
+
+
+async def send_cover_endings(db: AsyncSession, org: Organization) -> int:
+    """Tell each stand-in, the day after, that their cover has ended."""
+    from app.models.leave_request import LeaveApproverCover
+
+    org_id = str(org.id)
+    today = await resolve_org_today(db, org_id)
+    ended = (
+        (
+            await db.execute(
+                select(LeaveApproverCover)
+                .where(
+                    LeaveApproverCover.organization_id == org_id,
+                    LeaveApproverCover.end_date < today,
+                    LeaveApproverCover.end_date
+                    >= today - timedelta(days=COVER_ENDED_LOOKBACK_DAYS),
+                )
+                .order_by(LeaveApproverCover.end_date, LeaveApproverCover.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    sent = 0
+    for cover in ended:
+        approver = (await _users(db, org_id, cover.approver_id)).get(
+            str(cover.approver_id)
+        )
+        approver_name = _name(approver, "an approver")
+        if await _tell_stand_in(
+            db,
+            org_id,
+            KIND_COVER_ENDED,
+            str(cover.id),
+            str(cover.stand_in_id),
+            str(cover.approver_id),
+            cover.start_date,
+            cover.end_date,
+            EmailTemplateType.LEAVE_COVER_ENDED,
+            f"Your cover for {approver_name} has ended",
+            f"{approver_name} decides their leave requests again. Votes you "
+            "cast while covering keep counting.",
+            {},
+        ):
+            sent += 1
+    return sent
+
+
+async def send_cover_named(organization_id: str, cover_id: str, set_by_id: str) -> None:
+    """Background task: ``notify_cover_named`` on its own session."""
+    from app.core.database import database_manager
+
+    try:
+        async for session in database_manager.get_session():
+            await notify_cover_named(session, organization_id, cover_id, set_by_id)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Leave cover named notice failed: {}", exc)
+
+
+async def send_cover_cleared(
+    organization_id: str, cover: dict, cleared_by_id: str
+) -> None:
+    """Background task: ``notify_cover_cleared`` on its own session."""
+    from app.core.database import database_manager
+
+    try:
+        async for session in database_manager.get_session():
+            await notify_cover_cleared(session, organization_id, cover, cleared_by_id)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Leave cover cleared notice failed: {}", exc)
+
+
+def cover_prompt_sentence(start: date, end: Optional[date]) -> str:
+    """The line an approved leave's notice adds for an approver."""
+    span = f"from {_date(start)} to {_date(end)}" if end else f"from {_date(start)}"
+    return (
+        "You decide leave requests, so name an officer to decide them in your "
+        f"place {span} on the Leave Requests page."
+    )
+
+
+async def deliver_approval_notice(
+    db: AsyncSession,
+    organization_id: str,
+    leave_id: str,
+    decided_by_id: str,
+    kind: str,
+    summary: str,
+) -> bool:
+    """The member's notice that their request was approved.
+
+    For an approver whose new leave no cover spans yet, the notice also asks
+    them to name a stand-in, and a bell notice links to Leave Requests, where
+    the form waits with the leave's dates filled in.
+    """
+    from app.services.leave_of_absence_notices import deliver_leave_notice
+
+    org_id = str(organization_id)
+    leave = (
+        await db.execute(
+            select(MemberLeaveOfAbsence).where(
+                MemberLeaveOfAbsence.id == str(leave_id),
+                MemberLeaveOfAbsence.organization_id == org_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if leave is not None:
+        suggestions = await LeaveRequestService(db).cover_suggestions(
+            org_id, str(leave.user_id), leave_id=str(leave.id)
+        )
+        member = (await _users(db, org_id, leave.user_id)).get(str(leave.user_id))
+        if suggestions and member is not None:
+            first = suggestions[0]
+            prompt = cover_prompt_sentence(first.start_date, first.end_date)
+            summary = f"{summary} {prompt}"
+            _bell(
+                db,
+                org_id,
+                member,
+                "Name a stand-in while you are away",
+                prompt,
+                str(leave.id),
+                metadata_key="leave_id",
+            )
+            await _commit_bells(db)
+    return await deliver_leave_notice(
+        db, org_id, str(leave_id), str(decided_by_id), kind, summary=summary
+    )
+
+
+async def send_approval_notice(
+    organization_id: str,
+    leave_id: str,
+    decided_by_id: str,
+    kind: str,
+    summary: str,
+) -> None:
+    """Background task: ``deliver_approval_notice`` on its own session."""
+    from app.core.database import database_manager
+
+    try:
+        async for session in database_manager.get_session():
+            await deliver_approval_notice(
+                session, organization_id, leave_id, decided_by_id, kind, summary
+            )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Leave approval notice failed: {}", exc)

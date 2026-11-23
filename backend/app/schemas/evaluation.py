@@ -1420,6 +1420,26 @@ class ReassignmentPlan(BaseModel):
     rows: List[ReassignmentRow] = Field(default_factory=list)
 
 
+class GradeTally(BaseModel):
+    """Finalized reviews counted by grade: ``counts`` follows ``levels``,
+    ``other`` holds those with no place on the five grades."""
+
+    counts: List[int]
+    other: int
+    total: int
+
+
+class EvaluatorGradeTally(GradeTally):
+    evaluator_id: Optional[str] = None
+    name: str
+
+
+class GradeSpread(BaseModel):
+    levels: List[str]
+    evaluators: List[EvaluatorGradeTally] = Field(default_factory=list)
+    department: GradeTally
+
+
 class StepAssignment(BaseModel):
     """Who acts on an approval or calibration step. None hands the step back
     to the workflow's actor: the position's holders, or the view_all holders

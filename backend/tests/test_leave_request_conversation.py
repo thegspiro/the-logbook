@@ -62,7 +62,7 @@ async def _as(db, user, queued: list):
     ), patch.object(
         leave_requests, "send_request_denied", _recorder("denied")
     ), patch.object(
-        leave_requests, "send_leave_notice", _recorder("leave_notice")
+        leave_requests, "send_approval_notice", _recorder("leave_notice")
     ), patch.object(
         leave_requests, "send_request_event", _recorder("event")
     ), patch(

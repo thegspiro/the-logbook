@@ -598,14 +598,16 @@ export const DonorsPage: React.FC = () => {
                   <tr key={donor.id} className="hover:bg-theme-surface-hover transition-colors">
                     {/* Name */}
                     <td data-label="Name" className="px-4 py-3 text-sm">
-                      {/* An organization recorded without a contact leads with
+                      <div className="min-w-0">
+                        {/* An organization recorded without a contact leads with
                           its own name (W69-6). */}
-                      <span className="text-theme-text-primary font-medium">
-                        {personName(donor) || donor.companyName || 'Unnamed donor'}
-                      </span>
-                      {personName(donor) && donor.companyName && (
-                        <p className="text-theme-text-secondary text-xs">{donor.companyName}</p>
-                      )}
+                        <span className="text-theme-text-primary font-medium">
+                          {personName(donor) || donor.companyName || 'Unnamed donor'}
+                        </span>
+                        {personName(donor) && donor.companyName && (
+                          <p className="text-theme-text-secondary text-xs">{donor.companyName}</p>
+                        )}
+                      </div>
                     </td>
 
                     {/* Email */}

@@ -41,6 +41,7 @@ import type {
   ReassignmentHolder,
   ReassignmentPlan,
   ReviewHistoryEntry,
+  GradeSpread,
 } from '../types/evaluations';
 
 const api = createApiClient();
@@ -150,6 +151,12 @@ export const evaluationsService = {
   ): Promise<EvaluationSummary[]> {
     const response = await api.get<EvaluationSummary[]>('/evaluations', { params });
     return asArray(response.data);
+  },
+
+  /** Each evaluator's finalized reviews in a period, counted by grade (evaluations.view_all). */
+  async gradeSpread(periodId: string): Promise<GradeSpread> {
+    const response = await api.get<GradeSpread>('/evaluations/grade-spread', { params: { period_id: periodId } });
+    return { ...response.data, evaluators: asArray(response.data.evaluators) };
   },
 
   /** A zip of the signed PDF of every finalized evaluation in a period (evaluations.view_all, step-up). */

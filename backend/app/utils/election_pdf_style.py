@@ -58,6 +58,17 @@ CONTENT_WIDTH = letter[0] - 2 * SIDE_MARGIN - 12
 LOGO_BOX = 0.9 * inch
 
 
+def identity_style() -> ParagraphStyle:
+    """The small muted line under a department's name."""
+    return ParagraphStyle(
+        "DepartmentIdentity",
+        parent=document_stylesheet()["Normal"],
+        fontSize=8.5,
+        leading=11,
+        textColor=MUTED,
+    )
+
+
 def esc(value: Any) -> str:
     return html.escape(str(value)) if value is not None else ""
 
@@ -165,6 +176,39 @@ def logo_flowable(stored: Optional[str]) -> Optional[PdfImage]:
     )
 
 
+def department_identity(organization: Any) -> str:
+    """The department's address, phone and FDID on one line, or "".
+
+    Formal letterhead carries them under the name (owner decision,
+    2026-11-21), and the organization record already holds them. Blank
+    fields are skipped, so a department that has filled in only part of its
+    record gets no stray separators.
+    """
+    if organization is None:
+        return ""
+
+    def field(name: str) -> str:
+        return str(getattr(organization, name, None) or "").strip()
+
+    street = ", ".join(
+        part
+        for part in (field("mailing_address_line1"), field("mailing_address_line2"))
+        if part
+    )
+    state_zip = " ".join(
+        part for part in (field("mailing_state"), field("mailing_zip")) if part
+    )
+    address = ", ".join(
+        part for part in (street, field("mailing_city"), state_zip) if part
+    )
+    fdid = field("fdid")
+    return " · ".join(
+        part
+        for part in (address, field("phone"), f"FDID {fdid}" if fdid else "")
+        if part
+    )
+
+
 def beside_logo(lines: List[Any], logo: Optional[str], width: float) -> List[Any]:
     """*lines* with the department logo to their left, as one letterhead.
 
@@ -204,13 +248,16 @@ def letterhead(
     logo: Optional[str],
     styles: Dict[str, ParagraphStyle],
     fallback_title: str,
+    identity: Optional[str] = None,
 ) -> Table:
     """Logo beside the department name, the document kind and *lines*.
 
+    *identity* (:func:`department_identity`) is set small under the name.
     Without a usable logo the text takes the full width.
     """
     heading_text: List[Any] = [
         Paragraph(esc(org_name) or fallback_title, styles["org"]),
+        *([Paragraph(esc(identity), identity_style())] if identity else []),
         Spacer(1, 3),
         Paragraph(kicker, styles["kicker"]),
         *lines,

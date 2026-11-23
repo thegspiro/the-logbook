@@ -33,6 +33,7 @@ const board = (overrides: Record<string, unknown> = {}) => ({
   covers: [],
   approvers: [],
   stand_ins: [],
+  suggested: [],
   today: TODAY,
   ...overrides,
 });
@@ -155,5 +156,76 @@ describe('ApproverCover', () => {
     const section = await screen.findByRole('region', { name: 'Approver cover' });
     expect(within(section).queryByRole('button', { name: 'End cover' })).not.toBeInTheDocument();
     expect(within(section).queryByRole('button', { name: 'Set cover' })).not.toBeInTheDocument();
+  });
+
+  describe('asking an approver going on leave to name a stand-in', () => {
+    const suggestion = { leave_id: 'l1', start_date: '2027-03-05', end_date: '2027-03-12' };
+
+    it('says nothing when no leave of theirs wants one', async () => {
+      getCovers.mockResolvedValue(
+        board({ approvers: [{ id: 'me', name: 'Blake Board' }], stand_ins: [{ id: 'o1', name: 'Olive Officer' }] })
+      );
+      renderWithRouter(<ApproverCover />);
+
+      await screen.findByRole('region', { name: 'Approver cover' });
+      expect(screen.queryByRole('button', { name: 'Use these dates' })).not.toBeInTheDocument();
+    });
+
+    it("fills the form with the leave's dates and moves to the stand-in", async () => {
+      const user = userEvent.setup();
+      getCovers.mockResolvedValue(
+        board({
+          approvers: [{ id: 'me', name: 'Blake Board' }],
+          stand_ins: [{ id: 'o1', name: 'Olive Officer' }],
+          suggested: [suggestion],
+        })
+      );
+      renderWithRouter(<ApproverCover />);
+
+      const section = await screen.findByRole('region', { name: 'Approver cover' });
+      expect(within(section).getByRole('status')).toHaveTextContent(
+        'you are on leave from Mar 5, 2027 to Mar 12, 2027'
+      );
+      await user.click(within(section).getByRole('button', { name: 'Use these dates' }));
+
+      expect(within(section).getByLabelText('First day away')).toHaveValue('2027-03-05');
+      expect(within(section).getByLabelText('Last day away')).toHaveValue('2027-03-12');
+      expect(within(section).getByLabelText('Stand-in')).toHaveFocus();
+      await user.selectOptions(within(section).getByLabelText('Stand-in'), 'o1');
+      await user.click(within(section).getByRole('button', { name: 'Set cover' }));
+      expect(setCover).toHaveBeenCalledWith({
+        approver_id: 'me',
+        stand_in_id: 'o1',
+        start_date: '2027-03-05',
+        end_date: '2027-03-12',
+      });
+    });
+
+    it('an officer on leave is filled in as the approver who is away', async () => {
+      const user = userEvent.setup();
+      currentUser.id = 'o1';
+      getCovers.mockResolvedValue(
+        board({
+          approvers: [
+            { id: 'b1', name: 'Blake Board' },
+            { id: 'o1', name: 'Olive Officer' },
+          ],
+          stand_ins: [
+            { id: 'o1', name: 'Olive Officer' },
+            { id: 'o2', name: 'Oscar Officer' },
+          ],
+          suggested: [{ ...suggestion, end_date: null }],
+        })
+      );
+      renderWithRouter(<ApproverCover />);
+
+      const section = await screen.findByRole('region', { name: 'Approver cover' });
+      expect(within(section).getByRole('status')).toHaveTextContent('with no end date set');
+      await user.click(within(section).getByRole('button', { name: 'Use these dates' }));
+
+      expect(within(section).getByLabelText('Approver who is away')).toHaveValue('o1');
+      expect(within(section).getByLabelText('First day away')).toHaveValue('2027-03-05');
+      expect(within(section).getByLabelText('Last day away')).toHaveValue('');
+    });
   });
 });

@@ -29,6 +29,12 @@ const bulkPreview = vi.fn();
 const bulkDraft = vi.fn();
 const attention = vi.fn();
 const exportPeriod = vi.fn();
+const gradeSpread = vi.fn();
+const LEVELS = ['Unsatisfactory', 'Needs improvement', 'Meets expectations', 'Exceeds expectations', 'Outstanding'];
+const tally = (counts: number[], other: number) => {
+  const full = LEVELS.map((_, i) => counts[i] ?? 0);
+  return { counts: full, other, total: full.reduce((sum, n) => sum + n, other) };
+};
 const exportPeriodPdfs = vi.fn();
 const saveBlob = vi.fn();
 vi.mock('../../../utils/saveBlob', () => ({ saveBlob: (...a: unknown[]) => saveBlob(...a) as unknown }));
@@ -42,6 +48,7 @@ vi.mock('../services/evaluationsApi', () => ({
     bulkPreview: (...a: unknown[]) => bulkPreview(...a) as unknown,
     bulkDraft: (...a: unknown[]) => bulkDraft(...a) as unknown,
     exportPeriod: (...a: unknown[]) => exportPeriod(...a) as unknown,
+    gradeSpread: (...a: unknown[]) => gradeSpread(...a) as unknown,
     exportPeriodPdfs: (...a: unknown[]) => exportPeriodPdfs(...a) as unknown,
   },
 }));
@@ -248,6 +255,9 @@ describe('EvaluationListPage', () => {
       list.mockReset();
       list.mockResolvedValue([SUMMARY, DONE, DONE_TOO, ELSEWHERE]);
       exportPeriod.mockResolvedValue(new Blob(['csv']));
+      // No grades by evaluator unless a test sends some.
+      gradeSpread.mockReset();
+      gradeSpread.mockResolvedValue({ levels: LEVELS, evaluators: [], department: tally([], 0) });
       exportPeriodPdfs.mockReset();
       exportPeriodPdfs.mockResolvedValue(new Blob(['zip']));
     });
@@ -277,6 +287,33 @@ describe('EvaluationListPage', () => {
       await user.click(within(results).getByRole('button', { name: 'Export CSV' }));
       await waitFor(() => expect(exportPeriod).toHaveBeenCalledWith('p1'));
       expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'evaluation-results.csv');
+    });
+
+    it("shows view_all each evaluator's grades beside the department's", async () => {
+      granted = new Set(['evaluations.view_all']);
+      gradeSpread.mockResolvedValue({
+        levels: LEVELS,
+        evaluators: [
+          { evaluator_id: 'e1', name: 'Jordan Captain', ...tally([0, 0, 0, 3, 0], 0) },
+          { evaluator_id: 'e2', name: 'Sam Lieutenant', ...tally([0, 1, 2, 0, 0], 1) },
+        ],
+        department: tally([0, 1, 2, 3, 0], 1),
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<EvaluationListPage />);
+      await screen.findByRole('link', { name: 'Pat Member' });
+
+      await user.selectOptions(screen.getByLabelText('Period'), 'p1');
+
+      expect(gradeSpread).toHaveBeenCalledWith('p1');
+      const results = screen.getByRole('region', { name: 'Period results' });
+      await within(results).findByText('Whole department');
+      const rows = within(results).getAllByRole('listitem');
+      const row = (name: string) => rows.find((item) => within(item).queryByText(name) !== null);
+      expect(row('Whole department')).toHaveTextContent('Exceeds expectations3');
+      expect(row('Whole department')).toHaveTextContent('Not on the five grades1');
+      expect(row('Jordan Captain')).toHaveTextContent('Exceeds expectations3');
+      expect(row('Sam Lieutenant')).toHaveTextContent('Meets expectations2');
     });
 
     it("downloads the period's signed PDFs for view_all", async () => {

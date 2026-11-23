@@ -41,4 +41,71 @@ export async function expectTableFitsItsCard(table: Locator, label: string): Pro
     };
   });
   expect(width, `${label} is ${width - room}px wider than its card`).toBeLessThanOrEqual(room);
+  await expectStackedRowsAligned(table, label);
+}
+
+/**
+ * In the stacked view each labelled cell is a flex row: its `data-label` on the
+ * left, its value on the right. Three shapes broke that, none visible to the
+ * fit check above:
+ *
+ *   - a width on the <td> (`max-w-[160px]`, `w-10`) capped the whole row, so
+ *     label and value sat together in a narrow box at the left;
+ *   - a value and its sub-line as sibling elements became separate flex items,
+ *     spread across the row: "$248,750" mid-row, "(amended)" at the far edge;
+ *   - an auto margin (`mx-auto` on a centred icon) pulled the value off the
+ *     right edge.
+ *
+ * Checked only where the table is stacked, at whatever width that is.
+ */
+async function expectStackedRowsAligned(table: Locator, label: string): Promise<void> {
+  const problems = await table.evaluate((el) => {
+    const thead = el.querySelector('thead');
+    if (!thead || getComputedStyle(thead).display !== 'none') return [];
+    const found: string[] = [];
+    for (const tr of el.querySelectorAll<HTMLTableRowElement>('tbody tr')) {
+      const rowWidth = tr.getBoundingClientRect().width;
+      for (const td of tr.querySelectorAll<HTMLTableCellElement>(':scope > td[data-label]')) {
+        const style = getComputedStyle(td);
+        const box = td.getBoundingClientRect();
+        if (style.display === 'none' || td.classList.contains('rwd-table-lead') || box.width === 0) continue;
+        const name = td.dataset.label ?? '';
+        if (Math.abs(box.width - rowWidth) > 2) {
+          found.push(`${name}: row is ${Math.round(box.width)}px in a ${Math.round(rowWidth)}px card`);
+        }
+        // Each element child is its own flex item; adjacent text nodes share
+        // one anonymous item, so a run of text counts once.
+        const pieces: Node[] = [];
+        let afterText = false;
+        for (const node of td.childNodes) {
+          if (node.nodeType === Node.TEXT_NODE) {
+            if (node.textContent?.trim() && !afterText) pieces.push(node);
+            if (node.textContent?.trim()) afterText = true;
+          } else if (node instanceof HTMLElement) {
+            if (getComputedStyle(node).display !== 'none' && node.getBoundingClientRect().width > 0) {
+              pieces.push(node);
+              afterText = false;
+            }
+          }
+        }
+        if (pieces.length > 1) found.push(`${name}: value is split into ${pieces.length} pieces across the row`);
+        const last = pieces[pieces.length - 1];
+        if (pieces.length === 1 && last) {
+          let right: number;
+          if (last instanceof HTMLElement) right = last.getBoundingClientRect().right;
+          else {
+            // A text value can be several adjacent text nodes ("21", " of ",
+            // "24"); the one piece is all of them, which is the whole cell.
+            const range = document.createRange();
+            range.selectNodeContents(td);
+            right = range.getBoundingClientRect().right;
+          }
+          const edge = box.right - parseFloat(style.paddingRight);
+          if (edge - right > 4) found.push(`${name}: value sits ${Math.round(edge - right)}px short of the right edge`);
+        }
+      }
+    }
+    return found;
+  });
+  expect(problems, `${label}: stacked rows out of line`).toEqual([]);
 }

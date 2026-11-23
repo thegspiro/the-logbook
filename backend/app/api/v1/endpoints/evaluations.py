@@ -71,6 +71,7 @@ from app.schemas.evaluation import (
     EvaluationTemplateSummary,
     EvaluationTemplateUpdate,
     GradeRequest,
+    GradeSpread,
     GradesResponse,
     LiveDataResponse,
     PartWrite,
@@ -652,6 +653,26 @@ async def export_period_results(
             "Content-Disposition": 'attachment; filename="evaluation-results.csv"',
             "Cache-Control": "no-store",
         },
+    )
+
+
+@router.get("/grade-spread", response_model=GradeSpread)
+async def get_grade_spread(
+    period_id: str = Query(min_length=1, max_length=36),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.view_all")),
+):
+    """How each evaluator's finalized reviews in a period fall across the five
+    grades, beside the department's. Requires ``evaluations.view_all``, as
+    the grades it counts do; a period of another department answers 404.
+
+    **Permissions required:** evaluations.view_all
+    """
+    return ensure_found(
+        await EvaluationService(db).grade_spread(
+            current_user.organization_id, current_user, period_id
+        ),
+        "Review period",
     )
 
 
