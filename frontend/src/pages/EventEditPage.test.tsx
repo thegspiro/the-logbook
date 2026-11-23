@@ -570,6 +570,26 @@ describe('EventEditPage', () => {
       expect(screen.queryByText(/select at least one member type/i)).not.toBeInTheDocument();
     });
 
+    // Unticking Mandatory dropped the member types from the form, so the key
+    // left the save and the update kept them (pitfall #1): an event no longer
+    // mandatory still carried them, and ticking it again brought them back.
+    it('clears the member types when Mandatory is unticked', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        is_mandatory: true,
+        mandatory_membership_types: ['active'],
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await user.click(await screen.findByLabelText(/mandatory attendance/i));
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+      const [, payload] = vi.mocked(eventService.updateEvent).mock.calls[0] ?? [];
+      expect(payload).toEqual(expect.objectContaining({ is_mandatory: false, mandatory_membership_types: [] }));
+    });
+
     // Every member is the All members choice. "Only these member types" with
     // none ticked, whether unticked or newly made mandatory, is refused under
     // the field: the server would read the empty list as every member.
