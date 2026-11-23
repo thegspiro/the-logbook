@@ -1802,6 +1802,17 @@ Pages:
 - `PurchaseRequestDetailPage` — `/finance/purchase-requests/:id` — status timeline, approval actions
 - `PurchaseRequestFormPage` — `/finance/purchase-requests/new` and `/finance/purchase-requests/:id/edit`
 
+The form's **Fiscal Year** and **Budget** selects are controlled
+(`value={formValues.…}`), not left to `register()` alone _(2026-11-22,
+#4581)_. Their options arrive after the request: the budget lines are fetched
+only once the fiscal year is known. Uncontrolled, `reset()` wrote the saved ids
+into selects holding only their placeholder, the browser fell back to it, and
+nothing wrote the value again when the options came, so a linked request read
+**No budget linked** while the form state still held the line.
+`purchaseRequestEditOptions.test.tsx` holds both option lists on promises
+released after the request loads. A new picker whose options load late should
+be controlled the same way.
+
 ---
 
 ## Phase 3: Expense Reports & Check Requests

@@ -2605,6 +2605,14 @@ the same on both. See
 > [Membership > Leave of Absence](./01-membership.md#leave-of-absence) and
 > [Training > Compliance Matrix](./02-training.md#compliance-matrix).
 
+**Who is away this month** _(2026-11-22)_. Officers who manage leave can see
+the whole department's leave on one month's calendar: **Leave Requests →
+Calendar** shows who is on recorded leave and whose request is still waiting
+(marked **(requested)**), which is worth checking before you build next
+month's schedule. **Export leave records** under it downloads the same records
+as a CSV. See
+[Membership > Leave of Absence](./01-membership.md#leave-of-absence).
+
 ---
 
 ## Equipment Checks
@@ -5020,6 +5028,12 @@ that shift shows "Decided: add to the shift already on the schedule" (or
 "import separately from…") with the same **Undo**. Undo puts the question back,
 so a wrong click no longer means discarding the draft and its other decisions.
 A match of 90% or more is joined without asking and has nothing to undo.
+
+**Every outside-agency entry on the Shifts tab** _(2026-11-22)_. Rows on
+another agency's unit are listed under **Outside-agency hours** at the bottom
+of the **Shifts** tab, 50 to a page, with page buttons once there are more
+than 50. Before, the list stopped at the first 200 and sent you to the
+**Rows** tab for the rest.
 
 **Remembered decisions.** Departments usually import over several files from the
 same old system. Once an import is committed, its member, unit and position
