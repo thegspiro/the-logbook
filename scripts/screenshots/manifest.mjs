@@ -1939,6 +1939,71 @@ function mockRequirement(fields) {
   };
 }
 
+/**
+ * A leave request filed by a member in their own session, for the length of
+ * one shot. A pending request puts Leave Requests, with a count, in the
+ * sidebar of every officer who decides leave and of the member, whether
+ * requests are switched on or not, so none is left pending between shots:
+ * each shot files the one it pictures and withdraws it in cleanup, before
+ * requests are switched off again. `page` signed in as the member already is
+ * used as it is; otherwise the member signs in in a context of their own.
+ */
+let leaveRequestFiled = null;
+
+async function fileLeaveRequest(page, credentials, body) {
+  let memberPage = page;
+  let context = null;
+  if (!credentials.samePage) {
+    context = await page.context().browser().newContext();
+    memberPage = await context.newPage();
+    await memberPage.goto(new URL("/login", page.url()).toString(), {
+      waitUntil: "domcontentloaded",
+    });
+    if ((await passwordSignIn(memberPage, credentials)) !== "in") {
+      throw new Error(`${credentials.username} did not sign in`);
+    }
+  }
+  const filed = await rawApiFromPage(
+    memberPage,
+    "POST",
+    "/users/leave-requests",
+    body,
+  );
+  if (filed.status !== 201 && filed.status !== 200) {
+    throw new Error(`filing the leave request returned ${filed.status}`);
+  }
+  leaveRequestFiled = { memberPage, context, id: filed.body.id };
+  return filed.body;
+}
+
+async function withdrawLeaveRequest() {
+  const filed = leaveRequestFiled;
+  leaveRequestFiled = null;
+  if (!filed) return;
+  try {
+    const withdrawn = await rawApiFromPage(
+      filed.memberPage,
+      "POST",
+      `/users/leave-requests/${filed.id}/withdraw`,
+      {},
+    );
+    if (withdrawn.status !== 200) {
+      throw new Error(
+        `withdrawing the leave request returned ${withdrawn.status}`,
+      );
+    }
+  } finally {
+    if (filed.context) await filed.context.close();
+  }
+}
+
+/** A calendar date this many days from today, in the department's zone. */
+function departmentDate(days) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+  }).format(new Date(Date.now() + days * 86_400_000));
+}
+
 function withShiftSignoffs(prepare) {
   return async (page) => {
     const config = await apiFromPage(
@@ -27746,8 +27811,8 @@ export const SHOTS = [
     selector: "div.card:has(> div > h2:text-is('Leave of Absence'))",
   },
   {
-    // Bram Hollis's request, seeded pending (seed_backlog_01_leave_requests).
-    // The box is opened and nothing is typed or sent.
+    // Bram Hollis's request, filed in his own session for this shot and
+    // withdrawn in cleanup. The box is opened and nothing is typed or sent.
     id: "01-59-leave-request-ask-question",
     doc: "01-membership.md",
     line: 2440,
@@ -27757,8 +27822,25 @@ export const SHOTS = [
     expect: "Your question to the member",
     selector:
       "section[aria-labelledby='to-decide-heading'] li:has-text('Bram Hollis')",
-    cleanup: restoreLeaveRequests,
+    cleanup: async () => {
+      try {
+        await withdrawLeaveRequest();
+      } finally {
+        await restoreLeaveRequests();
+      }
+    },
     prepare: withLeaveRequestsOn(async (page) => {
+      await fileLeaveRequest(
+        page,
+        { username: "bhollis", password: "DemoMember!2026" },
+        {
+          leave_type: "personal",
+          start_date: departmentDate(30),
+          end_date: departmentDate(37),
+          reason: "Family wedding out of state.",
+        },
+      );
+      await page.reload({ waitUntil: "domcontentloaded" });
       const card = page
         .locator("section[aria-labelledby='to-decide-heading'] li")
         .filter({ hasText: "Bram Hollis" });
@@ -27771,8 +27853,9 @@ export const SHOTS = [
     }),
   },
   {
-    // The second member's request, with the administrator's changed dates
-    // waiting on their answer. Neither button is pressed.
+    // The second member's request, filed for this shot, with the
+    // administrator's changed dates waiting on their answer. Neither button
+    // is pressed; cleanup withdraws it.
     id: "01-60-leave-request-changed-dates",
     doc: "01-membership.md",
     line: 2443,
@@ -27782,12 +27865,42 @@ export const SHOTS = [
     auth: "second-member",
     expect: "Accept these dates",
     selector: "li:has(button:text-is('Accept these dates'))",
-    prepare: withLeaveRequestsOn(async (page) => {
+    prepare: withLeaveRequestsOn(async (page, { lookupPage }) => {
+      const filed = await fileLeaveRequest(
+        page,
+        { samePage: true },
+        {
+          leave_type: "leave_of_absence",
+          start_date: departmentDate(60),
+          end_date: departmentDate(69),
+          reason: "Visiting family abroad.",
+        },
+      );
+      const proposed = await apiFromPage(
+        await lookupPage(),
+        "POST",
+        `/users/leave-requests/${filed.id}/changes`,
+        {
+          start_date: departmentDate(62),
+          end_date: departmentDate(69),
+          note: "Starting two days later keeps the weekend crew covered.",
+        },
+      );
+      if (proposed.status !== 200) {
+        throw new Error(`proposing changed dates returned ${proposed.status}`);
+      }
+      await page.reload({ waitUntil: "domcontentloaded" });
       await page
         .getByRole("button", { name: "Accept these dates" })
         .waitFor({ timeout: 20_000 });
     }),
-    cleanup: restoreLeaveRequests,
+    cleanup: async () => {
+      try {
+        await withdrawLeaveRequest();
+      } finally {
+        await restoreLeaveRequests();
+      }
+    },
   },
   {
     // Rafael Duarte, whose leave is in progress. A first day back is typed
