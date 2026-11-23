@@ -21,6 +21,7 @@ import { ReassignWorkDialog } from '../components/evaluations/ReassignWorkDialog
 import { DeletionRecordList } from '../components/evaluations/DeletionRecordList';
 import { evaluationsService } from '../services/evaluationsApi';
 import { gradeCounts } from '../utils/evaluationRecord';
+import { GradeSpreadPanel } from '../components/evaluations/GradeSpreadPanel';
 import {
   EvaluationTemplateKind,
   type DraftOptions,
@@ -288,6 +289,7 @@ const EvaluationListPage: React.FC = () => {
                 ))}
               </dl>
             )}
+            <GradeSpreadPanel periodId={periodId} />
           </section>
         )}
 
