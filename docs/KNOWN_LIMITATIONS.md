@@ -943,6 +943,14 @@ read-only roster with filters, not a form. Not converted, and still listed in
 reports, eligibility, outside apparatus, notifications, platoons, and the
 defaults cards under the footer's Save Settings).
 
+**Rolled out further on 2026-11-23** (training batch E, part 2): the course
+library's Add / Edit Course, External Training's Add and Edit Provider, and
+Record Crew Training. The same rules apply. Adding a course or a provider and
+recording crew training create nothing until every flagged field is fixed;
+crew training now flags every open problem at once instead of one banner at a
+time. Editing a course or a provider saves the rest and keeps a refused field
+flagged. An edited provider's cleared description is now saved as cleared.
+
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
 
