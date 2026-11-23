@@ -19,6 +19,23 @@ interface PreviewRow {
   trackingType: string;
 }
 
+/**
+ * Whether a dry-run response carries the report the preview renders. Anything
+ * else (a proxy's error page, an empty body) is a check that did not run, not a
+ * report to read fields from: rendering one took the whole preview down.
+ */
+function isImportReport(value: unknown): value is InventoryImportResult {
+  if (typeof value !== 'object' || value === null) return false;
+  const report = value as Partial<InventoryImportResult>;
+  return (
+    typeof report.imported === 'number' &&
+    typeof report.failed === 'number' &&
+    typeof report.total_rows === 'number' &&
+    Array.isArray(report.errors) &&
+    Array.isArray(report.warnings)
+  );
+}
+
 const ImportInventory: React.FC = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -28,6 +45,13 @@ const ImportInventory: React.FC = () => {
   const [previewData, setPreviewData] = useState<PreviewRow[]>([]);
   const [totalRows, setTotalRows] = useState(0);
   const [importResult, setImportResult] = useState<InventoryImportResult | null>(null);
+  // The server's dry run of the chosen file: the rows the import would refuse,
+  // shown under the preview before Import rather than after it (W43-5).
+  const [rowCheck, setRowCheck] = useState<InventoryImportResult | null>(null);
+  const [rowCheckState, setRowCheckState] = useState<'idle' | 'checking' | 'done' | 'failed'>('idle');
+  // A slow check for a file the officer has since replaced must not land on
+  // the new file's preview.
+  const checkedFile = useRef<File | null>(null);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -41,7 +65,27 @@ const ImportInventory: React.FC = () => {
     setFile(selectedFile);
     setPreviewData([]);
     setImportResult(null);
+    setRowCheck(null);
+    setRowCheckState('idle');
     void validateFile(selectedFile);
+  };
+
+  const checkRows = async (csvFile: File) => {
+    checkedFile.current = csvFile;
+    setRowCheckState('checking');
+    try {
+      const result: unknown = await inventoryService.importItemsCsv(csvFile, { dryRun: true });
+      if (checkedFile.current !== csvFile) return;
+      if (!isImportReport(result)) {
+        setRowCheckState('failed');
+        return;
+      }
+      setRowCheck(result);
+      setRowCheckState('done');
+    } catch {
+      if (checkedFile.current !== csvFile) return;
+      setRowCheckState('failed');
+    }
   };
 
   const validateFile = async (csvFile: File) => {
@@ -87,6 +131,7 @@ const ImportInventory: React.FC = () => {
       setTotalRows(dataRowCount);
       setPreviewData(preview);
       toast.success(`Found ${dataRowCount} item${dataRowCount === 1 ? '' : 's'} to import`);
+      void checkRows(csvFile);
     } catch {
       toast.error('Could not read the CSV file. Check that it matches the template.');
     }
@@ -206,6 +251,9 @@ const ImportInventory: React.FC = () => {
                       setPreviewData([]);
                       setTotalRows(0);
                       setImportResult(null);
+                      setRowCheck(null);
+                      setRowCheckState('idle');
+                      checkedFile.current = null;
                     }}
                     className="mt-3 text-sm text-red-700 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                   >
@@ -294,6 +342,55 @@ const ImportInventory: React.FC = () => {
               </table>
             </div>
 
+            <div className="mt-6" role="status" aria-live="polite">
+              {rowCheckState === 'checking' && (
+                <p className="text-theme-text-secondary text-sm">
+                  Checking every row against the department&apos;s records…
+                </p>
+              )}
+              {rowCheckState === 'failed' && (
+                <p className="text-theme-text-secondary text-sm">
+                  The rows could not be checked before import. Any that are refused will be listed after you import.
+                </p>
+              )}
+              {rowCheckState === 'done' && rowCheck && (
+                <div className="space-y-3">
+                  <p className="text-theme-text-primary text-sm font-medium">
+                    {rowCheck.failed === 0
+                      ? `All ${rowCheck.total_rows} row${rowCheck.total_rows === 1 ? '' : 's'} passed the checks.`
+                      : `${rowCheck.imported} of ${rowCheck.total_rows} rows will import. ${rowCheck.failed} will be skipped:`}
+                  </p>
+                  {rowCheck.errors.length > 0 && (
+                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+                      <h3 className="mb-2 font-bold text-red-700 dark:text-red-300">Rows that will be skipped</h3>
+                      <div className="space-y-1 text-sm">
+                        {rowCheck.errors.map((error, index) => (
+                          <p key={index} className="text-red-700 dark:text-red-200">
+                            Row {error.row}: {error.error}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {rowCheck.warnings.length > 0 && (
+                    <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
+                      <h3 className="mb-2 flex items-center gap-2 font-bold text-yellow-700 dark:text-yellow-300">
+                        <AlertTriangle className="h-4 w-4" />
+                        Will import, with a warning
+                      </h3>
+                      <div className="space-y-1 text-sm">
+                        {rowCheck.warnings.map((warning, index) => (
+                          <p key={index} className="text-yellow-700 dark:text-yellow-200">
+                            {warning}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="mt-6 flex items-center justify-end">
               <button
                 onClick={() => {
@@ -378,6 +475,9 @@ const ImportInventory: React.FC = () => {
                   setPreviewData([]);
                   setTotalRows(0);
                   setImportResult(null);
+                  setRowCheck(null);
+                  setRowCheckState('idle');
+                  checkedFile.current = null;
                 }}
                 className="border-theme-input-border text-theme-text-secondary hover:text-theme-text-primary flex items-center space-x-2 rounded-lg border px-6 py-3 transition-colors"
               >
