@@ -1,7 +1,7 @@
 """Event request feedback: one response per request, from the department's form
 
 Revision ID: 0a4667186b2d
-Revises: e3b8d61f4a27
+Revises: 986d6575af35
 Create Date: 2026-11-23 12:00:00.000000
 
 Creates ``event_request_feedback``: a requester's answers to the department's
@@ -28,7 +28,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "0a4667186b2d"
-down_revision: Union[str, None] = "e3b8d61f4a27"
+down_revision: Union[str, None] = "986d6575af35"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
