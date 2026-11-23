@@ -139,9 +139,7 @@ async def test_a_training_manager_reads_a_training_drafts_session(db_session, dr
     assert await _session_read(db_session, draft, ["training.manage"]) == "payload"
 
 
-async def test_a_training_manager_does_not_read_another_types_draft(
-    db_session, draft
-):
+async def test_a_training_manager_does_not_read_another_types_draft(db_session, draft):
     await db_session.execute(
         text("UPDATE events SET event_type = 'business_meeting' WHERE id = :id"),
         {"id": draft["event"]},
