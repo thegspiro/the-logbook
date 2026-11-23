@@ -91,6 +91,27 @@ and the two fixes became two heads until #4560 joined them.
   is still one merge revision, per
   [Parallel branches and a single head](rules/migrations.md#parallel-branches-and-a-single-head).
 
+### Rejoined automatically (2026-11-23)
+
+When `main` forks anyway, the Rejoin Migration Heads workflow opens the merge
+revision as a pull request with auto-merge on, and starts CI on it; see
+[Parallel branches and a single head](rules/migrations.md#parallel-branches-and-a-single-head).
+What it depends on and leaves open:
+
+- **It needs "Allow GitHub Actions to create and approve pull requests"**
+  (Settings → Actions → General → Workflow permissions). Without it the
+  workflow pushes the branch but cannot open the pull request; the run fails
+  and says so, and the next push to `main` with the setting on opens it.
+- **Auto-merge needs "Allow auto-merge"** (Settings → General → Pull Requests).
+  Without it the pull request opens with a warning on the run and waits to be
+  merged by hand.
+- **The fork stands for one CI run.** Every database job on every other branch
+  fails until the rejoin merges, about the length of a full run.
+- **Its pull request is authored by `github-actions[bot]`**, and the
+  ruleset's automatic Copilot review applies to it like any other.
+- **A pull request closed by hand is not reopened.** The workflow warns on
+  each push to `main` until its branch is deleted, then opens a new one.
+
 ### What would reopen this
 
 - **A merge queue** tests each pull request on top of the ones queued ahead of

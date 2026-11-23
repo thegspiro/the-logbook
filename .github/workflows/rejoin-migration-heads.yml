@@ -1,0 +1,165 @@
+name: Rejoin Migration Heads
+
+# When two pull requests that each add a migration on the same parent both
+# merge, main is left with two Alembic heads and `alembic upgrade head` fails
+# for every deployment and every database job until a merge revision lands.
+# This opens that merge revision as a pull request within minutes of the fork,
+# with auto-merge on (owner decision, 2026-11-23). See "Parallel branches and a
+# single head" in docs/rules/migrations.md.
+#
+# It runs on every push to main, not only pushes that add a migration, because
+# two other cases need it too: a rejoin pull request left open after main got a
+# single head back some other way is closed, and one left behind main is
+# brought up to date so its auto-merge is not stuck on the "up to date" rule.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run at a time and never cancelled: two runs racing to open the same pull
+# request would at best fail and at worst both push.
+concurrency:
+  group: rejoin-migration-heads
+  cancel-in-progress: false
+
+jobs:
+  rejoin:
+    name: Rejoin migration heads
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # push the rejoin branch, delete a superseded one
+      pull-requests: write # open, close and auto-merge the rejoin pull request
+      actions: write # start CI on the branch (see below)
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PREFIX: automation/rejoin-heads-
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      # The versions backend/requirements.txt pins, so this run reads the chain
+      # exactly as the backend does. scripts/test_rejoin_migration_heads.py
+      # fails if the two drift apart.
+      - name: Install alembic
+        run: pip install 'alembic==1.20.1' 'sqlalchemy==2.1.8'
+
+      - name: Read the chain, and write the merge revision if it is forked
+        id: chain
+        run: |
+          set +e
+          python3 scripts/rejoin_migration_heads.py --write
+          status=$?
+          set -e
+          case "$status" in
+            0) echo "forked=false" >> "$GITHUB_OUTPUT" ;;
+            3) echo "forked=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::rejoin_migration_heads.py exited $status"; exit "$status" ;;
+          esac
+
+      - name: Close rejoin pull requests main no longer needs
+        if: steps.chain.outputs.forked == 'false'
+        run: |
+          gh pr list --state open --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"$PREFIX\")) | .number" |
+          while read -r number; do
+            gh pr close "$number" --delete-branch \
+              --comment "main has a single migration head again, so this merge revision is no longer needed."
+          done
+
+      # PRs and pushes made with GITHUB_TOKEN start no workflow runs, so CI
+      # never runs on the rejoin branch by itself, and main's ruleset requires
+      # CI Success and Migration Chain. A workflow_dispatch event is the one
+      # this token may raise; ci.yml treats it as "run everything", and the
+      # check runs it produces attach to the branch's head commit.
+      - name: Open, or bring up to date, the rejoin pull request
+        if: steps.chain.outputs.forked == 'true'
+        env:
+          HEADS: ${{ steps.chain.outputs.heads }}
+          REVISION: ${{ steps.chain.outputs.revision }}
+          MERGE_PATH: ${{ steps.chain.outputs.path }}
+        run: |
+          short=$(printf '%s\n' $HEADS | cut -c1-6 | paste -sd- -)
+          branch="${PREFIX}${short}"
+
+          existing=$(gh pr list --state open --head "$branch" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            # Already open for exactly these heads. If main moved on, the
+            # "up to date" rule holds its auto-merge; take main in and run CI.
+            if gh api -X PUT "repos/${GITHUB_REPOSITORY}/pulls/${existing}/update-branch" >/dev/null 2>&1; then
+              gh workflow run ci.yml --ref "$branch"
+              echo "Brought #${existing} up to date with main and started CI."
+            else
+              # 422 when it is already up to date, the usual case.
+              echo "#${existing} is open for these heads; not updated (already up to date, or the update was refused)."
+            fi
+            exit 0
+          fi
+
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            closed=$(gh pr list --state closed --head "$branch" --json number --jq '.[0].number // empty')
+            if [ -n "$closed" ]; then
+              echo "::warning::#${closed} for these heads was closed by hand. Not reopening it; delete branch $branch to let this workflow open a new one."
+              exit 0
+            fi
+            # Pushed by an earlier run whose pull request was never opened,
+            # e.g. before Actions was allowed to create pull requests.
+            echo "Branch $branch exists with no pull request; opening one for it."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+            git switch -c "$branch"
+            git add "$MERGE_PATH"
+            git commit -m "Rejoin migration heads: $HEADS" \
+              -m "Written by scripts/rejoin_migration_heads.py on main at ${GITHUB_SHA}. The merge revision $REVISION has no-op upgrade and downgrade; its id is derived from the heads, so any other merge of the same heads is this same file."
+            git push origin "$branch"
+          fi
+
+          body=$(mktemp)
+          {
+            echo "## Summary"
+            echo
+            echo "\`main\` has more than one Alembic head:"
+            echo
+            for head in $HEADS; do echo "- \`$head\`"; done
+            echo
+            echo "so \`alembic upgrade head\` fails for every deployment and every database job until they are rejoined. This adds the merge revision \`$REVISION\` (\`$MERGE_PATH\`), whose upgrade and downgrade do nothing."
+            echo
+            echo "## Changes"
+            echo
+            echo "- One no-op merge revision, written by \`scripts/rejoin_migration_heads.py\`. Its id is derived from the heads, so a session that writes its own merge of the same heads writes this same file."
+            echo
+            echo "## Testing"
+            echo
+            echo "- The script read the chain on \`main\` at ${GITHUB_SHA} and confirmed a single head after writing this file."
+            echo "- CI was started on this branch by the workflow, because pull requests opened with the workflow token do not start it. Auto-merge is on; this merges when CI Success and Migration Chain pass."
+            echo
+            echo "Opened by the Rejoin Migration Heads workflow: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } > "$body"
+
+          url=$(gh pr create --base main --head "$branch" \
+            --title "Rejoin migration heads: $HEADS" --body-file "$body")
+          echo "Opened $url"
+
+          # A rejoin PR opened for an earlier set of heads would fork main
+          # again if it merged now: its revision joins only some of today's.
+          gh pr list --state open --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"$PREFIX\")) | select(.headRefName != \"$branch\") | .number" |
+          while read -r number; do
+            gh pr close "$number" --delete-branch --comment "Superseded by $url, which joins every current head."
+          done
+
+          if ! gh pr merge "$url" --auto --merge; then
+            echo "::warning::Could not turn on auto-merge for $url. Is 'Allow auto-merge' on in Settings → General?"
+          fi
+
+          gh workflow run ci.yml --ref "$branch"
