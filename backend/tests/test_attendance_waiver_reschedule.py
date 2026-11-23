@@ -425,6 +425,19 @@ class TestConfirm:
             await _training(db_session).confirm(dept.org, dept.member, request.id)
         assert (await _row(db_session, request.id)).reconfirm_requested_at
 
+    # 2026-11-20 review: a void left the flag set, so a voided row still read
+    # as waiting on the member (and stayed open on the reconfirm clock).
+    async def test_voiding_clears_the_wait(self, db_session, dept):
+        request = await _submit(db_session, dept)
+        await _move(db_session, dept, dept.drill)
+        assert (await _row(db_session, request.id)).reconfirm_requested_at
+        await engine.void_pending_for_events(
+            db_session, dept.org, [dept.drill], "cancelled"
+        )
+        voided = await _row(db_session, request.id)
+        assert voided.status == AttendanceWaiverStatus.VOIDED
+        assert voided.reconfirm_requested_at is None
+
     async def test_withdrawing_declines_it(self, db_session, dept):
         request = await _submit(db_session, dept)
         await _move(db_session, dept, dept.drill)

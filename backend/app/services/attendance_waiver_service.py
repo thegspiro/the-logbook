@@ -3323,6 +3323,9 @@ async def void_pending_for_events(
         request.status = AttendanceWaiverStatus.VOIDED
         request.live_key = None
         request.info_requested_at = None
+        # A voided request waits on nobody; left set, the row still read as
+        # "member to confirm" and kept the reconfirm expiry candidate.
+        request.reconfirm_requested_at = None
         db.add(logged)
         db.add(
             NotificationLog(
