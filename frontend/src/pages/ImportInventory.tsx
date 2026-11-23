@@ -19,6 +19,23 @@ interface PreviewRow {
   trackingType: string;
 }
 
+/**
+ * Whether a dry-run response carries the report the preview renders. Anything
+ * else (a proxy's error page, an empty body) is a check that did not run, not a
+ * report to read fields from: rendering one took the whole preview down.
+ */
+function isImportReport(value: unknown): value is InventoryImportResult {
+  if (typeof value !== 'object' || value === null) return false;
+  const report = value as Partial<InventoryImportResult>;
+  return (
+    typeof report.imported === 'number' &&
+    typeof report.failed === 'number' &&
+    typeof report.total_rows === 'number' &&
+    Array.isArray(report.errors) &&
+    Array.isArray(report.warnings)
+  );
+}
+
 const ImportInventory: React.FC = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -57,8 +74,12 @@ const ImportInventory: React.FC = () => {
     checkedFile.current = csvFile;
     setRowCheckState('checking');
     try {
-      const result = await inventoryService.importItemsCsv(csvFile, { dryRun: true });
+      const result: unknown = await inventoryService.importItemsCsv(csvFile, { dryRun: true });
       if (checkedFile.current !== csvFile) return;
+      if (!isImportReport(result)) {
+        setRowCheckState('failed');
+        return;
+      }
       setRowCheck(result);
       setRowCheckState('done');
     } catch {

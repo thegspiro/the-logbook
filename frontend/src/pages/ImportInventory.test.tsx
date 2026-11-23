@@ -190,6 +190,19 @@ describe('ImportInventory — checking the rows before import', () => {
     expect(screen.queryByText('Rows that will be skipped')).not.toBeInTheDocument();
   });
 
+  // The e2e harness answers an unmocked call with {}; the page read
+  // rowCheck.errors.length off it and took the preview down with it.
+  it('treats a response without the report shape as a failed check, not a crash', async () => {
+    mockImportItemsCsv.mockResolvedValueOnce({});
+    const user = userEvent.setup();
+    renderWithRouter(<ImportInventory />);
+
+    await user.upload(screen.getByTestId<HTMLInputElement>('csv-file-input'), file());
+
+    expect(await screen.findByText(/could not be checked before import/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Import 3 Items/ })).toBeInTheDocument();
+  });
+
   it('still lets the officer import when the check could not run', async () => {
     mockImportItemsCsv.mockRejectedValueOnce(new Error('offline'));
     const user = userEvent.setup();
