@@ -257,7 +257,7 @@ re-shot on 2026-11-21.
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-19--20-2026).
 Nothing was captured by this pass. The Create and Check rows were worked on
-2026-11-23; one Create row (16) is still open.
+2026-11-23.
 
 | Guide | Screen | Action |
 | --- | --- | --- |
@@ -269,7 +269,7 @@ Nothing was captured by this pass. The Create and Check rows were worked on
 | 08 | Settings → Profile with **Short Name** and its hint | Created `08-125-profile-short-name` |
 | 03 | Shift template dialog reading "Template saved, except name" with the field flagged; the **Discard changes** confirmation | Created `03-143-template-saved-except-name`, `03-144-template-discard-changes` |
 | 03 | Settings → General, Overtime advisory card with a cleared Hours limit flagged "Enter a whole number from 0 to 336." | Created `03-142-overtime-hours-limit-error` |
-| 16 | Historical import: a committed step's **Undo this step**, the **Undo the training records?** confirmation with counts, the greyed-out "first undo the company drills step" line, the kept-records notice | Create. Still open: the demo department has no historical import, and committing one writes training and drill records that every other training shot would then show. Needs a seeder step for an import whose records are kept out of the other shots, or mocks of the import page's own endpoints |
+| 16 | Historical import: a committed step's **Undo this step**, the **Undo the training records?** confirmation with counts, the greyed-out "first undo the company drills step" line, the kept-records notice | Created `16-32-import-training-undo-blocked`, `16-33-import-training-undo-ready`, `16-34-import-undo-training-confirm`, `16-35-import-undo-kept-notice`, on a legacy import the seeder commits (`seed_backlog_16_historical_import`) for four archived former members. The shots undo for real and commit again in their cleanup. Guide 16 quoted the greyed line wrongly; it now quotes the server's "Undo the company drills step first: it builds on the training." |
 | 02 | Curriculum → Course Links with **Recent links**, one row reading "undone … by …", and the Undo confirmation (**Undo link** / **Keep it**) | Created `02-152-course-links-recent`, `02-153-course-links-undo-confirm` (history mocked: the demo has no links) |
 | 02 | Training Admin attention row "N training names can be linked to a course" with **Review links**, and the Course Links badge | Created `02-154-course-links-attention`, with the Curriculum card's badge (row mocked: no demo name has a suggestion) |
 | 02 | Competency heat-map at 390px: pinned names, wrapping, scroll cue | Created `02-155-competency-heatmap-phone` (levels mocked: the demo has evaluated no skills). `02-67-competency-matrix` checked: its heat-map shows the empty message, so the name column is not in frame |

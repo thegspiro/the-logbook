@@ -2031,6 +2031,137 @@ async function saveTemplateWithoutName(page) {
   await page.waitForTimeout(400);
 }
 
+/** The legacy import the seeder commits for guide 16's undo shots. */
+const HISTORICAL_SOURCE = "Oakville Legacy Hours DB";
+
+async function historicalImportId(page) {
+  const list = await apiFromPage(
+    page,
+    "GET",
+    "/integrations/historical-imports",
+  );
+  const record = (list.body?.imports ?? []).find(
+    (r) => (r.source_system ?? r.sourceSystem) === HISTORICAL_SOURCE,
+  );
+  if (!record) throw new Error("the seeder has not created the legacy import");
+  return record.id;
+}
+
+async function openHistoricalImport(page) {
+  const id = await historicalImportId(page);
+  await page.goto(
+    new URL(`/integrations/historical-import/${id}`, page.url()).toString(),
+  );
+  for (const name of ["Set up training", "Set up drills"]) {
+    await page.getByRole("button", { name }).click({ timeout: 30_000 });
+  }
+  await page.getByText("Undo this step").first().waitFor({ timeout: 30_000 });
+  await page.waitForTimeout(600);
+  return id;
+}
+
+// The names the seeder gives the legacy file's former members.
+const HISTORICAL_MEMBERS = {
+  501: ["Harold", "Pruitt"],
+  502: ["Doris", "Whitcomb"],
+  503: ["Leon", "Abernathy"],
+  504: ["Marta", "Cole"],
+};
+const HISTORICAL_DRILL_REQUIREMENT =
+  "Company Drill Attendance (legacy records)";
+
+async function checkedApi(page, method, path, body) {
+  const result = await apiFromPage(page, method, path, body);
+  if (result.status >= 400) {
+    throw new Error(`${method} ${path} -> ${result.status}`);
+  }
+  return result.body;
+}
+
+/**
+ * Commits whichever of the legacy import's training and drills steps a shot
+ * undid, as the seeder's step does: names for the members still waiting on a
+ * decision (an undo drops the typed ones), and the drills' requirement active
+ * only for the commit, so no current member is graded on it.
+ */
+async function restoreHistoricalImport(page) {
+  const id = await historicalImportId(page);
+  const base = `/integrations/historical-imports/${id}`;
+  const steps = (await checkedApi(page, "GET", `${base}/undo`)).steps ?? {};
+  if (!steps.training?.committed) {
+    const preview = await checkedApi(page, "GET", `${base}/training`);
+    const waiting = new Set((preview.members ?? []).map((m) => m.key));
+    const members = {};
+    for (const [number, [first, last]] of Object.entries(HISTORICAL_MEMBERS)) {
+      const key = `number:${number}`;
+      if (waiting.has(key)) {
+        members[key] = { action: "create", first_name: first, last_name: last };
+      }
+    }
+    if (Object.keys(members).length) {
+      await checkedApi(page, "PUT", `${base}/members`, { members });
+    }
+    await checkedApi(page, "POST", `${base}/training/commit`);
+  }
+  if (!steps.drills?.committed) {
+    const requirements = await checkedApi(
+      page,
+      "GET",
+      "/training/requirements?active_only=false",
+    );
+    const requirement = requirements.find(
+      (r) => r.name === HISTORICAL_DRILL_REQUIREMENT,
+    );
+    if (!requirement) throw new Error("the legacy drills' requirement is gone");
+    const at = `/training/requirements/${requirement.id}`;
+    await checkedApi(page, "PATCH", at, { active: true });
+    try {
+      await checkedApi(page, "PATCH", `${base}/training-settings`, {
+        drill_requirement_ids: [requirement.id],
+      });
+      await checkedApi(page, "POST", `${base}/drills/commit`);
+    } finally {
+      await checkedApi(page, "PATCH", at, { active: false });
+    }
+  }
+}
+
+/**
+ * Corrects the hours on Marta Cole's imported extrication record, as an
+ * officer would, so the training undo has a record changed since the import
+ * to keep. The undo counts a change only when it came more than two minutes
+ * after the import wrote the record, which the seeding run is well past.
+ */
+async function correctImportedRecord(page) {
+  const records = await checkedApi(
+    page,
+    "GET",
+    "/training/records?start_date=2014-06-14&end_date=2014-06-14",
+  );
+  const record = records.find((r) => r.course_name === "Vehicle Extrication");
+  if (!record) throw new Error("the legacy extrication record is missing");
+  await checkedApi(page, "PATCH", `/training/records/${record.id}`, {
+    hours_completed: 8.5,
+  });
+}
+
+/** Undo the drills, then open the training step's confirmation. */
+async function openTrainingUndoConfirm(page) {
+  await correctImportedRecord(page);
+  const id = await historicalImportId(page);
+  await checkedApi(
+    page,
+    "POST",
+    `/integrations/historical-imports/${id}/undo/drills`,
+  );
+  await openHistoricalImport(page);
+  await page.getByRole("button", { name: "Undo this step" }).first().click();
+  await page
+    .getByRole("button", { name: "Keep it" })
+    .waitFor({ timeout: 10_000 });
+  await page.waitForTimeout(400);
+}
+
 function withShiftSignoffs(prepare) {
   return async (page) => {
     const config = await apiFromPage(
@@ -14659,6 +14790,92 @@ export const SHOTS = [
       if (await discard.count()) await discard.click();
     },
     fullPage: false,
+  },
+  {
+    id: "16-32-import-training-undo-blocked",
+    doc: "16-integrations.md",
+    line: 1021,
+    anchor: "__placed-by-hand-16-32__",
+    alt: 'The Training step of a committed historical import: Imported 8 training records and 4 former members, and its Undo this step greyed out with "Undo the company drills step first: it builds on the training."',
+    route: "/integrations/historical-import",
+    expect: { selector: "text=Undo the company drills step first" },
+    prepare: openHistoricalImport,
+    selector:
+      "h2:text-is('5. Training') >> xpath=ancestor::*[contains(concat(' ', @class, ' '), ' card ')][1]",
+  },
+  {
+    id: "16-33-import-training-undo-ready",
+    doc: "16-integrations.md",
+    line: 1006,
+    anchor: "__placed-by-hand-16-33__",
+    alt: 'The same Training step once the company drills were undone: Undo this step is available, beside "Undoing removes the training records this step wrote, so you can change the decisions and commit it again."',
+    route: "/integrations/historical-import",
+    expect: { selector: "text=Undoing removes the training records" },
+    // Undoes the drills for real; the cleanup commits them again. The drills
+    // card is not framed: below its undo it says the department has no
+    // session-attendance requirement, true of the demo (the seeder switches
+    // the legacy drills' one off after the commit) and misleading beside it.
+    prepare: async (page) => {
+      const id = await historicalImportId(page);
+      await checkedApi(
+        page,
+        "POST",
+        `/integrations/historical-imports/${id}/undo/drills`,
+      );
+      await openHistoricalImport(page);
+    },
+    cleanup: restoreHistoricalImport,
+    selector:
+      "h2:text-is('5. Training') >> xpath=ancestor::*[contains(concat(' ', @class, ' '), ' card ')][1]",
+  },
+  {
+    id: "16-34-import-undo-training-confirm",
+    doc: "16-integrations.md",
+    line: 1013,
+    anchor: "__placed-by-hand-16-34__",
+    alt: "The Undo the training records? confirmation, once the drills were undone: how many records are removed, the one changed since the import that is kept, and that the former members it created go too, with Keep it and Undo this step",
+    route: "/integrations/historical-import",
+    expect: { selector: "text=Undo the training records?" },
+    // Undoes the drills for real; the cleanup commits them again.
+    allowEmptyState:
+      '"No batches yet" is the shift step, which this file has no rows for.',
+    prepare: openTrainingUndoConfirm,
+    cleanup: async (page) => {
+      const keep = page.getByRole("button", { name: "Keep it" });
+      if (await keep.count()) await keep.click();
+      await restoreHistoricalImport(page);
+    },
+    fullPage: false,
+  },
+  {
+    id: "16-35-import-undo-kept-notice",
+    doc: "16-integrations.md",
+    line: 1030,
+    anchor: "__placed-by-hand-16-35__",
+    alt: "The Training step after its undo: the notice that 1 record was kept because it was changed after the import, naming it, and the step ready to import again",
+    route: "/integrations/historical-import",
+    expect: { selector: "text=changed after the import" },
+    // Undoes the drills and the training for real; the cleanup commits both
+    // again, leaving the corrected record as it is.
+    prepare: async (page) => {
+      await openTrainingUndoConfirm(page);
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Undo this step" })
+        .click();
+      await page
+        .getByText("changed after the import")
+        .waitFor({ timeout: 20_000 });
+      // The success toast sits over the card's corner until it times out.
+      await page
+        .getByText(/records? removed/)
+        .waitFor({ state: "hidden", timeout: 15_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(600);
+    },
+    cleanup: restoreHistoricalImport,
+    selector:
+      "h2:text-is('5. Training') >> xpath=ancestor::*[contains(concat(' ', @class, ' '), ' card ')][1]",
   },
   {
     id: "08-01-setup-checklist",

@@ -1010,6 +1010,8 @@ undoes every committed shift review batch the import sent). The line reads
 _"Undoing removes the … this step wrote, so you can change the decisions and
 commit it again."_ Select **Undo this step**.
 
+![The same Training step once the company drills were undone: Undo this step is available, beside "Undoing removes the training records this step wrote, so you can change the decisions and commit it again."](./images/16-33-import-training-undo-ready.png)
+
 The confirmation, **Undo the …?**, says what will happen before anything is
 removed: how many records go; how many were **changed since the import and are
 kept**; for the roster and shift hours, how many shifts and seats the step used
@@ -1017,20 +1019,29 @@ but did not make, which are left alone; and that former members the import
 created are removed too, unless something else still refers to them. Select
 **Undo this step** to go ahead, or **Keep it**.
 
+![The Undo the training records? confirmation, once the drills were undone: how many records are removed, the one changed since the import that is kept, and that the former members it created go too, with Keep it and Undo this step](./images/16-34-import-undo-training-confirm.png)
+
 The rules, and why:
 
 - **One step at a time, in order.** A step a later one builds on waits for
   that one: training cannot be undone while the company drills stand (the
   drill sessions hold the training records), and shift hours cannot be undone
   while the staffing roster stands (the roster fills the shifts the hours
-  made). The button is greyed out with _"To undo this step, first undo the …
-  step, which builds on it."_ Shift hours also waits while any of its batches
-  is still in review: commit or discard those first.
+  made). The button is greyed out with _"Undo the … step first: it builds on
+  the …"_ — for training, "Undo the company drills step first: it builds on
+  the training." Shift hours also waits while any of its batches is still in
+  review: commit or discard those first.
+
+  ![The Training step of a committed historical import: Imported 8 training records and 4 former members, and its Undo this step greyed out with "Undo the company drills step first: it builds on the training."](./images/16-32-import-training-undo-blocked.png)
+
 - **Records an officer changed are kept.** A record edited after the import
   wrote it is treated as a correction, not as import output. It stays, and a
   notice after the undo lists it ("3 records were kept because they were
   changed after the import…"). Committing the step again leaves it as it is,
   so it is never written twice; fix or delete it by hand if it is still wrong.
+
+  ![The Training step after its undo: the notice that 1 record was kept because it was changed after the import, naming it, and the step ready to import again](./images/16-35-import-undo-kept-notice.png)
+
 - **A record already deleted by hand** is simply forgotten, so committing the
   step again writes it afresh.
 
