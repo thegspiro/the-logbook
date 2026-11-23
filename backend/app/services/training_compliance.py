@@ -2166,18 +2166,20 @@ async def load_evaluation_credits(
     return by_user
 
 
-def _find_matching_profile(
+def matching_profiles(
     member: User,
-    profiles: List[ComplianceProfile],
-) -> Optional[ComplianceProfile]:
-    """Find the first active profile, in resolution order, that matches a member.
+    profiles: Sequence[ComplianceProfile],
+) -> List[ComplianceProfile]:
+    """Every active profile that matches a member, in resolution order.
 
     The order is :func:`app.utils.compliance_profiles.ordered_profiles`:
     higher priority first, then the older profile, then the smaller id, so a
     caller may pass profiles in any order. Matches by membership_type and/or
-    role_ids. A profile with no
-    membership_types and no role_ids matches all members. Returns None
-    if no profile matches.
+    role_ids. A profile with no membership_types and no role_ids matches all
+    members. The first entry is the profile that grades the member
+    (:func:`_find_matching_profile`); :func:`admin_hours_profile` reads further
+    down the list. One matching rule for both, so a member never sits under
+    one profile for training and another for admin hours by accident.
     """
     member_types = {getattr(member, "membership_type", None)}
     # The legacy membership_type has no word for a junior member (it derives
@@ -2200,7 +2202,8 @@ def _find_matching_profile(
             if position_id:
                 member_role_ids.append(str(position_id))
 
-    for profile in ordered_profiles(profiles):
+    matched: List[ComplianceProfile] = []
+    for profile in ordered_profiles(list(profiles)):
         if not profile.is_active:
             continue
 
@@ -2214,9 +2217,38 @@ def _find_matching_profile(
             role_match = bool(set(member_role_ids) & set(profile.role_ids))
 
         if type_match and role_match:
-            return profile
+            matched.append(profile)
 
-    return None
+    return matched
+
+
+def _find_matching_profile(
+    member: User,
+    profiles: List[ComplianceProfile],
+) -> Optional[ComplianceProfile]:
+    """The profile that grades a member: the first of
+    :func:`matching_profiles`, or None if no profile matches."""
+    matched = matching_profiles(member, profiles)
+    return matched[0] if matched else None
+
+
+def admin_hours_profile(
+    member: User,
+    profiles: Sequence[ComplianceProfile],
+) -> Optional[ComplianceProfile]:
+    """The profile a member's admin-hours targets come from.
+
+    Owner decision 2026-11-23: the profile that grades the member's training
+    (:func:`_find_matching_profile`, the one ``ComplianceGrading.for_member``
+    reads), when it sets admin hours. When it sets none, the highest-priority
+    matching profile that does, which is the rule admin hours followed before.
+    Both come from :func:`matching_profiles`, so the tie-break and the
+    "junior" chip are grading's own. ``member.positions`` must be loaded.
+    """
+    matched = matching_profiles(member, profiles)
+    if matched and matched[0].admin_hours_requirements:
+        return matched[0]
+    return next((p for p in matched if p.admin_hours_requirements), None)
 
 
 # Status reported for an existing member's unmet requirement while its

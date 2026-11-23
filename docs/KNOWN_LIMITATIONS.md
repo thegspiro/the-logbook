@@ -943,6 +943,14 @@ read-only roster with filters, not a form. Not converted, and still listed in
 reports, eligibility, outside apparatus, notifications, platoons, and the
 defaults cards under the footer's Save Settings).
 
+**Rolled out further on 2026-11-23** (training batch E, part 2): the course
+library's Add / Edit Course, External Training's Add and Edit Provider, and
+Record Crew Training. The same rules apply. Adding a course or a provider and
+recording crew training create nothing until every flagged field is fixed;
+crew training now flags every open problem at once instead of one banner at a
+time. Editing a course or a provider saves the rest and keeps a refused field
+flagged. An edited provider's cleared description is now saved as cleared.
+
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
 
@@ -7387,15 +7395,16 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   the training-enhancements module, the `competency_matrices` table and its
   endpoints, are a different feature and are unchanged. Test:
   `tests/test_competency_matrix_endpoint_retired.py`.
-- **Profiles: admin hours choose their own profile — open, owner question
-  2026-11-21.** A member's admin-hours targets come from the highest-priority
-  matching profile that _carries_ admin hours (ties now resolved as grading
-  resolves them), not from the profile that grades their training. A member
-  whose grading profile has no admin hours therefore takes targets from a
-  lower-priority profile. `admin_hours_service.get_user_hours_compliance` also
-  matches profiles with its own rules, which lack grading's "junior" chip
-  handling. Whether admin hours should follow the grading profile is not
-  decided.
+- **Profiles: admin hours follow the grading profile — ✅ resolved (owner
+  decision 2026-11-23).** A member's admin-hours targets come from the profile
+  that grades their training, when it sets admin hours; when it sets none, from
+  the highest-priority matching profile that does, the rule that held before.
+  `training_compliance.admin_hours_profile` is the one resolver, built on the
+  same `matching_profiles` list grading takes its profile from, so the
+  tie-break and the "junior" chip are grading's own. A junior member under a
+  "junior" profile used to take targets from the profile matching their legacy
+  "probationary" type instead. Tests:
+  `tests/test_admin_hours_follow_grading_profile.py`.
 - **The compliance exports grade Met / Not Met from the report period's
   records only — fixed (owner decision 2026-11-21: status as of today).**
   Confirmed by running before the fix: a certification completed on 1 March
@@ -11656,3 +11665,48 @@ ones; the list it opens includes lots already expired and applies the
 shelf rule. A lot that expired yesterday is in the list but not in the count.
 
 **The decision:** which rule both should use.
+
+## Facilities — Four Decisions From App Review B4 Pass 6 (2026-11-23)
+
+Recorded rather than changed. Details in `docs/app-review/facilities.md` →
+Pass 6.
+
+### FAC2-8 — Can a maintenance or inspection record move to another facility?
+
+The edit dialogs used to offer a Facility picker that the server ignored, so a
+"moved" record stayed where it was behind a success message. The picker now
+appears only on create. If records should be movable (a work order filed under
+the wrong station), the update schemas need `facility_id`, validated in-org and
+with the record's system re-checked against the new facility.
+
+### FAC2-11 — Which inspection is current, and what does a missed one look like?
+
+Each inspection keeps its own next-inspection date, and recording the next
+inspection does not retire the previous one's, so an inspection done early
+still counts as upcoming. Every dashboard window starts at today, so a date that
+passes without the work done disappears from the counts instead of showing as
+overdue. Compliance checklists cannot be completed from any screen, so they age
+out the same way.
+
+**The decision:** whether the newest inspection of a type supersedes earlier
+ones, whether missed dates should show as overdue, and whether compliance
+checklists get a completion flow.
+
+### FAC2-12 — Maintenance intervals and system test frequencies are stored, never read
+
+Maintenance types carry seeded intervals and systems carry a test frequency,
+and nothing schedules the next occurrence or reports a test as due. Completing
+a system's maintenance does not update the system's last-serviced date.
+
+**The decision:** build recurrence (and the due-test report), or label the
+fields as reference only.
+
+### FAC2-13 — Renaming or archiving a facility leaves its rooms' locations stale
+
+A room's linked Location is updated when the room changes, not when its
+facility does. A renamed facility's rooms keep the old building name and
+address, and an archived facility's rooms stay offered in the Events and
+Storage pickers.
+
+**The decision:** whether facility changes should carry through to room
+Locations, and whether archiving should deactivate them.
