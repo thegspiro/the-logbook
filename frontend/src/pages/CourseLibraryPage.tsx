@@ -27,12 +27,15 @@ import { formCoercions } from '../utils/formValues';
 import type {
   TrainingCourse,
   TrainingCourseCreate,
-  TrainingCourseUpdate,
   TrainingCategory,
   TrainingType,
 } from '../types/training';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
-import { getErrorDetail } from '../utils/errorHandling';
+import { ErrorSummary } from '../components/ux/ErrorSummary';
+import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import { useDiscardGuard } from '../hooks/useDiscardGuard';
+import { firstRefused, saveExceptRefused } from '../utils/saveExceptRefused';
 
 // ==================== Course Form Modal ====================
 
@@ -54,64 +57,132 @@ const TRAINING_TYPES: { value: TrainingType; label: string }[] = [
   { value: 'policy_acknowledgment', label: 'Policy Acknowledgment' },
 ];
 
+type CourseForm = {
+  name: string;
+  code: string;
+  description: string;
+  training_type: TrainingType;
+  duration_hours: string;
+  credit_hours: string;
+  instructor: string;
+  max_participants: string;
+  expiration_months: string;
+  grants_qualification: string;
+  category_ids: string[];
+  materials_required: string;
+};
+
+const EMPTY_COURSE_FORM: CourseForm = {
+  name: '',
+  code: '',
+  description: '',
+  training_type: 'continuing_education',
+  duration_hours: '',
+  credit_hours: '',
+  instructor: '',
+  max_participants: '',
+  expiration_months: '',
+  grants_qualification: '',
+  category_ids: [],
+  materials_required: '',
+};
+
+type CourseField = keyof CourseForm;
+
+// Ordered as on screen, so the first refusal takes focus. Limits mirror
+// TrainingCourseBase (name and instructor 255, code and qualification 50).
+const COURSE_FIELDS: FieldSpecs<CourseField> = {
+  name: { id: 'course-name', label: 'Course name' },
+  code: { id: 'course-code', label: 'Course code' },
+  description: { id: 'course-description', label: 'Description' },
+  training_type: { id: 'course-training-type', label: 'Training type' },
+  duration_hours: { id: 'course-duration-hours', label: 'Duration' },
+  credit_hours: { id: 'course-credit-hours', label: 'Credit hours' },
+  instructor: { id: 'course-instructor', label: 'Instructor' },
+  max_participants: { id: 'course-max-participants', label: 'Max participants' },
+  expiration_months: { id: 'course-expires-months', label: 'Expires after' },
+  grants_qualification: { id: 'course-grants-qualification', label: 'Certifies' },
+  category_ids: { id: 'course-categories', label: 'Training categories' },
+  materials_required: { id: 'course-materials', label: 'Materials required' },
+};
+const COURSE_ORDER = Object.keys(COURSE_FIELDS) as CourseField[];
+const COURSE_LIMITS = { name: 255, code: 50, instructor: 255 } as const;
+const COURSE_LABEL_CLASS = 'text-theme-text-secondary mb-1 block text-sm font-medium';
+
+function seedCourseForm(course: TrainingCourse | null | undefined): CourseForm {
+  if (!course) return EMPTY_COURSE_FORM;
+  return {
+    name: course.name,
+    code: course.code || '',
+    description: course.description || '',
+    training_type: course.training_type,
+    duration_hours: course.duration_hours?.toString() || '',
+    credit_hours: course.credit_hours?.toString() || '',
+    instructor: course.instructor || '',
+    max_participants: course.max_participants?.toString() || '',
+    expiration_months: course.expiration_months?.toString() || '',
+    grants_qualification: course.grants_qualification || '',
+    category_ids: course.category_ids || [],
+    materials_required: (course.materials_required || []).join('\n'),
+  };
+}
+
+/** The checks the server makes too, said on the field before anything is sent. */
+function checkCourseForm(form: CourseForm): FieldErrors<CourseField> {
+  const problems: FieldErrors<CourseField> = {};
+  if (!form.name.trim()) problems.name = 'Give the course a name.';
+  const notNegative = (value: string) => value.trim() === '' || Number(value) >= 0;
+  const wholeFrom = (value: string, min: number) =>
+    value.trim() === '' || (Number.isInteger(Number(value)) && Number(value) >= min);
+  if (!notNegative(form.duration_hours)) problems.duration_hours = 'Enter 0 or more hours, or leave it empty.';
+  if (!notNegative(form.credit_hours)) problems.credit_hours = 'Enter 0 or more hours, or leave it empty.';
+  if (!wholeFrom(form.max_participants, 1))
+    problems.max_participants = 'Enter a whole number, 1 or more, or leave it empty.';
+  if (!wholeFrom(form.expiration_months, 0))
+    problems.expiration_months = 'Enter a whole number of months, or leave it empty for never.';
+  return problems;
+}
+
 const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categories, onClose, onSuccess }) => {
   const isEdit = !!course;
-  const [formData, setFormData] = useState({
-    name: '',
-    code: '',
-    description: '',
-    training_type: 'continuing_education' as TrainingType,
-    duration_hours: '',
-    credit_hours: '',
-    instructor: '',
-    max_participants: '',
-    expiration_months: '',
-    grants_qualification: '',
-    category_ids: [] as string[],
-    materials_required: '',
-  });
+  const [formData, setFormData] = useState<CourseForm>(EMPTY_COURSE_FORM);
+  // What the dialog held when it opened (or last saved), so Escape, the X and
+  // Cancel ask before throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState<CourseForm>(EMPTY_COURSE_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const courseErrors = useFieldErrors(COURSE_FIELDS);
+  const { clear: clearErrors } = courseErrors;
 
   useEffect(() => {
-    if (course) {
-      setFormData({
-        name: course.name,
-        code: course.code || '',
-        description: course.description || '',
-        training_type: course.training_type,
-        duration_hours: course.duration_hours?.toString() || '',
-        credit_hours: course.credit_hours?.toString() || '',
-        instructor: course.instructor || '',
-        max_participants: course.max_participants?.toString() || '',
-        expiration_months: course.expiration_months?.toString() || '',
-        grants_qualification: course.grants_qualification || '',
-        category_ids: course.category_ids || [],
-        materials_required: (course.materials_required || []).join('\n'),
-      });
-    } else {
-      setFormData({
-        name: '',
-        code: '',
-        description: '',
-        training_type: 'continuing_education',
-        duration_hours: '',
-        credit_hours: '',
-        instructor: '',
-        max_participants: '',
-        expiration_months: '',
-        grants_qualification: '',
-        category_ids: [],
-        materials_required: '',
-      });
-    }
-    setError('');
-  }, [course, isOpen]);
+    const seeded = seedCourseForm(course);
+    setFormData(seeded);
+    setBaseline(seeded);
+    clearErrors();
+  }, [course, isOpen, clearErrors]);
+
+  const set = (patch: Partial<CourseForm>) => {
+    setFormData((prev) => ({ ...prev, ...patch }));
+    for (const key of Object.keys(patch)) courseErrors.setError(key as CourseField, null);
+  };
+
+  const requestClose = useDiscardGuard({
+    isDirty: isOpen && JSON.stringify(formData) !== JSON.stringify(baseline),
+    onClose,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    const problems = checkCourseForm(formData);
+    courseErrors.setFormError(null);
+    courseErrors.setErrors(problems);
+    // A new course is not created until every field is fixed; an edit saves
+    // the rest and keeps a refused field's stored value (owner rule, 2026-11-05).
+    if (!isEdit && Object.keys(problems).length > 0) {
+      courseErrors.focusFirst(problems);
+      return;
+    }
     setIsSubmitting(true);
-    setError('');
 
     // On an edit every blank field goes out as null (an empty list for the
     // list fields): omitting the key means "leave it alone" to a
@@ -121,7 +192,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
     const emptyList = isEdit ? [] : undefined;
 
     const payload = {
-      name: formData.name,
+      name: formData.name.trim(),
       code: text(formData.code),
       description: text(formData.description),
       training_type: formData.training_type,
@@ -138,37 +209,57 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
     };
 
     try {
-      let saved: TrainingCourse;
       if (isEdit && course) {
-        saved = await trainingService.updateCourse(course.id, payload as TrainingCourseUpdate);
+        const { result: saved, refused } = await saveExceptRefused<CourseField, TrainingCourse>({
+          payload,
+          refused: problems,
+          send: (body) => trainingService.updateCourse(course.id, body),
+          place: (err) => placeApiError(COURSE_FIELDS, err),
+        });
+        const first = firstRefused(COURSE_ORDER, refused);
+        if (first) {
+          // The library refreshes behind the dialog, which stays open with the
+          // refused field flagged; only that field still counts as unsaved.
+          onSuccess(saved);
+          courseErrors.setErrors(refused);
+          courseErrors.setFormError(
+            `Course saved, except ${COURSE_FIELDS[first].label.toLowerCase()}. Fix it and save again.`
+          );
+          courseErrors.focusFirst(refused);
+          const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, baseline[k as CourseField]]));
+          setBaseline({ ...formData, ...keep });
+          return;
+        }
         toast.success('Course updated');
+        onSuccess(saved);
       } else {
-        saved = await trainingService.createCourse(payload as TrainingCourseCreate);
+        const saved = await trainingService.createCourse(payload as TrainingCourseCreate);
         toast.success('Course created');
+        onSuccess(saved);
       }
-      onSuccess(saved);
       onClose();
     } catch (err: unknown) {
-      const msg = getErrorDetail(err) || `Failed to ${isEdit ? 'update' : 'create'} course`;
-      setError(msg);
+      // A refused field is flagged on that field (forms review F-2); anything
+      // no field answers for is said in the dialog.
+      courseErrors.focusFirst(courseErrors.setFromApiError(err, `Failed to ${isEdit ? 'update' : 'create'} course`));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const toggleCategory = (catId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      category_ids: prev.category_ids.includes(catId)
-        ? prev.category_ids.filter((id) => id !== catId)
-        : [...prev.category_ids, catId],
-    }));
+    set({
+      category_ids: formData.category_ids.includes(catId)
+        ? formData.category_ids.filter((id) => id !== catId)
+        : [...formData.category_ids, catId],
+    });
   };
 
   if (!isOpen) return null;
 
   // Only show parent categories for selection
   const parentCategories = categories.filter((c) => !c.parent_category_id);
+  const { errors } = courseErrors;
 
   return (
     <div
@@ -176,18 +267,15 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
       role="dialog"
       aria-modal="true"
       aria-labelledby="course-form-title"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
     >
-      <DialogPanel onClose={onClose} className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto">
+      <DialogPanel onClose={requestClose} className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 id="course-form-title" className="text-theme-text-primary text-xl font-bold">
             {isEdit ? 'Edit Course' : 'Add New Course'}
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="Close"
             data-dialog-close
             className="text-theme-text-muted hover:text-theme-text-primary"
@@ -197,210 +285,234 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
         </div>
 
         <form
+          noValidate
           onSubmit={(e) => {
             void handleSubmit(e);
           }}
           className="space-y-4 p-6"
         >
-          {error && (
-            <div className="rounded-sm border border-red-500 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-400">
-              {error}
-            </div>
-          )}
+          <ErrorSummary items={courseErrors.summary} formError={courseErrors.formError} title="Check these fields" />
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label htmlFor="course-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                Course Name <span className="text-red-700 dark:text-red-400">*</span>
-              </label>
-              <input
-                id="course-name"
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="form-input text-sm"
-                placeholder="e.g., Firefighter I"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="course-code" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                Course Code
-              </label>
-              <input
-                id="course-code"
-                type="text"
-                value={formData.code}
-                onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                className="form-input text-sm"
-                placeholder="e.g., FF1"
-                maxLength={50}
-              />
-            </div>
+            <FormField
+              id={COURSE_FIELDS.name.id}
+              label="Course Name"
+              labelClassName={COURSE_LABEL_CLASS}
+              required
+              error={errors.name}
+              maxLength={COURSE_LIMITS.name}
+              count={formData.name.length}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => set({ name: e.target.value })}
+                  className="form-input text-sm"
+                  placeholder="e.g., Firefighter I"
+                />
+              )}
+            </FormField>
+            <FormField
+              id={COURSE_FIELDS.code.id}
+              label="Course Code"
+              labelClassName={COURSE_LABEL_CLASS}
+              error={errors.code}
+              maxLength={COURSE_LIMITS.code}
+              count={formData.code.length}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  value={formData.code}
+                  onChange={(e) => set({ code: e.target.value.toUpperCase() })}
+                  className="form-input text-sm"
+                  placeholder="e.g., FF1"
+                />
+              )}
+            </FormField>
           </div>
 
-          <div>
-            <label htmlFor="course-description" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              Description
-            </label>
-            <textarea
-              id="course-description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={3}
-              className="form-input text-sm"
-              placeholder="Describe the course content, objectives, and target audience..."
-            />
+          <FormField
+            id={COURSE_FIELDS.description.id}
+            label="Description"
+            labelClassName={COURSE_LABEL_CLASS}
+            error={errors.description}
+          >
+            {(field) => (
+              <textarea
+                {...field}
+                value={formData.description}
+                onChange={(e) => set({ description: e.target.value })}
+                rows={3}
+                className="form-input text-sm"
+                placeholder="Describe the course content, objectives, and target audience..."
+              />
+            )}
+          </FormField>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <FormField
+              id={COURSE_FIELDS.training_type.id}
+              label="Training Type"
+              labelClassName={COURSE_LABEL_CLASS}
+              required
+              error={errors.training_type}
+            >
+              {(field) => (
+                <select
+                  {...field}
+                  value={formData.training_type}
+                  onChange={(e) => set({ training_type: e.target.value as TrainingType })}
+                  className="form-input text-sm"
+                >
+                  {TRAINING_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+            <FormField
+              id={COURSE_FIELDS.duration_hours.id}
+              label="Duration (hours)"
+              labelClassName={COURSE_LABEL_CLASS}
+              error={errors.duration_hours}
+              hint="How long the class runs."
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  value={formData.duration_hours}
+                  onChange={(e) => set({ duration_hours: e.target.value })}
+                  className="form-input text-sm"
+                  placeholder="e.g., 40"
+                  min={0}
+                  step={0.5}
+                />
+              )}
+            </FormField>
+            <FormField
+              id={COURSE_FIELDS.credit_hours.id}
+              label="Credit Hours"
+              labelClassName={COURSE_LABEL_CLASS}
+              error={errors.credit_hours}
+              hint="The training hours a member is credited with, by a session of this course or by a mapped provider completion that reports no hours. Left blank, the course credits its duration."
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  value={formData.credit_hours}
+                  onChange={(e) => set({ credit_hours: e.target.value })}
+                  className="form-input text-sm"
+                  placeholder="e.g., 40"
+                  min={0}
+                  step={0.5}
+                />
+              )}
+            </FormField>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div>
-              <label
-                htmlFor="course-training-type"
-                className="text-theme-text-secondary mb-1 block text-sm font-medium"
-              >
-                Training Type *
-              </label>
+            <FormField
+              id={COURSE_FIELDS.instructor.id}
+              label="Instructor"
+              labelClassName={COURSE_LABEL_CLASS}
+              error={errors.instructor}
+              maxLength={COURSE_LIMITS.instructor}
+              count={formData.instructor.length}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  value={formData.instructor}
+                  onChange={(e) => set({ instructor: e.target.value })}
+                  className="form-input text-sm"
+                  placeholder="Instructor name"
+                />
+              )}
+            </FormField>
+            <FormField
+              id={COURSE_FIELDS.max_participants.id}
+              label="Max Participants"
+              labelClassName={COURSE_LABEL_CLASS}
+              error={errors.max_participants}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  value={formData.max_participants}
+                  onChange={(e) => set({ max_participants: e.target.value })}
+                  className="form-input text-sm"
+                  placeholder="Optional"
+                  min={1}
+                />
+              )}
+            </FormField>
+            <FormField
+              id={COURSE_FIELDS.expiration_months.id}
+              label="Expires After (months)"
+              labelClassName={COURSE_LABEL_CLASS}
+              error={errors.expiration_months}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  value={formData.expiration_months}
+                  onChange={(e) => set({ expiration_months: e.target.value })}
+                  className="form-input text-sm"
+                  placeholder="Never"
+                  min={0}
+                />
+              )}
+            </FormField>
+          </div>
+
+          <FormField
+            id={COURSE_FIELDS.grants_qualification.id}
+            label="Certifies"
+            labelClassName={COURSE_LABEL_CLASS}
+            error={errors.grants_qualification}
+            hint="Completing this course grants the member this qualification, dated from the training record's completion and expiry. The qualification decides which shift positions they may fill, and stops counting on its own when the card lapses."
+          >
+            {(field) => (
               <select
-                id="course-training-type"
-                value={formData.training_type}
-                onChange={(e) => setFormData({ ...formData, training_type: e.target.value as TrainingType })}
+                {...field}
+                value={formData.grants_qualification}
+                onChange={(e) => set({ grants_qualification: e.target.value })}
                 className="form-input text-sm"
               >
-                {TRAINING_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
+                <option value="">Nothing — this course certifies no qualification</option>
+                {COURSE_QUALIFICATIONS.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
                   </option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label
-                htmlFor="course-duration-hours"
-                className="text-theme-text-secondary mb-1 block text-sm font-medium"
-              >
-                Duration (hours)
-              </label>
-              <input
-                id="course-duration-hours"
-                type="number"
-                value={formData.duration_hours}
-                onChange={(e) => setFormData({ ...formData, duration_hours: e.target.value })}
-                className="form-input text-sm"
-                placeholder="e.g., 40"
-                min={0}
-                step={0.5}
-                aria-describedby="course-duration-hours-help"
-              />
-              <p id="course-duration-hours-help" className="text-theme-text-muted mt-1 text-xs">
-                How long the class runs.
-              </p>
-            </div>
-            <div>
-              <label htmlFor="course-credit-hours" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                Credit Hours
-              </label>
-              <input
-                id="course-credit-hours"
-                type="number"
-                value={formData.credit_hours}
-                onChange={(e) => setFormData({ ...formData, credit_hours: e.target.value })}
-                className="form-input text-sm"
-                placeholder="e.g., 40"
-                min={0}
-                step={0.5}
-                aria-describedby="course-credit-hours-help"
-              />
-              <p id="course-credit-hours-help" className="text-theme-text-muted mt-1 text-xs">
-                The training hours a member is credited with, by a session of this course or by a mapped provider
-                completion that reports no hours. Left blank, the course credits its duration.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div>
-              <label htmlFor="course-instructor" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                Instructor
-              </label>
-              <input
-                id="course-instructor"
-                type="text"
-                value={formData.instructor}
-                onChange={(e) => setFormData({ ...formData, instructor: e.target.value })}
-                className="form-input text-sm"
-                placeholder="Instructor name"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="course-max-participants"
-                className="text-theme-text-secondary mb-1 block text-sm font-medium"
-              >
-                Max Participants
-              </label>
-              <input
-                id="course-max-participants"
-                type="number"
-                value={formData.max_participants}
-                onChange={(e) => setFormData({ ...formData, max_participants: e.target.value })}
-                className="form-input text-sm"
-                placeholder="Optional"
-                min={1}
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="course-expires-months"
-                className="text-theme-text-secondary mb-1 block text-sm font-medium"
-              >
-                Expires After (months)
-              </label>
-              <input
-                id="course-expires-months"
-                type="number"
-                value={formData.expiration_months}
-                onChange={(e) => setFormData({ ...formData, expiration_months: e.target.value })}
-                className="form-input text-sm"
-                placeholder="Never"
-                min={1}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label
-              htmlFor="course-grants-qualification"
-              className="text-theme-text-secondary mb-1 block text-sm font-medium"
-            >
-              Certifies
-            </label>
-            <select
-              id="course-grants-qualification"
-              value={formData.grants_qualification}
-              onChange={(e) => setFormData({ ...formData, grants_qualification: e.target.value })}
-              className="form-input text-sm"
-            >
-              <option value="">Nothing — this course certifies no qualification</option>
-              {COURSE_QUALIFICATIONS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-            <p className="text-theme-text-muted mt-1 text-xs">
-              Completing this course grants the member this qualification, dated from the training record&apos;s
-              completion and expiry. The qualification decides which shift positions they may fill, and stops counting
-              on its own when the card lapses.
-            </p>
-          </div>
+            )}
+          </FormField>
 
           {/* Categories */}
           <div>
             <p id="course-categories-label" className="text-theme-text-secondary mb-2 block text-sm font-medium">
               Training Categories
             </p>
-            <div role="group" aria-labelledby="course-categories-label" className="flex flex-wrap gap-2">
+            <div
+              id={COURSE_FIELDS.category_ids.id}
+              tabIndex={-1}
+              role="group"
+              aria-labelledby="course-categories-label"
+              aria-describedby={errors.category_ids ? 'course-categories-error' : undefined}
+              className="flex flex-wrap gap-2"
+            >
               {parentCategories.map((cat) => (
                 <button
                   key={cat.id}
@@ -417,26 +529,35 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
                 </button>
               ))}
             </div>
+            {errors.category_ids && (
+              <p id="course-categories-error" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+                {errors.category_ids}
+              </p>
+            )}
           </div>
 
-          <div>
-            <label htmlFor="course-materials" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              Materials Required (one per line)
-            </label>
-            <textarea
-              id="course-materials"
-              value={formData.materials_required}
-              onChange={(e) => setFormData({ ...formData, materials_required: e.target.value })}
-              rows={3}
-              className="form-input text-sm"
-              placeholder="e.g., SCBA&#10;Bunker gear&#10;Notebook"
-            />
-          </div>
+          <FormField
+            id={COURSE_FIELDS.materials_required.id}
+            label="Materials Required (one per line)"
+            labelClassName={COURSE_LABEL_CLASS}
+            error={errors.materials_required}
+          >
+            {(field) => (
+              <textarea
+                {...field}
+                value={formData.materials_required}
+                onChange={(e) => set({ materials_required: e.target.value })}
+                rows={3}
+                className="form-input text-sm"
+                placeholder="e.g., SCBA&#10;Bunker gear&#10;Notebook"
+              />
+            )}
+          </FormField>
 
           <div className="border-theme-surface-border flex justify-end space-x-3 border-t pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover rounded-lg px-4 py-2 text-sm"
               disabled={isSubmitting}
             >
