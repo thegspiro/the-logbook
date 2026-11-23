@@ -30,7 +30,7 @@ seed = _load_seeder()
 
 USERS = [
     {"id": f"u-{name}", "username": name}
-    for name in ("isolberg", "ytanaka", "dokonkwo")
+    for name in ("isolberg", "ytanaka", "mbell")
 ]
 
 
@@ -148,7 +148,7 @@ class TestTheOutreachStepsRunOnce(unittest.TestCase):
         assert seated == [
             ("u-isolberg", "educator"),
             ("u-ytanaka", "educator"),
-            ("u-dokonkwo", "greeter"),
+            ("u-mbell", "greeter"),
         ]
         assert [p for m, p in api.writes if p == "/events"] == ["/events"]
 
