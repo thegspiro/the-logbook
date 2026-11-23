@@ -1,0 +1,48 @@
+{
+  "script": "docs/youtube-scripts/08-quick-tips-and-shorts.md — SHORT 8I",
+  "title": "Shifts in Your Phone Calendar",
+  "callout": "Your shifts, in the calendar you already use",
+  "endCard": {
+    "headline": "Try The Logbook",
+    "sub": "Free & Open Source",
+    "url": "github.com/thegspiro/the-logbook"
+  },
+  "shots": [
+    {
+      "id": "hook",
+      "say": "Want your shifts to show up in your phone's calendar? It takes a few seconds.",
+      "caption": "Your shifts, in your phone's calendar"
+    },
+    {
+      "id": "open",
+      "say": "Tap Schedule, then My Shifts.",
+      "speak": "Tap Sked-yool, then My Shifts.",
+      "caption": "Schedule → My Shifts"
+    },
+    {
+      "id": "subscribe",
+      "say": "Tap Subscribe to my shifts, and your own calendar link appears.",
+      "caption": "Subscribe to my shifts"
+    },
+    {
+      "id": "copy",
+      "say": "Copy the link, and add it as a subscribed calendar in Google Calendar, Apple Calendar or Outlook.",
+      "caption": "Copy it → add to Google, Apple or Outlook"
+    },
+    {
+      "id": "private",
+      "say": "The link is private to you. If it ever gets shared, press Reset link, and the old one stops working.",
+      "caption": "Private to you · Reset link if shared"
+    },
+    {
+      "id": "sync",
+      "say": "From then on, the shifts you're given show up in your calendar, and your calendar app keeps them up to date.",
+      "caption": "Every shift, kept up to date"
+    },
+    {
+      "id": "outro",
+      "say": "Your shifts, in the calendar you already use.",
+      "caption": "The calendar you already use"
+    }
+  ]
+}

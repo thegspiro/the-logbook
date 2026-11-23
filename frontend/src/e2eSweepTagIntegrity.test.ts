@@ -29,7 +29,7 @@ const E2E = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'e2e');
 
 /**
  * Five minutes. It has to sit under the *smallest* @sweep budget, which is
- * a mobile-presentation part's 1_080_000 — otherwise this file calls a test
+ * a mobile-presentation part's 780_000 — otherwise this file calls a test
  * ordinary while the workflow treats it as a sweep, and the two halves
  * disagree, which is what the second assertion below exists to catch. Nothing
  * else in the suite declares a budget at all, so ordinary tests sit on

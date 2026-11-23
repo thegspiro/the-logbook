@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4580](https://github.com/thegspiro/the-logbook/pull/4580) (branch
+`claude/security-review-core-infra-p15`)**:
+Feature 33 (Core infrastructure), pass 15 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable). PR #4576 (Feature 32, Locations & kiosk, pass 14) had
+already merged (`8c20bff8c`, squash) before this iteration started; row 32
+marked ✅ above.
+
+Baseline: pass 14's merge `027a1e14f`. Real delta since then: a 2-line
+addition to `SecurityMonitoringMiddleware.EXPORT_ENDPOINTS` in
+`security_middleware.py`, tracing to two real new export routes landed by
+other features (`GET /evaluations/export`, `POST /reports/export`) — both
+verified org-scoped, permission-gated and audited. `database.py` and
+`config.py` byte-identical to pass 14. The migration-chain fork pass 14
+flagged (tracked by #4255) is now resolved: single head. **0 fixed, 0 new
+findings.** Full write-up: `docs/security-review/CI15-33-core-infra.md`.
+
+Row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend shared)
+— re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 14, PR #4576, merged), preserved for history</summary>
+
 **PR [#4576](https://github.com/thegspiro/the-logbook/pull/4576) (branch
 `claude/security-review-locations-kiosk-p14`)**: Feature 32 (Locations &
 kiosk), pass 14 — watchdog pickup (the dedicated `/loop 30m
@@ -26,6 +49,8 @@ unreachable). 0 fixed, 0 new findings; see the Log entry below and
 Row 32 → ✅ (pending this PR's merge); next is Feature 33 (Core
 infrastructure) — re-check `list_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 14, PR #4558, merged), preserved for history</summary>
@@ -27514,7 +27539,7 @@ iteration's commit" rule.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                                                   | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                                                   | ✅     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                                                                                                          | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
@@ -27576,6 +27601,48 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-22 — Feature 32 (Locations & kiosk, pass 14) merged; Feature 33 (Core infrastructure, pass 15): watchdog pickup, 0 fixed, 0 new findings
+
+PR #4576 merged as `8c20bff8c` (squash); row 32 marked ✅ above. A fresh
+`list_pull_requests` (state=open, 18 results) found no
+`claude/security-review-*` head, confirming row 33 (Core infrastructure) as
+the next pending feature.
+
+Baseline: pass 14's merge commit `027a1e14f`. `git diff 027a1e14f..HEAD`
+against this feature's three declared scope files found `database.py` and
+`config.py` byte-identical, and exactly a 2-line addition to
+`security_middleware.py`'s `SecurityMonitoringMiddleware.EXPORT_ENDPOINTS`
+(the data-exfiltration monitoring registry): `/api/v1/evaluations/export`
+and `/api/v1/reports/export`. Both traced to real routes landed by other
+features (Evaluations, Reports) — `GET /evaluations/export`
+(`evaluations.py:627`, `evaluations.view_all`, org-scoped period lookup,
+`SafeCsvWriter`, audited) and `POST /reports/export` (`reports.py:184`,
+`reports.view` + per-report-type PII permission, client-supplied
+`saved_report_id` validated in-org before use, report regenerated
+server-side rather than trusted from the client). The registry's own
+schema-pinned guard tests (`TestExportEndpointsCoverage` in
+`test_security_middleware.py`) re-verified green in both directions
+(missing entries and stale entries), and independently cross-checked by
+hand against every `@router.get`/`@router.post` path containing `export`
+across `backend/app/api/v1/endpoints/`: 29 concrete routes, all covered.
+
+The migration-chain fork pass 14 flagged and left to PR #4255 is now
+resolved — `validate_migrations.py --strict` reports a single head
+(`561a3e9f4165`, 820 revisions), and `test_alembic_migrations.py`'s two
+previously-failing assertions are green. Not this feature's fix, but
+re-confirmed since pass 14's report named it as the one red gate row.
+
+**0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/CI15-33-core-infra.md`.
+
+**Completion gate:** `flake8`, `black --check` and `isort --check-only`
+clean on `app/`, `tests/`, `alembic/`; `validate_migrations.py --strict`
+clean (single head); feature-scoped tests 681 passed, 1 pre-existing skip;
+cross-cutting guard tests 253 passed. No frontend file in this feature's
+scope changed.
+
+---
 
 ### 2026-11-22 — Feature 31 (Scheduled tasks, pass 14) merged; Feature 32 (Locations & kiosk, pass 14): watchdog pickup, 0 fixed, 0 new findings
 
