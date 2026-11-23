@@ -16,10 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_Being updated by this same iteration's second commit, once the PR for
-Feature 01 (Auth & session lifecycle, pass 17) exists — Step 0 reads
-GitHub fresh regardless, so this row trailing by one commit is the
-intended state, not a problem to fix._
+**PR [#4625](https://github.com/thegspiro/the-logbook/pull/4625) (branch
+`claude/friendly-babbage-2isqey`)**: Feature 01 (Auth & session
+lifecycle), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run
+passes recorded here (`claude/friendly-babbage-n4b791`,
+`claude/friendly-babbage-v1mcno`): this session's environment restricts
+pushes to its own assigned branch rather than a freely-chosen
+`claude/security-review-auth-session-pNN` name.
+
+PR #4616 (Feature 00, Cross-cutting baseline, pass 18, which also reset
+the whole 35-row rotation for a new lap) had already merged before this
+iteration started; row 00 marked ✅ above.
+
+Baseline: pass 16's merge `ac2391db7` (PR #4332). 1279 commits since then.
+**True zero-delta pass:** all 18 of this feature's tracked files are
+byte-identical to pass 16, confirmed by an individual `git diff` against
+every path. The 2-head Alembic fork pass 16 flagged as pre-existing is
+resolved to a single head. **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/AUTH-01-auth-session.md`'s **Pass 17** section.
+
+Row 01 → ✅ (pending this PR's merge); next is Feature 02 (Permissions &
+roles) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 18, PR #4616, merged), preserved for history</summary>
