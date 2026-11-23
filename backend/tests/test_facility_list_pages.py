@@ -274,6 +274,40 @@ class TestDashboardDueWindows:
         _, unfiltered = await FacilitiesService(db_session).page_inspections(org.id)
         assert unfiltered == 5
 
+    async def test_the_facilities_dashboard_counts_what_the_list_shows(
+        self, db_session, scene
+    ):
+        """FAC2-7: the facilities dashboard's "Upcoming inspections" count and
+        preview left the archived-facility filter off, so a closed station's
+        inspection inflated the card above both the main dashboard tile and
+        the ``dueWithin=30`` list the card opens."""
+        org, fac, _ = scene
+        archived = await self._archived_facility(db_session, org, fac)
+        today = await resolve_org_today(db_session, org.id)
+        for title, facility in (("open station", fac), ("archived", archived)):
+            db_session.add(
+                FacilityInspection(
+                    id=str(uuid.uuid4()),
+                    organization_id=org.id,
+                    facility_id=facility.id,
+                    inspection_type="fire",
+                    title=title,
+                    inspection_date=today - timedelta(days=365),
+                    next_inspection_date=today + timedelta(days=5),
+                )
+            )
+        await db_session.flush()
+        service = FacilitiesService(db_session)
+
+        counts = await service.get_dashboard_counts(org.id)
+        summary = await service.get_dashboard_summary(org.id)
+        _, listed = await service.page_inspections(org.id, due_within_days=30)
+
+        assert counts["upcoming_inspections"] == listed == 1
+        assert [row["title"] for row in summary["upcoming_inspection_records"]] == [
+            "open station"
+        ]
+
     async def test_compliance_due_within_the_window(self, db_session, scene):
         org, fac, _ = scene
         archived = await self._archived_facility(db_session, org, fac)

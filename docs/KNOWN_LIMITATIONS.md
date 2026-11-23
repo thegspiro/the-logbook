@@ -11630,3 +11630,48 @@ ones; the list it opens includes lots already expired and applies the
 shelf rule. A lot that expired yesterday is in the list but not in the count.
 
 **The decision:** which rule both should use.
+
+## Facilities — Four Decisions From App Review B4 Pass 6 (2026-11-23)
+
+Recorded rather than changed. Details in `docs/app-review/facilities.md` →
+Pass 6.
+
+### FAC2-8 — Can a maintenance or inspection record move to another facility?
+
+The edit dialogs used to offer a Facility picker that the server ignored, so a
+"moved" record stayed where it was behind a success message. The picker now
+appears only on create. If records should be movable (a work order filed under
+the wrong station), the update schemas need `facility_id`, validated in-org and
+with the record's system re-checked against the new facility.
+
+### FAC2-11 — Which inspection is current, and what does a missed one look like?
+
+Each inspection keeps its own next-inspection date, and recording the next
+inspection does not retire the previous one's, so an inspection done early
+still counts as upcoming. Every dashboard window starts at today, so a date that
+passes without the work done disappears from the counts instead of showing as
+overdue. Compliance checklists cannot be completed from any screen, so they age
+out the same way.
+
+**The decision:** whether the newest inspection of a type supersedes earlier
+ones, whether missed dates should show as overdue, and whether compliance
+checklists get a completion flow.
+
+### FAC2-12 — Maintenance intervals and system test frequencies are stored, never read
+
+Maintenance types carry seeded intervals and systems carry a test frequency,
+and nothing schedules the next occurrence or reports a test as due. Completing
+a system's maintenance does not update the system's last-serviced date.
+
+**The decision:** build recurrence (and the due-test report), or label the
+fields as reference only.
+
+### FAC2-13 — Renaming or archiving a facility leaves its rooms' locations stale
+
+A room's linked Location is updated when the room changes, not when its
+facility does. A renamed facility's rooms keep the old building name and
+address, and an archived facility's rooms stay offered in the Events and
+Storage pickers.
+
+**The decision:** whether facility changes should carry through to room
+Locations, and whether archiving should deactivate them.
