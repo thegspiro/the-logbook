@@ -22530,7 +22530,7 @@ export const SHOTS = [
     line: 548,
     anchor:
       "Scheduling Admin → Settings → Outside Apparatus → one department with two units",
-    alt: "Scheduling Settings on Outside Apparatus: Township Fire Company with Engine 21 on and Tanker 23 switched off, a second department below, and the Add a department field",
+    alt: "Scheduling Settings on Outside Apparatus: Township Fire Company with Engine 21 on and Tanker 23 switched off, a second department below, each department with its edit, merge and delete buttons, and the Add a department field",
     route: "/scheduling/admin/settings/outside-apparatus",
     fullPage: true,
     expect: "Tanker 23",
@@ -22818,6 +22818,70 @@ export const SHOTS = [
         .selectOption({ label: "Add as an outside agency's unit…" });
       await page
         .getByText("starts hidden from members")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "03-139-history-import-existing-undo",
+    doc: "03-scheduling.md",
+    line: 5030,
+    anchor: "A draft import's Shifts tab: the E-1 shift a 75% match",
+    alt: 'A draft import\'s Shifts tab: the proposed E-1 shift on August 7, a 75% match for the shift already on the schedule, answered Add to that shift and now reading "You chose to add these members to that shift." with an Undo link',
+    route: "/scheduling/admin/history-import",
+    fullPage: true,
+    expect: "You chose to add these members to that shift.",
+    allowEmptyState: true,
+    prepare: async (page) => {
+      await page
+        .getByRole("link", { name: /^Review$/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("tab", { name: /^Shifts/ })
+        .click({ timeout: 20_000 });
+      // Saved to the draft like any reviewer's answer, so a later run finds
+      // it already given; the draft is never committed.
+      const chosen = page.getByText(
+        "You chose to add these members to that shift.",
+      );
+      if (!(await chosen.isVisible())) {
+        await page
+          .getByRole("button", { name: /^Add to that shift$/ })
+          .first()
+          .click({ timeout: 20_000 });
+      }
+      await chosen.waitFor({ timeout: 20_000 });
+      await chosen.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "03-141-history-import-rows-overlap",
+    doc: "03-scheduling.md",
+    line: 5007,
+    anchor:
+      "A draft import's Rows tab on Need attention: two of Gary Whitmore's E-2 rows",
+    alt: "A draft import's Rows tab on Need attention, filtered to Overlapping times: Gary Whitmore's two E-2 rows, the night shift and the next morning's 06:00 entry, each with its date, start and end as boxes and a Save button",
+    route: "/scheduling/admin/history-import",
+    fullPage: true,
+    expect: { selector: 'form[aria-label^="Date and times for line"]' },
+    allowEmptyState: true,
+    prepare: async (page) => {
+      await page
+        .getByRole("link", { name: /^Review$/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.getByRole("tab", { name: /^Rows/ }).click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: /^Need attention/ })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: /^Overlapping times/ })
+        .click({ timeout: 20_000 });
+      await page
+        .locator('form[aria-label^="Date and times for line"]')
+        .first()
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },

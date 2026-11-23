@@ -2993,9 +2993,7 @@ class Seeder:
         )
         if existing and pick(existing, "id"):
             if pick(existing, "attendance_finalized_at"):
-                self.api.post(
-                    f"/events/{pick(existing, 'id')}/reopen-attendance", {}
-                )
+                self.api.post(f"/events/{pick(existing, 'id')}/reopen-attendance", {})
             event = self.api.patch(
                 f"/events/{pick(existing, 'id')}",
                 {**window, "custom_fields": {}},
@@ -8920,6 +8918,7 @@ class Seeder:
         """State the scheduling guide pictures that nothing else seeds."""
         self._seed_outside_apparatus()
         self._seed_member_exchanges()
+        self._seed_history_import_existing_shift()
         self._seed_history_import_draft()
         self._seed_earlier_month_report()
 
@@ -9167,6 +9166,53 @@ class Seeder:
             },
         )
 
+    HISTORY_IMPORT_EXISTING_NOTE = "Guide 03: the engine shift a history import matches"
+    HISTORY_IMPORT_EXISTING_DAY = date(2026, 8, 7)
+
+    def _seed_history_import_existing_shift(self) -> None:
+        """A shift already on the schedule that the history import half-matches.
+
+        The Shifts tab asks "Add to that shift" or "Import separately" only for
+        a proposed shift that is a 60-89% match for one on the same unit and
+        day, and the demo's past shifts are on no unit. This one is on E-1,
+        07:00-19:00; the draft's crew for that day starts and ends half an
+        hour later, which scores 75%. No one is seated on it, and it is in
+        August, so no hours figure, roster or calendar another guide
+        photographs counts it.
+        """
+        day = self.HISTORY_IMPORT_EXISTING_DAY
+        existing = items(
+            self.api.get(f"/scheduling/shifts?start_date={day}&end_date={day}"),
+            "shifts",
+        )
+        if any(
+            pick(sh, "notes") == self.HISTORY_IMPORT_EXISTING_NOTE for sh in existing
+        ):
+            return
+        engine = next(
+            (
+                a
+                for a in items(self.api.get("/apparatus?limit=50"), "apparatus")
+                if str(pick(a, "unit_number", "unitNumber") or "").upper() == "E-1"
+            ),
+            None,
+        )
+        if engine is None:
+            self.blocked.append("guide 03: no E-1 for the history import's match")
+            return
+        start = datetime.combine(day, time(7), tzinfo=ORG_TIMEZONE)
+        end = start + timedelta(hours=12)
+        self.api.post(
+            "/scheduling/shifts",
+            {
+                "shift_date": str(day),
+                "start_time": iso(start.astimezone(timezone.utc)),
+                "end_time": iso(end.astimezone(timezone.utc)),
+                "apparatus_id": pick(engine, "id"),
+                "notes": self.HISTORY_IMPORT_EXISTING_NOTE,
+            },
+        )
+
     def _seed_history_import_draft(self) -> None:
         """A draft shift-history import, never committed.
 
@@ -9180,7 +9226,11 @@ class Seeder:
         column does: a personal vehicle and a vague "Other EMS" for the Units
         tab's catch-all, and a unit of an outside department the list already
         has but under a name it does not, for adding a unit under a picked
-        department. Each is on a member already in the file, so the Members
+        department. Two more put a crew on E-1 half an hour off the shift
+        ``_seed_history_import_existing_shift`` scheduled, for the Shifts
+        tab's "Add to that shift" question, and one gives Gary Whitmore a
+        second E-2 row that overlaps his night shift, for the Rows tab's inline
+        Save times. Each is on a member already in the file, so the Members
         tab is unchanged.
         """
         drafts = items(self.api.get("/scheduling/history-import"), "imports")
@@ -9302,6 +9352,27 @@ class Seeder:
                 "07:00",
                 "19:00",
                 "2",
+            ),
+            ("Marcus Bell", "E-1", "", "Driver", "2026-08-07", "07:30", "19:30", "2"),
+            (
+                "Priya Raman",
+                "E-1",
+                "",
+                "Firefighter",
+                "2026-08-07",
+                "07:30",
+                "19:30",
+                "2",
+            ),
+            (
+                "Gary Whitmore",
+                "E-2",
+                "",
+                "Firefighter",
+                "2026-08-06",
+                "06:00",
+                "10:00",
+                "0",
             ),
         ]
         text = "".join(",".join(f'"{cell}"' for cell in row) + "\r\n" for row in rows)

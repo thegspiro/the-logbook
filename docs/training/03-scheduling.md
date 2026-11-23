@@ -4990,17 +4990,23 @@ rather than starting from zero. It needs `scheduling.manage`.
    **Positions**, **Shifts** (the shifts the import proposes, each with a
    confidence score), joined entries and duplicates, and **Rows** (edit, revert
    or exclude any row).
-   _Added 2026-11-10._ A row flagged for **overlapping times** shows its start
-   and end as boxes right in the **Times** cell, with **Save times**. An overlap
-   is nearly always one mistyped time, so you can fix it without opening the
-   row's edit dialog. Only the changed time is sent, and it is saved as an
-   ordinary row edit, so **Revert** still brings back the file's value. An
-   excluded row keeps its plain text.
+   _Added 2026-11-10, date added 2026-11-21._ A row flagged for **overlapping
+   times** shows its date, start and end as boxes right in the table, with
+   **Save**. An overlap is nearly always one mistyped time or date (an
+   overnight shift entered twice on the same day, when the second belongs to
+   the next), so you can fix it without opening the row's edit dialog. Only
+   what you changed is sent, and it is saved as an ordinary row edit, so
+   **Revert** still brings back the file's value. An excluded row keeps its
+   plain text.
 4. Choose **Commit**. The dialog says plainly that a commit **cannot be undone**.
    The exception _(2026-11-19)_: batches sent here by a **Historical Data
    Import** can be undone together from that import's page, with **Undo this
    step** under its shift hours step. See
    [Integrations > Undoing a step](./16-integrations.md#undoing-a-step).
+
+<!-- Screenshot needed:
+A draft import's Rows tab on Need attention: two of Gary Whitmore's E-2 rows flagged for overlapping times, their date, start and end as boxes with Save
+-->
 
 How it reads your file: an end time at or before the start time means the shift
 crossed midnight; back-to-back entries for one member on one unit with a gap of
@@ -5020,6 +5026,10 @@ that shift shows "Decided: add to the shift already on the schedule" (or
 "import separately from…") with the same **Undo**. Undo puts the question back,
 so a wrong click no longer means discarding the draft and its other decisions.
 A match of 90% or more is joined without asking and has nothing to undo.
+
+<!-- Screenshot needed:
+A draft import's Shifts tab: the E-1 shift a 75% match for the one already on the schedule, answered Add to that shift, reading "You chose to add these members to that shift." with Undo
+-->
 
 **Remembered decisions.** Departments usually import over several files from the
 same old system. Once an import is committed, its member, unit and position
