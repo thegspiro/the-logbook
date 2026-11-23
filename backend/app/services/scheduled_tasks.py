@@ -67,6 +67,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 7:40 AM — ask the officer running an outreach event that ended yesterday to record its guest headcount
 40 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=guest_headcount_reminders
 
+# Daily at 7:50 AM — remind training officers of a session sign-off waiting 7 (then 14) days
+50 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=training_approval_reminders
+
 # Every 30 minutes — post-shift validation notifications
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=post_shift_validation
 
@@ -518,6 +521,16 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "07:40",
         "cron": "40 7 * * *",
+    },
+    "training_approval_reminders": {
+        "description": (
+            "Email the training officers when a training session's sign-off "
+            "has waited 7 days for a decision, and once more at 14 days; "
+            "stamped per approval so a re-run sends nothing new"
+        ),
+        "frequency": "daily",
+        "recommended_time": "07:50",
+        "cron": "50 7 * * *",
     },
     "post_shift_validation": {
         "description": "Notify shift officers to validate attendance and timing after their shift ends",
@@ -2034,6 +2047,17 @@ async def run_guest_headcount_reminders(db: AsyncSession) -> Dict[str, Any]:
         return counts.emails
 
     return await _for_each_org(db, "guest_headcount_reminders", _process)
+
+
+async def run_training_approval_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Remind training officers of sign-offs left waiting; see the service."""
+    from app.services.training_approval_reminders import send_approval_reminders
+
+    async def _process(db_session, org):
+        counts = await send_approval_reminders(db_session, org)
+        return counts.emails
+
+    return await _for_each_org(db, "training_approval_reminders", _process)
 
 
 async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
@@ -8761,6 +8785,7 @@ TASK_RUNNERS = {
     "event_reminders": run_event_reminders,
     "post_event_validation": run_post_event_validation,
     "guest_headcount_reminders": run_guest_headcount_reminders,
+    "training_approval_reminders": run_training_approval_reminders,
     "post_shift_validation": run_post_shift_validation,
     "shift_reminders": run_shift_reminders,
     "end_of_shift_checklist_reminders": run_end_of_shift_checklist_reminders,
@@ -8867,6 +8892,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "post_event_validation": 1800,
     # Daily; each event is reminded once (guest_headcount_reminder_service).
     "guest_headcount_reminders": 86400,
+    # Daily; each approval is reminded at most twice, stamped in
+    # reminder_sent_at (training_approval_reminders).
+    "training_approval_reminders": 86400,
     "post_shift_validation": 1800,
     "shift_reminders": 1800,
     "end_of_shift_checklist_reminders": 1800,

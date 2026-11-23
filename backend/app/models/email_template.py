@@ -142,6 +142,9 @@ class EmailTemplateType(str, enum.Enum):
     # The morning after an outreach event ends with no guest headcount; see
     # email_templates_outreach.py.
     GUEST_HEADCOUNT_REMINDER = "guest_headcount_reminder"
+    # A training session's sign-off still waiting 7, then 14, days after
+    # finalize; see email_templates_training_approval.py.
+    TRAINING_APPROVAL_REMINDER = "training_approval_reminder"
     CUSTOM = "custom"
 
 

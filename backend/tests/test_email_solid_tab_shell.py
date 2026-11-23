@@ -120,6 +120,7 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.LEAVE_COVER_CLEARED.value: "b6e3d1f47a29",
     EmailTemplateType.LEAVE_COVER_ENDED.value: "b6e3d1f47a29",
     EmailTemplateType.GUEST_HEADCOUNT_REMINDER.value: "73f64017f9e2",
+    EmailTemplateType.TRAINING_APPROVAL_REMINDER.value: "5845dae0c277",
 }
 
 
