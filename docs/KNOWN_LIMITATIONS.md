@@ -200,9 +200,7 @@ managed by the directory anyway), or let a fresh SSO sign-in count as step-up.
 The waiver emails and the template-CC fix (defect D1) follow the owner
 decisions of 2026-11-10. Where those left a gap, the conservative choice was
 taken; each is listed so the owner can confirm or reverse it.
-**Confirmed by the owner 2026-11-23:** every choice below. Whether meeting
-notices should become ones a member cannot switch off stays open (see the last
-item).
+**Confirmed by the owner 2026-11-23:** the defaults below.
 
 - **A CC copy leaves out the category and the decider's note, not only the
   buttons and the reason.** The decision said a copy carries "no buttons and
@@ -251,8 +249,7 @@ item).
   member who had turned reminders off learned of a charged miss only from the
   bell. A **void** stays optional: its session was cancelled or deleted, so
   nothing is graded and the cap slot is freed. Meeting notices are unchanged
-  (`EVENT_CHANGES`, optional, as above); whether they become mandatory is
-  still the owner's open decision. `member_record_email_kind` on
+  (`EVENT_CHANGES`, optional, as above). `member_record_email_kind` on
   `WorkflowSpec` holds the choice.
 
 ## Elections — Voter Rules by Member Type (Owner Decisions, 2026-11-13)
@@ -9458,9 +9455,10 @@ need an owner decision before anything is built.
 
 Five defects in training events and recurring series were fixed on
 2026-11-21 (owner approval of that date). Where the review left a choice, the
-conservative option was taken. **Confirmed by the owner 2026-11-23:** the
-first, fourth and fifth below, except a pause or resume for a rolling series.
-The second and third stay open.
+conservative option was taken; each can be redirected. **Confirmed by the
+owner 2026-11-23:** the fourth and fifth below. **Owner decision of
+2026-11-23** on the first and third: rolling series keep all-or-nothing time
+changes, and get no pause or resume for now.
 
 - **Cancelling a series' future ends the series.** "Only cancel future
   events" now sets the series' end date to the last kept occurrence and turns
@@ -9468,8 +9466,7 @@ The second and third stay open.
   no "pause and resume" for a rolling series; to continue it, create a new
   one. Separately, the nightly extension job never creates a date the series
   already holds, cancelled or not.
-- **A sign-off session is not held while its approval is pending** (still an
-  open owner decision). A session
+- **A sign-off session is not held while its approval is pending.** A session
   that requires completion confirmation drops out of every
   session-attendance grade from finalize until a training officer approves or
   rejects it. The alternative — counting attendees with a pending record as
@@ -9477,8 +9474,7 @@ The second and third stay open.
   own and it would credit attendance an officer may still reject. Only the
   newest approval counts; "newest" is by a one-second `created_at`, and a tie
   with a pending approval reads as pending.
-- **A series time change that would strand check-ins refuses the whole save**
-  (still an open owner decision, with pause and resume).
+- **A series time change that would strand check-ins refuses the whole save.**
   The refusal names how many members and occurrences are affected; nothing is
   moved. Postponing each affected occurrence is the way through.
 - **Credit hours follow the event's length only when they still equal it.**
@@ -11123,13 +11119,12 @@ was not among the questions the owner answered on 2026-11-01. Options:
 
 ## Training — Waiver Request Documents: What Was Left Out (2026-11-11)
 
-**Chosen conservatively; confirmed by the owner 2026-11-23, except the first
-(a member removing a document), which stays open.** Documents
+**Open, chosen conservatively; the owner may revisit any of these.** Every
+item but the first was confirmed by the owner 2026-11-23. Documents
 on session waiver requests (PDF, JPEG, PNG or HEIC, 10 MB each, three per
 request, kept 365 days) shipped with these gaps, each the narrower choice:
 
-- **A filed document cannot be removed by the member** (still an open owner
-  decision). Once filed it stays
+- **A filed document cannot be removed by the member.** Once filed it stays
   until the retention task deletes it. A member who filed the wrong file can
   withdraw a pending request and ask again; the withdrawn request's documents
   then age out with it. Allowing removal would have needed a rule for removing
@@ -11165,8 +11160,9 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
 
 The business-meeting waiver workflow (owner decisions, 2026-11-10) shares the
 training workflow's engine. Where the decisions left a gap, the conservative
-option was taken. **Confirmed by the owner 2026-11-23:** each choice below,
-except the two marked open.
+option was taken; each is open for the owner to revisit. **Confirmed by the
+owner 2026-11-23:** every choice below except the first (cancelling or
+deleting an event) and the moved-start one.
 
 - **Cancelling or deleting an event closes only pending requests.** The brief
   asked for requests to be voided "as the training workflow does", but the
@@ -11176,8 +11172,6 @@ except the two marked open.
   approved request as the member's record when its event is deleted. So an
   approval for a meeting that was then cancelled still counts toward the
   member's cap. Voiding approved requests as well would give the waiver back.
-  Voiding pending requests is confirmed; whether an approval for a cancelled
-  event keeps counting is still an open owner decision.
 - **A member on a leave of absence that covers the meeting cannot ask**
   ("on_leave"): the voting tally already excludes such a meeting, so there is
   nothing to excuse.
@@ -11206,8 +11200,7 @@ except the two marked open.
   2026-11-21 the member always gets seven days from that notice to answer
   (`expires_at_for` reads `reconfirm_requested_at`); before, a start fixed
   more than eight days after the session expired the request on the next
-  hourly sweep and charged the meeting as missed. **For the owner (still
-  open):** whether a
+  hourly sweep and charged the meeting as missed. **For the owner:** whether a
   correction to a session already held — or one that keeps the same local
   date, such as 19:00 fixed to 19:30 — should reopen the decision at all. Not
   reopening it would change the 2026-11-13 decision, so it was not done here.
