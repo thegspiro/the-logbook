@@ -36,7 +36,7 @@ re-create the bug, and nothing earlier reads the difference.
 so later edits to the service cannot change what this revision does.
 
 Revision ID: 1f3a6c2d9e40
-Revises: b6e3d1f47a29
+Revises: e3b8d61f4a27
 Create Date: 2026-11-23 12:00:00.000000
 """
 
@@ -48,7 +48,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "1f3a6c2d9e40"
-down_revision: Union[str, None] = "b6e3d1f47a29"
+down_revision: Union[str, None] = "e3b8d61f4a27"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
