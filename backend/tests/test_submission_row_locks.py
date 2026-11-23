@@ -74,9 +74,11 @@ def test_an_approval_commits_once_with_its_record():
 
 
 def test_the_attachment_endpoints_lock_the_submission():
+    # The whole-submission delete reads its certificates under the lock in
+    # the service, which queues them in the delete's own transaction.
     for func in (
         training_submissions.delete_submission_attachment,
-        training_submissions.delete_submission,
+        TrainingSubmissionService.delete_submission,
     ):
         source = _source(func)
         assert "for_update=True" in source, func.__name__

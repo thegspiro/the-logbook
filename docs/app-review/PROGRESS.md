@@ -42,7 +42,7 @@ from its open list.
 | B1  | medical-screening          | MS2    | ✅     |
 | B2  | apparatus                  | AP2    | ✅     |
 | B3  | inventory                  | INV2   | ✅     |
-| B4  | facilities                 | FAC2   | ⬜     |
+| B4  | facilities                 | FAC2   | ✅     |
 | B5  | elections                  | ELEC2  | ⬜     |
 | B6  | meetings & minutes         | MM2    | ⬜     |
 | B7  | equipment-check            | EC2    | ⬜     |
@@ -3688,3 +3688,22 @@ secrets redacted for non-admins. See
   quantity and its lots can drift; INV2-15 (LOW) the expiring tile and list
   disagree. Eight LOW items recorded as open. See inventory.md → Pass 6. Next:
   B4 facilities.
+- **B4 facilities ✅ (pass 6).** Read the backend for business-logic correctness
+  in depth for the first time (the security review covers access control) and
+  every frontend file changed since pass 5. Verified: 102 routes all
+  permission-gated, every update through `apply_updates` with `ValueError`
+  mapped to 400, overdue logic on the department's date, the overdue task safe
+  to run twice, utilities `Decimal`, the detail page id-checked. **4 fixes:**
+  FAC2-7 (MED), the facilities dashboard counted archived facilities'
+  inspections and both its links opened the unfiltered list — now the same
+  population and `?dueWithin=30` as the main tile; FAC2-8 (MED), the edit
+  dialogs offered a Facility picker the server ignored — now shown as text on
+  edit; FAC2-9 (LOW), a maintenance record's system could belong to another
+  facility; FAC2-10 (LOW), `floor=0` returned every floor. Every fix's test went
+  red first. **4 flagged** to KNOWN_LIMITATIONS: FAC2-8's other half (whether
+  records can move facility); FAC2-11 (MED) inspections redone early still count
+  as upcoming and missed dates vanish; FAC2-12 (LOW) intervals and test
+  frequencies nothing reads; FAC2-13 (LOW) facility renames and archives leave
+  room Locations stale. Facilities still has no feature doc. Gate clean; 328
+  backend and 218 frontend facilities tests pass. See facilities.md → Pass 6.
+  Next: B5 elections.
