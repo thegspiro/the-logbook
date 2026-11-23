@@ -280,6 +280,22 @@ describe('MemberTrainingHistoryPage training period', () => {
     });
     click.mockRestore();
   });
+
+  it('ends the PDF with signature lines when the box is ticked', async () => {
+    const user = userEvent.setup();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    renderWithRouter(<MemberTrainingHistoryPage />);
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Add signature lines to PDF' }));
+    await user.click(screen.getByRole('button', { name: 'Export PDF' }));
+
+    await waitFor(() => {
+      expect(mockExportReport).toHaveBeenCalledWith(
+        expect.objectContaining({ report_type: 'individual', format: 'pdf', signature_lines: true })
+      );
+    });
+    click.mockRestore();
+  });
 });
 
 describe('MemberTrainingHistoryPage record list', () => {

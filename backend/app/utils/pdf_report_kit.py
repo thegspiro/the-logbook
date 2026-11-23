@@ -374,6 +374,7 @@ class ReportMeta:
         wide: bool = False,
         identity: Optional[str] = None,
         report_number: Optional[str] = None,
+        signature_lines: bool = False,
     ):
         self.title = title
         self.org_name = org_name
@@ -392,6 +393,9 @@ class ReportMeta:
         # carries the number in its running header.
         self.identity = identity
         self.report_number = report_number
+        # Asked for at download (owner decision, 2026-11-21): a report going
+        # up the chain is signed on paper; a working copy is not.
+        self.signature_lines = signature_lines
 
     @property
     def width(self) -> float:
@@ -513,6 +517,67 @@ def _footer(meta: ReportMeta, total_pages: int) -> Callable[[Any, Any], None]:
     return draw
 
 
+_SIGNATURE_ROLES = ("Prepared by", "Reviewed by", "Approved by")
+_SIGNATURE_ROW = 30
+
+
+def signature_block(
+    meta: ReportMeta, styles: Dict[str, ParagraphStyle]
+) -> KeepTogether:
+    """Prepared by / Reviewed by / Approved by, each a signature line and a
+    date line, kept together at the end of the report.
+
+    The preparer's name and rank go under the first line, since the report
+    already knows them; the reviewer and approver are whoever signs.
+    """
+    width = meta.width
+    label_w, date_label_w, date_w = 1.0 * inch, 0.45 * inch, 1.4 * inch
+    # Capped so a landscape page does not draw a line across its full width.
+    sign_w = min(width - label_w - date_label_w - date_w - 12, 3.5 * inch)
+    rows = []
+    for role in _SIGNATURE_ROLES:
+        under = meta.generated_by if role == "Prepared by" else None
+        rows.append(
+            [
+                Paragraph(esc(role), styles["cell_bold"]),
+                "",
+                Paragraph("Date", styles["cell"]),
+                "",
+            ]
+        )
+        rows.append(
+            [
+                "",
+                Paragraph(esc(under), styles["cell_muted"]) if under else "",
+                "",
+                "",
+            ]
+        )
+    table = Table(
+        rows,
+        colWidths=[label_w, sign_w, date_label_w + 12, date_w],
+        rowHeights=[_SIGNATURE_ROW, 14] * len(_SIGNATURE_ROLES),
+        hAlign="LEFT",
+        style=body_table_style(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ]
+            # Even rows hold the lines; odd rows the name printed under one.
+            + [
+                ("LINEBELOW", (col, row), (col, row), 0.75, INK)
+                for row in range(0, len(rows), 2)
+                for col in (1, 3)
+            ]
+            + [("VALIGN", (0, row), (-1, row), "TOP") for row in range(1, len(rows), 2)]
+        ),
+    )
+    return KeepTogether([table])
+
+
 def render_report(
     meta: ReportMeta, body: Callable[[Dict[str, ParagraphStyle]], List[Any]]
 ) -> bytes:
@@ -553,6 +618,8 @@ def render_report(
             displayDocTitle=True,
         )
         story = [*_letterhead(meta, styles), *body(styles)]
+        if meta.signature_lines:
+            story += [Spacer(1, 24), signature_block(meta, styles)]
         doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
         return buf.getvalue()
 
