@@ -415,12 +415,17 @@ rest of `ci.yml`:
 | Runs                                                              | When                                                 |
 | ----------------------------------------------------------------- | ---------------------------------------------------- |
 | Migration Chain, Backend Lint, Docs Link Check                    | always                                               |
-| Backend Unit Tests, Frontend Tests (Vitest)                       | always                                               |
+| Backend Unit Tests, Frontend Tests (Vitest), Frontend Coverage    | always                                               |
 | Backend Type Check, Security Scan, Integration and Contract Tests | `backend/**` changed                                 |
 | Frontend Lint/Build, both Playwright suites, PWA Smoke Test       | `frontend/**` or the root `package*.json` changed    |
 | Docker Image Build                                                | either of the two above                              |
 | Everything                                                        | any path the script does not recognize               |
 | Everything, and the MariaDB legs                                  | a push to `main`, a merge queue commit, a manual run |
+
+Vitest runs as two shards. Neither is held to the coverage floor on its own:
+`Frontend Coverage` merges their reports and applies the thresholds in
+`vitest.config.ts` to the whole suite, so a coverage failure is reported by
+that job and not by a shard.
 
 The two unit suites are never skipped because they read across the tree:
 backend unit tests parse frontend sources, and Vitest reads `backend/`, `wiki/`

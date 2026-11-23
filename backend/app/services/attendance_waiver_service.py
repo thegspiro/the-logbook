@@ -99,6 +99,7 @@ from app.core.utils import generate_uuid
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
     AttendanceWaiverAttachment,
+    AttendanceWaiverEmailSend,
     AttendanceWaiverRequest,
     AttendanceWaiverRequestAction,
     AttendanceWaiverStatus,
@@ -133,7 +134,11 @@ from app.schemas.attendance_waiver import (
     CapPeriod,
     policy_from_settings,
 )
-from app.services.attendance_waiver_email_service import AttendanceWaiverEmails
+from app.services.attendance_waiver_email_service import (
+    REQUEST_PATHS,
+    AttendanceWaiverEmails,
+    user_key,
+)
 from app.services.email_policy import (
     EmailKind,
     department_required_kinds,
@@ -230,6 +235,17 @@ class WorkflowSpec:
     # under (CLAUDE.md pitfall #18: the email goes with the in-app row).
     decider_email_kind: EmailKind
     member_email_kind: EmailKind
+    # The kind for a member's notice that changes how their attendance is
+    # graded: the expiry (the session now counts as missed), a moved start
+    # (the approval is cleared and, unanswered, expires as a miss) and a
+    # decider's question (unanswered, it expires as a miss). For training this
+    # is the required record-changes kind, the one the decision email already
+    # uses, so a member who turned training reminders off is still told
+    # (CLAUDE.md pitfall #18). A void is not one: its session is not held.
+    member_record_email_kind: EmailKind
+    # Whether a request may carry documents. Only training has the upload
+    # routes and the retention sweep; a meeting policy cannot ask for them.
+    takes_documents: bool
 
 
 TRAINING_SPEC = WorkflowSpec(
@@ -242,10 +258,12 @@ TRAINING_SPEC = WorkflowSpec(
     audit_category="training",
     session_noun="training session",
     default_title="Training session",
-    decider_path="/attendance-waivers",
+    decider_path=REQUEST_PATHS[TRAINING_WORKFLOW],
     member_fallback_url="/training/my-training",
     decider_email_kind=EmailKind.TRAINING_DUTIES,
     member_email_kind=EmailKind.TRAINING_REMINDERS,
+    member_record_email_kind=EmailKind.TRAINING_RECORD_CHANGES,
+    takes_documents=True,
 )
 
 MEETING_SPEC = WorkflowSpec(
@@ -258,10 +276,12 @@ MEETING_SPEC = WorkflowSpec(
     audit_category="meetings",
     session_noun="business meeting",
     default_title="Business meeting",
-    decider_path="/meetings/waiver-requests",
+    decider_path=REQUEST_PATHS[MEETING_WORKFLOW],
     member_fallback_url="/events",
     decider_email_kind=EmailKind.EVENT_DUTIES,
     member_email_kind=EmailKind.EVENT_CHANGES,
+    member_record_email_kind=EmailKind.EVENT_CHANGES,
+    takes_documents=False,
 )
 
 SPECS: Dict[AttendanceWaiverWorkflow, WorkflowSpec] = {
@@ -368,7 +388,10 @@ EXPIRY_DEADLINE_PRESET = "7d_after_end"
 
 
 def expires_at_for(
-    session_date: date, tz: ZoneInfo, event: Optional[Event]
+    session_date: date,
+    tz: ZoneInfo,
+    event: Optional[Event],
+    reconfirm_requested_at: Optional[datetime] = None,
 ) -> datetime:
     """The instant a still-pending request for this session expires, in UTC.
 
@@ -380,11 +403,22 @@ def expires_at_for(
     deadline would close for the event, while the event exists: the second
     term means a request can never expire while it could still be submitted,
     which matters for a session that runs past its own start date.
+
+    A request waiting on the member to confirm a moved start
+    (``reconfirm_requested_at``) also stays open for ``EXPIRY_DAYS`` after it
+    was asked. A start corrected weeks after the session is still a move (owner
+    decision, 2026-11-13), and measured from the session alone that request
+    would already be overdue, so the next sweep would charge the member before
+    they could answer.
     """
-    day_end = local_day_start_utc(session_date + timedelta(days=EXPIRY_DAYS + 1), tz)
-    if event is None:
-        return day_end
-    return max(day_end, deadline_for(EXPIRY_DEADLINE_PRESET, event))
+    candidates = [
+        local_day_start_utc(session_date + timedelta(days=EXPIRY_DAYS + 1), tz)
+    ]
+    if event is not None:
+        candidates.append(deadline_for(EXPIRY_DEADLINE_PRESET, event))
+    if reconfirm_requested_at is not None:
+        candidates.append(_utc(reconfirm_requested_at) + timedelta(days=EXPIRY_DAYS))
+    return max(candidates)
 
 
 def _cap_period_label(period: CapPeriod, day: date, noun: str = "session") -> str:
@@ -523,12 +557,23 @@ class AttendanceWaiverService:
             else None
         )
         raw = section.get(self.spec.policy_key) if isinstance(section, dict) else None
-        return policy_from_settings(raw)
+        policy = policy_from_settings(raw)
+        if not self.spec.takes_documents and policy.attachment != "off":
+            # Only a direct API save before 2026-11-21 could have stored one,
+            # and it refused every submission (there is nowhere to upload).
+            # Read as off rather than rewritten; the next save stores off.
+            policy = policy.model_copy(update={"attachment": "off"})
+        return policy
 
     async def save_policy(
         self, organization_id: str, policy: AttendanceWaiverPolicy, actor: User
     ) -> AttendanceWaiverPolicy:
         org_id = str(organization_id)
+        if not self.spec.takes_documents and policy.attachment != "off":
+            raise ValueError(
+                f"{self.spec.default_title} requests do not take documents; "
+                "set attachments to off."
+            )
         await assert_all_in_org(
             self.db, Position, policy.approver_position_ids, org_id, label="position"
         )
@@ -1910,6 +1955,14 @@ class AttendanceWaiverService:
         for r in requests:
             own = str(r.user_id) == str(viewer.id)
             decider = await self._may_decide_in(org_id, pool, viewer, r.user_id)
+            # The reason, the notes and the filed documents can be medical:
+            # only the member and those who may decide read them
+            # (TRAINING_WAIVERS.md). Whoever decided a request can still open
+            # it (``_may_view``), so their history keeps working, but once
+            # they no longer may decide they see the outcome without the
+            # protected text, as the attachment download already refuses
+            # them. A note they wrote themselves stays theirs to read.
+            sees_text = own or decider
             bodies.append(
                 {
                     "id": str(r.id),
@@ -1922,7 +1975,7 @@ class AttendanceWaiverService:
                     "session_date": r.session_date,
                     "status": r.status.value,
                     "category": r.category,
-                    "reason": r.reason,
+                    "reason": r.reason if sees_text else None,
                     "submitted_at": r.submitted_at,
                     "decided_at": r.decided_at,
                     "decided_by": str(r.decided_by) if r.decided_by else None,
@@ -1948,6 +2001,7 @@ class AttendanceWaiverService:
                     and not own
                     and r.status == AttendanceWaiverStatus.DENIED,
                     "can_attach": own
+                    and self.spec.takes_documents
                     and r.status == AttendanceWaiverStatus.PENDING
                     and policy.attachment != "off"
                     and len(files.get(str(r.id), [])) < MAX_ATTACHMENTS,
@@ -1960,7 +2014,7 @@ class AttendanceWaiverService:
                             "file_size": f.file_size,
                             "uploaded_at": f.uploaded_at,
                         }
-                        for f in files.get(str(r.id), [])
+                        for f in (files.get(str(r.id), []) if sees_text else [])
                     ],
                     "actions": [
                         {
@@ -1970,7 +2024,11 @@ class AttendanceWaiverService:
                             "actor_name": (
                                 names.get(str(a.actor_id)) if a.actor_id else None
                             ),
-                            "note": a.note,
+                            "note": (
+                                a.note
+                                if sees_text or str(a.actor_id) == str(viewer.id)
+                                else None
+                            ),
                             "created_at": a.created_at,
                         }
                         for a in actions.get(str(r.id), [])
@@ -2005,6 +2063,7 @@ class AttendanceWaiverService:
                 r.session_date,
                 tz,
                 events.get(str(r.event_id)) if r.event_id else None,
+                r.reconfirm_requested_at,
             )
             for r in pending
         }
@@ -2176,6 +2235,8 @@ class AttendanceWaiverService:
         """
         try:
             recipients = await self.recipients(org_id, request, policy)
+            if answered:
+                recipients = await self._with_asker(org_id, request, policy, recipients)
             if not recipients:
                 return
             name = (await self._names(org_id, [member.id])).get(
@@ -2236,6 +2297,46 @@ class AttendanceWaiverService:
             decider_action_url(request),
             "Review Request",
         )
+
+    async def _with_asker(
+        self,
+        org_id: str,
+        request: AttendanceWaiverRequest,
+        policy: AttendanceWaiverPolicy,
+        recipients: List[User],
+    ) -> List[User]:
+        """``recipients`` plus whoever asked the question just answered.
+
+        A Chief or a President may ask (they decide outside the chosen
+        positions) but is not on the route, so the routed prompt alone left
+        the person waiting on the answer unaware of it. They are added only
+        while they still may decide, and only once.
+        """
+        asker_id = (
+            await self.db.execute(
+                select(AttendanceWaiverRequestAction.actor_id)
+                .where(
+                    AttendanceWaiverRequestAction.organization_id == org_id,
+                    AttendanceWaiverRequestAction.request_id == str(request.id),
+                    AttendanceWaiverRequestAction.action
+                    == AttendanceWaiverAction.INFO_REQUESTED,
+                )
+                .order_by(AttendanceWaiverRequestAction.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if asker_id is None or any(str(r.id) == str(asker_id) for r in recipients):
+            return recipients
+        asker = (
+            await self.db.execute(
+                select(User)
+                .options(selectinload(User.positions))
+                .where(User.id == str(asker_id), User.organization_id == org_id)
+            )
+        ).scalar_one_or_none()
+        if asker is None or not await self.may_decide(asker, request, policy):
+            return recipients
+        return [*recipients, asker]
 
     async def _prompt_deciders_with(
         self,
@@ -2483,7 +2584,7 @@ class AttendanceWaiverService:
                 org_id,
                 request,
                 [member],
-                SPECS[request.workflow].member_email_kind,
+                SPECS[request.workflow].member_record_email_kind,
                 subject,
                 [sentence],
                 url,
@@ -2500,7 +2601,7 @@ class AttendanceWaiverService:
         sentences: Sequence[str],
         path: Optional[str],
         button: str,
-    ) -> None:
+    ) -> Optional[bool]:
         """Email a notice that an in-app row also carries.
 
         The one way this workflow sends email, for every notice (CLAUDE.md
@@ -2510,7 +2611,9 @@ class AttendanceWaiverService:
         sign-in. Each recipient's email preferences decide, under ``kind``.
         ``path`` None sends no button, for a notice with nowhere to lead.
         Called after the commit and never allowed to fail the action: a
-        failure is logged by request id and swallowed.
+        failure is logged by request id and swallowed. Returns True once
+        sent, False when the send failed, and None when nobody was owed it
+        (no address, or every recipient's preferences said no).
         """
         try:
             org = (
@@ -2530,7 +2633,7 @@ class AttendanceWaiverService:
                 }
             )
             if not to_emails:
-                return
+                return None
             from app.services.email_service import EmailService, wrap_email_body
 
             body = "".join(f"<p>{html.escape(line)}</p>" for line in sentences)
@@ -2544,14 +2647,17 @@ class AttendanceWaiverService:
                 )
                 text_body += f"\n\n{button}: {url}"
             html_body = wrap_email_body(org, "Waiver Request", body)
-            await EmailService(organization=org).send_email(
-                to_emails=to_emails,
-                subject=subject,
-                html_body=html_body,
-                text_body=text_body,
+            return bool(
+                await EmailService(organization=org).send_email(
+                    to_emails=to_emails,
+                    subject=subject,
+                    html_body=html_body,
+                    text_body=text_body,
+                )
             )
         except Exception:
             logger.exception("Failed to email about waiver request {}", request.id)
+            return False
 
     async def _email(
         self, org_id: str, request: AttendanceWaiverRequest, action_id: str
@@ -2792,6 +2898,13 @@ class MemberNotice:
     workflow: AttendanceWaiverWorkflow
     subject: str
     sentences: Tuple[str, ...]
+    # A moved start changes grading and goes under the workflow's
+    # ``member_record_email_kind``; a void does not (see ``WorkflowSpec``).
+    changes_grading: bool = False
+    # The log row this notice reports (``RESCHEDULED`` or ``VOIDED``): each
+    # send is claimed against it and the member, so a retried send of the
+    # same notices emails once (CLAUDE.md pitfall #36).
+    action_id: Optional[str] = None
 
 
 def _same_instant(a: datetime, b: datetime) -> bool:
@@ -2878,7 +2991,8 @@ async def reconfirm_for_rescheduled_events(
     notices, for ``send_member_notices``.
 
     A member who never answers is not chased: the expiry task closes a request
-    still pending seven days after its (new) session.
+    still pending seven days after its (new) session, and never sooner than
+    seven days after this notice (``expires_at_for``).
     """
     ids = [str(e) for e in event_ids if e]
     if not ids:
@@ -2947,14 +3061,13 @@ async def reconfirm_for_rescheduled_events(
         request.chief_override = False
         request.info_requested_at = None
         request.reconfirm_requested_at = now
-        db.add(
-            AttendanceWaiverService._action(
-                request,
-                AttendanceWaiverAction.RESCHEDULED,
-                None,
-                f"The {noun} moved from {old_when} to {new_when}.",
-            )
+        logged = AttendanceWaiverService._action(
+            request,
+            AttendanceWaiverAction.RESCHEDULED,
+            None,
+            f"The {noun} moved from {old_when} to {new_when}.",
         )
+        db.add(logged)
         title = request.event_title_snapshot
         sentences = [
             f'The {noun} "{title}" you asked to be excused from moved from '
@@ -3001,6 +3114,8 @@ async def reconfirm_for_rescheduled_events(
                 workflow=request.workflow,
                 subject=subject,
                 sentences=tuple(sentences),
+                changes_grading=True,
+                action_id=str(logged.id),
             )
         )
     await db.flush()
@@ -3023,7 +3138,9 @@ async def send_member_notices(
     for (``reconfirm_for_rescheduled_events``, ``void_pending_for_events``).
 
     After the caller's commit, and never allowed to fail it: the change
-    stands whether or not a mail server answered.
+    stands whether or not a mail server answered. Safe to call again with
+    the same notices: each is claimed against its log row and the member,
+    and only a failed or unowed send is released for another try.
     """
     for notice in notices:
         service = AttendanceWaiverService(db, notice.workflow)
@@ -3049,16 +3166,78 @@ async def send_member_notices(
             continue
         if request is None or member is None:
             continue
-        await service._email_notice(
+        claim = await _claim_member_notice(db, str(org_id), notice, member)
+        if notice.action_id is not None and claim is None:
+            continue
+        sent = await service._email_notice(
             str(org_id),
             request,
             [member],
-            service.spec.member_email_kind,
+            (
+                service.spec.member_record_email_kind
+                if notice.changes_grading
+                else service.spec.member_email_kind
+            ),
             notice.subject,
             notice.sentences,
             member_action_url(request),
             "View Request",
         )
+        if claim is not None:
+            await _settle_member_notice(db, claim, sent)
+
+
+async def _claim_member_notice(
+    db: AsyncSession, org_id: str, notice: MemberNotice, member: User
+) -> Optional[AttendanceWaiverEmailSend]:
+    """Claim the email ``notice`` owes ``member``; None when it is already
+    claimed (sent, or in flight elsewhere) or names no log row.
+
+    The unique (action_id, recipient_key) the template emails use is what
+    stops a second send, so this is safe however often the caller retries.
+    """
+    if notice.action_id is None:
+        return None
+    claim = AttendanceWaiverEmailSend(
+        id=generate_uuid(),
+        organization_id=org_id,
+        request_id=notice.request_id,
+        action_id=notice.action_id,
+        recipient_key=user_key(str(member.id)),
+        is_copy=False,
+    )
+    try:
+        async with db.begin_nested():
+            db.add(claim)
+            await db.flush()
+        await db.commit()
+    except IntegrityError:
+        return None
+    except Exception:
+        logger.exception(
+            "Failed to claim the email for waiver request {}", notice.request_id
+        )
+        await db.rollback()
+        return None
+    return claim
+
+
+async def _settle_member_notice(
+    db: AsyncSession, claim: AttendanceWaiverEmailSend, sent: Optional[bool]
+) -> None:
+    """Stamp a sent claim; release one that sent nothing, so a retry (or a
+    member who later opts in, for an unsent one) is not refused by it."""
+    try:
+        if sent:
+            claim.sent_at = datetime.now(dt_timezone.utc)
+        else:
+            await db.delete(claim)
+        await db.commit()
+    except Exception:
+        logger.exception(
+            "Failed to record the email for waiver request {}", claim.request_id
+        )
+        await db.rollback()
 
 
 async def void_pending_for_events(
@@ -3106,25 +3285,25 @@ async def void_pending_for_events(
             f"{_day_label(request.session_date)} was closed: the "
             f"{spec.session_noun} was {cause}."
         )
+        logged = AttendanceWaiverService._action(
+            request,
+            AttendanceWaiverAction.VOIDED,
+            None,
+            f"The {spec.session_noun} was {cause}.",
+        )
         notices.append(
             MemberNotice(
                 request_id=str(request.id),
                 workflow=request.workflow,
                 subject=subject,
                 sentences=(sentence,),
+                action_id=str(logged.id),
             )
         )
         request.status = AttendanceWaiverStatus.VOIDED
         request.live_key = None
         request.info_requested_at = None
-        db.add(
-            AttendanceWaiverService._action(
-                request,
-                AttendanceWaiverAction.VOIDED,
-                None,
-                f"The {spec.session_noun} was {cause}.",
-            )
-        )
+        db.add(logged)
         db.add(
             NotificationLog(
                 id=generate_uuid(),

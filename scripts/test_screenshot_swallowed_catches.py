@@ -826,8 +826,6 @@ FROZEN = {
     "manifest.mjs:05-62-generate-variants:79e008176e18",  # :2662 action
     "manifest.mjs:05-62-generate-variants:c78ee68ad6a7",  # :2669 action
     "manifest.mjs:02-84-record-category-field:00d5412fc2da",  # :3022 framing
-    "manifest.mjs:02-79-training-attachments:fe1b0586b040",  # :3065 action
-    "manifest.mjs:02-79-training-attachments:3822b30dc79e",  # :3068 framing
     "manifest.mjs:02-96-bulk-enroll-picker:79cba5a0f412",  # :3337 action
     "manifest.mjs:02-97-manual-entry-apparatus:ef291d7a4413",  # :3598 action
     "manifest.mjs:02-97-manual-entry-apparatus:df14e0332d9a",  # :3610 action
@@ -842,7 +840,6 @@ FROZEN = {
     "manifest.mjs:08-56-template-discard:f63637715a8d",  # :5759 framing
     "manifest.mjs:08-58-template-send-test:e8a025c27831",  # :5797 framing
     "manifest.mjs:08-65-template-footer-selector:ab955e36080d",  # :5950 framing
-    "manifest.mjs:08-67-email-preview-design:12fc434515ee",  # :5994 framing
     "manifest.mjs:03-37-settings-rating-scale:c07e519d612b",  # :7651 toast
     "manifest.mjs:04-34-guest-prospect-card:74227377751c",  # :7854 framing
     "manifest.mjs:02-30-shift-reports:26793f8cac6f",  # :8289 action

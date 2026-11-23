@@ -16,12 +16,21 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { CalendarOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { leaveRequestService } from '../services/leaveRequestService';
+import { memberStatusService, type LeaveOfAbsenceResponse } from '../services/api';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { useAuthStore } from '../stores/authStore';
 import { formatCalendarDate, formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { LeaveDecisionRule, LeaveRequestStatus, type LeaveRequest, type LeaveVote } from '../types/leaveRequest';
+import {
+  LeaveApproverActions,
+  LeaveMemberActions,
+  LeaveRequestDetails,
+} from '../components/members/LeaveRequestConversation';
+import { useLeaveRequestNavStore } from '../hooks/useLeaveRequestNav';
+import EndLeaveEarly from '../components/members/EndLeaveEarly';
+import ApproverCover from '../components/members/ApproverCover';
 
 // The kinds a member asks for. Administrative and new-member leave are an
 // officer's to record, not a member's to request.
@@ -67,26 +76,44 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => (
   <span className={`badge ${STATUS_STYLES[status] ?? ''}`}>{STATUS_LABELS[status] ?? status}</span>
 );
 
-const Votes: React.FC<{ request: LeaveRequest }> = ({ request }) =>
-  request.votes.length === 0 ? null : (
+/** The current round's votes: accepting changed dates starts a new round. A
+ * stand-in's vote names the away approver it was cast for. */
+const Votes: React.FC<{ request: LeaveRequest }> = ({ request }) => {
+  const round = request.vote_round ?? 1;
+  const votes = request.votes.filter((v) => (v.round ?? 1) === round);
+  return votes.length === 0 ? null : (
     <ul className="mt-2 space-y-1 text-xs">
-      {request.votes.map((v) => (
-        <li key={v.voter_id} className="text-theme-text-secondary">
+      {votes.map((v) => (
+        <li key={`${v.voter_id}:${v.on_behalf_of_name ?? ''}`} className="text-theme-text-secondary">
           <span className="font-medium">{v.voter_name}</span> {v.vote === 'approve' ? 'approved' : 'denied'}
+          {v.on_behalf_of_name ? <> for {v.on_behalf_of_name}</> : null}
           {v.note ? <>: &ldquo;{v.note}&rdquo;</> : null}
         </li>
       ))}
     </ul>
   );
+};
+
+/** Who settled a decided request and when; empty while it waits. */
+const decidedLine = (r: LeaveRequest, tz: string): string => {
+  if (r.status === LeaveRequestStatus.PENDING || !r.decided_at) return '';
+  const on = formatDate(r.decided_at, tz);
+  if (r.status === LeaveRequestStatus.WITHDRAWN) return `Withdrawn on ${on}.`;
+  const verb = r.status === LeaveRequestStatus.APPROVED ? 'Approved' : 'Denied';
+  return r.decided_by_name ? `${verb} by ${r.decided_by_name} on ${on}.` : `${verb} on ${on}.`;
+};
 
 const LeaveRequestsPage: React.FC = () => {
   const tz = useTimezone();
   const { confirm } = useConfirm();
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const managesLeave = checkPermission('members.manage');
+  const userId = useAuthStore((state) => state.user?.id);
+  const refreshNav = useLeaveRequestNavStore((state) => state.load);
 
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [mine, setMine] = useState<LeaveRequest[]>([]);
+  const [myLeaves, setMyLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
   const [toDecide, setToDecide] = useState<LeaveRequest[]>([]);
   const [showDecided, setShowDecided] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -100,18 +127,23 @@ const LeaveRequestsPage: React.FC = () => {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const [config, own, decide] = await Promise.all([
+      const [config, own, decide, leaves] = await Promise.all([
         leaveRequestService.getConfig(),
         leaveRequestService.listMine(),
         leaveRequestService.listToDecide(showDecided),
+        // Only offers "I'm back early"; without it the rest still stands.
+        memberStatusService.getMyLeaves().catch(() => [] as LeaveOfAbsenceResponse[]),
       ]);
       setEnabled(config.requests_enabled);
       setMine(own);
+      setMyLeaves(leaves);
       setToDecide(decide);
+      // The menu's count follows what was just answered or decided.
+      if (userId) void refreshNav(userId, true);
     } catch (err: unknown) {
       setLoadError(getErrorMessage(err, 'Leave requests did not load. Refresh to try again.'));
     }
-  }, [showDecided]);
+  }, [showDecided, userId, refreshNav]);
 
   useEffect(() => {
     void load();
@@ -122,13 +154,17 @@ const LeaveRequestsPage: React.FC = () => {
     if (!form.start_date) return;
     setSubmitting(true);
     try {
-      await leaveRequestService.create({
+      const created = await leaveRequestService.create({
         leave_type: form.leave_type,
         start_date: form.start_date,
         end_date: openEnded ? undefined : form.end_date || undefined,
         reason: form.reason.trim() || undefined,
       });
-      toast.success('Your request was sent to the approvers.');
+      toast.success(
+        created.extends_leave
+          ? 'Your request to extend your leave was sent to the approvers.'
+          : 'Your request was sent to the approvers.'
+      );
       setForm({ leave_type: 'leave_of_absence', start_date: '', end_date: '', reason: '' });
       setOpenEnded(false);
       await load();
@@ -182,6 +218,40 @@ const LeaveRequestsPage: React.FC = () => {
     } finally {
       setBusy(null);
     }
+  };
+
+  /** Run a conversation action; true when it went through. */
+  const act = async (id: string, run: () => Promise<unknown>, done: string, failed: string): Promise<boolean> => {
+    setBusy(id);
+    try {
+      await run();
+      toast.success(done);
+      await load();
+      return true;
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, failed));
+      return false;
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const respondToChanges = async (r: LeaveRequest, accept: boolean): Promise<boolean> => {
+    if (!accept) {
+      const ok = await confirm({
+        title: 'Keep your own dates?',
+        message: 'The changed dates are declined, and the approvers decide your request as you made it.',
+        confirmLabel: 'Keep my dates',
+        cancelLabel: 'Go back',
+      });
+      if (!ok) return false;
+    }
+    return act(
+      r.id,
+      () => leaveRequestService.respondToChanges(r.id, accept),
+      accept ? 'You accepted the changed dates.' : 'You kept your own dates.',
+      'Your answer was not saved.'
+    );
   };
 
   const today = getTodayLocalDate(tz);
@@ -242,8 +312,9 @@ const LeaveRequestsPage: React.FC = () => {
                       {r.reason}
                     </p>
                   )}
-                  <p className="text-theme-text-muted mt-2 text-xs">{tallyLine(r)}</p>
+                  <p className="text-theme-text-muted mt-2 text-xs">{tallyLine(r) || decidedLine(r, tz)}</p>
                   <Votes request={r} />
+                  <LeaveRequestDetails request={r} audience="approver" />
                   {r.can_vote && (
                     <div className="mt-3 space-y-2">
                       <label className="form-label" htmlFor={`note-${r.id}`}>
@@ -277,6 +348,26 @@ const LeaveRequestsPage: React.FC = () => {
                       </div>
                     </div>
                   )}
+                  <LeaveApproverActions
+                    request={r}
+                    busy={busy === r.id}
+                    onAsk={(text) =>
+                      act(
+                        r.id,
+                        () => leaveRequestService.askQuestion(r.id, text),
+                        'Your question was sent. Voting waits for the answer.',
+                        'Your question was not sent.'
+                      )
+                    }
+                    onPropose={(start, end, note) =>
+                      act(
+                        r.id,
+                        () => leaveRequestService.proposeChanges(r.id, start, end, note),
+                        'The changed dates were sent to the member.',
+                        'The changed dates were not sent.'
+                      )
+                    }
+                  />
                   {r.my_vote && r.status === LeaveRequestStatus.PENDING && (
                     <p className="text-theme-text-muted mt-2 text-xs">
                       You {r.my_vote === 'approve' ? 'approved' : 'denied'} it; waiting on the other approvers.
@@ -295,6 +386,10 @@ const LeaveRequestsPage: React.FC = () => {
           manages leave.
         </div>
       )}
+
+      {enabled && <ApproverCover />}
+
+      {enabled && <EndLeaveEarly leaves={myLeaves} today={today} onEnded={load} />}
 
       {enabled && (
         <section className="card mb-6 p-4" aria-labelledby="ask-heading">
@@ -402,8 +497,27 @@ const LeaveRequestsPage: React.FC = () => {
                   </div>
                   <StatusBadge status={r.status} />
                 </div>
-                <p className="text-theme-text-muted mt-2 text-xs">{tallyLine(r)}</p>
+                <p className="text-theme-text-muted mt-2 text-xs">{tallyLine(r) || decidedLine(r, tz)}</p>
+                {r.routed_to_chief && r.status === LeaveRequestStatus.PENDING && (
+                  <p className="text-theme-text-muted mt-1 text-xs">
+                    As an approver yourself, your request goes to the Chief.
+                  </p>
+                )}
                 <Votes request={r} />
+                <LeaveRequestDetails request={r} audience="member" />
+                <LeaveMemberActions
+                  request={r}
+                  busy={busy === r.id}
+                  onAnswer={(text) =>
+                    act(
+                      r.id,
+                      () => leaveRequestService.answer(r.id, text),
+                      'Your answer was sent. Voting resumes.',
+                      'Your answer was not sent.'
+                    )
+                  }
+                  onRespond={(accept) => respondToChanges(r, accept)}
+                />
                 {r.status === LeaveRequestStatus.PENDING && (
                   <button
                     type="button"

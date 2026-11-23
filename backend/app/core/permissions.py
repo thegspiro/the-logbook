@@ -467,6 +467,24 @@ EVENTS_REOPEN_ATTENDANCE = Permission(
     PermissionCategory.EVENTS,
 )
 
+# Apparatus events: community outreach that rolls an apparatus with a named
+# crew (a Santamobile run, a parade) but is not a shift. Its own namespace
+# rather than events.*, because a seat behind the wheel carries an EVOC rule
+# and the hours go to Admin Hours, never to shift records. Every seeded list
+# granting events.manage grants the manage half and every list granting
+# events.view grants the signup half; tests/test_apparatus_event_grants.py
+# holds that pairing, and migration 3f8a1c6e2b94 applies it to stored rows.
+APPARATUS_EVENTS_SIGNUP = Permission(
+    "apparatus_events.signup",
+    "Sign up for crew seats on apparatus events",
+    PermissionCategory.EVENTS,
+)
+APPARATUS_EVENTS_MANAGE = Permission(
+    "apparatus_events.manage",
+    "Manage apparatus event templates, nights and crew assignments",
+    PermissionCategory.EVENTS,
+)
+
 # Locations
 LOCATIONS_VIEW = Permission(
     "locations.view", "View locations", PermissionCategory.LOCATIONS
@@ -929,6 +947,8 @@ ALL_PERMISSIONS: list[Permission] = [
     EVENTS_DELETE,
     EVENTS_MANAGE,
     EVENTS_REOPEN_ATTENDANCE,
+    APPARATUS_EVENTS_SIGNUP,
+    APPARATUS_EVENTS_MANAGE,
     # Locations
     LOCATIONS_VIEW,
     LOCATIONS_CREATE,
@@ -1495,6 +1515,7 @@ _LEADERSHIP_VIEW_PERMISSIONS = [
     FUNDRAISING_VIEW.name,
     AUDIT_VIEW.name,
     EVENTS_VIEW.name,
+    APPARATUS_EVENTS_SIGNUP.name,
     LOCATIONS_VIEW.name,
     FORMS_VIEW.name,
     MINUTES_VIEW.name,
@@ -1537,6 +1558,7 @@ _LINE_MEMBER_PERMISSIONS = [
     MEETINGS_VIEW.name,
     ELECTIONS_VIEW.name,
     EVENTS_VIEW.name,
+    APPARATUS_EVENTS_SIGNUP.name,
     FORMS_VIEW.name,
     MINUTES_VIEW.name,
     DOCUMENTS_VIEW.name,
@@ -1612,6 +1634,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             EVENTS_EDIT.name,
             EVENTS_DELETE.name,
             EVENTS_MANAGE.name,
+            APPARATUS_EVENTS_MANAGE.name,
             EVENTS_REOPEN_ATTENDANCE.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
@@ -1689,6 +1712,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             EVENTS_EDIT.name,
             EVENTS_DELETE.name,
             EVENTS_MANAGE.name,
+            APPARATUS_EVENTS_MANAGE.name,
             EVENTS_REOPEN_ATTENDANCE.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
@@ -1752,6 +1776,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
             EVENTS_MANAGE.name,
+            APPARATUS_EVENTS_MANAGE.name,
             EVENTS_REOPEN_ATTENDANCE.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
@@ -1837,6 +1862,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             MEETINGS_VIEW.name,
             ELECTIONS_VIEW.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             FORMS_VIEW.name,
             MINUTES_VIEW.name,
             DOCUMENTS_VIEW.name,
@@ -2129,10 +2155,12 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             AUDIT_EXPORT.name,
             AUDIT_MANAGE.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
             EVENTS_DELETE.name,
             EVENTS_MANAGE.name,
+            APPARATUS_EVENTS_MANAGE.name,
             EVENTS_REOPEN_ATTENDANCE.name,
             LOCATIONS_VIEW.name,
             LOCATIONS_CREATE.name,
@@ -2206,6 +2234,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             FUNDRAISING_MANAGE.name,
             AUDIT_VIEW.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             FORMS_VIEW.name,
             MINUTES_VIEW.name,
             MINUTES_MANAGE.name,
@@ -2301,7 +2330,9 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             ELECTIONS_VIEW.name,
             ELECTIONS_MANAGE.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             EVENTS_MANAGE.name,
+            APPARATUS_EVENTS_MANAGE.name,
             LOCATIONS_VIEW.name,
             FORMS_VIEW.name,
             FORMS_MANAGE.name,
@@ -2410,9 +2441,9 @@ DEFAULT_POSITIONS: dict[str, dict] = {
         ],
     },
     "public_outreach": {
-        "name": "Public Outreach",
+        "name": "Community Outreach Manager",
         "slug": "public_outreach",
-        "description": "Manages public education and outreach events",
+        "description": "Leads the department's community outreach and risk reduction work",
         "is_system": True,
         "priority": 55,
         "permissions": [
@@ -2424,9 +2455,11 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             STOREFRONT_VIEW.name,
             STOREFRONT_ORDER.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
             EVENTS_MANAGE.name,
+            APPARATUS_EVENTS_MANAGE.name,
             LOCATIONS_VIEW.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
@@ -2449,9 +2482,11 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             STOREFRONT_VIEW.name,
             STOREFRONT_ORDER.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
             EVENTS_MANAGE.name,
+            APPARATUS_EVENTS_MANAGE.name,
             LOCATIONS_VIEW.name,
             DOCUMENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
@@ -2477,6 +2512,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             DOCUMENTS_VIEW.name,
             DOCUMENTS_MANAGE.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             NOTIFICATIONS_VIEW.name,
             USERS_VIEW_CONSENTS.name,
             HISTORY_VIEW.name,
@@ -2560,6 +2596,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             # administers the disclosure policy, not the records themselves.
             TRAINING_CONFIGURE.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             NOTIFICATIONS_VIEW.name,
         ],
     },
@@ -2587,6 +2624,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             STOREFRONT_VIEW.name,
             STOREFRONT_ORDER.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             NOTIFICATIONS_VIEW.name,
             MEMBERS_MANAGE_ID_CARDS.name,
         ],
@@ -2610,6 +2648,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             COMPLIANCE_VIEW.name,
             COMPLIANCE_MANAGE.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
             INVENTORY_VIEW.name,
@@ -2662,6 +2701,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             DOCUMENTS_MANAGE.name,
             FORMS_VIEW.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             NOTIFICATIONS_VIEW.name,
         ],
     },
@@ -2690,9 +2730,11 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             APPARATUS_VIEW.name,
             FACILITIES_VIEW.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
             EVENTS_MANAGE.name,
+            APPARATUS_EVENTS_MANAGE.name,
             LOCATIONS_VIEW.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
@@ -2719,6 +2761,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             FUNDRAISING_VIEW.name,
             FUNDRAISING_MANAGE.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
             LOCATIONS_VIEW.name,
@@ -2751,6 +2794,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEETINGS_VIEW.name,
             MEETINGS_MANAGE.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             MINUTES_VIEW.name,
             MINUTES_MANAGE.name,
             DOCUMENTS_VIEW.name,
@@ -2781,6 +2825,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             INVENTORY_CHECK_MANAGE.name,
             INVENTORY_CHECK_SUBMIT.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             NOTIFICATIONS_VIEW.name,
         ],
     },
@@ -2798,9 +2843,11 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             STOREFRONT_VIEW.name,
             STOREFRONT_ORDER.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
             EVENTS_MANAGE.name,
+            APPARATUS_EVENTS_MANAGE.name,
             LOCATIONS_VIEW.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
@@ -2848,9 +2895,12 @@ DEFAULT_POSITIONS: dict[str, dict] = {
     # `historian`, `fundraising_chair`, `membership_coordinator` -- are the
     # chairs, with the permissions the chair's work needs.
     "community_outreach_team": {
-        "name": "Community Education / Outreach Team",
+        "name": "Community Outreach Team",
         "slug": "community_outreach_team",
-        "description": "Members who deliver community education and public outreach events",
+        "description": (
+            "Members who deliver community outreach, education and risk reduction "
+            "events"
+        ),
         "is_system": True,
         "priority": 10,
         "kind": "committee",
@@ -2906,6 +2956,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEETINGS_VIEW.name,
             ELECTIONS_VIEW.name,
             EVENTS_VIEW.name,
+            APPARATUS_EVENTS_SIGNUP.name,
             FORMS_VIEW.name,
             MINUTES_VIEW.name,
             DOCUMENTS_VIEW.name,

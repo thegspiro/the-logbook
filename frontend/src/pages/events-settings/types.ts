@@ -1,4 +1,4 @@
-import type { EventModuleSettings, EventType, EmailTemplate } from '../../types/event';
+import type { EventModuleSettings, EventType, EmailTemplate, StaffingRoleNeed } from '../../types/event';
 
 /** Props shared by all settings section components. */
 export interface SettingsSectionProps {
@@ -26,6 +26,8 @@ export interface CategoriesSectionProps extends SettingsSectionProps {
 export interface OutreachSectionProps extends SettingsSectionProps {
   onAddType: () => void;
   onRemoveType: (value: string) => void;
+  /** Save one type's role preset; an empty list removes it. */
+  onSaveTypeRoles: (value: string, roles: StaffingRoleNeed[]) => Promise<boolean>;
   newTypeLabel: string;
   onNewTypeLabelChange: (value: string) => void;
   onAddRole: () => void;

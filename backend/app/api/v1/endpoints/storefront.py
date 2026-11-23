@@ -55,6 +55,7 @@ from app.schemas.storefront import (
     StoreOrderPaymentMethodUpdate,
     StoreOrderPaymentRecord,
     StoreOrderPaymentReport,
+    StoreOrderPaymentReportRejection,
     StoreOrderRefund,
     StoreOrderResponse,
     StoreOrderStatusUpdate,
@@ -216,6 +217,9 @@ def _window_payload(
         "auto_close": window.auto_close,
         "expected_delivery_date": window.expected_delivery_date,
         "pickup_instructions": window.pickup_instructions,
+        "vendor_name": window.vendor_name,
+        "vendor_reference": window.vendor_reference,
+        "vendor_ordered_at": window.vendor_ordered_at,
         "include_all_products": window.include_all_products,
         "notify_on_open": window.notify_on_open,
         "opened_at": window.opened_at,
@@ -1019,13 +1023,15 @@ async def cancel_window(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("storefront.manage")),
 ) -> Any:
-    """Cancel an order window."""
-    from app.models.storefront import StoreWindowStatus
+    """Cancel an order window and the orders still open in it.
 
+    Refused while any of those orders has money recorded or a payment report
+    waiting; each other open order is cancelled and its member notified.
+    """
     service = StorefrontService(db)
     try:
-        window = await service.set_window_status(
-            window_id, str(current_user.organization_id), StoreWindowStatus.CANCELLED
+        window = await service.cancel_window(
+            window_id, str(current_user.organization_id), str(current_user.id)
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=safe_error_detail(exc))
@@ -1038,13 +1044,15 @@ async def mark_window_fulfilled(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("storefront.manage")),
 ) -> Any:
-    """Mark a closed window as fully distributed."""
-    from app.models.storefront import StoreWindowStatus
+    """Mark a closed window as fully distributed.
 
+    Refused unless the window is closed and every order in it is fulfilled or
+    cancelled.
+    """
     service = StorefrontService(db)
     try:
-        window = await service.set_window_status(
-            window_id, str(current_user.organization_id), StoreWindowStatus.FULFILLED
+        window = await service.fulfill_window(
+            window_id, str(current_user.organization_id)
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=safe_error_detail(exc))
@@ -1104,6 +1112,21 @@ async def record_vendor_order(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+    # Serialized like every other window response: product names and the
+    # order counters are not model attributes, so the bare ORM window the
+    # service hands back would report them as null and zero. Re-read after
+    # the orders were advanced, so the counters include that change.
+    organization_id = str(current_user.organization_id)
+    summary = await service.get_window_summary(window_id, organization_id)
+    window = await service.get_window(window_id, organization_id, reload=True)
+    if window is None:
+        raise HTTPException(status_code=404, detail="Order window not found")
+    result["window"] = _window_payload(
+        window,
+        order_count=summary["order_count"],
+        total_sales=summary["gross_sales"],
+        outstanding=summary["outstanding"],
     )
     return result
 
@@ -1484,6 +1507,41 @@ async def cancel_order(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    settings = await service.get_settings(str(current_user.organization_id))
+    return _order_payload(order, service, settings, include_internal=True)
+
+
+@router.post(
+    "/orders/{order_id}/reject-payment-report", response_model=StoreOrderResponse
+)
+async def reject_payment_report(
+    order_id: str,
+    payload: StoreOrderPaymentReportRejection,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Mark a member's reported payment as not received, so the balance is owed
+    again. Requires ``storefront.manage``."""
+    service = StorefrontService(db)
+    try:
+        order = await service.reject_payment_report(
+            order_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            reason=payload.reason,
+            notify_member=payload.notify_member,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    await log_audit_event(
+        db=db,
+        event_type="store_payment_report_rejected",
+        event_category="storefront",
+        severity="info",
+        event_data={"order_id": str(order_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     settings = await service.get_settings(str(current_user.organization_id))
     return _order_payload(order, service, settings, include_internal=True)
 

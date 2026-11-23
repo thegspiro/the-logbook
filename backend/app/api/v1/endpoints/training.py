@@ -114,8 +114,8 @@ from app.services.training_compliance import (
     ComplianceGrading,
     _load_compliance_config,
     evaluate_member_requirement,
-    evaluate_member_requirement_detail,
     get_requirement_date_window,
+    grade_members,
     load_credited_shift_dates,
     load_evaluation_credits,
     load_graded_records,
@@ -124,6 +124,7 @@ from app.services.training_compliance import (
     tally_standing,
 )
 from app.services.training_course_links import (
+    CourseLinkBusy,
     TrainingCourseLinkService,
     UnlinkedName,
 )
@@ -641,6 +642,9 @@ async def link_course_name(
             str(payload.course_id),
             linked_by=str(current_user.id),
         )
+    except CourseLinkBusy as e:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     await db.commit()
@@ -667,9 +671,13 @@ async def link_suggested_course_names(
 
     **Requires permission: training.manage**
     """
-    result = await TrainingCourseLinkService(db).link_suggested(
-        str(current_user.organization_id), linked_by=str(current_user.id)
-    )
+    try:
+        result = await TrainingCourseLinkService(db).link_suggested(
+            str(current_user.organization_id), linked_by=str(current_user.id)
+        )
+    except CourseLinkBusy as e:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=str(e))
     await db.commit()
     await log_audit_event(
         db=db,
@@ -2807,50 +2815,6 @@ async def get_expiring_certifications(
 
 
 # ============================================
-# Competency Matrix / Heat Map
-# ============================================
-
-
-@router.get("/competency-matrix")
-async def get_competency_matrix(
-    requirement_ids: str | None = Query(
-        None, description="Comma-separated requirement IDs to filter"
-    ),
-    user_ids: str | None = Query(
-        None, description="Comma-separated user IDs to filter"
-    ),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
-):
-    """
-    Generate a competency matrix / heat map for the department.
-
-    Shows all active members vs. all active training requirements,
-    color-coded by status:
-    - **current** (green): completed and not expiring soon
-    - **expiring_soon** (yellow): expiring within 90 days
-    - **expired** (red): past expiration date
-    - **not_started** (gray): no record on file
-
-    The `summary` block provides aggregate readiness metrics.
-
-    Requires `training.manage` permission.
-    """
-    from app.services.competency_matrix_service import CompetencyMatrixService
-
-    service = CompetencyMatrixService(db)
-    req_ids = requirement_ids.split(",") if requirement_ids else None
-    u_ids = user_ids.split(",") if user_ids else None
-
-    matrix = await service.get_competency_matrix(
-        organization_id=current_user.organization_id,
-        requirement_ids=req_ids,
-        user_ids=u_ids,
-    )
-    return matrix
-
-
-# ============================================
 # Certification Expiration Alert Processing
 # ============================================
 
@@ -3892,40 +3856,22 @@ async def get_compliance_matrix(
         await _load_compliance_config(db, str(org_id))
     )
 
-    # Only the records the grader can read for these requirements, not every
-    # record the department ever logged (TR4-2). Needs `today` and the
-    # config above: the windows it bounds by are resolved from both.
-    records_by_user: dict[str, list[TrainingRecord]] = {}
-    for r in await load_graded_records(
-        db,
-        str(org_id),
-        [m.id for m in members],
-        requirements,
-        today,
-        grading.include_current_month,
-    ):
-        records_by_user.setdefault(r.user_id, []).append(r)
-    shifts_by_user = await load_credited_shift_dates(
-        db,
-        str(org_id),
-        [m.id for m in members],
-        requirements,
-        today,
-        grading.include_current_month,
-    )
-    evaluations_by_user = await load_evaluation_credits(
-        db,
-        str(org_id),
-        [m.id for m in members],
-        requirements,
-        today,
-        grading.include_current_month,
-    )
-    held_sessions = await load_held_sessions(db, str(org_id), requirements)
-
-    # Batch-fetch all active waivers / leaves for the org
-    waivers_by_user = await fetch_org_waivers(db, str(org_id))
     viewer_is_chief = holds_chief_position(current_user)
+
+    # The shared batch grader, so the matrix, the compliance exports, the
+    # forecast and the member notices cannot read a member differently
+    # (CLAUDE.md pitfall 29). It loads only the records the grader can read
+    # for these requirements (TR4-2), and keeps the members' order.
+    graded = await grade_members(
+        db,
+        str(org_id),
+        members,
+        requirements,
+        today,
+        grading,
+        waivers_by_user=await fetch_org_waivers(db, str(org_id)),
+        held_sessions=await load_held_sessions(db, str(org_id), requirements),
+    )
 
     matrix = []
     # The evaluation cut-off can differ per requirement (each may override
@@ -3933,31 +3879,15 @@ async def get_compliance_matrix(
     # date through which *every* cell in the matrix is settled.
     as_of: str | None = None
 
-    for member in members:
-        member_records = records_by_user.get(member.id, [])
-        member_waivers = waivers_by_user.get(str(member.id), [])
-        join_date = member_join_date(member)
+    for compliance in graded:
+        member = compliance.member
         req_statuses = []
-
         # A compliance profile narrows which requirements grade this member and
         # can override the thresholds; requirements that do not apply are
-        # dropped. The same resolution feeds the dashboard percentage and the
-        # "Department Compliance" card this screen links from.
-        member_grading = grading.for_member(member, list(requirements))
-
-        for req in member_grading.requirements:
-            ev = evaluate_member_requirement_detail(
-                req,
-                member_records,
-                today,
-                waivers=member_waivers,
-                org_include_current_month=grading.include_current_month,
-                join_date=join_date,
-                shift_dates=shifts_by_user.get(str(member.id), []),
-                held_sessions=held_sessions,
-                evaluation_credits=evaluations_by_user.get(str(member.id), {}),
-            )
-
+        # absent from the evaluations. The same resolution feeds the dashboard
+        # percentage and the "Department Compliance" card this screen links
+        # from.
+        for req, ev in compliance.evaluations:
             if ev.as_of and (as_of is None or ev.as_of < as_of):
                 as_of = ev.as_of
 
@@ -3986,16 +3916,12 @@ async def get_compliance_matrix(
             )
 
         # Denominator is the member's *applicable* requirements, not every
-        # active requirement in the org. Dividing by the latter understated a
-        # member whose membership type exempts them from some of them — they
-        # could meet everything asked of them and still read below 100%.
-        # A cell in its catch-up period is shown but counts neither way.
+        # active requirement in the org. A cell in its catch-up period is shown
+        # but counts neither way. The standing and percentage are the grader's.
         completed_count, applicable_total = tally_standing(
             item.status for item in req_statuses
         )
-        standing, pct = grading.classify(
-            member_grading, completed_count, applicable_total
-        )
+        standing, pct = compliance.standing, compliance.pct
         member_name = (
             f"{member.last_name}, {member.first_name}"
             if member.last_name

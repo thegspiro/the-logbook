@@ -20,7 +20,7 @@ Responses are snake_case, like the rest of the reports module.
 import re
 from datetime import date, datetime
 from enum import Enum
-from typing import Annotated, List, Literal, Optional
+from typing import Annotated, Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -54,6 +54,9 @@ class EvaluationTool(str, Enum):
     CHECKLIST = "checklist"
     NARRATIVE = "narrative"
     GOALS = "goals"
+    # Rates each goal the member's previous review set. The goals are copied
+    # into the evaluation when it is drafted, so the record carries them.
+    GOAL_REVIEW = "goal_review"
 
 
 #: Tools that produce a number, and so can be weighted and scored.
@@ -184,6 +187,15 @@ class TemplateItem(BaseModel):
             raise ValueError(f"'{self.label}': only a rated item can carry weight")
         if self.tool != EvaluationTool.CHECKLIST and self.checklist_options:
             raise ValueError(f"'{self.label}': only a checklist has options")
+        if self.tool == EvaluationTool.GOAL_REVIEW:
+            if self.data_block is not None:
+                raise ValueError(
+                    f"'{self.label}' rates last review's goals and takes no figures"
+                )
+            if self.allow_na:
+                raise ValueError(
+                    f"'{self.label}': each goal is marked not applicable on its own"
+                )
         if not set(self.require_example_for) <= set(values):
             raise ValueError(
                 f"'{self.label}': examples can only be required at levels the "
@@ -269,6 +281,14 @@ class TemplateDefinition(BaseModel):
         item_keys = [i.key for s in self.sections for i in s.items]
         if len(set(item_keys)) != len(item_keys):
             raise ValueError("Item keys must be unique across the template")
+        goal_reviews = [
+            i
+            for s in self.sections
+            for i in s.items
+            if i.tool == EvaluationTool.GOAL_REVIEW
+        ]
+        if len(goal_reviews) > 1:
+            raise ValueError("Only one item can rate the last review's goals")
         self.officer_ranks = list(dict.fromkeys(self.officer_ranks))
         bands = sorted(self.grade_bands, key=lambda b: b.level)
         if [b.level for b in bands] != list(GRADE_LEVELS):
@@ -543,6 +563,12 @@ class EvaluationTemplateCreate(_Matching):
     # filled from it instead of left empty. Checked by the service, which
     # owns the catalog.
     starter: Optional[str] = Field(default=None, max_length=50)
+    # Rank codes that receive a starter's officer-only sections. Required by,
+    # and only accepted with, a starter that has them; checked against the
+    # department's ranks by the service.
+    officer_ranks: Optional[
+        List[Annotated[str, Field(min_length=1, max_length=50)]]
+    ] = Field(default=None, max_length=50)
 
     @field_validator("name")
     @classmethod
@@ -582,6 +608,8 @@ class EvaluationStarterResponse(BaseModel):
     member_class: Optional[str] = None
     member_status: Optional[str] = None
     section_titles: List[str]
+    # Creating from it needs ``officer_ranks``.
+    needs_officer_ranks: bool = False
 
 
 class TemplateDraftWrite(BaseModel):
@@ -739,6 +767,58 @@ def _blank_to_none(v: Optional[str]) -> Optional[str]:
     return v or None
 
 
+class GoalResult(str, Enum):
+    """How far a goal from the previous review was met."""
+
+    MET = "met"
+    PARTLY_MET = "partly_met"
+    NOT_MET = "not_met"
+    # The goal no longer applies (an assignment changed, say), so it is not
+    # counted as missed.
+    NOT_APPLICABLE = "not_applicable"
+
+
+class GoalRating(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    result: Optional[GoalResult] = None
+    comment: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+
+    @field_validator("comment")
+    @classmethod
+    def _blank(cls, v: Optional[str]) -> Optional[str]:
+        return _blank_to_none(v)
+
+
+#: Goals one Goals item may hold.
+MAX_GOALS_PER_ITEM = 20
+_GOAL_ID = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
+
+
+class GoalEntry(BaseModel):
+    """One goal on a Goals item. ``id`` is chosen by the form and stays with
+    the goal, so next year's review can rate this goal by it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    # Blank while the goal is still being written; a save drops it.
+    text: str = Field(default="", max_length=MAX_ANSWER_TEXT)
+    target_date: Optional[date] = None
+
+    @field_validator("id")
+    @classmethod
+    def _id(cls, v: str) -> str:
+        if not _GOAL_ID.match(v):
+            raise ValueError("A goal's id is 1 to 40 letters, digits, - or _")
+        return v
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def _strip(cls, v: Any) -> Any:
+        return v.strip() if isinstance(v, str) else v
+
+
 class ItemAnswer(BaseModel):
     """One item's answer in an evaluator's part or a self-evaluation.
 
@@ -746,8 +826,16 @@ class ItemAnswer(BaseModel):
     (CLAUDE.md pitfall #20): ``rating`` is the scale level given (``1`` /
     ``0`` for meets / does not meet), ``text`` the answer to a narrative or
     goals item, ``comment`` the remark beside a rated one, ``example`` the
-    specific instance a level requires, and ``justification`` the evaluator's
-    reason for departing from the score the data suggested.
+    specific instance a level requires, ``justification`` the evaluator's
+    reason for departing from the score the data suggested, and
+    ``goal_ratings`` a goal-review item's result for each goal the previous
+    review set, keyed by that review's goals item, and ``goals`` a Goals
+    item's goals.
+
+    A Goals item's canonical shape is ``goals``; ``save_part`` turns a
+    ``text`` answer into one goal. A part saved before goals were a list
+    (2026-11-22) keeps its ``text``: a submitted part is in the record hash
+    its signatures attest to, so it is read as it is, never rewritten.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -759,6 +847,12 @@ class ItemAnswer(BaseModel):
     comment: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
     example: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
     justification: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+    goal_ratings: dict[str, GoalRating] = Field(
+        default_factory=dict, max_length=MAX_SECTIONS * MAX_ITEMS_PER_SECTION
+    )
+    # A Goals item's goals, each with an optional target date. An answer
+    # written before goals were a list holds its goals as ``text`` instead.
+    goals: List[GoalEntry] = Field(default_factory=list, max_length=MAX_GOALS_PER_ITEM)
 
     @field_validator("text", "comment", "example", "justification")
     @classmethod
@@ -769,6 +863,9 @@ class ItemAnswer(BaseModel):
     def _na_is_unanswered(self) -> "ItemAnswer":
         if self.na and self.rating is not None:
             raise ValueError("An item marked N/A cannot also be rated")
+        ids = [g.id for g in self.goals]
+        if len(set(ids)) != len(ids):
+            raise ValueError("Each goal needs its own id")
         return self
 
 
@@ -1009,6 +1106,18 @@ class PreviousGoal(BaseModel):
     key: str
     label: str
     text: str
+    target_date: Optional[date] = None
+
+
+class GoalsUnderReview(BaseModel):
+    """The previous review's goals as they were copied into this evaluation
+    when it was drafted, for its goal-review item to rate."""
+
+    evaluation_id: str
+    period_name: Optional[str] = None
+    period_start: date
+    period_end: date
+    goals: List[PreviousGoal] = Field(default_factory=list)
 
 
 class PreviousReview(BaseModel):
@@ -1061,6 +1170,9 @@ class EvaluationDetail(EvaluationSummary):
     calibration_flags: List[str] = Field(default_factory=list)
     # The member's last review on the same form, when the caller may read it.
     previous_review: Optional[PreviousReview] = None
+    # The previous review's goals as copied into this one for its
+    # goal-review item; part of this record, unlike ``previous_review``.
+    goals_under_review: Optional[GoalsUnderReview] = None
     viewer: EvaluationViewer
 
 
@@ -1264,6 +1376,37 @@ class ResponseWrite(BaseModel):
 
 
 # ------------------------------------------------------- step assignment
+
+
+class ReassignmentRequest(BaseModel):
+    """Hand one person's open work in a review period to another."""
+
+    from_user_id: str = Field(min_length=1, max_length=36)
+    to_user_id: str = Field(min_length=1, max_length=36)
+
+
+class ReassignmentHolder(BaseModel):
+    """Someone holding open work in a period, and on how many evaluations."""
+
+    user_id: str
+    name: str
+    evaluations: int
+
+
+class ReassignmentRow(BaseModel):
+    """One evaluation a reassignment moves, or skips with the reason."""
+
+    evaluation_id: str
+    member_name: str
+    moves_evaluator: bool
+    steps: List[str] = Field(default_factory=list)
+    skipped_reason: Optional[str] = None
+
+
+class ReassignmentPlan(BaseModel):
+    from_name: str
+    to_name: str
+    rows: List[ReassignmentRow] = Field(default_factory=list)
 
 
 class StepAssignment(BaseModel):

@@ -19,7 +19,7 @@ import { EmptyState, PromptDialog } from '../components/ux';
 import { EditTrainingRecordModal } from '../components/training/EditTrainingRecordModal';
 import { MemberRequirementsSection } from '../components/training/MemberRequirementsSection';
 import { useAuthStore } from '../stores/authStore';
-import { Ban, GraduationCap, Download, Paperclip, Pencil, Upload, X } from 'lucide-react';
+import { Ban, GraduationCap, Download, Paperclip, Pencil, Trash2, Upload, X } from 'lucide-react';
 import { formatDate } from '../utils/dateFormatting';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
@@ -34,6 +34,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import type { TrainingRecord } from '../types/training';
 import type { UserWithRoles } from '../types/role';
 import { useDialog } from '../hooks/useDialog';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { getTrainingStatusLabel } from '../utils/trainingColors';
 import { TRAINING_TYPE_LABELS } from '../constants/enums';
 import { StatGrid } from '../components/ux/StatGrid';
@@ -63,10 +64,12 @@ const RecordAttachmentsModal: React.FC<{
   // this dialog dismissed on a backdrop click and had no Escape handler, so
   // removing the former would have left the X button as the only way out.
   const dialogRef = useDialog<HTMLDivElement>({ onClose });
+  const { confirm } = useConfirm();
 
   const [attachments, setAttachments] = useState<TrainingAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -98,6 +101,29 @@ const RecordAttachmentsModal: React.FC<{
     } finally {
       setUploading(false);
       e.target.value = '';
+    }
+  };
+
+  const handleRemove = async (attachment: TrainingAttachment, entryId: string) => {
+    const fileName = attachment.file_name || `Attachment ${attachment.index + 1}`;
+    const agreed = await confirm({
+      title: `Remove "${fileName}"?`,
+      message: 'The file is deleted from this training record. The record itself stays.',
+      confirmLabel: 'Remove file',
+      cancelLabel: 'Keep it',
+      variant: 'danger',
+    });
+    if (!agreed) return;
+    try {
+      setRemovingId(entryId);
+      await documentService.deleteAttachment(recordId, entryId);
+      const res = await documentService.getRecordAttachments(recordId);
+      setAttachments(res.attachments);
+      toast.success('File removed');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to remove the file'));
+    } finally {
+      setRemovingId(null);
     }
   };
 
@@ -133,20 +159,35 @@ const RecordAttachmentsModal: React.FC<{
           <ul className="mb-4 space-y-2">
             {attachments.map((a) => (
               <li
-                key={a.index}
+                key={a.id ?? a.index}
                 className="border-theme-surface-border flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
               >
                 <span className="text-theme-text-primary truncate text-sm">
                   {a.file_name || `Attachment ${a.index + 1}`}
                 </span>
-                <a
-                  href={documentService.getAttachmentDownloadUrl(recordId, a.index)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex shrink-0 items-center gap-1 text-sm text-red-600 hover:text-red-500"
-                >
-                  <Download className="h-4 w-4" /> Download
-                </a>
+                <div className="flex shrink-0 items-center gap-2">
+                  <a
+                    href={documentService.getAttachmentDownloadUrl(recordId, a)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex shrink-0 items-center gap-1 text-sm text-red-600 hover:text-red-500"
+                  >
+                    <Download className="h-4 w-4" /> Download
+                  </a>
+                  {a.can_remove && a.id && (
+                    <button
+                      type="button"
+                      aria-label={`Remove ${a.file_name || `attachment ${a.index + 1}`}`}
+                      disabled={removingId !== null}
+                      onClick={() => {
+                        if (a.id) void handleRemove(a, a.id);
+                      }}
+                      className="btn-icon text-theme-text-muted hover:text-red-700 dark:hover:text-red-400"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

@@ -12,7 +12,7 @@
  * link was previously only readable from the apparatus side.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import { Plus, Trash2, AlertTriangle, Clock, Loader2, PackagePlus, Truck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '@/services/inventoryService';
@@ -73,6 +73,16 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
   // "Exp 9/3/2026 · 24d left", 24 days after 8/11 being 9/4.
   const tz = useTimezone();
   const [lots, setLots] = useState<InventoryLot[]>([]);
+  // The quantities the +/- buttons last set, read synchronously by the next
+  // press; and each lot's in-flight save, so saves land in press order.
+  const lotsRef = useRef<InventoryLot[]>([]);
+  const pendingSaves = useRef(new Map<string, Promise<unknown>>());
+  // A layout effect, not a passive one: the buttons exist from this commit,
+  // and a passive effect runs in a later task, so a press in between read an
+  // empty ref and was dropped. A layout effect runs before any event can.
+  useLayoutEffect(() => {
+    lotsRef.current = lots;
+  }, [lots]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<LotForm>(emptyForm);
@@ -183,19 +193,25 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
   };
 
   const adjustQuantity = async (lotId: string, delta: number) => {
-    // Compute the new quantity from the latest state (not a render-time
-    // closure) so rapid clicks don't stack onto a stale base.
-    let target: number | null = null;
-    setLots((prev) =>
-      prev.map((l) => {
-        if (l.id !== lotId) return l;
-        target = Math.max(0, l.quantity + delta);
-        return { ...l, quantity: target };
-      })
-    );
-    if (target === null) return;
+    // The new quantity comes from a ref, not from inside the setLots updater:
+    // React runs an updater eagerly only when nothing else is queued, so a
+    // value read back out of one was still unset from the second press on and
+    // the save was skipped (INV2-7). The ref moves with each press, so rapid
+    // presses stack on each other rather than on a stale render.
+    const current = lotsRef.current.find((l) => l.id === lotId);
+    if (!current) return;
+    const target = Math.max(0, current.quantity + delta);
+    lotsRef.current = lotsRef.current.map((l) => (l.id === lotId ? { ...l, quantity: target } : l));
+    setLots(lotsRef.current);
+    // Each save waits for the lot's previous one, so a slow request cannot
+    // land after a newer one and leave the older count on the server.
+    const previous = pendingSaves.current.get(lotId) ?? Promise.resolve();
+    const save = previous
+      .catch(() => undefined)
+      .then(() => inventoryService.updateItemLot(lotId, { quantity: target }));
+    pendingSaves.current.set(lotId, save);
     try {
-      await inventoryService.updateItemLot(lotId, { quantity: target });
+      await save;
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to update quantity'));
       // Re-sync from the server rather than guessing the pre-click value.

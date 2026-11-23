@@ -1093,6 +1093,14 @@ class GrantService:
             allow_none=True,
             label="Assigned user",
         )
+        # Mirrors GrantApplication.assigned_to (GF-6): a newly chosen
+        # assignee must be a current member, not merely in-org.
+        await assert_current_members(
+            self.db,
+            [data.get("assigned_to")],
+            organization_id,
+            label="the assignee",
+        )
         if data.get("assigned_to") is not None:
             data = {**data, "assigned_to": str(data["assigned_to"])}
         task = GrantComplianceTask(
@@ -1140,6 +1148,17 @@ class GrantService:
             organization_id,
             allow_none=True,
             label="Assigned user",
+        )
+        # Mirrors GrantApplication.assigned_to (GF-6): a newly chosen
+        # assignee must be a current member. One already on the task may
+        # stay after leaving, so an edit that does not touch the assignee
+        # still saves.
+        await assert_current_members(
+            self.db,
+            [data.get("assigned_to")],
+            organization_id,
+            keep=[task.assigned_to],
+            label="the assignee",
         )
 
         old_status = task.status

@@ -253,30 +253,91 @@ describe('TrainingEnhancementsTab add dialogs name every control', () => {
 describe('TrainingEnhancementsTab compliance forecast', () => {
   beforeEach(() => {
     getComplianceForecast.mockReset();
-    getComplianceForecast.mockResolvedValue([
-      {
-        user_id: 'u-at-risk',
-        user_name: 'Ada Risk',
-        current_compliance_percentage: 85,
-        current_standing: 'at_risk',
-        forecast_30_days: 84,
-        forecast_60_days: 83,
-        forecast_90_days: 82,
-        at_risk_requirements: [],
-        expiring_certifications: [],
+    getComplianceForecast.mockResolvedValue({
+      members: [
+        {
+          user_id: 'u-at-risk',
+          user_name: 'Ada Risk',
+          current_compliance_percentage: 85,
+          current_standing: 'at_risk',
+          forecast_30_days: 84,
+          forecast_60_days: 83,
+          forecast_90_days: 82,
+          at_risk_requirements: [],
+          expiring_certifications: [],
+        },
+        {
+          user_id: 'u-compliant',
+          user_name: 'Cy Lowbar',
+          current_compliance_percentage: 60,
+          current_standing: 'compliant',
+          forecast_30_days: 59,
+          forecast_60_days: 58,
+          forecast_90_days: 57,
+          at_risk_requirements: [],
+          expiring_certifications: [],
+        },
+      ],
+      averages: {
+        current: { pct: 72.5, standing: 'at_risk' },
+        days_30: { pct: 71.5, standing: 'non_compliant' },
+        days_60: { pct: 70.5, standing: 'non_compliant' },
+        days_90: { pct: 69.5, standing: 'non_compliant' },
       },
-      {
-        user_id: 'u-compliant',
-        user_name: 'Cy Lowbar',
-        current_compliance_percentage: 60,
-        current_standing: 'compliant',
-        forecast_30_days: 59,
-        forecast_60_days: 58,
-        forecast_90_days: 57,
-        at_risk_requirements: [],
-        expiring_certifications: [],
+    });
+  });
+
+  it('colours each projection by the standing the server classified', async () => {
+    getComplianceForecast.mockResolvedValue({
+      members: [
+        {
+          user_id: 'u-1',
+          user_name: 'Ada Risk',
+          current_compliance_percentage: 85,
+          current_standing: 'at_risk',
+          forecast_30_days: 84,
+          forecast_30_standing: 'at_risk',
+          forecast_60_days: 59,
+          forecast_60_standing: 'compliant',
+          forecast_90_days: null,
+          forecast_90_standing: 'not_applicable',
+          at_risk_requirements: [],
+          expiring_certifications: [],
+        },
+      ],
+      averages: {
+        current: { pct: 85, standing: 'at_risk' },
+        days_30: { pct: 84, standing: 'at_risk' },
+        days_60: { pct: 59, standing: 'compliant' },
+        days_90: { pct: null, standing: 'not_applicable' },
       },
-    ]);
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingEnhancementsTab activeTab="reports" />);
+
+    await user.click(screen.getByRole('button', { name: /Load Forecast/ }));
+
+    expect(await screen.findByText('84%')).toHaveClass('text-orange-700');
+    expect(screen.getByText('59%')).toHaveClass('text-green-700');
+    expect(screen.getByText('N/A')).toHaveClass('text-theme-text-muted');
+  });
+
+  it('reports a body that is not a forecast report rather than an empty table', async () => {
+    // Before the envelope, a stray object rendered nothing and said nothing.
+    getComplianceForecast.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingEnhancementsTab activeTab="reports" />);
+
+    await user.click(screen.getByRole('button', { name: /Load Forecast/ }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to load forecast'));
+  });
+
+  it("says the projections are each member's standing on that day", () => {
+    renderWithRouter(<TrainingEnhancementsTab activeTab="reports" />);
+
+    expect(screen.getByText(/standing 30, 60 and 90 days from now if nothing new is logged/)).toBeInTheDocument();
+    expect(screen.queryByText(/based on expiring certifications/)).not.toBeInTheDocument();
   });
 
   it('colours the current figure by the standing the server classified', async () => {
@@ -291,5 +352,18 @@ describe('TrainingEnhancementsTab compliance forecast', () => {
     expect(atRisk).toHaveClass('text-orange-700');
     expect(atRisk).not.toHaveClass('text-green-700');
     expect(screen.getByText('60%')).toHaveClass('text-green-700');
+  });
+});
+
+describe('TrainingEnhancementsTab compliance report export', () => {
+  it('says the status columns are the current standing and what the period covers', () => {
+    // The export grades as the Compliance Matrix does, as of today; only the
+    // hours and record counts run from 1 January (owner decision 2026-11-21).
+    renderWithRouter(<TrainingEnhancementsTab activeTab="reports" />);
+
+    const card = screen.getByRole('button', { name: /Compliance Report/ });
+    expect(card).toHaveTextContent(/current standing on every requirement/);
+    expect(card).toHaveTextContent(/as the Compliance Matrix shows it/);
+    expect(card).toHaveTextContent(/training hours and records since January 1/);
   });
 });

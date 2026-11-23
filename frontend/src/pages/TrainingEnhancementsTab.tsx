@@ -33,6 +33,7 @@ import { EmptyState } from '../components/ux/EmptyState';
 import { CompetencyHeatmap } from '../components/training/CompetencyHeatmap';
 import useLoadData from '../hooks/useLoadData';
 import { getErrorMessage } from '../utils/errorHandling';
+import { isForecastReport } from '../utils/complianceForecast';
 import { displayNameOf } from '../utils/memberName';
 import { userService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
@@ -1483,8 +1484,9 @@ const ReportsSection: React.FC = () => {
   const handleLoadForecast = async () => {
     setLoading(true);
     try {
-      const data = await reportExportService.getComplianceForecast();
-      setForecasts(data);
+      const data: unknown = await reportExportService.getComplianceForecast();
+      if (!isForecastReport(data)) throw new TypeError('The compliance forecast response was not a report');
+      setForecasts(data.members);
     } catch {
       toast.error('Failed to load forecast');
     } finally {
@@ -1510,7 +1512,8 @@ const ReportsSection: React.FC = () => {
           <Download className="mb-2 h-6 w-6 text-blue-500" />
           <h3 className="text-theme-text-primary text-sm font-medium">Compliance Report</h3>
           <p className="text-theme-text-muted mt-1 text-xs">
-            Department-wide compliance status for all members and requirements
+            Each member's current standing on every requirement, as the Compliance Matrix shows it, with training hours
+            and records since January 1
           </p>
         </button>
 
@@ -1589,7 +1592,7 @@ const ReportsSection: React.FC = () => {
           <div className="split-row-main">
             <h3 className="text-theme-text-primary text-sm font-medium">Compliance Forecast</h3>
             <p className="text-theme-text-muted text-xs">
-              Predictive 30/60/90 day compliance based on expiring certifications
+              Each member's standing 30, 60 and 90 days from now if nothing new is logged
             </p>
           </div>
           <button
@@ -1649,13 +1652,31 @@ const ReportsSection: React.FC = () => {
                       )}
                     </td>
                     <td data-label="30 Days" className="py-2 pr-4">
-                      {f.forecast_30_days === null ? 'N/A' : `${f.forecast_30_days}%`}
+                      {f.forecast_30_days === null ? (
+                        <span className="text-theme-text-muted">N/A</span>
+                      ) : (
+                        // An estimate, classified by the member's grading
+                        // like the current figure.
+                        <span className={STANDING_TEXT_COLORS[f.forecast_30_standing]}>{f.forecast_30_days}%</span>
+                      )}
                     </td>
                     <td data-label="60 Days" className="py-2 pr-4">
-                      {f.forecast_60_days === null ? 'N/A' : `${f.forecast_60_days}%`}
+                      {f.forecast_60_days === null ? (
+                        <span className="text-theme-text-muted">N/A</span>
+                      ) : (
+                        // An estimate, classified by the member's grading
+                        // like the current figure.
+                        <span className={STANDING_TEXT_COLORS[f.forecast_60_standing]}>{f.forecast_60_days}%</span>
+                      )}
                     </td>
                     <td data-label="90 Days" className="py-2 pr-4">
-                      {f.forecast_90_days === null ? 'N/A' : `${f.forecast_90_days}%`}
+                      {f.forecast_90_days === null ? (
+                        <span className="text-theme-text-muted">N/A</span>
+                      ) : (
+                        // An estimate, classified by the member's grading
+                        // like the current figure.
+                        <span className={STANDING_TEXT_COLORS[f.forecast_90_standing]}>{f.forecast_90_days}%</span>
+                      )}
                     </td>
                     <td data-label="At Risk" className="py-2">
                       {f.at_risk_requirements.length > 0 && (

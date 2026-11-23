@@ -170,9 +170,17 @@ describe('groupDataSources', () => {
   });
 
   it('puts a module it has no name for under Other, not its slug', () => {
-    expect(groupDataSources([source('apparatus.runs', 'apparatus')])).toEqual([
-      { label: 'Other', sources: [source('apparatus.runs', 'apparatus')] },
+    expect(groupDataSources([source('elections.votes', 'elections')])).toEqual([
+      { label: 'Other', sources: [source('elections.votes', 'elections')] },
     ]);
+  });
+
+  it('names the equipment check and property groups', () => {
+    const groups = groupDataSources([
+      source('apparatus.equipment_checks', 'apparatus'),
+      source('inventory.overdue_at_period_end', 'inventory'),
+    ]);
+    expect(groups.map((g) => g.label)).toEqual(['Apparatus & equipment', 'Inventory']);
   });
 });
 

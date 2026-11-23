@@ -118,7 +118,6 @@ POST   /api/v1/training/import/confirm                     # Historical import: 
 GET    /api/v1/training/dashboard-summary                  # Officer dashboard widget data
 GET    /api/v1/training/compliance-summary/{user_id}       # Member compliance card (green/yellow/red)
 GET    /api/v1/training/compliance-matrix                  # Members x requirements standing
-GET    /api/v1/training/competency-matrix                  # Department readiness heat-map
 GET    /api/v1/training/category-hours/{user_id}           # Per-category hour breakdown for a member
 GET    /api/v1/training/requirements                       # List requirements (filterable by source, type)
 POST   /api/v1/training/requirements                       # Create requirement
@@ -162,6 +161,17 @@ percentage. `GET /training/dashboard-summary` reports `graded_members` and
 population is not 100%. `GET /training/compliance-matrix` rows carry
 `standing` (`compliant` / `at_risk` / `non_compliant` / `not_applicable`)
 and `completion_pct`, which is `null` for a `not_applicable` member.
+
+**Fields added 2026-11-20 – 21.** An HOURS cell on the matrix and an hours
+requirement on My Training's detail carry `monthly_average` and
+`monthly_needed` (`training_compliance.monthly_pace`, display only — the
+status is graded on the total). A `certification` requirement's detail
+carries `expiry_date`, the graded certificate's expiry. The member
+requirement responses (My Training and the officer's member view) add
+`optional_requirements_detail`, the profile's optional requirements, which are
+never graded. `POST /training/course-links` and `/link-suggested` answer 409
+when two links collide on the same records ("…Nothing was linked; try
+again.").
 
 ### Training Programs
 
@@ -432,8 +442,8 @@ DELETE /api/v1/training/submissions/{id}                   # Delete submission (
 POST   /api/v1/training/submissions/{id}/submit            # Hand a saved draft to the department (submitter only)
 POST   /api/v1/training/submissions/{id}/attachments       # Add a certificate to a submission
 GET    /api/v1/training/submissions/{id}/attachments       # List a submission's attachments
-GET    /api/v1/training/submissions/{id}/attachments/{index}/download  # Download one attachment
-DELETE /api/v1/training/submissions/{id}/attachments/{index}  # Remove one attachment
+GET    /api/v1/training/submissions/{id}/attachments/{entry}/download  # Download one attachment ({entry}: its id, or a legacy index)
+DELETE /api/v1/training/submissions/{id}/attachments/{entry}  # Remove one attachment by id (a repeat is a 204 no-op); a legacy index takes ?expected_id=
 GET    /api/v1/training/submissions/pending                # Pending submissions (training.manage)
 GET    /api/v1/training/submissions/pending/count          # Pending count (training.manage)
 GET    /api/v1/training/submissions/all                    # All submissions (training.manage)
@@ -449,10 +459,23 @@ the `TrainingRecord` verbatim, and the record download route accepts the
 self-reports area as well as its own. Only the submitter or a
 `training.manage` holder can read a submission's attachments (`403`
 otherwise); paths are confined to the submission's own organization.
-**Deleting a submission unlinks its files** — safe only because deletion is
-limited to `draft`, `pending_review` and `revision_requested`, never after
-approval, the one state where a record also references the file. If that
-guard is ever widened, the delete must stop unlinking.
+**Deleting a submission, or removing one attachment, unlinks a file only when
+no other row names it** _(2026-11-20)_: both commit, then call
+`member_files.remove_unreferenced_files`, because `reverse_approval` reopens a
+submission while its voided record keeps naming the same certificates.
+
+Since 2026-11-20 every request body (`TrainingRecordCreate` / `Update`,
+`TrainingSubmissionCreate` / `Update`) answers **422 at `body.attachments`**
+for any value, `null` and `[]` included; files reach a row only through the
+upload routes and the approval copy (`refuse_attachment_writes` in
+`app/schemas/base.py`). Each stored entry carries a stable `id` (a uuid4
+string, `app/utils/training_attachments.py`) beside its `index` in responses;
+`{entry}` in the routes above takes either, a repeat removal of an id is a 204
+no-op, and a legacy index takes `?expected_id=` and answers 409 if the list
+has moved. Review, submit, update, delete, reverse-approval and attachment
+removal lock the submission row (`get_submission(for_update=True)`), after a
+`FOR SHARE` lock on the member for review and submit. A voided record refuses
+an upload with 400.
 
 `attachment_retention_days` on the config is `null` (keep — the default) or
 90–36500; changing it is audited as
@@ -704,7 +727,8 @@ GET    /api/v1/training/reports/compliance-forecast         # Compliance forecas
 ```
 GET    /api/v1/training/records/{id}/attachments                       # List attachments (metadata only, no file paths)
 POST   /api/v1/training/records/{id}/attachments                       # Upload attachment (multipart, ≤25MB, magic-byte type check, malware scan)
-GET    /api/v1/training/records/{id}/attachments/{index}/download       # Download a stored attachment by index
+GET    /api/v1/training/records/{id}/attachments/{entry}/download       # Download a stored attachment by id (or a legacy index)
+DELETE /api/v1/training/records/{id}/attachments/{entry}                # Remove a file uploaded to the record (training.manage: any; member: own uploads; never an approved certificate or a voided record)
 ```
 
 Access is the record owner or `training.manage`.

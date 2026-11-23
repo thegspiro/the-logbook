@@ -29,9 +29,9 @@ rotation's own open pull request.
 | ADV2-6  | Officer       | Low      | `members.manage` could repoint the personal email of a member above its ceiling and collect a retried directory-account password                                   | Fixed  |
 | ADV2-7  | Member        | Low      | Draft events were still reachable through the QR payload, self-check-in, the event folder and the training-session lookup                                          | Fixed  |
 | ADV2-8  | Officer       | Low      | A shift officer without `scheduling.manage` can write their own close-out hours (predates the window)                                                              | Fixed  |
-| ADV2-9  | Officer       | Low      | An officer with `members.manage` + `scheduling.assign` can grant themselves a leave, which creates their own training waiver (predates the window)                 | Owner  |
-| ADV2-10 | Applicant     | Low      | An applicant can set their own follow-up-form email (or name and birth date) to a coordinator's, so the coordinator's self-access guard hides the file from them   | Owner  |
-| ADV2-11 | Outsider      | Info     | A Zeffy dues payment credits whichever member's email the payer typed, and overpayment becomes a donation in that member's name                                    | Owner  |
+| ADV2-9  | Officer       | Low      | An officer with `members.manage` + `scheduling.assign` can grant themselves a leave, which creates their own training waiver (predates the window)                 | Fixed  |
+| ADV2-10 | Applicant     | Low      | An applicant can set their own follow-up-form email (or name and birth date) to a coordinator's, so the coordinator's self-access guard hides the file from them   | Fixed  |
+| ADV2-11 | Outsider      | Info     | A Zeffy dues payment credits whichever member's email the payer typed, and overpayment becomes a donation in that member's name                                    | Fixed  |
 
 ## Fixes
 
@@ -110,20 +110,99 @@ hours. A holder of `scheduling.manage` is not affected.
   failed before the fix), and the "officer's own row" cases in
   `ShiftCloseoutWizard.test.tsx`.
 
+## ADV2-9 fix (2026-11-21)
+
+Owner decision: block it. Nobody grants or extends their own leave of absence.
+
+- `MemberLeaveService.create_leave` refuses `user_id == granted_by`, so the
+  rule holds for every caller, not only the route.
+  `POST /users/leaves-of-absence` answers 400.
+- `PATCH /users/leaves-of-absence/{id}` answers 403 on the caller's own leave:
+  extending it, or turning its training waiver back on, excuses requirements
+  as granting one does.
+- The caller's own leave goes through `POST /users/leave-requests`, which they
+  cannot decide. An approval creates the leave with the voter as
+  `granted_by`, so it never meets the refusal.
+- `DELETE /users/leaves-of-absence/{id}` is unchanged: ending one's own leave early
+  excuses nothing.
+- Tests: `tests/test_member_leave_self_grant.py` (five tests; the three
+  refusals failed before the fix).
+
+## ADV2-11 fix (2026-11-21)
+
+Owner decisions: hold a Zeffy dues payment as unmatched until a treasurer
+confirms it; the treasurer chooses whether an overpayment becomes the member's
+donation; any current member with open dues may be chosen, not only the email
+match; `finance.manage` confirms, with no step-up, as for a dues payment
+recorded by hand; payments already credited stay as they are.
+
+- `ZeffySyncService` no longer credits dues. A payment to a campaign linked to
+  a dues schedule is recorded `unmatched`, with a detail saying whether the
+  payer's email matches a current member. The hourly retry re-reads that
+  suggestion and never credits.
+- `GET /grants/zeffy/payments/{id}/dues-match` (`finance.manage`) returns the
+  net amount, the suggested member, and every current member with open dues
+  on the schedule with what their oldest open dues still owe.
+- `POST /grants/zeffy/payments/{id}/confirm-dues` (`finance.manage`) credits
+  the chosen member's oldest open dues under the payment's row lock, with the
+  open dues chosen by a locking read. An overpayment is refused unless
+  `excessAsDonation`; the treasurer may not credit their own dues; a second
+  confirmation answers 409. Audited at `warning` as
+  `zeffy_dues_payment_confirmed`.
+- The Zeffy page shows **Confirm member** on a held payment to a
+  `finance.manage` holder, and the status reads **Awaiting confirmation**.
+- Tests: `TestMembershipDues`, `TestTreasurerConfirmsDues` and
+  `TestDuesSelection` in `tests/test_zeffy_sync_service.py` (each failed
+  against the old service), `TestConfirmDues` in
+  `tests/test_zeffy_endpoints.py`, and the confirmation cases in
+  `ZeffyPage.test.tsx`.
+
+## ADV2-10 fix (2026-11-21)
+
+Owner decisions: once the applicant edits their email, name or date of birth,
+the self-access guard trusts only `transferred_user_id` for that record; only
+follow-up form edits count, not the first public application; a coordinator's
+correction restores the other identifiers; applications already edited are
+backfilled.
+
+- `prospective_members.identity_edited_by_applicant_at` (migration
+  `809893462b67`). `FollowUpFormService.submit` stamps it when a change to
+  `email`, `first_name`, `last_name` or `date_of_birth` is applied.
+  `MembershipPipelineService.update_prospect` clears it when a coordinator
+  changes one of them, and refuses it as a client-written field.
+- `app/api/prospect_privacy.py` matches by email or by name and birth date only
+  while the stamp is empty. The transfer back-link always counts.
+- The migration replays `prospect_activity_log`: a follow-up submission whose
+  `changed_fields` names an identity field stamps the record, and a later
+  `prospect_updated` naming one clears it.
+- Left as is: the first public application is still matched on what the
+  applicant typed (`docs/KNOWN_LIMITATIONS.md`).
+- The migration also joins `main`'s two heads, `7d2e4b81c5a3` and
+  `85680aed8332`.
+- Tests: `tests/test_prospect_applicant_edited_identity.py` (four of its seven
+  failed before the fix) and `tests/test_prospect_identity_edited_migration.py`.
+
+## Training-only waivers (2026-11-22)
+
+Found by the 2026-11-21 documentation pass after ADV2-9:
+`POST /training/waivers` let a `training.manage` holder give themselves a
+training-only waiver, the outcome the ADV2-9 fix stopped for leave. Owner
+decision: block it the same way.
+
+- `create_training_waiver` refuses `user_id == current_user.id` (400), and
+  `update_training_waiver` refuses the caller's own waiver (403). Deactivating
+  one's own waiver is unchanged.
+- Tests: `tests/test_training_waiver_self_grant.py` (six tests; the three
+  refusals failed before the fix).
+
 ## Awaiting an owner decision
 
 - **ADV2-4**: resolved 2026-11-16, owner's option 2 (refuse, and add a
-  manager's reassign-step action). See "ADV2-4 fix" below.
+  manager's reassign-step action). See "ADV2-4 fix" above.
 - **ADV2-8**: resolved 2026-11-20. See "ADV2-8 fix" above.
-- **ADV2-9**: `MemberLeaveService.create_leave` has no self check, and a leave
-  auto-creates a training waiver.
-- **ADV2-10**: Checking that the new email is not a current member's would cover
-  the email half. The name-and-birth-date half would remain, so the fix needs a
-  decision on whether self-detection should trust applicant-editable fields at
-  all (for example, only `transferred_user_id` once the applicant has edited
-  them).
-- **ADV2-11**: Accept the current behaviour, or record dues credits from Zeffy as
-  unmatched until a treasurer confirms them.
+- **ADV2-9**: resolved 2026-11-21. See "ADV2-9 fix" above.
+- **ADV2-10**: resolved 2026-11-21. See "ADV2-10 fix" above.
+- **ADV2-11**: resolved 2026-11-21. See "ADV2-11 fix" above.
 
 ## Checked and clean
 

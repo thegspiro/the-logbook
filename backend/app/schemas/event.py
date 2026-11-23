@@ -173,11 +173,22 @@ class EventDefaultsUpdate(BaseModel):
     )
 
 
+class OutreachRoleNeed(BaseModel):
+    """How many people one outreach role needs."""
+
+    role: str = Field(..., min_length=1, max_length=100)
+    count: int = Field(..., ge=1, le=50)
+
+
 class OutreachEventType(BaseModel):
     """An outreach event type option."""
 
     value: str = Field(..., min_length=1, max_length=100)
     label: str = Field(..., min_length=1, max_length=200)
+    # The roles an event of this type usually needs (owner decision,
+    # 2026-11-20). Prefills a signup sheet, which the organizer can change for
+    # each event; omitted, the sheet starts from the first configured role.
+    default_roles: Optional[List[OutreachRoleNeed]] = None
 
 
 class OutreachRole(BaseModel):
@@ -578,6 +589,26 @@ class UserRSVPSummary(UTCResponseBase):
     model_config = _response_config
 
 
+class EventVolunteerRole(BaseModel):
+    """One role on an outreach signup sheet and how full it is."""
+
+    role: str
+    label: str
+    total: int
+    filled: int
+    remaining: int
+
+
+class EventVolunteerSignup(BaseModel):
+    """An outreach event's signup sheet, as a member signing up sees it."""
+
+    shift_id: str
+    roles: List[EventVolunteerRole]
+    # The caller's own role when they hold a seat on the sheet.
+    signed_up: bool = False
+    my_role_label: Optional[str] = None
+
+
 class EventResponse(EventBase, UTCResponseBase):
     """Schema for event response"""
 
@@ -644,6 +675,20 @@ class EventResponse(EventBase, UTCResponseBase):
     # (outreach_event_clause) that has started and is not cancelled — the
     # checks the save applies. Detail endpoint only.
     can_record_guest_headcount: bool = False
+    # What happened at an outreach event, recorded when it closes.
+    outreach_outcome_note: Optional[str] = None
+    outreach_apparatus_ids: Optional[List[str]] = None
+    outreach_materials: Optional[List[Dict[str, Any]]] = None
+    outreach_photos: Optional[str] = None
+    # May this caller see and open the event's volunteer signup sheet:
+    # events.manage, on an outreach event that is not cancelled. Detail
+    # endpoint only (owner decision, 2026-11-20).
+    can_staff_event: bool = False
+    # The event's live volunteer signup sheet as any member sees it, so they
+    # can sign up from the event page. Detail endpoint only; None when there is
+    # no sheet. Carries no other volunteer's name: that list stays behind
+    # events.manage on GET /events/{id}/staffing.
+    volunteer_signup: Optional[EventVolunteerSignup] = None
     updated_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
@@ -935,6 +980,26 @@ class GuestHeadcountUpdate(BaseModel):
     """Set, or clear with null, the guests counted at an outreach event."""
 
     guest_headcount: Optional[int] = Field(None, ge=0, le=MAX_GUEST_HEADCOUNT)
+
+
+class OutreachMaterial(BaseModel):
+    """Something handed out at an outreach event, and how many."""
+
+    item: str = Field(..., min_length=1, max_length=100)
+    quantity: int = Field(..., ge=1, le=100000)
+
+
+class OutreachCloseoutUpdate(BaseModel):
+    """What happened at an outreach event (owner decision, 2026-11-20).
+
+    Replaces what was recorded: every field the close-out form owns is sent on
+    every save, and an empty or null value clears it.
+    """
+
+    outcome_note: Optional[str] = Field(None, max_length=5000)
+    apparatus_ids: List[str] = Field(default_factory=list, max_length=50)
+    materials: List[OutreachMaterial] = Field(default_factory=list, max_length=50)
+    photos: Optional[Literal["none", "consented", "not_consented"]] = None
 
 
 class RecordActualTimes(BaseModel):
@@ -1989,3 +2054,27 @@ class MyAttendancePetitionResponse(BaseModel):
     # Whether the pending request may still be taken back: false once it has
     # been withdrawn the maximum number of times, and for any decided request.
     can_withdraw: bool = False
+
+
+class OutreachCalendarItem(UTCResponseBase):
+    """One outreach event on the Outreach Overview's calendar.
+
+    The fill counts are null when the event has no live signup sheet, or no
+    apparatus crew plan, so "no sheet" is never read as "an empty sheet".
+    """
+
+    event_id: str
+    title: str
+    event_type: str
+    start_datetime: datetime
+    end_datetime: datetime
+    location: Optional[str] = None
+    is_draft: bool
+    request_id: Optional[str] = None
+    request_organization: Optional[str] = None
+    volunteers_filled: Optional[int] = None
+    volunteers_total: Optional[int] = None
+    crew_filled: Optional[int] = None
+    crew_total: Optional[int] = None
+    unit_numbers: List[str]
+    attendance_finalized: bool

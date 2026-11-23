@@ -2707,7 +2707,9 @@ by it.
 
 Members are judged the way the Training dashboard judges them. A member who has
 turned off training reminders in their own email settings is not sent these.
-Details are in
+A rolling requirement ("72 hours in any 12 months") has no deadline, so it gets
+no reminder, and the notice lists it once rather than every day while it stays
+short _(2026-11-21; before, both emails repeated daily)_. Details are in
 [Training → Compliance Emails to Members](./02-training.md#compliance-emails-to-members).
 
 ![Compliance requirements configuration: the Thresholds tab, with its status preview and reminder schedule](./images/08-69-compliance-requirements-config.png)
@@ -2726,23 +2728,36 @@ Profiles let different groups be held to different standards.
 2. Fill in:
    - **Profile Name** — for example "Line Officers" or "Probationary Members";
    - **Priority** — when a member matches more than one profile, the highest
-     priority applies;
+     priority applies; at equal priority the profile created first applies.
+     The form warns when the number you type ties with another active
+     profile, and a tied profile's card says so, but the save is allowed;
    - **Description**;
    - **Applies to Membership Types**;
    - **Applies to Members Holding a Position** _(2026-10-29)_ — see
      [Scoping a Compliance Profile by Position](./02-training.md#scoping-a-compliance-profile-by-position-2026-10-29);
    - optional **threshold overrides** for this group;
    - **Required Training Requirements** — what must be met;
-   - **Optional/Tracked Requirements** — tracked, but not needed for
-     compliance;
+   - **Optional Requirements** — shown to these members, and to officers, on
+     the member's training page, marked Optional. They never count toward
+     standing or percentage, and no reminders are sent. Ticking a requirement
+     Required takes it out of this list;
    - **Required Admin Hours** — admin-hours categories and the hours required.
 3. Save.
 
 How a profile grades the members it matches:
 
 - **The required requirements you tick are the whole list.** A profile with
-  none ticked grades its members against nothing, so they count as compliant. It
-  does not fall back to every requirement.
+  none ticked grades its members against nothing, so they read **Not
+  applicable** and are left out of the department's percentage. It does not
+  fall back to every requirement.
+- **A profile with no required list at all grades everything but its optional
+  requirements.** Only a profile created through the API can be in this state;
+  its card reads **Required: all except optional**. Since 2026-11-21, saving
+  such a profile from this screen keeps it that way. Before, an unrelated
+  save switched it to grading nothing.
+- **Optional requirements never grade.** They appear on the member's training
+  page under **Optional** and nowhere in the standing, the percentage, the
+  reports or the compliance emails. A requirement in both lists is required.
 - **Threshold overrides work on their own.** A profile whose only change is a
   stricter or gentler threshold still applies it.
 

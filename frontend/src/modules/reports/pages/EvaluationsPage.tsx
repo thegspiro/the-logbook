@@ -29,6 +29,7 @@ import {
   EvaluationTemplateKind,
   MEMBER_CLASS_OPTIONS,
   MEMBER_STATUS_OPTIONS,
+  type BuilderOptions,
   type EvaluationPeriod,
   type EvaluationStarter,
   type EvaluationTemplateSummary,
@@ -43,6 +44,8 @@ interface TemplateFormState {
   member_status: string;
   /** A starter's key, or '' for a blank form. */
   starter: string;
+  /** Rank codes chosen for a starter with officer sections. */
+  officer_ranks: string[];
 }
 
 const EMPTY_TEMPLATE: TemplateFormState = {
@@ -52,6 +55,7 @@ const EMPTY_TEMPLATE: TemplateFormState = {
   member_class: '',
   member_status: '',
   starter: '',
+  officer_ranks: [],
 };
 
 /** The dialog's fields as a starter fills them; each stays editable. */
@@ -63,6 +67,7 @@ function fromStarter(starter: EvaluationStarter): TemplateFormState {
     member_class: starter.member_class ?? '',
     member_status: starter.member_status ?? '',
     starter: starter.key,
+    officer_ranks: [],
   };
 }
 
@@ -106,6 +111,12 @@ const EvaluationsPage: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [templateForm, setTemplateForm] = useState<TemplateFormState | null>(null);
   const [starters, setStarters] = useState<EvaluationStarter[]>([]);
+  // The department's ranks, loaded when a starter with officer sections is
+  // chosen; null until then.
+  const [ranks, setRanks] = useState<BuilderOptions['ranks'] | null>(null);
+  const [ranksError, setRanksError] = useState<string | null>(null);
+  const chosenStarter = starters.find((starter) => starter.key === templateForm?.starter);
+  const needsRanks = chosenStarter?.needs_officer_ranks === true;
   const [periodForm, setPeriodForm] = useState<PeriodFormState | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -148,6 +159,31 @@ const EvaluationsPage: React.FC = () => {
     };
   }, [canConfigure]);
 
+  useEffect(() => {
+    if (!needsRanks || ranks !== null) return;
+    let cancelled = false;
+    evaluationTemplatesService
+      .builderOptions()
+      .then((options) => {
+        if (!cancelled) setRanks(options.ranks);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setRanksError(getErrorMessage(err, 'Could not load the department’s ranks.'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsRanks, ranks]);
+
+  const toggleRank = (code: string) => {
+    if (!templateForm) return;
+    const has = templateForm.officer_ranks.includes(code);
+    setTemplateForm({
+      ...templateForm,
+      officer_ranks: has ? templateForm.officer_ranks.filter((r) => r !== code) : [...templateForm.officer_ranks, code],
+    });
+  };
+
   const submitTemplate = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!templateForm) return;
@@ -160,6 +196,7 @@ const EvaluationsPage: React.FC = () => {
         member_class: templateForm.member_class || undefined,
         member_status: templateForm.member_status || undefined,
         starter: templateForm.starter || undefined,
+        officer_ranks: needsRanks ? templateForm.officer_ranks : undefined,
       });
       toast.success('Template created');
       setTemplateForm(null);
@@ -504,7 +541,11 @@ const EvaluationsPage: React.FC = () => {
             <button type="button" className="btn-secondary" onClick={() => setTemplateForm(null)}>
               Cancel
             </button>
-            <button type="submit" className="btn-primary" disabled={saving}>
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={saving || (needsRanks && (templateForm?.officer_ranks.length ?? 0) === 0)}
+            >
               Create and open builder
             </button>
           </div>
@@ -539,6 +580,41 @@ const EvaluationsPage: React.FC = () => {
                     : 'The builder opens with an empty form.'}
                 </p>
               </div>
+            )}
+            {needsRanks && (
+              <fieldset>
+                <legend className="form-label">Officer ranks</legend>
+                <p className="text-theme-text-muted mb-2 text-xs">
+                  Members holding these ranks get the Leadership and supervision section. Everyone else is graded on the
+                  other sections alone.
+                </p>
+                {ranksError ? (
+                  <p className="text-theme-alert-danger-text text-sm">{ranksError}</p>
+                ) : ranks === null ? (
+                  <p className="text-theme-text-secondary text-sm">Loading ranks…</p>
+                ) : ranks.length === 0 ? (
+                  <p className="text-theme-text-secondary text-sm">
+                    Your department has no ranks set up yet, and this form needs at least one.
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    {ranks.map((rank) => (
+                      <label key={rank.rank_code} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          className="form-checkbox"
+                          checked={templateForm.officer_ranks.includes(rank.rank_code)}
+                          onChange={() => toggleRank(rank.rank_code)}
+                        />
+                        <span className="text-theme-text-primary">
+                          {rank.display_name}
+                          {rank.is_active ? '' : ' (inactive)'}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </fieldset>
             )}
             <div>
               <label htmlFor="template-name" className="form-label">

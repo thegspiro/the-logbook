@@ -182,7 +182,7 @@ const MinutesList: React.FC = () => {
               <li key={item.id} className="card p-4">
                 <Link
                   to={`/public/minutes/${item.id}`}
-                  className="text-theme-text-primary text-base font-semibold hover:underline"
+                  className="text-theme-text-primary touch:min-h-11 inline-flex items-center text-base font-semibold hover:underline"
                 >
                   {item.title}
                 </Link>

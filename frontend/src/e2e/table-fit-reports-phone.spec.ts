@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { json, signIn } from './helpers';
 import { TABLE_FIT_VIEWPORTS, expectTableFitsItsCard } from './tableFit';
@@ -123,6 +123,24 @@ function reportTable(page: Page, header: string) {
 
 const VIEWPORTS = [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS];
 
+/**
+ * A report too wide for the dialog is a table from 768px up, as every report
+ * was before the reflow: sorting lives in its column headers, which card mode
+ * hides, so it scrolls sideways rather than lose them. The scroll area takes
+ * focus because nothing else in the table does, or a keyboard could not reach
+ * the columns past its edge.
+ */
+async function expectSortableTable(page: Page, table: ReturnType<typeof reportTable>, firstHeader: string) {
+  await expect(
+    table.getByRole('columnheader', { name: firstHeader, exact: true }),
+    'the headers are hidden'
+  ).toBeVisible();
+  await expect(
+    page.getByRole('dialog').getByRole('region', { name: 'Report results' }),
+    'the sideways-scrolling table cannot be reached from the keyboard'
+  ).toHaveAttribute('tabindex', '0');
+}
+
 // The shared report table, four columns: the training summary's member tab.
 test.describe('Training summary report table fits its card', () => {
   for (const viewport of VIEWPORTS) {
@@ -148,25 +166,38 @@ test.describe('Event attendance report table fits its card', () => {
 });
 
 // Nine columns with a long certification, agency and rank: the widest report.
-test.describe('Certification expiration report table fits its card', () => {
+test.describe('Certification expiration report: cards on a phone, a sortable table from 768px', () => {
   for (const viewport of VIEWPORTS) {
     test(`/reports certification expiration — ${viewport.name}`, async ({ page }) => {
       await openReport(page, viewport, 'Certification Expiration', certificationExpiration);
       const table = reportTable(page, 'Issuing Agency');
       await table.waitFor();
-      await expectTableFitsItsCard(table, 'Certification expiration table');
+      if (viewport.width < 768) {
+        await expectTableFitsItsCard(table, 'Certification expiration table');
+        return;
+      }
+      await expectSortableTable(page, table, 'Member');
+      const firstMember = table.locator('tbody tr').first().locator('td').first();
+      await table.getByRole('columnheader', { name: 'Member', exact: true }).click();
+      await expect(firstMember, 'sorting by member did not reorder the rows').toHaveText(/^Alexandria/);
+      await table.getByRole('columnheader', { name: 'Member', exact: true }).click();
+      await expect(firstMember, 'sorting by member did not reverse').toHaveText(/^Maximiliana/);
     });
   }
 });
 
 // Eight columns with a long email address and a list of roles.
-test.describe('Member roster report table fits its card', () => {
+test.describe('Member roster report: cards on a phone, a sortable table from 768px', () => {
   for (const viewport of VIEWPORTS) {
     test(`/reports member roster — ${viewport.name}`, async ({ page }) => {
       await openReport(page, viewport, 'Member Roster', memberRoster);
       const table = reportTable(page, 'Member #');
       await table.waitFor();
-      await expectTableFitsItsCard(table, 'Member roster table');
+      if (viewport.width < 768) {
+        await expectTableFitsItsCard(table, 'Member roster table');
+        return;
+      }
+      await expectSortableTable(page, table, 'Name');
     });
   }
 });

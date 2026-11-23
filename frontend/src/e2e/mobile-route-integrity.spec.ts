@@ -36,9 +36,11 @@ test('every registered route has mobile coverage or a documented exemption', () 
   // The route list moved to its own module so the presentation ratchet, the
   // accessibility pass and this check all read the same one.
   const presentation = readFileSync(resolve(src, 'e2e/mobile-routes.ts'), 'utf8');
-  // The query string is the route's own state, not part of its path.
+  // The query string and the fragment are the route's own state, not part of
+  // its path: the reset-password link carries its token in the fragment so it
+  // never reaches a server log.
   const measured = [...presentation.matchAll(/\{\s*path:\s*'([^']+)'/g)].map(
-    (match) => (match[1] ?? '').split('?')[0] ?? ''
+    (match) => (match[1] ?? '').split(/[?#]/)[0] ?? ''
   );
   // A registered path may be parameterized (/events/:id/monitoring) while the
   // pass visits a concrete instance of it (/events/1/monitoring).

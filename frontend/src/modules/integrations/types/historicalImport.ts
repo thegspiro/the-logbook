@@ -413,9 +413,37 @@ export interface StaffingMemberOption {
   status: string;
 }
 
+export interface StaffingSignupWithoutHours {
+  date?: string | null;
+  activity: string;
+  title: string;
+  member: string;
+}
+
+export interface StaffingHoursWithoutSignup {
+  date?: string | null;
+  start: string;
+  end: string;
+  member: string;
+}
+
+/**
+ * How the roster's seats pair with the hours already imported: the same member
+ * with overlapping times, since the two files share no id.
+ */
+export interface StaffingHoursMatch {
+  matched: number;
+  signups_without_hours: number;
+  hours_without_signup: number;
+  /** The first of each; the counts above are whole. */
+  signups_without_hours_examples: StaffingSignupWithoutHours[];
+  hours_without_signup_examples: StaffingHoursWithoutSignup[];
+}
+
 export interface StaffingCommitPreview {
   /** shifts, shift_seats, events, upcoming_events, check_ins, outreach_seats, assigned_unfilled */
   counts: Record<string, number>;
+  hours_match: StaffingHoursMatch;
   /** Seats left out, by reason. */
   skipped: Record<string, number>;
   unfilled_seats: number;
@@ -423,7 +451,8 @@ export interface StaffingCommitPreview {
   members: AdminMember[];
   member_options: StaffingMemberOption[];
   can_commit: boolean;
-  result?: Record<string, number | string> | null;
+  /** Counts by outcome, plus when and by whom; `reseated` is the record undo reads. */
+  result?: Record<string, unknown> | null;
 }
 
 export interface StaffingUnfilledSeat {
@@ -475,6 +504,8 @@ export interface UndoStepPreview {
   already_gone: number;
   /** Shifts and seats the step used but did not make: left as they are. */
   reused?: number;
+  /** Staffing only: re-seated members the undo puts back in their earlier seat. */
+  positions_restored?: number;
 }
 
 export interface UndoPreview {

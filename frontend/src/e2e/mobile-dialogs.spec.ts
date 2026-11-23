@@ -92,9 +92,10 @@ test.describe('mobile dialogs', () => {
       // ~12.7 min, and 2x that would have been 26. This PR's own run measured
       // 15.1 min with every route in (#4269, run 43444576216), so 2x is 31.
       //
-      // Split into PARTS tests on 2026-11-19, when the whole pass was a 30-minute
-      // CI job: a third is about 10 minutes, and 2x that is 20. An estimate from
-      // the whole, to be replaced by measured per-part times.
+      // Split into PARTS tests on 2026-11-19, budgeted at 20 minutes from an
+      // estimate. Measured since: 6.2-9.3 minutes a part on CI (2026-11-21
+      // and 22, three runs of parts 1 and 2 and seven of part 3, the
+      // slowest). 2x the slowest is 18.6, so 20 stands.
       test.setTimeout(1_200_000);
 
       // A dialog still fading in when axe runs is measured through a partial

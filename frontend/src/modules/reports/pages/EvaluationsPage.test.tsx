@@ -31,11 +31,13 @@ const listStarters = vi.fn();
 const draftOptions = vi.fn();
 const bulkPreview = vi.fn();
 const attention = vi.fn();
+const builderOptions = vi.fn();
 vi.mock('../services/evaluationsApi', () => ({
   evaluationTemplatesService: {
     list: (...a: unknown[]) => listTemplates(...a) as unknown,
     create: (...a: unknown[]) => createTemplate(...a) as unknown,
     starters: (...a: unknown[]) => listStarters(...a) as unknown,
+    builderOptions: (...a: unknown[]) => builderOptions(...a) as unknown,
   },
   evaluationsService: {
     draftOptions: (...a: unknown[]) => draftOptions(...a) as unknown,
@@ -98,9 +100,17 @@ describe('EvaluationsPage', () => {
       draftOptions,
       bulkPreview,
       attention,
+      builderOptions,
     ]) {
       m.mockReset();
     }
+    builderOptions.mockResolvedValue({
+      positions: [],
+      ranks: [
+        { rank_code: 'captain', display_name: 'Captain', is_active: true },
+        { rank_code: 'lieutenant', display_name: 'Lieutenant', is_active: true },
+      ],
+    });
     listTemplates.mockResolvedValue([template()]);
     listPeriods.mockResolvedValue([period()]);
     listStarters.mockResolvedValue([]);
@@ -341,6 +351,53 @@ describe('EvaluationsPage', () => {
 
       await waitFor(() => expect(createTemplate).toHaveBeenCalled());
       expect(createTemplate.mock.calls[0]?.[0]).toMatchObject({ kind: 'interim', starter: undefined });
+    });
+
+    it('asks for the officer ranks when the starter has officer sections', async () => {
+      listStarters.mockResolvedValue([
+        annualStarter,
+        {
+          ...annualStarter,
+          key: 'annual_with_officers',
+          name: 'Annual Evaluation with Officer Sections',
+          needs_officer_ranks: true,
+        },
+      ]);
+      const user = userEvent.setup();
+      renderWithRouter(<EvaluationsPage />);
+
+      await user.click(
+        await screen.findByRole('button', { name: 'Start from Annual Evaluation with Officer Sections' })
+      );
+      const dialog = await screen.findByRole('dialog');
+      const create = within(dialog).getByRole('button', { name: /create and open builder/i });
+      const ranks = await within(dialog).findByRole('group', { name: 'Officer ranks' });
+      // Nothing to create until a rank is chosen.
+      expect(create).toBeDisabled();
+      await user.click(within(ranks).getByRole('checkbox', { name: 'Lieutenant' }));
+      expect(create).toBeEnabled();
+      await user.click(create);
+
+      await waitFor(() => expect(createTemplate).toHaveBeenCalled());
+      expect(createTemplate.mock.calls[0]?.[0]).toMatchObject({
+        starter: 'annual_with_officers',
+        officer_ranks: ['lieutenant'],
+      });
+    });
+
+    it('asks for no ranks, and sends none, for a starter without officer sections', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EvaluationsPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Start from Annual Member Evaluation' }));
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).queryByRole('group', { name: 'Officer ranks' })).not.toBeInTheDocument();
+      await user.click(within(dialog).getByRole('button', { name: /create and open builder/i }));
+
+      await waitFor(() => expect(createTemplate).toHaveBeenCalled());
+      const payload = createTemplate.mock.calls[0]?.[0] as { officer_ranks?: string[] } | undefined;
+      expect(payload?.officer_ranks).toBeUndefined();
+      expect(builderOptions).not.toHaveBeenCalled();
     });
 
     it('still offers a blank form when the starters cannot be loaded', async () => {

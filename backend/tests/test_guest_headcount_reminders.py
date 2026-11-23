@@ -1,6 +1,6 @@
 """The morning-after reminder to record an outreach event's guest headcount.
 
-An outreach event that ended with no headcount leaves the Community Engagement
+An outreach event that ended with no headcount leaves the Outreach Impact
 report on the requester's estimate, or on nothing. These tests pin who is
 reminded, that it happens once, and every event that must be left alone,
 against real rows.
@@ -32,6 +32,29 @@ pytestmark = pytest.mark.integration
 
 TZ = "America/New_York"
 OFF = {"email_kinds": {"event_duties": False}}
+
+
+async def _member_by_rank(db_session, org, rank):
+    """A member who holds *rank* and no position of their own — their only
+    source of ``events.manage`` is the rank's default permissions
+    (``OPERATIONAL_RANKS``), not a position row."""
+    user_id = str(uuid4())
+    await db_session.execute(
+        text(
+            "INSERT INTO users (id, organization_id, username, first_name, "
+            "last_name, email, password_hash, status, `rank`) "
+            "VALUES (:id, :org, :un, 'Pat', 'Chief', :em, 'hashed', 'active', :rank)"
+        ),
+        {
+            "id": user_id,
+            "org": str(org.id),
+            "un": f"m-{user_id[:8]}",
+            "em": f"m-{user_id[:8]}@example.org",
+            "rank": rank,
+        },
+    )
+    await db_session.flush()
+    return user_id
 
 
 async def _member(db_session, org, *permissions, preferences=None):
@@ -151,6 +174,22 @@ class TestWhoIsReminded:
         assert f"/events/{event.id}" in call["html_body"]
         assert await _bells(db_session, event) == {organizer}
         assert event.custom_fields[REMINDER_MARKER] is True
+
+    async def test_an_organizer_whose_events_manage_comes_only_from_rank_is_reminded(
+        self, db_session, org, send_email
+    ):
+        """Eligibility must resolve the same way ``require_permission`` does
+        (CLAUDE.md #29). A fire chief holds ``events.manage`` through the
+        rank's own defaults, with no position of their own granting it —
+        exactly the gap ``_collect_user_permissions`` checks a user's rank for
+        in addition to their positions."""
+        organizer = await _member_by_rank(db_session, org, "fire_chief")
+        event = await _event(db_session, org, organizer_id=organizer)
+
+        counts = await _run(db_session, org)
+
+        assert (counts.events, counts.emails, counts.notifications) == (1, 1, 1)
+        assert await _bells(db_session, event) == {organizer}
 
     async def test_organizer_and_alternate_are_both_reminded(
         self, db_session, org, send_email

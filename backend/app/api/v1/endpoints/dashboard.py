@@ -655,6 +655,13 @@ class CommunityTypeBucket(BaseModel):
     people_reached: int
 
 
+class CommunityMaterial(BaseModel):
+    """Something handed out at outreach events, and how many."""
+
+    item: str
+    quantity: int
+
+
 class CommunityEventReach(BaseModel):
     event_id: str
     title: str
@@ -670,10 +677,14 @@ class CommunityEventReach(BaseModel):
     reach_is_estimate: bool
     crew: int
     member_hours: float
+    # What happened, recorded when the event closed (owner decision, 2026-11-20).
+    outcome_note: str | None = None
+    materials: list[CommunityMaterial] = []
+    photos: str | None = None
 
 
 class CommunityEngagement(BaseModel):
-    """Community engagement metrics for Public Outreach.
+    """Outreach Impact metrics for the Community Outreach Manager.
 
     The first four fields are all-time and unchanged from before the report
     was added; everything after them follows ``period``.
@@ -693,6 +704,8 @@ class CommunityEngagement(BaseModel):
     granularity: Literal["month", "year"]
     by_period: list[CommunityReachBucket]
     by_type: list[CommunityTypeBucket]
+    # Everything handed out across the period, one line per item, most first.
+    materials: list[CommunityMaterial] = []
     recent_events: list[CommunityEventReach]
 
 
@@ -1958,7 +1971,7 @@ async def get_community_engagement(
     current_user: User = Depends(require_permission("events.manage")),
 ) -> CommunityEngagement:
     """
-    Community engagement metrics for Public Outreach Coordinators.
+    Outreach Impact metrics for the Community Outreach Manager.
     Aggregates public event data and attendee counts.
     """
     org_id = current_user.organization_id

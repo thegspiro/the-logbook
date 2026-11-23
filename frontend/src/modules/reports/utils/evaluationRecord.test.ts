@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { figureDetail, formatFigure, gradeCounts, needsJustification, partItems, withAnswer } from './evaluationRecord';
+import {
+  compareSelfEvaluation,
+  figureDetail,
+  formatFigure,
+  gradeCounts,
+  needsJustification,
+  partItems,
+  withAnswer,
+} from './evaluationRecord';
 import type { TemplateDefinition, TemplateItem } from '../types/evaluations';
 
 function item(key: string, include = true): TemplateItem {
@@ -135,6 +143,53 @@ describe('gradeCounts', () => {
       { label: 'Needs improvement', count: 1 },
       { label: 'Outstanding', count: 2 },
       { label: '72% (weighted)', count: 1 },
+    ]);
+  });
+});
+
+describe('compareSelfEvaluation', () => {
+  const levels = [1, 2, 3, 4, 5].map((value) => ({ value, label: `L${value}`, anchor: null }));
+  const definition: TemplateDefinition = {
+    overall_mode: 'none',
+    officer_ranks: [],
+    sections: [
+      {
+        key: 's',
+        title: 'S',
+        description: null,
+        officer_only: false,
+        weight: 0,
+        items: [
+          { ...item('scale'), tool: 'labeled_scale', levels },
+          { ...item('meets'), tool: 'meets' },
+          { ...item('notes') },
+          { ...item('evaluator_only', false), tool: 'labeled_scale', levels },
+        ],
+      },
+    ],
+  };
+
+  it('flags a gap of two levels, and a different answer on meets / does not meet', () => {
+    const rows = compareSelfEvaluation(
+      definition,
+      { answers: { scale: { rating: 5 }, meets: { rating: 1 } } },
+      { answers: { scale: { rating: 3 }, meets: { rating: 0 } } }
+    );
+    expect(rows).toEqual([
+      { key: 'scale', label: 'scale', self: 'L5', evaluator: 'L3', differs: true },
+      { key: 'meets', label: 'meets', self: 'Meets', evaluator: 'Does not meet', differs: true },
+    ]);
+  });
+
+  it('does not flag one level apart, an unrated item or one marked not applicable', () => {
+    const rows = compareSelfEvaluation(
+      definition,
+      { answers: { scale: { rating: 4 }, meets: { na: true } } },
+      { answers: { scale: { rating: 3 } } }
+    );
+    expect(rows.map((row) => [row.self, row.evaluator, row.differs])).toEqual([
+      ['L4', 'L3', false],
+      ['Not applicable', 'Not rated', false],
     ]);
   });
 });

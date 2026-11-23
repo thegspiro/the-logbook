@@ -38,6 +38,7 @@ from app.services.separation_of_duties import assert_different_person
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.training_attachments import with_entry_ids
 
 # In-app prompts for a submission awaiting review share this category so the
 # inbox stacks them, and carry ``submission_id`` in their metadata so a
@@ -80,7 +81,11 @@ class TrainingSubmissionService:
     # ==================== Self-Report Config ====================
 
     async def get_config(self, organization_id: str) -> SelfReportConfig:
-        """Get or create self-report config for an organization."""
+        """Get or create self-report config for an organization.
+
+        Creating the default row commits. A path holding row locks must call
+        this before it takes them, or the commit releases them.
+        """
         result = await self.db.execute(
             select(SelfReportConfig).where(
                 SelfReportConfig.organization_id == organization_id
@@ -259,7 +264,13 @@ class TrainingSubmissionService:
         weeks, and the department's approval settings may have changed in the
         meantime.
         """
-        submission = await self.get_submission(submission_id, organization_id)
+        # Before the locks: get_config commits when it creates the default
+        # row, and a commit would release them.
+        config = await self.get_config(organization_id)
+        await self._lock_submitter(submission_id, organization_id)
+        submission = await self.get_submission(
+            submission_id, organization_id, for_update=True
+        )
         if not submission:
             raise ValueError("Submission not found")
 
@@ -269,7 +280,6 @@ class TrainingSubmissionService:
         if submission.status != SubmissionStatus.DRAFT:
             raise ValueError("Only a draft can be submitted for review")
 
-        config = await self.get_config(organization_id)
         # A draft can sit for weeks. Re-check the department's restrictions as
         # well as its routing: an entry the same member could no longer create
         # must not reach the queue just because it was started earlier.
@@ -421,22 +431,64 @@ class TrainingSubmissionService:
         )
 
     async def get_submission(
-        self, submission_id: str, organization_id: str
+        self,
+        submission_id: str,
+        organization_id: str,
+        *,
+        for_update: bool = False,
     ) -> Optional[TrainingSubmission]:
         """Get a single submission by ID, scoped to the caller's organization.
 
         The org filter is the tenant-isolation boundary for every mutation
         path (update/delete/review) that funnels through this method — do
         not remove it or add an unscoped variant.
+
+        ``for_update`` makes it a locking read, for any path that decides on
+        the submission or rewrites its attachments: an approval racing a
+        removal otherwise copies a list whose file has already been deleted
+        (pitfall #27). ``populate_existing`` is what makes the re-read worth
+        having: the caller has usually loaded this instance already, and
+        without it the identity map hands back the stale copy. It also
+        discards unflushed changes on the instance, so lock before mutating.
         """
-        result = await self.db.execute(
-            select(TrainingSubmission).where(
-                TrainingSubmission.id == submission_id,
-                TrainingSubmission.organization_id == organization_id,
-            )
+        query = select(TrainingSubmission).where(
+            TrainingSubmission.id == submission_id,
+            TrainingSubmission.organization_id == organization_id,
         )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         training_submission: Optional[TrainingSubmission] = result.scalar_one_or_none()
         return training_submission
+
+    async def _lock_submitter(self, submission_id: str, organization_id: str) -> None:
+        """Take a shared lock on the submitting member's ``users`` row.
+
+        For a path that will insert a training record. Lock order is the
+        member, then the submission, then records: anonymisation and the
+        permanent delete write the member row before they lock the member's
+        submissions, and the record insert's foreign key check needs a shared
+        lock on that row anyway. Taking it first, before the submission, is
+        what keeps an atomic approval from deadlocking against them.
+        """
+        submitted_by = (
+            await self.db.execute(
+                select(TrainingSubmission.submitted_by).where(
+                    TrainingSubmission.id == submission_id,
+                    TrainingSubmission.organization_id == organization_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if submitted_by is None:
+            return
+        await self.db.execute(
+            select(User.id)
+            .where(
+                User.id == submitted_by,
+                User.organization_id == organization_id,
+            )
+            .with_for_update(read=True)
+        )
 
     async def get_submissions(
         self,
@@ -508,7 +560,9 @@ class TrainingSubmissionService:
         **kwargs,
     ) -> TrainingSubmission:
         """Update a submission (only by the submitter, before approval)."""
-        submission = await self.get_submission(submission_id, organization_id)
+        submission = await self.get_submission(
+            submission_id, organization_id, for_update=True
+        )
         if not submission:
             raise ValueError("Submission not found")
 
@@ -561,7 +615,9 @@ class TrainingSubmissionService:
         self, submission_id: str, user_id: str, organization_id: str
     ) -> bool:
         """Delete a submission (only if draft or pending)."""
-        submission = await self.get_submission(submission_id, organization_id)
+        submission = await self.get_submission(
+            submission_id, organization_id, for_update=True
+        )
         if not submission:
             raise ValueError("Submission not found")
 
@@ -827,8 +883,16 @@ class TrainingSubmissionService:
         override_credit_hours: Optional[float] = None,
         override_training_type: Optional[str] = None,
     ) -> TrainingSubmission:
-        """Officer reviews a submission: approve, reject, or request revision."""
-        submission = await self.get_submission(submission_id, organization_id)
+        """Officer reviews a submission: approve, reject, or request revision.
+
+        Holds the member's row and the submission until the decision commits,
+        so a member's removal, upload or delete waits for it and then sees
+        the decision (pitfall #27).
+        """
+        await self._lock_submitter(submission_id, organization_id)
+        submission = await self.get_submission(
+            submission_id, organization_id, for_update=True
+        )
         if not submission:
             raise ValueError("Submission not found")
 
@@ -894,7 +958,12 @@ class TrainingSubmissionService:
             submission.reviewed_at = datetime.now(timezone.utc)
             submission.reviewer_notes = reviewer_notes
 
-            await self.db.commit()
+            # No commit here: _create_record_from_submission commits the
+            # decision and the record together, as submit_draft does. Two
+            # commits left an approved submission behind a failed record
+            # insert, and released the lock between them, so anonymisation
+            # or a reversal could run before the record copied a list whose
+            # files they had just removed.
 
             # Check for duplicate before creating record
             duplicate_info = await self._check_duplicate(submission)
@@ -1001,7 +1070,9 @@ class TrainingSubmissionService:
         """
         from app.services.training_program_service import TrainingProgramService
 
-        submission = await self.get_submission(submission_id, organization_id)
+        submission = await self.get_submission(
+            submission_id, organization_id, for_update=True
+        )
         if not submission:
             raise ValueError("Submission not found")
         if submission.status != SubmissionStatus.APPROVED:
@@ -1421,7 +1492,10 @@ class TrainingSubmissionService:
             instructor=submission.instructor,
             location=submission.location,
             notes=submission.description,
-            attachments=submission.attachments,
+            # A copy, keeping each entry's id: the record's entry and the
+            # submission's are one upload, and the two rows must not share a
+            # Python list that a later edit to either would change in both.
+            attachments=with_entry_ids(submission.attachments),
             status=TrainingStatus.COMPLETED,
             expiration_date=expiration_date,
             rank_at_completion=rank_at_completion,

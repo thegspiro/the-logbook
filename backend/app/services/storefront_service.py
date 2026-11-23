@@ -33,7 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.security import email_fingerprints
-from app.core.utils import generate_uuid
+from app.core.utils import generate_uuid, list_within_detail_limit
 from app.models.integration import Integration
 from app.models.inventory import InventoryItem
 from app.models.notification import NotificationChannel
@@ -92,6 +92,27 @@ _CENTS = Decimal("0.01")
 # that a typical window is one query, small enough not to hold a whole
 # department's order history in memory at once.
 _EXPORT_PAGE_SIZE = 200
+
+
+def _past_closing_time(window: StoreOrderWindow, now: datetime) -> bool:
+    """Whether a window set to close itself has reached its closing time.
+
+    The lifecycle job closes such a window, but only every 15 minutes, so the
+    time is checked wherever ordering is offered as well (W67b-15). A window
+    with ``auto_close`` off is closed by an officer, and until then its
+    closing time is only what members were told.
+    """
+    closes_at = _as_aware(window.closes_at)
+    return bool(window.auto_close and closes_at and closes_at <= now)
+
+
+# The orders a vendor order moves to ORDERED. Anything later is already past
+# that step, and a cancelled order was never on the sheet.
+_BEFORE_VENDOR_ORDER_STATUSES = (
+    StoreOrderStatus.SUBMITTED,
+    StoreOrderStatus.AWAITING_PAYMENT,
+    StoreOrderStatus.PAID,
+)
 _DASHBOARD_ACTIVITY_LIMIT = 100
 
 # Order numbers are allocated as ORD-YYYY-NNNN. Matching a payment reference
@@ -932,6 +953,17 @@ class StorefrontService:
         offerings = data.pop("offerings", None)
         apply_updates(window, data)
 
+        # The opening time is what schedules a window, as create_window
+        # decides it. Set on a draft later, it left the window a draft the
+        # lifecycle job never looks at, so it never opened (W67b-16). Only
+        # the two not-yet-open states move; an open or closed window keeps
+        # its status whatever is edited.
+        if "opens_at" in data:
+            if window.status == StoreWindowStatus.DRAFT and window.opens_at:
+                window.status = StoreWindowStatus.SCHEDULED
+            elif window.status == StoreWindowStatus.SCHEDULED and not window.opens_at:
+                window.status = StoreWindowStatus.DRAFT
+
         opens_at = _as_aware(window.opens_at)
         closes_at = _as_aware(window.closes_at)
         if opens_at and closes_at and closes_at <= opens_at:
@@ -1019,6 +1051,14 @@ class StorefrontService:
             return window
         if window.status in (StoreWindowStatus.FULFILLED, StoreWindowStatus.CANCELLED):
             raise ValueError("A fulfilled or cancelled window cannot be reopened")
+        # Opened past its closing time, the lifecycle job would close it again
+        # within 15 minutes: members got "ordering is open" and then "ordering
+        # has closed" (W67b-16).
+        if _past_closing_time(window, _utcnow()):
+            raise ValueError(
+                "This window's closing time has passed. Move the closing time "
+                "later, or turn off closing automatically, before opening it."
+            )
 
         window.status = StoreWindowStatus.OPEN
         window.opened_at = _utcnow()
@@ -1076,44 +1116,79 @@ class StorefrontService:
             window.vendor_reference = vendor_reference.strip() or None
         if expected_delivery_date is not None:
             window.expected_delivery_date = expected_delivery_date
+        # Recording again corrects the vendor details or orders the late
+        # payers. Whether this is the first recording decides who is emailed
+        # below, so a re-run does not tell everyone a second time (W67b-13).
+        first_recording = window.vendor_ordered_at is None
         window.vendor_ordered_at = _utcnow()
         window.vendor_ordered_by = actor_id
         await self.db.commit()
         await self.db.refresh(window)
 
-        advanced = 0
         skipped: List[Dict[str, str]] = []
+        advanced_ids: List[str] = []
         if advance_orders:
-            orders, _ = await self.list_orders(
-                organization_id, window_id=window.id, page_size=_EXPORT_PAGE_SIZE
+            # Every order in the window, not one page of them, and only those
+            # not yet with the vendor: an order already Ready or Fulfilled is
+            # past this step, and moving it back would tell its member the
+            # goods they were told to collect are on order again (W67b-13).
+            pending = await self.db.execute(
+                select(StoreOrder.id)
+                .where(
+                    StoreOrder.window_id == str(window.id),
+                    StoreOrder.organization_id == str(organization_id),
+                    StoreOrder.status.in_(_BEFORE_VENDOR_ORDER_STATUSES),
+                )
+                .order_by(StoreOrder.created_at)
             )
+            candidate_ids = [str(order_id) for order_id in pending.scalars().all()]
             result = await self.bulk_update_status(
                 organization_id,
-                [
-                    o.id
-                    for o in orders
-                    if o.status
-                    not in (StoreOrderStatus.CANCELLED, StoreOrderStatus.FULFILLED)
-                ],
+                candidate_ids,
                 StoreOrderStatus.ORDERED,
                 actor_id,
                 notify_members=False,
             )
-            advanced = result["updated"]
             skipped = result["errors"]
+            refused = {error["order_id"] for error in skipped}
+            advanced_ids = [i for i in candidate_ids if i not in refused]
 
         notified = 0
         settings = await self.get_settings(organization_id)
         if notify_members and settings.send_vendor_order_updates:
-            recipients = await self._window_customer_emails(window.id, organization_id)
+            # The orders this call advanced are what decides a re-run: their
+            # members have not been told, everyone else in the window has. On
+            # the first recording, members whose orders were already marked
+            # Ordered by hand are told as well. Under pay-before-vendor-order
+            # an unpaid order was held out of the purchase order, so its member
+            # is not told it was placed (W67b-11).
+            recipients = set(await self._customer_emails(advanced_ids, organization_id))
+            if first_recording:
+                recipients.update(
+                    await self._window_customer_emails(
+                        window.id,
+                        organization_id,
+                        settled_only=(
+                            settings.payment_policy
+                            == StorePaymentPolicy.BEFORE_VENDOR_ORDER
+                        ),
+                    )
+                )
             if recipients:
                 notified = await self.notifications.send_vendor_order_placed(
-                    window, settings, recipients, message=message
+                    window, settings, sorted(recipients), message=message
                 )
 
+        # Advancing commits once per order, which expires the window. The
+        # response reads its offerings, and a lazy load there raises
+        # MissingGreenlet: the recording succeeded, and the officer was shown
+        # a 500 that invited recording it again.
+        window = (
+            await self.get_window(window.id, organization_id, reload=True) or window
+        )
         return {
             "window": window,
-            "advanced": advanced,
+            "advanced": len(advanced_ids),
             "skipped": skipped,
             "notified": notified,
         }
@@ -1152,15 +1227,112 @@ class StorefrontService:
                     await self.db.commit()
         return window
 
-    async def set_window_status(
-        self, window_id: str, organization_id: str, status: StoreWindowStatus
+    _WINDOW_CANCEL_REASON = "The order window was cancelled"
+
+    async def cancel_window(
+        self, window_id: str, organization_id: str, actor_id: Optional[str]
     ) -> StoreOrderWindow:
+        """Cancel a window and, with it, every order still open in it.
+
+        Owner decision (W67b-12, 2026-11-21). A cancelled window's orders used
+        to stay open, so payment reminders kept chasing members for goods that
+        would never be ordered. Each open order now goes through cancel_order,
+        so it gets its date, reason, timeline entry and cancellation notice.
+
+        Refused while any of those orders has money recorded or a payment report
+        waiting: cancelling leaves amount_paid alone, and a whole window of
+        cancelled orders still holding money is W67b-2 in bulk. Staff refund or
+        settle those first; the refusal names them.
+
+        Safe to run twice: a cancelled window is returned as it is, and a run
+        that stopped part way skips the orders it already cancelled, so nobody
+        is emailed twice.
+        """
         window = await self.get_window(window_id, organization_id)
         if not window:
             raise ValueError("Order window not found")
-        window.status = status
-        if status == StoreWindowStatus.CANCELLED:
-            window.cancelled_at = _utcnow()
+        if window.status == StoreWindowStatus.CANCELLED:
+            return window
+        if window.status == StoreWindowStatus.FULFILLED:
+            raise ValueError("A fulfilled window cannot be cancelled")
+
+        result = await self.db.execute(
+            select(StoreOrder).where(
+                StoreOrder.window_id == str(window_id),
+                StoreOrder.organization_id == str(organization_id),
+                StoreOrder.status.notin_(
+                    [StoreOrderStatus.CANCELLED, StoreOrderStatus.FULFILLED]
+                ),
+            )
+        )
+        open_orders = list(result.scalars().all())
+        holding_money = sorted(
+            order.order_number
+            for order in open_orders
+            if _money(order.amount_paid) > 0
+            or order.payment_status == StorePaymentStatus.PENDING_VERIFICATION
+        )
+        if holding_money:
+            raise ValueError(
+                list_within_detail_limit(
+                    "These orders have money recorded or a payment report " "waiting: ",
+                    holding_money,
+                    ". Refund or settle them before cancelling the window.",
+                )
+            )
+
+        order_ids = [str(order.id) for order in open_orders]
+        for order_id in order_ids:
+            await self.cancel_order(
+                order_id,
+                organization_id,
+                actor_id,
+                reason=self._WINDOW_CANCEL_REASON,
+                notify_member=True,
+            )
+
+        window = await self.get_window(window_id, organization_id)
+        if not window:
+            raise ValueError("Order window not found")
+        window.status = StoreWindowStatus.CANCELLED
+        window.cancelled_at = _utcnow()
+        await self.db.commit()
+        await self.db.refresh(window)
+        return window
+
+    async def fulfill_window(
+        self, window_id: str, organization_id: str
+    ) -> StoreOrderWindow:
+        """Mark a window as fully distributed.
+
+        Owner decision (W67b-12, 2026-11-21): only a closed window, and only
+        once every order in it is fulfilled or cancelled. It could be marked
+        from any state before, an open one included, which skipped the close
+        and its notice and called a window done while members waited.
+        """
+        window = await self.get_window(window_id, organization_id)
+        if not window:
+            raise ValueError("Order window not found")
+        if window.status == StoreWindowStatus.FULFILLED:
+            return window
+        if window.status != StoreWindowStatus.CLOSED:
+            raise ValueError("Only a closed window can be marked fulfilled")
+        outstanding = await self.db.scalar(
+            select(func.count(StoreOrder.id)).where(
+                StoreOrder.window_id == str(window_id),
+                StoreOrder.organization_id == str(organization_id),
+                StoreOrder.status.notin_(
+                    [StoreOrderStatus.CANCELLED, StoreOrderStatus.FULFILLED]
+                ),
+            )
+        )
+        if outstanding:
+            noun = "order is" if outstanding == 1 else "orders are"
+            raise ValueError(
+                f"{outstanding} {noun} not fulfilled or cancelled yet. Finish or "
+                "cancel them before marking the window fulfilled."
+            )
+        window.status = StoreWindowStatus.FULFILLED
         await self.db.commit()
         await self.db.refresh(window)
         return window
@@ -1182,24 +1354,53 @@ class StorefrontService:
         await self.db.delete(window)
         await self.db.commit()
 
-    async def _window_customer_emails(
-        self, window_id: str, organization_id: str
+    async def _customer_emails(
+        self, order_ids: Sequence[str], organization_id: str
     ) -> List[str]:
+        """The addresses on these orders, one each."""
+        if not order_ids:
+            return []
         result = await self.db.execute(
             select(StoreOrder.customer_email).where(
+                StoreOrder.id.in_([str(order_id) for order_id in order_ids]),
+                StoreOrder.organization_id == str(organization_id),
+                StoreOrder.customer_email.isnot(None),
+            )
+        )
+        return sorted({email for email in result.scalars().all() if email})
+
+    async def _window_customer_emails(
+        self, window_id: str, organization_id: str, settled_only: bool = False
+    ) -> List[str]:
+        """The members with a live order in this window, one address each.
+
+        ``settled_only`` keeps only orders with nothing owed, decided by
+        ``_is_settled`` -- the same rule that holds an unpaid order out of the
+        vendor order, so the two cannot disagree about who was ordered for.
+        """
+        result = await self.db.execute(
+            select(StoreOrder).where(
                 StoreOrder.window_id == str(window_id),
                 StoreOrder.organization_id == str(organization_id),
                 StoreOrder.status != StoreOrderStatus.CANCELLED,
                 StoreOrder.customer_email.isnot(None),
             )
         )
-        return sorted({email for email in result.scalars().all() if email})
+        return sorted(
+            {
+                order.customer_email
+                for order in result.scalars().all()
+                if order.customer_email and (not settled_only or _is_settled(order))
+            }
+        )
 
     # ==================================================================
     # Shopper view
     # ==================================================================
 
-    async def get_open_windows(self, organization_id: str) -> List[StoreOrderWindow]:
+    async def get_open_windows(
+        self, organization_id: str, taking_orders: bool = False
+    ) -> List[StoreOrderWindow]:
         # Eager-loads the offerings the same way list_windows/get_window do.
         # The admin dashboard renders the open window through the full window
         # payload, which reads window.offerings — a lazy load there raises
@@ -1225,7 +1426,13 @@ class StorefrontService:
             )
             .order_by(StoreOrderWindow.closes_at.is_(None), StoreOrderWindow.closes_at)
         )
-        return list(result.scalars().all())
+        windows = list(result.scalars().all())
+        if taking_orders:
+            # The admin dashboard keeps showing a window until it is closed;
+            # members are not offered one whose closing time has passed.
+            now = _utcnow()
+            windows = [w for w in windows if not _past_closing_time(w, now)]
+        return windows
 
     async def get_storefront(
         self,
@@ -1235,7 +1442,7 @@ class StorefrontService:
     ) -> Dict[str, Any]:
         """Assemble everything the member-facing store needs in one payload."""
         settings = await self.get_settings(organization_id)
-        open_windows = await self.get_open_windows(organization_id)
+        open_windows = await self.get_open_windows(organization_id, taking_orders=True)
 
         window: Optional[StoreOrderWindow] = None
         if window_id:
@@ -1559,7 +1766,7 @@ class StorefrontService:
         if not settings.is_enabled:
             raise ValueError("The store is not currently open")
 
-        open_windows = await self.get_open_windows(organization_id)
+        open_windows = await self.get_open_windows(organization_id, taking_orders=True)
         if not open_windows:
             raise ValueError("There is no open order window")
 
@@ -2593,6 +2800,72 @@ class StorefrontService:
             await self.notifications.send_admin_new_order(refreshed, settings)
         return refreshed or order
 
+    async def reject_payment_report(
+        self,
+        order_id: str,
+        organization_id: str,
+        actor_id: Optional[str],
+        reason: Optional[str] = None,
+        notify_member: bool = True,
+    ) -> StoreOrder:
+        """Turn down a member's "I've sent payment" that never arrived (W67b-14).
+
+        Only a report could be verified before, so an order whose money never
+        came stayed pending for good: reminders skip pending orders, and the
+        member could not change the payment method while a report waited.
+        This returns the order to what the ledger says is owed. ``amount_paid``
+        is untouched, because a report never moved it.
+        """
+        # Locked like the settlement paths: verifying the same report at the
+        # same moment would otherwise be overwritten with "unpaid".
+        order = await self.get_order(order_id, organization_id, for_update=True)
+        if not order:
+            raise ValueError("Order not found")
+        if order.payment_status != StorePaymentStatus.PENDING_VERIFICATION:
+            await self.db.rollback()
+            raise ValueError("This order has no payment report waiting to be verified")
+
+        order.payment_status = (
+            StorePaymentStatus.PARTIAL
+            if _money(order.amount_paid) > 0
+            else StorePaymentStatus.UNPAID
+        )
+        # Both described the payment the member reported; left in place they
+        # would read as a reference for money the department never received.
+        order.payment_reported_at = None
+        order.payment_reference = None
+
+        message = (
+            "The payment you reported could not be verified, so the balance is "
+            "still owed."
+        )
+        detail = (reason or "").strip()
+        if detail:
+            message = f"{message} {detail}"
+        self.db.add(
+            StoreOrderEvent(
+                id=generate_uuid(),
+                organization_id=str(organization_id),
+                order_id=order.id,
+                event_type=StoreOrderEventType.MESSAGE,
+                message=message,
+                is_member_visible=True,
+                created_by=actor_id,
+            )
+        )
+        await self.db.commit()
+
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
+        if refreshed and notify_member:
+            # Not behind a notification switch, like a typed message: an
+            # officer decided this about one member's money, and the member
+            # otherwise believes they have paid.
+            settings = await self.get_settings(organization_id)
+            await self.notifications.send_order_update(
+                refreshed, message, settings, status_label="Payment not verified"
+            )
+        return refreshed or order
+
     async def update_member_payment_method(
         self,
         order_id: str,
@@ -2616,8 +2889,8 @@ class StorefrontService:
         if order.payment_status == StorePaymentStatus.PENDING_VERIFICATION:
             raise ValueError(
                 "A reported payment is awaiting verification. Wait for it to "
-                "be verified, or ask staff to reject the report before "
-                "changing the payment method"
+                "be verified, or ask the store staff to mark it not received, "
+                "before changing the payment method"
             )
 
         settings = await self.get_settings(organization_id)
@@ -3863,6 +4136,10 @@ class StorefrontService:
                 and window.auto_open
                 and opens_at
                 and opens_at <= now
+                # A window whose whole period passed without opening (the job
+                # was down) stays scheduled for an officer to reschedule,
+                # rather than opening and closing in the same run.
+                and not _past_closing_time(window, now)
             ):
                 await self.open_window(
                     window.id, organization_id, notify_members=window.notify_on_open
@@ -3903,11 +4180,24 @@ class StorefrontService:
             return 0
 
         cutoff = _utcnow() - timedelta(days=int(settings.payment_reminder_days or 3))
+        # Orders in a cancelled window are skipped: a window cancelled before
+        # W67b-12 left its orders open, and nobody should be chased for goods
+        # that will never be ordered.
+        cancelled_windows = select(StoreOrderWindow.id).where(
+            StoreOrderWindow.organization_id == str(organization_id),
+            StoreOrderWindow.status == StoreWindowStatus.CANCELLED,
+        )
         result = await self.db.execute(
             select(StoreOrder)
             .options(selectinload(StoreOrder.items))
             .where(
                 StoreOrder.organization_id == str(organization_id),
+                # An order whose window was deleted has no window_id, and a
+                # bare NOT IN drops NULLs, so it is kept explicitly.
+                or_(
+                    StoreOrder.window_id.is_(None),
+                    StoreOrder.window_id.notin_(cancelled_windows),
+                ),
                 StoreOrder.status.notin_(
                     [StoreOrderStatus.CANCELLED, StoreOrderStatus.FULFILLED]
                 ),

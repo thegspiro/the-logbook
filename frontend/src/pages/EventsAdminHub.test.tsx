@@ -20,9 +20,11 @@ vi.mock('../services/adminHubService', () => ({
 vi.mock('./EventCreatePage', () => ({ EventCreatePage: () => <p>create body</p> }));
 vi.mock('./PastEventsTab', () => ({ default: () => <p>past events body</p> }));
 vi.mock('./EventRequestsTab', () => ({ default: () => <p>requests body</p> }));
+vi.mock('./outreach-overview/OutreachOverviewTab', () => ({ default: () => <p>overview body</p> }));
 vi.mock('./AnalyticsDashboardPage', () => ({ default: () => <p>qr analytics body</p> }));
 vi.mock('./CommunityEngagementTab', () => ({ default: () => <p>community body</p> }));
 vi.mock('./EventCardCheckinsTab', () => ({ default: () => <p>card check-ins body</p> }));
+vi.mock('./ApparatusEventsTab', () => ({ default: () => <p>apparatus events body</p> }));
 vi.mock('./EventsSettingsTab', () => ({ default: () => <p>settings body</p> }));
 
 import { EventsAdminHub } from './EventsAdminHub';
@@ -80,10 +82,10 @@ describe('EventsAdminHub', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Community Outreach' }));
 
-    expect(window.location.search).toBe('?tab=requests');
-    expect(await screen.findByText('requests body')).toBeInTheDocument();
+    expect(window.location.search).toBe('?tab=overview');
+    expect(await screen.findByText('overview body')).toBeInTheDocument();
     const strip = screen.getByRole('tablist', { name: 'Community Outreach pages' });
-    await user.click(within(strip).getByRole('tab', { name: 'Community Engagement' }));
+    await user.click(within(strip).getByRole('tab', { name: 'Outreach Impact' }));
     expect(window.location.search).toBe('?tab=community');
     expect(await screen.findByText('community body')).toBeInTheDocument();
   });

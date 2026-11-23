@@ -12,6 +12,11 @@ const listToDecide = vi.fn();
 const create = vi.fn();
 const vote = vi.fn();
 const withdraw = vi.fn();
+const askQuestion = vi.fn();
+const getSummary = vi.fn();
+const endLeaveEarly = vi.fn();
+const getMyLeaves = vi.fn();
+const getCovers = vi.fn();
 
 vi.mock('../services/leaveRequestService', () => ({
   leaveRequestService: {
@@ -21,9 +26,19 @@ vi.mock('../services/leaveRequestService', () => ({
     create: (...a: unknown[]) => create(...a) as unknown,
     vote: (...a: unknown[]) => vote(...a) as unknown,
     withdraw: (...a: unknown[]) => withdraw(...a) as unknown,
+    askQuestion: (...a: unknown[]) => askQuestion(...a) as unknown,
+    getSummary: (...a: unknown[]) => getSummary(...a) as unknown,
+    endLeaveEarly: (...a: unknown[]) => endLeaveEarly(...a) as unknown,
+    getCovers: (...a: unknown[]) => getCovers(...a) as unknown,
   },
 }));
-vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('../services/api', () => ({
+  memberStatusService: { getMyLeaves: (...a: unknown[]) => getMyLeaves(...a) as unknown },
+}));
+const toastSuccess = vi.fn();
+vi.mock('react-hot-toast', () => ({
+  default: { success: (...a: unknown[]) => toastSuccess(...a) as unknown, error: vi.fn() },
+}));
 vi.mock('../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 
 const checkPermission = vi.fn();
@@ -33,6 +48,27 @@ vi.mock('../stores/authStore', () => ({
 }));
 
 import LeaveRequestsPage from './LeaveRequestsPage';
+import { addCalendarDays, getTodayLocalDate } from '../utils/dateFormatting';
+
+const today = getTodayLocalDate('UTC');
+
+const leave = (overrides: Record<string, unknown>) => ({
+  id: 'l1',
+  organization_id: 'o1',
+  user_id: 'me',
+  leave_type: 'medical',
+  reason: null,
+  start_date: addCalendarDays(today, -30),
+  end_date: addCalendarDays(today, 60),
+  granted_by: null,
+  granted_at: null,
+  active: true,
+  exempt_from_training_waiver: false,
+  linked_training_waiver_id: null,
+  created_at: null,
+  updated_at: null,
+  ...overrides,
+});
 
 const request = (overrides: Record<string, unknown>) => ({
   id: 'r1',
@@ -60,7 +96,21 @@ const request = (overrides: Record<string, unknown>) => ({
 
 describe('LeaveRequestsPage', () => {
   beforeEach(() => {
-    for (const mock of [getConfig, listMine, listToDecide, create, vote, withdraw, checkPermission]) {
+    for (const mock of [
+      getConfig,
+      listMine,
+      listToDecide,
+      create,
+      vote,
+      withdraw,
+      askQuestion,
+      getSummary,
+      endLeaveEarly,
+      getMyLeaves,
+      getCovers,
+      checkPermission,
+      toastSuccess,
+    ]) {
       mock.mockReset();
     }
     checkPermission.mockReturnValue(false);
@@ -69,6 +119,125 @@ describe('LeaveRequestsPage', () => {
     listToDecide.mockResolvedValue([]);
     create.mockResolvedValue(request({}));
     vote.mockResolvedValue(request({ status: 'approved' }));
+    getSummary.mockResolvedValue({ requests_enabled: true, to_decide: 0, waiting_on_me: 0 });
+    getMyLeaves.mockResolvedValue([]);
+    getCovers.mockResolvedValue({ covers: [], approvers: [], stand_ins: [], today });
+  });
+
+  it('says who decided a request and when, and when one was withdrawn', async () => {
+    listMine.mockResolvedValue([
+      request({
+        id: 'a',
+        status: 'approved',
+        decided_at: '2026-11-20T15:00:00Z',
+        decided_by_name: 'Lt. Smith',
+      }),
+      request({ id: 'd', status: 'denied', decided_at: '2026-11-19T15:00:00Z', decided_by_name: 'Capt. Lee' }),
+      request({ id: 'w', status: 'withdrawn', decided_at: '2026-11-18T15:00:00Z' }),
+    ]);
+    renderWithRouter(<LeaveRequestsPage />);
+
+    const mine = await screen.findByRole('region', { name: 'Your requests' });
+    expect(await within(mine).findByText(/^Approved by Lt\. Smith on .+\.$/)).toBeInTheDocument();
+    expect(within(mine).getByText(/^Denied by Capt\. Lee on .+\.$/)).toBeInTheDocument();
+    expect(within(mine).getByText(/^Withdrawn on .+\.$/)).toBeInTheDocument();
+  });
+
+  it('names the approver a stand-in voted for', async () => {
+    listToDecide.mockResolvedValue([
+      request({
+        votes: [
+          {
+            voter_id: 'o1',
+            voter_name: 'Olive Officer',
+            on_behalf_of_name: 'Blake Board',
+            round: 1,
+            vote: 'approve',
+            note: null,
+            created_at: '2026-11-20T15:00:00Z',
+          },
+        ],
+      }),
+    ]);
+    renderWithRouter(<LeaveRequestsPage />);
+
+    const section = await screen.findByRole('region', { name: 'To decide' });
+    expect(within(section).getByText(/approved for Blake Board/)).toBeInTheDocument();
+  });
+
+  it('tells an approver their own request goes to the Chief', async () => {
+    listMine.mockResolvedValue([request({ routed_to_chief: true })]);
+    renderWithRouter(<LeaveRequestsPage />);
+
+    const mine = await screen.findByRole('region', { name: 'Your requests' });
+    expect(
+      await within(mine).findByText('As an approver yourself, your request goes to the Chief.')
+    ).toBeInTheDocument();
+  });
+
+  it('a member on leave ends it early from their first day back', async () => {
+    const user = userEvent.setup();
+    const back = addCalendarDays(today, 3);
+    getMyLeaves.mockResolvedValue([leave({})]);
+    endLeaveEarly.mockResolvedValue({
+      leave_id: 'l1',
+      start_date: addCalendarDays(today, -30),
+      end_date: addCalendarDays(today, 2),
+      previous_end_date: addCalendarDays(today, 60),
+      first_day_back: back,
+    });
+    renderWithRouter(<LeaveRequestsPage />);
+
+    const card = await screen.findByRole('region', { name: 'Your leave' });
+    await user.click(within(card).getByRole('button', { name: 'I’m back early' }));
+    await user.type(within(card).getByLabelText('Your first day back'), back);
+    await user.click(within(card).getByRole('button', { name: 'End my leave' }));
+    expect(endLeaveEarly).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'End my leave' }));
+
+    expect(endLeaveEarly).toHaveBeenCalledWith('l1', back);
+    expect(toastSuccess).toHaveBeenCalledWith(expect.stringContaining('The officers who manage leave were told.'));
+  });
+
+  it('offers no early end for a leave not yet begun, or where requests are off', async () => {
+    getMyLeaves.mockResolvedValue([leave({ start_date: addCalendarDays(today, 10) })]);
+    const { unmount } = renderWithRouter(<LeaveRequestsPage />);
+    await screen.findByRole('region', { name: 'Your requests' });
+    expect(screen.queryByRole('region', { name: 'Your leave' })).not.toBeInTheDocument();
+    unmount();
+
+    getConfig.mockResolvedValue({ requests_enabled: false });
+    getMyLeaves.mockResolvedValue([leave({})]);
+    renderWithRouter(<LeaveRequestsPage />);
+    await screen.findByRole('region', { name: 'Your requests' });
+    expect(screen.queryByRole('region', { name: 'Your leave' })).not.toBeInTheDocument();
+  });
+
+  it('says when a request will extend the current leave', async () => {
+    const user = userEvent.setup();
+    create.mockResolvedValue(request({ extends_leave: { start_date: '2026-12-01', end_date: '2027-01-31' } }));
+    renderWithRouter(<LeaveRequestsPage />);
+
+    await user.type(await screen.findByLabelText('First day'), '2027-01-15');
+    await user.type(screen.getByLabelText('Last day'), '2027-03-31');
+    await user.click(screen.getByRole('button', { name: 'Send request' }));
+
+    expect(toastSuccess).toHaveBeenCalledWith('Your request to extend your leave was sent to the approvers.');
+  });
+
+  it('an approver asks the member a question from the page', async () => {
+    const user = userEvent.setup();
+    listToDecide.mockResolvedValue([request({ can_vote: true, can_ask: true })]);
+    askQuestion.mockResolvedValue(request({ awaiting: 'answer' }));
+    renderWithRouter(<LeaveRequestsPage />);
+
+    const section = await screen.findByRole('region', { name: 'To decide' });
+    await user.click(within(section).getByRole('button', { name: 'Ask a question' }));
+    await user.type(within(section).getByLabelText('Your question to the member'), 'Which shifts?');
+    await user.click(within(section).getByRole('button', { name: 'Send question' }));
+
+    expect(askQuestion).toHaveBeenCalledWith('r1', 'Which shifts?');
   });
 
   it('sends a request with no end date when the member does not know it', async () => {

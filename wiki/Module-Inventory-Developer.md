@@ -534,6 +534,7 @@ POST   /api/v1/inventory/maintenance                     # Create record
 PATCH  /api/v1/inventory/items/{id}/maintenance/{rid}    # Update record
 GET    /api/v1/inventory/items/{id}/maintenance          # Item history
 GET    /api/v1/inventory/maintenance/due                 # Items due
+GET    /api/v1/inventory/maintenance/never-inspected     # Needs inspecting, never inspected
 ```
 
 Maintenance dates default to the department's today.

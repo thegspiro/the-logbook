@@ -3015,6 +3015,23 @@ tbody tr:last-child {
     display: none !important;
   }
 
+  /* The left-navigation layout on paper. The nav itself is hidden above, but
+   * the content column kept its `ml-(--side-nav-width)` offset and the root
+   * kept painting the sidebar strip in its background, so every print route
+   * came out squeezed into the right of the page beside an empty column.
+   * Zeroing the variable releases both, since each reads it. The screen-height
+   * minimums that keep the footer below the fold also forced an extra blank
+   * sheet at the end of a short document. */
+  .has-side-nav {
+    --side-nav-width: 0px !important;
+    background: none !important;
+  }
+  .has-side-nav,
+  .has-side-nav > div,
+  main#main-content {
+    min-height: 0 !important;
+  }
+
   /* Reset backgrounds for ink savings.
    *
    * `html` is named explicitly because the root carries the themed canvas. It
@@ -3143,7 +3160,10 @@ tbody tr:last-child {
 .member-training-print__compliance--yellow {
   color: #92400e;
 }
-/* No requirement grades the member: neither a pass nor a warning. */
+/* No requirement grades the member: neither a pass nor a warning. An exempt
+   member is excused from grading, so the record prints it muted too, as the
+   profile card and My Crew show it. */
+.member-training-print__compliance--exempt,
 .member-training-print__compliance--not_applicable {
   color: #555;
 }

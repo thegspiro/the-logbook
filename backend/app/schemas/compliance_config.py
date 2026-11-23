@@ -7,12 +7,13 @@ Pydantic request/response schemas for compliance config endpoints.
 from datetime import datetime
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
 from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 from app.schemas.reminder_limits import ReminderLeadDays
+from app.utils.compliance_profiles import ordered_profiles
 
 # Mirrors ``LeaveMonthRule`` in app/models/compliance_config.py.
 LeaveMonthRuleValue = Literal["full_month", "proportional", "half"]
@@ -210,6 +211,15 @@ class ComplianceConfigResponse(ComplianceConfigBase):
     created_at: datetime
     updated_at: datetime
     updated_by: Optional[str] = None
+
+    @field_validator("profiles", mode="after")
+    @classmethod
+    def _in_resolution_order(
+        cls, profiles: List[ComplianceProfileResponse]
+    ) -> List[ComplianceProfileResponse]:
+        # The order grading resolves profiles in, so the editor lists the one
+        # that applies to a member matched by two first, without deciding it.
+        return ordered_profiles(profiles)
 
 
 # =============================================================================

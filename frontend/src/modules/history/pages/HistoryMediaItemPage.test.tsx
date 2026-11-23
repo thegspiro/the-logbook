@@ -25,6 +25,9 @@ vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_Y
 import HistoryMediaItemPage from './HistoryMediaItemPage';
 
 const catalogue = {
+  // Phase 5: every view carries the apparatus and events it is linked to.
+  apparatus: [],
+  events: [],
   id: 'm1',
   kind: 'photo' as const,
   title: 'Engine 3 at the parade',

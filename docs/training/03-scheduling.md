@@ -503,11 +503,7 @@ The same layout is used for a member's **Shift & Call History** on their
 profile, for the member and for officers with **View scheduling reports**;
 an officer sees the list but not **Log outside shift**.
 
-_Screenshots: `03-104-my-shifts-hours`, `03-108-member-outside-shifts` and
-`03-113-member-hours-with-outside` show the old layout and need replacing (see
-the 2026-11-20 rows in `SCREENSHOT_CURRENCY.md`)._
-
-![My Shifts on its Hours view: cards for this month, this year and all time, above the month-by-month table with its vs. busiest month bar column](./images/03-104-my-shifts-hours.png)
+![My Shifts on its Hours view: This month, this year and all-time cards with the two-colour split bar, the year picker between its Previous year and Next year arrows, the year-at-a-glance chart with its Busiest month, Months with shifts and Avg per active month tiles, and All shifts below](./images/03-104-my-shifts-hours.png)
 
 ### Your shifts on the dashboard
 
@@ -531,7 +527,9 @@ tab says: _"Shifts with open seats. Sign up for one and it goes straight onto
 your schedule."_
 
 1. Use **From** to pick a start date. The list shows the next 30 days from
-   that date.
+   that date, and outreach signup sheets (volunteer roles for a public
+   education or community event) for the next 60 days, because those events
+   are booked weeks ahead _(2026-11-21)_.
 2. Select **Sign Up** on a shift.
 3. Choose the **Position**, then select **Confirm Sign Up**.
 
@@ -678,7 +676,7 @@ evaluated too, but the credit waits for the approval. See
 The Shift Compliance report **does** add them into each member's shift and
 hour totals.
 
-![The Shifts with other departments card on a member's Hours view: two counted shifts with their times, hours and unit, one Not counted entry with the officer's reason, and the Log outside shift button](./images/03-108-member-outside-shifts.png)
+![All shifts on a member's Hours view: the All, department and Other departments filter, Log outside shift, and the year opened to a department shift labelled with the department's name beside outside shifts on a blue edge, one of them Not counted with the officer's reason](./images/03-108-member-outside-shifts.png)
 
 ![The Log a shift with another department dialog: Start filled in, End set by the +12 hours button, Counts as 12 hours, and Township Fire Company and Engine 21 chosen](./images/03-109-log-outside-shift-dialog.png)
 
@@ -746,7 +744,7 @@ You need to be able to manage schedules for both of these.
 
 ![The Log a shift with another department dialog at phone width, filled in: Start, an End set with +12 hours, Counts as 12 hours, Township Fire Company, Engine 21 and Position Driver](./images/03-112-member-outside-dialog-driver.png)
 
-![A member's Hours view: the This month card reading +24 hrs with other departments above the monthly table, and the Shifts with other departments section beneath with two counted entries and one Not counted with its reason](./images/03-113-member-hours-with-outside.png)
+![A member's Hours view with outside hours: each card's figure includes them, split under the bar into the department's own hours and +24 with other departments, above the year chart and All shifts with one Not counted entry](./images/03-113-member-hours-with-outside.png)
 
 ---
 
@@ -1442,6 +1440,17 @@ scheduling permission. They can assign and adjust the crew, record attendance,
 log calls, close the shift out and cancel it. Editing or deleting the shift
 itself still needs an officer who can manage schedules.
 
+**A Shift Officer does not record their own hours** _(2026-11-20)_. When you
+run a shift only because you are its Shift Officer (you do not hold
+`scheduling.manage`), the close-out takes **your own** times from your own
+check-in and check-out. You cannot change them, type hours for yourself, or
+add yourself as an attendee. Everyone else on the crew you record as before.
+If you forgot to check in or out, ask a scheduling administrator to correct
+your hours. On a one-person shift that means the administrator records them.
+This matches pre-shift work and event attendance, where nobody approves their
+own time. An officer who does hold `scheduling.manage` can still record
+everyone, themselves included.
+
 **Which screen you get** depends on how your department records calls. An
 administrator sets this under **Scheduling Settings → General → Shift
 close-out rules → How calls are recorded**:
@@ -1482,7 +1491,10 @@ Everything else in this section applies to both.
 - **Anyone still checked in.** They are checked out automatically at the
   shift's end time when you close out.
 - **Add hours for members who didn't check in.** A box for each assigned
-  member with no attendance. Type the hours they worked (up to 48).
+  member with no attendance. Type the hours they worked (up to 48). A Shift
+  Officer without `scheduling.manage` cannot enter hours for themselves here
+  _(2026-11-20)_. The close-out is refused with "You cannot record your own
+  hours on a shift you run".
 - **Calls.** The number of calls recorded on the shift.
 - **Staffing.** If the shift ran short, a warning such as "Ran understaffed —
   1 of 4 positions filled". This does not block the close-out. It keeps the
@@ -1557,6 +1569,7 @@ shift.
 | Someone adds, edits or removes attendance, or adds or edits a call, on a closed-out shift | Refused _(2026-10-24)_. Close-out has already credited the hours. Reopen the shift to correct it |
 | Someone tries to close out, or check in to, a cancelled shift | Refused. A cancelled shift did not run, so it credits no hours                                     |
 | An officer adds attendance for a member who already checked in | Refused, instead of creating a second row. A check-out earlier than the check-in is refused too   |
+| A Shift Officer without `scheduling.manage` adds attendance or hours for themselves | Refused _(2026-11-20)_: "You cannot record your own hours on a shift you run. Check in and out yourself, or ask a scheduling admin." |
 | A trainee's draft report fails to create          | The other trainees still get theirs                                                                               |
 | A member has no active training enrollment        | No draft report is made for them                                                                                  |
 
@@ -1583,6 +1596,12 @@ from check-in and check-out, and you can change them.
 - Anyone who was assigned but **never checked in** is listed too, with empty
   times. Fill them in, or that member gets no hours and no call credit.
 - Members who declined, are pending, or were no-shows are not listed.
+- **Your own row is read-only** _(2026-11-20)_ when you are closing out as the
+  Shift Officer without `scheduling.manage`. Its **Start**, **End** and
+  **Hours** boxes are greyed out, there is no **Until shift end** or **Full
+  shift** button, and a line under it reads "Your own times come from your
+  check-in and check-out. A scheduling admin can correct them." Your times are
+  saved as they stand and you can still go on to step 2.
 
 **The Hours box.** Each row also has an **Hours** box. For someone who forgot
 to check in or out, type the hours they worked instead of picking two times.
@@ -1686,6 +1705,7 @@ and it goes on the shift's record and in the audit log.
 | You reopen a closed-out shift                                     | The wizard starts again at step 1                                                                                                                                 |
 | The department switches back to logging individual calls          | Calls already recorded stay recorded. Reports read whichever source matches the current setting. They never add the two together, so no call is counted twice     |
 | More than 100 members on the shift are credited with fewer calls than the apparatus ran | _(2026-11-05)_ Refused with "A close-out can adjust the call credit of at most 100 members. _N_ are adjusted; credit the rest with the full count." A larger crew is fine as long as no more than 100 are lowered |
+| You run the shift as its Shift Officer and your own check-out is missing | _(2026-11-20)_ Your row is read-only, so you cannot fill it in. Ask a scheduling administrator to record your hours: before you close out, or afterwards by reopening the shift, since a closed-out shift's attendance is locked. A save that changes your row anyway (from a page opened before the upgrade, say) is refused, and nothing in that save is applied |
 
 ### Cancelling, Hand-Offs and Training Seats
 
@@ -3402,9 +3422,8 @@ its heading points to **Shift patterns**. Each pattern on the **Patterns** tab
 has an **Edit** button, which opens **Edit Pattern** and saves exactly as the
 old form did: emptying a field clears it, a field the server refuses stays
 flagged while the rest saves, and an inactive template is warned about.
-_Screenshots: check `03-12-shift-templates` and `03-129-template-reactivate`
-and replace either if it shows the old Templates / Patterns switch; create one
-of a pattern card on the Patterns tab with its **Edit** button._
+_Screenshot still to make: a pattern card on the Patterns tab with its **Edit**
+button._
 
 ### Templates
 
@@ -3471,7 +3490,7 @@ and re-adds nothing to shifts.
 
 Select **Save Template** when you are done.
 
-![Shift Templates tab listing templates with start and end times](./images/03-12-shift-templates.png)
+![Shift Templates tab listing templates with start and end times, under the heading's pointer to Shift patterns for repeating a template](./images/03-12-shift-templates.png)
 
 #### Required and optional seats
 
@@ -4991,6 +5010,17 @@ day; a score of 90 or more is accepted automatically and 60–89 is held for you
 Shifts already in the system, and hours already recorded for another agency's
 unit, are matched so importing the same file twice adds nothing.
 
+**Taking back an answer about a shift already on the schedule** _(2026-11-20)_.
+When a proposed shift is a 60–89% match for one already on your schedule, the
+**Shifts** tab asks **Add to that shift** or **Import separately**. Once you
+answer, the card says what you chose ("You chose to add these members to that
+shift." or "You chose to import it as a separate shift (_N_% match).") with an
+**Undo** link. On the **Rows** tab, and in a row's edit dialog, every row of
+that shift shows "Decided: add to the shift already on the schedule" (or
+"import separately from…") with the same **Undo**. Undo puts the question back,
+so a wrong click no longer means discarding the draft and its other decisions.
+A match of 90% or more is joined without asking and has nothing to undo.
+
 **Remembered decisions.** Departments usually import over several files from the
 same old system. Once an import is committed, its member, unit and position
 decisions are remembered, and later drafts apply them (marked **Remembered**)
@@ -5005,6 +5035,10 @@ well as ones still in service. If members should still log hours on it, switch
 it on in **Outside Apparatus** settings after you commit. Units already hidden
 stay pickable in the import, marked **hidden from members**. Names that are not
 a vehicle at all (`POV`, `Other EMS`) can each be sent to **Catch-all: Other**.
+That puts all of them on a single outside unit named **Other**, under an agency
+named **Other**, created on the first commit and reused after that.
+
+![A draft import's Units tab: POV and Other EMS both recorded on the catch-all Other unit, and Medic 7 open on Add as an outside agency's unit with Lakeside Volunteer Rescue picked from the Agency list, Medic 7 in the Unit box, and the note that a unit added here starts hidden from members](./images/03-140-history-import-units.png)
 
 **Shift notification CC boxes** _(2026-11-09)_. The four **CC additional email
 addresses** boxes in Scheduling notification settings now refuse text that is
@@ -5016,8 +5050,6 @@ accepted and saved onto the CC list.
 in-app notice now list each call type once with a count, most frequent first
 ("EMS ×10"), instead of one line per call. Every type is listed; the old notice
 stopped after five calls and the email after ten.
-That puts all of them on a single outside unit named **Other**, under an agency
-named **Other**, created on the first commit and reused after that.
 
 **Retired units of your own.** To stop a unit of your own being scheduled,
 **archive** it in the Apparatus module, or **deactivate** it on the basic

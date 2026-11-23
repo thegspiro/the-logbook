@@ -16,9 +16,10 @@ The score bands on the figure-backed items are placeholders a department is
 expected to change: what counts as enough training hours or shifts differs
 too much between departments for any default to be right.
 
-Officer-only sections are left out on purpose. Publishing one requires the
-department's own rank codes, which a starter cannot know, so a starter that
-included one would not publish without edits.
+An officer-only section needs the department's own rank codes before it can
+publish, which a starter cannot know. The one starter that carries officer
+sections (``officer_sections``) therefore takes the ranks when a template is
+created from it, so it too publishes as it stands.
 """
 
 from dataclasses import dataclass
@@ -294,6 +295,12 @@ def _annual_definition() -> TemplateDefinition:
                     "title": "Development",
                     "items": [
                         _written(
+                            "last_goals",
+                            "Last year's goals",
+                            "Whether each goal the last review set was met.",
+                            tool="goal_review",
+                        ),
+                        _written(
                             "strengths",
                             "Strengths",
                             "What the member does especially well.",
@@ -314,6 +321,97 @@ def _annual_definition() -> TemplateDefinition:
             ],
         }
     )
+
+
+#: The annual starter's section weights when an officer section shares the
+#: overall. A member without an officer rank is graded without that section,
+#: and the rest are weighed against each other (``evaluation_grading``), so
+#: these keep almost exactly the plain annual starter's 30 / 45 / 25.
+_OFFICER_FORM_WEIGHTS = {
+    "training_readiness": 25,
+    "operational_performance": 35,
+    "professionalism": 20,
+    "leadership": 20,
+}
+
+
+def _officer_annual_definition() -> TemplateDefinition:
+    """The annual starter with an officer-only leadership section.
+
+    ``officer_ranks`` is left empty: the department names its officer ranks
+    when it creates a template from this starter.
+    """
+    body = _annual_definition().model_dump(mode="json")
+    body["sections"].insert(
+        3,
+        {
+            "key": "leadership",
+            "title": "Leadership and supervision",
+            "officer_only": True,
+            "description": (
+                "For officers: how they lead crews, develop members and "
+                "carry out the duties of their office."
+            ),
+            "items": [
+                _rated(
+                    "crew_leadership",
+                    "Crew leadership",
+                    "Command of crews on calls and on duty: direction, "
+                    "accountability and decisions under pressure.",
+                    (
+                        "Does not take charge when the role requires it, or "
+                        "leads in a way that puts the crew at risk.",
+                        "Takes charge but gives unclear direction or loses "
+                        "track of the crew.",
+                        "Gives clear direction, keeps accountability and "
+                        "makes sound decisions.",
+                        "Anticipates what the crew and scene need and "
+                        "adjusts before being asked.",
+                        "Leads with a calm, decisive command that others "
+                        "learn from.",
+                    ),
+                    weight=40,
+                    example_for=(1, 5),
+                    source="positions.held",
+                ),
+                _rated(
+                    "member_development",
+                    "Developing members",
+                    "Training, mentoring and evaluating the members they " "supervise.",
+                    (
+                        "Does little to train or support the members they "
+                        "supervise.",
+                        "Trains or mentors only when asked.",
+                        "Trains, mentors and evaluates their members as the "
+                        "role expects.",
+                        "Seeks out chances to develop members and gives "
+                        "useful feedback.",
+                        "Builds the next generation of officers.",
+                    ),
+                    weight=35,
+                ),
+                _rated(
+                    "administration",
+                    "Administrative duties",
+                    "Reports, records and the other duties of the office, "
+                    "done well and on time.",
+                    (
+                        "Duties are often late, incomplete or left undone.",
+                        "Duties are done but often late or need correcting.",
+                        "Duties are done accurately and on time.",
+                        "Takes on more than the office requires and does it " "well.",
+                        "Improves how the department does its administrative " "work.",
+                    ),
+                    weight=25,
+                    source="admin_hours.hours",
+                ),
+            ],
+        },
+    )
+    for section in body["sections"]:
+        if section["key"] in _OFFICER_FORM_WEIGHTS:
+            section["weight"] = _OFFICER_FORM_WEIGHTS[section["key"]]
+    return TemplateDefinition.model_validate(body)
 
 
 def _check_in_definition() -> TemplateDefinition:
@@ -386,6 +484,12 @@ def _check_in_definition() -> TemplateDefinition:
                     "title": "Next steps",
                     "items": [
                         _written(
+                            "last_check_in_goals",
+                            "Since the last check-in",
+                            "Whether each thing the last check-in asked for was done.",
+                            tool="goal_review",
+                        ),
+                        _written(
                             "going_well",
                             "What is going well",
                             "Progress worth recognizing.",
@@ -412,6 +516,9 @@ class EvaluationStarter:
     member_class: Optional[str]
     member_status: Optional[str]
     definition: Callable[[], TemplateDefinition]
+    # Carries officer-only sections, so a template made from it needs the
+    # department's officer ranks at creation.
+    officer_sections: bool = False
 
     def workflow(self) -> TemplateWorkflow:
         return default_workflow(self.kind)
@@ -432,6 +539,22 @@ STARTERS: Tuple[EvaluationStarter, ...] = (
         member_class=None,
         member_status=None,
         definition=_annual_definition,
+    ),
+    EvaluationStarter(
+        key="annual_with_officers",
+        name="Annual Evaluation with Officer Sections",
+        description=(
+            "The annual member evaluation with an added Leadership and "
+            "supervision section for officers: crew leadership, developing "
+            "members, and the duties of their office. You choose which ranks "
+            "count as officers; everyone else is graded on the other sections "
+            "alone."
+        ),
+        kind=EvaluationTemplateKind.ANNUAL,
+        member_class=None,
+        member_status=None,
+        definition=_officer_annual_definition,
+        officer_sections=True,
     ),
     EvaluationStarter(
         key="probationary_check_in",

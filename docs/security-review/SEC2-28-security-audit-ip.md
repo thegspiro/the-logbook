@@ -4,8 +4,8 @@
 #1911), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4, and a
 pass-4 addendum, PR #2515), 2026-10-04 (pass 5), 2026-10-07 (pass 6),
 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27
-(pass 10), 2026-10-30 (pass 11), 2026-11-04 (pass 12), 2026-11-11 (pass 13) ·
-**PR:** #1911 (pass 1)
+(pass 10), 2026-10-30 (pass 11), 2026-11-04 (pass 12), 2026-11-11 (pass 13),
+2026-11-22 (pass 14) · **PR:** #1911 (pass 1)
 
 **Backend:** `app/api/v1/endpoints/security_monitoring.py` (677 L),
 `app/api/v1/endpoints/ip_security.py` (555 L), `app/api/v1/endpoints/audit_logs.py`
@@ -2341,6 +2341,152 @@ and it is out of this feature's scope.
 | frontend `npm run typecheck`                                                             | 0 errors                                           |
 | frontend `npm run lint`                                                                  | 0 errors/warnings                                  |
 | frontend scoped suite (`src/modules/ip-security`, `AuditLogPage`, `ErrorMonitoringPage`) | 65 passed (5 files)                                |
+
+Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
+`analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).
+
+---
+
+## Pass 14 (2026-11-22) — watchdog pickup, true zero-delta in scope, 0 new findings
+
+The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (no reachable
+agent via `ListAgents`). A fresh `list_pull_requests` (state=open) found no
+`claude/security-review-*` head — PR #4543 (Feature 27, Integrations, pass 14) had already merged clean (`0af595b72a508467980f64525eb47d89a0b05861`),
+confirming row 28 as the next `⬜` row.
+
+### Baseline and diff method
+
+Passes 12 and 13 both made zero code changes (each PR touched only this
+findings file and `PROGRESS.md`), so pass 12's merge — PR #3998's head,
+`00f411aa2241fdb663b6b2b6b9f6797dcdaa592f` — is still the current code
+baseline. This repo's shallow clone has lost the old merge commits
+themselves (the recurring caveat passes 7/9/10/11/12/13 already document),
+so that commit was fetched directly by its hash and diffed against by
+content, per file, rather than trusted from `git log`.
+
+**All nine backend scope files are byte-identical to the baseline**:
+`security_monitoring.py` (endpoint + service), `ip_security.py` (endpoint),
+`ip_security_service.py`, `audit_logs.py`, `error_logs.py`, `core/audit.py`,
+`core/geoip.py`, `audit_ship_service.py` — every `git diff --stat` against
+the baseline empty.
+
+**`core/security_middleware.py` carries a diff, confirmed already read.**
+Diffing against the baseline shows 80 insertions / 10 deletions — slightly
+more than pass 13's own count (78/10) against the same baseline. Diffing
+instead against pass 13's own PR head (`116679d3e0cdd3da2a7037106f33d604b4fc12e1`,
+fetched directly for the same shallow-clone reason) isolates the _new_
+2-line delta since pass 13: two more paths appended to
+`SecurityMonitoringMiddleware.EXPORT_ENDPOINTS` —
+`/api/v1/evaluations/export` and `/api/v1/reports/export`. This is the same
+shape pass 7 already saw and accepted (a different feature's own commit
+adding its new export route to this shared, hand-maintained allowlist,
+pinned against the live route table by `TestExportEndpointsCoverage`) — not
+a change to review as this feature's own, and not a gap, since an export
+route left off this list would fail that test. The rest of the file
+(`check_rate_limit`/`rate_limit_login`, the per-account + per-address
+sign-in rate-limit change) is byte-identical to what pass 13 already read
+and ruled out of scope (Feature 01/Auth or Feature 33/Core-infra, not this
+feature) — re-confirmed, not re-derived.
+
+**Frontend: three files carry a genuine post-pass-13 diff**, found the same
+way (diffed against pass 13's own PR head, not the pass-12 baseline, so the
+large forms-review/`FormField` rewrite of `IPExceptionRequestForm.tsx` and
+the rest of the ip-security module — already fully read and described by
+pass 13 — don't show up as if they were new). All three are cosmetic:
+
+- `BlockedCountriesTable.tsx` (+2/−2) — the `max-w-xs break-words` truncation
+  wrapper moved from the `<td>` onto an inner `min-w-0` div (the Pitfall #39
+  `rwd-table` reflow-fit shape); no change to what is rendered or read.
+- `AuditLogPage.tsx` (+3/−2) — the hand-rolled stats grid swapped for the
+  shared `StatGrid` component; same shape as pass 14-Forms'
+  `FormResultsPanel.tsx` swap on a different feature.
+- `ErrorMonitoringPage.tsx` (+20/−15) — `StatGrid` adoption, the AAA-contrast
+  blue-700/red-700/800 → blue-900/red-900/300 token sweep (CLAUDE.md's
+  2026-09-07 "every call site at once" correction), and `rwd-table`/
+  `data-label` reflow adoption on the error-code reference table. No query,
+  permission, or data-flow change in any of the three.
+
+### Route inventory — re-enumerated by AST, 37 routes, unchanged
+
+Counted every `@router.<method>` decorator directly in the four endpoint
+files (not trusted from the empty diff, or from pass 13's count): 16
+(`security_monitoring.py`) + 12 (`ip_security.py`) + 3 (`audit_logs.py`) + 6
+(`error_logs.py`) = **37**, identical to pass 13 — consistent with all four
+files being byte-identical. Also AST-checked that every one of the 37 has
+at least one `Depends(...)` in its parameter defaults (no route decorator
+missing an auth dependency).
+
+### Re-verified — both open items unchanged
+
+- **SEC2-28-6** (LOW, flagged) — `request_ip_exception`'s duplicate-request
+  check is still a plain `select()` → `INSERT`, no `.with_for_update()`, no
+  unique constraint — unchanged file, unchanged finding. Not a security
+  bypass; left as an admin-UX nicety.
+- **Dead detector code** (pass 3, flagged) — `analyze_request`/
+  `_check_rate_limit`/`_check_injection_patterns` still have zero production
+  callers outside `services/security_monitoring.py` — unchanged file.
+
+All previously FIXED/RESOLVED items (SEC-1 through SEC-9, SEC2-28-1 through
+SEC2-28-11, pass 11's IP-exception approval locking) are byte-identical to
+pass 13's already-spot-verified state — not re-walked line by line again
+this pass, since nothing in their files moved.
+
+### Also fixed (unrelated to this feature, found while running the completion gate)
+
+`validate_migrations.py --strict` failed on a forked Alembic chain — two
+heads (`3f93727e84ba`, the Integrations pass 14 watchdog's own merge
+revision, and `a9763f96e072`, an unrelated leave-request change) landed
+separately since this feature's last pass. Neither touches a table the
+other writes (checked by grepping each revision's `op.*` calls). Fixed with
+an empty `alembic merge` revision (`67f75ff116ae`); `alembic upgrade head`
+then applies cleanly to a single head. Same shape, same fix, as the
+Integrations pass 14 PR's own unrelated fix two passes ago — this rotation
+is now tripping over this class of conflict often enough that it may be
+worth a standing watchdog check of its own, rather than discovering it anew
+each time a feature's completion gate happens to run `alembic upgrade
+head` first.
+
+### Checklist dimensions re-checked directly against current code
+
+1. **Auth coverage** — all 37 routes carry a `Depends`-bearing dependency
+   (AST-checked above); none bare.
+2. **Authorization & role fit** — unchanged file content; permission
+   strings unchanged from pass 13's AST-verified set.
+3. **Tenant isolation** — unchanged file content; org-scoping on every
+   by-id audit/error-log/IP-exception/alert operation unchanged.
+4. **Injection & untrusted output** — unchanged file content; `like_pattern()`
+   - `escape=LIKE_ESCAPE_CHAR` on the audit-log search, `safe_error_detail()`
+     on the exception handlers, both unchanged.
+5. **Data exposure** — unchanged file content; `/security/`, `/audit-logs/`,
+   `/ip-security/`, `/errors` remain in `UNCACHEABLE_PREFIXES`.
+6. **Abuse resistance** — n/a change this pass; SEC-1's tracking-dict caps
+   untouched.
+7. **Schema & migration integrity** — no migration in this feature's own
+   scope this pass; the one migration touched (the merge revision) is the
+   unrelated fix above, carries no `op.*` calls, and is reviewed in that
+   section.
+
+### No new findings this pass
+
+**0 fixed, 0 new findings** in this feature's own scope. SEC2-28-6 and the
+dead-detector-code note remain open, unchanged, still awaiting their
+respective owner/product decision. No `KNOWN_LIMITATIONS.md` change needed.
+
+### Completion gate (Pass 14)
+
+| Check                                                                                                                             | Result                                                                            |
+| --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`)                                                                                   | clean                                                                             |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`)                                                                           | clean, 3395 files unchanged                                                       |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`)                                                                        | clean                                                                             |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                              | PASSED — 810 revisions, single head `67f75ff116ae` (after the merge-revision fix) |
+| `python3.13 scripts/generate_schema_docs.py --check`                                                                              | up to date                                                                        |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                 | 329 routes, 0 errors/warnings                                                     |
+| backend scoped suite (same `-k` filter as pass 11/12/13, plus `repair_schema.py` to mirror CI's production-startup column repair) | 925 passed, 1 pre-existing skip (`pywebpush`), 0 failed                           |
+| `npm run typecheck`                                                                                                               | 0 errors                                                                          |
+| `npm run lint`                                                                                                                    | 0 errors/warnings                                                                 |
+| frontend scoped suite (`src/modules/ip-security`, `AuditLogPage`, `ErrorMonitoringPage`)                                          | 65 passed (5 files)                                                               |
 
 Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
 `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).

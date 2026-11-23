@@ -366,9 +366,17 @@ template saved from a ranked-choice officer ballot. One item becomes four,
 which the confirmation warned about. The voting method changes from one choice
 per voter to ranked choice, which nothing warned about.
 
-![The bylaw draft before a template is applied: one ballot item, and a details card reading Voting Method — Simple Majority](./images/19-25-ballot-template-settings-before.png)
+Before, on the draft's **Ballot** page and on its **Overview**:
 
-![The same draft immediately after applying the saved officer ballot: four items replacing the one, and the details card now reading Ranked Choice](./images/19-26-ballot-template-settings-after.png)
+![The bylaw draft's Ballot page before a template is applied: Ballot Items (1), the Article VII Amendment](./images/19-25-ballot-template-settings-before.png)
+
+![The same draft's Overview before the template: the details card reading Voting Method — One choice per voter](./images/19-44-voting-method-before.png)
+
+After applying the template:
+
+![The same draft's Ballot page immediately after applying the saved officer ballot: Ballot Items (4), the template's officer seats replacing the one item](./images/19-26-ballot-template-settings-after.png)
+
+![The same draft's Overview after the template: the details card now reading Voting Method — Ranked choice](./images/19-45-voting-method-after.png)
 
 The risk is in what does _not_ change. This draft was created as
 **Supermajority Required (2/3)**. Applying the template overwrote the method
@@ -1140,7 +1148,7 @@ counted as one).
 
 ![Record Paper Ballots on a ranked-choice race: one ballot already added with its choices in order, and the next ballot being entered with its 1st and 2nd choice menus and the Identical ballots count](./images/14-28-paper-ballots-ranked.png)
 
-![Record Paper Ballots refusing a 24-ballot tally against a 22-member roster, with the override checkbox it offers instead](./images/19-27-paper-ballot-over-roster.png)
+![Record Paper Ballots refusing a 24-ballot tally for Captain when only 8 members are eligible to vote in that race, with the override checkbox it offers instead](./images/19-27-paper-ballot-over-roster.png)
 
 ### Officer Attestation
 
@@ -1531,6 +1539,10 @@ Every page after the first has a short header with the department's logo and
 name and the election's title _(2026-11-16)_, so a loose page still says which
 election it belongs to. The printable ballot and the pre-meeting package have
 the same header.
+
+_(2026-11-21)_ Every page's footer reads **Page 2 of 4**, not just **Page 2**,
+so a missing page shows. The pre-meeting package is numbered the same way, and
+the printable ballot already was.
 
 File the signed copy with the meeting minutes. Together with the forensics
 report, it is your full defence if the result is disputed.

@@ -82,6 +82,7 @@ class EmailKind(str, enum.Enum):
     SHIFT_NOTICES = "shift_notices"
     INVENTORY_UPDATES = "inventory_updates"
     STORE_ANNOUNCEMENTS = "store_announcements"
+    STORE_BALANCE = "store_balance"
     VOLUNTEER_CALLS = "volunteer_calls"
     ELECTION_NOTICES = "election_notices"
     SUGGESTION_BOX = "suggestion_box"
@@ -232,6 +233,11 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "An officer voided one of your training records, and why",
             "An officer edited one of your training records",
             "A decision on your request to be excused from a training session",
+            "Your request to be excused closed undecided, so the session "
+            "counts as missed",
+            "A session you asked to be excused from moved, so the request "
+            "needs your confirmation",
+            "A question about your request to be excused, which it waits on",
             "A leave of absence recorded, changed or removed, and what it does "
             "to your training requirements",
         ),
@@ -338,10 +344,21 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         audience=_M,
         includes=(
             "Ordering window open, closing or closed",
-            "Payment reminders",
             "Vendor order updates",
         ),
         rationale="Receipts for the member's own orders are still sent.",
+    ),
+    # Owner decision 2026-11-22 (W67b-17): payment reminders were part of
+    # Store announcements, so muting "ordering is open" also muted being told
+    # what the member owes. Their own choice, like Your dues, and on for
+    # everyone: no legacy switch, so a member who muted announcements still
+    # receives reminders until they turn this off too.
+    EmailKind.STORE_BALANCE: EmailPolicy(
+        label="Your store balance",
+        required=False,
+        audience=_M,
+        includes=("Reminders that a store order still has a balance to pay",),
+        rationale="My Orders in the store shows the same balance and how to pay.",
     ),
     EmailKind.VOLUNTEER_CALLS: EmailPolicy(
         label="Volunteer calls",

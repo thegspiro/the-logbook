@@ -255,7 +255,7 @@ const MyOrdersPage: React.FC = () => {
           {balance > 0 && order.status !== 'cancelled' && order.paymentStatus !== 'pending_verification' && (
             <button
               type="button"
-              className="text-theme-text-secondary hover:text-theme-text-primary self-start text-xs underline"
+              className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 self-start text-xs underline"
               onClick={() => {
                 setMethodOrder(order);
                 setNewPaymentMethod(order.paymentMethod ?? '');

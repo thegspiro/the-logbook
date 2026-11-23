@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from functools import lru_cache
 from types import SimpleNamespace
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence
 
 from loguru import logger
 from sqlalchemy import delete, func, select, union_all, update
@@ -67,6 +67,10 @@ from app.services.user_deletion_service import (
     release_user_references,
 )
 from app.utils.edit_window import EDIT_TOLERANCE, as_utc, changed_since
+
+if TYPE_CHECKING:
+    # Imported where used at runtime, as the void below is.
+    from app.services.attendance_waiver_service import MemberNotice
 
 STEP_ADMIN = "admin"
 STEP_TRAINING = "training"
@@ -127,6 +131,13 @@ class StepUndoPlan:
     # The staffing roster removes several kinds at once, by kind.
     _remove_by_kind: Dict[str, List[str]] = field(default_factory=dict, repr=False)
     _ledger_ids: List[str] = field(default_factory=list, repr=False)
+    # Seats the staffing roster moved to another position, by assignment id,
+    # with the position each goes back to.
+    _restore_positions: Dict[str, Optional[str]] = field(
+        default_factory=dict, repr=False
+    )
+    #: How many of them an undo puts back.
+    positions_restored: int = 0
 
 
 def _chunks(values: Sequence[str]) -> Iterable[List[str]]:
@@ -137,6 +148,11 @@ def _chunks(values: Sequence[str]) -> Iterable[List[str]]:
 class HistoricalImportUndoService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        # The emails owed to members whose pending waiver requests an undo
+        # voided (its events were deleted). ``undo`` runs inside the caller's
+        # transaction, so the caller sends them with ``send_member_notices``
+        # once it has committed (CLAUDE.md pitfall #18).
+        self.waiver_notices: List[MemberNotice] = []
 
     # ------------------------------------------------------------------
     # Preview
@@ -159,6 +175,7 @@ class HistoricalImportUndoService:
                 ],
                 "already_gone": plan.already_gone,
                 "reused": plan.reused,
+                "positions_restored": plan.positions_restored,
             }
         return {
             "steps": steps,
@@ -307,9 +324,14 @@ class HistoricalImportUndoService:
         re-seats a member the hours import already put on it. A record made
         by the commit was stamped with its ledger entry, so one created within
         ``EDIT_TOLERANCE`` of the entry was made by it (owner decision
-        2026-11-16); anything older was used and is left as it is. A re-seated
-        member keeps the roster's seat: the seat they had before was not
-        recorded.
+        2026-11-16); anything older was used and is left as it is.
+
+        A member the roster re-seated (on a shift for the same date and unit,
+        or on the shift their hours were paired with) goes back to the position
+        they had: the commit records it in ``results["staffing"]["reseated"]``.
+        A seat moved again since keeps where it was moved to, and a commit from
+        before 2026-11-21 recorded nothing, so its re-seated members keep the
+        roster's seat.
 
         Kept as an officer's work: a record changed since, a shift or event
         someone else has since been added to.
@@ -381,6 +403,17 @@ class HistoricalImportUndoService:
         classify(ImportedRecordKind.SHIFT_ASSIGNMENT)
         classify(ImportedRecordKind.EVENT)
         classify(ImportedRecordKind.SHIFT)
+
+        reseated = ((record.results or {}).get("staffing") or {}).get("reseated")
+        if isinstance(reseated, dict):
+            for seat_id, moved in reseated.items():
+                seat = rows[ImportedRecordKind.SHIFT_ASSIGNMENT].get(seat_id)
+                if seat is None or not isinstance(moved, dict):
+                    continue
+                current = getattr(seat.position, "value", seat.position)
+                if current == moved.get("to") and moved.get("from"):
+                    plan._restore_positions[seat_id] = moved["from"]
+            plan.positions_restored = len(plan._restore_positions)
 
         # A seat whose member has attendance on that shift belongs to the hours
         # import, however close in time the two commits ran: the roster writes
@@ -482,9 +515,22 @@ class HistoricalImportUndoService:
                 )
 
     async def _delete_staffing(self, org_id: str, plan: StepUndoPlan) -> int:
-        """Check-ins and seats first, then the events and shifts they were on."""
+        """Re-seated members back where they were, then check-ins and seats,
+        then the events and shifts they were on."""
         removed = 0
         by_kind = plan._remove_by_kind
+        leaving = set(by_kind.get(ImportedRecordKind.SHIFT_ASSIGNMENT.value, []))
+        for seat_id, position in sorted(plan._restore_positions.items()):
+            if seat_id in leaving:
+                continue
+            await self.db.execute(
+                update(ShiftAssignment)
+                .where(
+                    ShiftAssignment.organization_id == org_id,
+                    ShiftAssignment.id == seat_id,
+                )
+                .values(position=position)
+            )
         removed += await self._delete_ids(
             EventRSVP, org_id, by_kind.get(ImportedRecordKind.EVENT_RSVP.value, [])
         )
@@ -497,7 +543,9 @@ class HistoricalImportUndoService:
         if event_ids:
             from app.services.attendance_waiver_service import void_pending_for_events
 
-            await void_pending_for_events(self.db, org_id, event_ids, "deleted")
+            self.waiver_notices.extend(
+                await void_pending_for_events(self.db, org_id, event_ids, "deleted")
+            )
         removed += await self._delete_ids(Event, org_id, event_ids)
         removed += await self._delete_ids(
             Shift, org_id, by_kind.get(ImportedRecordKind.SHIFT.value, [])
@@ -780,6 +828,7 @@ class HistoricalImportUndoService:
             counts["removed"] = await self._delete_drills(record, plan._remove_ids)
         elif step == STEP_STAFFING:
             counts["removed"] = await self._delete_staffing(org_id, plan)
+            counts["positions_restored"] = plan.positions_restored
         else:
             counts["removed"] = await self._delete_shifts(org_id, plan)
         for chunk in _chunks(plan._ledger_ids):
@@ -939,7 +988,9 @@ class HistoricalImportUndoService:
 
         from app.services.attendance_waiver_service import void_pending_for_events
 
-        await void_pending_for_events(self.db, org_id, event_ids, "deleted")
+        self.waiver_notices.extend(
+            await void_pending_for_events(self.db, org_id, event_ids, "deleted")
+        )
         # The session and its requirement links cascade from the event.
         return await self._delete_ids(Event, org_id, event_ids)
 

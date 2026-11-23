@@ -197,6 +197,84 @@ class TestTheGrantAssignee:
             )
 
 
+class TestTheGrantComplianceTaskAssignee:
+    async def _application(self, db, org, actor):
+        return await GrantService(db).create_application(
+            org.id, {"grant_program_name": "AFG"}, actor.id
+        )
+
+    async def test_a_new_task_refuses_a_former_member(self, db_session):
+        org = await _org(db_session)
+        actor = await _member(db_session, org)
+        former = await _member(db_session, org, UserStatus.DROPPED_INVOLUNTARY)
+        application = await self._application(db_session, org, actor)
+
+        with pytest.raises(ValueError, match="Only current members"):
+            await GrantService(db_session).create_compliance_task(
+                application.id,
+                org.id,
+                {
+                    "task_type": "performance_report",
+                    "title": "Q4 report",
+                    "due_date": date(2027, 1, 15),
+                    "assigned_to": former.id,
+                },
+                actor.id,
+            )
+
+    async def test_an_edit_keeps_an_assignee_who_has_since_left(self, db_session):
+        org = await _org(db_session)
+        actor = await _member(db_session, org)
+        assignee = await _member(db_session, org)
+        service = GrantService(db_session)
+        application = await self._application(db_session, org, actor)
+        task = await service.create_compliance_task(
+            application.id,
+            org.id,
+            {
+                "task_type": "performance_report",
+                "title": "Q4 report",
+                "due_date": date(2027, 1, 15),
+                "assigned_to": assignee.id,
+            },
+            actor.id,
+        )
+        assignee.status = UserStatus.RETIRED
+        await db_session.flush()
+
+        updated = await service.update_compliance_task(
+            task.id,
+            {"assigned_to": assignee.id, "notes": "Still theirs"},
+            actor.id,
+            org.id,
+        )
+
+        assert updated is not None
+        assert updated.assigned_to == assignee.id
+
+    async def test_an_edit_refuses_choosing_a_former_member(self, db_session):
+        org = await _org(db_session)
+        actor = await _member(db_session, org)
+        service = GrantService(db_session)
+        application = await self._application(db_session, org, actor)
+        task = await service.create_compliance_task(
+            application.id,
+            org.id,
+            {
+                "task_type": "performance_report",
+                "title": "Q4 report",
+                "due_date": date(2027, 1, 15),
+            },
+            actor.id,
+        )
+        former = await _member(db_session, org, UserStatus.ARCHIVED)
+
+        with pytest.raises(ValueError, match="Only current members"):
+            await service.update_compliance_task(
+                task.id, {"assigned_to": former.id}, actor.id, org.id
+            )
+
+
 class TestTheInstructorQualification:
     async def test_a_former_member_is_refused(self, db_session):
         org = await _org(db_session)

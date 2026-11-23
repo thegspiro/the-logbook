@@ -47,6 +47,19 @@ def _no_review_prompts(monkeypatch):
     monkeypatch.setattr(TrainingSubmissionService, "_notify_member", AsyncMock())
 
 
+@pytest.fixture(autouse=True)
+def _no_row_locks(monkeypatch):
+    """The fake sessions hold no rows to lock. submit_draft now reads the
+    department's config before it locks the member and the submission (a
+    config created on first read commits, which would release the locks), so
+    a test that never configured one gets the default. The locks themselves
+    are proven in test_training_submission_attachment_races.py."""
+    monkeypatch.setattr(TrainingSubmissionService, "_lock_submitter", AsyncMock())
+    monkeypatch.setattr(
+        TrainingSubmissionService, "get_config", AsyncMock(return_value=_config())
+    )
+
+
 class _Session:
     def __init__(self):
         self.added = []
@@ -232,12 +245,13 @@ class TestAttachments:
         )
         assert rows[0] == {
             "index": 0,
+            "id": None,
             "file_name": "cert.pdf",
             "file_type": "application/pdf",
             "file_size": 12,
             "uploaded_at": "2026-03-12T00:00:00+00:00",
         }
-        assert rows[1] == {"index": 1, "file_name": "legacy-string-entry"}
+        assert rows[1] == {"index": 1, "id": None, "file_name": "legacy-string-entry"}
 
     def test_response_model_never_serializes_a_file_path(self):
         response = TrainingSubmissionResponse.model_validate(
@@ -315,7 +329,7 @@ class TestAttachments:
         with pytest.raises(HTTPException) as exc:
             await training_submissions.download_submission_attachment(
                 submission.id,
-                0,
+                "0",
                 db=None,
                 current_user=SimpleNamespace(id=submission.submitted_by),
             )
@@ -379,6 +393,7 @@ class TestAttachments:
         assert result["attachments"] == [
             {
                 "index": 0,
+                "id": submission.attachments[0]["id"],
                 "file_name": "cert.pdf",
                 "file_type": "application/pdf",
                 "file_size": len(b"%PDF-1.4"),
@@ -520,7 +535,7 @@ class TestAttachmentRoot:
         )
 
         response = await training_enhancements.download_record_attachment(
-            "rec-1", 0, db=db, current_user=member
+            "rec-1", "0", db=db, current_user=member
         )
 
         # Served (decrypted) from the record route rather than refused.
@@ -720,6 +735,53 @@ class TestCreateWithAttachment:
         # The row never landed, so the bytes on disk belong to nothing.
         assert os.listdir(os.path.join(str(tmp_path), "org-1", "self-reports")) == []
 
+    async def test_a_repeat_keeps_only_the_file_the_submission_names(
+        self, monkeypatch, tmp_path
+    ):
+        """A resend with the same client_request_id returns the submission
+        already stored. The resend's own upload belongs to nothing, and no
+        erasure path finds a file by anything but a row's reference, so it is
+        removed here (2026-11-21 member-files review)."""
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
+        monkeypatch.setattr(
+            file_storage_service, "detect_mime_type", lambda content: "application/pdf"
+        )
+        stored_rows: dict[str, SimpleNamespace] = {}
+
+        async def _create(**kwargs):
+            key = kwargs["client_request_id"]
+            if key not in stored_rows:
+                stored_rows[key] = _submission(
+                    status=SubmissionStatus.APPROVED,
+                    attachments=kwargs["attachments"],
+                )
+            return stored_rows[key]
+
+        monkeypatch.setattr(
+            training_submissions,
+            "TrainingSubmissionService",
+            lambda db: SimpleNamespace(create_submission=_create),
+        )
+
+        for _ in range(2):
+            submission = await training_submissions.create_submission_with_attachment(
+                payload=self._payload(client_request_id="device-attempt-1"),
+                file=SimpleNamespace(
+                    read=AsyncMock(return_value=b"%PDF-1.4"), filename="cert.pdf"
+                ),
+                db=None,
+                current_user=SimpleNamespace(id="user-1", organization_id="org-1"),
+            )
+
+        on_disk = [
+            os.path.join(directory, name)
+            for directory, _, names in os.walk(
+                os.path.join(str(tmp_path), "org-1", "self-reports")
+            )
+            for name in names
+        ]
+        assert on_disk == [submission.attachments[0]["file_path"]]
+
 
 class TestStartTime:
     def test_the_reported_start_time_reaches_the_record(self):
@@ -792,18 +854,20 @@ class TestRequiredEvidenceEverywhere:
             training_submissions,
             "TrainingSubmissionService",
             lambda db: SimpleNamespace(
+                get_config=AsyncMock(),
                 assert_evidence_requirement=AsyncMock(
                     side_effect=ValueError(
                         "This department requires supporting documents on a submission"
                     )
-                )
+                ),
             ),
         )
 
         with pytest.raises(HTTPException) as exc:
             await training_submissions.delete_submission_attachment(
                 submission.id,
-                0,
+                "0",
+                expected_id=None,
                 db=None,
                 current_user=SimpleNamespace(
                     id="user-1", organization_id=submission.organization_id

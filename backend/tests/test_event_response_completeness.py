@@ -87,6 +87,14 @@ CALLER_SUPPLIED = {
     # outreach event that has started (guest_headcount_offered). Per caller,
     # detail endpoint only; False is the honest default elsewhere.
     "can_record_guest_headcount",
+    # Whether this caller may see and open the event's volunteer signup sheet:
+    # events.manage on an outreach event that is not cancelled. Per caller,
+    # detail endpoint only; False is the honest default elsewhere.
+    "can_staff_event",
+    # The live signup sheet as this caller sees it: its roles and their own
+    # seat (member_signup_sheet). Per caller, detail endpoint only; None is the
+    # honest default elsewhere, where no single member is implied.
+    "volunteer_signup",
     # The rest of the list card's derived fields, per caller: whether this
     # member checked in (their own RSVP row), what the event would credit (the
     # org's hour mappings) and whether the attendee list will answer them (the

@@ -13,7 +13,7 @@
  * analysis that comes back is what the table shows next (pitfall #29).
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import { Modal } from '../../../../components/Modal';
 import { Pagination } from '../../../../components/ux';
@@ -56,7 +56,7 @@ type RowFilter = 'problems' | 'all' | 'excluded' | 'skipped';
 
 const PAGE_SIZE = 50;
 const EDIT_MAX_LENGTH = 255;
-const TIME_FIELDS = ['start_time', 'end_time'];
+const WHEN_FIELDS = ['date', 'start_time', 'end_time'];
 
 /** The edit dialog's sections, by field. A field in none of them goes under "Other". */
 const FIELD_GROUPS: { title: string; fields: string[] }[] = [
@@ -177,20 +177,22 @@ const IssueDecisions: React.FC<{ issue: HistoryImportIssue; rowId: string } & Ro
 };
 
 /**
- * Start and end, editable in the table, for a row whose times collide with
- * another line's. An overlap is nearly always one mistyped time, and fixing it
- * should not take a dialog; the value is saved as an edit like any other, so
- * Revert in the dialog still restores the file's cell. Only fields the column
- * mapping reads are offered — a file with no end-time column has nothing here
- * to edit for it.
+ * The Date and Times cells of a row whose times collide with another line's,
+ * with date, start and end editable in place. An overlap is nearly always one
+ * mistyped value — often the date of an overnight shift entered on the wrong
+ * day — and fixing it should not take a dialog. Each value is saved as an edit
+ * like any other, so Revert in the dialog still restores the file's cell. Only
+ * fields the column mapping reads are offered.
+ *
+ * One component renders both cells because they share one form: the date box
+ * sits in its own cell and joins the form in the Times cell through the HTML
+ * `form` attribute, so Enter in either cell saves the row.
  */
-const InlineTimes: React.FC<{ row: HistoryImportRow; fields: string[] } & Pick<RowActions, 'busy' | 'onRowUpdate'>> = ({
-  row,
-  fields,
-  busy,
-  onRowUpdate,
-}) => {
-  const editable = TIME_FIELDS.filter((f) => fields.includes(f));
+const InlineWhenCells: React.FC<
+  { row: HistoryImportRow; fields: string[] } & Pick<RowActions, 'busy' | 'onRowUpdate'>
+> = ({ row, fields, busy, onRowUpdate }) => {
+  const formId = useId();
+  const editable = WHEN_FIELDS.filter((f) => fields.includes(f));
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(editable.map((f) => [f, row.values[f] ?? '']))
   );
@@ -200,34 +202,52 @@ const InlineTimes: React.FC<{ row: HistoryImportRow; fields: string[] } & Pick<R
     if (next !== (row.values[field] ?? '')) changes[field] = next;
   }
   const dirty = Object.keys(changes).length > 0;
+  const times = editable.filter((f) => f !== 'date');
+
+  const input = (field: string, width: string) => (
+    <input
+      form={formId}
+      className={`form-input-sm ${width}`}
+      aria-label={`${HISTORY_IMPORT_FIELD_LABELS[field] ?? field}, line ${row.line_number}`}
+      maxLength={EDIT_MAX_LENGTH}
+      value={values[field] ?? ''}
+      onChange={(e) => setValues({ ...values, [field]: e.target.value })}
+    />
+  );
 
   return (
-    <form
-      className="flex flex-col items-start gap-1"
-      aria-label={`Times for line ${row.line_number}`}
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (dirty) void onRowUpdate(row.id, { edits: changes });
-      }}
-    >
-      <div className="flex items-center gap-1">
-        {editable.map((field, index) => (
-          <React.Fragment key={field}>
-            {index > 0 && <span aria-hidden="true">–</span>}
-            <input
-              className="form-input-sm w-20"
-              aria-label={`${HISTORY_IMPORT_FIELD_LABELS[field] ?? field}, line ${row.line_number}`}
-              maxLength={EDIT_MAX_LENGTH}
-              value={values[field] ?? ''}
-              onChange={(e) => setValues({ ...values, [field]: e.target.value })}
-            />
-          </React.Fragment>
-        ))}
-      </div>
-      <button type="submit" className="btn-secondary" disabled={busy || !dirty}>
-        Save times
-      </button>
-    </form>
+    <>
+      <td data-label="Date" className="px-3 py-2 whitespace-nowrap">
+        {editable.includes('date') ? input('date', 'w-28 touch:w-32') : row.values.date || '—'}
+      </td>
+      <td data-label="Times" className="px-3 py-2 whitespace-nowrap">
+        <form
+          id={formId}
+          className="flex flex-col items-start gap-1"
+          aria-label={`Date and times for line ${row.line_number}`}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (dirty) void onRowUpdate(row.id, { edits: changes });
+          }}
+        >
+          {times.length > 0 ? (
+            <div className="flex items-center gap-1">
+              {times.map((field, index) => (
+                <React.Fragment key={field}>
+                  {index > 0 && <span aria-hidden="true">–</span>}
+                  {input(field, 'w-20')}
+                </React.Fragment>
+              ))}
+            </div>
+          ) : (
+            <span>{timesOf(row)}</span>
+          )}
+          <button type="submit" className="btn-secondary" disabled={busy || !dirty}>
+            Save
+          </button>
+        </form>
+      </td>
+    </>
   );
 };
 
@@ -686,25 +706,27 @@ const ReviewRows: React.FC<ReviewRowsProps> = ({
                     <td data-label="Unit" className="px-3 py-2">
                       {unitOf(row)}
                     </td>
-                    <td data-label="Date" className="px-3 py-2 whitespace-nowrap">
-                      {row.values.date || '—'}
-                    </td>
-                    <td data-label="Times" className="px-3 py-2 whitespace-nowrap">
-                      {!row.excluded &&
-                      issues.some((i) => i.code === 'overlapping_entries') &&
-                      TIME_FIELDS.some((f) => fields.includes(f)) ? (
-                        <InlineTimes
-                          // A fresh analysis with new times starts the inputs over.
-                          key={`${row.values.start_time ?? ''}|${row.values.end_time ?? ''}`}
-                          row={row}
-                          fields={fields}
-                          busy={busy}
-                          onRowUpdate={onRowUpdate}
-                        />
-                      ) : (
-                        timesOf(row)
-                      )}
-                    </td>
+                    {!row.excluded &&
+                    issues.some((i) => i.code === 'overlapping_entries') &&
+                    WHEN_FIELDS.some((f) => fields.includes(f)) ? (
+                      <InlineWhenCells
+                        // A fresh analysis with new values starts the inputs over.
+                        key={WHEN_FIELDS.map((f) => row.values[f] ?? '').join('|')}
+                        row={row}
+                        fields={fields}
+                        busy={busy}
+                        onRowUpdate={onRowUpdate}
+                      />
+                    ) : (
+                      <>
+                        <td data-label="Date" className="px-3 py-2 whitespace-nowrap">
+                          {row.values.date || '—'}
+                        </td>
+                        <td data-label="Times" className="px-3 py-2 whitespace-nowrap">
+                          {timesOf(row)}
+                        </td>
+                      </>
+                    )}
                     <td data-label="Status" className="px-3 py-2">
                       {state ?? (
                         <ul className="space-y-2">

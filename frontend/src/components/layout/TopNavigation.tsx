@@ -39,6 +39,7 @@ import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './fina
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 import { useHasAssignedApplicants } from '../../modules/prospective-members/hooks/useHasAssignedApplicants';
 import { useHasCrew } from '../../hooks/useHasCrew';
+import { leaveRequestNavLabel, useLeaveRequestNav } from '../../hooks/useLeaveRequestNav';
 import { useWaiverAttention } from '../../hooks/useWaiverAttention';
 
 interface TopNavigationProps {
@@ -108,6 +109,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     !modulesLoading && isModuleOn('prospective_members')
   );
   const hasCrew = useHasCrew(currentUser?.id);
+  const leaveRequestNav = useLeaveRequestNav(currentUser?.id);
   const waivers = useWaiverAttention(currentUser?.id, {
     training: !modulesLoading && isModuleOn('training'),
     meetings: !modulesLoading && isModuleOn('minutes'),
@@ -193,6 +195,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
       : []),
     // Gate mirrors SideNavigation's My Crew — see there.
     ...(hasCrew ? [{ label: 'My Crew', path: '/members/my-crew' } as NavItem] : []),
+    // See SideNavigation: the backend decides who sees this.
+    ...(leaveRequestNav.show
+      ? [{ label: leaveRequestNavLabel(leaveRequestNav.waiting), path: '/members/leave-requests' } as NavItem]
+      : []),
     // Every member's inbox for department announcements, and the suggestion
     // box. SideNavigation has always listed both; without them here a
     // department on this layout had no way to reach either screen.

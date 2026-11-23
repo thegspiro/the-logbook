@@ -18,7 +18,7 @@
 import { chromium } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -588,6 +588,18 @@ async function enterAuthenticatorCode(page, credentials) {
  * session never pays for that login — which matters because `--only` runs are
  * the common case while iterating on one guide.
  */
+/**
+ * How long a signed-in context may sit unused before it is signed in afresh.
+ *
+ * The backend ends a session after HIPAA_SESSION_TIMEOUT_MINUTES (15) of
+ * inactivity. The administrator's context is used by most shots and never goes
+ * quiet that long, but the officer accounts are used by a handful each, spread
+ * over a two-hour run: by their next shot the session had lapsed, the app sent
+ * them to /login, and fifteen shots in one run failed with "route did not
+ * land". Under the timeout, with room for one slow shot.
+ */
+const SESSION_IDLE_LIMIT_MS = 12 * 60 * 1000;
+
 function makeSessions(browser, baseOptions) {
   const cache = new Map();
 
@@ -597,8 +609,15 @@ function makeSessions(browser, baseOptions) {
       const theme = shot.theme || "light";
       const key = `${auth}:${theme}`;
 
-      let entry = cache.get(key);
-      if (entry) return entry;
+      const cached = cache.get(key);
+      if (cached && Date.now() - cached.lastUsed < SESSION_IDLE_LIMIT_MS) {
+        cached.lastUsed = Date.now();
+        return cached.page;
+      }
+      if (cached) {
+        await cached.page.context().close();
+        cache.delete(key);
+      }
 
       const context = await browser.newContext({
         ...baseOptions,
@@ -648,13 +667,18 @@ function makeSessions(browser, baseOptions) {
         // Privileged and deliberately not enrolled in two-step sign-in, for
         // the grace-period banner and the password step-up box.
         await login(page, DEMO_MFA_GRACE_CREDENTIALS);
+      } else if (auth === "admin-unconfirmed") {
+        // The administrator in a session of its own, which nothing confirms.
+        // Shots on the admin session step up whenever the server asks, and
+        // for ten minutes after that a switch needing confirmation saves at
+        // once instead of opening the Confirm it's you box it pictures.
+        await login(page, DEMO_CREDENTIALS);
       } else if (auth !== "anonymous") {
         throw new Error(`unknown auth mode '${auth}' on shot ${shot.id}`);
       }
 
-      entry = page;
-      cache.set(key, page);
-      return entry;
+      cache.set(key, { page, lastUsed: Date.now() });
+      return page;
     },
   };
 }
@@ -777,6 +801,12 @@ async function main() {
   );
   for (const shot of shots) {
     const target = resolve(OUTPUT_DIR, `${shot.id}.png`);
+    // The capture is written beside the image, and moved over it only once
+    // every check below has passed. Writing straight to `target` meant a shot
+    // rejected for an out-of-frame subject, an error page or a crash had
+    // already replaced the committed image with the very frame it rejected,
+    // and a whole run left dozens of those behind with nothing to say so.
+    const pending = resolve(OUTPUT_DIR, `${shot.id}.capturing.png`);
 
     // Some states cannot exist in a seeded department — a first-run prompt is
     // gone the moment the thing it prompts for is seeded, and an empty-state
@@ -909,7 +939,7 @@ async function main() {
         ? await page.locator(shot.selector).first()
         : null;
       if (clip) {
-        await clip.screenshot({ path: target });
+        await clip.screenshot({ path: pending });
       } else {
         if (shot.fullPage) {
           // Return to the top first. A prepare step that clicks something far
@@ -921,11 +951,11 @@ async function main() {
           await page.waitForTimeout(250);
         }
         await page.screenshot({
-          path: target,
+          path: pending,
           fullPage: Boolean(shot.fullPage),
         });
       }
-      await optimize(target);
+      await optimize(pending);
       const outOfFrame = await detectSubjectOutOfFrame(page, shot);
       if (outOfFrame) {
         throw new Error(
@@ -948,6 +978,15 @@ async function main() {
         throw new Error(`page rendered an error: "${pageError}"`);
       }
       const overflow = await detectHorizontalOverflow(page);
+      // An empty state is recorded as captured but never applied, so it may
+      // fill a placeholder that has no image yet. It must not replace one that
+      // exists: that image was taken against richer data than this run had.
+      const keptExisting = Boolean(emptyState) && existsSync(target);
+      if (keptExisting) {
+        await rm(pending, { force: true });
+      } else {
+        await rename(pending, target);
+      }
       results.push({
         id: shot.id,
         status: "ok",
@@ -957,11 +996,12 @@ async function main() {
         anchor: shot.anchor,
         alt: shot.alt,
         ...(emptyState ? { emptyState } : {}),
+        ...(keptExisting ? { keptExisting: true } : {}),
         ...(overflow ? { horizontalOverflow: overflow } : {}),
         ...(shot.holdBack ? { holdBack: shot.holdBack } : {}),
       });
       console.log(
-        `  ${emptyState ? "~" : "+"} ${shot.id}${emptyState ? ` (empty: "${emptyState}")` : ""}`,
+        `  ${emptyState ? "~" : "+"} ${shot.id}${emptyState ? ` (empty: "${emptyState}"${keptExisting ? "; existing image kept" : ""})` : ""}`,
       );
       if (overflow) {
         console.log(
@@ -972,6 +1012,7 @@ async function main() {
         );
       }
     } catch (error) {
+      await rm(pending, { force: true });
       results.push({
         id: shot.id,
         status: "failed",

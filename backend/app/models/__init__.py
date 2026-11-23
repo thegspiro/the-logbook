@@ -41,6 +41,18 @@ from app.models.apparatus import (
     MaintenanceCategory,
     MaintenanceIntervalUnit,
 )
+from app.models.apparatus_event import (
+    ApparatusEventEvocMode,
+    ApparatusEventSeatCall,
+    ApparatusEventSeatMethod,
+    ApparatusEventSeatType,
+    ApparatusEventTemplate,
+    ApparatusEventTemplateSeat,
+    ApparatusEventTemplateUnit,
+    EventApparatusPlan,
+    EventApparatusSeat,
+    EventApparatusUnit,
+)
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
     AttendanceWaiverAttachment,
@@ -256,6 +268,7 @@ from app.models.historical_import import (
     ImportedSourceRecord,
 )
 from app.models.history import (
+    ApparatusDisposition,
     HistoricalMember,
     HistoricalMemberPeriodTitle,
     HistoricalMemberRelation,
@@ -263,22 +276,34 @@ from app.models.history import (
     HistoryAlbum,
     HistoryAlbumDocument,
     HistoryAlbumItem,
+    HistoryApparatus,
+    HistoryApparatusDesignation,
+    HistoryApparatusType,
     HistoryClearanceDecision,
     HistoryClearanceRequest,
     HistoryClearanceStep,
     HistoryDocument,
+    HistoryDocumentApparatusTag,
     HistoryDocumentFile,
     HistoryDocumentTag,
     HistoryDocumentType,
+    HistoryEvent,
+    HistoryEventApparatus,
+    HistoryEventDocument,
+    HistoryEventMedia,
+    HistoryEventMember,
+    HistoryEventType,
     HistoryImport,
     HistoryImportRow,
     HistoryImportTitleMapping,
     HistoryMedia,
+    HistoryMediaApparatusTag,
     HistoryMediaFile,
     HistoryMediaTag,
     HistoryRecordRedirect,
     HistoryRevision,
     HistorySource,
+    HistoryStation,
     HistoryTitle,
 )
 from app.models.integration import (
@@ -355,9 +380,12 @@ from app.models.knowledge_test import (
 )
 from app.models.label_printer import LabelPrinter
 from app.models.leave_request import (
+    LeaveApproverCover,
     LeaveDecisionRule,
+    LeaveMessageKind,
     LeaveNoticeSend,
     LeaveRequest,
+    LeaveRequestMessage,
     LeaveRequestStatus,
     LeaveRequestVote,
     LeaveVote,
@@ -443,6 +471,10 @@ from app.models.org_chart import OrgChartNode, OrgChartNodeHolder
 from app.models.organization_lock import OrganizationLock
 from app.models.organization_officer import OrganizationOfficer
 from app.models.passkey import UserPasskey, WebAuthnChallenge
+from app.models.pending_file_deletion import (
+    PendingDeletionReason,
+    PendingFileDeletion,
+)
 from app.models.public_portal import (
     PublicPortalAccessLog,
     PublicPortalAPIKey,
@@ -679,10 +711,13 @@ __all__ = [
     "AttendanceWaiverWorkflow",
     # Leave of absence requests and scheduled leave notices
     "LeaveDecisionRule",
+    "LeaveMessageKind",
+    "LeaveRequestMessage",
     "LeaveNoticeSend",
     "LeaveRequest",
     "LeaveRequestStatus",
     "LeaveRequestVote",
+    "LeaveApproverCover",
     "LeaveVote",
     # Error log models
     "ErrorLog",
@@ -775,6 +810,17 @@ __all__ = [
     # Open shift swap notices
     "OpenSwapNotice",
     # Event request models
+    # Apparatus event models
+    "ApparatusEventEvocMode",
+    "ApparatusEventSeatMethod",
+    "ApparatusEventSeatType",
+    "ApparatusEventSeatCall",
+    "ApparatusEventTemplate",
+    "ApparatusEventTemplateSeat",
+    "ApparatusEventTemplateUnit",
+    "EventApparatusPlan",
+    "EventApparatusSeat",
+    "EventApparatusUnit",
     "EventRequest",
     "EventRequestActivity",
     "EventRequestEmailTemplate",
@@ -838,6 +884,8 @@ __all__ = [
     "SchedulingModuleConfig",
     # Malware scan of files stored before upload scanning
     "StoredFileScan",
+    "PendingDeletionReason",
+    "PendingFileDeletion",
     "ScanVerdict",
     # Security alert models
     "SecurityAlertRecord",
@@ -919,6 +967,19 @@ __all__ = [
     "ReturnRequestStatus",
     "ReturnRequestType",
     # History models
+    "ApparatusDisposition",
+    "HistoryApparatus",
+    "HistoryApparatusDesignation",
+    "HistoryApparatusType",
+    "HistoryDocumentApparatusTag",
+    "HistoryEvent",
+    "HistoryEventApparatus",
+    "HistoryEventDocument",
+    "HistoryEventMedia",
+    "HistoryEventMember",
+    "HistoryEventType",
+    "HistoryMediaApparatusTag",
+    "HistoryStation",
     "HistoricalMember",
     "HistoricalMemberPeriodTitle",
     "HistoricalMemberRelation",

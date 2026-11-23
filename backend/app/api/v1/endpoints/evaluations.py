@@ -76,6 +76,9 @@ from app.schemas.evaluation import (
     PartWrite,
     PreviewOptions,
     PublishResult,
+    ReassignmentHolder,
+    ReassignmentPlan,
+    ReassignmentRequest,
     ResponseWrite,
     SignatureWrite,
     SignResult,
@@ -476,6 +479,98 @@ async def delete_period(
     )
 
 
+@router.get(
+    "/periods/{period_id}/reassign-options",
+    response_model=List[ReassignmentHolder],
+)
+async def list_reassignment_holders(
+    period_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.manage")),
+):
+    """Everyone holding open work in the period that a reassignment moves --
+    an evaluator who has not submitted, or a name on an approval or
+    calibration step not yet done -- with how many evaluations each.
+
+    **Permissions required:** evaluations.manage
+    """
+    return ensure_found(
+        await EvaluationService(db).reassignment_options(
+            current_user.organization_id, period_id
+        ),
+        "Review period",
+    )
+
+
+@router.get("/periods/{period_id}/reassign-preview", response_model=ReassignmentPlan)
+async def preview_reassignment(
+    period_id: str,
+    from_user_id: str = Query(min_length=1, max_length=36),
+    to_user_id: str = Query(min_length=1, max_length=36),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.manage")),
+):
+    """What handing one person's open work in the period to another would
+    move, and what it would skip and why. Changes nothing.
+
+    **Permissions required:** evaluations.manage
+    """
+    async with handle_service_errors("Failed to preview the reassignment"):
+        plan = await EvaluationService(db).reassignment_plan(
+            current_user.organization_id, period_id, from_user_id, to_user_id
+        )
+    return ensure_found(plan, "Review period")
+
+
+@router.post("/periods/{period_id}/reassign", response_model=ReassignmentPlan)
+async def reassign_period_work(
+    period_id: str,
+    data: ReassignmentRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.manage")),
+    _stepup: User = Depends(require_stepup),
+):
+    """Hand one person's open work in the period to another: evaluations
+    they have not yet submitted as evaluator (their draft stays for the new
+    evaluator), and approval and calibration steps naming them. An
+    evaluation the new person may not take over is skipped with the reason.
+
+    Choosing who writes and signs personnel records needs a recently
+    re-verified session, as assigning one step does. Each evaluation moved
+    is audited at ``warning`` with both people.
+
+    **Permissions required:** evaluations.manage
+    """
+    async with handle_service_errors("Failed to reassign"):
+        plan = ensure_found(
+            await EvaluationService(db).reassignment_plan(
+                current_user.organization_id,
+                period_id,
+                data.from_user_id,
+                data.to_user_id,
+                apply=True,
+            ),
+            "Review period",
+        )
+    for row in plan["rows"]:
+        if row["skipped_reason"] is None:
+            await _audit(
+                db,
+                current_user,
+                "evaluation_work_reassigned",
+                {
+                    "evaluation_id": row["evaluation_id"],
+                    "period_id": period_id,
+                    "from_user_id": data.from_user_id,
+                    "to_user_id": data.to_user_id,
+                    "evaluator_moved": row["moves_evaluator"],
+                    "steps_moved": row["steps"],
+                },
+                severity="warning",
+            )
+    return plan
+
+
 # ---------------------------------------------------------------- evaluations
 
 PartKind = Literal["self_evaluation", "evaluator"]
@@ -554,6 +649,43 @@ async def export_period_results(
         media_type="text/csv; charset=utf-8",
         headers={
             "Content-Disposition": 'attachment; filename="evaluation-results.csv"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get("/export-pdfs")
+async def export_period_pdfs(
+    period_id: str = Query(min_length=1, max_length=36),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.view_all")),
+    _stepup: User = Depends(require_stepup),
+):
+    """A zip of the signed PDF of every finalized evaluation in a period: the
+    copy the signatures attest to, without any later response. Requires
+    ``evaluations.view_all`` and a recently re-verified session, since it
+    hands over a period's personnel records at once (owner decision
+    2026-11-22). Audited, and watched as a bulk export; a period of another
+    department answers 404.
+
+    **Permissions required:** evaluations.view_all
+    """
+    async with handle_service_errors("Failed to prepare the PDFs"):
+        bundle = await EvaluationDocumentService(db).period_bundle(
+            current_user.organization_id, current_user, period_id
+        )
+    content, count = ensure_found(bundle, "Review period")
+    await _audit(
+        db,
+        current_user,
+        "evaluation_period_pdfs_exported",
+        {"period_id": period_id, "documents": count},
+    )
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": 'attachment; filename="evaluation-pdfs.zip"',
             "Cache-Control": "no-store",
         },
     )

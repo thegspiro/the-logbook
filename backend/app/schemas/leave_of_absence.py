@@ -13,7 +13,12 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.models.leave_request import LeaveDecisionRule, LeaveRequestStatus, LeaveVote
+from app.models.leave_request import (
+    LeaveDecisionRule,
+    LeaveMessageKind,
+    LeaveRequestStatus,
+    LeaveVote,
+)
 from app.models.user import LeaveType
 
 # More than any department has offices, and few enough to keep one routing
@@ -36,6 +41,10 @@ class LeaveOfAbsenceSettings(BaseModel):
         default_factory=list, max_length=MAX_APPROVER_POSITIONS
     )
     request_decision_rule: LeaveDecisionRule = LeaveDecisionRule.ANY
+    # A request still undecided this many days after it was made is sent,
+    # once, to the Chief (or, when no Chief can open it, the officers who
+    # manage leave). 0 sends none.
+    request_escalation_days: int = Field(default=21, ge=0, le=180)
 
     @field_validator("request_approver_position_ids")
     @classmethod
@@ -87,6 +96,51 @@ class LeaveRequestCreate(BaseModel):
         return self
 
 
+class LeaveQuestionCreate(BaseModel):
+    """An approver's question, or the member's answer."""
+
+    text: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("text")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Write something first.")
+        return value
+
+
+class LeaveChangesCreate(BaseModel):
+    """An approver's changed dates, for the member to accept or decline."""
+
+    start_date: date
+    end_date: Optional[date] = None
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+    @field_validator("note")
+    @classmethod
+    def _blank_note(cls, value: Optional[str]) -> Optional[str]:
+        return value.strip() or None if value else None
+
+    @model_validator(mode="after")
+    def _dates_in_order(self) -> "LeaveChangesCreate":
+        if self.end_date is not None and self.end_date < self.start_date:
+            raise ValueError("The end date must be on or after the start date.")
+        return self
+
+
+class LeaveChangesResponse(BaseModel):
+    """The member's answer to changed dates."""
+
+    accept: bool
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+    @field_validator("note")
+    @classmethod
+    def _blank_note(cls, value: Optional[str]) -> Optional[str]:
+        return value.strip() or None if value else None
+
+
 class LeaveRequestVoteCreate(BaseModel):
     vote: LeaveVote
     note: Optional[str] = Field(default=None, max_length=1000)
@@ -100,10 +154,42 @@ class LeaveRequestVoteCreate(BaseModel):
 class LeaveRequestVoteResponse(BaseModel):
     voter_id: str
     voter_name: str
+    # The voting round it was cast in; only the request's current round counts.
+    round: int = 1
     vote: LeaveVote
+    # The away approver a stand-in voted in place of; empty for a vote an
+    # approver cast for themselves.
+    on_behalf_of_name: Optional[str] = None
     # The approver's note; shown to the member and to approvers.
     note: Optional[str] = None
     created_at: datetime
+
+
+class LeaveRequestMessageResponse(BaseModel):
+    kind: LeaveMessageKind
+    author_name: str
+    body: Optional[str] = None
+    created_at: datetime
+
+
+class LeaveDates(BaseModel):
+    start_date: date
+    end_date: Optional[date] = None
+
+
+class LeaveProposalResponse(LeaveDates):
+    proposed_by_name: str
+    proposed_at: datetime
+
+
+class LeaveRequestSummary(BaseModel):
+    """What the navigation needs: whether to offer the page, and a count."""
+
+    requests_enabled: bool
+    # Waiting requests the caller may vote on now and has not.
+    to_decide: int
+    # The caller's own requests waiting on their answer.
+    waiting_on_me: int
 
 
 class LeaveRequestResponse(BaseModel):
@@ -121,6 +207,14 @@ class LeaveRequestResponse(BaseModel):
     decided_at: Optional[datetime] = None
     decided_by_name: Optional[str] = None
     leave_id: Optional[str] = None
+    # The active leave this request extends, as it stands.
+    extends_leave: Optional[LeaveDates] = None
+    # "answer" or "proposal" while the request waits on its member.
+    awaiting: Optional[str] = None
+    proposal: Optional[LeaveProposalResponse] = None
+    # Shown to the member and those who may decide, like the reason.
+    messages: List[LeaveRequestMessageResponse] = Field(default_factory=list)
+    vote_round: int = 1
     votes: List[LeaveRequestVoteResponse] = Field(default_factory=list)
     # The tally against the current approvers, and how many approvals
     # settle it under the rule.
@@ -128,6 +222,76 @@ class LeaveRequestResponse(BaseModel):
     denials: int = 0
     approver_count: int = 0
     approvals_needed: int = 0
+    # The member held an approver position when they asked, so the Chief
+    # decides it rather than their fellow approvers.
+    routed_to_chief: bool = False
     # The caller may vote on it now.
     can_vote: bool = False
+    # The caller may ask a question or propose changed dates now.
+    can_ask: bool = False
+    # The caller is the member and owes an answer, or a decision on dates.
+    can_answer: bool = False
+    can_respond_to_changes: bool = False
     my_vote: Optional[LeaveVote] = None
+
+
+class LeaveEndEarlyCreate(BaseModel):
+    """A member's first day back from their own leave in progress."""
+
+    first_day_back: date
+
+
+class LeaveEndedEarlyResponse(BaseModel):
+    leave_id: str
+    start_date: date
+    # The leave's last day now: the day before the first day back.
+    end_date: date
+    previous_end_date: Optional[date] = None
+    first_day_back: date
+
+
+class LeaveApproverCoverCreate(BaseModel):
+    """An approver's away period and the officer standing in for them."""
+
+    approver_id: str = Field(..., min_length=1, max_length=36)
+    stand_in_id: str = Field(..., min_length=1, max_length=36)
+    start_date: date
+    end_date: date
+
+    @model_validator(mode="after")
+    def _dates(self) -> "LeaveApproverCoverCreate":
+        if self.end_date < self.start_date:
+            raise ValueError("The cover must end on or after the day it starts.")
+        if self.stand_in_id == self.approver_id:
+            raise ValueError("An approver cannot stand in for themself.")
+        return self
+
+
+class LeaveApproverCoverResponse(BaseModel):
+    id: str
+    approver_id: str
+    approver_name: str
+    stand_in_id: str
+    stand_in_name: str
+    start_date: date
+    end_date: date
+    # Running today, in the department's timezone.
+    active: bool
+    can_clear: bool
+
+
+class LeaveCoverPerson(BaseModel):
+    id: str
+    name: str
+
+
+class LeaveApproverCoverBoard(BaseModel):
+    """The covers the caller may see, and whom they may set one for."""
+
+    covers: List[LeaveApproverCoverResponse] = Field(default_factory=list)
+    # Approvers the caller may set a cover for: themself if they are one,
+    # every approver for those who manage leave.
+    approvers: List[LeaveCoverPerson] = Field(default_factory=list)
+    # Who may stand in: the members who manage leave.
+    stand_ins: List[LeaveCoverPerson] = Field(default_factory=list)
+    today: date

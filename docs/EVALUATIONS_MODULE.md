@@ -131,14 +131,15 @@ A template version holds a **definition** and a **workflow**.
 `officer_only`, shown only to members whose rank is in `officer_ranks`. Each
 item has a tool:
 
-| Tool            | Answer                            | Scored |
-| --------------- | --------------------------------- | ------ |
-| `labeled_scale` | one of the item's labelled levels | yes    |
-| `numeric_scale` | one of the item's numbered levels | yes    |
-| `meets`         | meets or does not meet            | yes    |
-| `checklist`     | the options ticked                | no     |
-| `narrative`     | free text                         | no     |
-| `goals`         | free text for goals               | no     |
+| Tool            | Answer                                             | Scored |
+| --------------- | -------------------------------------------------- | ------ |
+| `labeled_scale` | one of the item's labelled levels                  | yes    |
+| `numeric_scale` | one of the item's numbered levels                  | yes    |
+| `meets`         | meets or does not meet                             | yes    |
+| `checklist`     | the options ticked                                 | no     |
+| `narrative`     | free text                                          | no     |
+| `goals`         | a list of goals, each with an optional target date | no     |
+| `goal_review`   | a result for each of the last review's goals       | no     |
 
 Items can allow N/A, require an example for given levels, require or forbid a
 comment, be left out of the self-evaluation, carry a weight, and carry a
@@ -159,6 +160,21 @@ period ends. The workflow also sets `reminder_days_before` (default 3),
 `response_window_days` (default 30). An annual evaluation must end with the
 member's acknowledgement; an interim check-in has only the self-evaluation and
 evaluator steps and no signatures.
+
+A form may have one `goal_review` item (see "Last year's goals" below). It
+takes no data block and cannot be marked N/A as a whole.
+
+**Starters:** a new template may start from a ready-made form
+(`GET /templates/starters`, `starter` on `POST /templates`): the annual member
+evaluation, the annual evaluation with officer sections, and the probationary
+check-in. Each publishes as it stands. Since 2026-11-21 the annual forms open
+their Development section with a "Last year's goals" item, and the check-in its
+Next steps with "Since the last check-in"; templates made from a starter before
+then are unchanged. The officer one adds an officer-only
+Leadership and supervision section and needs `officer_ranks` on the create
+request: required for it, refused for any other, and checked against the
+department's ranks. A member without one of those ranks is graded on the other
+sections alone, which keep nearly the plain annual form's shares.
 
 **Matching:** when drafting without naming a template, the most specific
 active, published template of the kind is used (class and status beats either,
@@ -185,18 +201,43 @@ that code (pitfall #29).
 | `events.attended_by_type`          | department events checked in to, one line per event type                            |
 | `shifts.hours`                     | hours on shifts worked                                                              |
 | `shifts.count`                     | shifts worked                                                                       |
+| `shifts.external_hours`            | hours worked for other agencies that the department counted, with how many shifts   |
 | `shifts.performance_rating_avg`    | average 1–5 rating on shift completion reports                                      |
 | `shifts.field_evaluation_averages` | average rating per field shift evaluation form, one line each (shown, never scored) |
 | `calls.responses`                  | calls responded to                                                                  |
 | `calls.response_pct`               | calls responded to out of all calls (hidden when call tracking is off)              |
 | `admin_hours.hours`                | approved administrative hours                                                       |
 | `skills.tests_passed`              | skills tests passed                                                                 |
+| `training.knowledge_tests_passed`  | knowledge tests passed, each once, with its best score                              |
+| `apparatus.equipment_checks`       | equipment checks the member signed off, with how many found a failed item           |
+| `inventory.overdue_at_period_end`  | items checked out past their due date and not returned on the period's last day     |
 | `certifications.current`           | qualifications held at the period's end, with expiry dates                          |
 | `certifications.expiring_soon`     | qualifications held at period end that expire within 90 days after it               |
 | `positions.held`                   | offices and committee seats held at any time during the period                      |
 
 A figure that cannot honestly be given is reported unavailable with a note,
 never as zero or 100%.
+
+**Four sources added on 2026-11-21**, each reusing the rule the owning module
+already applies:
+
+- `shifts.external_hours` reads the same month totals as `shifts.hours`, whose
+  detail line has reported these hours as "not included" since 2026-11-01;
+  only hours the department counted are included, as everywhere else.
+- `training.knowledge_tests_passed` counts a submitted attempt marked passed,
+  the program-milestone rule. A test passed twice counts once.
+- `apparatus.equipment_checks` counts checks whose `checked_by` is the member,
+  on a shift or standalone, by `checked_at`.
+- `inventory.overdue_at_period_end` asks inventory's overdue rule
+  (`overdue_checkout_clause`) as of the end of the period instead of now:
+  checked out and due before then, and not checked in by then. That rule falls
+  back to the stored overdue flag for a loan with no due date, which only
+  describes today, so such loans are not counted. Temporary item assignments
+  are not loans and are not counted either.
+
+Their detail is the stored `breakdown`. None is marked turned off in the
+builder: the Apparatus and Inventory modules are not switches that certainly
+stop the data, and the training and scheduling ones follow their groups.
 
 `calls.response_pct` _(2026-11-13)_ divides over `Coverage.included()`, the
 stretches no exclusion touches: calls during a leave or a gap in membership
@@ -289,12 +330,55 @@ Adding these sources changed the stored shape of no existing entry, so
    acknowledgement is done, and acknowledges receipt or refuses with a reason.
    Either finalizes it. Acknowledging is not agreement, and the PDF says so.
 6. **Finalization** freezes the PDF (`ensure_document`; built on first
-   download if building it at finalization failed).
+   download if building it at finalization failed). Since 2026-11-20 it is
+   footed "Page X of Y": `render_evaluation_pdf` lays the record out twice,
+   the first pass counting the pages. A PDF frozen earlier keeps "Page N".
 
 A signature needs the signer's name typed as on their account (case and
 spacing ignored), an intent checkbox, and step-up. The step is read under the
 evaluation's row lock, and the unique key on (evaluation, revision, step) backs
 that up.
+
+## Handing over open work
+
+When an evaluator or approver leaves or changes role, a holder of
+`evaluations.manage` hands their open work in one review period to someone
+else (owner decision 2026-11-21) from the conduct list's **Hand over work**:
+
+- `GET /periods/{id}/reassign-options` lists who holds open work in the period,
+  a former member included, with how many evaluations each.
+- `GET /periods/{id}/reassign-preview?from_user_id=&to_user_id=` says what
+  would move and what would be skipped and why, and changes nothing.
+- `POST /periods/{id}/reassign` (step-up) does it, deciding each evaluation
+  again under its row lock by the same rule, so it does what the preview said.
+
+What moves, on evaluations still in progress: the evaluator's part while the
+evaluator has not submitted (their draft stays, for the new evaluator to
+finish and submit as theirs), and approval and calibration steps not yet done
+that name the person. A step that goes to a position's holders follows the
+position and is not moved. An evaluation moves whole or not at all: it is
+skipped when the new person is its member, cannot conduct evaluations (for the
+evaluator's part), is named on its approval or calibration (for the
+evaluator's part), or is the evaluator or signed another approval (for an
+approval). The new evaluator or assignee gets the usual "Evaluation waiting on
+you" email for a step already open; the member is not emailed and sees the new
+name. Each evaluation moved is audited as `evaluation_work_reassigned` at
+`warning` with both people and what moved.
+
+## Self-evaluation beside the evaluation
+
+Once the member has submitted their self-evaluation, the evaluation screen
+lists each rated item they answered beside the evaluator's rating of it, and
+marks the items **far apart**: two or more levels on a scale, or opposite
+answers on meets / does not meet. Those are the points worth raising when the
+review is discussed. An unrated item or one marked not applicable is never
+marked. For the evaluator writing their part it follows their unsaved ratings.
+
+It is drawn on the screen from the two parts the server already sends, so it
+shows nobody anything new: the evaluator sees the self-evaluation only once it
+is submitted, and the member sees the evaluator's ratings only once they are
+released (`compareSelfEvaluation` in `utils/evaluationRecord.ts`). It is not
+printed on the PDF, which carries both parts in full.
 
 ## After finalization
 
@@ -335,6 +419,51 @@ evaluator without `evaluations.view_all`) gets nothing. It is shown on the
 screen beside the form and is not printed on the PDF: the PDF is the record of
 this review alone.
 
+## Last year's goals
+
+A `goal_review` item rates each goal the member's previous review set. The
+previous review is the one the last-review panel shows: the most recent
+finalized evaluation on the same template, whatever its version, whose period
+ended before this one began. Its goals are the goals on each `goals` item in
+its evaluator's part, one entry per goal, keyed `<item>:<goal id>` and
+labelled with its place in the item ("Goals for the coming year, goal 2").
+
+**Goals are a list since 2026-11-22.** A `goals` item holds up to 20 goals
+(`ItemAnswer.goals`), each with an id the form chooses, its text and an
+optional target date. Every save stores that shape: an answer sent as free
+`text` is stored as one goal (`goal-1`), and a goal still blank is left out
+(`as_goal_list`). A part saved before then keeps its `text`, because a
+submitted part is in the record hash its signatures attest to; it reads as one
+goal keyed by the item alone, the key goal copies and ratings taken before
+then already use. The PDF prints the list numbered, with "(by <date>)", and a
+goal review prints each goal's target.
+
+**The goals are copied into the evaluation** when it is drafted, under
+`data_snapshot.previous_goals`, and copied again when the figures are
+refreshed, which is allowed until the evaluator locks their part. A review
+amended later does not change the copy once locked. Because the copy is part of
+the record:
+
+- it is read without regard to who is looking, unlike the last-review panel:
+  everyone who reads this evaluation's content (the member, the evaluator,
+  approvers, calibration and `view_all`) sees the goals it rates, even an
+  evaluator who could not open last year's review. A manager without
+  `view_all` does not, as with the rest of the content. The department chose
+  this on 2026-11-21 so the record and its PDF can carry the goals they rate;
+- it is in the record hash, so a signature attests to the goals as rated. The
+  hash includes the copy only when there is one, so evaluations signed before
+  goal reviews existed still verify;
+- it is printed on the PDF beside each result.
+
+Each goal gets a result, `met`, `partly_met`, `not_met` or `not_applicable`
+("No longer applies", for a goal an assignment change made moot), and an
+optional comment, stored in the item's answer as `goal_ratings` keyed by the
+previous review's goals item. Submitting needs a result for every copied goal;
+a rating for a goal not in the copy is refused. When the previous review set no
+goals, or there is none, the item has nothing to rate and asks for nothing. If
+the item is in the self-evaluation, the member rates them too. The results are
+recorded and printed but do not count toward any grade.
+
 ## Period results
 
 For a holder of `evaluations.view_all`, the conduct list (`GET /evaluations`)
@@ -351,6 +480,22 @@ sent. `GET /evaluations/export?period_id=` (view_all) downloads the period as
 CSV, one row per evaluation with its grade, written with `SafeCsvWriter`. Each
 export is audited as `evaluation_period_exported`. The caller's own evaluation
 is left out of both, as the list leaves it out.
+
+### Signed PDFs for a period
+
+Beside Export CSV, **Download signed PDFs** (`GET /evaluations/export-pdfs?period_id=`)
+gives a holder of `evaluations.view_all` one zip holding the signed PDF of every
+finalized evaluation in the period: the copy the signatures attest to, without
+any response the member added later (owner decision 2026-11-22). The
+evaluations are those the conduct list and the export give the caller, so their
+own is left out; a PDF never built is built first. It needs a recently
+re-verified session, since it hands over a period's personnel records at once,
+is audited as `evaluation_period_pdfs_exported` with the count, and is watched
+by `SecurityMonitoringMiddleware` as a bulk export. Each file is named
+"Member - Form - period end.pdf", reduced to letters, digits, spaces and
+`.()-_` so no entry can point outside the folder it unpacks into. A PDF missing
+from storage is listed in `NOT INCLUDED.txt` inside the zip, and logged, rather
+than failing the download or silently dropping out.
 
 ## Emails
 
@@ -387,7 +532,10 @@ All under `/api/v1/evaluations`.
 | `GET ""`                                                                                                                      | `conduct`, `view_all` or `manage`                                                             |
 | `GET /draft-options`, `POST ""`                                                                                               | `conduct` or `manage`                                                                         |
 | `GET /bulk-preview`, `POST /bulk`                                                                                             | `manage`                                                                                      |
+| `GET /periods/{id}/reassign-options`, `GET /periods/{id}/reassign-preview`                                                    | `manage`                                                                                      |
+| `POST /periods/{id}/reassign`                                                                                                 | `manage`, with step-up                                                                        |
 | `GET /removed`                                                                                                                | `view_all`, `manage` or `delete`                                                              |
+| `GET /export-pdfs?period_id=`                                                                                                 | `view_all`, with step-up                                                                      |
 | `GET /export?period_id=`                                                                                                      | `view_all`                                                                                    |
 | `GET /mine`, `/mine/live-data`, `/mine/removed`                                                                               | sign-in                                                                                       |
 | `GET /crew`                                                                                                                   | sign-in; lists only the evaluations of members the caller supervises today                    |

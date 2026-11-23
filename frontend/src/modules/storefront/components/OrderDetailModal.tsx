@@ -453,6 +453,27 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
     });
   };
 
+  const rejectPaymentReport = async () => {
+    if (!order) return;
+    const ok = await confirm({
+      title: 'Mark this payment as not received?',
+      message: `${order.customerName} will be told the payment they reported could not be verified and that the balance is still owed. Payment reminders resume, and they can choose another way to pay.`,
+      confirmLabel: 'Not received',
+      cancelLabel: 'Keep checking',
+    });
+    if (!ok) return;
+    await withBusy(async () => {
+      try {
+        await storefrontService.rejectPaymentReport(order.id, { notifyMember: true });
+        toast.success('Payment marked as not received');
+        return true;
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Could not mark the payment as not received'));
+        return false;
+      }
+    });
+  };
+
   const cancelled = order?.status === StoreOrderStatus.CANCELLED;
 
   const submitWith =
@@ -608,10 +629,22 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
             )}
 
             {order.paymentStatus === 'pending_verification' && !cancelled && (
-              <div className="alert-warning text-sm">
-                The member reported paying
-                {order.paymentReference ? ` (ref ${order.paymentReference})` : ''}. Confirm it against the department
-                account, then record the payment below.
+              <div className="alert-warning flex flex-wrap items-center justify-between gap-3 text-sm">
+                <span>
+                  The member reported paying
+                  {order.paymentReference ? ` (ref ${order.paymentReference})` : ''}. Confirm it against the department
+                  account, then record the payment below. If it never arrived, mark it not received.
+                </span>
+                <button
+                  type="button"
+                  className="btn-secondary btn-md"
+                  disabled={busy}
+                  onClick={() => {
+                    void rejectPaymentReport();
+                  }}
+                >
+                  Not received
+                </button>
               </div>
             )}
 

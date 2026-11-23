@@ -9,7 +9,7 @@ the thresholds. Five officer views skipped the profile and graded every
 applicable requirement against the department's own settings:
 
 * the period roster (``GET /training/records/member-status``),
-* the competency matrix (``CompetencyMatrixService``),
+* the competency matrix (``CompetencyMatrixService``, retired 2026-11-21),
 * the compliance CSV and PDF export cells (``ReportExportService``),
 * the compliance forecast (``ReportExportService.generate_compliance_forecast``),
 * Scheduling's Shift Compliance report (``SchedulingService.get_shift_compliance``).
@@ -54,7 +54,6 @@ from app.models.training import (
 from app.models.user import User
 from app.services import training_compliance
 from app.services import training_enhancement_service as export_mod
-from app.services.competency_matrix_service import CompetencyMatrixService
 from app.services.scheduling_service import SchedulingService
 from app.services.training_enhancement_service import ReportExportService
 from app.utils.org_timezone import resolve_org_today
@@ -227,6 +226,7 @@ async def _config(
     compliant: float = 100.0,
     at_risk: float = 75.0,
     include_current_month: bool = True,
+    threshold_type: str = "percentage",
 ) -> str:
     config_id = _uid()
     await db.execute(
@@ -234,7 +234,7 @@ async def _config(
             "INSERT INTO compliance_configs "
             "(id, organization_id, compliant_threshold, at_risk_threshold, "
             "threshold_type, include_current_month, created_at, updated_at) "
-            "VALUES (:id, :org, :c, :a, 'percentage', :icm, :now, :now)"
+            "VALUES (:id, :org, :c, :a, :tt, :icm, :now, :now)"
         ),
         {
             "id": config_id,
@@ -242,6 +242,7 @@ async def _config(
             "c": compliant,
             "a": at_risk,
             "icm": 1 if include_current_month else 0,
+            "tt": threshold_type,
             "now": _now(),
         },
     )
@@ -338,11 +339,6 @@ async def _roster(db, org_id: str, today: date) -> dict[str, dict]:
     return {str(m["user_id"]): m for m in payload["members"]}
 
 
-async def _competency(db, org_id: str) -> dict[str, dict]:
-    payload = await CompetencyMatrixService(db).get_competency_matrix(org_id)
-    return payload
-
-
 async def _csv(db, org_id: str) -> tuple[list[str], dict[str, list[str]]]:
     """The compliance CSV's header and each member's row, keyed by last name."""
     import csv
@@ -426,23 +422,6 @@ class TestPeriodRosterFollowsTheProfile:
         assert len(calls) == 1
 
 
-# ------------------------------------------------------- competency matrix
-
-
-class TestCompetencyMatrixFollowsTheProfile:
-    async def test_out_of_profile_cell_is_not_applicable(self, db_session):
-        # Before: Charlie graded not_started, readiness 1 of 3.
-        dept = await _profiled_org(db_session)
-        payload = await _competency(db_session, dept.org)
-        row = next(m for m in payload["members"] if m["user_id"] == dept.member)
-
-        assert row["statuses"][dept.reqs["Charlie"]]["status"] == "not_applicable"
-        assert row["statuses"][dept.reqs["Alpha"]]["status"] == "current"
-        assert row["statuses"][dept.reqs["Bravo"]]["status"] == "not_started"
-        assert payload["summary"]["readiness_percentage"] == 50.0
-        assert payload["summary"]["total_requirements"] == 3
-
-
 # ------------------------------------------------------------------ exports
 
 
@@ -486,14 +465,11 @@ class TestComplianceForecastFollowsTheProfile:
         assert row["current_standing"] == "compliant"
         assert {r["name"] for r in row["at_risk_requirements"]} <= {"Alpha", "Bravo"}
 
-    async def test_projection_charges_an_unrelated_certificate_to_the_profile(
-        self, db_session
-    ):
-        # The projections still subtract every certificate expiring in the
-        # window, whatever grades it, now against the profile's two
-        # requirements: 100 - 1/2 = 50. Over all three requirements (Alpha
-        # and Bravo met) it read 66.7 - 33.3 = 33.3. Pinned so the figure is
-        # a decided one.
+    async def test_projection_ignores_an_unrelated_certificate(self, db_session):
+        # The projections are the matrix's grading on that day (owner decision
+        # 2026-11-21), so a certificate no requirement here reads costs
+        # nothing. It used to cost the profile's two requirements one:
+        # 100 - 1/2 = 50.
         dept = await _profiled_org(db_session)
         await _hours(db_session, dept.org, dept.member, "Bravo", dept.today)
         await _expiring_cert(db_session, dept.org, dept.member, dept.today, 20)
@@ -501,8 +477,75 @@ class TestComplianceForecastFollowsTheProfile:
         row = (await _forecast(db_session, dept.org))[dept.member]
 
         assert row["current_compliance_percentage"] == 100.0
-        assert row["forecast_30_days"] == 50.0
+        assert (row["forecast_30_days"], row["forecast_30_standing"]) == (
+            100.0,
+            "compliant",
+        )
         assert len(row["expiring_certifications"]) == 1
+
+    async def test_member_by_the_profile_average_by_the_department(self, db_session):
+        # One of the profile's two requirements met: 50%, compliant on the
+        # profile's 50 / 25 bar, while the department average of the same
+        # figure is non-compliant on the department's 100 / 75.
+        dept = await _profiled_org(db_session)
+
+        row = (await _forecast(db_session, dept.org))[dept.member]
+        report = await ReportExportService(
+            db_session
+        ).generate_compliance_forecast_report(dept.org)
+
+        assert row["current_standing"] == "compliant"
+        assert report["averages"]["current"] == {
+            "pct": 50.0,
+            "standing": "non_compliant",
+        }
+
+
+class TestForecastStandingsAndAverages:
+    async def test_all_required_average_needs_every_member_compliant(self, db_session):
+        org_id, today = await _org(db_session)
+        for name in HOURS_TYPES:
+            await _hours_req(db_session, org_id, name)
+        complete = await _member(db_session, org_id, "Complete")
+        partial = await _member(db_session, org_id, "Partial")
+        for name in HOURS_TYPES:
+            await _hours(db_session, org_id, complete, name, today)
+        await _hours(db_session, org_id, partial, "Alpha", today)
+        await _hours(db_session, org_id, partial, "Bravo", today)
+        await _config(db_session, org_id, at_risk=50, threshold_type="all_required")
+
+        report = await ReportExportService(
+            db_session
+        ).generate_compliance_forecast_report(org_id)
+
+        # Mean 83.3 clears the 50 bar, but one member is not compliant. The
+        # projections are graded on the future day, and an annual requirement
+        # can roll into a new period inside 90 days, so they are held only to
+        # "never compliant", which is true on any day the suite runs.
+        assert report["averages"]["current"] == {"pct": 83.3, "standing": "at_risk"}
+        for key in ("days_30", "days_60", "days_90"):
+            assert report["averages"][key]["standing"] != "compliant"
+
+    async def test_report_members_are_the_forecast_rows(self, db_session):
+        dept = await _profiled_org(db_session)
+        rows = await ReportExportService(db_session).generate_compliance_forecast(
+            dept.org
+        )
+        report = await ReportExportService(
+            db_session
+        ).generate_compliance_forecast_report(dept.org)
+        assert report["members"] == rows
+
+    async def test_no_graded_member_gives_not_applicable_averages(self, db_session):
+        org_id, _ = await _org(db_session)
+        await _member(db_session, org_id, "Mike")
+        report = await ReportExportService(
+            db_session
+        ).generate_compliance_forecast_report(org_id)
+        assert report["averages"] == {
+            key: {"pct": None, "standing": "not_applicable"}
+            for key in ("current", "days_30", "days_60", "days_90")
+        }
 
 
 class TestDepartmentCutOffReachesExportsAndForecast:
@@ -620,10 +663,8 @@ class TestShiftComplianceFollowsTheProfile:
 class TestOfficerViewsAgreeWithTheMatrix:
     """Every view against the matrix row, for a profiled and a plain member.
 
-    Hours and shift-credited shifts requirements only: the competency matrix
-    keeps its own evaluator, which reads a session-attendance requirement no
-    session has been held for as "not_applicable" while the matrix keeps it in
-    the row, so its id set is comparable only for these types.
+    Hours and shift-credited shifts requirements only, the types every view
+    below grades.
     """
 
     async def test_every_view_agrees_for_profiled_and_plain_members(self, db_session):
@@ -651,7 +692,6 @@ class TestOfficerViewsAgreeWithTheMatrix:
 
         matrix = await _matrix(db_session, org_id)
         roster = await _roster(db_session, org_id, today)
-        competency = await _competency(db_session, org_id)
         header, csv_rows = await _csv(db_session, org_id)
         forecast = await _forecast(db_session, org_id)
         shifts = await _shift_report(db_session, org_id)
@@ -670,13 +710,6 @@ class TestOfficerViewsAgreeWithTheMatrix:
                 row["requirements_total"],
             )
             assert r["compliance_status"] == COLOUR[row["standing"]]
-
-            statuses = next(m for m in competency["members"] if m["user_id"] == member)[
-                "statuses"
-            ]
-            assert {
-                rid for rid, s in statuses.items() if s["status"] != "not_applicable"
-            } == graded
 
             cells = _csv_requirement_cells(header, csv_rows[last])
             assert {name for name, value in cells.items() if value != "N/A"} == {

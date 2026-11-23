@@ -176,7 +176,7 @@ Complete reference of all pages in the application, organized by module.
 | `/members/my-crew`          | My Crew                 | Authenticated |
 | `/members/leave-requests`   | Leave Requests          | Authenticated |
 
-> **Leave Requests (`/members/leave-requests`)** _(added 2026-11-14)_. A member asks for a leave of absence here, when the department has turned requests on under **Members Settings — Leave of Absence**, and sees where their requests stand. Members who may decide a request see it under **To decide**: the department's chosen approver positions, or, when nobody else holds them, the Chief, then everyone with `members.manage`. Authenticated with no permission: who decides is not a permission, and the server lists each caller only the requests they may see (`GET /users/leave-requests`, `GET /users/leave-requests/me`). The member's reason is shown to them and their approvers only, and is never emailed.
+> **Leave Requests (`/members/leave-requests`)** _(added 2026-11-14)_. A member asks for a leave of absence here, when the department has turned requests on under **Members Settings — Leave of Absence**, and sees where their requests stand. Members who may decide a request see it under **To decide**: the department's chosen approver positions, or, when nobody else holds them, the Chief, then everyone with `members.manage`. Authenticated with no permission: who decides is not a permission, and the server lists each caller only the requests they may see (`GET /users/leave-requests`, `GET /users/leave-requests/me`). The member's reason is shown to them and their approvers only, and is never emailed. _(2026-11-16)_ The menu offers the page when the department takes requests or one waits on the member (`GET /users/leave-requests/summary`); approvers can ask a question or approve with changed dates, and the member answers or accepts there. _(2026-11-17)_ A member on leave can end it early from **Your leave** (`POST /users/leave-requests/my-leaves/{leave_id}/end-early`, their own leave only).
 
 > **My Crew (`/members/my-crew`)** _(added 2026-11-04)_. The members the signed-in member supervises today, by the dated Reports To assignments (owner decision 2026-11-01, crew views). Authenticated with no permission: the assignment is the grant, and the server lists only the caller's current crew (`GET /users/me/crew`). Each card shows the member's training standing from `GET /training/compliance-summary/{id}` and links to their training records; the page also lists the evaluations written about the crew (`GET /evaluations/crew`). The menu offers My Crew only to a member who supervises someone. Medical records and contact details are not part of crew access.
 
@@ -351,17 +351,31 @@ Set per event on **Edit Event → Check-In Settings**. Both default to off.
 
 Requires `events.manage` permission. Drawn with the same two-level navigation as Training, Scheduling and Inventory Administration: area cards above a strip of the chosen area's pages (the shared AdminHubAreaNav, with the areas declared in eventsAdminTabs). The URL is `?tab=<page>`; the area is derived from the page, so a link never names it.
 
-| Area               | `?tab=`         | Label                |
-| ------------------ | --------------- | -------------------- |
-| Events             | `create`        | Create Event         |
-| Events             | `past_events`   | Past Events          |
-| Community Outreach | `requests`      | Requests             |
-| Community Outreach | `community`     | Community Engagement |
-| Check-ins          | `analytics`     | QR Code Analytics    |
-| Check-ins          | `card_checkins` | Card Check-ins       |
-| Settings           | `settings`      | Settings             |
+| Area               | `?tab=`            | Label             |
+| ------------------ | ------------------ | ----------------- |
+| Events             | `create`           | Create Event      |
+| Events             | `past_events`      | Past Events       |
+| Community Outreach | `overview`         | Overview          |
+| Community Outreach | `requests`         | Outreach Requests |
+| Community Outreach | `community`        | Outreach Impact   |
+| Community Outreach | `apparatus_events` | Apparatus Events  |
+| Check-ins          | `analytics`        | QR Code Analytics |
+| Check-ins          | `card_checkins`    | Card Check-ins    |
+| Settings           | `settings`         | Settings          |
 
 A missing or unknown `?tab=` opens Create Event.
+
+> _(2026-11-16)_ **Apparatus Events** (`?tab=apparatus_events`) is outreach that rolls an apparatus with a named crew but is not a shift — a Santamobile run, a parade. Templates (apparatus, free-text seats, a Driver seat's EVOC rule, an Admin Hours category) are scheduled onto one or many nights; each night is an ordinary event whose crew card sits on its event page, and appears on Shift Scheduling as a read-only "Outreach · not a shift" chip. Managing it needs `apparatus_events.manage`; taking a seat needs `apparatus_events.signup`.
+
+| Route                           | Page                            | Access          |
+| ------------------------------- | ------------------------------- | --------------- |
+| `/events/admin/community/print` | Outreach Impact summary (print) | `events.manage` |
+
+> The Outreach Impact tab's **Print summary** opens this page for the period chosen on the tab (`?period=`), and it opens the print dialog once the report has loaded. Every figure comes from the same two endpoints the tab and its CSV export read.
+
+### Outreach Request (`/events/admin/requests/:requestId`)
+
+Requires `events.manage` permission. One request from the Community Outreach **Requests** board, on a page of its own _(2026-11-21, owner decision: a page rather than the side panel it replaced)_: its next action, checklist, scheduling, volunteer staffing, what was asked for, contact details and activity, with a link back to the board. A row on the board, and a request just entered with **New request**, open here, so a request can be linked, bookmarked, refreshed into and left with the back button.
 
 > _(2026-11-11)_ **Create Event hands a Training event to the training-event form.** Picking **Training** as the type, or a Training template, swaps the single-page form for the step-by-step one in place, carrying every value typed so far; picking another type swaps it back. `?tab=create&template=<id>` (the Events list's **Use template** link) opens with that template applied.
 
@@ -1252,31 +1266,40 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## History _(2026-11-03)_
 
-| URL                                   | Page                       | Permission                            |
-| ------------------------------------- | -------------------------- | ------------------------------------- |
-| `/history`                            | History home               | Authenticated                         |
-| `/history/people`                     | Past members               | Authenticated                         |
-| `/history/people/new`                 | Add a past member          | `history.manage`                      |
-| `/history/people/:personId`           | Past member                | Authenticated                         |
-| `/history/people/:personId/edit`      | Edit a past member         | `history.manage`                      |
-| `/history/people/:personId/merge`     | Merge two records          | `history.manage`                      |
-| `/history/import`                     | Import a roster            | `history.manage`                      |
-| `/history/media`                      | Photos and media           | Authenticated                         |
-| `/history/media/upload`               | Upload photos and media    | `history.manage`                      |
-| `/history/media/:mediaId`             | Photo or media item        | Authenticated                         |
-| `/history/media/:mediaId/edit`        | Edit a photo or media item | `history.manage`                      |
-| `/history/documents`                  | Documents                  | Authenticated                         |
-| `/history/documents/upload`           | Upload documents           | `history.manage`                      |
-| `/history/documents/:documentId`      | Document                   | Authenticated                         |
-| `/history/documents/:documentId/edit` | Edit a document            | `history.manage`                      |
-| `/history/albums`                     | Albums                     | Authenticated                         |
-| `/history/albums/:albumId`            | Album                      | Authenticated                         |
-| `/history/import/:importId`           | Review a roster import     | `history.manage`                      |
-| `/history/honor-roll`                 | Honor Roll                 | Authenticated                         |
-| `/history/clearance/:requestId`       | Clearance review           | Authenticated                         |
-| `/history/settings`                   | Titles and clearance list  | `history.manage` or `settings.manage` |
+| URL                                    | Page                        | Permission                            |
+| -------------------------------------- | --------------------------- | ------------------------------------- |
+| `/history`                             | History home                | Authenticated                         |
+| `/history/people`                      | Past members                | Authenticated                         |
+| `/history/people/new`                  | Add a past member           | `history.manage`                      |
+| `/history/people/:personId`            | Past member                 | Authenticated                         |
+| `/history/people/:personId/edit`       | Edit a past member          | `history.manage`                      |
+| `/history/people/:personId/merge`      | Merge two records           | `history.manage`                      |
+| `/history/import`                      | Import a roster             | `history.manage`                      |
+| `/history/media`                       | Photos and media            | Authenticated                         |
+| `/history/media/upload`                | Upload photos and media     | `history.manage`                      |
+| `/history/media/:mediaId`              | Photo or media item         | Authenticated                         |
+| `/history/media/:mediaId/edit`         | Edit a photo or media item  | `history.manage`                      |
+| `/history/documents`                   | Documents                   | Authenticated                         |
+| `/history/documents/upload`            | Upload documents            | `history.manage`                      |
+| `/history/documents/:documentId`       | Document                    | Authenticated                         |
+| `/history/documents/:documentId/edit`  | Edit a document             | `history.manage`                      |
+| `/history/timeline`                    | Timeline                    | Authenticated                         |
+| `/history/events`                      | Historical events           | Authenticated                         |
+| `/history/events/new`                  | Add an event                | `history.manage`                      |
+| `/history/events/:eventId`             | Event                       | Authenticated                         |
+| `/history/events/:eventId/edit`        | Edit an event               | `history.manage`                      |
+| `/history/apparatus`                   | Historical apparatus        | Authenticated                         |
+| `/history/apparatus/new`               | Add an apparatus            | `history.manage`                      |
+| `/history/apparatus/:apparatusId`      | Historical apparatus record | Authenticated                         |
+| `/history/apparatus/:apparatusId/edit` | Edit an apparatus           | `history.manage`                      |
+| `/history/albums`                      | Albums                      | Authenticated                         |
+| `/history/albums/:albumId`             | Album                       | Authenticated                         |
+| `/history/import/:importId`            | Review a roster import      | `history.manage`                      |
+| `/history/honor-roll`                  | Honor Roll                  | Authenticated                         |
+| `/history/clearance/:requestId`        | Clearance review            | Authenticated                         |
+| `/history/settings`                    | Titles and clearance list   | `history.manage` or `settings.manage` |
 
-> The department archive, off by default and turned on under Settings → Modules. Any signed-in member reads what is published to members; the server decides what each caller receives, so a member's response never carries a past member's birth date, addresses, verification sources or research notes, and each memorial detail (date of death, circumstances, resting place) only where its own visibility allows. `history.view` reads drafts and research without editing, `history.manage` creates and edits, and `history.publish` publishes. Publishing to the public needs the department's clearance list — each step a position, any one holder of which clears it — to have cleared the record's latest substantial revision; with no list, a publisher publishes directly. The review page opens for the archive's keepers, the member who submitted the record and holders of a step's position. Public records are stored now and appear on the department's website once the public feed ships. A roster CSV is imported through a reviewed draft: each row is matched to an existing record (which only gains the fields it is missing), mapped to a member account, created as a new draft record, or skipped, and no login account is ever created. Merging two records of one person keeps one, moves the other's service, family links and change history to it, and forwards the removed record's address. Photos, audio and video keep their original exactly as uploaded, downloadable by `history.manage` only; everyone else sees a photo as a re-encoded copy with its location and camera data stripped, and audio and video as a copy with their recording-device tags and data tracks removed. TIFF is not accepted. Documents (PDFs and scans) live in the protected History folder in Documents with their catalogue in History; everyone but `history.manage` opens a copy rebuilt without its metadata, scripts or attachments, in the browser's own viewer in a new tab, and search covers each PDF's own text and transcription. A tagged person's photo-use answer is shown to the archive's keepers as a warning, never a block.
+> The department archive, off by default and turned on under Settings → Modules. Any signed-in member reads what is published to members; the server decides what each caller receives, so a member's response never carries a past member's birth date, addresses, verification sources or research notes, and each memorial detail (date of death, circumstances, resting place) only where its own visibility allows. `history.view` reads drafts and research without editing, `history.manage` creates and edits, and `history.publish` publishes. Publishing to the public needs the department's clearance list — each step a position, any one holder of which clears it — to have cleared the record's latest substantial revision; with no list, a publisher publishes directly. The review page opens for the archive's keepers, the member who submitted the record and holders of a step's position. Public records are stored now and appear on the department's website once the public feed ships. A roster CSV is imported through a reviewed draft: each row is matched to an existing record (which only gains the fields it is missing), mapped to a member account, created as a new draft record, or skipped, and no login account is ever created. Merging two records of one person keeps one, moves the other's service, family links and change history to it, and forwards the removed record's address. Photos, audio and video keep their original exactly as uploaded, downloadable by `history.manage` only; everyone else sees a photo as a re-encoded copy with its location and camera data stripped, and audio and video as a copy with their recording-device tags and data tracks removed. TIFF is not accepted. Documents (PDFs and scans) live in the protected History folder in Documents with their catalogue in History; everyone but `history.manage` opens a copy rebuilt without its metadata, scripts or attachments, in the browser's own viewer in a new tab, and search covers each PDF's own text and transcription. A tagged person's photo-use answer is shown to the archive's keepers as a warning, never a block. Events (a start date, an optional end, and links to people with their roles, apparatus, photos and documents) and historical apparatus (with their unit numbers over time; one can start from an Apparatus-module truck, copying only its descriptive details once) are published the same way. The timeline shows events plus milestones read from the published records — apparatus in and out of service, line-of-duty deaths where the death date's own visibility allows, and the starts of titles the Historian has switched on and dated — and "Today in history" lists day-precise entries on today's date in earlier years, on the History home and the Dashboard.
 
 ---
 

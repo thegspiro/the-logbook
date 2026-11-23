@@ -16,11 +16,13 @@ from datetime import date, datetime
 from typing import Optional
 
 from sqlalchemy import (
+    Boolean,
     Date,
     DateTime,
     Enum,
     ForeignKey,
     Index,
+    Integer,
     String,
     UniqueConstraint,
 )
@@ -69,6 +71,17 @@ class LeaveRequest(Base):
     members explain a leave in their own words, often medical or family
     detail. ``leave_id`` is the leave an approval created; SET NULL so the
     request stays on record if that leave is later deleted.
+
+    ``extends_leave_id`` is set when the dates overlap an active leave or
+    start the day after it ends: approving the request moves that leave's
+    dates rather than recording a second, overlapping one.
+
+    **Two things pause voting.** ``info_requested_at`` is set while an
+    approver's question waits on the member's answer; ``proposed_at`` while
+    an approver's changed dates wait on the member to accept or decline them
+    (``proposed_end_date`` NULL then means no end date). Accepting moves the
+    request onto the proposed dates and starts a new ``vote_round``: votes
+    cast on the old dates no longer count.
     """
 
     __tablename__ = "leave_requests"
@@ -109,6 +122,33 @@ class LeaveRequest(Base):
     decided_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    extends_leave_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("member_leaves_of_absence.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    info_requested_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    proposed_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    proposed_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    proposed_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    proposed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    vote_round: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    # Set when the member held an approver position when they asked: their
+    # request skips the approver positions and goes to the Chief (owner
+    # decision 2026-11-21). Kept on the row, like ``decision_rule``, so the
+    # rule a request was made under does not move under it; requests made
+    # before the rule existed stay with their fellow approvers.
+    routed_to_chief: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     leave_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("member_leaves_of_absence.id", ondelete="SET NULL"),
@@ -128,7 +168,15 @@ class LeaveRequest(Base):
 
 
 class LeaveRequestVote(Base):
-    """One approver's vote on one request. One per approver, by constraint."""
+    """One approver's vote on one request, one per approver's seat.
+
+    ``seat_id`` is the approver whose vote this is. A stand-in covering an
+    away approver votes in that approver's place: ``voter_id`` is the
+    stand-in, ``seat_id`` and ``on_behalf_of`` the approver, and the vote
+    keeps counting for that approver once the cover ends. Otherwise
+    ``seat_id`` is the voter and ``on_behalf_of`` is empty. The constraint is
+    on the seat, so a seat is filled once per round whoever fills it.
+    """
 
     __tablename__ = "leave_request_votes"
 
@@ -145,6 +193,17 @@ class LeaveRequestVote(Base):
     voter_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
+    # Not a foreign key: it must outlive a deleted approver's account, or a
+    # stand-in's vote would lose the seat it filled.
+    seat_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    on_behalf_of: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # The request's vote_round when this vote was cast; only the current
+    # round's votes count.
+    round: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
     vote: Mapped[LeaveVote] = mapped_column(
         Enum(LeaveVote, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
@@ -156,8 +215,101 @@ class LeaveRequestVote(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("request_id", "voter_id", name="uq_leave_request_vote"),
+        UniqueConstraint(
+            "request_id", "seat_id", "round", name="uq_leave_request_vote_seat_round"
+        ),
         Index("ix_leave_request_votes_org_request", "organization_id", "request_id"),
+    )
+
+
+class LeaveApproverCover(Base):
+    """An approver away for a period, and the officer deciding in their place.
+
+    While the cover runs (``start_date`` to ``end_date``, calendar dates in
+    the department's timezone) the stand-in holds the approver's seat on
+    every request that approver may decide: they vote in the approver's
+    place, get the reminders, and the approver cannot vote until it ends.
+    The stand-in must manage leave (``members.manage``), checked when the
+    cover is set and again whenever it is used, so a stand-in who loses that
+    permission stops standing in.
+    """
+
+    __tablename__ = "leave_approver_covers"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    approver_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    stand_in_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_leave_approver_covers_org_approver", "organization_id", "approver_id"
+        ),
+        Index("ix_leave_approver_covers_org_end", "organization_id", "end_date"),
+    )
+
+
+class LeaveMessageKind(str, enum.Enum):
+    QUESTION = "question"
+    ANSWER = "answer"
+    PROPOSAL = "proposal"
+    PROPOSAL_ACCEPTED = "proposal_accepted"
+    PROPOSAL_DECLINED = "proposal_declined"
+
+
+class LeaveRequestMessage(Base):
+    """The conversation on a request: questions, answers and changed dates.
+
+    ``body`` is encrypted at rest: a question about a leave, and its answer,
+    can be as personal as the reason.
+    """
+
+    __tablename__ = "leave_request_messages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    request_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("leave_requests.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    author_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    kind: Mapped[LeaveMessageKind] = mapped_column(
+        Enum(LeaveMessageKind, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    body: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    # The message's place in the conversation. Timestamps are stored to the
+    # second, so a question and its answer can share one; every message is
+    # written while the request row is locked, so the next number is safe.
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_leave_request_messages_org_request", "organization_id", "request_id"),
+        UniqueConstraint(
+            "request_id", "position", name="uq_leave_request_message_position"
+        ),
     )
 
 
