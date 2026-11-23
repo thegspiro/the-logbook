@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**413 tables · 6466 columns · 1377 foreign keys**
+**413 tables · 6467 columns · 1377 foreign keys**
 
 ---
 
@@ -257,7 +257,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 18 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 22 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 30 | Event Template model for reusable event configurations |
-| [`events`](#events) | `Event` | 66 | Event model for managing department events |
+| [`events`](#events) | `Event` | 67 | Event model for managing department events |
 | [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 9 | RSVP History model for tracking RSVP status changes. |
 
 ### External_Shift_Hours
@@ -3771,6 +3771,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `guest_headcount` | INTEGER | yes |  |  |  |
 | `staffing_shift_id` | VARCHAR(36) | yes | FK |  | → `shifts.id` ON DELETE SET NULL |
 | `staffing_roles` | JSON | yes |  |  |  |
+| `volunteer_call_sent_at` | DATETIME | yes |  |  |  |
 | `outreach_outcome_note` | TEXT | yes |  |  |  |
 | `outreach_apparatus_ids` | JSON | yes |  |  |  |
 | `outreach_materials` | JSON | yes |  |  |  |

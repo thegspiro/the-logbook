@@ -1,7 +1,7 @@
 """Let a coordinator approve self sign-ups for apparatus nights
 
 Revision ID: 5c8e1f3a9d27
-Revises: b6e3d1f47a29
+Revises: e3b8d61f4a27
 Create Date: 2026-11-23 10:00:00.000000
 
 Adds ``require_signup_approval`` to ``apparatus_event_templates`` and
@@ -24,7 +24,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "5c8e1f3a9d27"
-down_revision: Union[str, None] = "b6e3d1f47a29"
+down_revision: Union[str, None] = "e3b8d61f4a27"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
