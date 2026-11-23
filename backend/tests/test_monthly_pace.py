@@ -69,6 +69,34 @@ class TestMonthlyPace:
         pace = monthly_pace(rows, 24.0, date(2026, 1, 1), date(2026, 12, 31))
         assert pace.average == 3.0
 
+    def test_a_partly_excused_month_counts_for_its_active_share(self):
+        """Half of February excused: its 3 hours over half a month, beside
+        January's 3 over a whole one, is 6 hours over 1.5 months."""
+        rows = [
+            {"month": "2026-01", "hours": 3.0, "waived": False, "waived_share": 0.0},
+            {"month": "2026-02", "hours": 3.0, "waived": True, "waived_share": 0.5},
+        ]
+        pace = monthly_pace(rows, 24.0, date(2026, 1, 1), date(2026, 12, 31))
+        assert pace.average == 4.0
+
+    def test_a_few_days_of_leave_do_not_remove_the_month(self):
+        """Three days excused leave the month's hours in the average."""
+        rows = [
+            {"month": "2026-01", "hours": 4.0, "waived": False, "waived_share": 0.0},
+            {"month": "2026-02", "hours": 4.0, "waived": True, "waived_share": 0.1},
+            {"month": "2026-03", "hours": 4.0, "waived": False, "waived_share": 0.0},
+        ]
+        pace = monthly_pace(rows, 48.0, date(2026, 1, 1), date(2026, 12, 31))
+        assert pace.average == round(12.0 / 2.9, 2)
+
+    def test_a_fully_excused_month_and_its_hours_are_left_out(self):
+        rows = [
+            {"month": "2026-01", "hours": 3.0, "waived": False, "waived_share": 0.0},
+            {"month": "2026-02", "hours": 23.0, "waived": True, "waived_share": 1.0},
+        ]
+        pace = monthly_pace(rows, 24.0, date(2026, 1, 1), date(2026, 12, 31))
+        assert pace.average == 3.0
+
     def test_no_average_when_every_month_was_excused(self):
         rows = [{"month": "2026-01", "hours": 4.0, "waived": True}]
         pace = monthly_pace(rows, 24.0, date(2026, 1, 1), date(2026, 12, 31))

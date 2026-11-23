@@ -37,6 +37,8 @@ interface ReviewShiftsProps {
 }
 
 const PAGE_SIZE = 20;
+/** Outside-agency entries are one line each, so a page holds more of them than of shift cards. */
+const EXTERNAL_PAGE_SIZE = 50;
 
 /**
  * Whether a shift ends on the local day it started. An overnight or 24-hour
@@ -143,6 +145,7 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
 }) => {
   const [onlyReview, setOnlyReview] = useState(true);
   const [page, setPage] = useState(1);
+  const [externalPage, setExternalPage] = useState(1);
 
   const pending = analysis.shifts.filter(needsReview).length;
   const probable = analysis.shifts.reduce(
@@ -157,6 +160,13 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
   // which can leave the current page past the end.
   const current = Math.min(page, Math.max(1, Math.ceil(shifts.length / PAGE_SIZE)));
   const shown = shifts.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
+  // A re-analysis can shorten the list (a row excluded on the Rows tab), so
+  // clamp rather than leave the reviewer on a page past the end.
+  const currentExternal = Math.min(externalPage, Math.max(1, Math.ceil(analysis.external.length / EXTERNAL_PAGE_SIZE)));
+  const shownExternal = analysis.external.slice(
+    (currentExternal - 1) * EXTERNAL_PAGE_SIZE,
+    currentExternal * EXTERNAL_PAGE_SIZE
+  );
 
   /** null clears an earlier answer, so the shift asks again. */
   const decideExisting = (key: string, decision: MatchDecision | null) =>
@@ -303,14 +313,16 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
       )}
 
       {analysis.external.length > 0 && (
-        <div className="card p-4">
-          <h3 className="text-theme-text-primary font-semibold">Outside-agency hours</h3>
+        <section aria-labelledby="review-external-heading" className="card p-4">
+          <h3 id="review-external-heading" className="text-theme-text-primary font-semibold">
+            Outside-agency hours
+          </h3>
           <p className="text-theme-text-secondary text-sm">
             {analysis.external.length} {analysis.external.length === 1 ? 'entry' : 'entries'} on other agencies' units,
             logged as outside-agency hours.
           </p>
           <ul className="divide-theme-surface-border mt-2 divide-y">
-            {analysis.external.slice(0, 200).map((att) => (
+            {shownExternal.map((att) => (
               <AttendanceLine
                 key={att.key}
                 att={att}
@@ -323,12 +335,15 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
               />
             ))}
           </ul>
-          {analysis.external.length > 200 && (
-            <p className="text-theme-text-secondary mt-2 text-sm">
-              Showing the first 200. Every entry is listed on the Rows tab.
-            </p>
+          {analysis.external.length > EXTERNAL_PAGE_SIZE && (
+            <Pagination
+              currentPage={currentExternal}
+              totalItems={analysis.external.length}
+              pageSize={EXTERNAL_PAGE_SIZE}
+              onPageChange={setExternalPage}
+            />
           )}
-        </div>
+        </section>
       )}
     </section>
   );

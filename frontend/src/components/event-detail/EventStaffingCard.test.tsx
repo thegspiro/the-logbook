@@ -5,11 +5,13 @@ import { MemoryRouter } from 'react-router';
 
 const getStaffing = vi.fn();
 const openStaffing = vi.fn();
+const sendVolunteerCall = vi.fn();
 
 vi.mock('../../services/api', () => ({
   eventService: {
     getStaffing: (...a: unknown[]) => getStaffing(...a) as unknown,
     openStaffing: (...a: unknown[]) => openStaffing(...a) as unknown,
+    sendVolunteerCall: (...a: unknown[]) => sendVolunteerCall(...a) as unknown,
     getModuleSettings: () =>
       Promise.resolve({
         outreach_event_types: [
@@ -17,6 +19,10 @@ vi.mock('../../services/api', () => ({
           { value: 'other', label: 'Other' },
         ],
       }),
+  },
+  memberAudienceService: {
+    getOptions: () => Promise.resolve({ member_classes: [], member_statuses: [], positions: [] }),
+    preview: () => Promise.resolve({ recipients: 12, skipped_opted_out: 1 }),
   },
   eventRequestService: {
     getOutreachRoles: () =>
@@ -44,6 +50,7 @@ describe('EventStaffingCard', () => {
   beforeEach(() => {
     getStaffing.mockReset();
     openStaffing.mockReset();
+    sendVolunteerCall.mockReset();
   });
 
   it('opens a sheet starting from a request type preset', async () => {
@@ -103,5 +110,56 @@ describe('EventStaffingCard', () => {
     );
     expect(screen.getByText('Jordan Avery')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open signups' })).not.toBeInTheDocument();
+  });
+
+  const OPEN_SHEET = {
+    ...EMPTY,
+    shift_id: 'sh-1',
+    slots_total: 2,
+    roles: [{ role: 'educator', label: 'Educator', total: 2, filled: 0, remaining: 2 }],
+  };
+
+  it("emails the membership from an event's own sheet", async () => {
+    const user = userEvent.setup();
+    getStaffing.mockResolvedValue(OPEN_SHEET);
+    sendVolunteerCall.mockResolvedValue({
+      message: 'Volunteer call emailed to 12 members.',
+      recipients: 12,
+      skipped_opted_out: 1,
+      volunteer_call_sent_at: '2026-11-22T15:00:00Z',
+    });
+    renderCard();
+
+    await user.click(await screen.findByRole('button', { name: 'Email the Membership' }));
+    await user.type(screen.getByLabelText('Note (optional)'), 'Bring the smoke trailer.');
+    const send = screen.getByRole('button', { name: 'Send Request for Help' });
+    await waitFor(() => expect(send).toBeEnabled());
+    await user.click(send);
+
+    await waitFor(() =>
+      expect(sendVolunteerCall).toHaveBeenCalledWith('ev-1', {
+        member_classes: [],
+        member_statuses: [],
+        position_ids: [],
+        message: 'Bring the smoke trailer.',
+      })
+    );
+    // The sheet is re-read afterwards, so "Last sent" reflects the send.
+    await waitFor(() => expect(getStaffing).toHaveBeenCalledTimes(2));
+  });
+
+  it("offers no call on a request's sheet, which is called for from the request", async () => {
+    getStaffing.mockResolvedValue({ ...OPEN_SHEET, request_id: 'req-9' });
+    renderCard();
+
+    expect(await screen.findByRole('link', { name: 'Open the request' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Email the Membership' })).not.toBeInTheDocument();
+  });
+
+  it('shows when the last call went out', async () => {
+    getStaffing.mockResolvedValue({ ...OPEN_SHEET, volunteer_call_sent_at: '2026-11-21T15:00:00Z' });
+    renderCard();
+
+    expect(await screen.findByText(/Last sent/)).toBeInTheDocument();
   });
 });

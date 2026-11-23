@@ -177,10 +177,14 @@ test.describe('Certification expiration report: cards on a phone, a sortable tab
         return;
       }
       await expectSortableTable(page, table, 'Member');
+      // Sorted from the keyboard: the header is a button, and Enter on it is
+      // what a keyboard or switch user does.
       const firstMember = table.locator('tbody tr').first().locator('td').first();
-      await table.getByRole('columnheader', { name: 'Member', exact: true }).click();
+      const sortByMember = table.getByRole('button', { name: 'Member', exact: true });
+      await sortByMember.focus();
+      await page.keyboard.press('Enter');
       await expect(firstMember, 'sorting by member did not reorder the rows').toHaveText(/^Alexandria/);
-      await table.getByRole('columnheader', { name: 'Member', exact: true }).click();
+      await page.keyboard.press('Enter');
       await expect(firstMember, 'sorting by member did not reverse').toHaveText(/^Maximiliana/);
     });
   }
