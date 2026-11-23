@@ -257,6 +257,9 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   leave_request_reminder: { icon: CalendarOff, label: 'Leave Request Reminder', color: 'text-purple-500' },
   leave_request_escalation: { icon: CalendarOff, label: 'Leave Request Escalation', color: 'text-purple-500' },
   leave_ended_early: { icon: CalendarOff, label: 'Leave Ended Early', color: 'text-purple-500' },
+  leave_cover_named: { icon: CalendarOff, label: 'Leave Cover: Stand-in Named', color: 'text-purple-500' },
+  leave_cover_cleared: { icon: CalendarOff, label: 'Leave Cover: Cleared', color: 'text-purple-500' },
+  leave_cover_ended: { icon: CalendarOff, label: 'Leave Cover: Ended', color: 'text-purple-500' },
   meeting_waiver_requested: {
     icon: ClipboardCheck,
     label: 'Meeting Waiver Requested',
@@ -382,6 +385,9 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
       'leave_request_reminder',
       'leave_request_escalation',
       'leave_ended_early',
+      'leave_cover_named',
+      'leave_cover_cleared',
+      'leave_cover_ended',
     ],
   },
   {

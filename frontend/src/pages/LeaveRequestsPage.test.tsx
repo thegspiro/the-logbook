@@ -17,6 +17,7 @@ const getSummary = vi.fn();
 const endLeaveEarly = vi.fn();
 const getMyLeaves = vi.fn();
 const getCovers = vi.fn();
+const getCalendar = vi.fn();
 
 vi.mock('../services/leaveRequestService', () => ({
   leaveRequestService: {
@@ -30,6 +31,7 @@ vi.mock('../services/leaveRequestService', () => ({
     getSummary: (...a: unknown[]) => getSummary(...a) as unknown,
     endLeaveEarly: (...a: unknown[]) => endLeaveEarly(...a) as unknown,
     getCovers: (...a: unknown[]) => getCovers(...a) as unknown,
+    getCalendar: (...a: unknown[]) => getCalendar(...a) as unknown,
   },
 }));
 vi.mock('../services/api', () => ({
@@ -48,7 +50,7 @@ vi.mock('../stores/authStore', () => ({
 }));
 
 import LeaveRequestsPage from './LeaveRequestsPage';
-import { addCalendarDays, getTodayLocalDate } from '../utils/dateFormatting';
+import { addCalendarDays, addCalendarMonths, getTodayLocalDate } from '../utils/dateFormatting';
 
 const today = getTodayLocalDate('UTC');
 
@@ -108,6 +110,7 @@ describe('LeaveRequestsPage', () => {
       endLeaveEarly,
       getMyLeaves,
       getCovers,
+      getCalendar,
       checkPermission,
       toastSuccess,
     ]) {
@@ -121,7 +124,14 @@ describe('LeaveRequestsPage', () => {
     vote.mockResolvedValue(request({ status: 'approved' }));
     getSummary.mockResolvedValue({ requests_enabled: true, to_decide: 0, waiting_on_me: 0 });
     getMyLeaves.mockResolvedValue([]);
-    getCovers.mockResolvedValue({ covers: [], approvers: [], stand_ins: [], today });
+    getCovers.mockResolvedValue({ covers: [], approvers: [], stand_ins: [], suggested: [], today });
+    getCalendar.mockResolvedValue({
+      month_start: `${today.slice(0, 7)}-01`,
+      month_end: addCalendarDays(addCalendarMonths(`${today.slice(0, 7)}-01`, 1), -1),
+      today,
+      entries: [],
+      covers: [],
+    });
   });
 
   it('says who decided a request and when, and when one was withdrawn', async () => {
@@ -305,6 +315,30 @@ describe('LeaveRequestsPage', () => {
     await user.click(await screen.findByRole('button', { name: 'Withdraw it' }));
 
     expect(withdraw).toHaveBeenCalledWith('r1');
+  });
+
+  it('only an officer who manages leave is offered the calendar', async () => {
+    renderWithRouter(<LeaveRequestsPage />);
+
+    await screen.findByRole('heading', { name: 'Ask for leave' });
+    expect(screen.queryByRole('button', { name: 'Calendar' })).not.toBeInTheDocument();
+    expect(getCalendar).not.toHaveBeenCalled();
+  });
+
+  it('an officer switches to the calendar and back', async () => {
+    const user = userEvent.setup();
+    checkPermission.mockImplementation((p: string) => p === 'members.manage');
+    renderWithRouter(<LeaveRequestsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Calendar' }));
+
+    expect(screen.getByRole('button', { name: 'Calendar' })).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByRole('heading', { name: 'Export leave records' })).toBeInTheDocument();
+    expect(getCalendar).toHaveBeenCalledWith(today.slice(0, 7));
+    expect(screen.queryByRole('heading', { name: 'Ask for leave' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Requests' }));
+    expect(await screen.findByRole('heading', { name: 'Ask for leave' })).toBeInTheDocument();
   });
 
   it('a failed load is said, not shown as no requests', async () => {

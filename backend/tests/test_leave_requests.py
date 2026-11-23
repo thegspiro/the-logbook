@@ -131,7 +131,11 @@ async def _as(db, user: User, queued: list):
     ), patch.object(
         leave_requests, "send_request_denied", _recorder("denied")
     ), patch.object(
-        leave_requests, "send_leave_notice", _recorder("leave_notice")
+        leave_requests, "send_approval_notice", _recorder("leave_notice")
+    ), patch.object(
+        leave_requests, "send_cover_named", _recorder("cover_named")
+    ), patch.object(
+        leave_requests, "send_cover_cleared", _recorder("cover_cleared")
     ), patch(
         "app.services.scheduling_service.SchedulingService."
         "cancel_member_assignments_in_range",

@@ -134,6 +134,11 @@ class EmailTemplateType(str, enum.Enum):
     # ending their own leave early.
     LEAVE_REQUEST_ESCALATION = "leave_request_escalation"
     LEAVE_ENDED_EARLY = "leave_ended_early"
+    # An officer named to decide leave requests in an approver's place: when
+    # named, when the cover is cleared, and the day after it ends.
+    LEAVE_COVER_NAMED = "leave_cover_named"
+    LEAVE_COVER_CLEARED = "leave_cover_cleared"
+    LEAVE_COVER_ENDED = "leave_cover_ended"
     # The morning after an outreach event ends with no guest headcount; see
     # email_templates_outreach.py.
     GUEST_HEADCOUNT_REMINDER = "guest_headcount_reminder"
