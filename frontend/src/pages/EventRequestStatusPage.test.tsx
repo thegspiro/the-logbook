@@ -7,6 +7,8 @@ const checkPublicStatus = vi.fn();
 vi.mock('../services/api', () => ({
   eventRequestService: {
     checkPublicStatus: (...args: unknown[]) => checkPublicStatus(...args) as unknown,
+    getPublicFeedbackForm: () =>
+      Promise.resolve({ form_name: 'Outreach feedback', contact_name: 'Pat Rivera', fields: [] }),
     getOutreachTypeLabels: () => Promise.resolve({ fire_safety_demo: 'Fire Safety Demo' }),
   },
 }));
@@ -57,5 +59,26 @@ describe('EventRequestStatusPage dates', () => {
 
     expect(await screen.findByText('1/21/2027')).toBeInTheDocument();
     expect(screen.queryByText('1/22/2027')).not.toBeInTheDocument();
+  });
+});
+
+describe('EventRequestStatusPage feedback', () => {
+  beforeEach(() => {
+    checkPublicStatus.mockReset();
+  });
+
+  it("offers the department's feedback form once the request is completed", async () => {
+    checkPublicStatus.mockResolvedValue({ ...STATUS, status: 'completed', can_cancel: false, feedback_offered: true });
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Outreach feedback' })).toBeInTheDocument();
+  });
+
+  it('thanks a requester who has already answered', async () => {
+    checkPublicStatus.mockResolvedValue({ ...STATUS, status: 'completed', can_cancel: false, feedback_sent: true });
+    renderPage();
+
+    expect(await screen.findByText(/Thank you for your feedback/)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Outreach feedback' })).not.toBeInTheDocument();
   });
 });
