@@ -129,6 +129,7 @@ from app.services.event_service import (
     BULK_ADD_MAX_SIZE,
     DEFAULT_ALLOWED_RSVP_STATUSES,
     PHASE_GATE_PREFIX,
+    EventNotFoundError,
     EventService,
     FinalizeOutcome,
     SeriesPhaseGateWarning,
@@ -1974,6 +1975,10 @@ async def update_future_events(
             "message": f"Successfully updated {updated_count} event(s)",
             "updated_count": updated_count,
         }
+    except EventNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
     except PermissionError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail=safe_error_detail(e)

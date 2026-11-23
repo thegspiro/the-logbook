@@ -266,6 +266,10 @@ def resolve_attendee_visibility(
 PHASE_GATE_PREFIX = "PHASE_GATE::"
 
 
+class EventNotFoundError(LookupError):
+    """The event id names no event in the caller's organization (a 404)."""
+
+
 class SeriesPhaseGateWarning(Exception):
     """A series RSVP includes sessions ahead of the member's training phase.
 
@@ -1648,6 +1652,9 @@ class EventService:
     ) -> int:
         """Update this event and all future events in the same recurring series.
 
+        Raises ``EventNotFoundError`` when *event_id* names no event in the
+        org.
+
         With *only_event_type*, refuse (``PermissionError``) when any occurrence
         the update would reach is of another type. A training manager may edit
         a Training series, and an occurrence an events manager re-typed is no
@@ -1666,7 +1673,9 @@ class EventService:
         anchor = result.scalar_one_or_none()
 
         if not anchor:
-            raise ValueError("Event not found")
+            # Not a ValueError: the route answers 404, as update_event's
+            # does, rather than a 400 for a refused change.
+            raise EventNotFoundError("Event not found")
 
         if anchor.is_cancelled:
             raise ValueError("Cannot update cancelled event")
