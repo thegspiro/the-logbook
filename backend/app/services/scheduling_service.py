@@ -83,9 +83,9 @@ from app.services.shift_eligibility_service import (
 )
 from app.services.training_compliance import (
     ComplianceGrading,
+    CreditedHours,
     _load_compliance_config,
     biannual_window,
-    catch_up_deadline,
     completion_window,
     counts_shift_attendance,
     evaluate_member_requirement_detail,
@@ -93,11 +93,7 @@ from app.services.training_compliance import (
     member_join_date,
     requirement_as_of,
 )
-from app.services.training_waiver_service import (
-    SOURCE_LEAVE,
-    adjust_required,
-    fetch_org_waivers,
-)
+from app.services.training_waiver_service import fetch_org_waivers
 from app.utils.apparatus_ref import (
     apparatus_in_use,
     apparatus_ref_exists,
@@ -10639,6 +10635,75 @@ class SchedulingService:
     # Shift Compliance
     # ============================================
 
+    async def _credited_shift_hours(
+        self,
+        organization_id: str,
+        start: date,
+        end: date,
+        user_ids: Sequence[str],
+    ) -> Dict[str, List[CreditedHours]]:
+        """Each member's credited shift hours by date, for HOURS grading.
+
+        The hours ``get_shift_compliance`` sums for its hours column, dated so
+        the shared grader can window and prorate them: finalized attendance
+        on this department's shifts, counted external shifts, and approved
+        pre-shift work on finalized shifts. Minutes are kept raw, so a
+        shortfall is never rounded away.
+        """
+        from app.services.pre_shift_work_service import approved_pre_work_minutes
+
+        if not user_ids:
+            return {}
+        ids = [str(u) for u in user_ids]
+        minutes: Dict[str, Dict[date, int]] = {}
+
+        def _add(user_id: Any, when: date, value: Any) -> None:
+            per_day = minutes.setdefault(str(user_id), {})
+            per_day[when] = per_day.get(when, 0) + int(value or 0)
+
+        attendance = await self.db.execute(
+            select(
+                ShiftAttendance.user_id,
+                Shift.shift_date,
+                func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0),
+            )
+            .join(Shift, ShiftAttendance.shift_id == Shift.id)
+            .where(Shift.organization_id == organization_id)
+            .where(Shift.shift_date >= start)
+            .where(Shift.shift_date <= end)
+            .where(Shift.is_finalized.is_(True))
+            .where(ShiftAttendance.user_id.in_(ids))
+            .group_by(ShiftAttendance.user_id, Shift.shift_date)
+        )
+        for user_id, when, value in attendance.all():
+            _add(user_id, when, value)
+
+        for row in await approved_pre_work_minutes(
+            self.db,
+            Shift.organization_id == organization_id,
+            Shift.shift_date >= start,
+            Shift.shift_date <= end,
+            Shift.is_finalized.is_(True),
+            ShiftPreWorkSession.user_id.in_(ids),
+            group_by=[ShiftPreWorkSession.user_id, Shift.shift_date],
+        ):
+            _add(row[0], row[1], row.minutes)
+
+        external = await ExternalShiftHoursService(
+            self.db
+        ).counted_minutes_by_user_and_date(organization_id, start, end, ids)
+        for user_id, per_day in external.items():
+            for when, value in per_day.items():
+                _add(user_id, when, value)
+
+        return {
+            user_id: [
+                CreditedHours(completion_date=when, hours_completed=value / 60.0)
+                for when, value in sorted(per_day.items())
+            ]
+            for user_id, per_day in minutes.items()
+        }
+
     def _compute_period_bounds(
         self, requirement, reference_date: date
     ) -> Tuple[date, date]:
@@ -10784,6 +10849,14 @@ class SchedulingService:
         ``period_end`` are that window, and are ``None`` where the window is
         open (a one-time requirement counts every shift on record).
 
+        A shift-credited HOURS requirement goes through the same grader, with
+        the member's credited shift hours (``_credited_shift_hours``) in place
+        of training records: the same window, cut-off, catch-up rule and
+        training waivers, so a waived month is excused here exactly as on the
+        member's training screens. Its hours count finalized shifts only, as
+        the SHIFTS rows do. It used its own rolling-only, leave-only
+        adjustment before, which ignored training waivers (pitfall 29).
+
         Returns a list of requirement compliance summaries, each containing
         per-member progress data.
         """
@@ -10841,11 +10914,12 @@ class SchedulingService:
             for u in all_users
         }
 
-        # SHIFTS requirements are graded by the shared grader, from the shared
-        # count of shifts worked, on the same cut-off and waivers.
+        # Every row is graded by the shared grader, on the same cut-off and
+        # waivers the training screens use (CLAUDE.md pitfall 29): SHIFTS from
+        # the shared count of shifts worked, HOURS from the same credited
+        # hours this report has always summed.
         include_current_month = grading.include_current_month
         shifts_by_user: Dict[str, List[date]] = {}
-        waivers_by_user: Dict[str, list] = {}
         if any(counts_shift_attendance(r) for r in requirements):
             shifts_by_user = await load_credited_shift_dates(
                 self.db,
@@ -10855,23 +10929,17 @@ class SchedulingService:
                 reference_date,
                 include_current_month,
             )
-            waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
+        waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
 
         # 3. For each requirement, compute compliance
         compliance_data: List[Dict[str, Any]] = []
-        leaves_by_user: Optional[Dict[str, list]] = None
 
         for req in requirements:
-            graded_by_shared_grader = counts_shift_attendance(req)
-            open_start: Optional[date]
-            open_end: Optional[date]
-            if graded_by_shared_grader:
-                open_start, open_end = completion_window(
-                    req,
-                    requirement_as_of(req, reference_date, include_current_month),
-                )
-            else:
-                open_start, open_end = self._compute_period_bounds(req, reference_date)
+            is_shifts = req.requirement_type == RequirementType.SHIFTS.value
+            open_start, open_end = completion_window(
+                req,
+                requirement_as_of(req, reference_date, include_current_month),
+            )
             # The attendance and external queries below need concrete bounds;
             # an open end of the window reads every shift on that side.
             period_start = open_start or date.min
@@ -10879,7 +10947,7 @@ class SchedulingService:
 
             # Determine required value
             required_value: float
-            if req.requirement_type == RequirementType.SHIFTS.value:
+            if is_shifts:
                 required_value = req.required_shifts or 0
             else:
                 required_value = req.required_hours or 0
@@ -10915,11 +10983,11 @@ class SchedulingService:
                 continue
 
             # Batch-query attendance for all applicable users in the period.
-            # A SHIFTS requirement credits finalized shifts only, as the shared
-            # count does; the hours column beside it follows the same rule so
-            # the row does not mix two kinds of attendance.
+            # Finalized shifts only, as the shared count of shifts worked and
+            # My Hours credit them: pending, member-controlled attendance is
+            # not credit until an officer closes the shift out.
             user_ids = [u.id for u in applicable_users]
-            att_query = (
+            att_result = await self.db.execute(
                 select(
                     ShiftAttendance.user_id,
                     func.count(ShiftAttendance.id).label("shift_count"),
@@ -10931,12 +10999,10 @@ class SchedulingService:
                 .where(Shift.organization_id == str(organization_id))
                 .where(Shift.shift_date >= period_start)
                 .where(Shift.shift_date <= period_end)
+                .where(Shift.is_finalized.is_(True))
                 .where(ShiftAttendance.user_id.in_(user_ids))
                 .group_by(ShiftAttendance.user_id)
             )
-            if graded_by_shared_grader:
-                att_query = att_query.where(Shift.is_finalized.is_(True))
-            att_result = await self.db.execute(att_query)
             attendance_map: Dict[str, Dict] = {}
             for row in att_result.all():
                 attendance_map[row.user_id] = {
@@ -10956,7 +11022,7 @@ class SchedulingService:
                 organization_id,
                 period_start,
                 period_end,
-                finalized_only=graded_by_shared_grader,
+                finalized_only=True,
                 user_ids=[str(u) for u in user_ids],
             )
 
@@ -10969,23 +11035,13 @@ class SchedulingService:
                 str(organization_id), period_start, period_end, user_ids
             )
 
-            # Pre-load leave months for rolling requirements so we can
-            # pro-rate each member's required value.
-            is_rolling = (
-                not graded_by_shared_grader
-                and req.due_date_type == DueDateType.ROLLING
-                and req.rolling_period_months
-            )
-            # Leaves of absence only, as this report has always counted, but
-            # measured by the department's leave month rule so a month here
-            # is excused exactly as it is on the member's training screen.
-            if is_rolling and leaves_by_user is None:
-                leaves_by_user = {
-                    uid: [w for w in periods if w.source == SOURCE_LEAVE]
-                    for uid, periods in (
-                        await fetch_org_waivers(self.db, str(organization_id))
-                    ).items()
-                }
+            # The same hours again, dated, for the grader: a waived month or
+            # a freshness cut-off needs to know when they fell.
+            hours_by_user: Dict[str, List[CreditedHours]] = {}
+            if not is_shifts:
+                hours_by_user = await self._credited_shift_hours(
+                    str(organization_id), period_start, period_end, user_ids
+                )
 
             # Build member compliance list
             members = []
@@ -11004,81 +11060,45 @@ class SchedulingService:
                     + prep_map.get(str(user.id), 0)
                 )
                 total_hours = hours_from_minutes(total_minutes)
-                leave_months = 0
-                member_required = required_value
-                member_leaves = (leaves_by_user or {}).get(str(user.id), [])
-                if is_rolling and member_leaves:
-                    member_required, leave_months, _ = adjust_required(
-                        required_value,
-                        period_start,
-                        period_end,
-                        member_leaves,
-                        str(req.id),
-                        period_months=req.rolling_period_months,
-                        whole_units=(
-                            req.requirement_type == RequirementType.SHIFTS.value
-                        ),
-                    )
 
-                if graded_by_shared_grader:
-                    ev = evaluate_member_requirement_detail(
-                        req,
-                        [],
-                        reference_date,
-                        waivers=waivers_by_user.get(str(user.id), []),
-                        org_include_current_month=include_current_month,
-                        join_date=member_join_date(user),
-                        shift_dates=shifts_by_user.get(str(user.id), []),
-                    )
-                    completed_value = ev.progress_current or 0
-                    shift_count = int(completed_value)
-                    member_required = ev.progress_required or 0
-                    leave_months = ev.waived_months
-                    is_compliant = ev.status == TrainingStatus.COMPLETED.value
-                    deadline = (
-                        date.fromisoformat(ev.catch_up_deadline)
-                        if ev.catch_up_deadline
-                        else None
-                    )
-                    percentage = round(
-                        (
-                            completed_value / member_required * 100
-                            if member_required > 0
-                            else (100 if is_compliant else 0)
-                        ),
-                        1,
-                    )
-                elif req.requirement_type == RequirementType.SHIFTS.value:
-                    completed_value = shift_count
-                    compliance_value: float = completed_value
+                ev = evaluate_member_requirement_detail(
+                    req,
+                    [],
+                    reference_date,
+                    waivers=waivers_by_user.get(str(user.id), []),
+                    org_include_current_month=include_current_month,
+                    join_date=member_join_date(user),
+                    shift_dates=shifts_by_user.get(str(user.id), []),
+                    credited_hours=(
+                        None if is_shifts else hours_by_user.get(str(user.id), [])
+                    ),
+                )
+                raw_value = float(ev.progress_current or 0)
+                member_required = ev.progress_required or 0
+                leave_months = ev.waived_months
+                is_compliant = ev.status == TrainingStatus.COMPLETED.value
+                deadline = (
+                    date.fromisoformat(ev.catch_up_deadline)
+                    if ev.catch_up_deadline
+                    else None
+                )
+                completed_value: float
+                if is_shifts:
+                    completed_value = raw_value
+                    shift_count = int(raw_value)
                 else:
-                    completed_value = total_hours
-                    # Keep the quarter-hour figure for presentation, but grade
-                    # against the attendance actually stored.  Rounding here
-                    # can otherwise erase a shortfall of nearly 7.5 minutes.
-                    compliance_value = float(total_minutes) / 60.0
-
-                if not graded_by_shared_grader:
-                    percentage = round(
-                        (
-                            (completed_value / member_required * 100)
-                            if member_required > 0
-                            else 100
-                        ),
-                        1,
-                    )
-                    is_compliant = compliance_value >= member_required
-
-                    # An existing member short of the target inside the
-                    # catch-up period is listed with the deadline but counted
-                    # neither way.
-                    deadline = (
-                        None
-                        if is_compliant
-                        else catch_up_deadline(
-                            req, member_join_date(user), reference_date
-                        )
-                    )
+                    # Shown at quarter-hour precision, graded on the raw
+                    # minutes above: rounding first could erase a shortfall
+                    # of nearly 7.5 minutes.
+                    completed_value = hours_from_minutes(round(raw_value * 60))
+                percentage = round(
+                    (
+                        raw_value / member_required * 100
+                        if member_required > 0
+                        else (100 if is_compliant else 0)
+                    ),
+                    1,
+                )
                 if deadline is None:
                     graded_count += 1
                     if is_compliant:

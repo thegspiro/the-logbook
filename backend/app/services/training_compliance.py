@@ -683,6 +683,24 @@ def _require_shift_dates(req, shift_dates: Optional[Sequence[date]]):
 # load_evaluation_credits.
 EvaluationCredits = Mapping[str, Sequence[Tuple[date, float]]]
 
+
+@dataclass(frozen=True)
+class CreditedHours:
+    """Hours credited to an HOURS requirement from somewhere other than a
+    training record: one member's shift hours on one date.
+
+    Shaped like the record attributes the HOURS branch of the grader reads
+    (``completion_date``, ``hours_completed``, ``expiration_date``), so the
+    window, freshness cut-off and monthly breakdown treat them exactly as they
+    treat records. Only the scheduling Shift Compliance report passes these;
+    every training screen grades HOURS from training records.
+    """
+
+    completion_date: date
+    hours_completed: float
+    expiration_date: Optional[date] = None
+
+
 _EVALUATION_TYPE_UNITS = {
     RequirementType.EVALUATED_SHIFTS.value: "evaluated shifts",
     RequirementType.TRANSPORTS.value: "transports",
@@ -1109,6 +1127,7 @@ def evaluate_member_requirement_detail(
     shift_dates: Optional[Sequence[date]] = None,
     held_sessions: Optional[Mapping[str, Sequence[HeldSession]]] = None,
     evaluation_credits: Optional[EvaluationCredits] = None,
+    credited_hours: Optional[Sequence[CreditedHours]] = None,
 ) -> RequirementEvaluation:
     """Evaluate one member against one requirement, honouring a catch-up period.
 
@@ -1129,6 +1148,12 @@ def evaluate_member_requirement_detail(
     ``evaluation_credits`` is the member's entry in
     :func:`load_evaluation_credits`, required whenever ``req`` is counted from
     shift evaluations (:func:`is_evaluation_credited`).
+
+    ``credited_hours``, when given, is what an HOURS requirement counts in
+    place of training records: the Shift Compliance report's shift hours for
+    a shift-credited requirement. Everything else about the grade (window,
+    freshness, waiver proration, cut-off, catch-up) is unchanged, which is
+    the point: the report and the training screens prorate alike.
     """
     ev = _grade_member_requirement(
         req,
@@ -1140,6 +1165,7 @@ def evaluate_member_requirement_detail(
         held_sessions=held_sessions,
         join_date=join_date,
         evaluation_credits=evaluation_credits,
+        credited_hours=credited_hours,
     )
     # Measured against the real day rather than the evaluation cut-off: the
     # deadline is a calendar promise to the member, not a period boundary.
@@ -1164,6 +1190,7 @@ def _grade_member_requirement(
     held_sessions: Optional[Mapping[str, Sequence[HeldSession]]] = None,
     join_date: Optional[date] = None,
     evaluation_credits: Optional[EvaluationCredits] = None,
+    credited_hours: Optional[Sequence[CreditedHours]] = None,
 ) -> RequirementEvaluation:
     """
     Evaluate a single member's status for a single requirement.
@@ -1265,7 +1292,17 @@ def _grade_member_requirement(
 
     # ---- HOURS requirements: sum hours of the records that count ----
     if req_type == RequirementType.HOURS.value:
-        type_matched = [r for r in windowed if hours_record_counts(req, r)]
+        if credited_hours is None:
+            type_matched = [r for r in windowed if hours_record_counts(req, r)]
+        else:
+            # Shift hours are not training: no category, course or type to
+            # match, so the window and freshness cut-off alone decide.
+            type_matched = [
+                h
+                for h in apply_recency(req, list(credited_hours), today)
+                if not (start_date and end_date)
+                or start_date <= h.completion_date <= end_date
+            ]
 
         total_hours = sum(r.hours_completed or 0 for r in type_matched)
         required = req.required_hours or 0
