@@ -8262,6 +8262,104 @@ class Seeder:
             self._stage_closeout_attendance(shift_id, crew, start_at, end_at)
         return shift
 
+    OFFICER_CLOSEOUT_NOTE = "Shift officer close-out fixture"
+    # A firefighter running the shift: Shift Officer without scheduling.manage,
+    # which every officer rank in the demo holds. Must match
+    # DEMO_SHIFT_OFFICER_CREDENTIALS in manifest.mjs.
+    OFFICER_CLOSEOUT_OFFICER = "ytanaka"
+    OFFICER_CLOSEOUT_CREW = ("isolberg", "smarchetti", "vbrennan", "rduarte")
+
+    def seed_backlog_03_officer_closeout(self) -> str:
+        """An ended shift whose Shift Officer cannot manage scheduling.
+
+        Guide 03 pictures close-out step 1 as that officer: their own row's
+        Start, End and Hours greyed out, with the line saying their times come
+        from their check-in and check-out. Two days ago, twelve hours, no
+        apparatus so no end-of-shift checklist intervenes, with the officer and
+        up to two of the crew candidates seated (one free at those hours is
+        enough: the picture is the officer's row beside an editable one), each
+        checked in and out. Found again by its note, and topped up rather than
+        made twice.
+        """
+        officer_id = self._user_id(self.OFFICER_CLOSEOUT_OFFICER)
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        shift = next(
+            (
+                sh
+                for sh in shifts
+                if str(pick(sh, "notes") or "").strip() == self.OFFICER_CLOSEOUT_NOTE
+            ),
+            None,
+        )
+        if shift is None:
+            day = TODAY - timedelta(days=2)
+            start_at = datetime.combine(
+                day, time(hour=8), tzinfo=ORG_TIMEZONE
+            ).astimezone(timezone.utc)
+            # Naming the Shift Officer seats them on the crew as well.
+            shift = self.api.post(
+                "/scheduling/shifts",
+                {
+                    "shift_date": str(day),
+                    "start_time": iso(start_at),
+                    "end_time": iso(start_at + timedelta(hours=12)),
+                    "shift_officer_id": officer_id,
+                    "min_staffing": 3,
+                    "positions": ["officer", "firefighter", "firefighter"],
+                    "notes": self.OFFICER_CLOSEOUT_NOTE,
+                },
+            )
+        shift_id = pick(shift, "id")
+        start_at = datetime.fromisoformat(
+            str(pick(shift, "start_time")).replace("Z", "+00:00")
+        )
+        end_at = datetime.fromisoformat(
+            str(pick(shift, "end_time")).replace("Z", "+00:00")
+        )
+        path = f"/scheduling/shifts/{shift_id}/assignments"
+        crew = [
+            str(pick(row, "user_id"))
+            for row in items(self.api.get(path), "assignments")
+        ]
+        if officer_id not in crew:
+            self.api.post(path, {"user_id": officer_id, "position": "officer"})
+            crew.insert(0, officer_id)
+        for username in self.OFFICER_CLOSEOUT_CREW:
+            if len(crew) >= 3:
+                break
+            user_id = self._user_id(username)
+            if user_id in crew:
+                continue
+            try:
+                self.api.post(path, {"user_id": user_id, "position": "firefighter"})
+            except ApiError as exc:
+                # On another shift at the same hours: the next candidate.
+                if exc.code not in (400, 409):
+                    raise
+                continue
+            crew.append(user_id)
+        attended = {
+            str(pick(row, "user_id"))
+            for row in items(
+                self.api.get(f"/scheduling/shifts/{shift_id}/attendance"), "attendance"
+            )
+            if pick(row, "checked_in_at", "checkedInAt")
+        }
+        added = 0
+        for index, user_id in enumerate(crew):
+            if user_id in attended:
+                continue
+            self.api.post(
+                f"/scheduling/shifts/{shift_id}/attendance",
+                {
+                    "user_id": user_id,
+                    "checked_in_at": iso(start_at + timedelta(minutes=index * 3)),
+                    "checked_out_at": iso(end_at - timedelta(minutes=index * 5)),
+                },
+            )
+            added += 1
+        return f"{len(crew)} on the crew, {added} check-ins added"
+
     def _ensure_closeout_check_template(self, unit: dict) -> None:
         """An end-of-shift template for the fixture's own apparatus.
 
@@ -22318,6 +22416,7 @@ class Seeder:
             lambda: self.seed_call_tracking_closeout(members),
         )
         self.step("guide 03 scheduling states", self.seed_guide03_scheduling)
+        self.step("backlog 03 officer close-out", self.seed_backlog_03_officer_closeout)
         self.step("label printers", self.seed_label_printers)
         self.step("id cards", self.seed_id_cards)
         self.step("card taps", self.seed_card_taps)

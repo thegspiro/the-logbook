@@ -1603,6 +1603,8 @@ from check-in and check-out, and you can change them.
   check-in and check-out. A scheduling admin can correct them." Your times are
   saved as they stand and you can still go on to step 2.
 
+![Close-out step 1 as a Shift Officer who cannot manage scheduling: their own row's Start, End and Hours read-only, with no Until shift end or Full shift button and the line that their times come from their check-in and check-out, under the crew member's row, which they can still change](./images/03-138-closeout-own-row-locked.png)
+
 **The Hours box.** Each row also has an **Hours** box. For someone who forgot
 to check in or out, type the hours they worked instead of picking two times.
 The hours are counted from their check-in time. If they never checked in, they
@@ -5020,6 +5022,8 @@ that shift shows "Decided: add to the shift already on the schedule" (or
 "import separately from…") with the same **Undo**. Undo puts the question back,
 so a wrong click no longer means discarding the draft and its other decisions.
 A match of 90% or more is joined without asking and has nothing to undo.
+
+![A proposed Engine 1 shift on a draft import's Shifts tab, added to the shift already on the schedule at a 78% match: You chose to add these members to that shift, with an Undo link, above its three members](./images/03-139-history-import-existing-undo.png)
 
 **Remembered decisions.** Departments usually import over several files from the
 same old system. Once an import is committed, its member, unit and position

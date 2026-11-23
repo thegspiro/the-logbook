@@ -133,6 +133,17 @@ export const DEMO_MFA_GRACE_CREDENTIALS = {
 };
 
 /**
+ * A firefighter who runs a shift: its Shift Officer, without
+ * scheduling.manage, which every officer rank in the demo holds. Shots marked
+ * `auth: "shiftofficer"` sign in as this account. Must match
+ * OFFICER_CLOSEOUT_OFFICER in seed_demo_data.py.
+ */
+export const DEMO_SHIFT_OFFICER_CREDENTIALS = {
+  username: "ytanaka",
+  password: "DemoMember!2026",
+};
+
+/**
  * A member who reviews no suggestion box and has one suggestion forwarded to
  * them, so the Review tab reaches them through the forward alone.
  *
@@ -14787,6 +14798,50 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    // The seeder's officer close-out fixture, opened by its Shift Officer,
+    // who lacks scheduling.manage: their own row is read-only. Step 1 only;
+    // nothing is saved. Found through the administrator's page, since a
+    // member's shift list is not the whole schedule.
+    id: "03-138-closeout-own-row-locked",
+    doc: "03-scheduling.md",
+    line: 1599,
+    anchor: "__placed-by-hand-03-138__",
+    alt: "Close-out step 1 as a Shift Officer who cannot manage scheduling: their own row's Start, End and Hours read-only, with no Until shift end or Full shift button and the line that their times come from their check-in and check-out, under the crew member's row, which they can still change",
+    route: "/scheduling",
+    auth: "shiftofficer",
+    expect: "Your own times come from your check-in and check-out",
+    prepare: async (page, { lookupPage }) => {
+      const admin = await lookupPage();
+      const listed = await apiFromPage(
+        admin,
+        "GET",
+        "/scheduling/shifts?limit=200",
+      );
+      const shifts = Array.isArray(listed.body)
+        ? listed.body
+        : listed.body?.shifts || listed.body?.items || [];
+      const shift = shifts.find(
+        (s) => (s.notes || "").trim() === "Shift officer close-out fixture",
+      );
+      if (!shift)
+        throw new Error("no officer close-out fixture; re-run the seeder");
+      // The three-step wizard is the count-only close-out, as for 03-75; in
+      // the other modes Close out shift is a single confirmation. Set on the
+      // administrator's page, since the setting is theirs.
+      await setCallTracking("count_only")(admin);
+      await page.goto(
+        new URL(`/scheduling?shift=${shift.id}`, page.url()).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await clickByName(/^Close out shift$/i)(page);
+      await page
+        .getByText("Your own times come from your check-in and check-out")
+        .waitFor({ timeout: 20_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(500);
+    },
+  },
+  {
     id: "03-75-closeout-step1-attendance",
     doc: "03-scheduling.md",
     line: 1376,
@@ -22779,6 +22834,57 @@ export const SHOTS = [
       // names, with their confidence, beside the ones still to decide.
       await page.getByLabel("Show settled").check();
       await page.waitForTimeout(1000);
+    },
+  },
+  {
+    // The seeded draft's first proposed shift, answered Add to that shift on a
+    // 78% match, so the card says what was chosen and offers Undo. Mocked: the
+    // draft's rows match no shift on the schedule, and an answer is kept in
+    // the draft. Changing the seeded file only reaches a fresh database, and a
+    // second draft would change 03-120's list. The card is the live component;
+    // Undo is not pressed.
+    id: "03-139-history-import-existing-undo",
+    doc: "03-scheduling.md",
+    line: 5016,
+    anchor: "__placed-by-hand-03-139__",
+    alt: "A proposed Engine 1 shift on a draft import's Shifts tab, added to the shift already on the schedule at a 78% match: You chose to add these members to that shift, with an Undo link, above its three members",
+    route: "/scheduling/admin/history-import",
+    expect: "You chose to add these members to that shift.",
+    selector:
+      "section[aria-labelledby='review-shifts-heading'] li.card:has-text('You chose to add these members to that shift.')",
+    beforeNavigate: async (page) => {
+      await page.route(
+        /\/api\/v1\/scheduling\/history-import\/[0-9a-f-]{36}$/,
+        async (route) => {
+          if (route.request().method() !== "GET") return route.fallback();
+          const response = await route.fetch();
+          const body = await response.json();
+          const first = body.analysis?.shifts?.[0];
+          if (first) {
+            first.existing_status = "accepted";
+            first.existing_confidence = 78;
+            first.existing_shift_id = "mock-existing-shift";
+          }
+          await route.fulfill({ response, json: body });
+        },
+      );
+    },
+    prepare: async (page) => {
+      await page
+        .getByRole("link", { name: /^Review$/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("tab", { name: /^Shifts/ })
+        .click({ timeout: 20_000 });
+      const onlyPending = page.getByLabel("Only shifts that need a decision");
+      if ((await onlyPending.count()) && (await onlyPending.isChecked())) {
+        await onlyPending.uncheck();
+      }
+      await page
+        .getByText("You chose to add these members to that shift.")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
     },
   },
   {
