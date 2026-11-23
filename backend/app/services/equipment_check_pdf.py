@@ -77,6 +77,7 @@ def _meta(
     parameters: List[Any],
     subtitle: Optional[str] = None,
     report_number: Optional[str] = None,
+    signature_lines: bool = False,
 ) -> ReportMeta:
     return ReportMeta(
         title,
@@ -89,6 +90,7 @@ def _meta(
         subject="Equipment check report",
         identity=department_identity(organization) or None,
         report_number=report_number,
+        signature_lines=signature_lines,
     )
 
 
@@ -99,6 +101,7 @@ def generate_compliance_pdf(
     organization: Optional[Organization] = None,
     generated_by: Optional[str] = None,
     report_number: Optional[str] = None,
+    signature_lines: bool = False,
 ) -> bytes:
     """Generate a compliance summary PDF."""
     meta = _meta(
@@ -107,6 +110,7 @@ def generate_compliance_pdf(
         generated_by,
         [("Period", _period(date_from, date_to))],
         report_number=report_number,
+        signature_lines=signature_lines,
     )
     width = meta.width
 
@@ -228,6 +232,7 @@ def generate_failure_log_pdf(
     organization: Optional[Organization] = None,
     generated_by: Optional[str] = None,
     report_number: Optional[str] = None,
+    signature_lines: bool = False,
 ) -> bytes:
     """Generate a failure/deficiency log PDF."""
     meta = _meta(
@@ -239,6 +244,7 @@ def generate_failure_log_pdf(
             ("Total failures", data.get("total", 0)),
         ],
         report_number=report_number,
+        signature_lines=signature_lines,
     )
     width = meta.width
 
@@ -276,6 +282,7 @@ def generate_check_detail_pdf(
     organization: Optional[Organization] = None,
     generated_by: Optional[str] = None,
     report_number: Optional[str] = None,
+    signature_lines: bool = False,
 ) -> bytes:
     """Generate an individual check report PDF
     (compartment-by-compartment results)."""
@@ -293,6 +300,7 @@ def generate_check_detail_pdf(
         ],
         subtitle=f"Result: {status_label}",
         report_number=report_number,
+        signature_lines=signature_lines,
     )
     width = meta.width
 

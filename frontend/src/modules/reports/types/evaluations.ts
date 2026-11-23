@@ -542,6 +542,16 @@ export interface PreviousReview {
   goals: { key: string; label: string; text: string; target_date?: string | null | undefined }[];
 }
 
+/** One of the member's other finalized reviews, with the overall result that stood. */
+export interface ReviewHistoryEntry {
+  evaluation_id: string;
+  template_name: string;
+  period_name: string | null;
+  period_start: string;
+  period_end: string;
+  overall: string | null;
+}
+
 export interface SubmitResult {
   outcome: 'submitted' | 'sent_for_calibration' | 'finalized';
   evaluation: EvaluationDetail;

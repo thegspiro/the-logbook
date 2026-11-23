@@ -1762,10 +1762,11 @@ async def export_pdf(
     date_to: date | None = Query(None),
     apparatus_id: str | None = Query(None),
     check_id: str | None = Query(None),
+    signature_lines: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.check_view")),
 ):
-    """Export report data as PDF."""
+    """Export report data as PDF, ending with signature lines when asked."""
     from starlette.responses import Response
 
     from app.services.equipment_check_pdf import (
@@ -1798,6 +1799,7 @@ async def export_pdf(
             organization=organization,
             generated_by=prepared_by,
             report_number=report_number,
+            signature_lines=signature_lines,
         )
         filename = "equipment_check_compliance.pdf"
 
@@ -1819,6 +1821,7 @@ async def export_pdf(
             organization=organization,
             generated_by=prepared_by,
             report_number=report_number,
+            signature_lines=signature_lines,
         )
         filename = "equipment_check_failures.pdf"
 
@@ -1879,6 +1882,7 @@ async def export_pdf(
             organization=organization,
             generated_by=prepared_by,
             report_number=report_number,
+            signature_lines=signature_lines,
         )
         filename = f"equipment_check_{check_id[:8]}.pdf"
 

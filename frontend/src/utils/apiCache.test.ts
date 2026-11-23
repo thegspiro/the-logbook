@@ -779,6 +779,16 @@ describe('apiCache', () => {
       expect(isCacheable('/inventory/items')).toBe(true);
       expect(isCacheable('/inventory/items/item1')).toBe(true);
     });
+
+    it('returns false for the course-link history (named staff action) (FE16-34, verified)', () => {
+      // Each row carries linked_by_name/undone_by_name — the officer who made
+      // or undid the link — caught by the generic '/history' substring below,
+      // not a route-specific entry. The live names list itself carries no
+      // member PII (a course spelling plus a member count), so it stays
+      // cacheable; only the history sub-route is excluded.
+      expect(isCacheable('/training/course-links/history')).toBe(false);
+      expect(isCacheable('/training/course-links')).toBe(true);
+    });
   });
 
   // ---- clearCache ----

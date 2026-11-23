@@ -38,6 +38,7 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { getTrainingStatusLabel } from '../utils/trainingColors';
 import { TRAINING_TYPE_LABELS } from '../constants/enums';
 import { StatGrid } from '../components/ux/StatGrid';
+import { SignatureLinesOption } from '../components/SignatureLinesOption';
 
 /**
  * Imported course names often end with their code — "CAPCE HIPAA Awareness
@@ -229,6 +230,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
   // sitting above a lifetime hour total.
   const [period, setPeriod] = useState<TrainingExportPeriod>(TrainingExportPeriod.YEAR);
   const [exporting, setExporting] = useState(false);
+  const [signatureLines, setSignatureLines] = useState(false);
 
   // Attachments
   const [attachmentRecord, setAttachmentRecord] = useState<TrainingRecord | null>(null);
@@ -266,6 +268,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
         user_id: userId,
         start_date: window.start_date,
         end_date: window.end_date,
+        ...(format === 'pdf' && signatureLines ? { signature_lines: true } : {}),
       });
       const memberName = user?.full_name || user?.username || 'member';
       const safeName = memberName.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
@@ -473,6 +476,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                   </option>
                 ))}
               </select>
+              <SignatureLinesOption checked={signatureLines} onChange={setSignatureLines} disabled={exporting} />
               <button
                 onClick={() => void handleExport('csv')}
                 disabled={exporting}

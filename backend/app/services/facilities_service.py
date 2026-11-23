@@ -186,6 +186,27 @@ class FacilitiesService:
         ):
             raise ValueError("Invalid facility")
 
+    async def _assert_system_on_facility(
+        self, system_id: Optional[str], facility_id: str, organization_id: str
+    ) -> None:
+        """Refuse a system that belongs to another facility than the record's.
+
+        ``assert_in_org`` proves the system is the department's; this proves
+        it is this facility's, so a work order for one station cannot be
+        filed against another station's equipment (FAC2-9). Call it after
+        ``assert_in_org``.
+        """
+        if not system_id:
+            return
+        system_facility = await self.db.scalar(
+            select(FacilitySystem.facility_id).where(
+                FacilitySystem.id == str(system_id),
+                FacilitySystem.organization_id == str(organization_id),
+            )
+        )
+        if system_facility is not None and str(system_facility) != str(facility_id):
+            raise ValueError("That system belongs to a different facility")
+
     async def _ensure_system_defaults(self) -> None:
         """Create system-level facility types and statuses if missing.
 
@@ -713,11 +734,15 @@ class FacilitiesService:
                 *self.maintenance_overdue_conditions(org_id)
             )
         )
+        # The same population as the main dashboard's tile and the
+        # dueWithin=30 list this card opens: an archived facility's next
+        # inspection is not upcoming work (FAC2-7).
         upcoming = await self.db.scalar(
             select(func.count(FacilityInspection.id)).where(
                 FacilityInspection.organization_id == org_id,
                 FacilityInspection.next_inspection_date >= today,
                 FacilityInspection.next_inspection_date <= upcoming_cutoff,
+                FacilityInspection.facility_id.in_(self._active_facility_ids(org_id)),
             )
         )
 
@@ -766,6 +791,7 @@ class FacilitiesService:
             .where(
                 FacilityInspection.organization_id == org_id,
                 Facility.organization_id == org_id,
+                Facility.is_archived.is_(False),
                 FacilityInspection.next_inspection_date >= today,
                 FacilityInspection.next_inspection_date <= upcoming_cutoff,
             )
@@ -1667,6 +1693,11 @@ class FacilitiesService:
             allow_none=True,
             label="facility system",
         )
+        await self._assert_system_on_facility(
+            getattr(maintenance_data, "system_id", None),
+            maintenance_data.facility_id,
+            organization_id,
+        )
 
         # Validate historic entries
         if maintenance_data.is_historic and not maintenance_data.occurred_date:
@@ -1728,6 +1759,9 @@ class FacilitiesService:
                 organization_id,
                 allow_none=True,
                 label="facility system",
+            )
+            await self._assert_system_on_facility(
+                update_data["system_id"], maintenance.facility_id, organization_id
             )
 
         # Handle completion
@@ -2461,7 +2495,7 @@ class FacilitiesService:
             conditions.append(FacilityRoom.facility_id == facility_id)
         if room_type:
             conditions.append(FacilityRoom.room_type == room_type)
-        if floor:
+        if floor is not None:
             conditions.append(FacilityRoom.floor == floor)
         if is_active is not None:
             conditions.append(FacilityRoom.is_active == is_active)

@@ -324,6 +324,23 @@ export const eventService = {
     return response.data;
   },
 
+  /** Email the chosen members asking for help with an event's own signup sheet (events.manage). */
+  async sendVolunteerCall(
+    eventId: string,
+    data: {
+      message?: string | undefined;
+      member_classes?: string[] | undefined;
+      member_statuses?: string[] | undefined;
+      position_ids?: string[] | undefined;
+    }
+  ): Promise<import('../types/event').EventRequestVolunteerCallResult> {
+    const response = await api.post<import('../types/event').EventRequestVolunteerCallResult>(
+      `/events/${eventId}/volunteer-call`,
+      data
+    );
+    return response.data;
+  },
+
   /** Record what happened at an outreach event (events.manage); replaces what was recorded. */
   async setOutreachCloseout(
     eventId: string,
@@ -1819,11 +1836,14 @@ export interface InventoryItemBulkResult {
 }
 
 export interface InventoryImportResult {
+  /** On a dry run, the rows that would import. */
   imported: number;
   failed: number;
   total_rows: number;
   errors: Array<{ row: number; error: string }>;
   warnings: string[];
+  /** True when nothing was written (the preview's check). */
+  dry_run?: boolean;
 }
 
 export interface ItemHistoryEvent {

@@ -783,3 +783,122 @@ class TestTheSeatBoard:
         with pytest.raises(HTTPException) as exc:
             await self._board(db_session, event, outsider)
         assert exc.value.status_code == 404
+
+
+class TestASwapMovesTheRsvp:
+    """A seat traded by a swap moves the going RSVP with it (2026-11-22)."""
+
+    async def test_a_handed_over_seat_moves_the_rsvp(self, db_session):
+        from app.models.event import RSVPStatus
+        from app.services.scheduling_service import SchedulingService
+
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        await _open(db_session, officer, event, ("educator", 2))
+        shift = await _sheet(db_session, event)
+        giver = await _member(db_session, org, "jordan")
+        taker = await _member(db_session, org, "riley")
+        await TestVolunteersAreGoing()._seat(db_session, org, shift, giver)
+
+        service = SchedulingService(db_session)
+        offer, error = await service.create_swap_request(
+            org.id,
+            giver.id,
+            {"offering_shift_id": shift.id, "target_user_id": taker.id},
+        )
+        assert error is None, error
+        accepted, error = await service.respond_to_swap_offer(
+            uuid.UUID(offer.id), org.id, taker.id, accept=True
+        )
+        assert error is None, error
+
+        gone = await _rsvp(db_session, event, giver)
+        await db_session.refresh(gone)
+        assert gone.status == RSVPStatus.NOT_GOING
+        assert gone.is_volunteer is False
+        arrived = await _rsvp(db_session, event, taker)
+        assert arrived is not None
+        assert arrived.status == RSVPStatus.GOING
+        assert arrived.is_volunteer is True
+
+
+class TestTheEventsOwnVolunteerCall:
+    """An event's own sheet can email the membership for help (2026-11-22)."""
+
+    async def _send(self, db, event, org, email_service):
+        from app.services.event_staffing_service import send_event_volunteer_call
+
+        with patch(
+            "app.services.email_service.EmailService",
+            return_value=email_service,
+        ):
+            return await send_event_volunteer_call(
+                db, event, org, message="Bring the smoke trailer."
+            )
+
+    async def test_it_emails_the_details_and_records_the_send(self, db_session):
+        from unittest.mock import MagicMock
+
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        await _open(db_session, officer, event, ("educator", 2))
+        await db_session.refresh(event)
+        email_service = MagicMock()
+        email_service.send_email = AsyncMock()
+
+        result = await self._send(db_session, event, org, email_service)
+
+        assert result["recipients"] >= 1
+        assert event.volunteer_call_sent_at is not None
+        kwargs = email_service.send_email.await_args.kwargs
+        assert officer.email in kwargs["to_emails"]
+        assert kwargs["subject"].startswith("Can you help? Engine at the Fall Festival")
+        assert "2 x Educator" in kwargs["text_body"]
+        assert "Where: Riverside Park" in kwargs["text_body"]
+        assert "Bring the smoke trailer." in kwargs["text_body"]
+        assert "/scheduling?tab=open-shifts" in kwargs["text_body"]
+        state = await get_event_staffing_sheet(
+            event_id=uuid.UUID(event.id), db=db_session, current_user=officer
+        )
+        assert state["volunteer_call_sent_at"] is not None
+
+    @pytest.mark.parametrize(
+        ("case", "reason"),
+        [
+            ("no_sheet", "Open volunteer signups"),
+            ("from_request", "came from a public request"),
+            ("cancelled", "was cancelled"),
+        ],
+    )
+    async def test_it_is_refused_where_it_cannot_be_sent(
+        self, db_session, case, reason
+    ):
+        from unittest.mock import MagicMock
+
+        org, officer = await _dept(db_session)
+        event = await _event(db_session, org, officer)
+        if case != "no_sheet":
+            await _open(db_session, officer, event, ("educator", 1))
+            await db_session.refresh(event)
+        if case == "from_request":
+            db_session.add(
+                EventRequest(
+                    organization_id=org.id,
+                    contact_name="Pat Rivera",
+                    contact_email="pat@example.test",
+                    description="Fire safety night",
+                    status=EventRequestStatus.SCHEDULED,
+                    event_id=event.id,
+                    event_date=START,
+                )
+            )
+            await db_session.flush()
+        if case == "cancelled":
+            event.is_cancelled = True
+            await db_session.flush()
+        email_service = MagicMock()
+        email_service.send_email = AsyncMock()
+
+        with pytest.raises(ValueError, match=reason):
+            await self._send(db_session, event, org, email_service)
+        email_service.send_email.assert_not_awaited()

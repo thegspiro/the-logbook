@@ -1296,36 +1296,46 @@ async def short_notice_request_ids(
     return {str(request_id) for (request_id,) in rows.all()}
 
 
-async def _roles_still_needed(
+async def volunteer_call_recipients(
     db: AsyncSession,
-    event_request: EventRequest,
     org: Optional[Organization],
-) -> str:
-    """The unfilled roles on this request's sheet, rendered for an email.
+    organization_id: str,
+    audience: AudienceFilter,
+) -> tuple[list[str], int]:
+    """Who a call for help goes to: ``(emails, skipped_opted_out)``.
 
-    Empty when no sheet has been opened, and when every seat is already
-    taken — a call for help that lists nothing still needed reads as a mistake.
+    Raises ``ValueError`` when the department has volunteer calls turned off
+    (the ``volunteer_call`` email trigger) or nobody is left to email. Shared
+    by a request's call and an event's own sheet's call.
     """
-    if not event_request.staffing_shift_id:
-        return describe_roles(org, event_request.staffing_roles)
-    state = await get_staffing_state(db, event_request, org)
-    labels = get_outreach_roles(org)
-    return ", ".join(
-        f"{entry['remaining']} x {role_label(labels, entry['role'])}"
-        for entry in state["roles"]
-        if entry["remaining"] > 0
-    )
+    pipeline = get_pipeline_settings(org)
+    trigger = (pipeline.get("email_triggers", {}) or {}).get("volunteer_call", {})
+    if not trigger.get("enabled", True):
+        raise ValueError("Volunteer call emails are turned off for this department.")
+    resolved = await resolve_audience(db, org, organization_id, audience)
+    if not resolved.emails:
+        raise ValueError("No members are available to email about this event.")
+    return list(resolved.emails), resolved.skipped_opted_out
 
 
-async def send_volunteer_call(
-    db: AsyncSession,
-    event_request: EventRequest,
+async def email_volunteer_call(
     org: Optional[Organization],
-    actor: User,
-    message: Optional[str] = None,
-    audience: Optional[AudienceFilter] = None,
-) -> dict[str, Any]:
-    """Email the membership asking who can help cover a scheduled request.
+    recipients: list[str],
+    *,
+    label: str,
+    requester: Optional[str],
+    start: datetime,
+    detail_rows: list[tuple[str, str]],
+    sheet_open: bool,
+    message: Optional[str],
+    db: AsyncSession,
+) -> None:
+    """Email a call for help on an outreach event to ``recipients``.
+
+    Shared by a request's call (``send_volunteer_call``) and an event's own
+    sheet (``event_staffing_service.send_event_volunteer_call``), so both say
+    the same thing the same way. Every email names what and when; a request
+    also names who it is ``requester`` for, and ``detail_rows`` follow.
 
     Email only, deliberately. This is a routine call for help a member acts on
     during the week, not one of the alerts in ``SmsAlert`` — see CLAUDE.md
@@ -1335,54 +1345,18 @@ async def send_volunteer_call(
     from app.core.config import settings
     from app.services.email_service import EmailService, wrap_email_body
 
-    pipeline = get_pipeline_settings(org)
-    trigger = (pipeline.get("email_triggers", {}) or {}).get("volunteer_call", {})
-    if not trigger.get("enabled", True):
-        raise ValueError("Volunteer call emails are turned off for this department.")
-    if not event_request.event_date:
-        raise ValueError("Confirm a date before asking the membership for help.")
-
-    audience = audience or AudienceFilter()
-    resolved = await resolve_audience(
-        db, org, str(event_request.organization_id), audience
-    )
-    recipients = resolved.emails
-    skipped = resolved.skipped_opted_out
-
-    if not recipients:
-        raise ValueError("No members are available to email about this event.")
-
     tz = _org_timezone(org)
-    start = event_request.event_date
     if start.tzinfo is None:
         start = start.replace(tzinfo=timezone.utc)
     when = start.astimezone(tz).strftime("%A, %B %d, %Y at %I:%M %p")
-
-    label = outreach_type_label(org, event_request.outreach_type)
-    who = event_request.organization_name or event_request.contact_name
+    rows = [("What", label)]
+    if requester:
+        rows.append(("For", requester))
+    rows += [("When", when), *detail_rows]
     signup_url = f"{settings.FRONTEND_URL}/scheduling?tab=open-shifts"
 
-    detail_rows = [
-        ("What", label),
-        ("For", who),
-        ("When", when),
-    ]
-    # What we are asking of them, in the words a member can picture themselves
-    # doing. "We need two people" tells them nothing; "2 x Tour Guide, 1 x
-    # Educator" tells them whether it is a job they can do.
-    still_needed = await _roles_still_needed(db, event_request, org)
-    if still_needed:
-        detail_rows.append(("Roles needed", still_needed))
-    if event_request.venue_address:
-        detail_rows.append(("Where", event_request.venue_address))
-    if event_request.audience_size:
-        detail_rows.append(("Expected attendance", str(event_request.audience_size)))
-    if event_request.age_group:
-        detail_rows.append(("Audience", event_request.age_group))
-
     details_html = "".join(
-        f"<p><strong>{_html.escape(k)}:</strong> {_html.escape(v)}</p>"
-        for k, v in detail_rows
+        f"<p><strong>{_html.escape(k)}:</strong> {_html.escape(v)}</p>" for k, v in rows
     )
     note_html = (
         f'<p style="white-space:pre-line;">{_html.escape(message)}</p>'
@@ -1395,7 +1369,7 @@ async def send_volunteer_call(
         f'<p style="text-align:center;">'
         f'<a href="{_html.escape(signup_url)}" class="button" role="link">'
         f"Sign Up on the Schedule</a></p>"
-        if event_request.staffing_shift_id
+        if sheet_open
         else (
             "<p>Reply to this email or contact the coordinator if you can help "
             "— signups will open on the schedule shortly.</p>"
@@ -1415,10 +1389,10 @@ async def send_volunteer_call(
         "covering it.",
         "",
     ]
-    text_lines += [f"{k}: {v}" for k, v in detail_rows]
+    text_lines += [f"{k}: {v}" for k, v in rows]
     if message:
         text_lines += ["", message]
-    if event_request.staffing_shift_id:
+    if sheet_open:
         text_lines += ["", f"Sign up on the schedule: {signup_url}"]
     else:
         text_lines += [
@@ -1437,18 +1411,81 @@ async def send_volunteer_call(
         template_type="event_request_volunteer_call",
     )
 
+
+async def roles_still_needed(
+    db: AsyncSession,
+    owner: Union[EventRequest, Event],
+    org: Optional[Organization],
+) -> str:
+    """The unfilled roles on a sheet, rendered for an email.
+
+    ``owner`` is a request or an event with its own sheet. With no sheet open
+    yet, the roles asked for; once every seat is taken, empty — a call for
+    help that lists nothing still needed reads as a mistake.
+    """
+    if not owner.staffing_shift_id:
+        return describe_roles(org, owner.staffing_roles)
+    state = await get_staffing_state(db, owner, org)
+    labels = get_outreach_roles(org)
+    return ", ".join(
+        f"{entry['remaining']} x {role_label(labels, entry['role'])}"
+        for entry in state["roles"]
+        if entry["remaining"] > 0
+    )
+
+
+async def send_volunteer_call(
+    db: AsyncSession,
+    event_request: EventRequest,
+    org: Optional[Organization],
+    actor: User,
+    message: Optional[str] = None,
+    audience: Optional[AudienceFilter] = None,
+) -> dict[str, Any]:
+    """Email the membership asking who can help cover a scheduled request."""
+    if not event_request.event_date:
+        raise ValueError("Confirm a date before asking the membership for help.")
+    audience = audience or AudienceFilter()
+    recipients, skipped = await volunteer_call_recipients(
+        db, org, str(event_request.organization_id), audience
+    )
+
+    # What we are asking of them, in the words a member can picture themselves
+    # doing. "We need two people" tells them nothing; "2 x Tour Guide, 1 x
+    # Educator" tells them whether it is a job they can do.
+    detail_rows: list[tuple[str, str]] = []
+    still_needed = await roles_still_needed(db, event_request, org)
+    if still_needed:
+        detail_rows.append(("Roles needed", still_needed))
+    if event_request.venue_address:
+        detail_rows.append(("Where", event_request.venue_address))
+    if event_request.audience_size:
+        detail_rows.append(("Expected attendance", str(event_request.audience_size)))
+    if event_request.age_group:
+        detail_rows.append(("Audience", event_request.age_group))
+
+    await email_volunteer_call(
+        org,
+        recipients,
+        label=outreach_type_label(org, event_request.outreach_type),
+        requester=event_request.organization_name or event_request.contact_name,
+        start=event_request.event_date,
+        detail_rows=detail_rows,
+        sheet_open=bool(event_request.staffing_shift_id),
+        message=message,
+        db=db,
+    )
+    sent = len(recipients)
+
     sent_at = datetime.now(timezone.utc)
     event_request.volunteer_call_sent_at = sent_at
     db.add(
         EventRequestActivity(
             request_id=event_request.id,
             action="volunteer_call_sent",
-            notes=(
-                f"Emailed {len(recipients)} "
-                f"{'member' if len(recipients) == 1 else 'members'} asking for help"
-            ),
+            notes=f"Emailed {sent} {'member' if sent == 1 else 'members'} asking for help",
             details={
-                "recipients": len(recipients),
+                "recipients": sent,
                 "skipped_opted_out": skipped,
                 **audience.as_record(),
             },
@@ -1456,8 +1493,8 @@ async def send_volunteer_call(
         )
     )
     return {
-        "message": f"Volunteer call emailed to {len(recipients)} members.",
-        "recipients": len(recipients),
+        "message": f"Volunteer call emailed to {sent} members.",
+        "recipients": sent,
         "skipped_opted_out": skipped,
         "volunteer_call_sent_at": sent_at,
     }

@@ -676,6 +676,42 @@ class ExternalShiftHoursService:
             for row in result.all()
         }
 
+    async def counted_minutes_by_user_and_date(
+        self,
+        organization_id: str,
+        start_date: date,
+        end_date: date,
+        user_ids: Sequence[str],
+    ) -> Dict[str, Dict[date, int]]:
+        """``{user_id: {shift_date: minutes}}`` of counted entries.
+
+        The dated form of :meth:`counted_totals_by_user`, for a grader that
+        needs to know when the hours fell (a window, a waived month).
+        """
+        if not user_ids:
+            return {}
+        result = await self.db.execute(
+            select(
+                ExternalShiftHours.user_id,
+                ExternalShiftHours.shift_date,
+                func.coalesce(func.sum(ExternalShiftHours.duration_minutes), 0).label(
+                    "minutes"
+                ),
+            )
+            .where(ExternalShiftHours.organization_id == str(organization_id))
+            .where(ExternalShiftHours.status == _COUNTED)
+            .where(ExternalShiftHours.shift_date >= start_date)
+            .where(ExternalShiftHours.shift_date <= end_date)
+            .where(ExternalShiftHours.user_id.in_(list(user_ids)))
+            .group_by(ExternalShiftHours.user_id, ExternalShiftHours.shift_date)
+        )
+        by_user: Dict[str, Dict[date, int]] = {}
+        for row in result.all():
+            by_user.setdefault(str(row.user_id), {})[row.shift_date] = int(
+                row.minutes or 0
+            )
+        return by_user
+
     async def counted_totals_by_month(
         self,
         organization_id: str,
