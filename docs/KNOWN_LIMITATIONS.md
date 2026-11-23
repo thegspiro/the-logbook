@@ -5692,8 +5692,11 @@ owner.
 
 Still open, each the owner's call:
 
-- The member response still carries the cohort's `notes` and creator ids.
-  They are not displayed, but they are sent.
+- ~~The member response still carries the cohort's `notes` and creator ids.
+  They are not displayed, but they are sent.~~ ✅ **Resolved.** `notes` were
+  withheld from a roster member on 2026-11-04; `created_by` and
+  `generated_by` are blanked the same way since 2026-11-23
+  (`_build_detail`, `tests/test_course_cohort.py`).
 - `is_roster_member` admits a withdrawn member, while `/mine` lists only
   active ones.
 - A `training.view_all` holder without `training.manage` sees the member view
