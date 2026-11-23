@@ -22906,57 +22906,6 @@ export const SHOTS = [
     },
   },
   {
-    // The seeded draft's first proposed shift, answered Add to that shift on a
-    // 78% match, so the card says what was chosen and offers Undo. Mocked: the
-    // draft's rows match no shift on the schedule, and an answer is kept in
-    // the draft. Changing the seeded file only reaches a fresh database, and a
-    // second draft would change 03-120's list. The card is the live component;
-    // Undo is not pressed.
-    id: "03-139-history-import-existing-undo",
-    doc: "03-scheduling.md",
-    line: 5016,
-    anchor: "__placed-by-hand-03-139__",
-    alt: "A proposed Engine 1 shift on a draft import's Shifts tab, added to the shift already on the schedule at a 78% match: You chose to add these members to that shift, with an Undo link, above its three members",
-    route: "/scheduling/admin/history-import",
-    expect: "You chose to add these members to that shift.",
-    selector:
-      "section[aria-labelledby='review-shifts-heading'] li.card:has-text('You chose to add these members to that shift.')",
-    beforeNavigate: async (page) => {
-      await page.route(
-        /\/api\/v1\/scheduling\/history-import\/[0-9a-f-]{36}$/,
-        async (route) => {
-          if (route.request().method() !== "GET") return route.fallback();
-          const response = await route.fetch();
-          const body = await response.json();
-          const first = body.analysis?.shifts?.[0];
-          if (first) {
-            first.existing_status = "accepted";
-            first.existing_confidence = 78;
-            first.existing_shift_id = "mock-existing-shift";
-          }
-          await route.fulfill({ response, json: body });
-        },
-      );
-    },
-    prepare: async (page) => {
-      await page
-        .getByRole("link", { name: /^Review$/ })
-        .first()
-        .click({ timeout: 20_000 });
-      await page
-        .getByRole("tab", { name: /^Shifts/ })
-        .click({ timeout: 20_000 });
-      const onlyPending = page.getByLabel("Only shifts that need a decision");
-      if ((await onlyPending.count()) && (await onlyPending.isChecked())) {
-        await onlyPending.uncheck();
-      }
-      await page
-        .getByText("You chose to add these members to that shift.")
-        .waitFor({ timeout: 20_000 });
-      await page.waitForTimeout(400);
-    },
-  },
-  {
     id: "03-140-history-import-units",
     doc: "03-scheduling.md",
     line: 5046,
