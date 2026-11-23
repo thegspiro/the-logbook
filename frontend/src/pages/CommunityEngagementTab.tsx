@@ -10,18 +10,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  CalendarDays,
-  Clock,
-  Download,
-  Globe,
-  Inbox,
-  Loader2,
-  Printer,
-  Users,
-} from 'lucide-react';
+import { CalendarDays, Clock, Download, Globe, Inbox, Loader2, Printer, Users } from 'lucide-react';
 import { dashboardService } from '../services/api';
 import type { CommunityEngagement, CommunityPeriod } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
@@ -43,25 +32,8 @@ import {
   type Change,
 } from './community-engagement/communityEngagement';
 import { ReachByPeriodChart, ReachByTypeBars, ReachLegend } from './community-engagement/CommunityCharts';
-
-const ChangeBadge: React.FC<{ change: Change | null; against: string | null }> = ({ change, against }) => {
-  if (!change) return null;
-  const tone =
-    change.direction === 'up'
-      ? 'text-green-900 dark:text-green-300'
-      : change.direction === 'down'
-        ? 'text-red-900 dark:text-red-300'
-        : 'text-theme-text-muted';
-  const Icon = change.direction === 'up' ? ArrowUpRight : change.direction === 'down' ? ArrowDownRight : null;
-  return (
-    <span className={`inline-flex items-center text-xs font-medium ${tone}`}>
-      {Icon && <Icon className="h-3.5 w-3.5" aria-hidden="true" />}
-      {/* Its own element, so axe measures the text without the icon beside it. */}
-      <span>{change.text}</span>
-      {against && <span className="sr-only"> compared with {against}</span>}
-    </span>
-  );
-};
+import { ChangeBadge } from './community-engagement/ChangeBadge';
+import CrrImpactSection from './community-engagement/CrrImpactSection';
 
 const Kpi: React.FC<{
   icon: React.ElementType;
@@ -302,6 +274,10 @@ const CommunityEngagementTab: React.FC = () => {
             ))}
           </ul>
         </section>
+      )}
+
+      {data.crr && (
+        <CrrImpactSection crr={data.crr} periodLabel={(option?.label ?? '').toLowerCase()} against={against} />
       )}
 
       <section className="card rwd-table-container overflow-hidden p-0" aria-labelledby="ce-events-heading">

@@ -184,6 +184,20 @@ The ZIP data is `backend/app/data/us_zip_codes.json`, rebuilt by
 `backend/scripts/build_us_zip_codes.py`. `data/` is gitignored repository-wide,
 so a rebuilt file is committed with `git add -f`; `tests/test_zip_lookup.py`
 fails if it is missing.
+Each entry is `[city, state, county, latitude, longitude]`; `lookup_zip`
+reads the first three, `zip_coordinates` the last two.
+
+**On Outreach Impact.** `GET /dashboard/community-engagement` carries a `crr`
+object for the same period and comparison as the rest of the report, built by
+`CrrImpactService.breakdown` (`services/crr_impact_service.py`): `activities`
+and `previous_activities`, `by_type` (each type's counts with their previous
+figures), `by_tag` (an activity counts under every tag it carries, so the rows
+do not sum to the total), `by_zip` (GeoNames' city and state, and the ZIP's
+centre for the map) and `unplaced_activities`. It reads no resident detail.
+The map (`CrrZipMap.tsx`, Leaflet, lazy) draws OpenStreetMap's tiles only once
+**Show map** is pressed; the nginx CSPs allow `https://tile.openstreetmap.org`
+in `img-src` and nothing else from outside, which `tests/test_csp_map_tiles.py`
+holds.
 
 ### Check-in and attendance
 

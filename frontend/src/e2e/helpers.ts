@@ -508,6 +508,113 @@ const COMMUNITY_ENGAGEMENT = {
       member_hours: 70,
     },
   ],
+  // CRR breakdowns with long names, so the cards are measured at their widest.
+  crr: {
+    activities: 14,
+    previous_activities: 9,
+    by_type: [
+      {
+        activity_type_id: 'crr-type-smoke',
+        name: 'Smoke alarm install',
+        activities: 8,
+        previous_activities: 5,
+        counts: [
+          { measure_id: 'crr-m-alarms', label: 'Alarms installed', quantity: 23, previous_quantity: 14 },
+          { measure_id: 'crr-m-homes', label: 'Homes', quantity: 8, previous_quantity: 5 },
+        ],
+      },
+      {
+        activity_type_id: 'crr-type-seats',
+        name: 'Car seat inspection and installation',
+        activities: 6,
+        previous_activities: 4,
+        counts: [
+          { measure_id: 'crr-m-inspected', label: 'Seats inspected', quantity: 31, previous_quantity: 20 },
+          { measure_id: 'crr-m-installed', label: 'Seats installed or corrected', quantity: 12, previous_quantity: 12 },
+        ],
+      },
+    ],
+    by_tag: [
+      {
+        tag_id: 'crr-tag-fire',
+        kind: 'risk',
+        label: 'Fire',
+        activities: 8,
+        counts: [
+          {
+            measure_id: 'crr-m-alarms',
+            activity_type_name: 'Smoke alarm install',
+            label: 'Alarms installed',
+            quantity: 23,
+          },
+          { measure_id: 'crr-m-homes', activity_type_name: 'Smoke alarm install', label: 'Homes', quantity: 8 },
+        ],
+      },
+      {
+        tag_id: 'crr-tag-mvc',
+        kind: 'risk',
+        label: 'Motor vehicle crashes',
+        activities: 6,
+        counts: [
+          {
+            measure_id: 'crr-m-inspected',
+            activity_type_name: 'Car seat inspection and installation',
+            label: 'Seats inspected',
+            quantity: 31,
+          },
+        ],
+      },
+      {
+        tag_id: 'crr-tag-children',
+        kind: 'population',
+        label: 'Children',
+        activities: 6,
+        counts: [
+          {
+            measure_id: 'crr-m-installed',
+            activity_type_name: 'Car seat inspection and installation',
+            label: 'Seats installed or corrected',
+            quantity: 12,
+          },
+        ],
+      },
+    ],
+    by_zip: [
+      {
+        zip_code: '22046',
+        city: 'Falls Church',
+        state: 'VA',
+        latitude: 38.8856,
+        longitude: -77.1802,
+        activities: 9,
+        counts: [
+          {
+            measure_id: 'crr-m-alarms',
+            activity_type_name: 'Smoke alarm install',
+            label: 'Alarms installed',
+            quantity: 17,
+          },
+        ],
+      },
+      {
+        zip_code: '22044',
+        city: 'Falls Church',
+        state: 'VA',
+        latitude: 38.8589,
+        longitude: -77.1513,
+        activities: 4,
+        counts: [
+          {
+            measure_id: 'crr-m-inspected',
+            activity_type_name: 'Car seat inspection and installation',
+            label: 'Seats inspected',
+            quantity: 22,
+          },
+        ],
+      },
+    ],
+    unplaced_activities: 1,
+  },
 };
 
 const HISTORY_ALBUMS: AlbumSummary[] = [

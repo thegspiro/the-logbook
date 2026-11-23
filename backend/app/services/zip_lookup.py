@@ -9,7 +9,7 @@ import json
 import re
 from functools import lru_cache
 from pathlib import Path
-from typing import NamedTuple, Optional
+from typing import Any, NamedTuple, Optional
 
 _DATA = Path(__file__).resolve().parents[1] / "data" / "us_zip_codes.json"
 _ZIP = re.compile(r"^\s*(\d{5})(?:-\d{4})?\s*$")
@@ -23,10 +23,12 @@ class ZipPlace(NamedTuple):
 
 
 @lru_cache(maxsize=1)
-def _places() -> dict[str, list[str]]:
-    # About 1.5 MB, read once per process on first use.
+def _places() -> dict[str, list[Any]]:
+    # A few MB, read once per process on first use. Each entry is
+    # [city, state, county] followed by [latitude, longitude] where GeoNames
+    # gives them (scripts/build_us_zip_codes.py).
     with _DATA.open(encoding="utf-8") as handle:
-        loaded: dict[str, list[str]] = json.load(handle)
+        loaded: dict[str, list[Any]] = json.load(handle)
     return loaded
 
 
@@ -45,3 +47,22 @@ def lookup_zip(value: str) -> Optional[ZipPlace]:
         return None
     city, state, county = found[0], found[1], found[2]
     return ZipPlace(zip_code, city, state, county)
+
+
+def zip_coordinates(value: str) -> Optional[tuple[float, float]]:
+    """(latitude, longitude) of a ZIP's centre; None when unknown.
+
+    Kept apart from lookup_zip so the lookup endpoint's response is unchanged.
+    """
+    zip_code = normalize_zip(value)
+    if zip_code is None:
+        return None
+    found = _places().get(zip_code)
+    if not found or len(found) < 5:
+        return None
+    latitude, longitude = found[3], found[4]
+    if not isinstance(latitude, (int, float)) or not isinstance(
+        longitude, (int, float)
+    ):
+        return None
+    return float(latitude), float(longitude)
