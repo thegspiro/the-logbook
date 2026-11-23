@@ -125,6 +125,9 @@ class RequestPipelineUpdate(BaseModel):
     # toggle still read as open, which is a confusing way to spell the thing
     # `accept_public_requests: false` already says plainly.
     public_daily_limit: Optional[int] = Field(None, ge=1, le=INT32_MAX)
+    # A null clears either one: no feedback form, or no rating question.
+    feedback_form_id: Optional[str] = Field(None, max_length=36)
+    feedback_rating_field_id: Optional[str] = Field(None, max_length=36)
     tasks: Optional[List[RequestPipelineTask]] = None
     email_triggers: Optional[Dict[str, EmailTriggerConfig]] = None
 
