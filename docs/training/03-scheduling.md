@@ -533,6 +533,14 @@ your schedule."_
 2. Select **Sign Up** on a shift.
 3. Choose the **Position**, then select **Confirm Sign Up**.
 
+**An outreach sheet asks for a role, not a seat** _(2026-11-22)_. Opening an
+outreach sheet from the calendar shows "Sign yourself up for this outreach
+event": pick the role you will do (tour guide, educator) and sign up. It
+replaces the per-seat **Sign myself up** the panel used to offer, which the
+server refused because it named no role. The same control is on the event's
+own page. See the events guide,
+[Signing up to volunteer at an outreach event](./04-events-meetings.md#signing-up-to-volunteer-at-an-outreach-event-2026-11-22).
+
 You see **Signed up for shift**, and the shift appears on **My Shifts**,
 where you can confirm it.
 
@@ -1262,6 +1270,11 @@ confirm.
 ## Shift Swap Requests
 
 A swap starts from the shift you are giving up.
+
+**A swap on an outreach sheet moves the RSVP too** _(2026-11-23)_. When the
+shift is a volunteer role at an outreach event, the member who takes the seat
+becomes the event's RSVP and the member who gave it up is taken off, so the
+event's volunteer list matches the roster.
 
 1. Go to **My Shifts** and stay on **Upcoming**. The **Swap** button only
    appears on shifts that have not happened yet.
