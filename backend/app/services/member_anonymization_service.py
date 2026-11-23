@@ -113,6 +113,7 @@ from app.models.user import (
 )
 from app.services import file_storage_service as file_storage
 from app.services.attendance_waiver_attachments import remove_member_attachments
+from app.services.attendance_waiver_service import MEETING_WAIVER_TEXT
 from app.services.file_storage_service import StorageArea
 from app.services.member_documents import erase_member_documents
 from app.services.member_files import (
@@ -291,10 +292,21 @@ class MemberAnonymizationService:
             )
             counts[f"{label}_scrubbed"] = rows_affected(result) or 0
 
+        # A waiver's reason may be the Secretary's free text about the member,
+        # so it goes; the excusal does not. Every reader decides "excused"
+        # from a non-blank waiver_reason, so clearing it would turn excused
+        # meetings into absences and drop the member's attendance figure.
+        # Neutral wording with no category keeps the session excused and
+        # says nothing about why. Migration 1f3a6c2d9e40 repairs members
+        # anonymised before this, whose reason is already gone, from the
+        # grant timestamp and request link every waiver writes beside it.
         result = await self.db.execute(
             update(MeetingAttendee)
-            .where(MeetingAttendee.user_id == user.id)
-            .values(waiver_reason=None)
+            .where(
+                MeetingAttendee.user_id == user.id,
+                MeetingAttendee.waiver_reason.is_not(None),
+            )
+            .values(waiver_reason=MEETING_WAIVER_TEXT)
         )
         counts["meeting_waiver_reasons_scrubbed"] = rows_affected(result) or 0
 
@@ -325,9 +337,11 @@ class MemberAnonymizationService:
         counts["attendance_waiver_notes_scrubbed"] = rows_affected(result) or 0
         # The documents filed with those requests (doctor's notes, mostly):
         # files and rows both go, the requests stay.
+        waiver_queued: list[str] = []
         counts["attendance_waiver_attachments_deleted"] = (
-            await remove_member_attachments(self.db, user)
+            await remove_member_attachments(self.db, user, queued=waiver_queued)
         )
+        counts["attendance_waiver_files_queued"] = len(waiver_queued)
 
         # --- RSVP quasi-health fields ----------------------------------
         result = await self.db.execute(
@@ -362,6 +376,7 @@ class MemberAnonymizationService:
         counts["form_submissions_scrubbed"] = prospect_counts["form_submissions"]
         counts["step_progress_scrubbed"] = prospect_counts["step_progress"]
         counts["prospect_activity_scrubbed"] = prospect_counts["activity"]
+        counts["applicant_files_queued"] = prospect_counts["files_queued"]
 
         # --- uploaded training files -----------------------------------
         # Last, so the files go as late as possible before the endpoint's
@@ -428,7 +443,9 @@ class MemberAnonymizationService:
             else:
                 failed.add(path)
 
-        if candidates:
+        # Visited even when the member has no stored file: a path-less entry's
+        # name is relabelled too (see _strip_entries).
+        if files.submission_ids or files.record_ids:
             if files.submission_ids:
                 submissions = (
                     (
@@ -494,6 +511,11 @@ class MemberAnonymizationService:
         form_submissions_scrubbed = 0
         step_progress_scrubbed = 0
         activity_scrubbed = 0
+        # Applicant documents whose file would not delete. Their rows go
+        # anyway, so the files are queued for the hourly sweep in this
+        # transaction, rather than left named by nothing (owner decision
+        # 2026-11-23).
+        retry: dict[str, StorageArea] = {}
         for prospect in prospects:
             # Rows linked to BOTH user_id and prospect_id were already
             # scrubbed (and counted) by the user-scoped update in
@@ -674,8 +696,8 @@ class MemberAnonymizationService:
                 confined = prospect_document_path(
                     doc.file_path, prospect.organization_id
                 )
-                # Best effort: already gone or unreachable, the row still goes.
-                await file_storage.delete_quietly(confined)
+                if confined and not await file_storage.delete(confined):
+                    retry[confined] = StorageArea.APPLICANTS
             await self.db.execute(
                 delete(ProspectDocument).where(
                     ProspectDocument.prospect_id == prospect.id
@@ -687,6 +709,14 @@ class MemberAnonymizationService:
             "form_submissions": form_submissions_scrubbed,
             "step_progress": step_progress_scrubbed,
             "activity": activity_scrubbed,
+            "files_queued": len(
+                enqueue_pending_file_deletions(
+                    self.db,
+                    str(user.organization_id),
+                    retry,
+                    PendingDeletionReason.MEMBER_ANONYMIZATION,
+                )
+            ),
         }
 
 
@@ -765,6 +795,15 @@ _NEUTRAL_LABELS = {
 }
 
 
+def _neutral_name(label: str, file_name: Any) -> str:
+    """*label* with the original name's extension, when it has a plausible
+    one (letters and digits, at most five), lower-cased; otherwise bare."""
+    extension = os.path.splitext(file_name)[1] if isinstance(file_name, str) else ""
+    if 1 < len(extension) <= 6 and extension[1:].isalnum():
+        return label + extension.lower()
+    return label
+
+
 def _strip_entries(
     row: TrainingSubmission | TrainingRecord,
     org_id: str,
@@ -803,6 +842,20 @@ def _strip_entries(
             and isinstance(attachment, dict)
         ):
             label = _NEUTRAL_LABELS[area] + os.path.splitext(path)[1]
+            if attachment.get("file_name") != label:
+                attachment = {**copy.deepcopy(attachment), "file_name": label}
+                changed = True
+        elif isinstance(attachment, dict) and not attachment.get("file_path"):
+            # A path-less entry (an old text-only attachment, settled as
+            # {"file_name": ...} by migration 0c22a95b94b8) names no file,
+            # but its name is the uploader's text and often the member's.
+            # Relabelled with the row kind's label: a submission's is a
+            # certificate, a record's an attachment. The frozen copy of this
+            # rule in migration 1f3a6c2d9e40 settles members anonymised
+            # before it.
+            label = _neutral_name(
+                _NEUTRAL_LABELS[areas[-1]], attachment.get("file_name")
+            )
             if attachment.get("file_name") != label:
                 attachment = {**copy.deepcopy(attachment), "file_name": label}
                 changed = True

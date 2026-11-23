@@ -93,18 +93,21 @@ export const RequirementMonthlyHours: React.FC<{ requirement: RequirementDetail 
   const total = months.reduce((sum, m) => sum + m.value, 0);
   const excused = months.filter((m) => m.waived);
   const excusedHours = excused.reduce((sum, m) => sum + m.value, 0);
-  // The average is the member's pace in the months nothing excused, measured
-  // only on those months' hours. Dividing every hour, leave hours included, by
+  // The average is the member's pace while active, the backend's
+  // monthly_pace rule: each month weighs its unexcused share, so a month half
+  // excused counts as half a month and its hours, and a wholly excused month
+  // and its hours are left out. Dividing every hour, leave hours included, by
   // the active months alone overstated it: 26 hours with 23 earned on leave
   // read as 13 a month for a member who logged 3.
-  const activeMonths = months.filter((m) => !m.waived);
+  const activeShare = (m: BreakdownMonth): number => 1 - Math.min(Math.max(m.waived_share ?? (m.waived ? 1 : 0), 0), 1);
+  const activeMonths = months.filter((m) => activeShare(m) > 0);
+  const activeMonthCount = activeMonths.reduce((sum, m) => sum + activeShare(m), 0);
   const activeHours = activeMonths.reduce((sum, m) => sum + m.value, 0);
   // For hours the server sends this same average (monthly_average), which the
   // card prints as its headline, so the panel prints the server's figure too.
   // Shifts and calls have no server average, so they are still worked out here.
   const serverAverage = hours?.length ? requirement.monthly_average : null;
-  const average =
-    serverAverage != null ? serverAverage : activeMonths.length > 0 ? activeHours / activeMonths.length : null;
+  const average = serverAverage != null ? serverAverage : activeMonthCount > 0 ? activeHours / activeMonthCount : null;
   // The department's own annual level over the months in the window. The
   // unadjusted figure, not the waiver-prorated one on the card: leave months
   // shrink what a member owes, not the pace the department set.
@@ -147,8 +150,8 @@ export const RequirementMonthlyHours: React.FC<{ requirement: RequirementDetail 
             {average != null && excused.length > 0 && (
               <>
                 {' '}
-                · average {oneDecimal(average)} {units.short}/month in the {activeMonths.length}{' '}
-                {activeMonths.length === 1 ? 'month' : 'months'} not excused
+                · average {oneDecimal(average)} {units.short}/month in the {oneDecimal(activeMonthCount)}{' '}
+                {activeMonthCount === 1 ? 'month' : 'months'} not excused
               </>
             )}
             {average != null && excused.length === 0 && (

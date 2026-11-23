@@ -64,6 +64,59 @@ describe('ReportTable', () => {
     expect(cells[0]?.textContent).toBe('Alice');
   });
 
+  describe('sorting from the keyboard', () => {
+    const rows = [
+      { name: 'Charlie', value: 30 },
+      { name: 'Alice', value: 10 },
+      { name: 'Bob', value: 20 },
+    ];
+    const firstName = () => screen.getAllByRole('cell')[0]?.textContent;
+
+    it('reaches a header with Tab and sorts it with Enter, then Space', async () => {
+      const user = userEvent.setup();
+      render(<ReportTable rows={rows} columns={columns} />);
+      const nameHeader = screen.getByRole('columnheader', { name: 'Name' });
+
+      await user.tab();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Name' })).toHaveFocus();
+
+      await user.keyboard('{Enter}');
+      expect(firstName()).toBe('Alice');
+      expect(nameHeader).toHaveAttribute('aria-sort', 'ascending');
+
+      await user.keyboard(' ');
+      expect(firstName()).toBe('Charlie');
+      expect(nameHeader).toHaveAttribute('aria-sort', 'descending');
+    });
+
+    it('returns to the report order on a third press', async () => {
+      const user = userEvent.setup();
+      render(<ReportTable rows={rows} columns={columns} />);
+      const button = screen.getByRole('button', { name: 'Name' });
+
+      await user.click(button);
+      await user.click(button);
+      await user.click(button);
+      expect(firstName()).toBe('Charlie');
+      expect(screen.getByRole('columnheader', { name: 'Name' })).toHaveAttribute('aria-sort', 'none');
+    });
+
+    it('gives an unsortable column no button', () => {
+      render(
+        <ReportTable
+          rows={rows}
+          columns={[
+            { key: 'name', header: 'Name', sortable: false },
+            { key: 'value', header: 'Value', align: 'right' },
+          ]}
+        />
+      );
+      expect(screen.queryByRole('button', { name: 'Name' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Value' })).toBeInTheDocument();
+    });
+  });
+
   it('paginates rows', () => {
     const rows = Array.from({ length: 30 }, (_, i) => ({
       name: `Item ${i}`,

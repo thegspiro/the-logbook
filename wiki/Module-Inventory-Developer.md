@@ -247,7 +247,7 @@ PATCH  /api/v1/inventory/items/{id}                      # Update item (cannot d
 POST   /api/v1/inventory/items/{id}/retire               # Retire item
 GET    /api/v1/inventory/items/export                    # CSV export (inventory.manage; carries a Ready Lot Stock column)
 GET    /api/v1/inventory/items/import-template           # CSV import template (inventory.manage)
-POST   /api/v1/inventory/items/import                    # CSV import (inventory.manage)
+POST   /api/v1/inventory/items/import                    # CSV import (inventory.manage); ?dry_run=true checks every row, writes nothing
 GET    /api/v1/inventory/items/pins                      # Caller's pinned items
 PUT    /api/v1/inventory/items/pins/order                # Reorder pins
 POST   /api/v1/inventory/items/{id}/pin                  # Pin (max 25)

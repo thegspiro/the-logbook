@@ -19,9 +19,16 @@ from app.core.utils import generate_uuid
 
 class PendingDeletionReason(str, Enum):
     MEMBER_HARD_DELETE = "member_hard_delete"
-    # Files named by rows an anonymisation removed: the documents in the
-    # member's personal Member Files folder.
+    # Files named by rows an anonymisation removed: a waiver or applicant
+    # document that would not delete, and the documents in the member's
+    # personal Member Files folder (LIFE-11).
     MEMBER_ANONYMIZATION = "member_anonymization"
+    # Training attachments named only by a row another workflow deleted: a
+    # never-credited record an event void removed, a record an import undo
+    # removed (or a drill event it removed), a withdrawn submission.
+    EVENT_RECORDS_VOIDED = "event_records_voided"
+    HISTORICAL_IMPORT_UNDONE = "historical_import_undone"
+    SUBMISSION_DELETED = "submission_deleted"
 
 
 class PendingFileDeletion(Base):

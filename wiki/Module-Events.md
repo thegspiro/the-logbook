@@ -1044,14 +1044,16 @@ modal (`EventTemplateForm`), active toggle and delete confirmation.
 - **A Training template also carries the session's training details**
   _(owner decision 2026-11-20)_ in `event_templates.training_details`: the
   course (library, one-off name and code, or none), training type, credit
-  hours and their source, lead instructor, and certification settings. Not
-  the requirement/program links, Counts toward attendance or the completion
-  settings. The editor's **Training Details** section (TrainingInfoStep's
+  hours and their source, lead instructor, and certification settings, and
+  since 2026-11-23 the category, program and phase, requirement link, Counts
+  toward attendance and the completion settings. The editor's **Training Details** section (TrainingInfoStep's
   `template` variant) edits them; **Save as Template** on a Training event
   saves its session's. Applying one checks the course and instructor against
   the Course Library and member list (`reconcileTemplateTraining`): a course
   no longer listed falls back to No course yet, an instructor no longer a
-  member is cleared, each with a note on Training Info.
+  member is cleared, and a category, program, phase or requirement no longer
+  active is dropped (`reconcileTemplateLinks`, against
+  `useTrainingLinkageData`'s lists), each with a note on Training Info.
 
 ---
 
