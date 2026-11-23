@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (branch `claude/friendly-babbage-2isqey`)**: Feature 02 (Permissions &
+roles), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here (`claude/friendly-babbage-n4b791`,
+`claude/friendly-babbage-v1mcno`): this session's environment restricts
+pushes to its own assigned branch rather than a freely-chosen
+`claude/security-review-permissions-roles-pNN` name. This PR's own number
+follows in a second commit on the same branch once it is known.
+
+PR #4625 (Feature 01, Auth & session lifecycle, pass 17) had already
+merged (`5f96b7c2`) before this iteration started; row 01 marked ✅ above.
+
+Baseline: pass 16's merge `7ba683ce2` (PR #4332). Real delta: exactly two
+tracked files changed — `core/permissions.py` (two new permissions,
+`apparatus_events.manage`/`apparatus_events.signup`, seeded by evidence
+pairing with a migration backfill and 97 passing pairing tests) and
+`users.py` (`assign_user_roles`'s audit payload gained `roles_added`/
+`roles_removed` role names, computed from already-org-scoped data, placed
+after the existing grant-ceiling and last-administrator checks). Three
+frontend files changed, all cosmetic/UX (an officer picker now correctly
+uses `isActiveAccount` rather than a literal status check, a phone-input
+type fix, a contrast/heading-level fix). Route count unchanged (28,
+re-enumerated by AST). **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/PERM-02-permissions-roles.md`'s **Pass 17** section.
+
+Row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public surface &
+webhooks) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 17, PR #4625, merged), preserved for history</summary>
+
 **PR [#4625](https://github.com/thegspiro/the-logbook/pull/4625) (branch
 `claude/friendly-babbage-2isqey`)**: Feature 01 (Auth & session
 lifecycle), pass 17 — watchdog pickup (the dedicated `/loop 30m
@@ -37,9 +70,10 @@ every path. The 2-head Alembic fork pass 16 flagged as pre-existing is
 resolved to a single head. **0 fixed, 0 new findings.** Full write-up:
 `docs/security-review/AUTH-01-auth-session.md`'s **Pass 17** section.
 
-Row 01 → ✅ (pending this PR's merge); next is Feature 02 (Permissions &
-roles) — re-check `list_pull_requests` fresh rather than trusting this
-note.
+Row 01 → ✅ (merged). Next was Feature 02 (Permissions & roles) — confirmed
+fresh via `list_pull_requests` rather than trusted from this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 18, PR #4616, merged), preserved for history</summary>
@@ -27610,7 +27644,7 @@ iteration's commit" rule.
 | --- | ------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                                                                                                                                                         | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                                                                                                                          | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                                                                                                                           | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                                                                                                                           | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (51 unauth routes, added pass 16), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                                                                                 | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ⬜     |
