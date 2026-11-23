@@ -65,6 +65,14 @@ describe('training dashboard widgets', () => {
     expect(screen.getByText('50%')).toBeInTheDocument();
     expect(screen.getByText('1 of 2 graded members')).toBeInTheDocument();
   });
+  it('shows the one-decimal figure the Admin hub shows, unrounded', () => {
+    const twoOfThree = {
+      ...data,
+      stats: { ...data.stats, graded_members: 3, compliant_members: 2, compliance_percentage: 66.7 },
+    };
+    render(<ComplianceOverviewWidget data={twoOfThree} />);
+    expect(screen.getByText('66.7%')).toBeInTheDocument();
+  });
   it('counts only graded members, and names the not-applicable ones', () => {
     const mixed = {
       ...data,

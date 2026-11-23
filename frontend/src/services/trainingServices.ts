@@ -144,7 +144,7 @@ export interface TrainingDashboardSummary {
     /** Members no requirement grades; outside the percentage entirely. */
     not_applicable_members?: number;
     compliant_members: number;
-    /** Null when no member is graded against anything. */
+    /** One decimal, as on the Admin hub. Null when no member is graded against anything. */
     compliance_percentage: number | null;
     expiring_count: number;
     completions_last_30_days: number;

@@ -114,6 +114,7 @@ from app.services.training_compliance import (
     STANDING_NOT_CURRENT_MEMBER_LABEL,
     UNGRADED_STATUSES,
     ComplianceGrading,
+    OrgComplianceTally,
     _load_compliance_config,
     evaluate_member_requirement,
     get_requirement_date_window,
@@ -451,11 +452,16 @@ async def get_training_dashboard_summary(
             "graded_members": graded_members,
             "not_applicable_members": not_applicable,
             "compliant_members": compliant,
-            # None when no member is graded against anything: an empty
-            # population is not applicable, not 100%.
-            "compliance_percentage": (
-                round(compliant / graded_members * 100) if graded_members else None
-            ),
+            # The Admin hub's figure, to its one decimal: one department must
+            # not read 67% here and 66.7% there (pitfall 29). None when no
+            # member is graded against anything: an empty population is not
+            # applicable, not 100%.
+            "compliance_percentage": OrgComplianceTally(
+                compliant=compliant,
+                graded=graded_members,
+                not_applicable=not_applicable,
+                active_requirements=len(requirements),
+            ).pct,
             "expiring_count": len(expiring_records),
             "completions_last_30_days": len(recent),
             "total_hours_this_year": total_hours,
