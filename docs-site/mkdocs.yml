@@ -1,0 +1,126 @@
+# The Logbook documentation site. Build with docs-site/build.sh, which stages
+# docs/, wiki/ and docs-site/content/ into build/content first; see
+# docs-site/README.md.
+site_name: The Logbook Docs
+site_description: Training guides, setup and administration documentation, videos and FAQs for The Logbook.
+# Used for the sitemap and canonical links only; every link inside the site is
+# relative, so the site works under any hostname the tunnel serves it on.
+site_url: !ENV [SITE_URL, "https://thelogbook.us/"]
+
+docs_dir: build/content
+site_dir: build/site
+use_directory_urls: true
+strict: true
+
+theme:
+  name: material
+  # Fonts and icons are bundled rather than fetched from Google Fonts, so the
+  # pages make no third-party request and the CSP in nginx.conf can stay 'self'.
+  font: false
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+extra_css:
+  - stylesheets/extra.css
+
+plugins:
+  - search
+  - awesome-nav
+
+hooks:
+  - hooks/repo_links.py
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - toc:
+      permalink: true
+      # GitHub's heading anchors, so the thousands of #section links written
+      # for GitHub resolve on the site too.
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+
+validation:
+  nav:
+    omitted_files: info
+    not_found: warn
+    absolute_links: info
+  links:
+    not_found: warn
+    absolute_links: info
+    unrecognized_links: info
+    anchors: warn
+
+# Maintainer records that are not documentation for people running or using
+# The Logbook: review rotations, audits, agent rules, the video scripts (the
+# finished videos are what the site carries) and the red-team reports, which
+# must not be published on a public site. A link to one of these from a
+# published page is sent to GitHub by hooks/repo_links.py.
+exclude_docs: |
+  *.sh
+  /wiki/_Sidebar.md
+  /wiki/README.md
+  /docs/app-review/
+  /docs/change-audit/
+  /docs/evaluations/
+  /docs/backend/
+  /docs/module-audit/
+  /docs/rules/
+  /docs/security/RED_TEAM_REVIEW_*.md
+  /docs/security-review/
+  /docs/workflow-review/
+  /docs/youtube-scripts/
+  /docs/training/video-scripts/
+  /docs/training/LEARNING_CENTER_SCREENSHOTS.md
+  /docs/training/SCREENSHOT_CURRENCY.md
+  /docs/training/SCREENSHOT_STATUS.md
+  /docs/training/TRAINING_MATERIALS_REVIEW.md
+  /docs/APPLICATION_REVIEW_ROTATION.md
+  /docs/CLAUDE_SKILLS_REVIEW.md
+  /docs/DATABASE_SCHEMA_DRIFT.md
+  /docs/DOCUMENTATION_BACKFILL_*.md
+  /docs/FEATURE_DOC_COVERAGE.md
+  /docs/FORMS_REVIEW_*.md
+  /docs/MOBILE_ACCESSIBILITY_REVIEW_*.md
+  /docs/MOBILE_QUICK_ENTRY_REVIEW.md
+  /docs/ORG_SCOPING_SWEEP.md
+  /docs/RELEASE_CANDIDATE_PLAN.md
+  /docs/SHIFT_SCHEDULING_UX_REVIEW.md
+  /docs/SKILLS_TESTING_DATA_REVIEW.md
+  /docs/review-log.md
+  /docs/scheduling-module-audit.md

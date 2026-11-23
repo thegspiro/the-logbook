@@ -1,0 +1,8 @@
+# Top-level tabs. Staged as build/content/.nav.yml by build.sh.
+nav:
+  - Home: index.md
+  - Training guides: docs/training
+  - Setup & administration: wiki
+  - Reference: docs
+  - Videos: videos.md
+  - FAQ: faq.md
