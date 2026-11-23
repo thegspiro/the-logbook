@@ -449,6 +449,68 @@ describe('EventEditPage', () => {
     });
   });
 
+  // A series save reaches every later occurrence, and the server writes each
+  // field it receives onto all of them. The form resends every field it shows,
+  // so an untouched value was refused when a later occurrence was finalized,
+  // and a field blank on this occurrence wiped it from every later one.
+  describe('This and all future events sends only what changed', () => {
+    const { description: _none, ...withoutDescription } = mockEvent;
+    const occurrence: Event = {
+      ...withoutDescription,
+      // What the API always returns, and the form loads as is.
+      is_draft: false,
+      allow_guest_check_in: false,
+      guest_check_in_creates_prospect: false,
+      recurrence_parent_id: 'series-1',
+      start_datetime: '2026-03-15T22:00:00Z',
+      end_datetime: '2026-03-16T00:00:00Z',
+      check_in_window_type: 'flexible',
+      check_in_minutes_before: 60,
+      check_in_minutes_after: 15,
+      require_checkout: false,
+    };
+
+    beforeEach(() => {
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEvent).mockResolvedValue(occurrence);
+      vi.mocked(eventService.updateEvent).mockReset();
+      vi.mocked(eventService.updateFutureEvents).mockReset();
+      vi.mocked(eventService.updateFutureEvents).mockResolvedValue({ updated_count: 3 });
+    });
+
+    const saveFuture = async (edit: (user: ReturnType<typeof userEvent.setup>) => Promise<void>) => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+      await user.click(await screen.findByLabelText(/this and all future events/i));
+      await edit(user);
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+      await waitFor(() => expect(eventService.updateFutureEvents).toHaveBeenCalledTimes(1));
+      return vi.mocked(eventService.updateFutureEvents).mock.calls[0]?.[1];
+    };
+
+    it('sends a retitle alone, without the blank description or the times', async () => {
+      const payload = await saveFuture(async (user) => {
+        const title = screen.getByLabelText(/^title/i);
+        await user.clear(title);
+        await user.type(title, 'Monday Drill');
+      });
+
+      expect(payload).toEqual({ title: 'Monday Drill' });
+      expect(eventService.updateEvent).not.toHaveBeenCalled();
+    });
+
+    it('sends the times together when the start moves', async () => {
+      const payload = await saveFuture(async (user) => {
+        await user.selectOptions(screen.getByLabelText('Start time minute'), '30');
+      });
+
+      expect(payload).toEqual(expect.objectContaining({ start_datetime: '2026-03-15T22:30:00.000Z' }));
+      expect(payload).toHaveProperty('end_datetime');
+      expect(payload).not.toHaveProperty('title');
+      expect(payload).not.toHaveProperty('description');
+    });
+  });
+
   describe('Loads every field it saves', () => {
     beforeEach(() => {
       vi.mocked(eventService.getEvent).mockReset();
@@ -1176,8 +1238,10 @@ describe('EventEditPage', () => {
       await waitFor(() => expect(eventService.updateFutureEvents).toHaveBeenCalledTimes(1));
       expect(eventService.updateFutureEvents).toHaveBeenCalledWith(
         'evt-1',
-        expect.objectContaining({ title: 'Hose Testing Night', training_details: unchangedDetails })
+        expect.objectContaining({ training_details: unchangedDetails })
       );
+      // The untouched event fields stay behind: only what changed goes.
+      expect(vi.mocked(eventService.updateFutureEvents).mock.calls[0]?.[1]).not.toHaveProperty('title');
       expect(eventService.updateEvent).not.toHaveBeenCalled();
     });
 
