@@ -28,6 +28,20 @@ export const formatPartialDate = (
   return circa ? `c. ${text}` : text;
 };
 
+/** "Jul 4, 1911", or "1908 – Jun 1911" for something that ran over time. */
+export const formatDateSpan = (item: {
+  start_date: string | null;
+  start_precision: DatePrecision;
+  start_circa: boolean;
+  end_date: string | null;
+  end_precision: DatePrecision | null;
+  end_circa: boolean;
+}): string => {
+  const start = formatPartialDate(item.start_date, item.start_precision, item.start_circa);
+  const end = formatPartialDate(item.end_date, item.end_precision, item.end_circa);
+  return end && end !== start ? `${start} – ${end}` : start;
+};
+
 /** "1951–1972", from one service period. */
 /** A recording's length as m:ss, or h:mm:ss from an hour up. */
 export const formatDuration = (seconds: number | null | undefined): string => {

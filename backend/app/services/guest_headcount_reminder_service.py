@@ -1,7 +1,7 @@
 """The morning-after reminder to record an outreach event's guest headcount.
 
 Run daily by the ``guest_headcount_reminders`` task. An outreach event — by
-the same rule the Community Engagement report counts (``outreach_event_clause``,
+the same rule the Outreach Impact report counts (``outreach_event_clause``,
 pitfall #29) — that ended before today on the department's calendar, within
 the last ``LOOKBACK_DAYS``, with no guest headcount recorded, gets one reminder:
 an email and a bell notification linking to its event page.
@@ -34,8 +34,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.dependencies import user_has_permission
 from app.core.config import settings
-from app.core.permissions import permission_matches
 from app.core.utils import generate_uuid
 from app.models.email_template import EmailTemplateType
 from app.models.event import Event
@@ -78,11 +78,15 @@ class ReminderCounts:
 
 
 def can_record_headcount(user: User) -> bool:
-    """Whether *user* holds the permission ``set_guest_headcount`` requires."""
-    granted: set[str] = set()
-    for role in user.roles or []:
-        granted.update(role.permissions or [])
-    return permission_matches(EVENT_MANAGER_PERMISSION, granted)
+    """Whether *user* holds the permission ``set_guest_headcount`` requires.
+
+    Resolved the same way ``require_permission`` resolves it (CLAUDE.md #29) —
+    a hand-rolled loop over ``user.roles`` alone missed a grant that reaches a
+    user only through their operational rank's defaults, not a position of
+    their own (see ``_collect_user_permissions``), which silently dropped that
+    organizer from their own event's reminder.
+    """
+    return user_has_permission(user, EVENT_MANAGER_PERMISSION)
 
 
 class GuestHeadcountReminderService:
@@ -209,7 +213,7 @@ class GuestHeadcountReminderService:
                 subject=f"Record the guest headcount for {event.title}",
                 message=(
                     f'"{event.title}" has ended with no guest headcount. Enter '
-                    "how many people attended so the Community Engagement "
+                    "how many people attended so the Outreach Impact "
                     "report counts them."
                 ),
                 action_url=f"/events/{event.id}",

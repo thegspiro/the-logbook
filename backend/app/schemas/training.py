@@ -224,12 +224,13 @@ class TrainingAttachment(BaseModel):
 
     The stored attachment also carries `file_path` — an absolute path on the
     server's disk — and `uploaded_by`. Neither belongs in a response, so this
-    schema lists what does and a validator drops the rest. `index` is how a
-    client names an attachment on the download route; the stored records have
-    no id of their own.
+    schema lists what does and a validator drops the rest. `id` is the
+    entry's stable id, which the routes take; `index` is its position, kept
+    for clients written against the older index-addressed routes.
     """
 
     index: Optional[int] = None
+    id: Optional[str] = None
     file_name: Optional[str] = None
     file_type: Optional[str] = None
     file_size: Optional[int] = None
@@ -387,8 +388,8 @@ class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
     def number_the_attachments(cls, v):
         """Stamp each attachment with its position.
 
-        The stored attachments have no id; the download route addresses them
-        by index, so a client that never sees one cannot fetch a file. Legacy
+        The stored entry's own id is carried through as it is; the position is
+        added beside it for clients that still address entries by index. Legacy
         rows hold bare strings (the column's original shape) and are carried
         through as a file name.
         """

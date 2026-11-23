@@ -65,6 +65,7 @@ from app.schemas.evaluation import (
     BulkDraftItem,
     EvaluationCreate,
     EvaluationTool,
+    GoalEntry,
     PartContent,
     TemplateDefinition,
     TemplateItem,
@@ -139,10 +140,16 @@ def _allowed_ratings(item: TemplateItem) -> Optional[set]:
 
 
 def shape_errors(
-    content: PartContent, items: Dict[str, TemplateItem], kind: str
+    content: PartContent,
+    items: Dict[str, TemplateItem],
+    kind: str,
+    goal_keys: frozenset = frozenset(),
 ) -> List[str]:
     """What makes a saved answer unreadable against its form. Checked on every
-    save, so a draft never stores what the form cannot show."""
+    save, so a draft never stores what the form cannot show.
+
+    ``goal_keys`` are the previous review's goals copied into the
+    evaluation, the only goals a goal-review item may rate."""
     errors: List[str] = []
     for key, answer in content.answers.items():
         item = items.get(key)
@@ -166,8 +173,18 @@ def shape_errors(
             EvaluationTool.GOALS,
         ):
             errors.append(f"'{item.label}' takes a comment, not a written answer.")
+        if answer.goals and item.tool != EvaluationTool.GOALS:
+            errors.append(f"'{item.label}' does not take goals.")
         if answer.justification and kind != EvaluationPartKind.EVALUATOR.value:
             errors.append(f"'{item.label}': only the evaluator justifies a score.")
+        if answer.goal_ratings:
+            if item.tool != EvaluationTool.GOAL_REVIEW:
+                errors.append(f"'{item.label}' does not rate goals.")
+            elif not set(answer.goal_ratings) <= goal_keys:
+                errors.append(
+                    f"'{item.label}': a goal rated is not among the last "
+                    "review's goals."
+                )
     if (
         kind != EvaluationPartKind.EVALUATOR.value
         and content.overall_rating is not None
@@ -182,8 +199,11 @@ def completeness_errors(
     kind: str,
     overall_mode: str,
     suggested: Dict[str, int],
+    goal_keys: frozenset = frozenset(),
 ) -> List[str]:
-    """What must be filled in before a part can be submitted."""
+    """What must be filled in before a part can be submitted. A goal-review
+    item needs a result for each of ``goal_keys``, and nothing when the
+    member's previous review set no goals."""
     errors: List[str] = []
     evaluator = kind == EvaluationPartKind.EVALUATOR.value
     for key, item in items.items():
@@ -206,9 +226,16 @@ def completeness_errors(
                     f"'{item.label}': explain why the score differs from the "
                     f"{suggested[key]} the figures suggest."
                 )
-        if item.tool in (EvaluationTool.NARRATIVE, EvaluationTool.GOALS):
+        if item.tool == EvaluationTool.NARRATIVE:
             if answer is None or not answer.text:
                 errors.append(f"Answer '{item.label}'.")
+        elif item.tool == EvaluationTool.GOALS:
+            if answer is None or not (answer.goals or answer.text):
+                errors.append(f"Set at least one goal in '{item.label}'.")
+        elif item.tool == EvaluationTool.GOAL_REVIEW:
+            rated = answer.goal_ratings if answer is not None else {}
+            if any(key not in rated or rated[key].result is None for key in goal_keys):
+                errors.append(f"'{item.label}': rate each of the last review's goals.")
         elif item.comment == "required" and (answer is None or not answer.comment):
             if not (answer is not None and answer.na):
                 errors.append(f"'{item.label}' needs a comment.")
@@ -289,6 +316,11 @@ def content_hash(evaluation: Evaluation, parts: Dict[str, EvaluationPart]) -> st
             and part.status == EvaluationPartStatus.SUBMITTED.value
         },
     }
+    # Added only when present: every evaluation signed before goal reviews
+    # existed carries a hash taken without the key, and must still verify.
+    frozen_goals = goals_under_review(evaluation)
+    if frozen_goals is not None:
+        payload["previous_goals"] = frozen_goals
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -372,6 +404,72 @@ def standing_overall(
     return None
 
 
+def goals_set(
+    definition: TemplateDefinition, evaluator: PartContent
+) -> List[Dict[str, Any]]:
+    """The goals an evaluator's part set, one entry per goal. Read by the
+    last-review summary and by the copy a later evaluation's goal-review item
+    rates, which keys its results by ``key``.
+
+    A goal from the list is keyed ``<item>:<goal id>`` and labelled with its
+    place in the item. A part saved before goals were a list holds them as
+    the item's ``text``: that reads as one goal keyed by the item alone, the
+    key copies and ratings taken before then already use.
+    """
+    goals: List[Dict[str, Any]] = []
+    for section in definition.sections:
+        for item in section.items:
+            if item.tool != EvaluationTool.GOALS:
+                continue
+            answer = evaluator.answers.get(item.key)
+            if answer is None:
+                continue
+            if answer.goals:
+                many = len(answer.goals) > 1
+                for number, goal in enumerate(answer.goals, start=1):
+                    entry: Dict[str, Any] = {
+                        "key": f"{item.key}:{goal.id}",
+                        "label": f"{item.label}, goal {number}" if many else item.label,
+                        "text": goal.text,
+                    }
+                    if goal.target_date is not None:
+                        entry["target_date"] = goal.target_date.isoformat()
+                    goals.append(entry)
+                continue
+            text = (answer.text or "").strip()
+            if text:
+                goals.append({"key": item.key, "label": item.label, "text": text})
+    return goals
+
+
+def as_goal_list(content: PartContent, items: Dict[str, TemplateItem]) -> PartContent:
+    """``content`` with every Goals item's free-text answer turned into one
+    goal, and goals still blank left out: the shape every save stores (see
+    ``ItemAnswer``). A row the evaluator has added but not yet filled in so
+    does not stop a draft from saving."""
+    converted = content.model_copy(deep=True)
+    for key, answer in converted.answers.items():
+        item = items.get(key)
+        if item is None or item.tool != EvaluationTool.GOALS:
+            continue
+        if answer.text and not answer.goals:
+            answer.goals = [GoalEntry(id="goal-1", text=answer.text)]
+        answer.goals = [goal for goal in answer.goals if goal.text]
+        answer.text = None
+    return converted
+
+
+def goals_under_review(evaluation: Evaluation) -> Optional[Dict[str, Any]]:
+    """The previous review's goals as copied into ``evaluation``, if any."""
+    frozen = (evaluation.data_snapshot or {}).get("previous_goals")
+    return frozen if isinstance(frozen, dict) and frozen.get("goals") else None
+
+
+def goal_keys_under_review(evaluation: Evaluation) -> frozenset:
+    frozen = goals_under_review(evaluation)
+    return frozenset(g["key"] for g in frozen["goals"]) if frozen else frozenset()
+
+
 def previous_review_summary(view: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """What a later evaluation shows of an earlier one, from the earlier one's
     detail as the viewer may see it: the overall grade, each section's grade,
@@ -403,16 +501,7 @@ def previous_review_summary(view: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         else []
     )
 
-    goals: List[Dict[str, str]] = []
-    if evaluator is not None:
-        for section in definition.sections:
-            for item in section.items:
-                if item.tool != EvaluationTool.GOALS:
-                    continue
-                answer = evaluator.answers.get(item.key)
-                text = (answer.text or "").strip() if answer else ""
-                if text:
-                    goals.append({"key": item.key, "label": item.label, "text": text})
+    goals = goals_set(definition, evaluator) if evaluator is not None else []
 
     if overall is None and not sections and not goals:
         return None
@@ -663,6 +752,9 @@ class EvaluationService:
             and user_has_permission(viewer, "evaluations.delete"),
             amendments=await self._amendments(evaluation),
         )
+        view["goals_under_review"] = (
+            goals_under_review(evaluation) if roles.reads_content else None
+        )
         view["previous_review"] = (
             await self._previous_review(organization_id, evaluation, viewer)
             if include_previous
@@ -683,23 +775,12 @@ class EvaluationService:
         a period that ended before this one began, so a re-done review of the
         same period is never compared with itself.
         """
-        previous_id = await self.db.scalar(
-            select(Evaluation.id)
-            .join(
-                EvaluationTemplateVersion,
-                EvaluationTemplateVersion.id == Evaluation.template_version_id,
-            )
-            .where(
-                Evaluation.organization_id == organization_id,
-                Evaluation.member_id == evaluation.member_id,
-                Evaluation.status == EvaluationStatus.FINALIZED.value,
-                Evaluation.id != evaluation.id,
-                EvaluationTemplateVersion.template_id
-                == evaluation.template_version.template_id,
-                Evaluation.period_end < evaluation.period_start,
-            )
-            .order_by(Evaluation.period_end.desc(), Evaluation.id.desc())
-            .limit(1)
+        previous_id = await self._previous_evaluation_id(
+            organization_id,
+            evaluation.member_id,
+            evaluation.template_version.template_id,
+            evaluation.period_start,
+            exclude_id=evaluation.id,
         )
         if previous_id is None:
             return None
@@ -709,6 +790,37 @@ class EvaluationService:
         if previous is None:
             return None
         return previous_review_summary(previous)
+
+    async def _previous_evaluation_id(
+        self,
+        organization_id: str,
+        member_id: str,
+        template_id: str,
+        before: date,
+        *,
+        exclude_id: Optional[str],
+    ) -> Optional[str]:
+        """The member's most recent finalized evaluation on the template,
+        whatever its version, whose period ended before ``before``."""
+        query = (
+            select(Evaluation.id)
+            .join(
+                EvaluationTemplateVersion,
+                EvaluationTemplateVersion.id == Evaluation.template_version_id,
+            )
+            .where(
+                Evaluation.organization_id == organization_id,
+                Evaluation.member_id == member_id,
+                Evaluation.status == EvaluationStatus.FINALIZED.value,
+                EvaluationTemplateVersion.template_id == template_id,
+                Evaluation.period_end < before,
+            )
+            .order_by(Evaluation.period_end.desc(), Evaluation.id.desc())
+            .limit(1)
+        )
+        if exclude_id is not None:
+            query = query.where(Evaluation.id != exclude_id)
+        return await self.db.scalar(query)
 
     def _released_to_member(
         self, evaluation: Evaluation, steps: Sequence[EvaluationStep]
@@ -1966,7 +2078,9 @@ class EvaluationService:
             includes_officer_sections=officer,
             created_by=actor.id,
         )
-        await self._take_snapshot(evaluation, member, coverage, definition, officer, tz)
+        await self._take_snapshot(
+            evaluation, member, coverage, definition, officer, tz, version.template_id
+        )
         for order, step in enumerate(workflow.steps):
             parallel = step.type.value in (_SELF, _EVALUATOR)
             evaluation.steps.append(
@@ -2005,6 +2119,7 @@ class EvaluationService:
         definition: TemplateDefinition,
         officer: bool,
         tz: Any,
+        template_id: str,
     ) -> None:
         keys = sources_used(definition, officer)
         values = await EvaluationDataService(self.db).compute(
@@ -2014,10 +2129,57 @@ class EvaluationService:
         evaluation.coverage_start = coverage.start
         evaluation.coverage_end = coverage.end
         evaluation.excluded_ranges = coverage.as_json()["excluded"]
-        evaluation.data_snapshot = build_snapshot(
-            coverage, values, definition, officer, taken_at
-        )
+        snapshot = build_snapshot(coverage, values, definition, officer, taken_at)
+        if any(
+            item.tool == EvaluationTool.GOAL_REVIEW
+            for section in form_definition(definition, officer).sections
+            for item in section.items
+        ):
+            previous_goals = await self._goals_to_review(evaluation, template_id)
+            if previous_goals is not None:
+                snapshot["previous_goals"] = previous_goals
+        evaluation.data_snapshot = snapshot
         evaluation.snapshot_taken_at = taken_at
+
+    async def _goals_to_review(
+        self, evaluation: Evaluation, template_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """The goals the member's previous review set, copied for this one's
+        goal-review item to rate, or None when it set none.
+
+        "Previous" is the review the last-review panel shows, found by
+        :meth:`_previous_evaluation_id`. Unlike that panel it is read without
+        regard to who is looking: the department decided (2026-11-21) that
+        whoever takes part in this review sees the goals it rates, and the
+        copy makes them part of this record and its PDF.
+        """
+        previous_id = await self._previous_evaluation_id(
+            evaluation.organization_id,
+            evaluation.member_id,
+            template_id,
+            evaluation.period_start,
+            exclude_id=evaluation.id,
+        )
+        if previous_id is None:
+            return None
+        previous = await self._evaluation(evaluation.organization_id, previous_id)
+        if previous is None:
+            return None
+        part = (await self._parts(previous)).get(EvaluationPartKind.EVALUATOR.value)
+        if part is None or part.status != EvaluationPartStatus.SUBMITTED.value:
+            return None
+        goals = goals_set(
+            self._definition(previous), PartContent.model_validate(part.content)
+        )
+        if not goals:
+            return None
+        return {
+            "evaluation_id": previous.id,
+            "period_name": previous.period.name if previous.period else None,
+            "period_start": previous.period_start.isoformat(),
+            "period_end": previous.period_end.isoformat(),
+            "goals": goals,
+        }
 
     async def refresh_data(
         self, organization_id: str, evaluation_id: str, actor: User
@@ -2061,6 +2223,7 @@ class EvaluationService:
             definition,
             evaluation.includes_officer_sections,
             tz,
+            evaluation.template_version.template_id,
         )
         await self.db.commit()
         return True
@@ -2117,14 +2280,16 @@ class EvaluationService:
         evaluation, _steps, parts, _step = loaded
         definition = self._definition(evaluation)
         items = form_items(definition, kind)
-        _raise_if(shape_errors(content, items, kind))
+        _raise_if(
+            shape_errors(content, items, kind, goal_keys_under_review(evaluation))
+        )
         _raise_if(
             grade_errors(
                 definition, content, kind == EvaluationPartKind.EVALUATOR.value
             )
         )
         part = parts.get(kind)
-        stored = content.model_dump(mode="json")
+        stored = as_goal_list(content, items).model_dump(mode="json")
         if part is None:
             self.db.add(
                 EvaluationPart(
@@ -2159,12 +2324,13 @@ class EvaluationService:
         items = form_items(definition, kind)
         content = PartContent.model_validate(part.content)
         suggested = (evaluation.data_snapshot or {}).get("suggested_scores") or {}
-        _raise_if(shape_errors(content, items, kind))
+        goal_keys = goal_keys_under_review(evaluation)
+        _raise_if(shape_errors(content, items, kind, goal_keys))
         evaluator = kind == EvaluationPartKind.EVALUATOR.value
         _raise_if(grade_errors(definition, content, evaluator))
         _raise_if(
             completeness_errors(
-                content, items, kind, definition.overall_mode, suggested
+                content, items, kind, definition.overall_mode, suggested, goal_keys
             )
             + (override_reason_errors(definition, content) if evaluator else [])
         )
@@ -2508,6 +2674,251 @@ class EvaluationService:
                 organization_id, evaluation.id, [step.step_key]
             )
         return {"previous": previous, "assignee": step.assignee_id}
+
+    # ---------------------------------------------------- bulk reassigning
+
+    async def _period_in_org(
+        self, organization_id: str, period_id: str
+    ) -> Optional[EvaluationPeriod]:
+        return (
+            await self.db.execute(
+                select(EvaluationPeriod).where(
+                    EvaluationPeriod.id == period_id,
+                    EvaluationPeriod.organization_id == organization_id,
+                )
+            )
+        ).scalar_one_or_none()
+
+    def _open_work_of(
+        self, evaluation: Evaluation, steps: Sequence[EvaluationStep], user_id: str
+    ) -> Tuple[bool, List[EvaluationStep]]:
+        """What ``user_id`` holds on ``evaluation`` that a reassignment moves:
+        its evaluator's part, while the evaluator has not submitted, and the
+        approval and calibration steps not yet done that name them. A step
+        that goes to a position's holders follows the position, so it is
+        never moved here (owner decision 2026-11-21)."""
+        evaluator_step = next((s for s in steps if s.step_type == _EVALUATOR), None)
+        holds_evaluator = (
+            str(evaluation.evaluator_id or "") == str(user_id)
+            and evaluator_step is not None
+            and evaluator_step.status not in _DONE
+        )
+        named = [
+            s
+            for s in steps
+            if s.step_type in self._ASSIGNABLE
+            and str(s.assignee_id or "") == str(user_id)
+            and s.status
+            in (EvaluationStepStatus.PENDING.value, EvaluationStepStatus.OPEN.value)
+        ]
+        return holds_evaluator, named
+
+    def _reassignment_problem(
+        self,
+        evaluation: Evaluation,
+        steps: Sequence[EvaluationStep],
+        to_user: User,
+        moves_evaluator: bool,
+        moved_steps: Sequence[EvaluationStep],
+    ) -> Optional[str]:
+        """Why ``to_user`` may not take over this evaluation's open work, by
+        the rules ``create`` and ``assign_step`` already apply; None when
+        they may. The whole evaluation moves or none of it does."""
+        if str(to_user.id) == str(evaluation.member_id):
+            return "They are the member being evaluated."
+        if moves_evaluator:
+            if not user_has_permission(to_user, "evaluations.conduct"):
+                return f"{to_user.full_name} is not able to conduct evaluations."
+            if any(
+                str(s.assignee_id or "") == str(to_user.id)
+                for s in steps
+                if s.step_type in self._ASSIGNABLE and s not in moved_steps
+            ):
+                return (
+                    "They are named on this evaluation's approval or calibration, "
+                    "and an evaluator never approves or calibrates their own work."
+                )
+        evaluator_after = to_user.id if moves_evaluator else evaluation.evaluator_id
+        for step in moved_steps:
+            excluded = self._excluded_from(evaluation, steps, step) - {
+                str(evaluation.evaluator_id or "")
+            }
+            excluded.add(str(evaluator_after or ""))
+            if str(to_user.id) in excluded:
+                return (
+                    "The member, the evaluator, and anyone who signed another "
+                    "approval on this evaluation cannot act on its steps."
+                )
+        return None
+
+    async def _reassignment_inputs(
+        self,
+        organization_id: str,
+        period_id: str,
+        from_user_id: str,
+        to_user_id: Optional[str],
+    ) -> Optional[Tuple[EvaluationPeriod, User, Optional[User]]]:
+        period = await self._period_in_org(organization_id, period_id)
+        if period is None:
+            return None
+        # The person handing over may have left the department: their work is
+        # exactly what needs moving, so any account of this department will do.
+        from_user = await self.db.scalar(
+            select(User).where(
+                User.id == str(from_user_id), User.organization_id == organization_id
+            )
+        )
+        if from_user is None:
+            raise ValueError("Choose whose work to hand over.")
+        to_user: Optional[User] = None
+        if to_user_id is not None:
+            if str(to_user_id) == str(from_user_id):
+                raise ValueError("Choose someone else to take the work over.")
+            to_user = await self._member(
+                organization_id, to_user_id, with_positions=True
+            )
+            if to_user is None or to_user.status not in ACTIVE_ACCOUNT_STATUSES:
+                raise ValueError("Name a current member of the department.")
+        return period, from_user, to_user
+
+    async def _period_evaluations(
+        self, organization_id: str, period_id: str, *, for_update: bool
+    ) -> List[Evaluation]:
+        query = (
+            select(Evaluation)
+            .options(
+                selectinload(Evaluation.template_version).selectinload(
+                    EvaluationTemplateVersion.template
+                ),
+                selectinload(Evaluation.period),
+            )
+            .where(
+                Evaluation.organization_id == organization_id,
+                Evaluation.period_id == period_id,
+                Evaluation.status == EvaluationStatus.IN_PROGRESS.value,
+            )
+            .order_by(Evaluation.id)
+        )
+        if for_update:
+            query = query.with_for_update()
+        return list((await self.db.execute(query)).scalars().all())
+
+    async def reassignment_options(
+        self, organization_id: str, period_id: str
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Everyone holding open work in the period that a reassignment
+        could move, with how many evaluations they hold it on. None when the
+        period is not this department's."""
+        if await self._period_in_org(organization_id, period_id) is None:
+            return None
+        counts: Dict[str, int] = {}
+        for evaluation in await self._period_evaluations(
+            organization_id, period_id, for_update=False
+        ):
+            steps = await self._steps(evaluation)
+            holders = {str(evaluation.evaluator_id or "")} | {
+                str(s.assignee_id) for s in steps if s.assignee_id
+            }
+            for holder in holders - {""}:
+                evaluator, named = self._open_work_of(evaluation, steps, holder)
+                if evaluator or named:
+                    counts[holder] = counts.get(holder, 0) + 1
+        people = await self._people(organization_id, list(counts))
+        options = [
+            {
+                "user_id": user_id,
+                "name": (
+                    people[user_id].full_name if user_id in people else "Former member"
+                ),
+                "evaluations": count,
+            }
+            for user_id, count in counts.items()
+        ]
+        return sorted(options, key=lambda o: (o["name"].casefold(), o["user_id"]))
+
+    async def reassignment_plan(
+        self,
+        organization_id: str,
+        period_id: str,
+        from_user_id: str,
+        to_user_id: str,
+        *,
+        apply: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        """Hand ``from_user_id``'s open work in a period to ``to_user_id``,
+        or, without ``apply``, say what doing so would move and skip.
+
+        The preview and the change are one computation, so a row the preview
+        offers is one the change makes. Applying locks the period's
+        evaluations in progress and decides each again under the lock. An
+        evaluator's draft stays with the evaluation for the new evaluator to
+        finish (owner decision 2026-11-21); the new evaluator, or a step's new
+        assignee, is told by the usual email when their step is already open.
+        None when the period is not this department's.
+        """
+        inputs = await self._reassignment_inputs(
+            organization_id, period_id, from_user_id, to_user_id
+        )
+        if inputs is None:
+            return None
+        _period, from_user, to_user = inputs
+        if to_user is None:
+            raise ValueError("Name a current member of the department.")
+        evaluations = await self._period_evaluations(
+            organization_id, period_id, for_update=apply
+        )
+        people = await self._people(organization_id, [e.member_id for e in evaluations])
+        rows: List[Dict[str, Any]] = []
+        announce: List[Tuple[str, List[str]]] = []
+        for evaluation in evaluations:
+            steps = await self._steps(evaluation, for_update=apply)
+            moves_evaluator, moved = self._open_work_of(evaluation, steps, from_user.id)
+            if not moves_evaluator and not moved:
+                continue
+            labels = {s.key: s.label for s in self._workflow(evaluation).steps}
+            member = people.get(evaluation.member_id)
+            problem = self._reassignment_problem(
+                evaluation, steps, to_user, moves_evaluator, moved
+            )
+            rows.append(
+                {
+                    "evaluation_id": evaluation.id,
+                    "member_name": member.full_name if member else "Former member",
+                    "moves_evaluator": moves_evaluator,
+                    "steps": [labels.get(s.step_key, s.step_key) for s in moved],
+                    "skipped_reason": problem,
+                }
+            )
+            if not apply or problem is not None:
+                continue
+            opened: List[str] = []
+            if moves_evaluator:
+                evaluation.evaluator_id = to_user.id
+                part = (await self._parts(evaluation, for_update=True)).get(
+                    EvaluationPartKind.EVALUATOR.value
+                )
+                if part is not None:
+                    part.author_id = to_user.id
+                evaluator_step = next(s for s in steps if s.step_type == _EVALUATOR)
+                if evaluator_step.status == EvaluationStepStatus.OPEN.value:
+                    opened.append(evaluator_step.step_key)
+            for step in moved:
+                step.assignee_id = to_user.id
+                if step.status == EvaluationStepStatus.OPEN.value:
+                    opened.append(step.step_key)
+            if opened:
+                announce.append((evaluation.id, opened))
+        if apply:
+            await self.db.commit()
+            notices = EvaluationNoticeService(self.db)
+            for evaluation_id, keys in announce:
+                await notices.steps_opened(organization_id, evaluation_id, keys)
+        rows.sort(key=lambda r: (r["member_name"].casefold(), r["evaluation_id"]))
+        return {
+            "from_name": from_user.full_name,
+            "to_name": to_user.full_name,
+            "rows": rows,
+        }
 
     # ------------------------------------------------------- bulk drafting
 

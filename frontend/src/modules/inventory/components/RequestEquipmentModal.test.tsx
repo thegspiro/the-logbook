@@ -127,6 +127,22 @@ describe('RequestEquipmentModal', () => {
     expect(rows[0]).toHaveTextContent('3 sizes');
   });
 
+  // W41-7: a product stocked in one size read "1 sizes".
+  it('counts a single stocked size in the singular', async () => {
+    const coat: RequestableProduct = {
+      ...shirt,
+      key: 'vg:2',
+      name: 'Structural Coat',
+      category_name: 'Turnout Gear',
+      variants: [{ item_id: 'coat-m', size: 'm', size_label: 'M', available: 0 }],
+    };
+    mockGetRequestableCatalog.mockResolvedValue({ products: [coat], categories: [] });
+    renderModal();
+
+    const row = await screen.findByRole('button', { name: /Structural Coat/ });
+    expect(row).toHaveTextContent(/· 1 size$/);
+  });
+
   it('sends the search term to the server rather than filtering locally', async () => {
     const user = userEvent.setup();
     renderModal();

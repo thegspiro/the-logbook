@@ -20,13 +20,20 @@ failure. Only identifiers that are unique in practice are used — the
 transfer back-link, an email address the user owns, or a full name paired
 with a matching date of birth. Name alone is not enough (two J. Smiths in
 one department is routine).
+
+The email and the name and birth date are the applicant's to edit, through a
+follow-up form. An applicant who changed them to a coordinator's would hide
+their own file from that coordinator, so once they have
+(``identity_edited_by_applicant_at`` is set) the record is matched by the
+transfer back-link alone (ADV2-10, owner decision 2026-11-21). A coordinator's
+correction clears the stamp and restores the other identifiers.
 """
 
 import uuid as uuid_lib
 from typing import Optional, Set
 
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -36,11 +43,17 @@ from app.core.security import email_fingerprints
 from app.models.membership_pipeline import ProspectInterview, ProspectiveMember
 from app.models.user import User
 
+# The record's email, name and birth date are trusted only while the applicant
+# has not edited them (see the module docstring).
+_IDENTITY_NOT_APPLICANT_EDITED = ProspectiveMember.identity_edited_by_applicant_at.is_(
+    None
+)
+
 
 def _link_predicate(user: User) -> Optional[ColumnElement[bool]]:
     """SQL predicate for the identifiers a database can compare directly: the
     transfer back-link and an email address the user owns."""
-    clauses = []
+    clauses: list[ColumnElement[bool]] = []
 
     if user.id:
         clauses.append(ProspectiveMember.transferred_user_id == str(user.id))
@@ -52,7 +65,12 @@ def _link_predicate(user: User) -> Optional[ColumnElement[bool]]:
         for fp in email_fingerprints(address)
     ]
     if fingerprints:
-        clauses.append(ProspectiveMember.email_hash.in_(fingerprints))
+        clauses.append(
+            and_(
+                ProspectiveMember.email_hash.in_(fingerprints),
+                _IDENTITY_NOT_APPLICANT_EDITED,
+            )
+        )
 
     return or_(*clauses) if clauses else None
 
@@ -107,6 +125,7 @@ async def load_self_prospect_ids(
                 *scope,
                 func.lower(ProspectiveMember.first_name) == user.first_name.lower(),
                 func.lower(ProspectiveMember.last_name) == user.last_name.lower(),
+                _IDENTITY_NOT_APPLICANT_EDITED,
             )
         )
         found.update(

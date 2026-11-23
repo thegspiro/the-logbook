@@ -784,7 +784,9 @@ Results Report** / **Send Report** (only after close).
   `email_recipients` and `email_skipped_details`.
 - **Certified results package** (`GET /elections/{id}/certified-results`,
   closed elections only) is a formal PDF with tallies, turnout/quorum, the
-  attestation trail, integrity verification and officer signature lines.
+  attestation trail, integrity verification and officer signature lines. Its
+  pages, and the pre-meeting package's, are numbered "Page N of M"
+  _(2026-11-21, #4451)_; the printable ballot already was.
 
 ### Live Turnout Dashboard
 

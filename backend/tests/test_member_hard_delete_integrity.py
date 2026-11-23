@@ -29,6 +29,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.endpoints import users as users_endpoint
+from app.core.audit import log_audit_event as real_log_audit_event
 from app.core.database import Base
 from app.models.attendance_waiver import (
     AttendanceWaiverAttachment,
@@ -36,11 +37,25 @@ from app.models.attendance_waiver import (
     AttendanceWaiverStatus,
     AttendanceWaiverWorkflow,
 )
+from app.models.audit import AuditLog
+from app.models.forms import Form, FormSubmission
 from app.models.inventory import (
     InventoryItem,
     ItemCondition,
     ItemStatus,
     TrackingType,
+)
+from app.models.membership_pipeline import (
+    MembershipPipeline,
+    MembershipPipelineStep,
+    PipelineStepType,
+    ProspectActivityLog,
+    ProspectDocument,
+    ProspectFormRequest,
+    ProspectiveMember,
+    ProspectStatus,
+    ProspectStepProgress,
+    StepProgressStatus,
 )
 from app.models.skills_testing import SkillTemplate, SkillTest
 from app.models.training import (
@@ -56,6 +71,8 @@ from app.models.training import (
 from app.schemas.shift_completion import ShiftCompletionReportResponse
 from app.services import file_storage_service, member_files
 from app.services.inventory_service import InventoryService
+from app.services.pending_file_deletions import PendingFileDeletionSweep
+from app.services.scheduled_tasks import run_pending_file_deletions
 from app.services.user_deletion_service import _cascading_references
 from tests.fake_request import fake_request
 
@@ -130,6 +147,14 @@ async def _hard_delete(db, dept, user_id: str) -> None:
         current_user=_admin(dept),
         request=fake_request(),
     )
+
+
+def _audit_events() -> dict[str, dict]:
+    """The event data of each audit event the patched helper received, by type."""
+    return {
+        call.kwargs["event_type"]: call.kwargs["event_data"]
+        for call in users_endpoint.log_audit_event.await_args_list
+    }
 
 
 async def _fresh(db, model, row_id: str):
@@ -519,13 +544,24 @@ class TestStoredFilesGoWithTheMember:
 
     @staticmethod
     def _audit_counts() -> dict:
-        event = users_endpoint.log_audit_event.await_args.kwargs
-        assert event["event_type"] == "user_hard_deleted"
-        data = event["event_data"]
-        return {
-            key: data[key]
-            for key in ("files_deleted", "files_not_deleted", "files_shared_kept")
+        """The file outcome of the delete just run.
+
+        Since owner decision 2026-11-21 (e), user_hard_deleted is written in
+        the delete's transaction and says how many files were queued; the
+        outcome follows in pending_file_deletions_completed, which names
+        the files left queued ``files_still_pending``. Read back here under
+        the names these tests have always asserted.
+        """
+        events = _audit_events()
+        queued = events["user_hard_deleted"]["files_queued"]
+        outcome = events["pending_file_deletions_completed"]
+        counts = {
+            "files_deleted": outcome["files_deleted"],
+            "files_not_deleted": outcome["files_still_pending"],
+            "files_shared_kept": outcome["files_shared_kept"],
         }
+        assert sum(counts.values()) == queued
+        return counts
 
     async def test_removes_the_files_of_every_cascaded_row(
         self, db_session, department, root
@@ -667,6 +703,7 @@ class TestStoredFilesGoWithTheMember:
         await self._record(
             db_session, department, department.trainee, [self._entry(evidence)]
         )
+        check = member_files.referenced_elsewhere
         monkeypatch.setattr(
             member_files,
             "referenced_elsewhere",
@@ -687,3 +724,351 @@ class TestStoredFilesGoWithTheMember:
             "files_not_deleted": 2,
             "files_shared_kept": 0,
         }
+        # Kept, and still queued untouched: the sweep can finish them.
+        assert (
+            await self._pending(db_session, department.org)
+            == [
+                ("attendance-waivers", 0),
+                ("self-reports", 0),
+                ("training-records", 0),
+            ][1:]
+        )
+        monkeypatch.setattr(member_files, "referenced_elsewhere", check)
+        await self._backdate(db_session, department.org)
+
+        await PendingFileDeletionSweep(db_session).run()
+
+        assert not certificate.exists()
+        assert not evidence.exists()
+        assert await self._pending(db_session, department.org) == []
+
+    @staticmethod
+    async def _pending(db, org_id: str) -> list[tuple[str, int]]:
+        rows = await db.execute(
+            text(
+                "SELECT area, attempts FROM pending_file_deletions "
+                "WHERE organization_id = :org ORDER BY area"
+            ),
+            {"org": org_id},
+        )
+        return [(row.area, row.attempts) for row in rows]
+
+    @staticmethod
+    async def _backdate(db, org_id: str) -> None:
+        """Past the sweep's grace period, measured by the database's clock."""
+        await db.execute(
+            text(
+                "UPDATE pending_file_deletions "
+                "SET created_at = created_at - INTERVAL 1 HOUR "
+                "WHERE organization_id = :org"
+            ),
+            {"org": org_id},
+        )
+
+    async def test_a_crash_after_the_commit_leaves_rows_the_sweep_finishes(
+        self, db_session, department, root, monkeypatch
+    ):
+        """The delete commits and the process dies before removing a file:
+        the queue, written in the delete's own transaction, is what lets the
+        hourly sweep finish the job."""
+        certificate = self._file(root, department.org, "self-reports")
+        evidence = self._file(root, department.org, "training-records")
+        await self._submission(
+            db_session, department, department.trainee, [self._entry(certificate)]
+        )
+        await self._record(
+            db_session, department, department.trainee, [self._entry(evidence)]
+        )
+        note = await self._waiver_document(
+            db_session, department, department.trainee, root
+        )
+        await db_session.commit()
+        monkeypatch.setattr(
+            users_endpoint,
+            "process_pending_file_deletions",
+            AsyncMock(side_effect=_Killed()),
+        )
+
+        with pytest.raises(_Killed):
+            await _hard_delete(db_session, department, department.trainee)
+
+        gone = await db_session.scalar(
+            text("SELECT COUNT(*) FROM users WHERE id = :id"),
+            {"id": department.trainee},
+        )
+        assert gone == 0
+        assert certificate.exists()
+        assert evidence.exists()
+        assert note.exists()
+        assert await self._pending(db_session, department.org) == [
+            ("attendance-waivers", 0),
+            ("self-reports", 0),
+            ("training-records", 0),
+        ]
+        await self._backdate(db_session, department.org)
+
+        result = await run_pending_file_deletions(db_session)
+
+        assert not certificate.exists()
+        assert not evidence.exists()
+        assert not note.exists()
+        assert await self._pending(db_session, department.org) == []
+        assert result["deleted"] == 3
+
+    async def test_a_crash_after_the_commit_keeps_the_audit_row(
+        self, db_session, department, root, monkeypatch
+    ):
+        """Owner decision 2026-11-21 (e): user_hard_deleted is written in the
+        delete's transaction, with the real audit helper here, so a process
+        killed right after the commit keeps it. Before, it was written after
+        the commit and lost with the process."""
+        monkeypatch.setattr(users_endpoint, "log_audit_event", real_log_audit_event)
+        certificate = self._file(root, department.org, "self-reports")
+        await self._submission(
+            db_session, department, department.trainee, [self._entry(certificate)]
+        )
+        await db_session.commit()
+        monkeypatch.setattr(
+            users_endpoint,
+            "process_pending_file_deletions",
+            AsyncMock(side_effect=_Killed()),
+        )
+
+        with pytest.raises(_Killed):
+            await _hard_delete(db_session, department, department.trainee)
+
+        rows = (
+            (
+                await db_session.execute(
+                    select(AuditLog).where(
+                        AuditLog.event_type == "user_hard_deleted",
+                        AuditLog.organization_id == department.org,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(rows) == 1
+        assert rows[0].event_data["deleted_user_id"] == department.trainee
+        assert rows[0].event_data["files_queued"] == 1
+
+    async def test_an_unwritable_audit_row_refuses_the_delete(
+        self, db_session, department, root, monkeypatch
+    ):
+        """Owner decision 2026-11-21 (e): the audit helper reports a failed
+        write by returning None; the delete then rolls back, the member and
+        their files stay, and nothing is queued."""
+        monkeypatch.setattr(
+            users_endpoint, "log_audit_event", AsyncMock(return_value=None)
+        )
+        certificate = self._file(root, department.org, "self-reports")
+        await self._submission(
+            db_session, department, department.trainee, [self._entry(certificate)]
+        )
+        await db_session.commit()
+
+        with pytest.raises(HTTPException) as exc:
+            await _hard_delete(db_session, department, department.trainee)
+
+        assert exc.value.status_code == 500
+        still_there = await db_session.scalar(
+            text("SELECT COUNT(*) FROM users WHERE id = :id"),
+            {"id": department.trainee},
+        )
+        assert still_there == 1
+        assert certificate.exists()
+        assert await self._pending(db_session, department.org) == []
+
+    async def test_a_refused_delete_queues_nothing(
+        self, db_session, department, root, monkeypatch
+    ):
+        """The queue rows ride the delete's transaction: a delete refused at
+        its commit leaves none behind."""
+        certificate = self._file(root, department.org, "self-reports")
+        evidence = self._file(root, department.org, "training-records")
+        await self._submission(
+            db_session, department, department.trainee, [self._entry(certificate)]
+        )
+        await self._record(
+            db_session, department, department.trainee, [self._entry(evidence)]
+        )
+        # Committed, so the endpoint's rollback discards only the delete.
+        await db_session.commit()
+        real_flush = db_session.flush
+
+        async def refused():
+            # The INSERTs and the DELETE reach the database, then the commit
+            # is refused, as an unexpected foreign key would refuse it.
+            await real_flush()
+            raise IntegrityError("DELETE FROM users", {}, Exception("1451"))
+
+        commit = db_session.commit
+        monkeypatch.setattr(db_session, "commit", refused)
+
+        with pytest.raises(HTTPException) as exc:
+            await _hard_delete(db_session, department, department.trainee)
+
+        monkeypatch.setattr(db_session, "commit", commit)
+        assert exc.value.status_code == 409
+        kept = await db_session.scalar(
+            text("SELECT COUNT(*) FROM users WHERE id = :id"),
+            {"id": department.trainee},
+        )
+        assert kept == 1
+        assert await self._pending(db_session, department.org) == []
+        assert certificate.exists()
+        assert evidence.exists()
+
+
+class TestTheApplicantRecordGoesWithTheMember:
+    """A member converted from an applicant keeps a prospective_members row
+    linked by ``transferred_user_id``, which is SET NULL: deleting the member
+    only detached it. The applicant's details, ID documents and form answers
+    survived with nothing left linking them to anybody, and Purge takes only
+    inactive applications, so nothing could ever remove them (2026-11-21
+    member-files review, high)."""
+
+    @pytest.fixture
+    def root(self, tmp_path, monkeypatch):
+        uploads = tmp_path / "uploads"
+        uploads.mkdir()
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(uploads))
+        return uploads
+
+    @staticmethod
+    async def _application(db, dept, member: str, root, label: str):
+        form = Form(organization_id=dept.org, name=f"Application {label}")
+        db.add(form)
+        await db.flush()
+        answers = [
+            FormSubmission(
+                organization_id=dept.org,
+                form_id=form.id,
+                data={"full_name": f"Applicant {label}"},
+                submitter_name=f"Applicant {label}",
+            )
+            for _ in range(3)
+        ]
+        db.add_all(answers)
+        await db.flush()
+        original, duplicate, follow_up = answers
+        prospect = ProspectiveMember(
+            organization_id=dept.org,
+            first_name="Applicant",
+            last_name=label,
+            email=f"applicant-{label}-{uuid.uuid4().hex[:6]}@example.org",
+            status=ProspectStatus.TRANSFERRED,
+            transferred_user_id=member,
+            form_submission_id=original.id,
+        )
+        db.add(prospect)
+        pipeline = MembershipPipeline(organization_id=dept.org, name=f"P {label}")
+        db.add(pipeline)
+        await db.flush()
+        step = MembershipPipelineStep(
+            pipeline_id=pipeline.id,
+            name="Apply",
+            step_type=PipelineStepType.FORM_SUBMISSION,
+        )
+        db.add(step)
+        await db.flush()
+        path = root / dept.org / "applicants" / str(prospect.id) / "licence.pdf"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"%PDF-1.4 driver's licence")
+        db.add_all(
+            [
+                ProspectDocument(
+                    prospect_id=prospect.id,
+                    document_type="id",
+                    file_name="licence.pdf",
+                    file_path=str(path),
+                ),
+                ProspectStepProgress(
+                    prospect_id=prospect.id,
+                    step_id=step.id,
+                    status=StepProgressStatus.COMPLETED,
+                    action_result={"form_submission_id": str(duplicate.id)},
+                ),
+                ProspectFormRequest(
+                    organization_id=dept.org,
+                    prospect_id=prospect.id,
+                    form_id=form.id,
+                    token="follow-up-" + uuid.uuid4().hex,
+                    submission_id=follow_up.id,
+                ),
+                ProspectActivityLog(
+                    prospect_id=prospect.id,
+                    action="prospect_updated",
+                    details={"changes": {"phone": {"from": "1", "to": "2"}}},
+                ),
+            ]
+        )
+        await db.flush()
+        return SimpleNamespace(
+            prospect=str(prospect.id),
+            file=path,
+            submissions=[str(a.id) for a in answers],
+        )
+
+    async def test_the_application_its_answers_and_its_documents_go(
+        self, db_session, department, root
+    ):
+        theirs = await self._application(
+            db_session, department, department.trainee, root, "deleted"
+        )
+        kept = await self._application(
+            db_session, department, department.examiner, root, "kept"
+        )
+        # The preview names what the delete is about to remove.
+        impact = await users_endpoint.get_deletion_impact(
+            user_id=UUID(department.trainee),
+            db=db_session,
+            current_user=_admin(department),
+        )
+        by_table = {r.table: r for r in impact.removed_records}
+        assert by_table["prospective_members"].count == 1
+
+        await _hard_delete(db_session, department, department.trainee)
+
+        remaining = set(
+            (
+                await db_session.execute(
+                    select(ProspectiveMember.id).where(
+                        ProspectiveMember.organization_id == department.org
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert remaining == {kept.prospect}
+        answers = set(
+            (
+                await db_session.execute(
+                    select(FormSubmission.id).where(
+                        FormSubmission.id.in_(theirs.submissions + kept.submissions)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert answers == set(kept.submissions)
+        documents = (
+            await db_session.execute(
+                select(func.count())
+                .select_from(ProspectDocument)
+                .where(ProspectDocument.prospect_id == theirs.prospect)
+            )
+        ).scalar_one()
+        assert documents == 0
+        assert not theirs.file.exists()
+        assert kept.file.exists()
+        events = _audit_events()
+        assert events["pending_file_deletions_completed"]["files_deleted"] == 1
+        assert events["user_hard_deleted"]["applicant_records_deleted"] == 1
+
+
+class _Killed(BaseException):
+    """A worker killed mid-request: not an Exception, so no handler swallows it."""

@@ -48,7 +48,9 @@ from app.schemas.history import (
     AlbumItemsReplace,
     AlbumSummary,
     AlbumUpdate,
+    ApparatusTagsReplace,
     DocumentSummary,
+    EventSummary,
     HistorySourceCreate,
     HistorySourceMerge,
     HistorySourceResponse,
@@ -75,6 +77,7 @@ from app.services.history_collection_service import (
     HistorySourceService,
 )
 from app.services.history_document_service import HistoryDocumentService
+from app.services.history_event_service import HistoryEventService
 from app.services.history_media_service import RECORD_MEDIA, HistoryMediaService
 from app.services.history_service import HistoryService, Viewer
 from app.utils.upload_limits import read_upload_limited
@@ -131,14 +134,28 @@ async def _full_view(
                 item.id,
                 item.substantial_revision_number,
             ),
-        )
+        ),
+        events=await _events_of(db, viewer, item),
     )
+
+
+async def _events_of(
+    db: AsyncSession, viewer: Viewer, item: HistoryMedia
+) -> list[EventSummary]:
+    service = HistoryEventService(db)
+    return [
+        EventSummary(**service.summary(event))
+        for event in await service.related(viewer, media_id=item.id)
+    ]
 
 
 async def _item_view(db: AsyncSession, viewer: Viewer, item: HistoryMedia) -> MediaView:
     if viewer.can_view_archive:
         return await _full_view(db, viewer, item)
-    return MediaMemberView(**HistoryMediaService(db).member_view(viewer, item))
+    return MediaMemberView(
+        **HistoryMediaService(db).member_view(viewer, item),
+        events=await _events_of(db, viewer, item),
+    )
 
 
 async def _reloaded_full(db: AsyncSession, user: User, media_id: str) -> MediaFullView:
@@ -161,6 +178,7 @@ async def list_media(
     decade: Optional[int] = Query(None, ge=1700, le=2100),
     album_id: Optional[str] = Query(None, max_length=36),
     member_id: Optional[str] = Query(None, max_length=36),
+    apparatus_id: Optional[str] = Query(None, max_length=36),
     level: Optional[PublicationLevel] = None,
     limit: int = Query(60, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -168,7 +186,7 @@ async def list_media(
     current_user: User = Depends(get_current_user),
 ):
     """
-    The gallery. Members see what is published to members or the public; the
+    The gallery. ``apparatus_id`` lists what an apparatus is tagged in. Members see what is published to members or the public; the
     archive's keepers also see drafts and may filter by publication level.
 
     **Authentication required**
@@ -181,6 +199,7 @@ async def list_media(
         decade=decade,
         album_id=album_id,
         member_id=member_id,
+        apparatus_id=apparatus_id,
         level=level,
         limit=limit,
         offset=offset,
@@ -422,6 +441,33 @@ async def replace_media_tags(
         current_user,
         "history_media_tagged",
         {"media_id": media_id, "member_ids": sorted(set(payload.member_ids))},
+    )
+    return await _reloaded_full(db, current_user, media_id)
+
+
+@router.put("/media/{media_id}/apparatus", response_model=MediaFullView)
+async def replace_media_apparatus(
+    media_id: str,
+    payload: ApparatusTagsReplace,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("history.manage")),
+):
+    """
+    Set the apparatus the item shows. No consent warning applies.
+
+    **Requires permission: history.manage**
+    """
+    item = await _managed_item(db, current_user, media_id)
+    async with handle_service_errors("Could not save these apparatus tags"):
+        await HistoryMediaService(db).replace_apparatus_tags(
+            item, payload.apparatus_ids, str(current_user.id)
+        )
+    await db.commit()
+    await _audit(
+        db,
+        current_user,
+        "history_media_apparatus_tagged",
+        {"media_id": media_id, "apparatus_ids": sorted(set(payload.apparatus_ids))},
     )
     return await _reloaded_full(db, current_user, media_id)
 

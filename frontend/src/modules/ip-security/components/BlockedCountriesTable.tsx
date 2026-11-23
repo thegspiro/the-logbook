@@ -75,8 +75,8 @@ export const BlockedCountriesTable: React.FC<BlockedCountriesTableProps> = ({ co
                   </span>
                 )}
               </td>
-              <td data-label="Reason" className="text-theme-text-secondary max-w-xs px-4 py-3 break-words">
-                {c.reason}
+              <td data-label="Reason" className="text-theme-text-secondary px-4 py-3">
+                <div className="max-w-xs min-w-0 break-words">{c.reason}</div>
               </td>
               <td data-label="Blocked Attempts" className="text-theme-text-muted px-4 py-3">
                 {c.blockedAttemptsCount ?? 0}

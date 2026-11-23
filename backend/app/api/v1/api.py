@@ -15,6 +15,7 @@ from app.api.v1.endpoints import (
     admin_hub,
     analytics,
     apparatus,
+    apparatus_events,
     attendance_waiver_requests,
     audit_logs,
     auth,
@@ -44,6 +45,7 @@ from app.api.v1.endpoints import (
     historical_import,
     history,
     history_documents,
+    history_events,
     history_import,
     history_media,
     integrations,
@@ -64,6 +66,7 @@ from app.api.v1.endpoints import (
     medical_supplies,
     meeting_waiver_requests,
     meetings,
+    member_audience,
     member_badges,
     member_id_cards,
     member_leaves,
@@ -172,6 +175,12 @@ api_router.include_router(
     event_attendance_petitions.router, prefix="/events", tags=["events"]
 )
 api_router.include_router(event_requests.router, tags=["event-requests"])
+api_router.include_router(
+    apparatus_events.router, prefix="/apparatus-events", tags=["apparatus-events"]
+)
+api_router.include_router(
+    member_audience.router, prefix="/member-audience", tags=["member-audience"]
+)
 api_router.include_router(locations.router, prefix="/locations", tags=["locations"])
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
@@ -401,6 +410,12 @@ api_router.include_router(
 )
 api_router.include_router(
     history_documents.router,
+    prefix="/history",
+    tags=["history"],
+    dependencies=module_gate("history", "History"),
+)
+api_router.include_router(
+    history_events.router,
     prefix="/history",
     tags=["history"],
     dependencies=module_gate("history", "History"),

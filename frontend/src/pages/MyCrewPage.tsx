@@ -135,7 +135,10 @@ const MyCrewPage: React.FC = () => {
               return (
                 <li key={member.id} className="card p-4">
                   <h2 className="text-theme-text-primary text-base font-semibold">
-                    <Link to={`/members/${member.id}`} className="hover:underline">
+                    <Link
+                      to={`/members/${member.id}`}
+                      className="touch:min-h-11 inline-flex items-center hover:underline"
+                    >
                       {member.name}
                     </Link>
                   </h2>

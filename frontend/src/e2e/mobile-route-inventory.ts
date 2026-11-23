@@ -39,32 +39,32 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/forgot-password',
     source: 'src/App.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/reset-password',
     source: 'src/App.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/privacy',
     source: 'src/App.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/terms',
     source: 'src/App.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/public/minutes',
     source: 'src/App.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/public/minutes/:copyId',
@@ -87,8 +87,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/admin/errors',
     source: 'src/modules/admin/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/admin/analytics',
@@ -99,8 +99,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/admin/platform-analytics',
     source: 'src/modules/admin/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/admin/audit-log',
@@ -135,8 +135,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/admin-hours/manage',
     source: 'src/modules/admin-hours/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/apparatus/print-labels',
@@ -153,8 +153,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/apparatus/new',
     source: 'src/modules/apparatus/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/apparatus/:id',
@@ -256,8 +256,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/ballot',
     source: 'src/modules/elections/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/events',
@@ -306,6 +306,18 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     source: 'src/modules/events/routes.tsx',
     coverage: 'ratchet',
     detail: 'settings tab and all nine of its sections, measured through the mobile presentation ratchet',
+  },
+  {
+    path: '/events/admin/requests/:requestId',
+    source: 'src/modules/events/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/events/admin/community/print',
+    source: 'src/modules/events/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
     path: '/events/:id/edit',
@@ -497,8 +509,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/finance/purchase-requests/new',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/finance/purchase-requests/:id',
@@ -521,8 +533,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/finance/expenses/new',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/finance/expenses/:id',
@@ -539,8 +551,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/finance/check-requests/new',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/finance/check-requests/:id',
@@ -611,8 +623,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/grants/opportunities/new',
     source: 'src/modules/grants-fundraising/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/grants/opportunities/:id/edit',
@@ -629,8 +641,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/grants/applications/new',
     source: 'src/modules/grants-fundraising/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/grants/applications/:id',
@@ -665,8 +677,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/grants/donations/new',
     source: 'src/modules/grants-fundraising/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/grants/donations/:donationId/edit',
@@ -713,8 +725,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/integrations/historical-import',
     source: 'src/modules/integrations/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/integrations/historical-import/:importId',
@@ -732,9 +744,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/claude/connections',
     source: 'src/modules/integrations/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      "secondary list of a member's own Claude connections; single-column cards with one shared-utility button each",
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/inventory',
@@ -907,8 +918,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/ip-security/my-requests',
     source: 'src/modules/ip-security/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/history',
@@ -1007,6 +1018,60 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized or configuration route; covered by its representative module route',
   },
   {
+    path: '/history/timeline',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
+  },
+  {
+    path: '/history/events',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
+  },
+  {
+    path: '/history/events/new',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
+  },
+  {
+    path: '/history/events/:eventId',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/events/:eventId/edit',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/apparatus',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
+  },
+  {
+    path: '/history/apparatus/new',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
+  },
+  {
+    path: '/history/apparatus/:apparatusId',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/apparatus/:apparatusId/edit',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
     path: '/history/albums',
     source: 'src/modules/history/routes.tsx',
     coverage: 'ratchet',
@@ -1051,8 +1116,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/medical-supplies/categories',
     source: 'src/modules/medical-supplies/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/members',
@@ -1087,8 +1152,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/members/my-crew',
     source: 'src/modules/membership/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/members/leave-requests',
@@ -1136,7 +1201,7 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     path: '/members/admin/settings',
     source: 'src/modules/membership/routes.tsx',
     coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    detail: 'redirect to its first section (Contact Visibility); every section route is inventoried',
   },
   {
     path: '/members/admin/settings/visibility',
@@ -1691,8 +1756,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/inventory/admin/checklists/templates/new',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/inventory/admin/checklists/templates/:templateId',
@@ -1787,8 +1852,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/settings/roles',
     source: 'src/modules/settings/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/setup',
@@ -1824,8 +1889,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/store/orders',
     source: 'src/modules/storefront/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/inventory/admin/store',

@@ -126,6 +126,14 @@ class EmailTemplateType(str, enum.Enum):
     OPEN_ENDED_LEAVE_DIGEST = "open_ended_leave_digest"
     LEAVE_REQUEST_SUBMITTED = "leave_request_submitted"
     LEAVE_REQUEST_DENIED = "leave_request_denied"
+    # The request conversation and the undecided-request reminder.
+    LEAVE_REQUEST_FOR_MEMBER = "leave_request_for_member"
+    LEAVE_REQUEST_UPDATE = "leave_request_update"
+    LEAVE_REQUEST_REMINDER = "leave_request_reminder"
+    # A request still waiting past the department's limit, and a member
+    # ending their own leave early.
+    LEAVE_REQUEST_ESCALATION = "leave_request_escalation"
+    LEAVE_ENDED_EARLY = "leave_ended_early"
     # The morning after an outreach event ends with no guest headcount; see
     # email_templates_outreach.py.
     GUEST_HEADCOUNT_REMINDER = "guest_headcount_reminder"

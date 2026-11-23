@@ -189,4 +189,21 @@ describe('ItemEditor', () => {
     expect(screen.getByRole('option', { name: 'Training hours' })).toBeInTheDocument();
     expect(screen.getByText(/call tracking is turned off\. until it is turned on/i)).toBeInTheDocument();
   });
+
+  it('switching to a goal review clears figures and N/A, and offers neither', async () => {
+    const item: TemplateItem = {
+      ...newItem('Attendance', []),
+      allow_na: true,
+      data_block: { source: 'training.hours', scoring_rule: null },
+    };
+    const user = userEvent.setup();
+    render(<Harness initial={item} />);
+
+    await user.selectOptions(screen.getByLabelText('Evaluation tool'), 'goal_review');
+
+    expect(lastChange()).toMatchObject({ tool: 'goal_review', allow_na: false, data_block: null, weight: 0 });
+    expect(screen.queryByLabelText('Data shown with this item')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Evaluator comment')).not.toBeInTheDocument();
+    expect(screen.getByText(/does not count toward any grade/)).toBeInTheDocument();
+  });
 });

@@ -16,6 +16,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import List
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -24,6 +25,7 @@ from app.models.storefront import (
     StoreOrderStatus,
     StoreOrderWindow,
     StorePaymentMethod,
+    StorePaymentPolicy,
     StoreProduct,
     StoreProductStatus,
     StoreWindowStatus,
@@ -452,3 +454,43 @@ class TestDefaults:
         assert settings.send_window_closing_reminder is True
         assert settings.send_window_closed is True
         assert settings.send_vendor_order_updates is True
+
+
+class TestVendorOrderNoticeRecipients:
+    """W67b-11: the "placed with the vendor" notice went to every member in the
+    window, including members whose unpaid orders the pay-before-vendor-order
+    rule had just held back from that very order."""
+
+    async def _two_orders(self, db_session, policy):
+        service, recorder, org, member, product, window = await _setup(
+            db_session, payment_policy=policy
+        )
+        other = await _make_member(db_session, org)
+        paid = await _place_order(service, org, member, product)
+        await _place_order(service, org, other, product)
+        await service.record_payment(paid.id, org.id, None, None, notify_member=False)
+        capture = AsyncMock(return_value=1)
+        recorder.send_vendor_order_placed = capture
+        return service, org, window, member, other, capture
+
+    async def test_members_held_back_for_payment_are_not_told_it_was_ordered(
+        self, db_session
+    ):
+        service, org, window, member, other, capture = await self._two_orders(
+            db_session, StorePaymentPolicy.BEFORE_VENDOR_ORDER
+        )
+
+        await service.record_vendor_order(window.id, org.id, None, vendor_name="Acme")
+
+        recipients = capture.await_args.args[2]
+        assert recipients == [member.email]
+
+    async def test_without_the_hold_everyone_who_ordered_is_told(self, db_session):
+        service, org, window, member, other, capture = await self._two_orders(
+            db_session, StorePaymentPolicy.NONE
+        )
+
+        await service.record_vendor_order(window.id, org.id, None, vendor_name="Acme")
+
+        recipients = capture.await_args.args[2]
+        assert recipients == sorted([member.email, other.email])

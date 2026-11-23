@@ -1931,6 +1931,8 @@ export interface SelfReportConfigUpdate {
  */
 export interface SubmissionAttachment {
   index: number;
+  /** The entry's stable id. Null only on an entry stored before ids existed. */
+  id?: string | null;
   file_name?: string | null;
   file_type?: string | null;
   file_size?: number | null;
@@ -2384,6 +2386,13 @@ export interface RequirementDetail {
   /** Fractional when a partial month was excused. */
   active_months?: number;
   cert_expired?: boolean;
+  /**
+   * For a `certification` requirement: the expiration date (YYYY-MM-DD) of
+   * the certificate graded, so the card reads "On file (Expires ...)" or
+   * "Expired ..." rather than 1/1 or 0/1. Null when nothing is on file or the
+   * certificate never expires, and for every other type.
+   */
+  expiry_date?: string | null;
   blocks_activity?: boolean;
   /**
    * Set while an existing member's catch-up period runs and the requirement is
@@ -2486,6 +2495,8 @@ export interface MemberRequirementsResponse {
     avg_compliance: number | null;
   };
   requirements_detail: RequirementDetail[];
+  /** The member's profile's optional requirements: listed, never graded. */
+  optional_requirements_detail?: RequirementDetail[];
   leaves_of_absence: MemberLeavePeriod[];
 }
 
@@ -2539,6 +2550,9 @@ export interface MyTrainingHistoryPage {
 export interface MyTrainingSummary {
   visibility: MemberVisibility;
   requirements_detail?: RequirementDetail[];
+  /** Sent with `requirements_detail`: the member's profile's optional
+   *  requirements, listed and never graded. */
+  optional_requirements_detail?: RequirementDetail[];
   /** Sent with `requirements_detail`: the leaves behind a reduced target. */
   leaves_of_absence?: MemberLeavePeriod[];
   leave_month_rule?: LeaveMonthRule;
@@ -3142,14 +3156,37 @@ export interface ComplianceForecast {
   /**
    * The current figure's compliance matrix standing, by the member's profile
    * thresholds or the department's. Colour the current figure by this, never
-   * by thresholds of a screen's own. The projections carry no standing.
+   * by thresholds of a screen's own. Each projection carries its own standing,
+   * classified the same way; the projections remain estimates (every
+   * certificate expiring in the window is charged, whatever grades it).
    */
   current_standing: Standing;
   forecast_30_days: number | null;
+  forecast_30_standing: Standing;
   forecast_60_days: number | null;
+  forecast_60_standing: Standing;
   forecast_90_days: number | null;
+  forecast_90_standing: Standing;
   at_risk_requirements: Array<Record<string, unknown>>;
   expiring_certifications: Array<Record<string, unknown>>;
+}
+
+/** A department forecast average, classified by the department's thresholds. */
+export interface ComplianceForecastAverage {
+  /** Null when no member is graded. */
+  pct: number | null;
+  standing: Standing;
+}
+
+/** `GET /training/reports/compliance-forecast`. */
+export interface ComplianceForecastReport {
+  members: ComplianceForecast[];
+  averages: {
+    current: ComplianceForecastAverage;
+    days_30: ComplianceForecastAverage;
+    days_60: ComplianceForecastAverage;
+    days_90: ComplianceForecastAverage;
+  };
 }
 
 export interface DepartmentComplianceTrend {
@@ -3366,8 +3403,11 @@ export interface ComplianceProfile {
   roleIds?: string[];
   compliantThresholdOverride?: number;
   atRiskThresholdOverride?: number;
-  requiredRequirementIds?: string[];
-  optionalRequirementIds?: string[];
+  // null: no required list was ever set (only possible through the API), so
+  // the profile grades every applicable requirement except its optional ones.
+  // Distinct from [], which grades nothing.
+  requiredRequirementIds?: string[] | null;
+  optionalRequirementIds?: string[] | null;
   adminHoursRequirements?: AdminHoursRequirementItem[];
   isActive: boolean;
   priority: number;

@@ -48,7 +48,7 @@ def outreach_event_clause(organization_id: str) -> ColumnElement[bool]:
     A public-facing event type, or any event a public request was scheduled
     onto — a coordinator can link a request to an existing event of any type,
     and that event is still the department answering the public. Cancelled
-    events are out. The dashboard pulse card and the Community Engagement tab
+    events are out. The dashboard pulse card and the Outreach Impact tab
     it links to both read this, so the two cannot count different events
     (pitfall #29).
     """

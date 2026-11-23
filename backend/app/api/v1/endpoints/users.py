@@ -54,6 +54,7 @@ from app.models.document import Document
 from app.models.inventory import CheckOutRecord, ItemAssignment, ItemIssuance
 from app.models.member_position_term import note_position_actor, sync_position_terms
 from app.models.passkey import UserPasskey
+from app.models.pending_file_deletion import PendingDeletionReason
 from app.models.training import TrainingRecord as TrainingRecordModel
 from app.models.user import Organization, Role, User, UserStatus, user_roles
 from app.schemas.auth import PasskeyResponse
@@ -103,10 +104,7 @@ from app.services.email_policy import (
     member_choice,
 )
 from app.services.email_service import welcome_email_can_send
-from app.services.member_files import (
-    collect_member_files,
-    remove_files_after_hard_delete,
-)
+from app.services.member_files import collect_member_files
 from app.services.member_position_term_service import past_positions_for
 from app.services.member_service_history_service import MemberServiceHistoryService
 from app.services.member_shift_release_service import (
@@ -117,10 +115,17 @@ from app.services.operational_rank_service import (
     rank_not_configured_message,
 )
 from app.services.organization_service import OrganizationService
+from app.services.pending_file_deletions import (
+    enqueue as enqueue_pending_file_deletions,
+)
+from app.services.pending_file_deletions import (
+    process as process_pending_file_deletions,
+)
 from app.services.security_monitoring import report_privilege_escalation_attempt
 from app.services.upload_scanning import reject_if_malicious
 from app.services.user_deletion_service import (
     count_records_removed_with_member,
+    delete_transferred_applications,
     find_hard_delete_blockers,
     release_user_references,
     return_member_inventory,
@@ -2567,8 +2572,17 @@ async def delete_user(
     Pass `hard=true` to permanently delete the member and all associated records.
     A permanent delete also removes the stored files named by the rows it
     cascades away (self-report certificates, training-record uploads,
-    attendance waiver documents), after the commit, keeping any file another
-    row still references; a refused delete touches no file.
+    attendance waiver documents). They are queued in pending_file_deletions
+    inside the delete's own transaction and removed right after its commit,
+    keeping any file another row still references; an hourly sweep retries
+    whatever a crash or an unreachable store left. A refused delete queues
+    and touches nothing. The user_hard_deleted audit row is written inside
+    the delete's transaction; if it cannot be written the delete is refused
+    with a 500 and nothing changes. The file outcome follows in a
+    pending_file_deletions_completed event. The applicant record the member was converted from
+    (its details, interviews, activity log and form answers) is deleted in
+    the same transaction, and its uploaded documents are queued with the
+    member's other files.
 
     **Authentication required**
 
@@ -2658,10 +2672,23 @@ async def delete_user(
         await release_user_references(db, str(user_id))
 
         # Read before the delete: the rows naming these files CASCADE away
-        # with the member. Removed only after the commit below succeeds, so
-        # a refused delete touches no file.
+        # with the member. Queued in this transaction, so the commit below
+        # records them durably with the delete, and a refused delete (the
+        # rollback) queues nothing. Removed only after that commit.
         owned_files = await collect_member_files(
             db, str(user_id), str(current_user.organization_id)
+        )
+        # The application that became this member is linked by a SET NULL
+        # key, so the delete below would only detach it. It goes here, in
+        # this transaction, and its ID documents are queued with the rest.
+        applications = await delete_transferred_applications(
+            db, str(user_id), str(current_user.organization_id)
+        )
+        pending_ids = enqueue_pending_file_deletions(
+            db,
+            str(current_user.organization_id),
+            {**owned_files.paths_by_area(), **applications.document_paths},
+            PendingDeletionReason.MEMBER_HARD_DELETE,
         )
 
         # Deleting the User is also what removes its user_positions rows.
@@ -2670,30 +2697,34 @@ async def delete_user(
         # holding rows that no longer exist, and the flush below would then
         # fail with StaleDataError.
         await db.delete(user)
+        conflict = HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This member is still referenced by records that must keep "
+                "an owner, so they cannot be permanently deleted. "
+                "Archive the member instead, then anonymize them from their "
+                "profile."
+            ),
+        )
+        # Flushed here so a reference the metadata scan expected MySQL to
+        # resolve on its own, and did not (schema drift from the models),
+        # surfaces as a 409 before the audit row is written. Left to the audit
+        # helper's savepoint, the DELETE would flush inside its swallowing try
+        # and read as an audit failure.
         try:
-            await db.commit()
+            await db.flush()
         except IntegrityError as e:
-            # A reference the metadata scan expected MySQL to resolve on its
-            # own did not resolve (schema drift from the models). Report it as
-            # a conflict rather than a 500; the real constraint is logged.
             await db.rollback()
             logger.error(f"Hard delete of user {user_id} blocked by a reference: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "This member is still referenced by records that must keep "
-                    "an owner, so they cannot be permanently deleted. "
-                    "Archive the member instead, then anonymize them from their "
-                    "profile."
-                ),
-            )
+            raise conflict
 
-        # Never raises, so the audit row below is always written.
-        removal = await remove_files_after_hard_delete(
-            db, str(user_id), str(current_user.organization_id), owned_files
-        )
-
-        await log_audit_event(
+        # Owner decision 2026-11-21 (e): written inside the delete's
+        # transaction, so the delete never commits without it, and a delete
+        # whose audit row cannot be written does not happen. Every other
+        # audit event keeps the rule that an audit failure never blocks. What
+        # became of the files is known only after the commit, so it follows
+        # in its own event below.
+        hard_delete_audit = await log_audit_event(
             db=db,
             event_type="user_hard_deleted",
             event_category="user_management",
@@ -2708,14 +2739,61 @@ async def delete_user(
                     "pool_returns": returned.pool_returns,
                     "checked_in": returned.checked_in,
                 },
-                "files_deleted": removal.deleted,
-                "files_not_deleted": removal.not_deleted,
-                "files_shared_kept": removal.shared_kept,
+                "files_queued": len(pending_ids),
+                "applicant_records_deleted": applications.applications,
             },
             user_id=str(current_user.id),
             username=current_user.username,
             **_request_origin(request),
         )
+        if hard_delete_audit is None:
+            await db.rollback()
+            logger.error(
+                "Hard delete of user {} refused: its audit record could not be "
+                "written",
+                user_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=(
+                    "The member was not deleted: the audit record a permanent "
+                    "delete requires could not be written. Nothing was "
+                    "changed; please try again."
+                ),
+            )
+
+        try:
+            await db.commit()
+        except IntegrityError as e:
+            await db.rollback()
+            logger.error(f"Hard delete of user {user_id} blocked by a reference: {e}")
+            raise conflict
+
+        # Never raises. Whatever it could not remove stays queued for the
+        # hourly sweep; its row resolutions commit with the event below.
+        removal = await process_pending_file_deletions(
+            db, str(current_user.organization_id), pending_ids
+        )
+        if pending_ids:
+            # The sweep's event type, so one type means "files removed after a
+            # delete"; this one also names the delete it follows.
+            await log_audit_event(
+                db=db,
+                event_type="pending_file_deletions_completed",
+                event_category="user_management",
+                severity="info",
+                event_data={
+                    "files_deleted": removal.deleted,
+                    "files_shared_kept": removal.shared_kept,
+                    "files_still_pending": removal.not_deleted,
+                    "trigger": "member_hard_delete",
+                    "deleted_user_id": str(user_id),
+                    "user_hard_deleted_audit_id": hard_delete_audit.id,
+                },
+                user_id=str(current_user.id),
+                username=current_user.username,
+                **_request_origin(request),
+            )
     else:
         # Preserve membership number so it can be restored on reactivation,
         # then clear it to free the unique index for new members.
@@ -3783,6 +3861,18 @@ async def anonymize_member(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
+    # The same ceiling delete, archive and status change apply. A departed
+    # member keeps their positions, and anonymisation cannot be undone, so a
+    # manager below a former chief's privileges must not be able to erase
+    # that account when they could not delete it.
+    await _enforce_account_reset_ceiling(
+        current_user,
+        user,
+        db,
+        action="member-anonymize",
+        detail="You cannot anonymize a member with privileges beyond your own.",
+    )
+
     try:
         summary = await service.anonymize_member(user)
     except ValueError as e:
@@ -3987,7 +4077,7 @@ async def get_photo_use_roster(
         # *weaker* gate than the per-member ``/{user_id}/consents`` beside it
         # (users.edit or members.manage) while returning strictly more.
         #
-        # users.view_consents exists because the Historian and Public Outreach
+        # users.view_consents exists because the Historian and Community Outreach Manager
         # positions have a real claim on this page — a historian curates the
         # photo archive — and share nothing with each other but broad grants
         # (users.view, members.view, events.view). Widening to any of those

@@ -1,0 +1,48 @@
+{
+  "script": "docs/youtube-scripts/08-quick-tips-and-shorts.md — SHORT 8H",
+  "title": "Read the Schedule Board",
+  "callout": "Scheduling — know who's on duty, anytime",
+  "endCard": {
+    "headline": "Try The Logbook",
+    "sub": "Free & Open Source",
+    "url": "github.com/thegspiro/the-logbook"
+  },
+  "shots": [
+    {
+      "id": "hook",
+      "say": "See who's working every shift this week, at a glance.",
+      "caption": "Your schedule at a glance"
+    },
+    {
+      "id": "open",
+      "say": "Tap Schedule, at the bottom of the screen. The board shows every shift this week, colored by whether it still needs people.",
+      "caption": "Tap Schedule",
+      "speak": "Tap Sked-yool, at the bottom of the screen. The board shows every shift this week, colored by whether it still needs people."
+    },
+    {
+      "id": "colours",
+      "say": "Red means two or more seats are open. Amber means one. Green means the shift is full.",
+      "caption": "Red 2+ open · Amber 1 open · Green full"
+    },
+    {
+      "id": "day",
+      "say": "Tap a day to see who's on each shift, and which seats are still open.",
+      "caption": "Tap a day: who's on, what's open"
+    },
+    {
+      "id": "filters",
+      "say": "Filter to the shifts that need staffing, or to just your own.",
+      "caption": "Needs staffing · My shifts"
+    },
+    {
+      "id": "mine",
+      "say": "Your own shifts are blue, so you always know when you're on duty.",
+      "caption": "Blue = you're on duty"
+    },
+    {
+      "id": "outro",
+      "say": "Know who's on duty, any time.",
+      "caption": "Know who's on duty"
+    }
+  ]
+}

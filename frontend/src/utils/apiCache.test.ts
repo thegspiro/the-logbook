@@ -494,7 +494,6 @@ describe('apiCache', () => {
     });
 
     it('returns false for the org-wide per-member training heat maps and dashboard', () => {
-      expect(isCacheable('/training/competency-matrix')).toBe(false);
       expect(isCacheable('/training/compliance-matrix')).toBe(false);
       expect(isCacheable('/training/dashboard-summary')).toBe(false);
     });

@@ -119,11 +119,23 @@ describe('StoreSettingsTab notification switches', () => {
     await screen.findByText('Notifications');
 
     const previews = screen.getAllByRole('button', { name: /^Preview/ });
-    expect(previews).toHaveLength(9);
+    expect(previews).toHaveLength(10);
 
     await user.click(screen.getByRole('button', { name: /Preview the Order placed with the vendor email/ }));
     expect(mockPreviewNotification).toHaveBeenCalledWith('vendor_order_placed');
     expect(await screen.findByText(/Order placed with the vendor — Fall job shirts/)).toBeInTheDocument();
+  });
+
+  it('previews the cancellation email from the status changes row', async () => {
+    // W67b-17: the cancellation email had a template but no preview, though
+    // the status changes switch governs it.
+    const user = userEvent.setup();
+    render(<StoreSettingsTab onChanged={vi.fn()} />);
+    await screen.findByText('Notifications');
+
+    await user.click(screen.getByRole('button', { name: 'Preview the Order cancelled email' }));
+    expect(mockPreviewNotification).toHaveBeenCalledWith('order_cancelled');
+    expect(screen.getByRole('checkbox', { name: /^Status changes/ })).toBeChecked();
   });
 
   it('previewing does not toggle the switch it sits beside', async () => {

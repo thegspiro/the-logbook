@@ -55,6 +55,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import OutreachRoleSignup from '../../modules/scheduling/components/OutreachRoleSignup';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import { trainingProgramService } from '../../services/trainingServices';
 import type { ShiftRecord, PlatoonRosterEntry } from '../../modules/scheduling/services/api';
@@ -322,8 +323,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     training_program_id: '',
     training_evaluator_id: '',
   });
+  // The role an officer seats somebody in on an outreach sheet; see isOutreachSheet.
+  const [assignRole, setAssignRole] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
   const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set());
+  // Members whose leave request covering this date is still undecided. They
+  // stay assignable (it may be denied); the picker says so.
+  const [leaveRequestedIds, setLeaveRequestedIds] = useState<Set<string>>(new Set());
 
   // Cancel-shift state
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -338,6 +344,15 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
 
   const apparatusPositions = useMemo(() => shift.apparatus_positions ?? [], [shift.apparatus_positions]);
   const hasApparatusPositions = apparatusPositions.length > 0;
+  // A community outreach sheet's seats are all plain volunteer seats, and the
+  // server refuses a signup that does not name the role (tour guide,
+  // educator) the member will fill. Its signup goes through OutreachRoleSignup,
+  // never the per-seat buttons, which name only a seat.
+  const outreachRoles = shift.is_outreach ? (shift.outreach_roles ?? []) : [];
+  const isOutreachSheet = outreachRoles.length > 0;
+  const openOutreachRoles = outreachRoles.filter((r) => r.remaining > 0);
+  // A role that filled while the form was open falls back to the first one left.
+  const assignOutreachRole = openOutreachRoles.find((r) => r.role === assignRole) ?? openOutreachRoles[0];
 
   // Determine available position options based on apparatus
   const positionOptions: [string, string][] = useMemo(
@@ -455,6 +470,15 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       }
     };
     void loadUnavailable();
+    const loadLeaveRequested = async () => {
+      try {
+        setLeaveRequestedIds(new Set(await schedulingService.getLeaveRequestedMembers(shift.id)));
+      } catch {
+        // Non-critical — the picker just carries no leave-request note.
+        setLeaveRequestedIds(new Set());
+      }
+    };
+    void loadLeaveRequested();
   }, [showAssignForm, isEditing, shift.id, setPendingFlag, loadMembers]);
 
   // Load apparatus list when editing
@@ -854,6 +878,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       const res = await schedulingService.createAssignment(shift.id, {
         user_id: assignForm.user_id,
         position: assignForm.position,
+        ...(isOutreachSheet ? { outreach_role: assignOutreachRole?.role } : {}),
         is_training: assignForm.is_training,
         training_program_id: assignForm.is_training ? assignForm.training_program_id || undefined : undefined,
         training_evaluator_id: assignForm.is_training ? assignForm.training_evaluator_id || undefined : undefined,
@@ -1198,6 +1223,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const showNoClaimableSeatNote =
     !isPast &&
     !isUserAssigned &&
+    !isOutreachSheet &&
     !eligibilityLoading &&
     eligibilityError === null &&
     openPositions.length > 0 &&
@@ -2366,7 +2392,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                         isPast={isPast}
                         rosterLocked={isRosterLocked}
                         isUserAssigned={isUserAssigned}
-                        canSignUp={canSignUpFor(position)}
+                        canSignUp={!isOutreachSheet && canSignUpFor(position)}
                         positionOptions={positionOptions}
                         attendanceRecord={assignment ? attendanceByUser.get(assignment.user_id) : undefined}
                         tz={tz}
@@ -2466,7 +2492,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       {/* Not until the roster has loaded: before then every seat
                           reads as open, so the label overstated the gap and the
                           form it opens offered seats already taken. */}
-                      {!loading && openPositions.length > 1 && (
+                      {/* Not on an outreach sheet: each seat needs a role, which a bulk fill cannot choose. */}
+                      {!loading && !isOutreachSheet && openPositions.length > 1 && (
                         <button
                           onClick={openBulkAssign}
                           className="flex items-center gap-1 rounded-lg border border-violet-500/20 px-2.5 py-1.5 text-xs text-violet-600 transition-colors hover:bg-violet-500/10 dark:text-violet-400"
@@ -2482,31 +2509,58 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       className="border-theme-surface-border bg-theme-surface-hover/30 space-y-3 rounded-lg border p-4"
                     >
                       <h4 className="text-theme-text-primary text-sm font-medium">Assign someone to this shift</h4>
-                      {/* Step 1: Position selection */}
-                      <div>
-                        <label
-                          htmlFor="assign-position"
-                          className="text-theme-text-secondary mb-1 block text-xs font-medium"
-                        >
-                          Position
-                        </label>
-                        <select
-                          id="assign-position"
-                          value={assignForm.position}
-                          onChange={(e) => setAssignForm((p) => ({ ...p, position: e.target.value }))}
-                          className={inputCls}
-                        >
-                          {positionOptions.map(([val, label]) => {
-                            const isOpen = openPositions.includes(val);
-                            return (
-                              <option key={val} value={val}>
-                                {label}
-                                {isOpen ? ' (open)' : ''}
-                              </option>
-                            );
-                          })}
-                        </select>
-                      </div>
+                      {/* Step 1: Position selection — or, on an outreach sheet, the role */}
+                      {isOutreachSheet ? (
+                        <div>
+                          <label
+                            htmlFor="assign-outreach-role"
+                            className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                          >
+                            Role
+                          </label>
+                          {assignOutreachRole ? (
+                            <select
+                              id="assign-outreach-role"
+                              value={assignOutreachRole.role}
+                              onChange={(e) => setAssignRole(e.target.value)}
+                              className={inputCls}
+                            >
+                              {openOutreachRoles.map((r) => (
+                                <option key={r.role} value={r.role}>
+                                  {r.label} ({r.remaining} needed)
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <p className="text-theme-text-muted text-xs">Every role on this sheet is filled.</p>
+                          )}
+                        </div>
+                      ) : (
+                        <div>
+                          <label
+                            htmlFor="assign-position"
+                            className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                          >
+                            Position
+                          </label>
+                          <select
+                            id="assign-position"
+                            value={assignForm.position}
+                            onChange={(e) => setAssignForm((p) => ({ ...p, position: e.target.value }))}
+                            className={inputCls}
+                          >
+                            {positionOptions.map(([val, label]) => {
+                              const isOpen = openPositions.includes(val);
+                              return (
+                                <option key={val} value={val}>
+                                  {label}
+                                  {isOpen ? ' (open)' : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                      )}
                       {/* Step 2: Member search + select */}
                       <div>
                         <label
@@ -2547,9 +2601,16 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                             {filteredMembers.map((m) => (
                               <option key={m.id} value={m.id}>
                                 {m.label}
+                                {leaveRequestedIds.has(m.id) ? ' — leave requested' : ''}
                               </option>
                             ))}
                           </select>
+                        )}
+                        {assignForm.user_id && leaveRequestedIds.has(assignForm.user_id) && (
+                          <p className="text-theme-alert-warning-text mt-1 text-xs" role="status">
+                            Leave requested: this member has asked for leave covering this date, and it is not decided
+                            yet. You can still assign them; if the leave is approved, the assignment is dropped.
+                          </p>
                         )}
                       </div>
                       {/* Step 3: Training slot (optional) */}
@@ -2629,7 +2690,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                           onClick={() => {
                             void handleAssign();
                           }}
-                          disabled={pending.assigning || !assignForm.user_id}
+                          disabled={
+                            pending.assigning || !assignForm.user_id || (isOutreachSheet && !assignOutreachRole)
+                          }
                           className="rounded-lg bg-violet-700 px-3 py-1.5 text-sm text-white hover:bg-violet-800 disabled:opacity-50"
                         >
                           {pending.assigning ? 'Assigning...' : 'Assign'}
@@ -2779,48 +2842,83 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 </p>
               )}
 
-              {/* Sign Up (for members not yet assigned — non-apparatus mode) */}
-              {!hasApparatusPositions && !isPast && !isUserAssigned && !eligibilityLoading && !memberSignupClosed && (
+              {/* Sign Up for a role on a community outreach sheet */}
+              {isOutreachSheet && !isPast && !isUserAssigned && !memberSignupClosed && (
                 <div className="rounded-lg border border-dashed border-violet-500/30 bg-violet-500/5 p-4">
                   <h3 className="text-theme-text-primary mb-2 flex items-center gap-2 text-sm font-semibold">
-                    <UserPlus className="h-4 w-4 text-violet-500" aria-hidden="true" /> Sign yourself up for this shift
+                    <UserPlus className="h-4 w-4 text-violet-500" aria-hidden="true" /> Sign yourself up for this
+                    outreach event
                   </h3>
-                  {signupOptions.length === 0 ? (
-                    <p className="text-theme-text-muted text-xs">
-                      No position on this shift matches your rank, positions or completed training. If that seems wrong,
-                      ask a scheduling admin to check your rank and positions, or the positions on this shift.
-                    </p>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={signupPosition}
-                        onChange={(e) => setSignupPosition(e.target.value)}
-                        className={'flex-1 ' + inputCls}
-                      >
-                        {signupOptions.map(([val, label]) => (
-                          <option key={val} value={val}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => {
-                          void handleSignup();
-                        }}
-                        disabled={pending.signingUp}
-                        className="inline-flex items-center gap-1 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white hover:bg-violet-800 disabled:opacity-50"
-                      >
-                        {pending.signingUp ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <UserPlus className="h-4 w-4" aria-hidden="true" />
-                        )}
-                        Sign myself up
-                      </button>
-                    </div>
-                  )}
+                  <ul className="mb-3 space-y-1 text-sm">
+                    {outreachRoles.map((r) => (
+                      <li key={r.role} className="flex justify-between gap-3">
+                        <span className="text-theme-text-primary">{r.label}</span>
+                        <span className="text-theme-text-secondary">
+                          {r.filled} of {r.total}
+                          {r.remaining > 0 ? ` — ${r.remaining} still needed` : ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <OutreachRoleSignup
+                    shiftId={shift.id}
+                    roles={outreachRoles}
+                    onSignedUp={async () => {
+                      await refreshAssignments();
+                      onRefresh?.();
+                    }}
+                  />
                 </div>
               )}
+
+              {/* Sign Up (for members not yet assigned — non-apparatus mode) */}
+              {!isOutreachSheet &&
+                !hasApparatusPositions &&
+                !isPast &&
+                !isUserAssigned &&
+                !eligibilityLoading &&
+                !memberSignupClosed && (
+                  <div className="rounded-lg border border-dashed border-violet-500/30 bg-violet-500/5 p-4">
+                    <h3 className="text-theme-text-primary mb-2 flex items-center gap-2 text-sm font-semibold">
+                      <UserPlus className="h-4 w-4 text-violet-500" aria-hidden="true" /> Sign yourself up for this
+                      shift
+                    </h3>
+                    {signupOptions.length === 0 ? (
+                      <p className="text-theme-text-muted text-xs">
+                        No position on this shift matches your rank, positions or completed training. If that seems
+                        wrong, ask a scheduling admin to check your rank and positions, or the positions on this shift.
+                      </p>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={signupPosition}
+                          onChange={(e) => setSignupPosition(e.target.value)}
+                          className={'flex-1 ' + inputCls}
+                        >
+                          {signupOptions.map(([val, label]) => (
+                            <option key={val} value={val}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => {
+                            void handleSignup();
+                          }}
+                          disabled={pending.signingUp}
+                          className="inline-flex items-center gap-1 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white hover:bg-violet-800 disabled:opacity-50"
+                        >
+                          {pending.signingUp ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <UserPlus className="h-4 w-4" aria-hidden="true" />
+                          )}
+                          Sign myself up
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
               {/* Sign Up confirmation for already-assigned members */}
               {isUserAssigned && (

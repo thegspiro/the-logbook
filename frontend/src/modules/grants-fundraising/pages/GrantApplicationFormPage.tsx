@@ -956,7 +956,7 @@ export const GrantApplicationFormPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setContactRows((prev) => [...prev, { ...EMPTY_CONTACT_ROW }])}
-                className="text-theme-text-secondary hover:text-theme-text-primary mt-2 inline-flex items-center gap-1 text-sm font-medium"
+                className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 mt-2 inline-flex items-center gap-1 text-sm font-medium"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add contact

@@ -1,5 +1,5 @@
 /**
- * The Community Engagement tab's presentation rules, kept free of React so they
+ * The Outreach Impact tab's presentation rules, kept free of React so they
  * can be tested on their own. Every figure here is one the backend computed
  * (community_engagement_service.py); this file only decides how it reads.
  */
@@ -173,7 +173,16 @@ export const CSV_HEADER = [
   'Reach is an estimate',
   'Crew',
   'Member hours',
+  'Materials handed out',
+  'Photos',
+  'Outcome',
 ] as const;
+
+const PHOTO_LABELS: Record<string, string> = {
+  none: 'No photos',
+  consented: 'With consent',
+  not_consented: 'Without consent',
+};
 
 export const csvRows = (rows: CommunityEventReach[], timezone: string): CsvValue[][] => [
   [...CSV_HEADER],
@@ -190,5 +199,30 @@ export const csvRows = (rows: CommunityEventReach[], timezone: string): CsvValue
     r.crew,
     // Already on the quarter from the backend; a bare number so a spreadsheet can total it.
     r.member_hours,
+    (r.materials ?? []).map((m) => `${m.quantity} ${m.item}`).join('; '),
+    r.photos ? (PHOTO_LABELS[r.photos] ?? r.photos) : '',
+    r.outcome_note ?? '',
   ]),
 ];
+
+const LONG_DATE: Intl.DateTimeFormatOptions = { month: 'long', day: 'numeric', year: 'numeric' };
+
+/**
+ * The span a report covers, as printed under the summary's title: "January 1,
+ * 2026 – November 20, 2026", or "Through November 20, 2026" for all time,
+ * which has no start.
+ */
+export const periodRangeText = (start: string | null, end: string, timezone: string): string => {
+  const through = formatDateCustom(end, LONG_DATE, timezone);
+  return start ? `${formatDateCustom(start, LONG_DATE, timezone)} – ${through}` : `Through ${through}`;
+};
+
+/**
+ * Every type in one group, largest reach first. The printed summary lists them
+ * all: the screen folds the tail into "Other" to keep four bars comparable, but
+ * a page handed to a board has room for each.
+ */
+export const allTypesIn = (types: CommunityTypeBucket[], group: CommunityTypeBucket['group']): CommunityTypeBucket[] =>
+  types
+    .filter((t) => t.group === group)
+    .sort((a, b) => b.people_reached - a.people_reached || b.events - a.events || a.label.localeCompare(b.label));

@@ -1,5 +1,5 @@
 /**
- * Community Engagement Tab (PO3)
+ * Outreach Impact Tab (PO3) — formerly Community Engagement
  *
  * What the department's public outreach reached over a period: events held,
  * people reached (signed in, or estimated from the request where nobody signed
@@ -19,6 +19,7 @@ import {
   Globe,
   Inbox,
   Loader2,
+  Printer,
   Users,
 } from 'lucide-react';
 import { dashboardService } from '../services/api';
@@ -145,7 +146,7 @@ const CommunityEngagementTab: React.FC = () => {
       <div>
         <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
           <Globe className="h-5 w-5 text-blue-700 dark:text-blue-400" aria-hidden="true" />
-          <span>Community Engagement</span>
+          <span>Outreach Impact</span>
         </h2>
         <p className="text-theme-text-muted mt-1 text-sm">How far the department&apos;s public outreach reaches.</p>
       </div>
@@ -284,8 +285,27 @@ const CommunityEngagementTab: React.FC = () => {
         </section>
       </div>
 
+      {(data.materials?.length ?? 0) > 0 && (
+        <section className="card mb-5 p-4" aria-labelledby="ce-materials-heading">
+          <h3 id="ce-materials-heading" className="text-theme-text-primary text-sm font-semibold">
+            Materials handed out
+          </h3>
+          <p className="text-theme-text-muted mb-3 text-xs">
+            Recorded when each event closed, {option?.label.toLowerCase()}
+          </p>
+          <ul className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            {data.materials?.map((m) => (
+              <li key={m.item} className="flex justify-between gap-3">
+                <span className="text-theme-text-primary">{m.item}</span>
+                <span className="text-theme-text-secondary tabular-nums">{formatNumber(m.quantity)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="card rwd-table-container overflow-hidden p-0" aria-labelledby="ce-events-heading">
-        <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div>
             <h3 id="ce-events-heading" className="text-theme-text-primary text-sm font-semibold">
               Recent outreach events
@@ -296,15 +316,26 @@ const CommunityEngagementTab: React.FC = () => {
               </p>
             )}
           </div>
-          <button
-            type="button"
-            className="btn-secondary btn-sm flex shrink-0 items-center gap-1"
-            onClick={() => void exportCsv()}
-            disabled={!rows.length || exporting}
-          >
-            <Download className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>{exporting ? 'Exporting…' : 'Export CSV'}</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={`/events/admin/community/print?period=${period}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-secondary btn-sm flex items-center gap-1"
+            >
+              <Printer className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Print summary</span>
+            </a>
+            <button
+              type="button"
+              className="btn-secondary btn-sm flex items-center gap-1"
+              onClick={() => void exportCsv()}
+              disabled={!rows.length || exporting}
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{exporting ? 'Exporting…' : 'Export CSV'}</span>
+            </button>
+          </div>
         </div>
         {!rows.length ? (
           <p className="text-theme-text-muted px-4 pb-4 text-sm">No outreach events held in this period.</p>

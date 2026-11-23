@@ -15,6 +15,8 @@ with no duplicates, no blanks, and no count outside the seat limits.
 
 from typing import Any, Dict, List, Optional
 
+from app.core.utils import list_within_detail_limit
+
 # A sheet this size is a data error, not a staffing plan: the seat list that
 # backs it is capped at 50 by app/utils/positions, so a larger count here would
 # promise seats the shift cannot hold.
@@ -82,3 +84,40 @@ def role_label(configured: Any, role: Optional[str]) -> str:
     if not role:
         return ""
     return role_labels(configured).get(role, role.replace("_", " ").title())
+
+
+def settle_type_role_presets(types: Any, configured_roles: Any) -> List[Dict[str, Any]]:
+    """Settle each outreach type's ``default_roles`` into the canonical shape.
+
+    A preset prefills a signup sheet, so it is held to what a sheet allows:
+    roles the department has configured, and no more seats than a sheet can
+    hold. An unknown role is refused rather than dropped — the administrator
+    named it and would otherwise see the preset silently lose a line. A type
+    with no preset is stored without the key, as before presets existed.
+
+    Raises ``ValueError`` for an unknown role or an oversized preset.
+    """
+    known = role_labels(configured_roles)
+    settled: List[Dict[str, Any]] = []
+    for entry in types if isinstance(types, list) else []:
+        if not isinstance(entry, dict) or not entry.get("value"):
+            continue
+        item = {key: value for key, value in entry.items() if key != "default_roles"}
+        preset = normalize_staffing_roles(entry.get("default_roles"))
+        if preset:
+            unknown = sorted({need["role"] for need in preset} - set(known))
+            if unknown:
+                raise ValueError(
+                    list_within_detail_limit(
+                        f"{item.get('label') or item['value']}: unknown role(s) ",
+                        unknown,
+                    )
+                )
+            if sum(need["count"] for need in preset) > MAX_TOTAL_SEATS:
+                raise ValueError(
+                    f"{item.get('label') or item['value']}: a signup sheet holds "
+                    f"at most {MAX_TOTAL_SEATS} people."
+                )
+            item["default_roles"] = preset
+        settled.append(item)
+    return settled

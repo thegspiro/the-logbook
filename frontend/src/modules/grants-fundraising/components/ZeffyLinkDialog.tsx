@@ -194,7 +194,7 @@ export const ZeffyLinkDialog: React.FC<ZeffyLinkDialogProps> = ({
               ? 'Each payment becomes a donation on the campaign, from a donor matched by email.'
               : targetType === ZeffyLinkTarget.FUNDRAISING_EVENT
                 ? 'Each payment adds to the event’s revenue, and each ticket to its attendance.'
-                : 'Each payment is credited to the paying member’s open dues on the schedule, matched by email. Anything over the balance is recorded as a donation.'
+                : 'Each payment waits on the Payments list until someone with finance access confirms whose open dues on the schedule it pays. The payer’s email only suggests a member.'
           }
         >
           {(field) => (

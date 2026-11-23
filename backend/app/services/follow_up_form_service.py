@@ -43,6 +43,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import settings
 from app.models.forms import FieldType, Form, FormField, FormStatus, FormSubmission
 from app.models.membership_pipeline import (
+    PROSPECT_IDENTITY_FIELDS,
     MembershipPipelineStep,
     PipelineStepType,
     ProspectFormRequest,
@@ -877,6 +878,12 @@ class FollowUpFormService:
             c["field"] for c in changes if c["field"] in CONTACT_FIELDS
         )
         stamp = _now()
+        # The applicant now chose the details the self-access guard would
+        # match a member on, so it stops trusting them (ADV2-10).
+        if any(
+            c["applied"] and c["field"] in PROSPECT_IDENTITY_FIELDS for c in changes
+        ):
+            prospect.identity_edited_by_applicant_at = stamp
         request.submission_id = submission.id
         request.submitted_at = stamp
         request.changes = changes or None

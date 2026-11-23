@@ -4,14 +4,27 @@
  */
 
 import api from './apiClient';
-import { expectArray } from '../utils/asArray';
+import { asArray, expectArray } from '../utils/asArray';
 import type {
+  LeaveApproverCoverBoard,
+  LeaveApproverCoverCreate,
+  LeaveEndedEarly,
   LeaveRequest,
   LeaveRequestCreate,
+  LeaveRequestSummary,
   LeaveSettings,
   LeaveSettingsResponse,
   LeaveVote,
 } from '../types/leaveRequest';
+
+/** The board with its lists verified: a body without them shows no cover
+ * section rather than taking the page down. */
+const coverBoard = (data: LeaveApproverCoverBoard): LeaveApproverCoverBoard => ({
+  covers: asArray(data?.covers),
+  approvers: asArray(data?.approvers),
+  stand_ins: asArray(data?.stand_ins),
+  today: data?.today ?? '',
+});
 
 export const leaveRequestService = {
   async getSettings(): Promise<LeaveSettingsResponse> {
@@ -52,11 +65,63 @@ export const leaveRequestService = {
     return response.data;
   },
 
+  /** End the caller's own leave in progress; the day before `firstDayBack` is its last. */
+  async endLeaveEarly(leaveId: string, firstDayBack: string): Promise<LeaveEndedEarly> {
+    const response = await api.post<LeaveEndedEarly>(`/users/leave-requests/my-leaves/${leaveId}/end-early`, {
+      first_day_back: firstDayBack,
+    });
+    return response.data;
+  },
+
+  async getSummary(): Promise<LeaveRequestSummary> {
+    const response = await api.get<LeaveRequestSummary>('/users/leave-requests/summary');
+    return response.data;
+  },
+
+  async askQuestion(id: string, text: string): Promise<LeaveRequest> {
+    const response = await api.post<LeaveRequest>(`/users/leave-requests/${id}/question`, { text });
+    return response.data;
+  },
+
+  async answer(id: string, text: string): Promise<LeaveRequest> {
+    const response = await api.post<LeaveRequest>(`/users/leave-requests/${id}/answer`, { text });
+    return response.data;
+  },
+
+  async proposeChanges(id: string, startDate: string, endDate: string | null, note?: string): Promise<LeaveRequest> {
+    const response = await api.post<LeaveRequest>(`/users/leave-requests/${id}/changes`, {
+      start_date: startDate,
+      end_date: endDate,
+      note: note?.trim() || undefined,
+    });
+    return response.data;
+  },
+
+  async respondToChanges(id: string, accept: boolean): Promise<LeaveRequest> {
+    const response = await api.post<LeaveRequest>(`/users/leave-requests/${id}/changes/respond`, { accept });
+    return response.data;
+  },
+
   async vote(id: string, vote: LeaveVote, note?: string): Promise<LeaveRequest> {
     const response = await api.post<LeaveRequest>(`/users/leave-requests/${id}/vote`, {
       vote,
       note: note?.trim() || undefined,
     });
     return response.data;
+  },
+
+  async getCovers(): Promise<LeaveApproverCoverBoard> {
+    const response = await api.get<LeaveApproverCoverBoard>('/users/leave-requests/covers');
+    return coverBoard(response.data);
+  },
+
+  async setCover(data: LeaveApproverCoverCreate): Promise<LeaveApproverCoverBoard> {
+    const response = await api.post<LeaveApproverCoverBoard>('/users/leave-requests/covers', data);
+    return coverBoard(response.data);
+  },
+
+  async clearCover(id: string): Promise<LeaveApproverCoverBoard> {
+    const response = await api.delete<LeaveApproverCoverBoard>(`/users/leave-requests/covers/${id}`);
+    return coverBoard(response.data);
   },
 };

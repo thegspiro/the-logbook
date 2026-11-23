@@ -4528,11 +4528,13 @@ class TestThirtiethRoundFindings:
         assert "waived" not in json.dumps(body)
 
     @pytest.mark.usefixtures("_use_test_session")
-    async def test_standalone_hours_check_stays_aggregated_in_sql(
+    async def test_standalone_check_reads_only_the_columns_it_grades(
         self, org_with_members, db_session, monkeypatch
     ):
-        """Without a preload, an hours check sums in SQL rather than loading
-        the member's records, as it did before the page preload existed."""
+        """Without a preload, a check loads the member's completed records
+        once, with the page preload's columns: never notes or attachments.
+        It used to sum hours in SQL, a separate copy of the grading rules
+        that disagreed with the compliance matrix (2026-11-21)."""
         from app.models.training import (
             RequirementFrequency,
             RequirementType,
@@ -4576,8 +4578,85 @@ class TestThirtiethRoundFindings:
         )
         assert progress.is_complete is True
         record_reads = [s for s in statements if "training_records" in s]
-        assert any("sum(training_records.hours_completed)" in s for s in record_reads)
-        assert all("training_records.notes" not in s for s in record_reads)
+        assert len(record_reads) == 1
+        assert "training_records.notes" not in record_reads[0]
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_standalone_biannual_hours_check_reads_only_counted_certificates(
+        self, org_with_members, db_session
+    ):
+        """The SQL path applies the same lapsed-certificate rule as My
+        Training and the compliance matrix: a certificate outside the
+        biannual window is not read, and a lapsed one inside it fails the
+        requirement (lapsed_biannual_certificate)."""
+        from app.models.training import (
+            RequirementFrequency,
+            RequirementType,
+            TrainingRequirement,
+        )
+        from app.services.training_service import TrainingService
+
+        org_id, _, member_id = org_with_members
+        today = date.today()
+        req = TrainingRequirement(
+            organization_id=org_id,
+            name="Recertification hours",
+            requirement_type=RequirementType.HOURS,
+            frequency=RequirementFrequency.BIANNUAL,
+            training_type=TrainingType.CERTIFICATION,
+            required_hours=2,
+            applies_to_all=True,
+            active=True,
+        )
+        db_session.add(req)
+        db_session.add_all(
+            [
+                TrainingRecord(
+                    organization_id=org_id,
+                    user_id=member_id,
+                    course_name="Drill",
+                    training_type=TrainingType.CERTIFICATION,
+                    status=TrainingStatus.COMPLETED,
+                    completion_date=today,
+                    hours_completed=3.0,
+                ),
+                # Before the biannual window opens; lapsed long ago.
+                TrainingRecord(
+                    organization_id=org_id,
+                    user_id=member_id,
+                    course_name="Old certificate",
+                    training_type=TrainingType.CERTIFICATION,
+                    status=TrainingStatus.COMPLETED,
+                    completion_date=date(today.year - 4, 3, 1),
+                    expiration_date=date(today.year - 2, 3, 1),
+                    hours_completed=3.0,
+                ),
+            ]
+        )
+        await db_session.flush()
+        service = TrainingService(db_session)
+        progress = await service.check_requirement_progress(
+            uuid.UUID(member_id), uuid.UUID(req.id), uuid.UUID(org_id), waivers=[]
+        )
+        assert progress.is_complete is True
+
+        db_session.add(
+            TrainingRecord(
+                organization_id=org_id,
+                user_id=member_id,
+                course_name="Lapsed certificate",
+                training_type=TrainingType.CERTIFICATION,
+                status=TrainingStatus.COMPLETED,
+                completion_date=date(today.year - 1, 1, 15),
+                expiration_date=today - timedelta(days=1),
+                hours_completed=1.0,
+            )
+        )
+        await db_session.flush()
+        progress = await service.check_requirement_progress(
+            uuid.UUID(member_id), uuid.UUID(req.id), uuid.UUID(org_id), waivers=[]
+        )
+        assert progress.is_complete is False
 
     @pytest.mark.usefixtures("_use_test_session")
     async def test_scheduling_summary_uses_the_department_timezone(
@@ -4697,9 +4776,10 @@ class TestThirtiethRoundFindings:
         assert len(statements) == short_page
         # Waivers (with the Chief's overrides and approved session waiver
         # requests, read beside them), the preload, the org's timezone for
-        # "today", and the member's shifts worked (attendance and external)
-        # — still a fixed count, whatever the page size.
-        assert short_page <= 8
+        # "today", the department's include-current-month setting, and the
+        # member's shifts worked (attendance and external) — still a fixed
+        # count, whatever the page size.
+        assert short_page <= 9
         # The preload carries only the columns the checks read, and stops
         # at the earliest window on the page: these are annual
         # requirements, so records older than a year are not loaded.

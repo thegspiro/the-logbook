@@ -41,10 +41,10 @@ runs:
         cache: pip
         cache-dependency-path: backend/requirements.txt
 
+    # The install script behind the apt archive cache: these jobs run ffmpeg,
+    # which ubuntu-26.04 does not ship. See the action for why.
     - name: Install system dependencies
-      shell: bash
-      run: |
-        "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
+      uses: ./.github/actions/install-system-deps
 
     - name: Install Python dependencies
       shell: bash

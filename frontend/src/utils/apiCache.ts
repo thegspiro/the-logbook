@@ -73,7 +73,6 @@ const UNCACHEABLE_PREFIXES = [
   '/training/instructors/qualifications', // per-member instructor credentials
   '/training/instructors/validate/', // GET /validate/{user_id}/{course_id}: a named member's qualification verdict
   '/training/compliance-matrix', // org-wide per-member compliance rollup (names + status)
-  '/training/competency-matrix', // org-wide per-member competency heat map (names + status) — same shape as compliance-matrix above
   '/training/dashboard-summary', // dashboard widgets: per-member names on at-risk/needs-intervention lists
   '/training/sessions/approve/', // approval-token roster: attendee names + emails (GET /sessions/approve/{token})
   // An event's session and approval summary: the summary can carry the approval
@@ -108,6 +107,7 @@ const UNCACHEABLE_PREFIXES = [
   '/minutes-records/', // meeting minutes with potentially sensitive discussions
   '/meetings', // meeting list + detail: attendee PII, notes/motions/agenda (no trailing slash covers both)
   '/event-requests', // external event-request intake: contact name/email/phone, venue address (PII)
+  '/apparatus-events/', // crew boards and seat pickers: which member holds which seat, member names (PII)
   '/events/missed-mandatory', // caller's own missed mandatory attendance (per-member compliance)
   '/forms', // form defs carry admin notification emails + creator id; no trailing slash so GET /forms list is covered too
   '/inventory/users/', // member-specific inventory, issuances & history (PII)
@@ -176,6 +176,9 @@ const UNCACHEABLE_SUBSTRINGS = [
   // their free-text reasons (PII), and a pending/decided state that a 30s-stale
   // copy would misreport right after the organizer acts on it.
   '/eligible-members', // returns member first/last name + email (PII)
+  '/staffing', // an outreach signup sheet's volunteers by name (GET /events/{id}/staffing,
+  // /event-requests/{id}/staffing) and the historical import's staffing previews,
+  // which list members too; a cached copy would also hide a signup for 30s.
   '/issue-plan', // kit issue preview: embeds the member's recorded garment sizes (PII)
   '/external-attendees', // external attendee PII
   '/check-in-monitoring', // live attendee/location check-in data (PII)

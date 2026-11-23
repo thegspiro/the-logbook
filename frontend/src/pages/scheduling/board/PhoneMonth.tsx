@@ -8,6 +8,7 @@
 
 import React from 'react';
 import type { ShiftRecord } from '../../../modules/scheduling';
+import type { CalendarOutreachItem } from '../../../types/apparatusEvent';
 import {
   dayMatchesFilter,
   daySummary,
@@ -20,7 +21,7 @@ import {
 } from '../../../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../../../modules/scheduling/hooks/useSignupWindow';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
-import { STATUS_STYLES, legendFor } from './statusStyles';
+import { OUTREACH_STYLE, STATUS_STYLES, legendFor } from './statusStyles';
 
 const WEEKDAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -37,6 +38,8 @@ export interface PhoneMonthProps {
   today?: Date;
   /** Adds the "crew size not set" entry to the legend when it is in use. */
   hasUnsizedShift?: boolean;
+  /** Apparatus outreach nights by day: drawn apart from the shifts, never counted with them. */
+  outreachByDate?: Map<string, CalendarOutreachItem[]> | undefined;
   onSelect: (date: Date) => void;
 }
 
@@ -49,6 +52,7 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
   filter,
   today = new Date(),
   hasUnsizedShift = false,
+  outreachByDate,
   onSelect,
 }) => {
   const signupWindow = useSignupWindow();
@@ -150,11 +154,15 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
                       } ${STATUS_STYLES[shiftStatusInfo(shift, currentUserId, new Date(), signupWindow).status].bar}`}
                     />
                   ))}
+                  {(outreachByDate?.get(key) ?? []).length > 0 && (
+                    <span className={`h-1 w-[18px] rounded-full ${OUTREACH_STYLE.bar}`} />
+                  )}
                   <span className="sr-only">
                     {formatCalendarDate(key, { weekday: 'long', month: 'long', day: 'numeric' })}
                     {summary.shiftCount === 0
                       ? ', no shifts'
                       : `, ${summary.openSeats} open seat${summary.openSeats === 1 ? '' : 's'}`}
+                    {(outreachByDate?.get(key) ?? []).length > 0 ? ', outreach event, not a shift' : ''}
                   </span>
                 </button>
               );
@@ -170,6 +178,12 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
             <span className="text-theme-text-secondary text-[11px]">{STATUS_STYLES[status].label}</span>
           </li>
         ))}
+        {outreachByDate && outreachByDate.size > 0 && (
+          <li className="flex items-center gap-1.5">
+            <span className={`h-[5px] w-4 rounded-full ${OUTREACH_STYLE.bar}`} aria-hidden="true" />
+            <span className="text-theme-text-secondary text-[11px]">{OUTREACH_STYLE.label}</span>
+          </li>
+        )}
       </ul>
     </div>
   );

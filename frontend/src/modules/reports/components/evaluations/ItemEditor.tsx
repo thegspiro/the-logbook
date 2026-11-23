@@ -57,6 +57,7 @@ export const ItemEditor: React.FC<ItemEditorProps> = ({
   const id = `item-${item.key}`;
   const isScale = SCALE_TOOLS.includes(item.tool);
   const isScored = SCORED_TOOLS.includes(item.tool);
+  const isGoalReview = item.tool === EvaluationTool.GOAL_REVIEW;
   const source = dataSources.find((s) => s.key === item.data_block?.source);
   const bands = item.data_block?.scoring_rule?.bands ?? [];
   const gaps = source ? scoringGaps(bands, source.unit) : [];
@@ -230,21 +231,23 @@ export const ItemEditor: React.FC<ItemEditorProps> = ({
             />
           </div>
         )}
-        <div>
-          <label htmlFor={`${id}-comment`} className="form-label">
-            Evaluator comment
-          </label>
-          <select
-            id={`${id}-comment`}
-            className="form-input"
-            value={item.comment}
-            onChange={(e) => onChange({ ...item, comment: e.target.value as TemplateItem['comment'] })}
-          >
-            <option value="none">No comment box</option>
-            <option value="optional">Optional</option>
-            <option value="required">Required</option>
-          </select>
-        </div>
+        {!isGoalReview && (
+          <div>
+            <label htmlFor={`${id}-comment`} className="form-label">
+              Evaluator comment
+            </label>
+            <select
+              id={`${id}-comment`}
+              className="form-input"
+              value={item.comment}
+              onChange={(e) => onChange({ ...item, comment: e.target.value as TemplateItem['comment'] })}
+            >
+              <option value="none">No comment box</option>
+              <option value="optional">Optional</option>
+              <option value="required">Required</option>
+            </select>
+          </div>
+        )}
         <div className="flex flex-col justify-end gap-2 text-sm">
           <label className="flex items-center gap-2">
             <input
@@ -351,117 +354,127 @@ export const ItemEditor: React.FC<ItemEditorProps> = ({
         </div>
       )}
 
-      <div className="border-theme-surface-border border-t pt-4">
-        <label htmlFor={`${id}-source`} className="form-label">
-          Data shown with this item
-        </label>
-        <select
-          id={`${id}-source`}
-          className="form-input"
-          value={item.data_block?.source ?? ''}
-          onChange={(e) => setSource(e.target.value)}
-        >
-          <option value="">None</option>
-          {groupDataSources(dataSources).map((group) => (
-            <optgroup key={group.label} label={group.label}>
-              {group.sources.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.unavailable_reason ? `${s.label} (turned off)` : s.label}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-        {source && <p className="text-theme-text-muted mt-1 text-xs">{source.description}</p>}
-        {source?.unavailable_reason && (
-          <p className="mt-1 text-xs text-amber-900 dark:text-amber-200">
-            {source.unavailable_reason} Until it is turned on, this figure may have nothing to measure for any member.
-          </p>
-        )}
+      {isGoalReview && (
+        <p className="text-theme-text-secondary text-sm">
+          Lists each goal the member&apos;s previous review on this form set, copied into the evaluation when it is
+          drafted, and asks whether it was met, partly met, not met, or no longer applies, with a comment on each. It is
+          recorded on the evaluation and its PDF but does not count toward any grade. A form can have one.
+        </p>
+      )}
 
-        {source?.scoreable && isScale && (
-          <fieldset className="mt-3">
-            <legend className="text-theme-text-primary text-sm font-semibold">
-              Scoring rule{' '}
-              <span className="text-theme-text-muted font-normal">
-                — suggests a level; the evaluator may change it with a written justification
-              </span>
-            </legend>
-            {bands.length > 0 && (
-              <div className="mt-2 space-y-2">
-                {bands.map((band, bandIndex) => (
-                  <div key={bandIndex} className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="text-theme-text-secondary w-10">From</span>
-                    <input
-                      aria-label={`Band ${bandIndex + 1} from`}
-                      type="number"
-                      min={0}
-                      className="form-input-sm w-24"
-                      value={band.min}
-                      onChange={(e) =>
-                        setBands(replaceAt(bands, bandIndex, { ...band, min: numberOr(e.target.value, 0) }))
-                      }
-                    />
-                    <span className="text-theme-text-secondary">up to</span>
-                    <input
-                      aria-label={`Band ${bandIndex + 1} up to`}
-                      type="number"
-                      min={0}
-                      className="form-input-sm w-24"
-                      placeholder="and above"
-                      value={band.max ?? ''}
-                      onChange={(e) =>
-                        setBands(
-                          replaceAt(bands, bandIndex, {
-                            ...band,
-                            max: e.target.value.trim() === '' ? null : numberOr(e.target.value, band.min),
-                          })
-                        )
-                      }
-                    />
-                    <span className="text-theme-text-secondary">scores</span>
-                    <select
-                      aria-label={`Band ${bandIndex + 1} score`}
-                      className="form-input-sm w-52"
-                      value={band.score}
-                      onChange={(e) =>
-                        setBands(replaceAt(bands, bandIndex, { ...band, score: Number(e.target.value) }))
-                      }
-                    >
-                      {item.levels.map((level) => (
-                        <option key={level.value} value={level.value}>
-                          {level.value} · {level.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      className="btn-icon-sm"
-                      aria-label={`Remove band ${bandIndex + 1}`}
-                      onClick={() => setBands(bands.filter((_, i) => i !== bandIndex))}
-                    >
-                      <X className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  </div>
+      {!isGoalReview && (
+        <div className="border-theme-surface-border border-t pt-4">
+          <label htmlFor={`${id}-source`} className="form-label">
+            Data shown with this item
+          </label>
+          <select
+            id={`${id}-source`}
+            className="form-input"
+            value={item.data_block?.source ?? ''}
+            onChange={(e) => setSource(e.target.value)}
+          >
+            <option value="">None</option>
+            {groupDataSources(dataSources).map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.sources.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.unavailable_reason ? `${s.label} (turned off)` : s.label}
+                  </option>
                 ))}
-              </div>
-            )}
-            <button type="button" className="btn-secondary btn-sm mt-2" onClick={addBand}>
-              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-              Add band
-            </button>
-            {source.unit === 'percent' && (
-              <p className="text-theme-text-muted mt-1 text-xs">Values are percentages (0–100).</p>
-            )}
-            {gaps.length > 0 && (
-              <p role="status" className="mt-2 text-xs text-amber-900 dark:text-amber-200">
-                No rating is suggested for values {gaps.map((gap) => describeGap(gap, source.unit)).join(', ')}. A
-                member whose figure falls there is rated without a suggestion.
-              </p>
-            )}
-          </fieldset>
-        )}
-      </div>
+              </optgroup>
+            ))}
+          </select>
+          {source && <p className="text-theme-text-muted mt-1 text-xs">{source.description}</p>}
+          {source?.unavailable_reason && (
+            <p className="mt-1 text-xs text-amber-900 dark:text-amber-200">
+              {source.unavailable_reason} Until it is turned on, this figure may have nothing to measure for any member.
+            </p>
+          )}
+
+          {source?.scoreable && isScale && (
+            <fieldset className="mt-3">
+              <legend className="text-theme-text-primary text-sm font-semibold">
+                Scoring rule{' '}
+                <span className="text-theme-text-muted font-normal">
+                  — suggests a level; the evaluator may change it with a written justification
+                </span>
+              </legend>
+              {bands.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  {bands.map((band, bandIndex) => (
+                    <div key={bandIndex} className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="text-theme-text-secondary w-10">From</span>
+                      <input
+                        aria-label={`Band ${bandIndex + 1} from`}
+                        type="number"
+                        min={0}
+                        className="form-input-sm w-24"
+                        value={band.min}
+                        onChange={(e) =>
+                          setBands(replaceAt(bands, bandIndex, { ...band, min: numberOr(e.target.value, 0) }))
+                        }
+                      />
+                      <span className="text-theme-text-secondary">up to</span>
+                      <input
+                        aria-label={`Band ${bandIndex + 1} up to`}
+                        type="number"
+                        min={0}
+                        className="form-input-sm w-24"
+                        placeholder="and above"
+                        value={band.max ?? ''}
+                        onChange={(e) =>
+                          setBands(
+                            replaceAt(bands, bandIndex, {
+                              ...band,
+                              max: e.target.value.trim() === '' ? null : numberOr(e.target.value, band.min),
+                            })
+                          )
+                        }
+                      />
+                      <span className="text-theme-text-secondary">scores</span>
+                      <select
+                        aria-label={`Band ${bandIndex + 1} score`}
+                        className="form-input-sm w-52"
+                        value={band.score}
+                        onChange={(e) =>
+                          setBands(replaceAt(bands, bandIndex, { ...band, score: Number(e.target.value) }))
+                        }
+                      >
+                        {item.levels.map((level) => (
+                          <option key={level.value} value={level.value}>
+                            {level.value} · {level.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="btn-icon-sm"
+                        aria-label={`Remove band ${bandIndex + 1}`}
+                        onClick={() => setBands(bands.filter((_, i) => i !== bandIndex))}
+                      >
+                        <X className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button type="button" className="btn-secondary btn-sm mt-2" onClick={addBand}>
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                Add band
+              </button>
+              {source.unit === 'percent' && (
+                <p className="text-theme-text-muted mt-1 text-xs">Values are percentages (0–100).</p>
+              )}
+              {gaps.length > 0 && (
+                <p role="status" className="mt-2 text-xs text-amber-900 dark:text-amber-200">
+                  No rating is suggested for values {gaps.map((gap) => describeGap(gap, source.unit)).join(', ')}. A
+                  member whose figure falls there is rated without a suggestion.
+                </p>
+              )}
+            </fieldset>
+          )}
+        </div>
+      )}
     </div>
   );
 };

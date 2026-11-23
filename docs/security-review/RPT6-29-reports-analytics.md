@@ -1,14 +1,19 @@
-# Security Review — Feature 29: Reports & Analytics (pass 8; see later `## Pass N` sections for subsequent passes, most recently pass 15)
+# Security Review — Feature 29: Reports & Analytics (pass 8; see later `## Pass N` sections for subsequent passes, most recently pass 16)
 
-**Prefix:** `RPT6` · **Rotation pass:** 15 (this file also carries passes 8–14) · **Reviewed:** 2026-11-11 · **PR:** (this PR)
+**Prefix:** `RPT6` · **Rotation pass:** 16 (this file also carries passes 8–15) · **Reviewed:** 2026-11-22 · **PR:** (this PR)
 
-**Backend:** `api/v1/endpoints/reports.py` (7 routes), `analytics.py` (3),
-`platform_analytics.py` (1), `dashboard.py` (7), `labels.py` (12) — 30 routes
-total; services `reports_service.py` (2,406 L), `dashboard_widget_service.py`,
+**Backend:** `api/v1/endpoints/reports.py` (8 routes), `analytics.py` (3),
+`platform_analytics.py` (1), `dashboard.py` (14), `labels.py` (12) — 38 routes
+total; services `reports_service.py`, `dashboard_widget_service.py`,
 `attendance_dashboard_service.py`, `label_service.py`,
-`label_printer_service.py`; `schemas/reports.py`.
-**Frontend:** `modules/reports` (read, unchanged this pass).
-**Migrations:** none touching this feature's tables since pass 7.
+`label_printer_service.py`, `community_engagement_service.py`;
+`schemas/reports.py`.
+**Frontend:** `modules/reports` (real delta this pass — server-side export
+wiring, Evaluations surface growth), `pages/Dashboard.tsx`,
+`pages/AnalyticsDashboardPage.tsx`, `pages/PlatformAnalyticsPage.tsx`,
+`components/labels` (unchanged since pass 15).
+**Migrations:** none touching this feature's own tables this pass (the new
+`Event.outreach_*`/`guest_headcount` columns belong to Feature 16).
 
 ---
 
@@ -1601,6 +1606,166 @@ organization_id` — and is consumed identically by the dashboard pulse card
 | `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                        | ✅ 0 errors                                             |
 | `cd frontend && npm run lint`                                                                                                                                                                                                                                                             | ✅ 0 errors/warnings                                    |
 | `npx vitest run src/modules/reports src/pages/AnalyticsDashboardPage.test.tsx src/pages/Dashboard.test.tsx src/components/labels/LabelPrintPage.test.tsx src/components/labels/barcodeGeometry.test.ts src/components/labels/printerDpi.test.ts src/pages/PlatformAnalyticsPage.test.tsx` | ✅ 359 passed (27 files)                                |
+
+Next in rotation: Feature 30 (Onboarding — `api/v1/onboarding.py`, 26 unauth
+bootstrap routes).
+
+## Pass 16 (2026-11-22) — watchdog pickup, real delta (server-side report export, Outreach Impact closeout/materials, voting-eligibility reuse), 0 fixed, 0 new findings
+
+**Step 0/1.** `list_pull_requests` (state `open`) returned zero PRs with a
+`claude/security-review-*` head. PR #4547 (Feature 28, Security, audit & IP,
+pass 14) had already merged (`78809b873`), and row 29 (Reports & analytics)
+was confirmed the next `⬜` row on a freshly fetched `main`.
+
+**Also found, unrelated to this feature, not fixed here:** `main` has two
+forked Alembic heads (`67f75ff116ae`, `6a94645761c1`), both introduced by
+other work since pass 15. PR #4549 (`fix(migrations): merge the two Alembic
+heads on main into one`) was already open and addressing exactly this when
+this pass started; duplicating its empty merge revision here would only add a
+third fork. `validate_migrations.py --strict` is therefore recorded as
+FAILED below with a cross-reference to #4549, not fixed in this PR — the same
+"say so once and stop pushing for it" rule the tend path uses for a
+base-branch-red check applies to a check another open PR already owns. The
+local database used to run this pass's own test gate borrowed #4549's single
+merge revision file temporarily (for `alembic upgrade head` only) and it was
+removed before this commit; nothing in this PR's diff touches `alembic/`.
+
+**Baseline:** pass 15's merge, `413ab36e6` (PR #4238).
+
+**Real delta, diffed file by file against that baseline:** `analytics.py`,
+`platform_analytics.py`, `labels.py`, `label_service.py`,
+`label_printer_service.py` — byte-identical to pass 15. `reports.py`
+(+167/-17: a new `POST /reports/export` route), `dashboard.py` (+42/-3: a new
+`GET /dashboard/community-engagement/events` route and outreach-closeout
+response fields), `reports_service.py` (+121/-6: leave periods surfaced
+beside Annual Training and Program Requirement Progress, RPT5-29-1's
+follow-through; a `source` label on certification-expiration and admin-hours
+rows), `dashboard_widget_service.py` (+17/-1: a new `is_outreach_event`
+helper), `saved_report_schedule.py` (+15/-1: a saved report's stored fixed
+dates now parse defensively instead of raising), `attendance_dashboard_service.py`
+(+50/-32: voting eligibility now reuses the election gate's own
+`voting_reason_under_rules` instead of re-deriving it from the tier ladder,
+plus row locking on the waiver-grant path), `schemas/reports.py` (+25/-2: the
+new `ReportExportRequest`). `community_engagement_service.py`
+(not a file this feature's row names, but consumed by `dashboard.py`'s
+community-engagement routes the same way `reports_service.py` is consumed by
+`reports.py` — read in full as in prior passes) carries the new outreach
+closeout/materials/headcount read path behind the new export route;
++285/-56.
+
+### Route inventory — re-enumerated by AST from source, 38 routes, up from pass 15's 36
+
+8 (`reports.py`) + 3 (`analytics.py`) + 1 (`platform_analytics.py`) + 14
+(`dashboard.py`) + 12 (`labels.py`) = **38**. Both new routes carry their own
+`Depends`-bearing auth dependency, matching their file's existing shape:
+
+- `POST /reports/export` — `require_permission("reports.view")`, the same
+  gate `POST /reports/generate` and `POST /reports/saved/{id}/run` already
+  carry, plus `_enforce_report_pii_permission` for PII report types (same
+  helper, same call shape as the other two routes).
+- `GET /dashboard/community-engagement/events` — `require_permission
+("events.manage")`, identical to its sibling `GET /dashboard/community
+-engagement`.
+
+### Verified good ✅ (no findings; this pass's own checks)
+
+- **CSV export uses `SafeCsvWriter`** (`report_export.py`'s
+  `render_report_csv`) — Pitfall #15. Numeric cells are passed as numbers
+  rather than strings specifically so a leading `-` (e.g. "-5 days until
+  expiry") is not mistaken for a formula lead-in by the writer's own
+  neutralisation.
+- **PDF export escapes every value before building reportlab `Paragraph`
+  markup** (`pdf_report_kit.py`'s `cell`/`num`/`kpi_strip`/header helpers all
+  call `esc()` first) — a member-supplied saved-report name or report cell
+  cannot inject reportlab mini-XML markup. The one unescaped text (the
+  footer, drawn with `canvas.drawString`, which parses no markup) is
+  correctly unescaped by design, not by omission.
+- **`Content-Disposition` filename cannot be used for header injection.**
+  `export_report` builds the filename from a user-controlled saved-report
+  name, then branches on `quote(filename) != filename`: any character that
+  would make the raw string unsafe inside a bare `filename="..."` header (a
+  quote, backslash, CR/LF, non-ASCII) is exactly the set `urllib.parse.quote`
+  percent-encodes, so that branch is taken and the value is sent RFC-5987
+  encoded (`filename*=utf-8''...`) instead. The literal-quoted branch is only
+  reachable when the filename contains nothing but `quote()`'s own safe
+  characters, which cannot include a `"` or a newline. Traced by hand rather
+  than assumed.
+- **`export_report` threads `current_user` through to `generate_report`**
+  exactly as `generate_report`/`run_saved_report` already do, so the
+  meeting/minutes visibility restriction RPT6-29-5/6 (pass 15) fixed on
+  `department_overview` and `get_admin_summary` is not bypassed by this new
+  third caller.
+- **The audit row for an export carries ids and counts, never report
+  content** (`filter_keys` logs the filters' _keys_, not their values;
+  `row_count`, not the rows) — Pitfall #33.
+- **`is_outreach_event`'s by-id check repeats the organization filter**
+  explicitly inside `outreach_event_clause`'s own call, rather than trusting
+  that clause alone to be visibly org-scoped at the call site — Pitfall #14's
+  own stated reason for doing this.
+- **`CommunityEngagementService.set_outreach_closeout` validates every
+  client-supplied apparatus id in-org** via `resolve_apparatus_ref` before
+  storing it (XC-1), and **locks the event row** (`with_for_update()`) before
+  reading or writing it, matching the sibling `set_guest_headcount`.
+- **The meeting-attendance waiver grant now locks the parent `Meeting` row
+  before its own find-or-create on `MeetingAttendee`** (Pitfall #27) — closing
+  a race between this path and the member's own approved-waiver-request path
+  landing on the same `(meeting, member)` pair, both of which write through
+  this function's unique index.
+- **Voting eligibility is no longer re-derived** on this screen: it now calls
+  the same `ElectionService.voting_reason_under_rules` the ballot-send gate
+  uses, closing a Pitfall #29 risk (the tier-ladder re-derivation this
+  replaces could disagree with the gate that actually decides who receives a
+  ballot) before it had a chance to drift.
+- **A client-side HTML-injection surface was removed, not merely left
+  unused.** `modules/reports/utils/export.ts` previously built a Report's
+  printable HTML as a string and wrote it into a new window with
+  `printWindow.document.write(html)` — unescaped, though every value it
+  carried was already escaped upstream (so not itself a live finding against
+  the committed code). This pass's server-side PDF/CSV export replaces that
+  path entirely; the file is now 19 lines and contains no `document.write`,
+  `window.open`, or `innerHTML`. Confirmed via `grep` across the full diff:
+  zero hits for `dangerouslySetInnerHTML`, `innerHTML`, `window.confirm` /
+  `alert` / `prompt`, `localStorage.`/`sessionStorage.`, or `eval(` anywhere
+  in this pass's frontend delta.
+- **`ReportExportRequest` enforces exactly one source** (`report_type` xor
+  `saved_report_id`) via `model_validator`, matching the docstring's own
+  stated contract rather than leaving it to caller discipline.
+- **Cross-feature, read for risk only, not re-reviewed in full:**
+  `set_guest_headcount`/`set_outreach_closeout` are exposed via
+  `events.py` (Feature 16, Events & requests, already ✅), gated at
+  `events.manage` and org-scoped through `CommunityEngagementService` — the
+  same file this feature's own `dashboard.py` routes consume for reads. The
+  new `Event.guest_headcount`/`outreach_outcome_note`/`outreach_apparatus_ids`/
+  `outreach_materials`/`outreach_photos` columns and their migration belong to
+  that feature's own scope.
+
+### Still flagged — every open item re-checked against current code, not the doc
+
+- **LBL-29-2 (LOW/policy)** — `list_label_printers` still carries only
+  `get_current_user`; `labels.py` is byte-identical to pass 15. Unchanged.
+- **LBL-29-4 (Informational)** — `LabelService.generate()` still has no
+  count cap of its own. Unchanged.
+- **RPT-5c / RPT-6 / RPT-7** — `reports_service.py` carries a real diff this
+  pass (see above), but neither touches `_generate_inventory_status` or
+  `_generate_apparatus_status`; both re-grepped directly and are still
+  present verbatim. Unchanged.
+- **DASH-2 (LOW)** — `grep -rn "dashboardService\.getStats" frontend/src/` —
+  0 hits, re-checked this pass. Still zero callers.
+
+### Completion gate (Pass 16)
+
+| Check                                                                                                                                                                                                                                                                                                                                                                                      | Result                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, both the sandbox's `python3.13` and bare `python3` interpreters — CLAUDE.md's "two Python interpreters" trap)                                                                                                                                                                                                                              | ✅ 0 violations, both interpreters                                                                                            |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, both interpreters)                                                                                                                                                                                                                                                                                                                 | ✅ clean, both interpreters                                                                                                   |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, both interpreters)                                                                                                                                                                                                                                                                                                              | ✅ clean, both interpreters                                                                                                   |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                                                       | ❌ FAILED — two forked heads, pre-existing on `main`, already owned by open PR #4549 (not fixed here; see "Also found" above) |
+| `python3.13 scripts/generate_schema_docs.py --check`                                                                                                                                                                                                                                                                                                                                       | ✅ up to date                                                                                                                 |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                                                                                                                                                                          | ✅ 329 routes, 0 errors, 0 warnings                                                                                           |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline or dues_overdue or saved_report or evaluation or meeting or minutes or outreach or community_engagement or leave"` (after locally borrowing #4549's single merge revision to build the test database, then removing it before this commit) | ✅ 4863 passed, 1 pre-existing skip (`pywebpush`)                                                                             |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                                                                                                                         | ✅ 0 errors                                                                                                                   |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                                                                                                                              | ✅ 0 errors/warnings                                                                                                          |
+| `npx vitest run src/modules/reports src/pages/AnalyticsDashboardPage.test.tsx src/pages/Dashboard.test.tsx src/components/labels/LabelPrintPage.test.tsx src/components/labels/barcodeGeometry.test.ts src/components/labels/printerDpi.test.ts src/pages/PlatformAnalyticsPage.test.tsx`                                                                                                  | ✅ 438 passed (33 files)                                                                                                      |
 
 Next in rotation: Feature 30 (Onboarding — `api/v1/onboarding.py`, 26 unauth
 bootstrap routes).

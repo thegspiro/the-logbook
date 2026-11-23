@@ -2580,6 +2580,10 @@ class InventoryService:
                 InventoryLotRecall.lot_number_key == key,
                 InventoryLotRecall.lifted_at.is_(None),
             )
+            # A locking read, not just under the lock: the caller has already
+            # read in this transaction, so a plain SELECT would answer from the
+            # snapshot taken before a concurrent recall committed (INV2-6).
+            .with_for_update()
         )
         if existing:
             raise ValueError("This lot is already recalled")
@@ -4409,6 +4413,11 @@ class InventoryService:
                 InventoryLot.received_date,
             )
             .with_for_update()
+            # The session keeps objects across commits, so a lot an earlier
+            # call in the same session loaded would otherwise come back with
+            # its cached quantity while the lock saw the committed one, and the
+            # decrement would be written from the cached value (INV2-5).
+            .execution_options(populate_existing=True)
         )
         lots = list(result.scalars().all())
         available = sum(lot.quantity or 0 for lot in lots)
@@ -4561,6 +4570,9 @@ class InventoryService:
                     InventoryLot.organization_id == organization_id,
                 )
                 .with_for_update()
+                # As in _consume_from_lots: credit the committed count, not a
+                # copy this session cached before the lock (INV2-5).
+                .execution_options(populate_existing=True)
             )
             by_id = {str(lot.id): lot for lot in result.scalars().all()}
             for lot_id, give in repaid.items():
@@ -5546,6 +5558,42 @@ class InventoryService:
             .where(InventoryItem.next_inspection_due <= cutoff_date)
             .options(selectinload(InventoryItem.category))
             .order_by(InventoryItem.next_inspection_due)
+        )
+        return list(result.scalars().all())
+
+    async def get_never_inspected(
+        self, organization_id: UUID | str, limit: int = 200
+    ) -> List[InventoryItem]:
+        """Active items that need inspecting and have never had one.
+
+        ``get_maintenance_due`` lists items by ``next_inspection_due``, which
+        only a completed inspection sets, so an item whose category requires
+        maintenance (or which carries its own interval) had no date and never
+        appeared there (workflow review W42-6). The owner chose to list these
+        on their own rather than count them as due: what "due" means, and the
+        dashboard counts built on it, are unchanged.
+
+        An item given a due date by hand is excluded, since the due list
+        already shows it.
+        """
+        result = await self.db.execute(
+            select(InventoryItem)
+            .outerjoin(
+                InventoryCategory, InventoryItem.category_id == InventoryCategory.id
+            )
+            .where(InventoryItem.organization_id == str(organization_id))
+            .where(InventoryItem.active.is_(True))
+            .where(InventoryItem.last_inspection_date.is_(None))
+            .where(InventoryItem.next_inspection_due.is_(None))
+            .where(
+                or_(
+                    InventoryItem.inspection_interval_days > 0,
+                    InventoryCategory.requires_maintenance.is_(True),
+                )
+            )
+            .options(selectinload(InventoryItem.category))
+            .order_by(InventoryItem.name, InventoryItem.id)
+            .limit(limit)
         )
         return list(result.scalars().all())
 
@@ -11059,6 +11107,11 @@ class InventoryService:
             )
             if not reorder:
                 return None, "Reorder request not found"
+
+            # Before anything reads the payload: a null status would pass the
+            # workflow check below as falsy, and a null quantity would reach
+            # the floor comparison as None (INV2-4).
+            reject_null_for_required(reorder, data)
 
             if "quantity_received" in data:
                 return None, "Received quantity changes require the receiving workflow"

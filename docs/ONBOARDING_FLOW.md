@@ -895,7 +895,7 @@ be the department's own, before there is a right answer.
 
 - **Leadership**: IT Administrator, Chief, President, Assistant Chief, Vice President
 - **Administrative**: Secretary, Assistant Secretary, Quartermaster
-- **Operational**: Officers, Training Officer, Public Outreach Coordinator, Meeting Hall Coordinator
+- **Operational**: Officers, Training Officer, Community Outreach Manager, Meeting Hall Coordinator
 - **Specialized**: Membership Coordinator, Communications Officer, Apparatus Manager
 - **Base**: Member
 
@@ -2262,7 +2262,7 @@ Before deploying to production:
 
 Eight new roles added to the default role set (total: 16 system roles):
 
-- Officers, Quartermaster, Training Officer, Public Outreach Coordinator, Meeting Hall Coordinator, Membership Coordinator, Communications Officer, Apparatus Manager
+- Officers, Quartermaster, Training Officer, Community Outreach Manager, Meeting Hall Coordinator, Membership Coordinator, Communications Officer, Apparatus Manager
 
 ### Module UIs
 

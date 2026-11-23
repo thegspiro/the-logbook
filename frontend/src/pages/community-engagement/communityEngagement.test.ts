@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { CommunityEventReach, CommunityReachTotals } from '../../services/api';
 import {
+  allTypesIn,
   bucketLabel,
   changeFor,
   csvRows,
@@ -8,6 +9,7 @@ import {
   expectedText,
   niceMax,
   parseCommunityPeriod,
+  periodRangeText,
   reachText,
   topTypes,
   typeGroups,
@@ -174,6 +176,69 @@ describe('csvRows', () => {
       'yes',
       4,
       10,
+      '',
+      '',
+      '',
     ]);
+  });
+
+  it('exports what was recorded when the event closed', () => {
+    const [header, first] = csvRows(
+      [
+        row({
+          materials: [
+            { item: 'Smoke alarms', quantity: 12 },
+            { item: 'Flyers', quantity: 100 },
+          ],
+          photos: 'not_consented',
+          outcome_note: 'Follow up with the principal',
+        }),
+      ],
+      'America/New_York'
+    );
+    expect(header?.slice(-3)).toEqual(['Materials handed out', 'Photos', 'Outcome']);
+    expect(first?.slice(-3)).toEqual([
+      '12 Smoke alarms; 100 Flyers',
+      'Without consent',
+      'Follow up with the principal',
+    ]);
+  });
+});
+
+describe('periodRangeText', () => {
+  it("names the span in the department's calendar", () => {
+    expect(periodRangeText('2026-01-01T05:00:00Z', '2026-11-20T17:00:00Z', 'America/New_York')).toBe(
+      'January 1, 2026 – November 20, 2026'
+    );
+  });
+
+  it('has no start for all time', () => {
+    expect(periodRangeText(null, '2026-11-20T17:00:00Z', 'America/New_York')).toBe('Through November 20, 2026');
+  });
+
+  it("reads a midnight-UTC boundary as the department's own day", () => {
+    // 04:30 UTC on Jan 1 is still December 31 in New York.
+    expect(periodRangeText('2026-01-01T04:30:00Z', '2026-01-02T12:00:00Z', 'America/New_York')).toBe(
+      'December 31, 2025 – January 2, 2026'
+    );
+  });
+});
+
+describe('allTypesIn', () => {
+  it('keeps every type of one group, largest reach first', () => {
+    const types = [
+      { group: 'request' as const, label: 'CPR', events: 2, people_reached: 40 },
+      { group: 'department' as const, label: 'Public Education', events: 4, people_reached: 670 },
+      { group: 'request' as const, label: 'School Visit', events: 6, people_reached: 860 },
+      { group: 'request' as const, label: 'Fundraiser', events: 1, people_reached: 40 },
+      { group: 'request' as const, label: 'Block Party', events: 3, people_reached: 40 },
+    ];
+    expect(allTypesIn(types, 'request').map((t) => t.label)).toEqual([
+      'School Visit',
+      'Block Party',
+      'CPR',
+      'Fundraiser',
+    ]);
+    expect(allTypesIn(types, 'department').map((t) => t.label)).toEqual(['Public Education']);
   });
 });

@@ -16,7 +16,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { ClipboardList, Clock, CheckCircle, XCircle, Calendar, Loader2, Pause } from 'lucide-react';
 import { eventRequestService } from '../services/api';
-import { formatDate } from '../utils/dateFormatting';
+import { formatCalendarDate, formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { EventRequestPublicStatus, EventRequestStatus } from '../types/event';
 
@@ -140,6 +140,10 @@ const EventRequestStatusPage: React.FC = () => {
   const isTerminal = data.status === 'declined' || data.status === 'cancelled';
   const isPostponed = data.status === 'postponed';
   const currentStep = STATUS_ORDER[data.status] ?? -1;
+  // The department's clock, not the visitor's: a requester reading this on a
+  // phone set to another zone, or a laptop left on UTC, must see the time the
+  // department will turn up.
+  const departmentTz = data.timezone || tz;
 
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br px-4 py-12">
@@ -183,7 +187,7 @@ const EventRequestStatusPage: React.FC = () => {
               <p className="text-theme-text-secondary text-sm">
                 This event has been postponed.{' '}
                 {data.event_date
-                  ? `A tentative new date has been set for ${formatDate(data.event_date, tz)}.`
+                  ? `A tentative new date has been set for ${formatDate(data.event_date, departmentTz)}.`
                   : 'A new date has not been set yet. We will notify you when it is rescheduled.'}
               </p>
             </div>
@@ -272,11 +276,11 @@ const EventRequestStatusPage: React.FC = () => {
             <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
               <div>
                 <span className="text-theme-text-muted mb-0.5 block">Submitted</span>
-                <span className="text-theme-text-primary font-medium">{formatDate(data.created_at, tz)}</span>
+                <span className="text-theme-text-primary font-medium">{formatDate(data.created_at, departmentTz)}</span>
               </div>
               <div>
                 <span className="text-theme-text-muted mb-0.5 block">Last Updated</span>
-                <span className="text-theme-text-primary font-medium">{formatDate(data.updated_at, tz)}</span>
+                <span className="text-theme-text-primary font-medium">{formatDate(data.updated_at, departmentTz)}</span>
               </div>
               {data.date_flexibility && (
                 <div>
@@ -290,8 +294,8 @@ const EventRequestStatusPage: React.FC = () => {
                 <div>
                   <span className="text-theme-text-muted mb-0.5 block">Preferred Date</span>
                   <span className="text-theme-text-primary font-medium">
-                    {formatDate(data.preferred_date_start, tz)}
-                    {data.preferred_date_end && ` — ${formatDate(data.preferred_date_end, tz)}`}
+                    {formatCalendarDate(data.preferred_date_start)}
+                    {data.preferred_date_end && ` — ${formatCalendarDate(data.preferred_date_end)}`}
                   </span>
                 </div>
               )}
@@ -304,7 +308,9 @@ const EventRequestStatusPage: React.FC = () => {
               {data.event_date && !isPostponed && (
                 <div>
                   <span className="text-theme-text-muted mb-0.5 block">Scheduled Date</span>
-                  <span className="text-theme-accent-green font-semibold">{formatDate(data.event_date, tz)}</span>
+                  <span className="text-theme-accent-green font-semibold">
+                    {formatDate(data.event_date, departmentTz)}
+                  </span>
                 </div>
               )}
             </div>

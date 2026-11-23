@@ -28,8 +28,15 @@ tables added later are covered without editing this file.
 
 A permanent delete also removes the stored files named by the rows it
 cascades away (training submissions, training records, attendance waiver
-documents), after the commit and keeping any file another row still
-references: see ``member_files.remove_files_after_hard_delete``.
+documents), keeping any file another row still references. They are queued
+in ``pending_file_deletions`` inside the delete's own transaction and removed
+after its commit, with an hourly sweep retrying the rest: see
+``app.services.pending_file_deletions``.
+
+It also deletes the applicant records that became the member
+(:func:`delete_transferred_applications`), whose link to the member is
+``SET NULL`` and would otherwise survive the delete, detached; their document
+files are queued the same way.
 """
 
 import importlib
@@ -37,12 +44,22 @@ from dataclasses import dataclass
 from functools import lru_cache
 from uuid import UUID
 
-from sqlalchemy import func, literal, or_, select, union_all, update
+from loguru import logger
+from sqlalchemy import delete, func, literal, or_, select, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.schema import ForeignKey
 
 from app.core.database import Base
+from app.models.forms import FormSubmission
 from app.models.inventory import CheckOutRecord, InventoryItem, ItemIssuance
+from app.models.membership_pipeline import (
+    ProspectDocument,
+    ProspectFormRequest,
+    ProspectiveMember,
+    ProspectStepProgress,
+)
+from app.services import file_storage_service as file_storage
+from app.services.file_storage_service import StorageArea
 from app.utils.sql_results import rows_affected
 
 # Referential actions MySQL carries out by itself when the user row goes away.
@@ -51,6 +68,9 @@ from app.utils.sql_results import rows_affected
 _DB_HANDLED_ACTIONS = frozenset({"CASCADE", "SET NULL", "SET DEFAULT"})
 
 _USER_TABLE = "users"
+
+_APPLICATIONS_TABLE = "prospective_members"
+_APPLICATIONS_LABEL = "Applicant record, with its documents and form answers"
 
 # ``(table_name, column_name)`` pairs.
 _ReferenceSet = tuple[tuple[str, str], ...]
@@ -293,8 +313,22 @@ async def count_records_removed_with_member(
             .select_from(table)
             .where(*conditions)
         )
-    if not branches:
-        return []
+    # Not a CASCADE: the applicant record's link is SET NULL, and the delete
+    # removes it explicitly (delete_transferred_applications). Counted here so
+    # the preview says so.
+    applications = Base.metadata.tables[_APPLICATIONS_TABLE]
+    branches.append(
+        select(
+            literal(_APPLICATIONS_TABLE).label("table_name"),
+            literal("transferred_user_id").label("column_name"),
+            func.count().label("row_count"),
+        )
+        .select_from(applications)
+        .where(
+            applications.c.transferred_user_id == user_id,
+            applications.c.organization_id == organization_id,
+        )
+    )
 
     totals: dict[str, int] = {}
     for table_name, _column_name, row_count in (
@@ -304,7 +338,15 @@ async def count_records_removed_with_member(
             totals[table_name] = totals.get(table_name, 0) + int(row_count)
 
     removed = [
-        RemovedRecordCount(table=name, label=_label_for_table(name), count=count)
+        RemovedRecordCount(
+            table=name,
+            label=(
+                _APPLICATIONS_LABEL
+                if name == _APPLICATIONS_TABLE
+                else _label_for_table(name)
+            ),
+            count=count,
+        )
         for name, count in totals.items()
     ]
     return sorted(removed, key=lambda r: (-r.count, r.label))
@@ -430,3 +472,113 @@ async def return_member_inventory(
         summary.checked_in += int(ok)
 
     return summary
+
+
+@dataclass(frozen=True)
+class ApplicantRecordRemoval:
+    """What deleting a member's applicant-era records removed: the number of
+    applications, and the stored document files to queue for deletion."""
+
+    applications: int
+    document_paths: dict[str, StorageArea]
+
+
+async def delete_transferred_applications(
+    db: AsyncSession, user_id: str, organization_id: str
+) -> ApplicantRecordRemoval:
+    """Delete the applications that became this member; no commit.
+
+    ``prospective_members.transferred_user_id`` is ``SET NULL``, so deleting
+    the member would only detach the applicant record: name, contact details,
+    notes, interviews, election package, activity log, form answers and ID
+    documents would all survive, linked to nobody, and Purge takes only
+    inactive applications, so nothing could reach them again. A permanent
+    delete removes them, in the caller's transaction.
+
+    The form answers live in the Forms module and are linked only from the
+    application: its original submission, a duplicate application's
+    submission recorded on step progress, and each follow-up form's
+    submission. They are deleted first; the cascade then takes the rest.
+
+    The document files are returned rather than deleted: they can only go
+    after the caller's commit, through ``pending_file_deletions`` like the
+    member's other files. A stored path that does not confine to this
+    organization's applicant storage is never queued.
+    """
+    prospects = (
+        await db.execute(
+            select(ProspectiveMember.id, ProspectiveMember.form_submission_id)
+            .where(
+                ProspectiveMember.transferred_user_id == str(user_id),
+                ProspectiveMember.organization_id == str(organization_id),
+            )
+            .with_for_update()
+        )
+    ).all()
+    if not prospects:
+        return ApplicantRecordRemoval(applications=0, document_paths={})
+    prospect_ids = [str(row.id) for row in prospects]
+
+    document_paths: dict[str, StorageArea] = {}
+    stored = (
+        await db.execute(
+            select(ProspectDocument.file_path).where(
+                ProspectDocument.prospect_id.in_(prospect_ids)
+            )
+        )
+    ).scalars()
+    for stored_path in stored:
+        confined = file_storage.resolve(
+            stored_path, str(organization_id), StorageArea.APPLICANTS
+        )
+        if confined:
+            document_paths[confined] = StorageArea.APPLICANTS
+        elif stored_path:
+            logger.warning(
+                "Not queueing an applicant document outside organization {}'s "
+                "storage while deleting member {}",
+                organization_id,
+                user_id,
+            )
+
+    submission_ids = {
+        str(row.form_submission_id) for row in prospects if row.form_submission_id
+    }
+    progress = (
+        await db.execute(
+            select(ProspectStepProgress.action_result).where(
+                ProspectStepProgress.prospect_id.in_(prospect_ids)
+            )
+        )
+    ).scalars()
+    for action_result in progress:
+        if isinstance(action_result, dict) and action_result.get("form_submission_id"):
+            submission_ids.add(str(action_result["form_submission_id"]))
+    follow_ups = (
+        await db.execute(
+            select(ProspectFormRequest.submission_id).where(
+                ProspectFormRequest.prospect_id.in_(prospect_ids),
+                ProspectFormRequest.submission_id.isnot(None),
+            )
+        )
+    ).scalars()
+    submission_ids.update(str(submission_id) for submission_id in follow_ups)
+
+    # The prospects go first: prospective_members.form_submission_id points at
+    # the original submission, and the submissions cannot go while it does.
+    await db.execute(
+        delete(ProspectiveMember).where(
+            ProspectiveMember.id.in_(prospect_ids),
+            ProspectiveMember.organization_id == str(organization_id),
+        )
+    )
+    if submission_ids:
+        await db.execute(
+            delete(FormSubmission).where(
+                FormSubmission.id.in_(submission_ids),
+                FormSubmission.organization_id == str(organization_id),
+            )
+        )
+    return ApplicantRecordRemoval(
+        applications=len(prospect_ids), document_paths=document_paths
+    )

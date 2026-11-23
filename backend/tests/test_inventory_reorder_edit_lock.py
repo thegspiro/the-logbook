@@ -140,3 +140,28 @@ class TestRowLock:
 
         assert updated is None
         assert error == "Reorder request not found"
+
+
+class TestNullOnARequiredField:
+    """INV2-4: ``ReorderRequestUpdate`` accepts ``null`` for every field, and a
+    null aimed at a NOT NULL column reached ``setattr`` and failed at flush,
+    or earlier as a ``TypeError`` in the quantity floor. The broad ``except``
+    turned either into a 400 carrying the driver's text instead of saying
+    which field cannot be cleared. A null ``status`` also slipped past the
+    "status changes require a workflow action" check, because it is falsy."""
+
+    @pytest.mark.parametrize(
+        "field", ["item_name", "quantity_requested", "urgency", "status"]
+    )
+    async def test_null_is_refused_by_name_and_nothing_changes(self, db_session, field):
+        org = await _make_org(db_session)
+        reorder = await _make_reorder(db_session, org, requested=10, received=6)
+
+        updated, error = await _update(db_session, org, reorder, {field: None})
+
+        assert updated is None
+        assert error == f"Field '{field}' cannot be cleared"
+        await db_session.refresh(reorder)
+        assert reorder.item_name == "Nitrile gloves"
+        assert reorder.quantity_requested == 10
+        assert reorder.status is not None

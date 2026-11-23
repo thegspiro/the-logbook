@@ -204,22 +204,22 @@ const CheckRequestFormPage: React.FC = () => {
         <h1 className="text-theme-text-primary mb-6 text-xl font-bold">New Check Request</h1>
 
         <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="space-y-4">
-          <div className="flex items-start gap-3">
-            <input
-              id="isAdvance"
-              type="checkbox"
-              className="form-checkbox mt-0.5"
-              checked={isAdvance}
-              onChange={(e) => toggleAdvance(e.target.checked)}
-              aria-describedby="isAdvance-hint"
-            />
-            <div>
-              <label
-                htmlFor="isAdvance"
-                className="text-theme-text-primary touch:flex touch:min-h-11 touch:items-center text-sm font-medium"
-              >
-                {canRaiseForOthers ? 'This is a cash advance' : 'This is a cash advance to me'}
-              </label>
+          <div>
+            <label
+              htmlFor="isAdvance"
+              className="text-theme-text-primary touch:min-h-11 flex items-center gap-3 text-sm font-medium"
+            >
+              <input
+                id="isAdvance"
+                type="checkbox"
+                className="form-checkbox"
+                checked={isAdvance}
+                onChange={(e) => toggleAdvance(e.target.checked)}
+                aria-describedby="isAdvance-hint"
+              />
+              {canRaiseForOthers ? 'This is a cash advance' : 'This is a cash advance to me'}
+            </label>
+            <div className="pl-7">
               <p id="isAdvance-hint" className="text-theme-text-secondary text-xs">
                 Money paid to {canRaiseForOthers ? 'a member' : 'you'} before an expense, such as for travel.{' '}
                 {advanceDeadlineHint(returnMethod, ADVANCE_RETURN_DAYS)}{' '}

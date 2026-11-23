@@ -12,16 +12,22 @@ button produces) created the row and stopped, so nobody was assigned and
 nobody — requester or coordinator — was told a request had arrived.
 """
 
+import copy
 import html as _html
-from datetime import datetime, timedelta, timezone
-from typing import Any, Iterable, Optional
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Iterable, Optional, Union
 
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import list_within_detail_limit
-from app.models.event_request import EventRequest, EventRequestActivity
+from app.models.event import Event
+from app.models.event_request import (
+    EventRequest,
+    EventRequestActivity,
+    EventRequestStatus,
+)
 from app.models.user import Organization, User
 from app.schemas.event import MAX_EVENT_DURATION_MINUTES
 from app.services.email_policy import (
@@ -29,6 +35,7 @@ from app.services.email_policy import (
     department_required_kinds,
     member_receives_email,
 )
+from app.services.member_audience import AudienceFilter, resolve_audience
 from app.utils.member_names import format_display_name
 from app.utils.outreach_roles import (
     MAX_TOTAL_SEATS,
@@ -195,6 +202,64 @@ def configured_task_ids(org: Optional[Organization]) -> set[str]:
     """The set of pipeline task ids this department has configured."""
     tasks = get_pipeline_settings(org).get("tasks", []) or []
     return {str(t.get("id")) for t in tasks if isinstance(t, dict) and t.get("id")}
+
+
+# Owner decision, 2026-11-22: these default pipeline tasks tick themselves from
+# the request's own state, and untick when that state is undone. They are read,
+# never stored, so a postponement or a volunteer dropping out shows at once and
+# requests filed before the rule read correctly with no backfill. A department
+# that renamed one keeps the id and the behaviour; one that deleted it never
+# shows it. Plan Content and Prepare Equipment have no such state and stay
+# manual.
+AUTOMATIC_TASK_HINTS = {
+    "review_request": "Ticks itself once work on the request starts.",
+    "assign_coordinator": "Ticks itself while a coordinator is assigned.",
+    "confirm_date": "Ticks itself once the event is scheduled.",
+    "arrange_volunteers": "Ticks itself when every volunteer seat is filled.",
+}
+
+
+def automatic_task_states(
+    event_request: EventRequest, staffing: Optional[tuple[int, int]]
+) -> dict[str, bool]:
+    """Task id -> done, for each task the request's state decides right now.
+
+    ``staffing`` is the request's ``(filled, total)`` from
+    ``staffing_counts_by_request``, the count the board shows, or None when it
+    has no live signup sheet. Without a sheet with seats on it there is nothing
+    to measure volunteers against, so Arrange Volunteers stays a manual tick
+    for a department that arranges them another way.
+    """
+    status = event_request.status
+    states = {
+        "review_request": status != EventRequestStatus.SUBMITTED,
+        "assign_coordinator": event_request.assigned_to is not None,
+        "confirm_date": status
+        in (EventRequestStatus.SCHEDULED, EventRequestStatus.COMPLETED),
+    }
+    if staffing is not None and staffing[1] > 0:
+        filled, total = staffing
+        states["arrange_volunteers"] = filled >= total
+    return states
+
+
+def effective_task_completions(
+    event_request: EventRequest, staffing: Optional[tuple[int, int]]
+) -> dict[str, Any]:
+    """The checklist every reader shows: stored ticks, with the automatic ones
+    replaced by what the request's state decides.
+
+    An automatic task's stored tick, including one a coordinator made by hand
+    before the rule existed, is overridden either way, so the checklist cannot
+    say a postponed request's date is confirmed.
+    """
+    completions: dict[str, Any] = copy.deepcopy(event_request.task_completions or {})
+    for task_id, done in automatic_task_states(event_request, staffing).items():
+        if done:
+            completions[task_id] = {"completed": True, "automatic": True}
+        else:
+            completions.pop(task_id, None)
+    return completions
 
 
 # The fixed vocabularies the requester's preference fields may hold. Unlike
@@ -372,9 +437,10 @@ def normalize_request_preferences(
 def lead_time_error(
     pipeline: dict,
     date_flexibility: Optional[str],
-    preferred_date_start: Optional[datetime],
-    now: Optional[datetime] = None,
-    preferred_date_end: Optional[datetime] = None,
+    preferred_date_start: Optional[date],
+    *,
+    today: date,
+    preferred_date_end: Optional[date] = None,
 ) -> Optional[str]:
     """Reject a request whose earliest requested date is inside the lead time.
 
@@ -387,6 +453,11 @@ def lead_time_error(
     Only a request that names a date can be too soon: ``general_timeframe`` and
     ``flexible`` requesters are asking the department to pick, so there is
     nothing to measure against and nothing to refuse.
+
+    The requested dates are calendar dates, measured against ``today`` on the
+    department's calendar (``org_today``), which every caller must pass: the
+    server's date is UTC, already tomorrow for a US department each evening.
+    A datetime is still accepted and read as its own calendar date.
     """
     try:
         min_days = int(pipeline.get("min_lead_time_days") or 0)
@@ -402,10 +473,9 @@ def lead_time_error(
     if date_flexibility != "specific_dates" or requested is None:
         return None
 
-    reference = now or datetime.now(timezone.utc)
-    if requested.tzinfo is None:
-        requested = requested.replace(tzinfo=timezone.utc)
-    if requested >= reference + timedelta(days=min_days):
+    if isinstance(requested, datetime):
+        requested = requested.date()
+    if requested >= today + timedelta(days=min_days):
         return None
 
     day_word = "day" if min_days == 1 else "days"
@@ -469,15 +539,18 @@ async def apply_default_assignee(
         select(User.id).where(
             User.id == default_assignee,
             User.organization_id == str(event_request.organization_id),
+            User.is_active,
         )
     ):
-        # The coordinator left the department (or the setting predates their
-        # transfer). Leave the request unassigned rather than pointing it at
-        # somebody who is no longer there — an unassigned request is visible
-        # in the queue, one assigned to a departed member is not.
+        # The coordinator left the department: their account is now former
+        # (archived, retired, dropped, inactive), deleted, or belongs to
+        # another organization. Leave the request unassigned rather than
+        # pointing it at somebody who is no longer there — an unassigned
+        # request is visible in the queue, one assigned to a departed member
+        # is not.
         logger.warning(
-            "Default event-request coordinator {} is not in org {}; "
-            "leaving request unassigned",
+            "Default event-request coordinator {} is not a current member of "
+            "org {}; leaving request unassigned",
             default_assignee,
             event_request.organization_id,
         )
@@ -561,6 +634,7 @@ async def send_request_notification(
     org: Organization,
     extra_context: Optional[dict] = None,
     template: Any = None,
+    skip_requester: bool = False,
 ) -> bool:
     """
     Send email notification based on pipeline trigger settings.
@@ -569,6 +643,11 @@ async def send_request_notification(
     as configured. ``template``, when given, is a department's own
     EventRequestEmailTemplate and is sent as itself in place of the generic
     status email.
+
+    The requester is skipped when the request holds no email (a phone request
+    a coordinator entered) or when ``skip_requester`` is set — a coordinator
+    entering a request can decline the acknowledgement because they have just
+    told the caller everything it says. The coordinator's own copy still goes.
 
     Returns True when the configured work completed — including "the trigger is
     switched off, so there was nothing to send". Returns False only when
@@ -598,7 +677,11 @@ async def send_request_notification(
         status_label = STATUS_LABELS.get(status_value, status_value)
 
         # Notify the requester
-        if trigger_config.get("notify_requester", False):
+        if (
+            trigger_config.get("notify_requester", False)
+            and not skip_requester
+            and event_request.contact_email
+        ):
             from app.models.email_template import EmailTemplateType
             from app.services.email_template_service import (
                 DEFAULT_EVENT_REQUEST_STATUS_HTML,
@@ -735,15 +818,18 @@ async def send_request_notification(
                     html_body=body,
                 )
 
+                # Only NotificationLog's own columns: an unknown key is a
+                # TypeError that log_notification swallows with a rollback, so
+                # the notice went unrecorded and every object the caller held
+                # was expired under it.
                 await notifications_service.log_notification(
                     organization_id=org.id,
                     log_data={
                         "recipient_id": assignee.id,
                         "channel": "email",
                         "category": "events",
-                        "trigger": "event_reminder",
                         "subject": subject,
-                        "body": f"New event request from {event_request.contact_name}",
+                        "message": f"New event request from {event_request.contact_name}",
                     },
                 )
         return True
@@ -795,6 +881,11 @@ def get_outreach_roles(org: Optional[Organization]) -> list[dict[str, str]]:
 def outreach_role_label(org: Optional[Organization], role: Optional[str]) -> str:
     """The department's label for a role, or a humanized fallback."""
     return role_label(get_outreach_roles(org), role)
+
+
+def outreach_timezone(org: Optional[Organization]):
+    """The timezone an outreach sheet's calendar date is read in."""
+    return _org_timezone(org)
 
 
 def _org_timezone(org: Optional[Organization]):
@@ -856,57 +947,40 @@ def validate_staffing_roles(
     return normalized
 
 
-async def open_staffing_shift(
+async def create_outreach_shift(
     db: AsyncSession,
-    event_request: EventRequest,
+    organization_id: str,
     org: Optional[Organization],
-    staffing_roles: Any,
+    start: datetime,
+    end: Optional[datetime],
+    roles: list[dict[str, Any]],
+    note_lines: list[str],
     actor_id: str,
-    notes: Optional[str] = None,
 ):
-    """Create the shift members sign up on to cover a scheduled request.
+    """Create the shift members sign up on to staff an outreach event.
 
-    Returns ``(shift, error)``. The shift is ``open_to_all_members`` so the
-    eligibility service returns its seats to every member — an outreach event
-    is staffed by whoever can come, not by operational rank — and self-signup
-    capacity is what caps it at the number of seats requested.
+    Shared by a request's sheet and an event's own (owner decision,
+    2026-11-20), so the two are the same kind of shift to every reader. The
+    shift is ``open_to_all_members`` so the eligibility service returns its
+    seats to every member — an outreach event is staffed by whoever can come,
+    not by operational rank — and self-signup capacity is what caps it at the
+    number of seats requested. It gets one plain ``volunteer`` seat per person;
+    the caller stores ``roles`` to say which seat is which job.
 
-    ``staffing_roles`` says what the day needs by job ("2 tour guides, 1
-    educator"). It is stored on the request; the shift gets one plain
-    ``volunteer`` seat per person so every operational reader still
-    understands it.
+    Returns ``(shift, error)``.
     """
     from app.services.scheduling_service import SchedulingService
 
-    if not event_request.event_date:
-        return None, "Confirm a date before opening volunteer signups."
-
-    try:
-        roles = validate_staffing_roles(org, staffing_roles)
-    except ValueError as e:
-        return None, str(e)
     seat_count = sum(entry["count"] for entry in roles)
-
     tz = _org_timezone(org)
-    start = event_request.event_date
     if start.tzinfo is None:
         start = start.replace(tzinfo=timezone.utc)
-    end = event_request.event_end_date or (start + timedelta(hours=2))
+    end = end or (start + timedelta(hours=2))
     if end.tzinfo is None:
         end = end.replace(tzinfo=timezone.utc)
 
-    label = outreach_type_label(org, event_request.outreach_type)
-    who = event_request.organization_name or event_request.contact_name
-    note_lines = [f"Community outreach: {label} for {who}."]
-    note_lines.append("Roles needed: " + describe_roles(org, roles))
-    if notes:
-        note_lines.append(notes)
-    if event_request.venue_address:
-        note_lines.append(f"Location: {event_request.venue_address}")
-
-    service = SchedulingService(db)
-    shift, error = await service.create_shift(
-        event_request.organization_id,
+    shift, error = await SchedulingService(db).create_shift(
+        organization_id,
         {
             # Stored as the calendar date in the department's own timezone: an
             # evening event stamped from a UTC date lands on the following day
@@ -925,6 +999,52 @@ async def open_staffing_shift(
     )
     if error or shift is None:
         return None, error or "Unable to create the volunteer signup shift."
+    return shift, None
+
+
+async def open_staffing_shift(
+    db: AsyncSession,
+    event_request: EventRequest,
+    org: Optional[Organization],
+    staffing_roles: Any,
+    actor_id: str,
+    notes: Optional[str] = None,
+):
+    """Create the shift members sign up on to cover a scheduled request.
+
+    Returns ``(shift, error)``. ``staffing_roles`` says what the day needs by
+    job ("2 tour guides, 1 educator"); it is stored on the request.
+    """
+    if not event_request.event_date:
+        return None, "Confirm a date before opening volunteer signups."
+
+    try:
+        roles = validate_staffing_roles(org, staffing_roles)
+    except ValueError as e:
+        return None, str(e)
+    seat_count = sum(entry["count"] for entry in roles)
+
+    label = outreach_type_label(org, event_request.outreach_type)
+    who = event_request.organization_name or event_request.contact_name
+    note_lines = [f"Community outreach: {label} for {who}."]
+    note_lines.append("Roles needed: " + describe_roles(org, roles))
+    if notes:
+        note_lines.append(notes)
+    if event_request.venue_address:
+        note_lines.append(f"Location: {event_request.venue_address}")
+
+    shift, error = await create_outreach_shift(
+        db,
+        event_request.organization_id,
+        org,
+        event_request.event_date,
+        event_request.event_end_date,
+        roles,
+        note_lines,
+        actor_id,
+    )
+    if error or shift is None:
+        return None, error
 
     event_request.staffing_shift_id = shift.id
     event_request.staffing_roles = roles
@@ -953,6 +1073,11 @@ def describe_roles(org: Optional[Organization], roles: Any) -> str:
     )
 
 
+def released_seat_statuses() -> list[Any]:
+    """Assignment statuses that no longer hold a seat on a signup sheet."""
+    return _released_seat_statuses()
+
+
 def _released_seat_statuses() -> list[Any]:
     """Assignment statuses that no longer hold a seat on a signup sheet.
 
@@ -967,10 +1092,15 @@ def _released_seat_statuses() -> list[Any]:
 
 async def get_staffing_state(
     db: AsyncSession,
-    event_request: EventRequest,
+    event_request: Union[EventRequest, Event],
     org: Optional[Organization] = None,
 ) -> dict[str, Any]:
-    """Who has signed up to cover this request, and which roles are still open."""
+    """Who has signed up to cover this request, and which roles are still open.
+
+    ``event_request`` is whichever owns the sheet: a request, or an outreach
+    event that opened one directly. Both carry ``staffing_shift_id`` and
+    ``staffing_roles``; only a request records a volunteer call.
+    """
     from app.models.training import ShiftAssignment
 
     empty: dict[str, Any] = {
@@ -980,7 +1110,9 @@ async def get_staffing_state(
         "slots_filled": 0,
         "roles": [],
         "volunteers": [],
-        "volunteer_call_sent_at": event_request.volunteer_call_sent_at,
+        "volunteer_call_sent_at": getattr(
+            event_request, "volunteer_call_sent_at", None
+        ),
     }
     if not event_request.staffing_shift_id:
         return empty
@@ -1067,16 +1199,22 @@ async def get_staffing_state(
         "slots_filled": len(volunteers),
         "roles": roles,
         "volunteers": volunteers,
-        "volunteer_call_sent_at": event_request.volunteer_call_sent_at,
+        "volunteer_call_sent_at": getattr(
+            event_request, "volunteer_call_sent_at", None
+        ),
     }
 
 
 async def staffing_counts_by_request(
     db: AsyncSession,
     organization_id: str,
-    requests: Iterable[EventRequest],
+    requests: Iterable[Union[EventRequest, Event]],
 ) -> dict[str, tuple[int, int]]:
     """``(filled, total)`` seats on each request's live signup sheet.
+
+    Keyed by the owner's id, so it answers as well for an outreach event that
+    opened a sheet directly (both carry ``staffing_shift_id``); the Outreach
+    Overview passes a mix of the two.
 
     The requests list shows "4 of 6 signed up" on every scheduled row, and
     calling ``get_staffing_state`` once per row would cost two queries a row.
@@ -1176,7 +1314,7 @@ async def send_volunteer_call(
     org: Optional[Organization],
     actor: User,
     message: Optional[str] = None,
-    membership_types: Optional[list[str]] = None,
+    audience: Optional[AudienceFilter] = None,
 ) -> dict[str, Any]:
     """Email the membership asking who can help cover a scheduled request.
 
@@ -1195,28 +1333,12 @@ async def send_volunteer_call(
     if not event_request.event_date:
         raise ValueError("Confirm a date before asking the membership for help.")
 
-    query = select(User).where(
-        User.organization_id == str(event_request.organization_id),
-        User.is_active,
-        User.email.isnot(None),
+    audience = audience or AudienceFilter()
+    resolved = await resolve_audience(
+        db, org, str(event_request.organization_id), audience
     )
-    if membership_types:
-        query = query.where(User.membership_type.in_(membership_types))
-    members = list((await db.execute(query)).scalars().all())
-
-    recipients: list[str] = []
-    skipped = 0
-    for member in members:
-        if not member.email:
-            continue
-        if not member_receives_email(
-            member.notification_preferences,
-            EmailKind.VOLUNTEER_CALLS,
-            department_required_kinds(org),
-        ):
-            skipped += 1
-            continue
-        recipients.append(member.email)
+    recipients = resolved.emails
+    skipped = resolved.skipped_opted_out
 
     if not recipients:
         raise ValueError("No members are available to email about this event.")
@@ -1319,7 +1441,7 @@ async def send_volunteer_call(
             details={
                 "recipients": len(recipients),
                 "skipped_opted_out": skipped,
-                "membership_types": membership_types,
+                **audience.as_record(),
             },
             performed_by=str(actor.id),
         )
@@ -1354,7 +1476,7 @@ async def resolve_outreach_signup_role(
     # and — because the shift's generic capacity is shared across roles — can
     # leave another role with no seat left to fill. Serializing on the request
     # row makes the pair atomic; every claim for one sheet contends on one row.
-    event_request = await db.scalar(
+    owner: Union[EventRequest, Event, None] = await db.scalar(
         select(EventRequest)
         .where(
             EventRequest.staffing_shift_id == str(shift.id),
@@ -1362,9 +1484,18 @@ async def resolve_outreach_signup_role(
         )
         .with_for_update()
     )
-    needed = normalize_staffing_roles(
-        event_request.staffing_roles if event_request else None
-    )
+    if owner is None:
+        # A sheet an outreach event opened directly, with no request behind it
+        # (owner decision, 2026-11-20). Locked the same way, on its event row.
+        owner = await db.scalar(
+            select(Event)
+            .where(
+                Event.staffing_shift_id == str(shift.id),
+                Event.organization_id == str(organization_id),
+            )
+            .with_for_update()
+        )
+    needed = normalize_staffing_roles(owner.staffing_roles if owner else None)
     if not needed:
         # A sheet opened before roles existed, or whose request has since been
         # unlinked. Those seats are plain volunteer seats and the generic
@@ -1470,7 +1601,7 @@ async def sync_staffing_shift_cancelled(
 
 
 async def get_live_staffing_shift(
-    db: AsyncSession, event_request: EventRequest
+    db: AsyncSession, event_request: Union[EventRequest, Event]
 ) -> Optional[Any]:
     """The signup sheet this request is linked to, when it is still standing.
 
@@ -1577,7 +1708,6 @@ async def get_linked_calendar_event(
     """
     if not event_request.event_id:
         return None
-    from app.models.event import Event
 
     return await db.scalar(
         select(Event).where(
@@ -1807,3 +1937,46 @@ async def sync_calendar_event_cancelled(
             event_request.id,
             e,
         )
+
+
+async def complete_request_for_finalized_event(
+    db: AsyncSession, event: Any, actor_id: Optional[str]
+) -> None:
+    """Close the request an outreach event came from once its attendance is final.
+
+    Owner decision, 2026-11-20: finalizing an event's attendance is what
+    closes the outreach request it was scheduled from, so the coordinator does
+    not have to come back and press Mark completed. Only a request still
+    *scheduled* moves — one already completed, cancelled or postponed is left
+    as its coordinator set it — so running this again changes nothing
+    (pitfall #36). The requester is told as for a manual completion. Commits;
+    the caller runs it after the finalize is durable and absorbs a failure.
+    """
+    request = await db.scalar(
+        select(EventRequest)
+        .where(
+            EventRequest.event_id == str(event.id),
+            EventRequest.organization_id == str(event.organization_id),
+            EventRequest.status == EventRequestStatus.SCHEDULED,
+        )
+        .with_for_update()
+    )
+    if request is None:
+        return
+    request.status = EventRequestStatus.COMPLETED
+    db.add(
+        EventRequestActivity(
+            request_id=request.id,
+            action="status_changed_to_completed",
+            old_status=EventRequestStatus.SCHEDULED.value,
+            new_status=EventRequestStatus.COMPLETED.value,
+            notes="Completed when the event's attendance was finalized",
+            performed_by=str(actor_id) if actor_id else None,
+        )
+    )
+    await db.commit()
+    org = await db.scalar(
+        select(Organization).where(Organization.id == str(event.organization_id))
+    )
+    if org is not None:
+        await send_request_notification(db, request, "on_completed", org)

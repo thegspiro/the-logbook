@@ -586,6 +586,12 @@ app/api/v1/endpoints/training.py::list_requirements
 app/api/v1/endpoints/training.py::revoke_requirement_override
 
 app/api/v1/endpoints/training_enhancements.py::create_effectiveness_evaluation
+# Removing a training record's file (2026-11-21, owner decision (d)): the
+# record is loaded org-scoped by _load_record_for_attachment (404 otherwise,
+# 403 unless the record's member or training.manage), and _removal_refusal
+# then allows training.manage any record-own file and the member only a file
+# they uploaded; approval-copied certificates and voided records are refused.
+app/api/v1/endpoints/training_enhancements.py::delete_record_attachment
 app/api/v1/endpoints/training_enhancements.py::download_record_attachment
 app/api/v1/endpoints/training_enhancements.py::get_competency_matrices
 app/api/v1/endpoints/training_enhancements.py::get_effectiveness_evaluations
@@ -708,6 +714,28 @@ app/api/v1/endpoints/history_documents.py::list_document_revisions
 app/api/v1/endpoints/history_documents.py::list_document_types
 app/api/v1/endpoints/history_documents.py::list_documents
 app/api/v1/endpoints/history_documents.py::person_documents
+# History phase 5 (events, apparatus, timelines): reading published history needs
+# no permission, as for people, photos and documents. Every handler filters to
+# records published to members or the public unless the caller holds
+# history.view/manage/publish, and the timeline, "today" and per-record timelines
+# compute each entry from a record the caller may read (a line-of-duty death
+# also by its death date's own visibility). The revision lists answer only a
+# keeper or a clearance-step holder. The three list reads are the department's
+# station names and type lists, which any member's screens show.
+app/api/v1/endpoints/history_events.py::apparatus_timeline
+app/api/v1/endpoints/history_events.py::get_apparatus
+app/api/v1/endpoints/history_events.py::get_event
+app/api/v1/endpoints/history_events.py::list_apparatus
+app/api/v1/endpoints/history_events.py::list_apparatus_revisions
+app/api/v1/endpoints/history_events.py::list_apparatus_types
+app/api/v1/endpoints/history_events.py::list_event_revisions
+app/api/v1/endpoints/history_events.py::list_event_types
+app/api/v1/endpoints/history_events.py::list_events
+app/api/v1/endpoints/history_events.py::list_stations
+app/api/v1/endpoints/history_events.py::person_timeline
+app/api/v1/endpoints/history_events.py::timeline
+app/api/v1/endpoints/history_events.py::timeline_decades
+app/api/v1/endpoints/history_events.py::today_in_history
 
 # Added 2026-11-04 (owner decisions of 2026-11-01). Each is meant for every
 # member and scoped inside the handler:
@@ -730,11 +758,31 @@ app/api/v1/endpoints/scheduling.py::review_time_off_request
 # request; list-me returns the caller's own; list and get return only requests
 # the caller may decide (every one for members.manage), 404 for any other; a
 # vote by anyone outside the request's approvers is 404 (409 for the member or
-# a members.manage holder who is not one of them).
+# a members.manage holder who is not one of them). Added 2026-11-16: question
+# and changes act only for the request's approvers, on the same terms as a
+# vote; answer and changes/respond only for the request's own member (404 for
+# anyone else); summary returns counts for the caller alone and no request.
+# Added 2026-11-17: end-early acts only on a leave whose user_id is the
+# caller's, in the caller's organization (404 for any other), and only where
+# the department takes leave requests.
+# Added 2026-11-21: approver covers. The board shows a non-manager only covers
+# naming them (as approver or stand-in) in their own organization; setting one
+# for anyone but oneself, and clearing one, require members.manage in the
+# service; the stand-in must hold members.manage; a cover in another
+# organization is a 404.
+app/api/v1/endpoints/leave_requests.py::answer_leave_request_question
+app/api/v1/endpoints/leave_requests.py::ask_leave_request_question
+app/api/v1/endpoints/leave_requests.py::clear_leave_approver_cover
 app/api/v1/endpoints/leave_requests.py::create_leave_request
+app/api/v1/endpoints/leave_requests.py::end_own_leave_early
+app/api/v1/endpoints/leave_requests.py::get_leave_approver_covers
 app/api/v1/endpoints/leave_requests.py::get_leave_request
 app/api/v1/endpoints/leave_requests.py::get_leave_request_config
+app/api/v1/endpoints/leave_requests.py::get_leave_request_summary
 app/api/v1/endpoints/leave_requests.py::list_leave_requests_to_decide
 app/api/v1/endpoints/leave_requests.py::list_my_leave_requests
+app/api/v1/endpoints/leave_requests.py::propose_leave_request_changes
+app/api/v1/endpoints/leave_requests.py::respond_to_leave_request_changes
+app/api/v1/endpoints/leave_requests.py::set_leave_approver_cover
 app/api/v1/endpoints/leave_requests.py::vote_on_leave_request
 app/api/v1/endpoints/leave_requests.py::withdraw_leave_request

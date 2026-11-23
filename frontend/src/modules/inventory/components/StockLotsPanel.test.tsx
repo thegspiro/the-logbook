@@ -6,6 +6,7 @@ import type { InventoryLot } from '@/services/eventServices';
 const mockGetItemLots = vi.fn();
 const mockGetItemDeployments = vi.fn();
 const mockDeleteItemLot = vi.fn();
+const mockUpdateItemLot = vi.fn();
 const mockToastError = vi.fn();
 
 vi.mock('@/services/inventoryService', () => ({
@@ -15,6 +16,7 @@ vi.mock('@/services/inventoryService', () => ({
     updateLot: vi.fn(),
     deleteLot: vi.fn(),
     deleteItemLot: (...a: unknown[]) => mockDeleteItemLot(...a) as unknown,
+    updateItemLot: (...a: unknown[]) => mockUpdateItemLot(...a) as unknown,
   },
 }));
 vi.mock('../services/equipmentCheckApi', () => ({
@@ -104,5 +106,69 @@ describe('StockLotsPanel deleting a lot received against a reorder', () => {
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(refusal));
     expect(mockDeleteItemLot).toHaveBeenCalledWith('r');
     expect(screen.getByRole('button', { name: 'Delete lot RX-1' })).toBeInTheDocument();
+  });
+});
+
+// INV2-7: the quantity was computed inside the setLots updater and read
+// straight after. React 19 runs an updater eagerly only when nothing else is
+// queued, so from the second press on `target` was still null and the PATCH
+// was never sent: the screen counted down while the server kept the first
+// value, and a reload put it back.
+describe('StockLotsPanel adjusting a lot quantity', () => {
+  beforeEach(() => {
+    mockGetItemLots.mockReset();
+    mockGetItemLots.mockResolvedValue([lot({ id: 'a', lot_number: 'TQ-A', quantity: 5 })]);
+    mockGetItemDeployments.mockReset();
+    mockGetItemDeployments.mockResolvedValue([]);
+    mockUpdateItemLot.mockReset();
+    mockUpdateItemLot.mockResolvedValue({});
+  });
+
+  it('saves every press, not only the first', async () => {
+    renderWithRouter(<StockLotsPanel itemId="item-1" canManage />);
+    const decrease = await screen.findByRole('button', { name: 'Decrease lot TQ-A' });
+
+    for (const expected of [4, 3, 2]) {
+      fireEvent.click(decrease);
+      await waitFor(() => expect(mockUpdateItemLot).toHaveBeenLastCalledWith('a', { quantity: expected }));
+    }
+
+    expect(mockUpdateItemLot).toHaveBeenCalledTimes(3);
+  });
+
+  it('sends rapid presses in order, each from the one before', async () => {
+    renderWithRouter(<StockLotsPanel itemId="item-1" canManage />);
+    const increase = await screen.findByRole('button', { name: 'Increase lot TQ-A' });
+
+    fireEvent.click(increase);
+    fireEvent.click(increase);
+    fireEvent.click(increase);
+
+    await waitFor(() => expect(mockUpdateItemLot).toHaveBeenCalledTimes(3));
+    expect(mockUpdateItemLot.mock.calls.map((call) => (call[1] as { quantity: number }).quantity)).toEqual([6, 7, 8]);
+  });
+
+  // The +/- buttons are on screen from the commit that renders the lots, but
+  // the ref a press reads was filled by a passive effect, which React runs in
+  // a later task. A press in between found no lot and was dropped without a
+  // word. A loaded CI runner widened the gap enough to fail the test above.
+  // The MutationObserver presses in the microtask after the commit, before
+  // any scheduled task, which is the earliest a person's tap could land.
+  it('saves a press made as soon as the lots appear', async () => {
+    const pressed = new Promise<void>((resolve) => {
+      const observer = new MutationObserver(() => {
+        const decrease = screen.queryByRole('button', { name: 'Decrease lot TQ-A' });
+        if (!decrease) return;
+        observer.disconnect();
+        fireEvent.click(decrease);
+        resolve();
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    });
+    renderWithRouter(<StockLotsPanel itemId="item-1" canManage />);
+
+    await pressed;
+
+    await waitFor(() => expect(mockUpdateItemLot).toHaveBeenCalledWith('a', { quantity: 4 }));
   });
 });

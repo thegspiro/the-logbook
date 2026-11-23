@@ -12,11 +12,31 @@
  */
 
 import type { LucideIcon } from 'lucide-react';
-import { CalendarDays, CalendarPlus, History, Inbox, Megaphone, Nfc, QrCode, ScanLine, Settings } from 'lucide-react';
+import {
+  CalendarDays,
+  CalendarPlus,
+  CalendarRange,
+  History,
+  Inbox,
+  Megaphone,
+  Nfc,
+  QrCode,
+  ScanLine,
+  Settings,
+  Truck,
+} from 'lucide-react';
 import type { AdminHubCardTab } from '../components/admin/AdminHubCardTabs';
 
 export type EventsAdminTab =
-  'create' | 'past_events' | 'requests' | 'analytics' | 'community' | 'card_checkins' | 'settings';
+  | 'create'
+  | 'past_events'
+  | 'overview'
+  | 'requests'
+  | 'analytics'
+  | 'community'
+  | 'apparatus_events'
+  | 'card_checkins'
+  | 'settings';
 
 /**
  * Settings is always last — the frame's rule, on every module. Every tab is
@@ -32,13 +52,30 @@ export const EVENTS_ADMIN_TABS: AdminHubCardTab<EventsAdminTab>[] = [
     icon: CalendarPlus,
   },
   { id: 'past_events', label: 'Past Events', description: 'Events that have already happened', icon: History },
-  { id: 'requests', label: 'Requests', description: 'Community requests for outreach events', icon: Inbox },
+  {
+    id: 'overview',
+    label: 'Overview',
+    description: 'What needs you now, and the outreach calendar',
+    icon: CalendarRange,
+  },
+  {
+    id: 'requests',
+    label: 'Outreach Requests',
+    description: 'Requests from the community for outreach events',
+    icon: Inbox,
+  },
   { id: 'analytics', label: 'QR Code Analytics', description: 'Check-ins by QR code, device and error', icon: QrCode },
   {
     id: 'community',
-    label: 'Community Engagement',
-    description: 'How far public outreach events reach',
+    label: 'Outreach Impact',
+    description: 'What community outreach reached, and what it took',
     icon: Megaphone,
+  },
+  {
+    id: 'apparatus_events',
+    label: 'Apparatus Events',
+    description: 'Outreach that uses an apparatus and a crew, but is not a shift',
+    icon: Truck,
   },
   {
     id: 'card_checkins',
@@ -87,9 +124,9 @@ export const EVENTS_ADMIN_AREAS: EventsAdminArea[] = [
   {
     id: 'outreach',
     label: 'Community Outreach',
-    description: 'Requests from the public, and how far outreach reaches',
+    description: 'Requests from the community, outreach events, and their impact',
     icon: Megaphone,
-    destinations: [tabById('requests'), tabById('community')],
+    destinations: [tabById('overview'), tabById('requests'), tabById('community'), tabById('apparatus_events')],
   },
   {
     id: 'check_ins',

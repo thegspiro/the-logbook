@@ -74,9 +74,16 @@ const fingerprintOf = (m: Measurement) => `${m.textLength}:${m.totalTargets}`;
  * Changing it moves the `@sweep` test count that ci.yml's matrix is derived
  * from.
  */
-const PARTS = 2;
+const PARTS = 5;
 
 test.describe('mobile presentation', () => {
+  // No retries, as in the other two sweeps. A part that runs out its budget
+  // would otherwise run twice more: on 2026-11-22 the second of two parts did
+  // (run 44940079030), and the leg was cancelled at the job cap with the
+  // timeout unreported. A pass on a retry fails the job anyway
+  // (failOnFlakyTests).
+  test.describe.configure({ retries: 0 });
+
   for (let part = 0; part < PARTS; part++) {
     const routes = routesInPart(part, PARTS);
     // The route filter in mobile-routes.ts can leave a slice empty.
@@ -104,7 +111,15 @@ test.describe('mobile presentation', () => {
       // Split into PARTS tests on 2026-11-19, when the whole pass was an
       // 18-minute CI job: half is about 9 minutes, and 2x that is 18. An
       // estimate from the whole, to be replaced by measured per-part times.
-      test.setTimeout(1_080_000);
+      //
+      // Re-split into five on 2026-11-22, by owner decision, from those
+      // measured times. On #4544's run (44977001718) part 1 took 12.8 min and
+      // part 2 ran out its 18 two routes from the end, ~18.5 min: ~31 min in
+      // all, so a fifth is ~6.3 and 2x that is 13. On main the same day part
+      // 2 took 17.2 min against 18, so the next route added would have timed
+      // it out wherever it landed. Five parts keep the 2x margin without
+      // raising the leg cap: ci.yml has five sweep legs to match.
+      test.setTimeout(780_000);
       await page.setViewportSize(PHONE);
       // The fixture user has no permissions by default (`signIn` sets
       // `permissions: []`, overriding TEST_USER's list), so a manager-gated route

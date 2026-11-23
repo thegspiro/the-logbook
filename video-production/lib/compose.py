@@ -1,13 +1,18 @@
-"""Assemble a short from its capture, narration and overlays.
+"""Assemble a short or a guide from its capture, narration and overlays.
 
-Usage: python compose.py <short-dir> <build-dir> <v|h> <out.mp4>
+Usage: python compose.py <video-dir> <build-dir> <v|h> <out.mp4>
 
 Reads from <build-dir>: frames.json and frames/ (the capture),
 audio/durations.json and audio/<shot>.wav (the narration), and
 overlays/<v|h>/*.png with overlays/layout.json (the branding).
+
+A guide ("kind": "guide" in shots.json) also writes <out>.chapters.txt, the
+section start times in YouTube's chapter format, and <out>.srt, the narration
+as subtitles.
 """
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -16,6 +21,8 @@ FPS = 30
 CALLOUT_MIN = 2.0  # seconds the closing callout stays up
 END_CARD = 2.5  # the script's production notes ask for about two seconds
 VOICE_LEAD = 0.12  # a line starts just after its cut, not on it
+TITLE_CARD = 3.0  # a guide opens on its chapter title over the first line
+BANNER = 3.5  # seconds a guide's section banner stays over the screen
 
 
 def ffmpeg(*args: str) -> None:
@@ -96,13 +103,27 @@ def main(short_dir: Path, build: Path, fmt: str, out: Path) -> None:
         str(screen),
     )
 
-    # Caption windows: each line from its shot's start to the next shot's
-    # start; the last gives way to the callout.
-    windows = []
-    for i, s in enumerate(shots):
-        end = at[shots[i + 1]] if i + 1 < len(shots) else callout_start
-        windows.append((f"cap-{s}.png", at[s], end))
-    windows.append(("callout.png", callout_start, main_end))
+    # Overlay windows: (layer, from, to, x, y, fades out). A short captions
+    # each line from its shot's start to the next shot's start, the last giving
+    # way to the callout. A guide opens on its title card and announces each
+    # section with a banner instead; its narration goes to the .srt.
+    windows: list[tuple[str, float, float, int, int, bool]] = []
+    guide = spec.get("kind") == "guide"
+    if guide:
+        B = layout["banner"]
+        windows.append(("title.png", 0.0, TITLE_CARD, 0, 0, True))
+        for s in spec["shots"]:
+            if s.get("section"):
+                a = max(at[s["id"]], TITLE_CARD)
+                windows.append(
+                    (f"sec-{s['id']}.png", a, a + BANNER, B["x"], B["y"], True)
+                )
+        windows.append(("callout.png", callout_start, main_end, B["x"], B["y"], False))
+    else:
+        for i, s in enumerate(shots):
+            end = at[shots[i + 1]] if i + 1 < len(shots) else callout_start
+            windows.append((f"cap-{s}.png", at[s], end, C["x"], C["y"], False))
+        windows.append(("callout.png", callout_start, main_end, C["x"], C["y"], False))
 
     inputs = [
         *looped(ov / "bg.png", total),
@@ -110,7 +131,7 @@ def main(short_dir: Path, build: Path, fmt: str, out: Path) -> None:
         str(screen),
         *looped(ov / "mask.png", total),
     ]
-    for name, _, _ in windows:
+    for name, *_ in windows:
         inputs += looped(ov / name, total)
     end_idx = 3 + len(windows)
     inputs += looped(ov / "end.png", total)
@@ -125,10 +146,13 @@ def main(short_dir: Path, build: Path, fmt: str, out: Path) -> None:
         f"[0:v][scrm]overlay={S['x']}:{S['y']}:shortest=1[v0]",
     ]
     cur = "v0"
-    for i, (_, a, b) in enumerate(windows):
-        g.append(f"[{3 + i}:v]format=rgba,fade=in:st={a:.3f}:d=0.15:alpha=1[c{i}]")
+    for i, (_, a, b, x, y, fades) in enumerate(windows):
+        fade = f"fade=in:st={a:.3f}:d=0.15:alpha=1"
+        if fades:
+            fade += f",fade=out:st={b - 0.4:.3f}:d=0.4:alpha=1"
+        g.append(f"[{3 + i}:v]format=rgba,{fade}[c{i}]")
         g.append(
-            f"[{cur}][c{i}]overlay={C['x']}:{C['y']}"
+            f"[{cur}][c{i}]overlay={x}:{y}"
             f":enable='between(t,{a:.3f},{b:.3f})'[v{i + 1}]"
         )
         cur = f"v{i + 1}"
@@ -178,7 +202,55 @@ def main(short_dir: Path, build: Path, fmt: str, out: Path) -> None:
         str(out),
     )
 
+    if guide:
+        write_chapters(spec, at, out.with_suffix(".chapters.txt"))
+        write_srt(spec, at, dur, out.with_suffix(".srt"))
     print(json.dumps({"out": str(out), "seconds": round(total, 2)}))
+
+
+def clock(t: float) -> str:
+    m, s = divmod(int(t), 60)
+    return f"{m}:{s:02d}"
+
+
+def write_chapters(spec: dict, at: dict, path: Path) -> None:
+    """Section starts as YouTube reads them from a description: one per line,
+    the first at 0:00, at least three, each at least ten seconds long."""
+    rows = [(at[s["id"]], s["section"]) for s in spec["shots"] if s.get("section")]
+    if rows:
+        rows[0] = (0.0, rows[0][1])
+    path.write_text("".join(f"{clock(t)} {title}\n" for t, title in rows), "utf-8")
+
+
+def srt_time(t: float) -> str:
+    ms = int(round(t * 1000))
+    h, ms = divmod(ms, 3_600_000)
+    m, ms = divmod(ms, 60_000)
+    s, ms = divmod(ms, 1000)
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def write_srt(spec: dict, at: dict, dur: dict, path: Path) -> None:
+    """Each line's sentences, timed across its narration in proportion to
+    their length. The voice keeps an even pace, so this lands within a beat of
+    the speech without a second transcription pass."""
+    cues = []
+    for s in spec["shots"]:
+        sentences = [x for x in re.split(r"(?<=[.!?])\s+", s["say"].strip()) if x]
+        start = at[s["id"]] + VOICE_LEAD
+        span = dur[s["id"]]
+        total_chars = sum(len(x) for x in sentences) or 1
+        for text in sentences:
+            length = span * len(text) / total_chars
+            cues.append((start, start + length, text))
+            start += length
+    path.write_text(
+        "".join(
+            f"{i}\n{srt_time(a)} --> {srt_time(b)}\n{text}\n\n"
+            for i, (a, b, text) in enumerate(cues, 1)
+        ),
+        "utf-8",
+    )
 
 
 if __name__ == "__main__":

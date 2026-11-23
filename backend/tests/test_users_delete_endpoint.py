@@ -20,6 +20,7 @@ from fastapi import HTTPException
 from app.api.v1.endpoints import users as users_endpoint
 from app.models.user import UserStatus
 from app.services.member_files import FileRemoval, MemberFiles
+from app.services.user_deletion_service import ApplicantRecordRemoval
 from tests.fake_request import fake_request
 
 
@@ -34,6 +35,7 @@ def _db(*results):
     db = MagicMock()
     db.execute = AsyncMock(side_effect=list(results))
     db.delete = AsyncMock()
+    db.flush = AsyncMock()
     db.commit = AsyncMock()
     db.rollback = AsyncMock()
     return db
@@ -95,7 +97,19 @@ class TestDeleteUserHard:
         )
         monkeypatch.setattr(
             users_endpoint,
-            "remove_files_after_hard_delete",
+            "delete_transferred_applications",
+            AsyncMock(
+                return_value=ApplicantRecordRemoval(applications=0, document_paths={})
+            ),
+        )
+        monkeypatch.setattr(
+            users_endpoint,
+            "enqueue_pending_file_deletions",
+            MagicMock(return_value=[]),
+        )
+        monkeypatch.setattr(
+            users_endpoint,
+            "process_pending_file_deletions",
             AsyncMock(return_value=FileRemoval()),
         )
 
@@ -163,6 +177,99 @@ class TestDeleteUserHard:
             db, str(target.id), "org-1", performed_by="admin-1"
         )
         assert order == ["return", "delete", "commit"]
+
+    async def test_the_audit_row_is_written_inside_the_delete_transaction(
+        self, monkeypatch
+    ):
+        """Owner decision 2026-11-21 (e): user_hard_deleted commits with the
+        delete, so a process killed after the commit cannot lose it. The
+        file outcome, known only after the commit, follows in its own event,
+        linked to the first by id."""
+        order: list[str] = []
+        audit_row = SimpleNamespace(id=812)
+
+        async def audit(*args, **kwargs):
+            order.append(f"audit:{kwargs['event_type']}")
+            return audit_row
+
+        monkeypatch.setattr(
+            users_endpoint, "log_audit_event", AsyncMock(side_effect=audit)
+        )
+        monkeypatch.setattr(
+            users_endpoint,
+            "enqueue_pending_file_deletions",
+            MagicMock(return_value=["row-1", "row-2"]),
+        )
+        monkeypatch.setattr(
+            users_endpoint,
+            "process_pending_file_deletions",
+            AsyncMock(
+                side_effect=lambda *a, **k: order.append("process")
+                or FileRemoval(deleted=1, not_deleted=0, shared_kept=1)
+            ),
+        )
+        target = _member()
+        db = _db(_result(scalar_one=target))
+        db.delete = AsyncMock(side_effect=lambda *_: order.append("delete"))
+        db.flush = AsyncMock(side_effect=lambda: order.append("flush"))
+        db.commit = AsyncMock(side_effect=lambda: order.append("commit"))
+
+        await users_endpoint.delete_user(
+            user_id=target.id,
+            hard=True,
+            db=db,
+            current_user=_member(id="admin-1"),
+            request=fake_request(),
+        )
+
+        assert order == [
+            "delete",
+            "flush",
+            "audit:user_hard_deleted",
+            "commit",
+            "process",
+            "audit:pending_file_deletions_completed",
+        ]
+        calls = users_endpoint.log_audit_event.await_args_list
+        deleted = calls[0].kwargs["event_data"]
+        assert deleted["files_queued"] == 2
+        for moved in ("files_deleted", "files_not_deleted", "files_shared_kept"):
+            assert moved not in deleted
+        outcome = calls[1].kwargs["event_data"]
+        assert outcome == {
+            "files_deleted": 1,
+            "files_shared_kept": 1,
+            "files_still_pending": 0,
+            "trigger": "member_hard_delete",
+            "deleted_user_id": str(target.id),
+            "user_hard_deleted_audit_id": 812,
+        }
+
+    async def test_a_failed_audit_write_refuses_the_delete(self, monkeypatch):
+        """Owner decision 2026-11-21 (e): an irreversible delete never goes
+        through without its audit row. Every other event keeps the rule that
+        an audit failure does not block."""
+        monkeypatch.setattr(
+            users_endpoint, "log_audit_event", AsyncMock(return_value=None)
+        )
+        process = AsyncMock(return_value=FileRemoval())
+        monkeypatch.setattr(users_endpoint, "process_pending_file_deletions", process)
+        target = _member()
+        db = _db(_result(scalar_one=target))
+
+        with pytest.raises(HTTPException) as exc:
+            await users_endpoint.delete_user(
+                user_id=target.id,
+                hard=True,
+                db=db,
+                current_user=_member(id="admin-1"),
+                request=fake_request(),
+            )
+
+        assert exc.value.status_code == 500
+        db.rollback.assert_awaited_once()
+        db.commit.assert_not_awaited()
+        process.assert_not_awaited()
 
     async def test_hard_delete_does_not_run_the_shift_release(self):
         """The member's assignments CASCADE with them; there is nothing to

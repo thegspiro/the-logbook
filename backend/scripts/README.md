@@ -361,6 +361,54 @@ docker exec -it intranet-backend python scripts/rotate_applicant_status_tokens.p
 docker exec -it intranet-backend python scripts/rotate_applicant_status_tokens.py --org "Falls Church Volunteer Fire Department" --apply
 ```
 
+### `sweep_orphaned_member_files.py`
+
+Finds, and with `--apply` removes, files in the three member-owned storage
+areas (self-report certificates, training-record uploads, attendance-waiver
+documents) that no record names any more — **owner decision 2026-11-21**.
+They come from permanent deletes before 2026-11-16, and still accrue from a
+historical-import undo, the onboarding reset or a process killed mid-delete,
+so run it whenever you like; a second run finds nothing new to do.
+
+- **Dry run by default**: prints counts per department and area, never a
+  path. `--apply` deletes and writes one `orphaned_member_files_removed`
+  audit event per department, counts only.
+- **Skips files younger than `--min-age-days`** (default 30, at least 1),
+  measured from the later of the file's modification and change times.
+- **Refuses to run** while an upload relocation or remote migration is not
+  finalized (a manifest under `/app/uploads/.relocation/` or
+  `/app/uploads/.s3-migration/`). Finalize it first. A relocation that was
+  rolled back keeps its manifest unfinalized for good: once you are sure the
+  rollback is complete, move that manifest file off the uploads volume.
+- **Local volume only.** Files a department keeps on a remote store are not
+  reached; the output counts the remote references it saw.
+- `--org <organization id>` limits it to one department.
+- Deleting a file does not remove it from backups taken before.
+
+Exit codes: `0` success; `1` some files could not be deleted, or a
+department's references could not be re-read (nothing was deleted for it);
+`2` refused, database error or bad arguments.
+
+**Docker Compose** (the standard install, and AWS EC2, which the AWS guide
+deploys with Docker Compose — connect to the instance first):
+
+```bash
+# Dry run — counts only, changes nothing:
+docker exec -it intranet-backend python scripts/sweep_orphaned_member_files.py
+
+# Delete them:
+docker exec -it intranet-backend python scripts/sweep_orphaned_member_files.py --apply
+```
+
+**Unraid**: the backend container is `logbook-backend` in the Unraid compose
+stack (`TheLogbook` on a Community Applications install). From the Unraid
+terminal:
+
+```bash
+docker exec -it logbook-backend python scripts/sweep_orphaned_member_files.py
+docker exec -it logbook-backend python scripts/sweep_orphaned_member_files.py --apply
+```
+
 ### `clear_hidden_form_answers.py`
 
 Removes stale answers to conditional form questions from stored submissions.

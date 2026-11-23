@@ -54,6 +54,25 @@ import type {
   DocumentUploadFields,
   DocumentView,
   HistoryDocumentType,
+  ApparatusCreate,
+  ApparatusFullView,
+  ApparatusList,
+  ApparatusQuery,
+  ApparatusUpdate,
+  ApparatusView,
+  ClearanceRecordType,
+  EventCreate,
+  EventFullView,
+  EventList,
+  EventQuery,
+  EventSummary,
+  EventUpdate,
+  EventView,
+  FleetOption,
+  HistoryListEntry,
+  TimelineDecade,
+  TimelineEntry,
+  TimelineKind,
 } from '../types';
 
 const api = createApiClient();
@@ -174,7 +193,11 @@ export const historyService = {
 
   async updateTitle(
     id: string,
-    changes: { name?: string | undefined; is_retired?: boolean | undefined }
+    changes: {
+      name?: string | undefined;
+      is_retired?: boolean | undefined;
+      show_on_timeline?: boolean | undefined;
+    }
   ): Promise<HistoryTitle> {
     const { data } = await api.patch<HistoryTitle>(`${BASE}/titles/${id}`, changes);
     return data;
@@ -205,7 +228,7 @@ export const historyService = {
   async submitForClearance(
     recordId: string,
     purpose: ClearancePurpose,
-    recordType: 'member' | 'media' | 'document' = 'member'
+    recordType: ClearanceRecordType = 'member'
   ): Promise<ClearanceRequest> {
     const { data } = await api.post<ClearanceRequest>(`${BASE}/clearance/requests`, {
       record_type: recordType,
@@ -326,9 +349,17 @@ export const historyMediaService = {
 
   async getMedia(id: string): Promise<MediaView> {
     const { data } = await api.get<MediaView>(`${BASE}/media/${id}`);
+    const links = { apparatus: asArray(data.apparatus), events: asArray(data.events) };
     // Narrowed first: a spread of the union would lose which view it is.
-    if (data.view === 'full') return { ...data, tags: asArray(data.tags) };
-    return { ...data, tags: asArray(data.tags) };
+    if (data.view === 'full') return { ...data, ...links, tags: asArray(data.tags) };
+    return { ...data, ...links, tags: asArray(data.tags) };
+  },
+
+  async replaceApparatus(id: string, apparatusIds: string[]): Promise<MediaFullView> {
+    const { data } = await api.put<MediaFullView>(`${BASE}/media/${id}/apparatus`, {
+      apparatus_ids: apparatusIds,
+    });
+    return data;
   },
 
   /** One file of a batch. Each goes in its own request: the server accepts 60 MB
@@ -491,8 +522,16 @@ export const historyDocumentService = {
 
   async getDocument(id: string): Promise<DocumentView> {
     const { data } = await api.get<DocumentView>(`${BASE}/documents/${id}`);
-    if (data.view === 'full') return { ...data, tags: asArray(data.tags) };
-    return { ...data, tags: asArray(data.tags) };
+    const links = { apparatus: asArray(data.apparatus), events: asArray(data.events) };
+    if (data.view === 'full') return { ...data, ...links, tags: asArray(data.tags) };
+    return { ...data, ...links, tags: asArray(data.tags) };
+  },
+
+  async replaceApparatus(id: string, apparatusIds: string[]): Promise<DocumentFullView> {
+    const { data } = await api.put<DocumentFullView>(`${BASE}/documents/${id}/apparatus`, {
+      apparatus_ids: apparatusIds,
+    });
+    return data;
   },
 
   async uploadDocument(
@@ -582,6 +621,207 @@ export const historyDocumentService = {
       into_type_id: intoTypeId,
     });
     return data;
+  },
+};
+
+// --- Phase 5: managed lists ---
+
+/** The three phase 5 managed lists, by their path under /history. */
+export type ManagedListPath = 'stations' | 'apparatus-types' | 'event-types';
+
+export const historyListService = {
+  async list(path: ManagedListPath, includeRetired = false): Promise<HistoryListEntry[]> {
+    const { data } = await api.get<HistoryListEntry[]>(`${BASE}/${path}`, {
+      params: { include_retired: includeRetired },
+    });
+    return asArray(data);
+  },
+
+  async create(path: ManagedListPath, name: string): Promise<HistoryListEntry> {
+    const { data } = await api.post<HistoryListEntry>(`${BASE}/${path}`, { name });
+    return data;
+  },
+
+  async update(
+    path: ManagedListPath,
+    id: string,
+    changes: { name?: string | undefined; is_retired?: boolean | undefined }
+  ): Promise<HistoryListEntry> {
+    const { data } = await api.patch<HistoryListEntry>(`${BASE}/${path}/${id}`, changes);
+    return data;
+  },
+
+  async merge(path: ManagedListPath, id: string, intoId: string): Promise<HistoryListEntry> {
+    const { data } = await api.post<HistoryListEntry>(`${BASE}/${path}/${id}/merge`, { into_id: intoId });
+    return data;
+  },
+};
+
+// --- Phase 5: historical apparatus ---
+
+function normalizeApparatus<T extends ApparatusView>(data: T): T {
+  return { ...data, designations: asArray(data.designations) };
+}
+
+export const historyApparatusService = {
+  async listApparatus(query: ApparatusQuery = {}): Promise<ApparatusList> {
+    const { data } = await api.get<ApparatusList>(`${BASE}/apparatus`, { params: query });
+    return {
+      items: asArray(data.items).map((item) => ({ ...item, designations: asArray(item.designations) })),
+      total: data.total,
+    };
+  },
+
+  async getApparatus(id: string): Promise<ApparatusView> {
+    const { data } = await api.get<ApparatusView>(`${BASE}/apparatus/${id}`);
+    return normalizeApparatus(data);
+  },
+
+  async createApparatus(payload: ApparatusCreate): Promise<ApparatusFullView> {
+    const { data } = await api.post<ApparatusFullView>(`${BASE}/apparatus`, payload);
+    return normalizeApparatus(data);
+  },
+
+  async updateApparatus(id: string, payload: ApparatusUpdate): Promise<ApparatusFullView> {
+    const { data } = await api.patch<ApparatusFullView>(`${BASE}/apparatus/${id}`, payload);
+    return normalizeApparatus(data);
+  },
+
+  async deleteApparatus(id: string): Promise<void> {
+    await api.delete(`${BASE}/apparatus/${id}`);
+  },
+
+  async publish(id: string, level: 'members' | 'public'): Promise<ApparatusFullView> {
+    const { data } = await api.post<ApparatusFullView>(`${BASE}/apparatus/${id}/publish`, { level });
+    return normalizeApparatus(data);
+  },
+
+  async unpublish(id: string, level: 'draft' | 'members'): Promise<ApparatusFullView> {
+    const { data } = await api.post<ApparatusFullView>(`${BASE}/apparatus/${id}/unpublish`, { level });
+    return normalizeApparatus(data);
+  },
+
+  async listRevisions(id: string): Promise<Revision[]> {
+    const { data } = await api.get<Revision[]>(`${BASE}/apparatus/${id}/revisions`);
+    return asArray(data);
+  },
+
+  async timeline(id: string): Promise<TimelineEntry[]> {
+    const { data } = await api.get<TimelineEntry[]>(`${BASE}/apparatus/${id}/timeline`);
+    return asArray(data);
+  },
+
+  async fleetOptions(): Promise<FleetOption[]> {
+    const { data } = await api.get<FleetOption[]>(`${BASE}/apparatus/fleet-options`);
+    return asArray(data);
+  },
+
+  async createFromFleet(fleetApparatusId: string): Promise<ApparatusFullView> {
+    const { data } = await api.post<ApparatusFullView>(`${BASE}/apparatus/from-fleet`, {
+      fleet_apparatus_id: fleetApparatusId,
+    });
+    return normalizeApparatus(data);
+  },
+};
+
+// --- Phase 5: events ---
+
+function normalizeEvent<T extends EventView>(data: T): T {
+  return {
+    ...data,
+    members: asArray(data.members),
+    apparatus: asArray(data.apparatus),
+    media: asArray(data.media),
+    documents: asArray(data.documents),
+  };
+}
+
+export const historyEventService = {
+  async listEvents(query: EventQuery = {}): Promise<EventList> {
+    const { data } = await api.get<EventList>(`${BASE}/events`, { params: query });
+    return { items: asArray(data.items), total: data.total };
+  },
+
+  async getEvent(id: string): Promise<EventView> {
+    const { data } = await api.get<EventView>(`${BASE}/events/${id}`);
+    return normalizeEvent(data);
+  },
+
+  async createEvent(payload: EventCreate): Promise<EventFullView> {
+    const { data } = await api.post<EventFullView>(`${BASE}/events`, payload);
+    return normalizeEvent(data);
+  },
+
+  async updateEvent(id: string, payload: EventUpdate): Promise<EventFullView> {
+    const { data } = await api.patch<EventFullView>(`${BASE}/events/${id}`, payload);
+    return normalizeEvent(data);
+  },
+
+  async deleteEvent(id: string): Promise<void> {
+    await api.delete(`${BASE}/events/${id}`);
+  },
+
+  async publish(id: string, level: 'members' | 'public'): Promise<EventFullView> {
+    const { data } = await api.post<EventFullView>(`${BASE}/events/${id}/publish`, { level });
+    return normalizeEvent(data);
+  },
+
+  async unpublish(id: string, level: 'draft' | 'members'): Promise<EventFullView> {
+    const { data } = await api.post<EventFullView>(`${BASE}/events/${id}/unpublish`, { level });
+    return normalizeEvent(data);
+  },
+
+  async listRevisions(id: string): Promise<Revision[]> {
+    const { data } = await api.get<Revision[]>(`${BASE}/events/${id}/revisions`);
+    return asArray(data);
+  },
+
+  async relatedTo(query: { member_id?: string; apparatus_id?: string }): Promise<EventSummary[]> {
+    const { data } = await api.get<EventList>(`${BASE}/events`, { params: { ...query, limit: 200 } });
+    return asArray(data.items);
+  },
+};
+
+// --- Phase 5: timelines and "Today in history" ---
+
+export interface TimelineFilters {
+  kinds?: TimelineKind[] | undefined;
+  event_type_id?: string | undefined;
+}
+
+/** Repeated keys (`kinds=event&kinds=title`), the shape FastAPI reads a list
+ * query parameter in; axios would otherwise send `kinds[]=`. */
+const timelineParams = (filters: TimelineFilters, extra: Record<string, string | number> = {}) => {
+  const params = new URLSearchParams();
+  Object.entries(extra).forEach(([key, value]) => params.append(key, String(value)));
+  (filters.kinds ?? []).forEach((kind) => params.append('kinds', kind));
+  if (filters.event_type_id) params.append('event_type_id', filters.event_type_id);
+  return params;
+};
+
+export const historyTimelineService = {
+  async decades(filters: TimelineFilters = {}): Promise<TimelineDecade[]> {
+    const { data } = await api.get<TimelineDecade[]>(`${BASE}/timeline/decades`, {
+      params: timelineParams(filters),
+    });
+    return asArray(data);
+  },
+
+  async decade(decade: number, filters: TimelineFilters = {}): Promise<TimelineEntry[]> {
+    const { data } = await api.get<TimelineEntry[]>(`${BASE}/timeline`, {
+      params: timelineParams(filters, { decade }),
+    });
+    return asArray(data);
+  },
+
+  async today(): Promise<TimelineEntry[]> {
+    const { data } = await api.get<TimelineEntry[]>(`${BASE}/today`);
+    return asArray(data);
+  },
+
+  async personTimeline(personId: string): Promise<TimelineEntry[]> {
+    const { data } = await api.get<TimelineEntry[]>(`${BASE}/people/${personId}/timeline`);
+    return asArray(data);
   },
 };
 

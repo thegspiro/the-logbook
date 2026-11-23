@@ -14,7 +14,17 @@ from dataclasses import field as dataclass_field
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -25,7 +35,7 @@ from sqlalchemy.orm import aliased, selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core.config import settings
-from app.models.admin_hours import EVENT_TYPES_WITHOUT_ADMIN_HOURS
+from app.models.admin_hours import EVENT_TYPES_WITHOUT_ADMIN_HOURS, AdminHoursCategory
 from app.models.attendance_waiver import (
     AttendanceWaiverRequest,
     AttendanceWaiverStatus,
@@ -187,6 +197,30 @@ BULK_ADD_MAX_SIZE = 200
 # tight — it exists only so a regression in promote_from_waitlist's "no longer
 # fits" condition cannot turn one RSVP into an unbounded loop.
 MAX_WAITLIST_PROMOTIONS_PER_RELEASE = 50
+
+# What a volunteer is told when the outreach event their signup sheet covered
+# goes away — one event or a whole series, the same words.
+CANCELLED_SHEET_REASON = "The outreach event this covered was cancelled."
+DELETED_SHEET_REASON = "The outreach event this covered was deleted."
+
+
+def rsvp_seats(rsvp: Any) -> int:
+    """Attendee seats a going RSVP takes against ``max_attendees``.
+
+    One for the member and one per guest — except a volunteer, who is crew
+    rather than audience (owner decision, 2026-11-21) and takes no seat of
+    their own; their guests still do. ``rsvp_seats_sql`` is the same rule for
+    a query, and every seat count — the RSVP path, waitlist promotion, the
+    list card, the detail page and the stats — goes through one or the other
+    (pitfall #29).
+    """
+    member = 0 if getattr(rsvp, "is_volunteer", False) else 1
+    return member + (rsvp.guest_count or 0)
+
+
+def rsvp_seats_sql() -> Any:
+    """``rsvp_seats`` as a column expression, for a SUM over going RSVPs."""
+    return EventRSVP.guest_count + case((EventRSVP.is_volunteer.is_(True), 0), else_=1)
 
 
 def resolve_attendee_visibility(
@@ -397,6 +431,26 @@ def attendance_is_settled(event: Event, now: datetime) -> bool:
     )
 
 
+def _stranded_check_ins_error(stranded: int, occurrences: int = 0) -> str:
+    """The refusal for a schedule change that would strand check-ins.
+
+    ``occurrences`` is given by the series door, which checks every open
+    occurrence a "this and all future events" save moves.
+    """
+    members = "member is" if stranded == 1 else "members are"
+    where = ""
+    if occurrences:
+        where = (
+            " in 1 occurrence" if occurrences == 1 else f" in {occurrences} occurrences"
+        )
+    return (
+        f"{stranded} {members} already checked in{where} at a time outside "
+        "the new schedule, and would be credited for the new date. "
+        "Postpone the event instead, which starts its attendance "
+        "afresh, or remove or correct those check-ins first."
+    )
+
+
 def attendance_locked_error(action: str) -> str:
     """Build the sentinel-prefixed refusal for a write blocked by the lock.
 
@@ -486,6 +540,10 @@ class EventService:
         # Waiver-request emails owed by a move made with ``defer_commit=True``,
         # sent by ``complete_deferred_writes`` once the batch has committed.
         self._deferred_waiver_notices: List[Any] = []
+        # Signup sheets owned by events cancelled with ``defer_commit=True``,
+        # stood down by ``complete_deferred_writes`` once the batch commits
+        # (``cancel_shift`` commits on its own, so it cannot run inside it).
+        self._deferred_sheet_stand_downs: List[Tuple[str, str]] = []
 
     async def _organizer_columns(
         self,
@@ -733,7 +791,7 @@ class EventService:
         # or it will promise room the RSVP path then refuses. going_count stays
         # the member count, which is what "N going" means.
         occupied_seats_sq = (
-            select(func.coalesce(func.sum(1 + EventRSVP.guest_count), 0))
+            select(func.coalesce(func.sum(rsvp_seats_sql()), 0))
             .where(EventRSVP.event_id == Event.id)
             .where(EventRSVP.status == RSVPStatus.GOING)
             .correlate(Event)
@@ -1129,8 +1187,10 @@ class EventService:
         if not items:
             return
 
-        mappings = await AdminHoursService(self.db).get_active_mappings_by_source(
-            str(organization_id)
+        admin_hours = AdminHoursService(self.db)
+        mappings = await admin_hours.get_active_mappings_by_source(str(organization_id))
+        crew_categories = await admin_hours.crew_hour_category_overrides(
+            str(organization_id), [str(item["event"].id) for item in items]
         )
 
         for item in items:
@@ -1140,7 +1200,7 @@ class EventService:
             item["check_in_closes_at"] = check_in_closes_at
 
             credited_hours, hour_category_label = self._resolve_credited_hours(
-                event, mappings
+                event, mappings, crew_categories.get(str(event.id))
             )
             item["credited_hours"] = credited_hours
             item["hour_category_label"] = hour_category_label
@@ -1154,15 +1214,20 @@ class EventService:
         is that same rule for a single event, so the card and the detail page
         cannot state different credits.
         """
-        mappings = await AdminHoursService(self.db).get_active_mappings_by_source(
-            str(organization_id)
-        )
-        return self._resolve_credited_hours(event, mappings)
+        admin_hours = AdminHoursService(self.db)
+        mappings = await admin_hours.get_active_mappings_by_source(str(organization_id))
+        crew_category = (
+            await admin_hours.crew_hour_category_overrides(
+                str(organization_id), [str(event.id)]
+            )
+        ).get(str(event.id))
+        return self._resolve_credited_hours(event, mappings, crew_category)
 
     @staticmethod
     def _resolve_credited_hours(
         event: Event,
         mappings: Dict[Tuple[str, str], List[Tuple[int, str]]],
+        crew_category: Optional[AdminHoursCategory] = None,
     ) -> Tuple[Optional[float], Optional[str]]:
         """Hours this event's scheduled duration would credit, and to what.
 
@@ -1182,7 +1247,12 @@ class EventService:
         # promise a credit credit_event_attendance will not make.
         if event_type in EVENT_TYPES_WITHOUT_ADMIN_HOURS:
             return None, None
-        if event_type:
+        matched: Optional[List[Tuple[int, str]]]
+        if crew_category is not None:
+            # An apparatus night credits its own category in place of the
+            # event-type mapping — AdminHoursService.crew_hour_category_overrides.
+            matched = [(100, crew_category.name)]
+        elif event_type:
             matched = mappings.get(("event_type", event_type))
         elif event.custom_category:
             matched = mappings.get(("custom_category", event.custom_category))
@@ -1328,6 +1398,7 @@ class EventService:
         was_training = self.event_credits_training(event)
         old_title = event.title
         old_start = event.start_datetime
+        old_end = event.end_datetime
         for field, value in update_data.items():
             setattr(event, field, value)
         self._forget_sent_reminders_if_moved(event, old_start)
@@ -1343,6 +1414,9 @@ class EventService:
                 updated_by,
                 previous_titles={str(event.id): old_title},
             )
+        await self._follow_event_length(
+            [(event, old_start, old_end)], training_details, organization_id
+        )
         # After the refusals above, so a refused save writes nothing here.
         waiver_notices = await self._reconfirm_waiver_requests_if_moved(
             {str(event.id): old_start}, [event], organization_id
@@ -1351,6 +1425,7 @@ class EventService:
         if updated_by:
             event.updated_by = str(updated_by)
         event.updated_at = datetime.now(dt_timezone.utc)
+        await self._move_own_staffing(event, organization_id)
 
         if defer_commit:
             await self.db.flush()
@@ -1422,10 +1497,48 @@ class EventService:
         await training.apply_session_details(plans, organization_id, updated_by)
         self.last_training_plans = plans
 
+    async def _follow_event_length(
+        self,
+        moved: List[Tuple[Event, Optional[datetime], Optional[datetime]]],
+        training_details: Optional[TrainingSessionDetailsUpdate],
+        organization_id: UUID | str,
+    ) -> None:
+        """Keep credit hours that follow each moved event's length on it.
+
+        ``moved`` pairs each event with its times before the save. A save
+        whose training details set the hours has already decided them.
+        """
+        if (
+            training_details is not None
+            and "credit_hours" in training_details.model_fields_set
+        ):
+            return
+        from app.services.training_session_service import TrainingSessionService
+
+        training = TrainingSessionService(self.db)
+        for event, old_start, old_end in moved:
+            if not self.event_credits_training(event):
+                continue
+            await training.follow_event_length(
+                event, old_start, old_end, organization_id
+            )
+
     async def _refuse_orphaning_check_ins(
         self, event: Event, update_data: Dict[str, Any]
     ) -> None:
         """Refuse a schedule change that would strand existing check-ins.
+
+        See :meth:`_count_stranded_check_ins` for the rule; this is its
+        single-event door, and ``update_future_events`` is its series one.
+        """
+        stranded = await self._count_stranded_check_ins(event, update_data)
+        if stranded:
+            raise ValueError(_stranded_check_ins_error(stranded))
+
+    async def _count_stranded_check_ins(
+        self, event: Event, update_data: Dict[str, Any]
+    ) -> int:
+        """Count the check-ins a schedule change would strand.
 
         A check-in is a timestamp, and crediting clamps an early one forward
         to the scheduled start (``_credited_check_in_time``). Moving an event
@@ -1449,7 +1562,7 @@ class EventService:
             "check_in_minutes_after",
         }
         if not window_fields.intersection(update_data):
-            return
+            return 0
 
         def proposed(name: str) -> Any:
             return update_data.get(name, getattr(event, name, None))
@@ -1468,7 +1581,7 @@ class EventService:
         )
         opens, closes = self._get_check_in_window(moved)
         if (opens, closes) == current:
-            return
+            return 0
         window_type = moved.check_in_window_type or CheckInWindowType.FLEXIBLE
         if window_type != CheckInWindowType.STRICT:
             opens -= timedelta(hours=1)
@@ -1484,14 +1597,7 @@ class EventService:
             at = self._as_utc(checked_in_at)
             if at is not None and not opens <= at <= closes:
                 stranded += 1
-        if stranded:
-            members = "member is" if stranded == 1 else "members are"
-            raise ValueError(
-                f"{stranded} {members} already checked in at a time outside "
-                "the new schedule, and would be credited for the new date. "
-                "Postpone the event instead, which starts its attendance "
-                "afresh, or remove or correct those check-ins first."
-            )
+        return stranded
 
     async def complete_deferred_writes(self, organization_id: UUID | str) -> None:
         """Run what ``defer_commit`` writes owe once their batch has committed.
@@ -1504,6 +1610,9 @@ class EventService:
         await self._reverse_pipeline_after_commit(pending, organization_id)
         notices, self._deferred_waiver_notices = self._deferred_waiver_notices, []
         await self._send_waiver_notices(notices, organization_id)
+        sheets, self._deferred_sheet_stand_downs = self._deferred_sheet_stand_downs, []
+        for sheet_id, reason in sheets:
+            await self._stand_down_own_staffing(sheet_id, organization_id, reason)
 
     async def publish_event(
         self, event_id: UUID, organization_id: UUID | str
@@ -1684,6 +1793,38 @@ class EventService:
                 )
             )
 
+        # The 2026-11-08 rule against stranding check-ins holds on this door
+        # too: each open occurrence is checked against its own new times (it
+        # moves by the anchor's shift) and any check-in settings sent, and the
+        # whole save is refused before anything is written. A finalized
+        # occurrence was refused above if its times change.
+        stranded = 0
+        stranded_occurrences = 0
+        for occurrence in future_events:
+            if attendance_is_finalized(occurrence):
+                continue
+            # Only settings that differ: the edit form re-sends them all.
+            proposed = {
+                key: value
+                for key, value in update_data.items()
+                if key.startswith("check_in_")
+                and value != getattr(occurrence, key, None)
+            }
+            if times_change:
+                start_wall = _wall_time(occurrence.start_datetime, tz) + shift
+                proposed["start_datetime"] = _stored_time(start_wall, tz)
+                proposed["end_datetime"] = _stored_time(start_wall + length, tz)
+            if not proposed:
+                continue
+            count = await self._count_stranded_check_ins(occurrence, proposed)
+            if count:
+                stranded += count
+                stranded_occurrences += 1
+        if stranded:
+            raise ValueError(
+                _stranded_check_ins_error(stranded, occurrences=stranded_occurrences)
+            )
+
         # XC-1 (BXC-1): update_event and create_event validate a newly-set
         # location_id in-org, but this series-wide bulk update did not — and the
         # location is eager-loaded and name-projected as location_name in the
@@ -1700,12 +1841,14 @@ class EventService:
         training_follow_ups = []
         previous_titles: Dict[str, str] = {}
         previous_starts: Dict[str, Optional[datetime]] = {}
+        previous_times: List[Tuple[Event, Optional[datetime], Optional[datetime]]] = []
         for event in future_events:
             was_training = self.event_credits_training(event)
             old_title = event.title
             previous_titles[str(event.id)] = old_title
             old_start = event.start_datetime
             previous_starts[str(event.id)] = old_start
+            previous_times.append((event, old_start, event.end_datetime))
             for field, value in update_data.items():
                 if field == "custom_fields":
                     value = self._with_own_lifecycle_markers(event, value)
@@ -1742,6 +1885,10 @@ class EventService:
                 organization_id,
                 updated_by,
                 previous_titles=previous_titles,
+            )
+        if times_change:
+            await self._follow_event_length(
+                previous_times, training_details, organization_id
             )
 
         waiver_notices = await self._reconfirm_waiver_requests_if_moved(
@@ -1816,12 +1963,22 @@ class EventService:
             await self.db.flush()
             self._deferred_reversals.extend(pending_reversals)
             self._deferred_waiver_notices.extend(waiver_notices)
+            sheet_id = getattr(event, "staffing_shift_id", None)
+            if sheet_id:
+                self._deferred_sheet_stand_downs.append(
+                    (sheet_id, CANCELLED_SHEET_REASON)
+                )
             return event
 
         await self.db.commit()
         await self.db.refresh(event)
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
         await self._send_waiver_notices(waiver_notices, organization_id)
+        await self._stand_down_own_staffing(
+            getattr(event, "staffing_shift_id", None),
+            organization_id,
+            CANCELLED_SHEET_REASON,
+        )
 
         # Send cancellation notifications if requested
         if send_notifications and rsvps_to_notify:
@@ -2001,10 +2158,14 @@ class EventService:
             guest.checked_in = False
             guest.checked_in_at = None
 
+        old_end = event.end_datetime
         event.start_datetime = new_start
         event.end_datetime = new_end
         event.actual_start_time = None
         event.actual_end_time = None
+        await self._follow_event_length(
+            [(event, old_start, old_end)], None, organization_id
+        )
         if event.postponed_from_start is None:
             event.postponed_from_start = old_start
         event.postponed_at = now
@@ -2033,6 +2194,8 @@ class EventService:
         waiver_notices = await self._reconfirm_waiver_requests_if_moved(
             {str(event.id): old_start}, [event], organization_id
         )
+
+        await self._move_own_staffing(event, organization_id)
 
         await self.db.commit()
         await self.db.refresh(event)
@@ -2324,6 +2487,7 @@ class EventService:
             list(events), organization_id, "cancelled"
         )
 
+        sheet_ids = self._own_sheet_ids(events)
         now = datetime.now(dt_timezone.utc)
         cancelled_count = 0
         for event in events:
@@ -2333,14 +2497,62 @@ class EventService:
             event.updated_at = now
             cancelled_count += 1
 
+        if cancel_future_only and events:
+            await self._end_series_at_kept(
+                parent_event_id, organization_id, list(events)
+            )
+
         if cancelled_count > 0:
             await self.db.commit()
             await self._reverse_pipeline_after_commit(
                 pending_reversals, organization_id
             )
             await self._send_waiver_notices(waiver_notices, organization_id)
+            for sheet_id in sheet_ids:
+                await self._stand_down_own_staffing(
+                    sheet_id, organization_id, CANCELLED_SHEET_REASON
+                )
 
         return cancelled_count
+
+    async def _end_series_at_kept(
+        self,
+        parent_event_id: UUID | str,
+        organization_id: UUID | str,
+        cancelling: List[Event],
+    ) -> None:
+        """End a series at its last kept occurrence when its future is cancelled.
+
+        The same step delete_event_series takes for a "this and future"
+        delete: the rolling-extension job continues a series from its latest
+        live occurrence, so a parent left rolling would have the cancelled
+        dates (and every date after them) back the next night. Only when the
+        parent itself is kept — a cancelled parent drops out of the job's
+        query on its own.
+        """
+        cancelling_ids = {str(e.id) for e in cancelling}
+        if str(parent_event_id) in cancelling_ids:
+            return
+        result = await self.db.execute(
+            select(Event).where(
+                Event.organization_id == str(organization_id),
+                or_(
+                    Event.id == str(parent_event_id),
+                    Event.recurrence_parent_id == str(parent_event_id),
+                ),
+            )
+        )
+        series = list(result.scalars().all())
+        parent = next((e for e in series if str(e.id) == str(parent_event_id)), None)
+        if parent is None or not parent.is_recurring:
+            return
+        kept = [
+            e for e in series if str(e.id) not in cancelling_ids and not e.is_cancelled
+        ] or [parent]
+        parent.recurrence_end_date = max(
+            (e.start_datetime for e in kept), key=_utc_instant
+        )
+        parent.rolling_recurrence = False
 
     async def duplicate_event(
         self, event_id: UUID, organization_id: UUID | str, created_by: UUID | str
@@ -2370,10 +2582,37 @@ class EventService:
             for lifecycle_key in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS:
                 custom_fields.pop(lifecycle_key, None)
 
+        # The source's organizers, rechecked: one who can no longer run an
+        # event gives way to the duplicating officer, as on create, rather
+        # than refusing the duplicate.
+        try:
+            organizers = await self._organizer_columns(
+                source_event.organizer_id,
+                source_event.alternate_organizer_id,
+                organization_id,
+                created_by,
+            )
+        except ValueError:
+            try:
+                organizers = await self._organizer_columns(
+                    source_event.organizer_id, None, organization_id, created_by
+                )
+            except ValueError:
+                organizers = await self._organizer_columns(
+                    None, None, organization_id, created_by
+                )
+
         # Fields to copy from the source event
         new_event = Event(
             organization_id=organization_id,
             created_by=created_by,
+            # Always a draft: the officer is sent straight to the copy's edit
+            # form and publishes from there. Copying the flag published a
+            # duplicate of a hidden draft at once, and a duplicate of a
+            # published event appeared on every calendar, at the source's own
+            # date and room, before the officer had changed anything.
+            is_draft=True,
+            **organizers,
             title=source_event.title,
             description=source_event.description,
             event_type=source_event.event_type,
@@ -2562,6 +2801,7 @@ class EventService:
             [event], organization_id, "deleted"
         )
 
+        sheet_id = getattr(event, "staffing_shift_id", None)
         await self.db.delete(event)
         try:
             await self.db.commit()
@@ -2580,7 +2820,56 @@ class EventService:
 
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
         await self._send_waiver_notices(waiver_notices, organization_id)
+        await self._stand_down_own_staffing(
+            sheet_id,
+            organization_id,
+            DELETED_SHEET_REASON,
+        )
         return True
+
+    async def _move_own_staffing(
+        self, event: Event, organization_id: UUID | str
+    ) -> None:
+        """Keep an event's own signup sheet on its time (owner decision,
+        2026-11-20). Inside the event's transaction; a request-owned sheet is
+        moved by the request's own sync instead."""
+        # getattr: callers in tests hand in plain stand-ins without the column.
+        if not getattr(event, "staffing_shift_id", None):
+            return
+        from app.services.event_staffing_service import move_event_staffing
+
+        org = await self.db.scalar(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        await move_event_staffing(self.db, event, org)
+
+    async def _stand_down_own_staffing(
+        self, sheet_id: Optional[str], organization_id: UUID | str, reason: str
+    ) -> None:
+        """Cancel an event's own signup sheet and tell its crew, after the
+        event's own commit (``cancel_shift`` commits)."""
+        if not sheet_id:
+            return
+        from app.services.event_staffing_service import stand_down_event_staffing
+
+        await stand_down_event_staffing(
+            self.db, sheet_id, str(organization_id), None, reason
+        )
+
+    @staticmethod
+    def _own_sheet_ids(events: Sequence[Event]) -> List[str]:
+        """The signup sheets these events own, for a series cancel or delete.
+
+        Each occurrence owns its own sheet (a request-owned sheet is stood down
+        by the request's sync instead). Read before the commit: a deleted
+        row's columns cannot be read after it.
+        """
+        # getattr: callers in tests hand in plain stand-ins without the column.
+        return [
+            str(sheet_id)
+            for sheet_id in (getattr(e, "staffing_shift_id", None) for e in events)
+            if sheet_id
+        ]
 
     async def delete_event_series(
         self,
@@ -2668,6 +2957,8 @@ class EventService:
             list(events), organization_id, "deleted"
         )
 
+        # Read before the delete: the rows, and their sheet ids, are gone after.
+        sheet_ids = self._own_sheet_ids(events)
         for event in events:
             await self.db.delete(event)
 
@@ -2688,6 +2979,10 @@ class EventService:
 
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
         await self._send_waiver_notices(waiver_notices, organization_id)
+        for sheet_id in sheet_ids:
+            await self._stand_down_own_staffing(
+                sheet_id, organization_id, DELETED_SHEET_REASON
+            )
         return len(events)
 
     # RSVP Methods
@@ -2848,6 +3143,13 @@ class EventService:
             if "guest_count" in rsvp_data.model_fields_set or existing_rsvp is None
             else (existing_rsvp.guest_count or 0)
         )
+        # A volunteer holds a role on the event's signup sheet and takes no
+        # seat of their own (rsvp_seats); only their guests are audience.
+        # getattr, as in rsvp_seats: callers in tests hand in plain stand-ins.
+        volunteer = existing_rsvp is not None and bool(
+            getattr(existing_rsvp, "is_volunteer", False)
+        )
+        member_seat = 0 if volunteer else 1
 
         # Validate RSVP status against allowed statuses
         allowed_statuses = event.allowed_rsvp_statuses or DEFAULT_ALLOWED_RSVP_STATUSES
@@ -2893,7 +3195,7 @@ class EventService:
         # to wait for, and since promote_from_waitlist refuses to skip the head
         # of the queue, admitting one would block everybody behind it.
         if event.max_attendees and rsvp_data.status == RSVPStatus.GOING.value:
-            party_size = 1 + effective_guest_count
+            party_size = member_seat + effective_guest_count
             if party_size > event.max_attendees:
                 seats = (
                     "1 person"
@@ -2905,6 +3207,28 @@ class EventService:
                     f"This event holds {seats}, so a party "
                     f"of {party_size} cannot be accommodated.",
                 )
+            # A volunteer is never waitlisted: that would take them off the
+            # crew list while they still hold their role. So guests a
+            # volunteer brings must fit now, and the check runs here, before
+            # the row is touched, for the reason given above. Locking read, as
+            # at the capacity check below.
+            if volunteer and effective_guest_count and existing_rsvp is not None:
+                with self.db.no_autoflush:
+                    others = await self.db.scalar(
+                        select(func.coalesce(func.sum(rsvp_seats_sql()), 0))
+                        .where(EventRSVP.event_id == str(event_id))
+                        .where(EventRSVP.status == RSVPStatus.GOING)
+                        .where(EventRSVP.id != existing_rsvp.id)
+                        .with_for_update()
+                    )
+                room = max(0, event.max_attendees - (others or 0))
+                if effective_guest_count > room:
+                    return (
+                        None,
+                        "Your role on the signup sheet holds your own place, "
+                        f"but the event has room for {room} more "
+                        f"guest{'' if room == 1 else 's'}.",
+                    )
 
         # Soft pipeline phase gate — warn (overridable) when RSVPing to a session
         # ahead of the member's current phase. Only when actually attending.
@@ -2920,7 +3244,7 @@ class EventService:
         # below. Reducing a guest count while staying "going" frees capacity
         # just as surely as declining does.
         previous_seats = (
-            1 + (existing_rsvp.guest_count or 0)
+            rsvp_seats(existing_rsvp)
             if existing_rsvp and existing_rsvp.status == RSVPStatus.GOING
             else 0
         )
@@ -2971,7 +3295,7 @@ class EventService:
             # coalesce is required: SUM over zero rows is NULL, and comparing
             # NULL against max_attendees would skip waitlisting entirely.
             capacity_query = (
-                select(func.coalesce(func.sum(1 + EventRSVP.guest_count), 0))
+                select(func.coalesce(func.sum(rsvp_seats_sql()), 0))
                 .where(EventRSVP.event_id == str(event_id))
                 .where(EventRSVP.status == RSVPStatus.GOING)
             )
@@ -2994,7 +3318,7 @@ class EventService:
             # party of three does not fit a one-seat gap. (A party too big for
             # the event at all was already refused above, before this function
             # touched the session.)
-            requested_seats = 1 + effective_guest_count
+            requested_seats = member_seat + effective_guest_count
             would_fit = occupied_seats + requested_seats <= event.max_attendees
 
             # EV-24: a member resubmitting an RSVP that is *already* waitlisted
@@ -3044,7 +3368,8 @@ class EventService:
                     )
                 queue_jump = earlier_result.first() is not None
 
-            if not would_fit or queue_jump:
+            # A volunteer's guests were checked against the room above.
+            if (not would_fit or queue_jump) and not volunteer:
                 # Auto-waitlist instead of rejecting
                 rsvp.status = RSVPStatus.WAITLISTED
 
@@ -3078,7 +3403,7 @@ class EventService:
             rsvp.status.value if hasattr(rsvp.status, "value") else rsvp.status
         )
         current_seats = (
-            1 + (rsvp.guest_count or 0) if final_status == RSVPStatus.GOING.value else 0
+            rsvp_seats(rsvp) if final_status == RSVPStatus.GOING.value else 0
         )
         if event.max_attendees and current_seats < previous_seats:
             # Looped, because one release can admit several parties: a party of
@@ -3229,7 +3554,7 @@ class EventService:
         # party of three gets promoted into a one-seat gap the RSVP path
         # correctly refused.
         occupied_result = await self.db.execute(
-            select(func.coalesce(func.sum(1 + EventRSVP.guest_count), 0))
+            select(func.coalesce(func.sum(rsvp_seats_sql()), 0))
             .where(EventRSVP.event_id == str(event_id))
             .where(EventRSVP.status == RSVPStatus.GOING)
             .with_for_update()
@@ -3242,7 +3567,7 @@ class EventService:
         # shown. (A party that can never fit was already excluded by the query
         # above — that is a different case, and the only one worth passing
         # over.)
-        needed_seats = 1 + (waitlisted_rsvp.guest_count or 0)
+        needed_seats = rsvp_seats(waitlisted_rsvp)
         if occupied_seats + needed_seats > event.max_attendees:
             return None
 
@@ -4118,6 +4443,7 @@ class EventService:
                 func.count(EventRSVP.id),
                 func.sum(EventRSVP.guest_count),
                 func.sum(case((EventRSVP.checked_in.is_(True), 1), else_=0)),
+                func.sum(rsvp_seats_sql()),
             )
             .where(EventRSVP.event_id == str(event_id))
             .group_by(EventRSVP.status)
@@ -4130,9 +4456,11 @@ class EventService:
         total_guests = 0
         checked_in_count = 0
 
-        for status, count, guests, checked_in in rsvp_counts:
+        occupied_seats = 0
+        for status, count, guests, checked_in, seats in rsvp_counts:
             if status == RSVPStatus.GOING:
                 going_count = count
+                occupied_seats = seats or 0
                 total_guests = guests or 0
                 # Only count checked-in attendees who are still GOING
                 checked_in_count = checked_in or 0
@@ -4148,8 +4476,8 @@ class EventService:
         # fills a 10-seat event, and reporting that as 80% would have an
         # organizer expecting room that the RSVP path will refuse.
         capacity_percentage = None
+        # Volunteers take no seat of their own (rsvp_seats).
         if event.max_attendees and event.max_attendees > 0:
-            occupied_seats = going_count + total_guests
             capacity_percentage = round((occupied_seats / event.max_attendees) * 100, 2)
 
         return EventStats(
@@ -4447,6 +4775,7 @@ class EventService:
                 event, organization_id, finalized_by
             )
             await self._advance_prospects_after_finalize(event)
+            await self._complete_request_after_finalize(event, finalized_by)
             return outcome
 
         updated_count = 0
@@ -4554,8 +4883,37 @@ class EventService:
                 credit, organization_id, finalized_by, can_manage_training
             )
         await self._advance_prospects_after_finalize(event)
+        await self._complete_request_after_finalize(event, finalized_by)
 
         return outcome
+
+    async def _complete_request_after_finalize(
+        self, event: Event, finalized_by: UUID | str | None
+    ) -> None:
+        """Close the outreach request this event came from (owner decision,
+        2026-11-20); see ``complete_request_for_finalized_event``.
+
+        Runs after the close is durable and swallows its own failure, as the
+        applicant advance beside it does: the attendance and credited hours
+        are what finalizing is for, and a request left scheduled is one press
+        of Mark completed away, now that its date has passed.
+        """
+        from app.services.event_request_service import (
+            complete_request_for_finalized_event,
+        )
+
+        try:
+            await complete_request_for_finalized_event(
+                self.db, event, str(finalized_by) if finalized_by else None
+            )
+        except Exception:
+            logger.exception(
+                "Could not complete the request for finalized event {}", event.id
+            )
+            try:
+                await self.db.rollback()
+            except Exception:
+                logger.exception("Rollback after that failure also failed")
 
     async def _advance_prospects_after_finalize(self, event: Event) -> None:
         """Move applicants this event's now-settled attendance clears.

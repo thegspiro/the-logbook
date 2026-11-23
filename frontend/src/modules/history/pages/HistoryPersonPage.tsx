@@ -16,6 +16,7 @@ import { historyService } from '../services/api';
 import { ClearanceSteps } from '../components/ClearanceSteps';
 import { PersonDetails } from '../components/PersonDetails';
 import { PersonDocumentsStrip } from '../components/PersonDocumentsStrip';
+import { PersonEventsStrip, PersonTimelineStrip } from '../components/PersonHistoryStrips';
 import { PersonMediaStrip } from '../components/PersonMediaStrip';
 import { PublicationBadge } from '../components/PublicationBadge';
 import { RelationsEditor } from '../components/RelationsEditor';
@@ -182,6 +183,8 @@ export const HistoryPersonPage: React.FC = () => {
           <PersonDetails person={person} />
           <PersonMediaStrip personId={person.id} />
           <PersonDocumentsStrip personId={person.id} />
+          <PersonEventsStrip personId={person.id} />
+          <PersonTimelineStrip personId={person.id} />
 
           {full?.can_edit && (
             <section aria-labelledby="edit-service-heading" className="border-theme-surface-border border-t pt-4">

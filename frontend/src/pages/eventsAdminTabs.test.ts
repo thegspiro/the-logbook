@@ -17,6 +17,7 @@ describe('Events admin areas', () => {
     ['past_events', 'events'],
     ['requests', 'outreach'],
     ['community', 'outreach'],
+    ['apparatus_events', 'outreach'],
     ['analytics', 'check_ins'],
     ['card_checkins', 'check_ins'],
     ['settings', 'settings'],
