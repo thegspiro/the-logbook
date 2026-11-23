@@ -216,6 +216,7 @@ class TestVoiding:
             completion_date=None,
             hours_completed=0.0,
             notes=None,
+            attachments=None,
         )
         svc, db = self._svc([record])
 
@@ -262,6 +263,7 @@ class TestLegacyReach:
             "completion_date": None,
             "hours_completed": 0.0,
             "notes": None,
+            "attachments": None,
             "created_by": "user-1",
         }
         fields.update(overrides)
