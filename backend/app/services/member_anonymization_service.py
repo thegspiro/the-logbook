@@ -45,6 +45,15 @@ docs/COMPLIANCE.md):
   follow-up forms they were sent, and the applicant copy each election
   package took (its ballot item, an official election record, is retained).
 
+- Stored Documents (owner decision 2026-11-23, LIFE-11): the member's
+  separation letters in the Member Separations folder are redacted, their
+  home address and stated reason for leaving removed and the property list
+  and values kept, since the department may need them for unreturned
+  property; and every folder under Member Files the member owns is deleted
+  with its documents, the files queued on pending_file_deletions
+  (app.services.member_documents). Runs first, while the name, address and
+  status reason that find the letters are still on the users row.
+
 What is deliberately NOT touched:
 - audit_logs — append-only and hash-chained; rewriting them is tampering.
 - votes/ballots — election integrity signatures must not change.
@@ -87,6 +96,7 @@ from app.models.membership_pipeline import (
     ProspectiveMember,
     ProspectStepProgress,
 )
+from app.models.pending_file_deletion import PendingDeletionReason
 from app.models.training import (
     ExternalUserMapping,
     ShiftTimeOff,
@@ -104,6 +114,7 @@ from app.models.user import (
 from app.services import file_storage_service as file_storage
 from app.services.attendance_waiver_attachments import remove_member_attachments
 from app.services.file_storage_service import StorageArea
+from app.services.member_documents import erase_member_documents
 from app.services.member_files import (
     collect_member_files,
     confined_attachment_path,
@@ -111,6 +122,9 @@ from app.services.member_files import (
 )
 from app.services.membership_pipeline_service import prospect_document_path
 from app.services.passkey_service import delete_all_passkeys
+from app.services.pending_file_deletions import (
+    enqueue as enqueue_pending_file_deletions,
+)
 from app.services.upload_relocation import areas_for
 from app.utils.sql_results import rows_affected
 
@@ -124,6 +138,9 @@ _DEPARTED_STATUSES = {
 class MemberAnonymizationService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        #: ``pending_file_deletions`` rows the last :meth:`anonymize_member`
+        #: queued, for the caller to process once it has committed.
+        self.queued_file_deletion_ids: list[str] = []
 
     async def get_user_for_anonymization(
         self, user_id: str, organization_id: str
@@ -161,6 +178,23 @@ class MemberAnonymizationService:
         self._check_preconditions(user)
 
         counts: dict[str, int] = {}
+
+        # --- stored documents ------------------------------------------
+        # Before the users row below: the letters are found by the name,
+        # address and status reason it still holds.
+        documents = await erase_member_documents(
+            self.db, user, str(user.organization_id)
+        )
+        self.queued_file_deletion_ids = enqueue_pending_file_deletions(
+            self.db,
+            str(user.organization_id),
+            documents.document_paths,
+            PendingDeletionReason.MEMBER_ANONYMIZATION,
+        )
+        counts["separation_letters_redacted"] = documents.separation_letters_redacted
+        counts["personal_folders_deleted"] = documents.personal_folders_deleted
+        counts["personal_documents_deleted"] = documents.personal_documents_deleted
+        counts["personal_document_files_queued"] = len(self.queued_file_deletion_ids)
         now = datetime.now(UTC)
         token = uuid.uuid4().hex[:12]
 

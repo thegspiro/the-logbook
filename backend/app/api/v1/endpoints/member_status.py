@@ -579,6 +579,7 @@ async def change_member_status(
             member_name=member.full_name,
             html_content=html_content,
             created_by=str(current_user.id),
+            member_id=str(user_id),
         )
         if doc:
             response.document_id = str(doc.id)

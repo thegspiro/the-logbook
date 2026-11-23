@@ -19,6 +19,9 @@ from app.core.utils import generate_uuid
 
 class PendingDeletionReason(str, Enum):
     MEMBER_HARD_DELETE = "member_hard_delete"
+    # Files named by rows an anonymisation removed: the documents in the
+    # member's personal Member Files folder.
+    MEMBER_ANONYMIZATION = "member_anonymization"
 
 
 class PendingFileDeletion(Base):
