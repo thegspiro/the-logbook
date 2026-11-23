@@ -28,6 +28,35 @@ export const fillTone = (filled: number, total: number): string => {
   return filled === 0 ? TONE.red : TONE.amber;
 };
 
+/**
+ * Whether a night is staffed, as a badge tone (owner decision, 2026-11-23):
+ * green once every essential seat is filled, red with none of them filled,
+ * amber between. Non-essential seats do not move it. A night with no essential
+ * seats falls back to fillTone, so an empty night of optional seats still reads
+ * red rather than counting "every essential seat filled" over nothing.
+ */
+export const readinessTone = (
+  essentialFilled: number,
+  essentialTotal: number,
+  filled: number,
+  total: number
+): string => {
+  if (essentialTotal === 0) return fillTone(filled, total);
+  if (essentialFilled >= essentialTotal) return TONE.green;
+  return essentialFilled === 0 ? TONE.red : TONE.amber;
+};
+
+/** "Essential 3/3 · 5 of 7 filled", or just the fill when no seat is essential. */
+export const readinessLabel = (
+  essentialFilled: number,
+  essentialTotal: number,
+  filled: number,
+  total: number
+): string =>
+  essentialTotal > 0 && essentialTotal < total
+    ? `Essential ${essentialFilled}/${essentialTotal} · ${filled} of ${total} filled`
+    : `${filled} of ${total} seats filled`;
+
 export const EVOC_MODE_LABEL: Record<ApparatusEventEvocMode, string> = {
   [ApparatusEventEvocMode.ENFORCE]: 'EVOC enforced',
   [ApparatusEventEvocMode.WARN]: 'EVOC warn only',

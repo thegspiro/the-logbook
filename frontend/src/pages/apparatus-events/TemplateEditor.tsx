@@ -398,18 +398,30 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ initial, templat
                           <X className="h-4 w-4" aria-hidden="true" />
                         </button>
                         {/* Full width: beside three other fields it was too narrow to read. */}
-                        <div className="col-span-full">
-                          <label className="sr-only" htmlFor={`seat-note-${seat.key}`}>
-                            Note for members
+                        <div className="col-span-full flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <label className="text-theme-text-secondary flex shrink-0 items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              className="form-checkbox"
+                              checked={seat.is_essential}
+                              onChange={(e) => updateSeat(unit.key, seat.key, { is_essential: e.target.checked })}
+                              aria-describedby={`seat-essential-help-${unit.key}`}
+                            />
+                            Essential
                           </label>
-                          <input
-                            id={`seat-note-${seat.key}`}
-                            className="form-input"
-                            placeholder="Note for members (optional)"
-                            value={seat.note}
-                            maxLength={300}
-                            onChange={(e) => updateSeat(unit.key, seat.key, { note: e.target.value })}
-                          />
+                          <div className="min-w-0 flex-1">
+                            <label className="sr-only" htmlFor={`seat-note-${seat.key}`}>
+                              Note for members
+                            </label>
+                            <input
+                              id={`seat-note-${seat.key}`}
+                              className="form-input"
+                              placeholder="Note for members (optional)"
+                              value={seat.note}
+                              maxLength={300}
+                              onChange={(e) => updateSeat(unit.key, seat.key, { note: e.target.value })}
+                            />
+                          </div>
                         </div>
                       </li>
                     );
@@ -427,6 +439,10 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ initial, templat
                   <span className="text-theme-text-muted text-xs">
                     Seat names are free text. Only a <span className={`badge ${TONE.red}`}>Driver · EVOC</span> seat
                     checks EVOC.
+                  </span>
+                  <span id={`seat-essential-help-${unit.key}`} className="text-theme-text-muted basis-full text-xs">
+                    Essential seats must be filled before a night counts as staffed. Untick a seat that is welcome but
+                    optional.
                   </span>
                 </div>
               </section>

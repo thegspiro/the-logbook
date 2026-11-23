@@ -28,6 +28,7 @@ interface SeatRow {
   name: string;
   seat_type: ApparatusEventSeatType;
   note: string;
+  is_essential: boolean;
   occupant: string | null;
 }
 
@@ -59,6 +60,7 @@ const rowsFrom = (board: CrewBoard): UnitRow[] =>
       name: seat.name,
       seat_type: seat.seat_type,
       note: seat.note ?? '',
+      is_essential: seat.is_essential,
       occupant: seat.user_name,
     })),
   }));
@@ -136,6 +138,9 @@ export const EditNightDialog: React.FC<EditNightDialogProps> = ({ board, onClose
           name: s.name.trim(),
           seat_type: s.seat_type,
           note: s.note.trim() || undefined,
+          // Always sent: the PUT replaces the night's seats, and a seat that
+          // omitted it would turn essential again.
+          is_essential: s.is_essential,
         })),
       })),
     };
@@ -298,6 +303,15 @@ export const EditNightDialog: React.FC<EditNightDialogProps> = ({ board, onClose
                 >
                   <X className="h-4 w-4" aria-hidden="true" />
                 </button>
+                <label className="text-theme-text-secondary col-span-full flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={seat.is_essential}
+                    onChange={(e) => updateSeat(unit.key, seat.key, { is_essential: e.target.checked })}
+                  />
+                  Essential: must be filled for this night to count as staffed
+                </label>
               </div>
             ))}
             <button
@@ -316,6 +330,7 @@ export const EditNightDialog: React.FC<EditNightDialogProps> = ({ board, onClose
                               name: '',
                               seat_type: ApparatusEventSeatType.GENERAL,
                               note: '',
+                              is_essential: true,
                               occupant: null,
                             },
                           ],

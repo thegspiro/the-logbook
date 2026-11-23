@@ -45,6 +45,7 @@ export interface SeatDraft {
   /** A string while typing, so a cleared box is not instantly a 0. */
   count: string;
   note: string;
+  is_essential: boolean;
 }
 
 export interface UnitDraft {
@@ -74,6 +75,7 @@ export const blankSeat = (name = '', seatType: ApparatusEventSeatType = Apparatu
   seat_type: seatType,
   count: '1',
   note: '',
+  is_essential: true,
 });
 
 export const blankUnit = (apparatusId = ''): UnitDraft => ({
@@ -119,6 +121,7 @@ export const draftFromTemplate = (template: ApparatusEventTemplate): TemplateDra
       seat_type: seat.seat_type,
       count: String(seat.count),
       note: seat.note ?? '',
+      is_essential: seat.is_essential,
     })),
   })),
   duplicated_from_id: '',
@@ -190,6 +193,7 @@ export const toPayload = (draft: TemplateDraft): ApparatusEventTemplatePayload =
       seat_type: seat.seat_type,
       count: seatCount(seat),
       note: seat.note.trim() || undefined,
+      is_essential: seat.is_essential,
     })),
   })),
 });

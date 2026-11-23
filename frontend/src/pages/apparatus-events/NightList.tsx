@@ -14,7 +14,7 @@ import { EmptyState, SkeletonCardGrid } from '../../components/ux';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatTime } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { TONE, fillTone } from './tones';
+import { TONE, readinessLabel, readinessTone } from './tones';
 
 const EMPTY: Record<NightScope, { title: string; description: string }> = {
   upcoming: {
@@ -97,8 +97,10 @@ export const NightList: React.FC<{ scope: NightScope }> = ({ scope }) => {
             ) : row.attendance_finalized ? (
               <span className={`badge ${TONE.green}`}>Hours posted</span>
             ) : (
-              <span className={`badge ${fillTone(row.filled, row.total)}`}>
-                {row.filled} of {row.total} seats filled
+              <span
+                className={`badge ${readinessTone(row.essential_filled, row.essential_total, row.filled, row.total)}`}
+              >
+                {readinessLabel(row.essential_filled, row.essential_total, row.filled, row.total)}
               </span>
             )}
             <ChevronRight className="text-theme-text-muted h-4 w-4" aria-hidden="true" />

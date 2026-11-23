@@ -195,6 +195,12 @@ class ApparatusEventTemplateSeat(Base):
     seat_type: Mapped[str] = mapped_column(
         String(20), nullable=False, default="general", server_default="general"
     )
+    # Owner decision, 2026-11-23: an essential seat must be filled for the
+    # night to count as staffed; a non-essential one is welcome but optional.
+    # Existing seats were all essential, which is what the default keeps.
+    is_essential: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
     count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default="1"
     )
@@ -341,6 +347,10 @@ class EventApparatusSeat(Base):
         String(20), nullable=False, default="general", server_default="general"
     )
     note: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    # Copied from the template seat; see ApparatusEventTemplateSeat.is_essential.
+    is_essential: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
     sort_order: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )

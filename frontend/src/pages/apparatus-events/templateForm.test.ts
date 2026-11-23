@@ -192,3 +192,25 @@ describe('lengths entered in hours', () => {
     expect(minutesFromHours(hours)).toBe(minutes);
   });
 });
+
+describe('essential seats', () => {
+  it('starts a new seat essential', () => {
+    expect(blankSeat('Elf').is_essential).toBe(true);
+  });
+
+  it('carries the flag to the payload, both ways', () => {
+    const draft = blankDraft('app-1');
+    draft.name = 'Santamobile';
+    draft.units = [
+      {
+        key: 'u',
+        apparatus_id: 'app-1',
+        seats: [
+          { ...blankSeat('Driver', ApparatusEventSeatType.DRIVER) },
+          { ...blankSeat('Elf'), is_essential: false },
+        ],
+      },
+    ];
+    expect(nth(toPayload(draft).units, 0).seats.map((s) => s.is_essential)).toEqual([true, false]);
+  });
+});

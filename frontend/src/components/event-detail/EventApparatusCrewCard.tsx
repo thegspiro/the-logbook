@@ -18,7 +18,13 @@ import { ApparatusEventSeatType, type CrewBoard, type CrewSeat, type CrewUnit } 
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { formatCalendarDate, formatShortDateTime, toLocalDateString } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { EVOC_MODE_LABEL, EVOC_MODE_TONE, TONE, fillTone } from '../../pages/apparatus-events/tones';
+import {
+  EVOC_MODE_LABEL,
+  EVOC_MODE_TONE,
+  TONE,
+  readinessLabel,
+  readinessTone,
+} from '../../pages/apparatus-events/tones';
 import AssignSeatDialog from './apparatus-crew/AssignSeatDialog';
 import EditNightDialog from './apparatus-crew/EditNightDialog';
 import SeatCallDialog from './apparatus-crew/SeatCallDialog';
@@ -74,6 +80,8 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
   const canTake = !closed && !ended && board.can_sign_up && board.allow_self_signup && board.my_seat_id === null;
   const filled = board.units.reduce((n, u) => n + u.seats.filter((s) => s.user_id).length, 0);
   const total = board.units.reduce((n, u) => n + u.seats.length, 0);
+  const essentialSeats = board.units.flatMap((u) => u.seats.filter((s) => s.is_essential));
+  const essentialFilled = essentialSeats.filter((s) => s.user_id).length;
 
   const act = async (seatId: string, action: () => Promise<CrewBoard>, done: string) => {
     setPendingSeat(seatId);
@@ -121,7 +129,8 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
           </h2>
           <p className="text-theme-text-muted mt-1 text-sm">
             {board.night_count > 1 ? `Night ${board.night_number} of ${board.night_count}` : 'One night'}
-            {board.template_name ? ` · from “${board.template_name}”` : ''} · {filled} of {total} seats filled
+            {board.template_name ? ` · from “${board.template_name}”` : ''} ·{' '}
+            {readinessLabel(essentialFilled, essentialSeats.length, filled, total)}
           </p>
         </div>
         {board.can_manage && !closed && (
@@ -169,7 +178,7 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
             return current ? (
               <span
                 key={night.event_id}
-                className={`badge ring-theme-text-primary ring-2 ring-offset-1 ${fillTone(night.filled, night.total)}`}
+                className={`badge ring-theme-text-primary ring-2 ring-offset-1 ${readinessTone(night.essential_filled, night.essential_total, night.filled, night.total)}`}
                 aria-current="page"
               >
                 {day} · {night.filled}/{night.total}
@@ -178,7 +187,7 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
               <Link
                 key={night.event_id}
                 to={`/events/${night.event_id}`}
-                className={`badge hover:underline ${fillTone(night.filled, night.total)}`}
+                className={`badge hover:underline ${readinessTone(night.essential_filled, night.essential_total, night.filled, night.total)}`}
               >
                 {day} · {night.filled}/{night.total}
               </Link>
@@ -263,7 +272,8 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
                             <p className="text-theme-text-muted">{label}</p>
                           )}
                           <p className="text-theme-text-muted text-xs">
-                            {seat.user_id ? label : 'Open position'}
+                            {seat.user_id ? label : seat.is_essential ? 'Open position' : 'Optional position'}
+                            {seat.user_id && !seat.is_essential && ' (optional)'}
                             {seat.seat_type === ApparatusEventSeatType.DRIVER && (
                               <span className={`badge ml-2 ${TONE.red}`}>Driver · EVOC</span>
                             )}

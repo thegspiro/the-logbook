@@ -18,7 +18,7 @@ from datetime import timezone as dt_timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, overload
 
 from loguru import logger
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -110,17 +110,37 @@ def _value(enum_or_str: Any) -> Any:
 
 def _expand_seats(
     units: Iterable[Any],
-) -> List[Tuple[str, List[Tuple[str, str, Optional[str]]]]]:
-    """A template's units as (apparatus_id, [(name, seat_type, note), ...]),
-    each ``count``-wide seat row expanded into that many seats."""
+) -> List[Tuple[str, List[Tuple[str, str, Optional[str], bool]]]]:
+    """A template's units as (apparatus_id, [(name, seat_type, note,
+    is_essential), ...]), each ``count``-wide seat row expanded into that many
+    seats."""
     expanded = []
     for unit in units:
-        seats: List[Tuple[str, str, Optional[str]]] = []
+        seats: List[Tuple[str, str, Optional[str], bool]] = []
         for seat in unit.seats:
             for _ in range(int(seat.count)):
-                seats.append((seat.name, _value(seat.seat_type), seat.note))
+                seats.append(
+                    (
+                        seat.name,
+                        _value(seat.seat_type),
+                        seat.note,
+                        bool(seat.is_essential),
+                    )
+                )
         expanded.append((unit.apparatus_id, seats))
     return expanded
+
+
+def _essential_counts() -> Tuple[Any, Any]:
+    """SQL aggregates over ``EventApparatusSeat``: essential seats filled, and
+    essential seats in all. A night is staffed when the two match, whatever
+    its non-essential seats hold (owner decision, 2026-11-23)."""
+    essential = EventApparatusSeat.is_essential.is_(True)
+    filled = func.sum(
+        case((and_(essential, EventApparatusSeat.user_id.is_not(None)), 1), else_=0)
+    )
+    total = func.sum(case((essential, 1), else_=0))
+    return filled, total
 
 
 class ApparatusEventService:
@@ -291,6 +311,7 @@ class ApparatusEventService:
                         seat_type=_value(seat.seat_type),
                         count=seat.count,
                         note=seat.note,
+                        is_essential=seat.is_essential,
                         sort_order=seat_index,
                     )
                     for seat_index, seat in enumerate(unit.seats)
@@ -537,7 +558,7 @@ class ApparatusEventService:
             )
             self.db.add(unit)
             await self.db.flush()
-            for seat_index, (name, seat_type, note) in enumerate(seats):
+            for seat_index, (name, seat_type, note, essential) in enumerate(seats):
                 self.db.add(
                     EventApparatusSeat(
                         organization_id=str(organization_id),
@@ -546,6 +567,7 @@ class ApparatusEventService:
                         name=name,
                         seat_type=seat_type,
                         note=note,
+                        is_essential=essential,
                         sort_order=seat_index,
                     )
                 )
@@ -704,13 +726,21 @@ class ApparatusEventService:
 
     async def series_nights(
         self, organization_id: str, series_id: str
-    ) -> List[Tuple[str, datetime, int, int]]:
-        """(event id, start, filled, total) for every uncancelled night in a
-        series, in date order."""
+    ) -> List[Tuple[str, datetime, int, int, int, int]]:
+        """(event id, start, filled, total, essential filled, essential total)
+        for every uncancelled night in a series, in date order."""
         filled = func.count(EventApparatusSeat.user_id)
         total = func.count(EventApparatusSeat.id)
+        essential_filled, essential_total = _essential_counts()
         result = await self.db.execute(
-            select(Event.id, Event.start_datetime, filled, total)
+            select(
+                Event.id,
+                Event.start_datetime,
+                filled,
+                total,
+                essential_filled,
+                essential_total,
+            )
             .join(EventApparatusPlan, EventApparatusPlan.event_id == Event.id)
             .outerjoin(EventApparatusSeat, EventApparatusSeat.event_id == Event.id)
             .where(
@@ -723,7 +753,8 @@ class ApparatusEventService:
             .order_by(Event.start_datetime)
         )
         return [
-            (str(i), _utc(start), int(f), int(t)) for i, start, f, t in result.all()
+            (str(i), _utc(start), int(f), int(t), int(ef or 0), int(et or 0))
+            for i, start, f, t, ef, et in result.all()
         ]
 
     async def member_names(
@@ -1371,6 +1402,7 @@ class ApparatusEventService:
                 seat_row.name = seat_spec.name
                 seat_row.seat_type = _value(seat_spec.seat_type)
                 seat_row.note = seat_spec.note
+                seat_row.is_essential = seat_spec.is_essential
                 seat_row.sort_order = seat_index
 
         await self.db.flush()
@@ -1459,6 +1491,28 @@ class ApparatusEventService:
             units.setdefault(str(event_id), []).append(unit_number)
         return seat_counts, units
 
+    async def essential_summary(
+        self, organization_id: str, event_ids: List[str]
+    ) -> Dict[str, Tuple[int, int]]:
+        """``(filled, total)`` essential seats per event; absent with no seats.
+
+        Apart from ``crew_summary`` so its other reader, the Outreach Overview,
+        keeps the shape it was written against."""
+        if not event_ids:
+            return {}
+        filled, total = _essential_counts()
+        rows = await self.db.execute(
+            select(EventApparatusSeat.event_id, filled, total)
+            .where(
+                EventApparatusSeat.organization_id == str(organization_id),
+                EventApparatusSeat.event_id.in_(event_ids),
+            )
+            .group_by(EventApparatusSeat.event_id)
+        )
+        return {
+            str(event_id): (int(f or 0), int(t or 0)) for event_id, f, t in rows.all()
+        }
+
     async def _night_rows(
         self, organization_id: str, *conditions: Any, order_desc: bool = False
     ) -> List[Dict[str, Any]]:
@@ -1479,6 +1533,7 @@ class ApparatusEventService:
             return []
         event_ids = [str(event.id) for event, _plan in rows]
         seat_counts, units = await self.crew_summary(organization_id, event_ids)
+        essential = await self.essential_summary(organization_id, event_ids)
         checked_in = {
             str(event_id): int(count)
             for event_id, count in (
@@ -1499,6 +1554,7 @@ class ApparatusEventService:
         out = []
         for event, plan in rows:
             filled, total = seat_counts.get(str(event.id), (0, 0))
+            essential_filled, essential_total = essential.get(str(event.id), (0, 0))
             out.append(
                 {
                     "event": event,
@@ -1511,6 +1567,8 @@ class ApparatusEventService:
                     "unit_numbers": units.get(str(event.id), []),
                     "filled": filled,
                     "total": total,
+                    "essential_filled": essential_filled,
+                    "essential_total": essential_total,
                     "is_cancelled": bool(event.is_cancelled),
                     "attendance_finalized": attendance_is_finalized(event),
                     "checked_in": checked_in.get(str(event.id), 0),
