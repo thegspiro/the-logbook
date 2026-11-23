@@ -1784,8 +1784,9 @@ without a ruling:
   Outreach Impact counts by, so the two pages cannot disagree (pitfall #29). An
   apparatus night whose template uses a non-public type (business meeting,
   other) is therefore not on the Overview, though it stays on Apparatus Events.
-  Widening the rule would change Outreach Impact's counts too. "Has a CRR
-  activity" joins the rule with the Outreach Impact breakdowns (CRR part 3).
+  Widening the rule would change Outreach Impact's counts too. Activities can
+  be recorded only on events the rule already counts, so it did not need
+  widening for CRR (part 3, 2026-11-23).
 - **"Closed out" is attendance finalized**, per the 2026-11-20 decision
   (completion on finalize). An event with a headcount but no finalize still
   shows as waiting; a draft never does.
@@ -1847,8 +1848,39 @@ Boundaries drawn without a ruling:
 - **A member credited 0 minutes is recorded as taking part** but credits no
   time.
 
-Still to build: the Outreach Impact breakdowns by count, risk, population and
-ZIP (part 3), and yearly goals per count (phase 4).
+**Part 3 — Outreach Impact breakdowns (built 2026-11-23).** A Community risk
+reduction section on Outreach Impact, and on its print page. Owner decisions
+of 2026-11-23:
+
+| Question                       | Decision                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------- |
+| Which period                   | The page's own switch, with its comparison against the previous period           |
+| What a risk or population sums | Activities and each count's total; an activity counts under every tag it carries |
+| How ZIP codes are shown        | A list, and a street map from OpenStreetMap's tiles                              |
+| Export                         | Screen and print page only; the CSV stays the events list                        |
+
+Boundaries drawn without a ruling:
+
+- **The map loads only when someone presses Show map.** Opening it makes the
+  viewer's browser fetch tiles from `tile.openstreetmap.org`, which tells
+  OpenStreetMap the area being viewed; nothing else is sent. The CSP allows
+  that one host for images, and `tests/test_csp_map_tiles.py` holds the nginx
+  configs and the map to it. An air-gapped install sees the circles over a
+  blank background. OpenStreetMap's tile usage policy suits a department's
+  occasional use; a department that wants heavy use, or no outside contact,
+  needs a self-hosted tile server, which is not built.
+- **A circle sits at each ZIP code's centre,** sized by activities. It is not
+  a boundary shape: GeoNames gives a point per ZIP, and ZIP boundaries are
+  large data the app does not bundle.
+- **The print page has the tables, not the map.** A street map does not print
+  reliably.
+- **"Events with CRR activities count as outreach" changes nothing**, so the
+  shared outreach rule is not widened: an activity can only be recorded on an
+  event that already counts.
+- **Retired types, counts and tags still appear** when they have activity in
+  the period.
+
+Still to build: yearly goals per count (phase 4).
 
 **The footer credit is hidden on a phone,** with the rest of its line: a link
 on every page's footer would be a tap target under 44px on every route. The

@@ -1715,7 +1715,7 @@ down. Manage the crew on that event's page.
 > cancelled event, so add it again from the request once it is rescheduled.
 > A moved date is not re-checked for apparatus conflicts; look at **Shift
 > Scheduling** for that day if the engine might be committed elsewhere. **Volunteer signups** for the same request stay
-available; a visit can have an engine crew and extra educators.
+> available; a visit can have an engine crew and extra educators.
 
 ---
 
@@ -2023,12 +2023,12 @@ creation tab. Both are pages of **Events Administration**, which is laid out
 like Training, Scheduling and Inventory Administration: four area cards, and
 under them a strip of the chosen area's pages with a line naming the open one.
 
-| Area                   | Pages                                                                      |
-| ---------------------- | -------------------------------------------------------------------------- |
-| **Events**             | **Create Event**, **Past Events**                                          |
-| **Community Outreach** | **Overview**, **Outreach Requests**, **Outreach Impact**, **Apparatus Events** |
-| **Check-ins**          | **QR Code Analytics**, **Card Check-ins** |
-| **Settings**           | **Settings**                              |
+| Area                   | Pages                                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------- |
+| **Events**             | **Create Event**, **Past Events**                                                                  |
+| **Community Outreach** | **Overview**, **Outreach Requests**, **CRR Activities**, **Outreach Impact**, **Apparatus Events** |
+| **Check-ins**          | **QR Code Analytics**, **Card Check-ins**                                                          |
+| **Settings**           | **Settings**                                                                                       |
 
 An area card and the page under it carry a red count when the **Needs
 attention** list has items there.
@@ -2864,6 +2864,7 @@ scheduling and communication.
    > with one type reading "Usually needs 2 × Tour Guide, 1 × Greeter" and
    > another open for editing, showing **Add a role**, **Clear preset** and
    > **Save roles**.
+
 4. Under **Handling** (**Request Handling**), set:
    - **Default Coordinator** — the member assigned every new request. The
      list shows each member's rank by name ("Jordan Avery — Firefighter").
@@ -2932,11 +2933,11 @@ back button. **All requests** at the top returns to the list. The page leads
 with the one action that moves the request forward; on a phone that button
 stays in a bar at the bottom of the screen while you scroll:
 
-| Status                   | Main button                                     |
-| ------------------------ | ----------------------------------------------- |
-| New, nobody assigned     | **Take it**                                     |
-| New, assigned            | **Start working**                               |
-| In progress or postponed | **Schedule event**                              |
+| Status                   | Main button                                       |
+| ------------------------ | ------------------------------------------------- |
+| New, nobody assigned     | **Take it**                                       |
+| New, assigned            | **Start working**                                 |
+| In progress or postponed | **Schedule event**                                |
 | Scheduled                | **Mark completed**, once the event's date is past |
 
 **Completing a request** _(2026-11-21)_. **Finalizing the event's
@@ -3257,6 +3258,24 @@ Under the figures:
 - **Recent outreach events** lists the latest fifty with their crew and hours.
   **Export CSV** downloads every event in the period, not only the fifty, so a
   spreadsheet totals to the figures on the screen.
+
+**Community risk reduction.** Beneath those, the
+[CRR activities](#crr-activities) recorded in the period, both log entries and
+activities at events:
+
+- **By activity** — each activity type's counts (**Alarms installed: 23**),
+  each with its change since the same point last period.
+- **By risk** and **By priority population** — how many activities, and how
+  much of each count, went to Fire, Falls, Older adults and so on. An activity
+  tagged with two risks counts under both, so these lists do not add up to the
+  total.
+- **By ZIP code** — each ZIP code with its city and state, its activities and
+  counts. **Show map** opens a street map with a circle at each ZIP code,
+  sized by its activities. The map is drawn from OpenStreetMap, so it loads
+  only when you open it; if your network blocks OpenStreetMap, the circles
+  still show, over a blank background.
+
+The printed summary carries the same three lists, without the map.
 
 #### Recording a guest headcount
 

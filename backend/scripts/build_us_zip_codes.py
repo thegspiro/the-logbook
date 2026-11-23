@@ -10,7 +10,10 @@ for credit with a link to www.geonames.org. The app's footer carries it, and
 app/data/us_zip_codes.LICENSE.txt records the terms beside the file.
 
 Output shape, one entry per five-digit ZIP, sorted, so a refresh reads as a
-small diff: {"02134": ["Allston", "MA", "Suffolk"], ...}
+small diff: {"02134": ["Allston", "MA", "Suffolk", 42.3539, -71.1337], ...}
+The coordinates are the ZIP's centre as GeoNames gives it, rounded to four
+decimals (about 11 m); Outreach Impact's map places each ZIP there. A ZIP
+GeoNames lists without coordinates keeps only its first three fields.
 """
 
 import io
@@ -26,11 +29,27 @@ OUTPUT = Path(__file__).resolve().parents[1] / "app" / "data" / "us_zip_codes.js
 # Columns of the GeoNames postal code dump (its readme.txt): country code,
 # postal code, place name, admin name1 (state), admin code1 (state code),
 # admin name2 (county), ...
+# admin code2, admin name3, admin code3, latitude, longitude, accuracy.
 _ZIP, _PLACE, _STATE_CODE, _COUNTY = 1, 2, 4, 5
+_LATITUDE, _LONGITUDE = 9, 10
 
 
-def parse(text: str) -> dict[str, list[str]]:
-    places: dict[str, list[str]] = {}
+def _coordinates(fields: list[str]) -> list[float]:
+    """[latitude, longitude] rounded to four decimals, or [] when absent."""
+    if len(fields) <= _LONGITUDE:
+        return []
+    try:
+        latitude = float(fields[_LATITUDE])
+        longitude = float(fields[_LONGITUDE])
+    except ValueError:
+        return []
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return []
+    return [round(latitude, 4), round(longitude, 4)]
+
+
+def parse(text: str) -> dict[str, list[str | float]]:
+    places: dict[str, list[str | float]] = {}
     for line in text.splitlines():
         fields = line.split("\t")
         if len(fields) <= _COUNTY:
@@ -45,6 +64,7 @@ def parse(text: str) -> dict[str, list[str]]:
                 fields[_PLACE].strip(),
                 fields[_STATE_CODE].strip(),
                 fields[_COUNTY].strip(),
+                *_coordinates(fields),
             ],
         )
     return dict(sorted(places.items()))

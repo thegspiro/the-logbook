@@ -35,6 +35,7 @@ from app.models.event_request import (
     EventRequestStatus,
 )
 from app.models.user import Organization
+from app.services.crr_impact_service import CrrImpactService
 from app.services.dashboard_widget_service import (
     is_outreach_event,
     outreach_event_clause,
@@ -525,6 +526,9 @@ class CommunityEngagementService:
             "by_type": self._by_type(rows),
             "materials": self._materials(rows),
             "recent_events": [self._row(r) for r in rows[:RECENT_EVENT_LIMIT]],
+            "crr": await CrrImpactService(self.db).breakdown(
+                organization_id, start, end, previous
+            ),
         }
 
     async def load_event(self, organization_id: str, event_id: str) -> Optional[Event]:
