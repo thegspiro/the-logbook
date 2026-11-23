@@ -1267,7 +1267,10 @@ class AnnualComplianceReportService:
                 "records_with_instructor": field_lookup.get("instructor", 0),
                 "records_with_location": field_lookup.get("location", 0),
                 "records_with_hours": field_lookup.get("hours_completed", 0),
-                "records_with_certification": field_lookup.get("course_name", 0),
+                # Named for what it counts. It was "records_with_certification"
+                # over the same course-name check, which no certification
+                # field feeds (CS-9).
+                "records_with_course_name": field_lookup.get("course_name", 0),
                 "completeness_pct": record_completeness["overall_completeness_pct"],
                 # The dashboard reads both of these without guarding, so
                 # omitting them threw on `field_details.map` and took the whole

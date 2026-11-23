@@ -3215,10 +3215,11 @@ tbody tr:last-child {
   color: #92400e;
 }
 /* No requirement grades the member: neither a pass nor a warning. An exempt
-   member is excused from grading, so the record prints it muted too, as the
-   profile card and My Crew show it. */
+   member is excused from grading, and a former member is not graded, so the
+   record prints both muted too, as the profile card and My Crew show them. */
 .member-training-print__compliance--exempt,
-.member-training-print__compliance--not_applicable {
+.member-training-print__compliance--not_applicable,
+.member-training-print__compliance--not_current_member {
   color: #555;
 }
 .member-training-print__stats,

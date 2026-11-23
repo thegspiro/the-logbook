@@ -17,6 +17,7 @@ from app.core.utils import generate_uuid
 from app.models.training import TrainingWaiver, TrainingWaiverType
 from app.models.user import LeaveType, MemberLeaveOfAbsence, User
 from app.utils.model_updates import apply_updates
+from app.utils.separation_of_duties import is_own_grant
 
 
 class MemberLeaveService:
@@ -110,7 +111,7 @@ class MemberLeaveService:
         their own requirements. Their own leave goes through a leave request,
         whose approvers never include the requester.
         """
-        if granted_by is not None and str(granted_by) == str(user_id):
+        if is_own_grant(granted_by, user_id):
             raise ValueError(
                 "You cannot grant your own leave of absence. Submit a leave "
                 "request, or ask another officer."

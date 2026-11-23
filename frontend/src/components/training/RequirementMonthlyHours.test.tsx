@@ -187,6 +187,29 @@ describe('RequirementMonthlyHours', () => {
     expect(screen.getByText(/2 shifts\/month needed/)).toBeInTheDocument();
   });
 
+  it('counts a partly excused month for its active share, as the server does', async () => {
+    const user = userEvent.setup();
+    render(
+      <RequirementMonthlyHours
+        requirement={requirement({
+          name: 'Shift Coverage',
+          requirement_type: 'shifts',
+          required_hours: 2,
+          original_required_hours: 24,
+          completed_hours: 3,
+          monthly_hours: null,
+          monthly_counts: [
+            { month: '2026-01', count: 1, waived: false },
+            { month: '2026-02', count: 2, waived: true, waived_share: 0.5, on_leave: true },
+          ],
+        })}
+      />
+    );
+    await user.click(screen.getByRole('button', { name: /show monthly shifts/i }));
+    // 3 shifts over one and a half active months: 2 a month, not 1.
+    expect(screen.getByText(/average 2 shifts\/month in the 1\.5 months not excused/)).toBeInTheDocument();
+  });
+
   it('says calls for a call requirement', async () => {
     const user = userEvent.setup();
     render(
