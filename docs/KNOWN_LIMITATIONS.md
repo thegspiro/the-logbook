@@ -143,10 +143,43 @@ for it.
 
 - **"Email the membership that seats are open"** — built 2026-11-20 as
   **Email members** on the crew card; see "Open-seat email" below.
-- **"Coordinator approves self sign-ups."** A claimed seat is taken at once.
-  An approval step needs a pending state on the seat and a reviewer's screen.
+- **"Coordinator approves self sign-ups."** — built 2026-11-23 as a
+  per-template setting; see "Self sign-up approval" below.
 - **"Message crew"** on the night. The existing event reminders reach a
   night's RSVPs, which every seat holder has.
+
+### Self sign-up approval (owner decisions of 2026-11-23)
+
+**Coordinator approves self sign-ups** is a template setting, copied to each
+night it schedules and changeable in **Edit this night**. While it is on,
+**Sign me up** reads **Ask for this seat**. The seat stays open, so several
+members can ask for the same one. Approving one member declines the others.
+The night's organizer and alternate are emailed each request ("Event officer
+duties"), and the member is emailed the answer ("Event changes and
+cancellations"). A request nobody answers is declined when the night starts,
+by the `apparatus_seat_request_lapse` task every 15 minutes. Choices made
+without a ruling:
+
+- **One waiting request per member per night.** A member who wants a
+  different seat withdraws the first request. This matches the one seat per
+  night a member can hold.
+- **The organizer and alternate are told only if they hold
+  `apparatus_events.manage`**, because only they can answer. Failing both,
+  the event's creator is told, if they hold it. When nobody qualifies, the
+  request still waits on the crew card and in the nights list, with no
+  email. Nights scheduled from a template make the person who scheduled them
+  the organizer.
+- **No bell notification.** Email is the channel of record (pitfall #18), and
+  the crew card and nights list show what is waiting.
+- **Switching approval off leaves waiting requests decidable.** They stay on
+  the card for the coordinator. A member who then signs up takes the seat at
+  once, and anyone waiting on that seat is declined.
+- **Lapsing has up to 15 minutes of delay.** Approval is refused from the
+  night's start, so a late answer is never possible, but the "not answered"
+  email can arrive up to a quarter of an hour after the start.
+- **At most once, not at least once.** Each request is closed and committed
+  before its email goes out. A crash between the two loses that member's
+  email; the request is gone from the card either way (pitfall #36).
 
 ### Boundaries chosen without a ruling
 
@@ -943,6 +976,29 @@ read-only roster with filters, not a form. Not converted, and still listed in
 reports, eligibility, outside apparatus, notifications, platoons, and the
 defaults cards under the footer's Save Settings).
 
+**Rolled out further on 2026-11-23** (training batch E, part 1): the
+requirement editor, opened from Training Admin's requirements page and from
+Programs' Requirements tab, and the skill template builder. The same rules
+apply. A new requirement or template is created only once every flagged field
+is fixed. An edited requirement saved for everyone saves the rest; a refused
+target keeps the stored type and target together, and a save for new members
+only, which makes a new copy, saves whole or not at all. An edited template
+saves its settings and keeps the stored sheet while any section or criterion
+is flagged, because the sheet is replaced whole on every save; Publish stays
+refused until every error is fixed. Default taken: the builder's sheet rules
+the API does not enforce (a checklist step with no item, a statement with no
+text, a deduction with no points to come off) still hold the sheet back on
+Save, not only on Publish, as they did before; making them Publish-only would
+let a draft store steps that score nothing, and is the owner's to decide.
+
+**Rolled out further on 2026-11-23** (training batch E, part 2): the course
+library's Add / Edit Course, External Training's Add and Edit Provider, and
+Record Crew Training. The same rules apply. Adding a course or a provider and
+recording crew training create nothing until every flagged field is fixed;
+crew training now flags every open problem at once instead of one banner at a
+time. Editing a course or a provider saves the rest and keeps a refused field
+flagged. An edited provider's cleared description is now saved as cleared.
+
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
 
@@ -1693,6 +1749,11 @@ limitation:
   `training.manage` holder can no longer excuse their own training this way**;
   another officer must be given the permission, or the leave-request route
   used.
+  Owner confirmed 2026-11-23: no exception for a lone Chief. The Waivers
+  page now says so as soon as an officer picks themselves, links to Leave
+  Requests and keeps the form from submitting, and it offers no Edit on the
+  officer's own leave. Leave, overrides and training waivers share one check,
+  `is_own_grant` in `app/utils/separation_of_duties.py`.
 - ~~**An applicant's edited email or name and birth date can make a coordinator's
   self-access guard hide their file (ADV2-10).**~~ ✅ Resolved 2026-11-21
   (owner: trust only `transferred_user_id` once the applicant edits). An
@@ -1770,6 +1831,33 @@ limitation:
 | **jsdom held at 30.0.1**                    | ⚠️ Open (2026-09-22)                                                                     | vitest replaces jsdom's `URL.createObjectURL` with a shim that copies each jsdom `Blob` into a Node `Blob`, and it locates jsdom's private implementation object by taking the _first_ own symbol of `new window.Blob()`. jsdom 30.1 changed that, so `blob[implSymbol]` is `undefined` and the shim throws `Cannot read properties of undefined (reading '_buffer')` from inside `URL.createObjectURL` — under vitest 4.1.11 and 5.0.1 alike, and with jsdom 30.1.0 and 30.1.1 alike. The four photo tests in `EquipmentCheckFormCounts.test.tsx` fail on it. It is test-environment only: jsdom is a devDependency and the shipped app never loads it. `frontend/package.json` and the root `package.json` therefore keep `jsdom` at 30.0.1, and `.github/dependabot.yml` ignores `jsdom >= 30.1.0`. Lift both once a vitest release handles jsdom ≥ 30.1.                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Images run newer runtimes than CI tests** | ✅ Resolved (owner decision 2026-11-01: pin images to tested versions; built 2026-11-03) | `backend/Dockerfile` built on `python:3.14-slim` and `frontend/Dockerfile` on `node:26-alpine`, while every test job in `.github/workflows/ci.yml` runs on Python 3.13 and Node 22, so the suites never ran on the interpreter production used. **Resolved 2026-11-03:** the backend now builds on `python:3.13-slim` and both Node stages of the frontend on `node:22-alpine` (variants unchanged; tags, not digests, as before). The combined Unraid image (`docker/combined/Dockerfile`) is built on top of those two images rather than naming a runtime of its own, so it inherits the same versions. `tests/test_image_runtime_versions.py` reads the `setup-python` / `setup-node` versions out of every workflow and the `FROM` lines out of every Dockerfile and fails when they disagree, and also checks the `engines.node` floor in both `package.json` files names the same major — so the next bump has to move CI and the images together. `nginx:alpine` is not pinned: it runs no code the suites test. Tags float within a minor (`3.13-slim` takes each 3.13.x patch), which is the precision CI itself uses.                                                                                                                             |
 | **No nested `frontend/package-lock.json`**  | ✅ Resolved (2026-08-05)                                                                 | The repo is npm **workspaces** (`workspaces: [backend, frontend]`), so the root `package-lock.json` is the only lockfile `npm ci` reads, and `frontend/Dockerfile` copies just `package.json` and runs `npm install`. A stale nested lock had survived since PR #1071, pinning axios 1.13.6 / form-data 4.0.5 / @remix-run/router 1.23.0 while the root lock carried the patched axios 1.19.0 and form-data 4.0.6. Nothing installed from it — but Trivy scans every lockfile it finds, so it reported 12 HIGH advisories against dependency versions the build does not use. Deleted. Do not re-add a per-workspace lockfile; run `npm install` from the repo root.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+
+## Compliance Consistency — Defaults Taken (2026-11-23)
+
+Five screens that disagreed with the shared grader now report what it decided
+(CLAUDE.md pitfall 29). Where the fix needed a choice, the conservative one was
+taken; each can be revisited.
+
+- **Former members are not graded.** The profile card and the training
+  officer's member view report "Not a Current Member" for anyone whose account
+  status is not current (`ACTIVE_ACCOUNT_STATUSES`, pitfall 32) or who is
+  deleted, checked before the compliance exemption. A status of `leave` or
+  `suspended` counts as not current, because the compliance matrix leaves those
+  members out too. The officer view returns no requirement list for them; the
+  member's training records are unchanged and still listed.
+- **Shift Compliance hours count finalized shifts only.** Shift-credited HOURS
+  rows are now graded by the shared grader over the requirement's compliance
+  window, with training waivers, like the SHIFTS rows. Their hours follow the
+  SHIFTS rows' rule: attendance on a shift not yet finalized stops counting
+  until an officer finalizes it. Counted external shifts and approved pre-shift
+  work on finalized shifts still count.
+- **The monthly average weights a partly excused month.** Each month counts for
+  its unexcused share (`1 - waived_share`), so a half-excused month is half a
+  month with all of its hours. Hours earned in such a month cannot be split by
+  the day, so all of them count against the active half, which can read
+  slightly high. A wholly excused month and its hours are still left out.
+- **The dashboard percentage has one decimal**, the Admin hub's figure
+  (`OrgComplianceTally.pct`).
 
 ## Training Module
 
@@ -3654,7 +3742,7 @@ Per-module docs under `docs/module-audit/` carry the full lower-severity list.
 | **Security/IP: global country-block table + geo fail-open**                                                                                                                     | ✅ Resolved                                                                                                                             | Geo-blocking is a platform-edge control (enforced before any tenant/auth context, against one shared MaxMind DB + one global blocked-country set), so per-org `CountryBlockRule` rows don't fit the enforcement model. Instead: (1) `GEOIP_FAIL_CLOSED` (default False) makes `is_ip_blocked` block any IP whose country can't be resolved — including the missing/corrupt-DB case — closing the "silently disabled app-wide" hole; private/reserved IPs are still allowed first, so an internal operator can recover (correction 2026-08-27: allowlisted IPs are no longer part of that recovery path; resolved 2026-10-05 by a dedicated per-IP allowlist lookup kept separate from this recovery path — see `docs/security-review/SEC2-28-security-audit-ip.md` → SEC2-28-5). (2) The two mutating country-rule endpoints are gated by `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` (default False), so an org admin can no longer alter the shared cross-tenant blocklist via the API — the operator sets it at deploy time via `BLOCKED_COUNTRIES`. The non-destructive audit-chain ops (`/checkpoint`, read-only `/integrity`) remain on `audit.export`/`audit.view`. (SEC-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **Security monitoring: anonymous brute-force alerts on a multi-organization install have no viewer**                                                                            | Open — needs a platform-operator design (narrowed 2026-10-05)                                                                           | The rest of this item is resolved (owner decision SEC2-28-alerts, "build UI + backend fixes"): `/admin/security-alerts` lists, acknowledges and resolves alerts with an attributed audit trail; the exfiltration check sizes exports from the bytes sent rather than a `Content-Length` header and matches parameterized export routes; every export is logged (route, size, member, IP — never the content or query string) and listed under `GET /security/download-activity`; and a failed sign-in against a known account now attributes its brute-force alert to that account's department, while a single-organization install attributes every tenant-less alert to its one department. **What remains:** on an installation hosting **more than one** organization, a brute-force alert against an _unknown_ username belongs to no tenant and is stored with `organization_id = NULL`, which no org-scoped view returns. Showing it needs a decision on who may see login-page activity that is not their department's — a platform-operator role, which this codebase does not have — and that is not inferred here. See `docs/security-review/SEC2-28-security-audit-ip.md` → SEC2-28-7.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **Security/Audit: the hash chain had no write-concurrency control — two simultaneous audit-log writes forked the chain, and `verify_integrity` reported the fork as tampering** | ✅ Resolved (2026-10-12, owner decision: rows stay in the caller's transaction; a separate sealer orders and hashes them)               | **Was:** `AuditLogger.create_log_entry` read the chain's last row (for the new row's `previous_hash`) with a plain, non-locking `SELECT`, inside the caller's transaction. Two writers on two sessions read the same last row and wrote the same `previous_hash` (100% reproduction on a fresh chain); `verify_integrity` then reported `"Chain broken"` and `get_security_status` raised a `LOG_TAMPERING` CRITICAL alert. Reachable unauthenticated through `IPBlockingMiddleware._log_blocked_attempt`, which writes an audit row on its own session for every blocked request. **Now:** the write and the chain are separate steps. `create_log_entry` inserts the row in the caller's transaction exactly as before — a rolled-back action leaves no row, and a caller that aborts when the audit write fails keeps that guarantee — but with `chain_seq`, `previous_hash`, `current_hash`, `hash_version` and `signing_key_id` all NULL. `AuditLogger.seal_pending`, in its own short transaction, locks the single `audit_chain_head` row (`SELECT ... FOR UPDATE`), seals the committed unsealed rows in id order (position, previous hash, HMAC under the existing v4 scheme, key id), advances the head and commits. Two sealers serialize on that row and cannot fork; no lock is taken inside a caller's transaction. Migration `bcd688674099` adds `audit_logs.chain_seq` (unique; backfilled to `id`, the old chain order), makes the two hash columns nullable and creates `audit_chain_head`, seeded from the current tail so existing chains continue without a break. **When the sealer runs:** every commit that carried audit rows starts it in the background (a `Session` `after_commit` hook; one in-flight sealer per process, so a burst of blocked requests cannot open a connection per row), at startup before the integrity check, and from the `audit_chain_seal` scheduled task every minute as the backstop for anything those missed (a worker that exited first, a failed attempt). **Chain order is `chain_seq`, not id:** a transaction that inserts early and commits late is sealed after rows with higher ids. `verify_integrity` and `rehash_chain` walk by `chain_seq`; off-host shipping (SEC2-28-9) ships only sealed rows, in chain order, and its watermark (`audit_ship_state.last_shipped_id`, kept under its old name) now holds a chain position — equal to the id for every row sealed before the change; batches also carry `X-Logbook-First-Seq`/`Last-Seq`; retention purges only at a checkpoint boundary that is a clean prefix of the chain, and checkpoints refuse a range containing an unsealed row. **Left open, by design:** a row is unsealed between its commit and the seal — normally milliseconds, at worst until the next scheduled run (about a minute) if the after-commit seal failed. In that window it is not verified, not shipped and not checkpointable; `verify_integrity` reports it in `pending_seal` instead of as tampering, so a non-zero count that persists past a minute means the sealer is failing, not that the log was altered. The downgrade refuses while any row is unsealed, and after it the previous code verifies in id order, so a row that was sealed out of id order reads as a broken link until re-upgraded. Tests: `tests/test_audit_chain_sealing.py`. See `docs/security-review/SEC2-28-security-audit-ip.md` → SEC2-28-10. |
-| **Compliance: reporting correctness & email abuse-surface polish**                                                                                                              | Partially resolved (LOW/MED)                                                                                                            | **Fixed:** the report email HTML now `html.escape`s the org name, `report_type`, and period label (was raw interpolation of user-controlled values — mail-client HTML/script injection); `report_type` is constrained to `monthly`/`annual` (was free-form, persisted + interpolated). **Still flagged:** report emailing accepts client-supplied recipients (external auditors are a legitimate case — **owner decision 2026-08-09: allow any recipient, but audit-log each send to a non-member address**; `_email_report` now calls `audit_external_recipients`, which writes an `external_recipient_send` audit event listing every out-of-org address); attestation history over-fetch is **resolved** — this row previously said it was still blocked on a deferred `audit_logs.organization_id` column; that column was added and the query updated on 2026-07-30 (`d07a51821`, "Add organization_id to the audit log with org-scoped reads"), and `get_attestation_history` (`compliance_officer_service.py`) has filtered `AuditLog.organization_id == str(organization_id)` directly in the query — not a global fetch with Python-side filtering — since before this row's own last edit; corrected here during the CMP-20 security-review pass 8 re-verification (2026-10-16); `records_with_certification` mislabel left as-is (ambiguous intent). (CS-9)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Compliance: reporting correctness & email abuse-surface polish**                                                                                                              | Partially resolved (LOW/MED)                                                                                                            | **Fixed:** the report email HTML now `html.escape`s the org name, `report_type`, and period label (was raw interpolation of user-controlled values — mail-client HTML/script injection); `report_type` is constrained to `monthly`/`annual` (was free-form, persisted + interpolated). **Still flagged:** report emailing accepts client-supplied recipients (external auditors are a legitimate case — **owner decision 2026-08-09: allow any recipient, but audit-log each send to a non-member address**; `_email_report` now calls `audit_external_recipients`, which writes an `external_recipient_send` audit event listing every out-of-org address); attestation history over-fetch is **resolved** — this row previously said it was still blocked on a deferred `audit_logs.organization_id` column; that column was added and the query updated on 2026-07-30 (`d07a51821`, "Add organization_id to the audit log with org-scoped reads"), and `get_attestation_history` (`compliance_officer_service.py`) has filtered `AuditLog.organization_id == str(organization_id)` directly in the query — not a global fetch with Python-side filtering — since before this row's own last edit; corrected here during the CMP-20 security-review pass 8 re-verification (2026-10-16); `records_with_certification` mislabel **resolved 2026-11-23**: the key is now `records_with_course_name`, the count it always was; certification numbers are not counted (an API change for any JSON reader of the old key). (CS-9)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **Compliance: "notify non-compliant members" / reminder-days settings were stored but never sent**                                                                              | ✅ Resolved 2026-10-11 (owner decision: build the daily email task — settings work as configured, email-first)                          | **Resolved per the owner's decision.** The daily `compliance_member_notices` scheduled task (`app/services/compliance_member_notices.py`, registered in `TASK_RUNNERS`/`TASK_INTERVALS_SECONDS`) reads both settings, each on its own: `notify_days_before_deadline` emails a member a reminder for each unmet requirement whose deadline (the end of its current compliance window, or the member's catch-up deadline) is that many days away — the most urgent begun window, so a missed run still sends; `notify_non_compliant_members` emails a member whose standing is `non_compliant` a notice listing what is unmet. Members are graded by the shared evaluator (`training_compliance.grade_org_members`, the same rules as `compute_org_compliance_tally`), so the emails agree with the dashboard and matrix. Email only (`EmailKind.TRAINING_REMINDERS`, honouring a member's opt-out unless the department requires it); idempotent through email-channel `NotificationLog` rows keyed by (requirement, deadline, offset) and by the unmet (requirement, window) set. The panel's "Not yet active" warning is gone. **Behaviour to know on upgrade:** a department whose saved configuration holds the suggested `[30, 14, 7]` starts sending reminders on the first run; clearing the list stops them. **Not changed:** `grace_period_days` is still not consulted by any grading (outside this decision; the configuration page says so). Tests: `tests/test_compliance_member_notices.py`. (CMP2-1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Finance: no separation of duties on terminal money movement**                                                                                                                 | ✅ Resolved (owner decision: same-person guard, no new role)                                                                            | **Resolved 2026-10-11 per the owner's decision — guard the same person on every disbursement, add no new role.** The request **approval step** calls the shared `assert_different_person` guard, so one person cannot both raise a purchase/check request and approve it. `mark_pr_paid`, `mark_expense_paid`, `issue_check` and `waive_dues` each compare the actor against the request's `requested_by` / the expense's `submitted_by` / the dues member and refuse on a match. **`record_dues_payment` now does the same** (`recorded_by` vs `dues.user_id`, refused before the ledger is touched), matching its storefront analogue `record_payment` and its sibling `waive_dues` on the same record — the gap OPS-8 recorded. `void_check` and `unwaive_dues` take no actor and are reversals that move money _away_ from the actor, so they are correctly unguarded. **Accepted, by decision:** there is no distinct `finance.disburse` permission, so this is self-dealing prevention rather than three-way separation — a `finance.manage` holder can still execute an already-approved payment that somebody else raised. The owner chose this over a new role because a small department would need a second holder of it. A treasurer paying their own dues must have another `finance.manage` holder record it. Tests: `tests/test_dues_payment_guards.py::TestRecordingYourOwnDuesIsRefused`, `tests/test_money_separation_of_duties.py`. (FIN-4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **Finance: dues administration has no UI — every write is API-only**                                                                                                            | ✅ Resolved (owner decision, 2026-10-11)                                                                                                | _Resolved 2026-10-11 (owner: "build it — documented click-paths become real")._ **Finance › Dues** now carries, for a `finance.manage` holder: **New schedule** / **Edit schedule** (`DuesScheduleDialog`), **Generate dues** behind a confirmation, **Record payment** (`DuesPaymentDialog`, amount prefilled with what is owed), **Waive** and **Reverse waiver** (reason required, `PromptDialog`), and a **Payment history** dialog over `GET /finance/dues/{id}/payments` for every reader. `GET /finance/dues` now sends each row's `memberName`, so the list names members instead of showing a user id. ~~**Still open:** the schedule form offers only name, amount, frequency, due date, notes and active, because nothing reads the stored grace period, late fee, fiscal year or membership types (pitfall #19) — generation bills every active member and no late fee is ever charged; the payment history does not show who recorded each payment (the id is stored, the name is not sent).~~ **✅ Resolved (owner decisions 2026-11-01: "Show the name" and "Build them"; built 2026-11-06).** The payment history names who recorded each payment (`recordedByName` on `GET /finance/dues/{id}/payments`; "a former member" when that account is gone). The schedule form offers the grace period, late fee, fiscal year and membership types, and all four now apply (`app/services/dues_terms.py`): generation bills only members whose membership standing is a listed tier (none listed bills everyone, as before; matched by `member_holds_tier`, the rule an event's "mandatory for" list uses), a due date outside the schedule's fiscal year is refused on save, and generation is refused once that year is closing or locked; the daily `dues_late_fees` task adds the late fee to `amount_due` once, recording it in `late_fee_applied`, on dues still owing after the due date plus the grace period. It is a stored charge, not an on-read rule, so every screen, export and report that totals `amount_due` already includes it; its UPDATE requires `late_fee_applied IS NULL`, so a second or concurrent run charges nothing (pitfall #36). **Existing schedules behave as before until saved:** the new `dues_schedules.terms_effective_at` is NULL for every schedule that existed at upgrade, and such a schedule keeps billing every active member and charging no fee whatever it stores (a late fee or membership list written through the API before now did nothing, and still does not). Saving it from the form sets it — the form says so first — and a fee is charged only where the grace period ends after that instant, so turning terms on never charges for lateness that already happened. A fee already charged is not re-priced when the schedule's fee changes. Tests: `tests/test_dues_terms_and_reminders.py`, `duesTerms.test.tsx`. See `docs/training/11-finance.md`, "Dues & Assessments".                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -4911,11 +4999,26 @@ recorded here rather than built.
    and the credit waits. This also corrects the claim above: re-approval did
    **not** restate the credit (the ledger's idempotency skipped the new
    figure); it does now, through the same restating calculation. Covered by
-   `tests/test_shift_report_credit_restatement.py`. **Residual:** (a) the
-   ledger's numeric reversal never reopens a completed requirement, so an
-   edit that lowers hours below a target the report had met restates the
-   value and percentage but leaves the requirement completed (common to every
-   feed that restates, including a re-finalized training session); (b) the
+   `tests/test_shift_report_credit_restatement.py`. **Residual:** (a) ✅
+   **resolved, owner decision 2026-11-23 ("lowered hours reopen a completed
+   program requirement").** A correction that takes a member below a
+   requirement they had completed — a shift report edited, a training session
+   re-finalized, a credited record voided — moves the requirement back to in
+   progress and clears `completed_at`
+   (`TrainingProgramService._reopen_if_below_target`), and the training
+   officers get the **Program Requirement Reopened** email (migration
+   `bfb747c095c3`) and a bell notice, once per reopening. **Nothing else is
+   changed:** certificates already issued stand, the enrollment stays
+   completed (the rollup's own reopen is skipped for these corrections, where
+   before this change it reopened a completed enrollment whose average fell),
+   and a phase the member advanced to is kept; the notice says so. A drop
+   that stays at or above the target changes nothing, and a later restore
+   completes the requirement again. _Defaults taken:_ only a COMPLETED row
+   reopens — VERIFIED and WAIVED are an officer's decision and stand; a
+   requirement with no numeric target (a certification, a checklist) is never
+   reopened this way; the officers told are those holding a training-officer
+   role, with no SMS. Tests: `tests/test_program_requirement_reopen.py`.
+   (b) the
    edit and the restatement share one request and session but not one
    database transaction, because the shared progress updater commits per
    requirement, as it does on approval; (c) competency is not stepped back
@@ -7380,15 +7483,16 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   the training-enhancements module, the `competency_matrices` table and its
   endpoints, are a different feature and are unchanged. Test:
   `tests/test_competency_matrix_endpoint_retired.py`.
-- **Profiles: admin hours choose their own profile — open, owner question
-  2026-11-21.** A member's admin-hours targets come from the highest-priority
-  matching profile that _carries_ admin hours (ties now resolved as grading
-  resolves them), not from the profile that grades their training. A member
-  whose grading profile has no admin hours therefore takes targets from a
-  lower-priority profile. `admin_hours_service.get_user_hours_compliance` also
-  matches profiles with its own rules, which lack grading's "junior" chip
-  handling. Whether admin hours should follow the grading profile is not
-  decided.
+- **Profiles: admin hours follow the grading profile — ✅ resolved (owner
+  decision 2026-11-23).** A member's admin-hours targets come from the profile
+  that grades their training, when it sets admin hours; when it sets none, from
+  the highest-priority matching profile that does, the rule that held before.
+  `training_compliance.admin_hours_profile` is the one resolver, built on the
+  same `matching_profiles` list grading takes its profile from, so the
+  tie-break and the "junior" chip are grading's own. A junior member under a
+  "junior" profile used to take targets from the profile matching their legacy
+  "probationary" type instead. Tests:
+  `tests/test_admin_hours_follow_grading_profile.py`.
 - **The compliance exports grade Met / Not Met from the report period's
   records only — fixed (owner decision 2026-11-21: status as of today).**
   Confirmed by running before the fix: a certification completed on 1 March
@@ -8797,6 +8901,15 @@ fails loudly rather than double-booking. The same residual exists for the
 store's per-department lock, and for program enrollment, which takes the same
 kind of lock (scope `program_enrollment`) around its duplicate check.
 
+**Series edits (2026-11-23).** A "this and all future events" edit that moves
+the times or changes the room now checks each moved occurrence at its new slot
+and refuses the save, naming the clashing bookings. It ignores the occurrences
+it is moving, since they vacate their old slots. **Default taken:** earlier
+occurrences of the same series, which the edit does not move, still count as
+bookings, so a shift that lands a moved occurrence on an earlier one is refused. An
+edit that moves no occurrence is not refused over a clash already there
+(`tests/test_event_series_room_overlap.py`).
+
 ## Prospects — Seven Drawer Fields Have Readers and No Producer (2026-09-24, resolved 2026-09-24)
 
 Found by the mapper sweep that followed the `election_title` fix (see below).
@@ -9111,11 +9224,22 @@ single-page form. What it changes, and what it leaves:
   `event_templates.training_details`, and picking it fills Training Info as
   well as the event. The Event Templates editor has a Training Details
   section for them, and Save as Template on a Training event saves its
-  session's. Still not carried, because they were not in the owner's list:
+  session's. ~~Still not carried, because they were not in the owner's list:
   the category, program, phase and requirement links, Counts toward
   attendance, and the completion settings (counts toward certification,
   auto-create records, completion sign-off and its deadline); they start on
-  their defaults. A template whose library course is no longer in the Course
+  their defaults.~~ **Resolved 2026-11-23 (owner decision, "Templates keep
+  more fields"):** a Training template now also keeps the category, program
+  and phase, the requirement link, Counts toward attendance and the
+  completion and sign-off settings. Each linked id is checked to be the
+  department's when saved; applying the template drops any category,
+  program, phase or requirement no longer active (or a phase no longer in
+  its program), with a note, rather than refusing the create
+  (`tests/test_event_template_training_details.py`,
+  `trainingDetailsModel.test.ts`, `CreateTrainingSessionPage.test.tsx`).
+  **Still true:** Save as Template from a library-course event stores the
+  session's hours as typed (`manual`), so a later change to the course's
+  hours does not reach the template. A template whose library course is no longer in the Course
   Library opens on No course yet, and one whose lead instructor is no longer
   a current member opens with Lead instructor empty, each with a note on
   Training Info. The entry below still applies to an event made from a
@@ -11228,9 +11352,10 @@ deleting an event) and the moved-start one.
   correction to a session already held — or one that keeps the same local
   date, such as 19:00 fixed to 19:30 — should reopen the decision at all. Not
   reopening it would change the 2026-11-13 decision, so it was not done here.
-- **`idx_meeting_attendees_meeting` is now a prefix of the new unique
-  `(meeting_id, user_id)` index** and could be dropped; it was left to keep
-  the migration to what the feature needs.
+- ~~**`idx_meeting_attendees_meeting` is now a prefix of the new unique
+  `(meeting_id, user_id)` index** and could be dropped.~~ ✅ Resolved
+  2026-11-23: `b37218495d33` drops it wherever another index leads on
+  `meeting_id` (otherwise MySQL needs it for the foreign key, and it stays).
 
 ## Training — Shift Evaluations: What the 2026-11-13 Review Left Open
 
@@ -11395,9 +11520,13 @@ each case; confirmed by the owner 2026-11-23):
   `user_anonymized` audit event). A later permanent delete of the anonymised
   member collects these kept entries again, which is the one retry path.
   `remove_member_attachments` and the applicant-document step drop the row
-  whatever happens to the file; this step does not, because anonymisation
-  refuses to run twice and a dropped reference would leave a file nothing
-  could find again. Nothing else retries these: retention
+  whatever happens to the file, and since 2026-11-23 (batch A item 1) queue a
+  file that would not delete on `pending_file_deletions` in the same
+  transaction, for the hourly sweep (`member_anonymization`, counted as
+  `attendance_waiver_files_queued` / `applicant_files_queued`). This step
+  keeps its entry instead, because anonymisation refuses to run twice and the
+  entry is how a later permanent delete finds the file. Nothing else retries
+  these kept entries: retention
   (`attachment_retention_days`) is opt-in and covers self-report certificates
   only, so a department that has not set it keeps the file until someone
   removes it by hand.
@@ -11482,11 +11611,33 @@ each case; confirmed by the owner 2026-11-23):
   lost 204 must not show the member a failure. **Still open:** a legacy index
   without `?expected_id=` keeps the old behaviour and is deprecated; the
   shipped screens send the id whenever the entry has one.
-- **File names on path-less entries survive anonymisation.** The
-  anonymisation step relabels only entries naming a stored file, so a
-  `{"file_name": ...}` entry with no `file_path` (what the 2026-11-20
-  migration made of the old bare strings) keeps the uploader's filename, which
-  can be the member's name, on their submissions and records.
+- ~~**File names on path-less entries survive anonymisation.**~~ **Resolved
+  2026-11-23** (batch A item 2): a `{"file_name": ...}` entry with no
+  `file_path` gets the same neutral label as a stored one (`certificate` on a
+  submission, `attachment` on a record, a plausible extension kept).
+  Migration `1f3a6c2d9e40` relabelled the entries of members anonymised
+  before; the names it replaced cannot be recovered.
+- ~~**Anonymisation turned excused meetings into absences.**~~ **Resolved
+  2026-11-23** (batch A item 3): it cleared `meeting_attendees.waiver_reason`,
+  which every attendance reader takes as the excusal. It now writes the
+  standard `Excused: approved request` with no category in its place.
+  Migration `1f3a6c2d9e40` restored the wording on rows of members anonymised
+  before, where `waiver_granted_at` or `waiver_request_id` shows a waiver.
+- ~~**Three workflows deleted training rows and left their files.**~~
+  **Resolved 2026-11-23** (batch A item 4): `void_event_records` deleting a
+  never-credited record, the historical import undo deleting imported records
+  and its drills' events, and a member deleting a submission now queue the
+  files those rows named on `pending_file_deletions` in the delete's own
+  transaction (`event_records_voided`, `historical_import_undone`,
+  `submission_deleted`). The submission delete processes its rows right after
+  the commit; the other two leave them to the hourly sweep. A file another row
+  still names is kept.
+- **Deleting an event leaves its attachment files.** `EventService.delete_event`
+  and the series delete remove the row and every `events.attachments` file it
+  named stays on the volume, named by nothing. Found while closing the drill
+  undo above, which now queues them for the drills it deletes; the ordinary
+  event delete was out of that change's scope. Open for an owner decision on
+  whether event deletes should queue their files the same way.
 - ~~**A training record's own uploaded file has no removal route.**~~
   **Resolved 2026-11-21** (owner decision 2026-11-21, (d)):
   `DELETE /training/records/{id}/attachments/{entry}` and a Remove button in
@@ -11616,3 +11767,48 @@ ones; the list it opens includes lots already expired and applies the
 shelf rule. A lot that expired yesterday is in the list but not in the count.
 
 **The decision:** which rule both should use.
+
+## Facilities — Four Decisions From App Review B4 Pass 6 (2026-11-23)
+
+Recorded rather than changed. Details in `docs/app-review/facilities.md` →
+Pass 6.
+
+### FAC2-8 — Can a maintenance or inspection record move to another facility?
+
+The edit dialogs used to offer a Facility picker that the server ignored, so a
+"moved" record stayed where it was behind a success message. The picker now
+appears only on create. If records should be movable (a work order filed under
+the wrong station), the update schemas need `facility_id`, validated in-org and
+with the record's system re-checked against the new facility.
+
+### FAC2-11 — Which inspection is current, and what does a missed one look like?
+
+Each inspection keeps its own next-inspection date, and recording the next
+inspection does not retire the previous one's, so an inspection done early
+still counts as upcoming. Every dashboard window starts at today, so a date that
+passes without the work done disappears from the counts instead of showing as
+overdue. Compliance checklists cannot be completed from any screen, so they age
+out the same way.
+
+**The decision:** whether the newest inspection of a type supersedes earlier
+ones, whether missed dates should show as overdue, and whether compliance
+checklists get a completion flow.
+
+### FAC2-12 — Maintenance intervals and system test frequencies are stored, never read
+
+Maintenance types carry seeded intervals and systems carry a test frequency,
+and nothing schedules the next occurrence or reports a test as due. Completing
+a system's maintenance does not update the system's last-serviced date.
+
+**The decision:** build recurrence (and the due-test report), or label the
+fields as reference only.
+
+### FAC2-13 — Renaming or archiving a facility leaves its rooms' locations stale
+
+A room's linked Location is updated when the room changes, not when its
+facility does. A renamed facility's rooms keep the old building name and
+address, and an archived facility's rooms stay offered in the Events and
+Storage pickers.
+
+**The decision:** whether facility changes should carry through to room
+Locations, and whether archiving should deactivate them.

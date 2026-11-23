@@ -329,6 +329,55 @@ describe('TrainingProgramsPage', () => {
     expect(await screen.findByText('FCVFD Duty Shifts')).toBeInTheDocument();
   });
 
+  it('saves the rest of a requirement edit the server partly refuses, and keeps the editor open on the field', async () => {
+    mockHasPermission = true;
+    const stored = {
+      id: 'req-1',
+      name: 'FCVFD Hours',
+      description: 'Old',
+      requirement_type: 'shifts',
+      source: 'department',
+      required_shifts: 20,
+      frequency: 'one_time',
+      applies_to_all: true,
+      active: true,
+      due_date_type: 'calendar_period',
+      is_editable: true,
+    };
+    mockGetRequirementsEnhanced.mockResolvedValue([stored]);
+    mockUpdateRequirement.mockReset();
+    mockUpdateRequirement
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Request failed with status code 422'), {
+          isAxiosError: true,
+          response: {
+            status: 422,
+            data: { detail: [{ loc: ['body', 'name'], msg: 'String should have at most 255 characters' }] },
+          },
+        })
+      )
+      .mockResolvedValueOnce({ ...stored, description: 'Reworded' });
+    renderWithRouter(<TrainingProgramsPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Edit FCVFD Hours/i }));
+    const dialog = await screen.findByRole('dialog', { name: /Edit Requirement/i });
+    const description = within(dialog).getByLabelText(/^Description/i);
+    await userEvent.clear(description);
+    await userEvent.type(description, 'Reworded');
+    await userEvent.click(within(dialog).getByRole('button', { name: /Update Requirement/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Save for everyone' }));
+
+    await waitFor(() => expect(mockUpdateRequirement).toHaveBeenCalledTimes(2));
+    const [, resent] = mockUpdateRequirement.mock.calls[1] as [string, Record<string, unknown>];
+    expect(resent).not.toHaveProperty('name');
+    expect(resent.description).toBe('Reworded');
+    const stillOpen = screen.getByRole('dialog', { name: /Edit Requirement/i });
+    expect(within(stillOpen).getByLabelText(/^Name/i)).toHaveAttribute('aria-invalid', 'true');
+    expect(within(stillOpen).getByText(/Requirement saved, except name/)).toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
   it('lists the requirements before the registry import cards', async () => {
     mockHasPermission = true;
     mockGetRequirementsEnhanced.mockResolvedValue([

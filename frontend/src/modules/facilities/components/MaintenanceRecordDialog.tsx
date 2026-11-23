@@ -73,7 +73,15 @@ export default function MaintenanceRecordDialog({ form, titleId, facilities }: P
                 {formError}
               </p>
             )}
-            {facilities && (
+            {/* A record's facility is chosen when it is created. The update schema has
+                no facility_id, so a picker here changed nothing on save (FAC2-8). */}
+            {facilities && editingRecord && (
+              <p className="text-theme-text-secondary text-sm">
+                <span className="font-medium">Facility:</span>{' '}
+                {facilities.find((f) => f.id === editingRecord.facilityId)?.name ?? 'Unknown facility'}
+              </p>
+            )}
+            {facilities && !editingRecord && (
               <FormField {...field('facility_id')} label="Facility" required>
                 {(control) => (
                   <select

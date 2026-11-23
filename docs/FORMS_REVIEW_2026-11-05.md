@@ -479,9 +479,8 @@ greyed out.
 
 **Not yet converted** (F-2 to F-9 still apply to them):
 
-- **Top-level pages:** the locations setup wizard; skill template, course
-  library, external training, training enhancements, knowledge tests and crew
-  training pages; the pipeline create and edit pages; integrations; forms;
+- **Top-level pages:** the locations setup wizard; training enhancements and
+  knowledge tests pages; the pipeline create and edit pages; integrations; forms;
   members admin; the manual shift report and shift detail, reports and
   patterns tabs.
 - **Inventory and assets:** bulk add, size preferences, catalog quick add, the
@@ -706,6 +705,60 @@ Settings); applicant conversion, stage configuration, detail dialog, interviews
 and pipeline settings; onboarding, the public portal, membership, history, the
 org chart node and IP security admin. The other rows are as batches 21 to 23
 left them.
+
+## Rollout status, 2026-11-23 (training batch E, part 1)
+
+The same steps, on these:
+
+| Area     | Converted                                                                                                                  |
+| -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Training | the requirement editor, from Training Admin's requirements page and Programs' Requirements tab; the skill template builder |
+
+The requirement editor toasted one refusal at a time ("Name is required") and
+sent nothing. Every open refusal (name, the target its type needs, who it
+applies to, the grandfathering dates, the year) is now said on its field and in
+a summary. A new requirement is not created until every one is fixed. An edit
+saved for everyone saves the rest; the type and its target are left out
+together when the target is refused, so a new type is never paired with the
+stored target of another, and the cutoff and catch-up deadline likewise. An
+edit saved for new members only makes a new copy, so it saves whole or not at
+all. The two pages no longer swallow a failed save in a toast: it reaches the
+editor, which puts it on its field. Programs has no form of its own; its
+requirement saves are this editor's.
+
+The skill template builder listed its open errors in a banner and saved
+nothing. Each is now flagged on its control (settings, a section's name, a
+criterion's label, points, checklist items, statement text). A new template
+creates nothing until fixed. Save on an existing template saves the settings
+and leaves out a refused one; the sheet is replaced whole by the update, so a
+sheet with an open error keeps the stored sheet while the settings save.
+Publish stays refused until every error is fixed. The settings and sheet are a
+`<form>`; Cancel and leaving the page ask before discarding.
+
+## Rollout status, 2026-11-23 (training batch E, part 2)
+
+The same steps, on these:
+
+| Area     | Converted                                                                                               |
+| -------- | ------------------------------------------------------------------------------------------------------- |
+| Training | the course library's Add / Edit Course; External Training's Add and Edit Provider; Record Crew Training |
+
+Add Course and Add Provider create nothing until every field is fixed. Add
+Provider used to lean on the url input's bubble for the address; the address
+is now checked for a full http(s) URL and the reason said on the field. The
+edits save the rest: a refused field is left out of the update, and a 422 on a
+field is resent without it (a refused review time travels as `config`, which
+the update replaces whole, so the resend leaves the stored config alone).
+Editing a provider sent a cleared description as `undefined`, which the update
+reads as "leave alone"; it is sent as `null` now.
+
+Record Crew Training files one pending submission per member present, so it is
+a create. It checked one thing at a time and said it in a banner at the foot of
+the page; every open problem is now flagged on its field at once, with the
+summary at the top. A future date is refused on the field, as the schema does.
+
+The provider mapping pickers on the same page save as each picker changes and
+hold no typed field; they were looked at and left.
 
 ## Suggested order
 

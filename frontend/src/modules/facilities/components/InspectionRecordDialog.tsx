@@ -116,7 +116,15 @@ export default function InspectionRecordDialog({ form, titleId, facilities }: Pr
                 {formError}
               </p>
             )}
-            {facilities && (
+            {/* A record's facility is chosen when it is created. The update schema has
+                no facility_id, so a picker here changed nothing on save (FAC2-8). */}
+            {facilities && editingInspection && (
+              <p className="text-theme-text-secondary text-sm">
+                <span className="font-medium">Facility:</span>{' '}
+                {facilities.find((f) => f.id === editingInspection.facilityId)?.name ?? 'Unknown facility'}
+              </p>
+            )}
+            {facilities && !editingInspection && (
               <FormField {...field('facility_id')} label="Facility" required>
                 {(control) => (
                   <select

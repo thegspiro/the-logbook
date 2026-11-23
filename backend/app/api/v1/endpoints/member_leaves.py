@@ -43,6 +43,7 @@ from app.services.leave_of_absence_notices import (
 from app.services.member_leave_service import MemberLeaveService
 from app.services.scheduling_service import SchedulingService
 from app.utils.org_timezone import resolve_org_today
+from app.utils.separation_of_duties import is_own_grant
 
 router = APIRouter()
 
@@ -366,7 +367,7 @@ async def update_leave_of_absence(
     existing = await svc.get_leave(
         organization_id=str(current_user.organization_id), leave_id=leave_id
     )
-    if existing is not None and str(existing.user_id) == str(current_user.id):
+    if existing is not None and is_own_grant(current_user.id, existing.user_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
