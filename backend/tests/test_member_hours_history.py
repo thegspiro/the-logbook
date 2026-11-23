@@ -28,7 +28,14 @@ pytestmark = [pytest.mark.integration]
 
 from app.api.v1.endpoints import scheduling as scheduling_endpoint
 from app.models.external_shift_hours import ExternalShiftHours, ExternalShiftHoursStatus
-from app.models.training import Shift, ShiftAttendance, ShiftDutyType
+from app.models.training import (
+    PreWorkStatus,
+    Shift,
+    ShiftAssignment,
+    ShiftAttendance,
+    ShiftDutyType,
+    ShiftPreWorkSession,
+)
 from app.models.user import User
 from app.services.scheduling_service import SchedulingService
 
@@ -847,3 +854,133 @@ class TestMyAttendanceHistoryPaging:
         finalized = {entry["shift_id"]: entry["shift_is_finalized"] for entry in page}
 
         assert finalized == {credited: True, pending: False}
+
+
+async def _seat(db_session: AsyncSession, org_id, shift_id, user_id, position):
+    db_session.add(
+        ShiftAssignment(
+            id=_uid(),
+            organization_id=org_id,
+            shift_id=shift_id,
+            user_id=user_id,
+            position=position,
+        )
+    )
+    await db_session.flush()
+
+
+class TestHoursByPosition:
+    """Credited department shifts, cut by the seat the member held (owner
+    decisions 2026-11-23): the selected year and all time, credited only,
+    unrecorded seats last; outside hours stay on the totals."""
+
+    @pytest.mark.asyncio
+    async def test_a_year_and_all_time_by_seat(self, db_session, org_and_member):
+        org_id, user_id = org_and_member
+        driving = await _worked(
+            db_session, org_id, user_id, date(2025, 4, 7), 720, finalized=True, calls=3
+        )
+        await _seat(db_session, org_id, driving, user_id, "driver")
+        officer = await _worked(
+            db_session, org_id, user_id, date(2025, 6, 2), 600, finalized=True, calls=1
+        )
+        await _seat(db_session, org_id, officer, user_id, "officer")
+        # No seat recorded: its own row, last.
+        await _worked(
+            db_session, org_id, user_id, date(2025, 7, 1), 240, finalized=True
+        )
+        earlier = await _worked(
+            db_session, org_id, user_id, date(2024, 3, 3), 480, finalized=True, calls=2
+        )
+        await _seat(db_session, org_id, earlier, user_id, "driver")
+        # Not closed out: in no position yet.
+        pending = await _worked(
+            db_session, org_id, user_id, date(2025, 8, 8), 600, finalized=False
+        )
+        await _seat(db_session, org_id, pending, user_id, "driver")
+
+        history = await SchedulingService(db_session).get_my_hours_history(
+            user_id, org_id, 2025
+        )
+
+        assert history["positions"] == [
+            {"position": "driver", "shifts": 1, "hours": 12.0, "calls": 3},
+            {"position": "officer", "shifts": 1, "hours": 10.0, "calls": 1},
+            {"position": None, "shifts": 1, "hours": 4.0, "calls": 0},
+        ]
+        assert history["all_time_positions"][0] == {
+            "position": "driver",
+            "shifts": 2,
+            "hours": 20.0,
+            "calls": 5,
+        }
+        # The seats add up to the credited total beside them.
+        assert sum(p["hours"] for p in history["positions"]) == (
+            history["totals"]["hours"]
+        )
+
+    @pytest.mark.asyncio
+    async def test_approved_pre_shift_work_counts_in_the_seat_held(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        shift_id = await _worked(
+            db_session, org_id, user_id, date(2025, 4, 7), 600, finalized=True
+        )
+        await _seat(db_session, org_id, shift_id, user_id, "driver")
+        db_session.add(
+            ShiftPreWorkSession(
+                id=_uid(),
+                organization_id=org_id,
+                shift_id=shift_id,
+                user_id=user_id,
+                started_at=datetime(2025, 4, 7, 7, 0),
+                ended_at=datetime(2025, 4, 7, 8, 0),
+                duration_minutes=60,
+                status=PreWorkStatus.APPROVED,
+                approved_minutes=60,
+            )
+        )
+        await db_session.flush()
+
+        history = await SchedulingService(db_session).get_my_hours_history(
+            user_id, org_id, 2025
+        )
+
+        assert history["positions"] == [
+            {"position": "driver", "shifts": 1, "hours": 11.0, "calls": 0}
+        ]
+        assert history["totals"]["hours"] == 11.0
+
+    @pytest.mark.asyncio
+    async def test_another_departments_shifts_and_outside_hours_are_not_seats(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        other_org = await _add_org(db_session)
+        theirs = await _worked(
+            db_session, other_org, user_id, date(2025, 4, 7), 600, finalized=True
+        )
+        await _seat(db_session, other_org, theirs, user_id, "driver")
+        db_session.add(
+            ExternalShiftHours(
+                id=_uid(),
+                organization_id=org_id,
+                user_id=user_id,
+                shift_date=date(2025, 5, 3),
+                duration_minutes=240,
+                agency_name="County",
+                apparatus_name="E116",
+                call_count=3,
+                status=ExternalShiftHoursStatus.COUNTED.value,
+            )
+        )
+        await db_session.flush()
+
+        history = await SchedulingService(db_session).get_my_hours_history(
+            user_id, org_id, 2025
+        )
+
+        assert history["positions"] == []
+        assert history["all_time_positions"] == []
+        assert history["totals"]["external_hours"] == 4.0

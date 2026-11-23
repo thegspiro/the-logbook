@@ -9988,6 +9988,100 @@ class SchedulingService:
             entry["external_calls"] = totals.get("calls", 0)
         return buckets
 
+    async def get_member_position_totals(
+        self, user_id: UUID | str, organization_id: UUID | str
+    ) -> Dict[int, Dict[Optional[str], Dict[str, int]]]:
+        """A member's credited department shifts by year and the position
+        they held: raw ``shifts``, ``minutes`` and ``calls``.
+
+        The same credit :meth:`get_member_month_totals` counts, cut by seat
+        instead of month: finalized shifts only, attendance plus approved
+        pre-shift work, scoped through ``Shift.organization_id``. The seat is
+        read through a subquery on the member's own assignment so a shift is
+        never counted twice, and is None when no seat was recorded.
+        """
+        uid = str(user_id)
+        seat = (
+            select(func.min(ShiftAssignment.position))
+            .where(ShiftAssignment.shift_id == Shift.id)
+            .where(ShiftAssignment.user_id == uid)
+            .correlate(Shift)
+            .scalar_subquery()
+        )
+        year_col = func.year(Shift.shift_date)
+        found: Dict[int, Dict[Optional[str], Dict[str, int]]] = {}
+
+        def _cell(year: Any, position: Any) -> Dict[str, int]:
+            value = getattr(position, "value", position)
+            key = str(value) if value else None
+            return found.setdefault(int(year), {}).setdefault(
+                key, {"shifts": 0, "minutes": 0, "calls": 0}
+            )
+
+        attended = await self.db.execute(
+            select(
+                year_col.label("year"),
+                seat.label("position"),
+                func.count(ShiftAttendance.id).label("shifts"),
+                func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0).label(
+                    "minutes"
+                ),
+                func.coalesce(func.sum(ShiftAttendance.call_count), 0).label("calls"),
+            )
+            .join(Shift, ShiftAttendance.shift_id == Shift.id)
+            .where(ShiftAttendance.user_id == uid)
+            .where(Shift.organization_id == str(organization_id))
+            .where(Shift.is_finalized.is_(True))
+            .group_by(year_col, seat)
+        )
+        for row in attended.all():
+            cell = _cell(row.year, row.position)
+            cell["shifts"] += int(row.shifts or 0)
+            cell["minutes"] += int(row.minutes or 0)
+            cell["calls"] += int(row.calls or 0)
+
+        from app.services.pre_shift_work_service import approved_pre_work_minutes
+
+        for row in await approved_pre_work_minutes(
+            self.db,
+            ShiftPreWorkSession.user_id == uid,
+            Shift.organization_id == str(organization_id),
+            Shift.is_finalized.is_(True),
+            group_by=[year_col.label("year"), seat.label("position")],
+        ):
+            _cell(row.year, row.position)["minutes"] += int(row.minutes or 0)
+        return found
+
+    @staticmethod
+    def _position_rows(
+        cells: List[Dict[Optional[str], Dict[str, int]]],
+    ) -> List[Dict[str, Any]]:
+        """Fold raw per-position figures into rows, most hours first. Hours
+        are taken from the summed minutes once, never from rounded parts."""
+        merged: Dict[Optional[str], Dict[str, int]] = {}
+        for by_seat in cells:
+            for position, raw in by_seat.items():
+                into = merged.setdefault(
+                    position, {"shifts": 0, "minutes": 0, "calls": 0}
+                )
+                for field_name in into:
+                    into[field_name] += raw[field_name]
+        rows: List[Dict[str, Any]] = [
+            {
+                "position": position,
+                "shifts": raw["shifts"],
+                "hours": hours_from_minutes(raw["minutes"]),
+                "calls": raw["calls"],
+            }
+            for position, raw in merged.items()
+            if raw["shifts"] or raw["minutes"]
+        ]
+        # Unrecorded seats last, whatever their hours.
+        rows.sort(
+            key=lambda r: (r["position"] is None, -r["hours"], r["position"] or "")
+        )
+        return rows
+
     async def get_my_hours_history(
         self,
         user_id: UUID | str,
@@ -10016,6 +10110,7 @@ class SchedulingService:
         selected_year = int(year) if year else today.year
 
         months_by_key = await self.get_member_month_totals(user_id, organization_id)
+        by_year = await self.get_member_position_totals(user_id, organization_id)
 
         months = [
             months_by_key.get((selected_year, m))
@@ -10088,6 +10183,8 @@ class SchedulingService:
             ],
             "department_label": await self._department_label(organization_id),
             "history": [months_by_key[key] for key in sorted(months_by_key)],
+            "positions": self._position_rows([by_year.get(selected_year, {})]),
+            "all_time_positions": self._position_rows(list(by_year.values())),
         }
 
     async def _external_entry_years(

@@ -232,6 +232,23 @@ describe('MyHoursSummary', () => {
     expect(within(list).getByText('3')).toBeInTheDocument();
   });
 
+  it("shows the year's hours by the seat held", async () => {
+    useDefaultHistory(
+      history({
+        positions: [
+          { position: 'driver', shifts: 2, hours: 24, calls: 3 },
+          { position: null, shifts: 1, hours: 4, calls: 0 },
+        ],
+        all_time_positions: [{ position: 'driver', shifts: 9, hours: 108, calls: 12 }],
+      })
+    );
+    render(<MyHoursSummary />);
+
+    const section = await screen.findByRole('region', { name: 'Hours by position' });
+    expect(within(section).getAllByRole('listitem')[0]).toHaveTextContent('24 hrs · 2 shifts · 3 calls');
+    expect(section).toHaveTextContent('No position recorded');
+  });
+
   it('hands the shift list every year on record and the department label', async () => {
     const years = [{ year: 2026, totals: history().totals, months: history().months }];
     useDefaultHistory(history({ years }));
