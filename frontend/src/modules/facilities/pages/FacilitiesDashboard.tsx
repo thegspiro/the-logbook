@@ -316,7 +316,7 @@ export default function FacilitiesDashboard() {
               value={stats?.upcomingInspectionCount ?? 0}
               subtext="Next 30 days"
               color="amber"
-              onClick={() => void navigate('/facilities/inspections')}
+              onClick={() => void navigate('/facilities/inspections?dueWithin=30')}
             />
           </div>
 
@@ -379,7 +379,7 @@ export default function FacilitiesDashboard() {
                   <h2 className="text-theme-text-primary text-sm font-semibold">Upcoming Inspections</h2>
                 </div>
                 <button
-                  onClick={() => void navigate('/facilities/inspections')}
+                  onClick={() => void navigate('/facilities/inspections?dueWithin=30')}
                   className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-[44px] flex items-center gap-1 text-xs transition-colors"
                 >
                   View all <ArrowRight className="h-3 w-3" />
