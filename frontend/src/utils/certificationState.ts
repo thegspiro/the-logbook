@@ -32,3 +32,17 @@ export const certificationStatusOf = (req: RequirementDetail): CertificationStat
   if (req.is_met) return { state: 'on_file', expiry };
   return expiry ? { state: 'expired', expiry } : { state: 'missing', expiry: null };
 };
+
+/**
+ * The date a member's digital ID card is valid through: the soonest expiry
+ * among the certificates they hold now (owner decision, 2026-11-23). The card
+ * says when the member next needs a renewal; it is not a date the badge stops
+ * scanning. Null when no current certificate expires, or none is readable.
+ */
+export const cardValidThrough = (requirements: RequirementDetail[]): string | null =>
+  requirements.reduce<string | null>((soonest, req) => {
+    const status = certificationStatusOf(req);
+    if (status?.state !== 'on_file' || !status.expiry) return soonest;
+    const expiry = status.expiry.slice(0, 10);
+    return soonest === null || expiry < soonest ? expiry : soonest;
+  }, null);

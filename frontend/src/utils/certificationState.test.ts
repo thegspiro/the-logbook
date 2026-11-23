@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { certificationStatusOf } from './certificationState';
+import { cardValidThrough, certificationStatusOf } from './certificationState';
 import type { RequirementDetail } from '../types/training';
 
 const cpr: RequirementDetail = {
@@ -46,5 +46,26 @@ describe('certificationStatusOf', () => {
   it('says nothing about other requirement types or ungraded ones', () => {
     expect(certificationStatusOf({ ...cpr, requirement_type: 'hours' })).toBeNull();
     expect(certificationStatusOf({ ...cpr, not_applicable: true })).toBeNull();
+  });
+});
+
+describe('cardValidThrough', () => {
+  it('is the soonest expiry among the certificates held now', () => {
+    expect(
+      cardValidThrough([
+        cpr,
+        { ...cpr, id: 'b', expiry_date: '2026-12-01' },
+        // Lapsed: already past, and not a certificate held now.
+        { ...cpr, id: 'c', is_met: false, expiry_date: '2026-03-14' },
+        // Never expires: sets no date.
+        { ...cpr, id: 'd', expiry_date: null },
+      ])
+    ).toBe('2026-12-01');
+  });
+
+  it('is null when no held certificate expires, or the status is withheld', () => {
+    expect(cardValidThrough([{ ...cpr, expiry_date: null }])).toBeNull();
+    expect(cardValidThrough([{ ...cpr, certification_status_hidden: true }])).toBeNull();
+    expect(cardValidThrough([])).toBeNull();
   });
 });
