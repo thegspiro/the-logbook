@@ -13,7 +13,10 @@ const mockPersonDocuments = vi.fn();
 const mockRelatedEvents = vi.fn();
 const mockPersonTimeline = vi.fn();
 
+const mockRelatedArticles = vi.fn((..._args: unknown[]) => Promise.resolve([] as unknown[]));
 vi.mock('../services/api', () => ({
+  // The page's Articles section; none here unless a test says so.
+  historyArticleService: { relatedTo: (...args: unknown[]) => mockRelatedArticles(...args) as unknown },
   historyService: {
     getPerson: (...args: unknown[]) => mockGetPerson(...args) as unknown,
     listTitles: (...args: unknown[]) => mockListTitles(...args) as unknown,

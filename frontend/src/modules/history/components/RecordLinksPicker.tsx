@@ -1,14 +1,14 @@
 /**
- * Photos or documents an event links to, found by searching the archive.
- * Their order is the order they are added.
+ * Photos, documents or events a record links to, found by searching the
+ * archive. Their order is the order they are added.
  */
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { historyDocumentService, historyMediaService } from '../services/api';
+import { historyDocumentService, historyEventService, historyMediaService } from '../services/api';
 import type { LinkedRecord } from '../utils/eventCatalogue';
 
 interface RecordLinksPickerProps {
-  kind: 'media' | 'document';
+  kind: 'media' | 'document' | 'event';
   value: LinkedRecord[];
   onChange: (next: LinkedRecord[]) => void;
   disabled?: boolean;
@@ -17,6 +17,7 @@ interface RecordLinksPickerProps {
 const LABELS = {
   media: { list: 'Linked photos and media', add: 'Add a photo, recording or film' },
   document: { list: 'Linked documents', add: 'Add a document' },
+  event: { list: 'Linked events', add: 'Add an event' },
 };
 
 export const RecordLinksPicker: React.FC<RecordLinksPickerProps> = ({ kind, value, onChange, disabled = false }) => {
@@ -35,7 +36,9 @@ export const RecordLinksPicker: React.FC<RecordLinksPickerProps> = ({ kind, valu
       const request =
         kind === 'media'
           ? historyMediaService.listMedia(search).then((list) => list.items)
-          : historyDocumentService.listDocuments(search).then((list) => list.items);
+          : kind === 'event'
+            ? historyEventService.listEvents(search).then((list) => list.items)
+            : historyDocumentService.listDocuments(search).then((list) => list.items);
       request
         .then((items) => {
           if (!cancelled) setResults(items.map((item) => ({ id: item.id, label: item.title })));

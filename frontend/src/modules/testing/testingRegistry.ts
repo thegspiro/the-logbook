@@ -1333,6 +1333,25 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'history.manage',
         module: 'history',
       },
+      { path: '/history/articles', label: 'Articles', module: 'history' },
+      {
+        path: '/history/articles/new',
+        label: 'Write an article',
+        permission: 'history.manage',
+        module: 'history',
+      },
+      {
+        path: '/history/articles/:articleId',
+        label: 'Article',
+        module: 'history',
+        note: 'Members see only the photos and links that are published; the PDF and Word downloads hold the same page.',
+      },
+      {
+        path: '/history/articles/:articleId/edit',
+        label: 'Edit an article',
+        permission: 'history.manage',
+        module: 'history',
+      },
       { path: '/history/apparatus', label: 'Historical apparatus', module: 'history' },
       {
         path: '/history/apparatus/new',

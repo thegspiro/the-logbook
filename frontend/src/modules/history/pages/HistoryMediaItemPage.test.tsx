@@ -9,7 +9,10 @@ const mockGetMedia = vi.fn();
 const mockPublish = vi.fn();
 const mockRevisions = vi.fn();
 
+const mockRelatedArticles = vi.fn((..._args: unknown[]) => Promise.resolve([] as unknown[]));
 vi.mock('../services/api', () => ({
+  // The page's Articles section; none here unless a test says so.
+  historyArticleService: { relatedTo: (...args: unknown[]) => mockRelatedArticles(...args) as unknown },
   historyMediaService: {
     getMedia: (...args: unknown[]) => mockGetMedia(...args) as unknown,
     publish: (...args: unknown[]) => mockPublish(...args) as unknown,

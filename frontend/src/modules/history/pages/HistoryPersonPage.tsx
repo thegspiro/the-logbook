@@ -18,6 +18,7 @@ import { PersonDetails } from '../components/PersonDetails';
 import { PersonDocumentsStrip } from '../components/PersonDocumentsStrip';
 import { PersonEventsStrip, PersonTimelineStrip } from '../components/PersonHistoryStrips';
 import { PersonMediaStrip } from '../components/PersonMediaStrip';
+import { RelatedArticles } from '../components/RelatedArticles';
 import { PublicationBadge } from '../components/PublicationBadge';
 import { RelationsEditor } from '../components/RelationsEditor';
 import { RevisionList } from '../components/RevisionList';
@@ -184,6 +185,7 @@ export const HistoryPersonPage: React.FC = () => {
           <PersonMediaStrip personId={person.id} />
           <PersonDocumentsStrip personId={person.id} />
           <PersonEventsStrip personId={person.id} />
+          <RelatedArticles query={{ member_id: person.id }} headingId="person-articles-heading" className="" />
           <PersonTimelineStrip personId={person.id} />
 
           {full?.can_edit && (

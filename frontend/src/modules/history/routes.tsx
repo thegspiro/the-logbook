@@ -34,6 +34,9 @@ const HistoryTimelinePage = lazyWithRetry(() => import('./pages/HistoryTimelineP
 const HistoryEventsPage = lazyWithRetry(() => import('./pages/HistoryEventsPage'));
 const HistoryEventPage = lazyWithRetry(() => import('./pages/HistoryEventPage'));
 const HistoryEventFormPage = lazyWithRetry(() => import('./pages/HistoryEventFormPage'));
+const HistoryArticlesPage = lazyWithRetry(() => import('./pages/HistoryArticlesPage'));
+const HistoryArticlePage = lazyWithRetry(() => import('./pages/HistoryArticlePage'));
+const HistoryArticleFormPage = lazyWithRetry(() => import('./pages/HistoryArticleFormPage'));
 const HistoryApparatusListPage = lazyWithRetry(() => import('./pages/HistoryApparatusListPage'));
 const HistoryApparatusPage = lazyWithRetry(() => import('./pages/HistoryApparatusPage'));
 const HistoryApparatusFormPage = lazyWithRetry(() => import('./pages/HistoryApparatusFormPage'));
@@ -190,6 +193,38 @@ export function getHistoryRoutes() {
         element={
           <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
             <HistoryEventFormPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/articles"
+        element={
+          <ProtectedRoute requiredModule="history" moduleLabel="History">
+            <HistoryArticlesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/articles/new"
+        element={
+          <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
+            <HistoryArticleFormPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/articles/:articleId"
+        element={
+          <ProtectedRoute requiredModule="history" moduleLabel="History">
+            <HistoryArticlePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/articles/:articleId/edit"
+        element={
+          <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
+            <HistoryArticleFormPage />
           </ProtectedRoute>
         }
       />

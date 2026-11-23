@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { ConfirmProvider } from '../../../contexts/ConfirmContext';
@@ -9,7 +9,10 @@ const mockGetEvent = vi.fn();
 const mockPublish = vi.fn();
 const mockListRevisions = vi.fn();
 
+const mockRelatedArticles = vi.fn((..._args: unknown[]) => Promise.resolve([] as unknown[]));
 vi.mock('../services/api', () => ({
+  // The page's Articles section; none here unless a test says so.
+  historyArticleService: { relatedTo: (...args: unknown[]) => mockRelatedArticles(...args) as unknown },
   historyEventService: {
     getEvent: (...args: unknown[]) => mockGetEvent(...args) as unknown,
     publish: (...args: unknown[]) => mockPublish(...args) as unknown,
@@ -86,6 +89,8 @@ describe('HistoryEventPage', () => {
     mockPublish.mockReset();
     mockListRevisions.mockReset();
     mockListRevisions.mockResolvedValue([]);
+    mockRelatedArticles.mockReset();
+    mockRelatedArticles.mockResolvedValue([]);
   });
 
   it('shows a member the event, its people with their roles, and nothing of the Historian’s', async () => {
@@ -108,5 +113,36 @@ describe('HistoryEventPage', () => {
     expect(screen.getByRole('button', { name: 'Publish to the public' })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: 'Publish to members' }));
     expect(mockPublish).toHaveBeenCalledWith('e1', 'members');
+  });
+
+  it('lists the articles that tell of the event, and shows no Articles section when there are none', async () => {
+    mockGetEvent.mockResolvedValue(memberView());
+    mockRelatedArticles.mockResolvedValue([
+      {
+        id: 'ar1',
+        title: 'The night the mill burned',
+        subtitle: null,
+        byline: 'Hannah',
+        summary: null,
+        cover: null,
+        publication_level: 'members',
+        updated_at: '2026-11-22T12:00:00Z',
+      },
+    ]);
+    renderPage();
+    expect(await screen.findByRole('link', { name: 'The night the mill burned' })).toHaveAttribute(
+      'href',
+      '/history/articles/ar1'
+    );
+    expect(screen.getByRole('heading', { name: 'Articles' })).toBeInTheDocument();
+    expect(mockRelatedArticles).toHaveBeenCalledWith(expect.objectContaining({ event_id: 'e1' }));
+  });
+
+  it('leaves the Articles section out for an event no article mentions', async () => {
+    mockGetEvent.mockResolvedValue(memberView());
+    renderPage();
+    expect(await screen.findByRole('heading', { name: 'Mill fire' })).toBeInTheDocument();
+    await waitFor(() => expect(mockRelatedArticles).toHaveBeenCalled());
+    expect(screen.queryByRole('heading', { name: 'Articles' })).not.toBeInTheDocument();
   });
 });

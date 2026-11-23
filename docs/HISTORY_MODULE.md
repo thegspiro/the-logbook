@@ -9,9 +9,9 @@ Phase 4 (2026-11-14) adds documents: letters, minutes, clippings and other
 papers, kept in a protected History folder in Documents. Phase 5 (2026-11-21)
 adds events, historical apparatus, the department timeline and "Today in
 history" inside the app, with managed lists of stations, apparatus types and
-event types. Later phases add articles with PDF/Word export (6), and
-publishing outward — the public portal feed and the public "Today in history"
-widget (7).
+event types. Phase 6 (2026-11-23) adds articles, with PDF and Word export.
+Phase 7 publishes outward: the public portal feed and the public "Today in
+history" widget.
 
 Decisions the owner made are recorded in
 [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md#history--decisions-the-module-ships-with-2026-11-03).
@@ -408,6 +408,76 @@ says when nothing happened) and on the Dashboard when the module is on (which
 hides itself on such a day). The public widget stays in phase 7 with the
 public feed.
 
+## Articles
+
+Phase 6, built to the owner-approved spec of 2026-11-22. An article is the
+archive's written piece: a station's history, a past chief's profile, the
+story of a fire. It is published like every other record: draft, members or
+public with the clearance list (`record_type = "article"`), minor and
+substantial edits, a change history, delete only while a draft, research notes
+encrypted. Only the archive's keepers (`history.manage`) write them.
+
+**Fields** (`history_articles`): a title, a subtitle, a byline, a summary, a
+cover photo, the body, four link lists, the references it cites and research
+notes. The byline is free text, because a piece may be by a retired member with
+no account; left out of a new article it is the writer's name.
+
+**The body is a list of blocks** (`history_article_blocks`), each either text
+or a photo:
+
+- A text block is written in the same rich-text editor as meeting minutes and
+  stored as the same small HTML subset: two heading levels, bold, italic,
+  underline, lists, quotes and links. It is cleaned on every save by
+  `app/utils/rich_text.py` and again in the browser.
+- A photo block names an archive photo by id, with its own caption and a width
+  (full or half). A recording or film is refused.
+
+A photo is never an image inside the HTML. Referenced by id, it is checked
+against each reader on every page and every export, and the sanitizer's
+allowlist stays exactly as the minutes need it. A photo deleted from the
+archive leaves its block empty rather than renumbering the article: readers
+skip it, and the editor shows the gap to fix.
+
+**What a reader sees.** A member sees the photos (cover and blocks), people,
+events, apparatus and documents they could open, and nothing else. An article
+cannot go for **public** clearance while it shows any photo that is not itself
+public; the article page lists those photos for the Historian. If a photo is
+withdrawn from the public later, the public copy leaves its block out. Review
+clearance is never refused for this.
+
+**Sources.** The end of an article lists the documents and events it links to
+and the photos it shows (only those the reader may see), then the Historian's
+own references in their order: a book, a newspaper of a given date, an
+interview.
+
+**Linked records.** Each person, event, apparatus, document and photo page has
+an "Articles" section listing the articles that link to it or show it, when
+there are any. A person merge moves article links to the kept person. Articles
+are not placed on the timeline or in "Today in history": an article is about a
+period, not a day.
+
+**Search** covers the title, subtitle, summary and the words of every text
+block and caption. The plain text is settled into `search_text` on every save,
+so a search never parses HTML row by row.
+
+**Export** (`GET /articles/{id}/export?format=pdf|docx`).
+
+- Built on the server with ReportLab (the minutes' fonts and logo placement)
+  and python-docx. Both were already dependencies.
+- The file holds exactly the page its reader could read: only the photos and
+  links they may see, and never the research notes. Anyone who may read the
+  article may export it.
+- The department's name and logo head the first page. The footer of each page
+  reads "Prepared by the department historian", the date the file was made on
+  the department's calendar, and the page number (the PDF says "Page N of Y").
+- Archive photos are stored as WebP, which neither library embeds, so each is
+  read from its display copy (already stripped of location and camera data)
+  and re-encoded as JPEG at up to 1600 pixels. A photo whose stored file cannot
+  be read prints "(Photo not available)" rather than failing the file.
+- The file is made in full before anything is sent, so a failure answers with
+  an error, never half a file. Each export is audited by article id and format,
+  never its text.
+
 ## API
 
 `/api/v1/history`, gated on the module. Every by-id read filters the
@@ -438,6 +508,10 @@ position) is checked against it before it is stored.
 | `GET /apparatus/fleet-options`, `POST /apparatus/from-fleet`                                                                                                                                                                                                 | `history.manage`, with the Apparatus module on                                                                       |
 | `POST /events/{id}/publish`, `/unpublish`, `POST /apparatus/{id}/publish`, `/unpublish`                                                                                                                                                                      | `history.publish`                                                                                                    |
 | `GET /events/{id}/revisions`, `GET /apparatus/{id}/revisions`                                                                                                                                                                                                | `history.view` / `history.manage`, or a clearer                                                                      |
+| `GET /articles`, `GET /articles/{id}`, `GET /articles/{id}/export`                                                                                                                                                                                           | signed in (drafts to the keepers only)                                                                               |
+| `POST /articles`, `PATCH /articles/{id}`, `DELETE /articles/{id}`                                                                                                                                                                                            | `history.manage`                                                                                                     |
+| `POST /articles/{id}/publish`, `/unpublish`                                                                                                                                                                                                                  | `history.publish`                                                                                                    |
+| `GET /articles/{id}/revisions`                                                                                                                                                                                                                               | `history.view` / `history.manage`, or a clearer                                                                      |
 
 Markdown is rendered on the server (`app/utils/markdown_render.py`:
 `markdown-it-py` with raw HTML and images off, then `nh3` against an
@@ -459,6 +533,8 @@ allowlist (`modules/history/utils/historyFormat.ts`).
 `/history/events/new`, `/history/events/:eventId`,
 `/history/events/:eventId/edit`, `/history/apparatus`,
 `/history/apparatus/new`, `/history/apparatus/:apparatusId`,
-`/history/apparatus/:apparatusId/edit`. Every route carries
+`/history/apparatus/:apparatusId/edit`, `/history/articles`,
+`/history/articles/new`, `/history/articles/:articleId`,
+`/history/articles/:articleId/edit`. Every route carries
 `requiredModule="history"`; the API client is `createApiClient`, and `/history`
 URLs are never cached (`UNCACHEABLE_SUBSTRINGS`).

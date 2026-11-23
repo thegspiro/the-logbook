@@ -4,6 +4,7 @@ import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import {
   historyApparatusService,
+  historyArticleService,
   historyDocumentService,
   historyEventService,
   historyMediaService,
@@ -23,6 +24,8 @@ const source = (recordType: ClearanceRecordType): { listRevisions: (id: string) 
       return historyApparatusService;
     case 'event':
       return historyEventService;
+    case 'article':
+      return historyArticleService;
     case 'member':
       return historyService;
   }
@@ -33,7 +36,7 @@ export const RevisionList: React.FC<{
   personId: string;
   refreshKey: number;
   /** Whose history: a person's (the default), a photo/media item's, a
-   * document's, an apparatus record's or an event's. */
+   * document's, an apparatus record's, an event's or an article's. */
   recordType?: ClearanceRecordType;
 }> = ({ personId, refreshKey, recordType = 'member' }) => {
   const tz = useTimezone();

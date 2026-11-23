@@ -1048,6 +1048,30 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized or configuration route; covered by its representative module route',
   },
   {
+    path: '/history/articles',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
+  },
+  {
+    path: '/history/articles/new',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
+  },
+  {
+    path: '/history/articles/:articleId',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/articles/:articleId/edit',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
     path: '/history/apparatus',
     source: 'src/modules/history/routes.tsx',
     coverage: 'ratchet',

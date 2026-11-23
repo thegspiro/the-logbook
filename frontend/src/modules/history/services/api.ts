@@ -73,6 +73,14 @@ import type {
   TimelineDecade,
   TimelineEntry,
   TimelineKind,
+  ArticleCreate,
+  ArticleExportFormat,
+  ArticleFullView,
+  ArticleList,
+  ArticleQuery,
+  ArticleSummary,
+  ArticleUpdate,
+  ArticleView,
 } from '../types';
 
 const api = createApiClient();
@@ -779,6 +787,78 @@ export const historyEventService = {
   async relatedTo(query: { member_id?: string; apparatus_id?: string }): Promise<EventSummary[]> {
     const { data } = await api.get<EventList>(`${BASE}/events`, { params: { ...query, limit: 200 } });
     return asArray(data.items);
+  },
+};
+
+// --- Phase 6: articles ---
+
+function normalizeArticle<T extends ArticleView>(data: T): T {
+  return {
+    ...data,
+    blocks: asArray(data.blocks),
+    citations: asArray(data.citations),
+    members: asArray(data.members),
+    events: asArray(data.events),
+    apparatus: asArray(data.apparatus),
+    documents: asArray(data.documents),
+    sources: asArray(data.sources),
+  };
+}
+
+export const historyArticleService = {
+  async listArticles(query: ArticleQuery = {}): Promise<ArticleList> {
+    const { data } = await api.get<ArticleList>(`${BASE}/articles`, { params: query });
+    return { items: asArray(data.items), total: data.total };
+  },
+
+  async getArticle(id: string): Promise<ArticleView> {
+    const { data } = await api.get<ArticleView>(`${BASE}/articles/${id}`);
+    return normalizeArticle(data);
+  },
+
+  async createArticle(payload: ArticleCreate): Promise<ArticleFullView> {
+    const { data } = await api.post<ArticleFullView>(`${BASE}/articles`, payload);
+    return normalizeArticle(data);
+  },
+
+  async updateArticle(id: string, payload: ArticleUpdate): Promise<ArticleFullView> {
+    const { data } = await api.patch<ArticleFullView>(`${BASE}/articles/${id}`, payload);
+    return normalizeArticle(data);
+  },
+
+  async deleteArticle(id: string): Promise<void> {
+    await api.delete(`${BASE}/articles/${id}`);
+  },
+
+  async publish(id: string, level: 'members' | 'public'): Promise<ArticleFullView> {
+    const { data } = await api.post<ArticleFullView>(`${BASE}/articles/${id}/publish`, { level });
+    return normalizeArticle(data);
+  },
+
+  async unpublish(id: string, level: 'draft' | 'members'): Promise<ArticleFullView> {
+    const { data } = await api.post<ArticleFullView>(`${BASE}/articles/${id}/unpublish`, { level });
+    return normalizeArticle(data);
+  },
+
+  async listRevisions(id: string): Promise<Revision[]> {
+    const { data } = await api.get<Revision[]>(`${BASE}/articles/${id}/revisions`);
+    return asArray(data);
+  },
+
+  /** The articles a person, event, apparatus, document or photo is in. */
+  async relatedTo(
+    query: Pick<ArticleQuery, 'member_id' | 'event_id' | 'apparatus_id' | 'document_id' | 'media_id'>
+  ): Promise<ArticleSummary[]> {
+    const { data } = await api.get<ArticleList>(`${BASE}/articles`, { params: { ...query, limit: 200 } });
+    return asArray(data.items);
+  },
+
+  async exportArticle(id: string, format: ArticleExportFormat): Promise<Blob> {
+    const { data } = await api.get<Blob>(`${BASE}/articles/${id}/export`, {
+      params: { format },
+      responseType: 'blob',
+    });
+    return data;
   },
 };
 

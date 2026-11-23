@@ -1288,6 +1288,10 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/history/events/new`                  | Add an event                | `history.manage`                      |
 | `/history/events/:eventId`             | Event                       | Authenticated                         |
 | `/history/events/:eventId/edit`        | Edit an event               | `history.manage`                      |
+| `/history/articles`                    | Articles                    | Authenticated                         |
+| `/history/articles/new`                | Write an article            | `history.manage`                      |
+| `/history/articles/:articleId`         | Article                     | Authenticated                         |
+| `/history/articles/:articleId/edit`    | Edit an article             | `history.manage`                      |
 | `/history/apparatus`                   | Historical apparatus        | Authenticated                         |
 | `/history/apparatus/new`               | Add an apparatus            | `history.manage`                      |
 | `/history/apparatus/:apparatusId`      | Historical apparatus record | Authenticated                         |

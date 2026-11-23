@@ -1129,6 +1129,32 @@ Phase 5, events, apparatus and timelines (2026-11-21), ships with these:
   in the description, which the clearance list checks before anything is
   public, or in the encrypted research notes.
 
+Phase 6, articles with PDF and Word export (2026-11-22 spec), ships with these:
+
+- **Only the archive's keepers write articles.** A member reads and exports
+  what is published to them; there is no member submission or draft-for-review
+  flow yet.
+- **Photos are blocks, not inline images.** A photo sits between paragraphs,
+  full or half width, never floated inside one, and only an archive photo can
+  be shown (not a recording, a film or an image from elsewhere). This keeps
+  every photo checked against its reader on every page and export.
+- **A public article shows only public photos.** It cannot be sent for public
+  clearance while it shows a photo that is not cleared for the public. A photo
+  withdrawn from the public afterwards is left out of the public copy rather
+  than holding the article back.
+- **Each article stands alone.** There are no series or collections, and no
+  timeline excerpts inside an article. An article is not placed on the
+  timeline or in "Today in history".
+- **A file names the archive's sources; it does not link them.** A link the
+  Historian typed in the text stays a link in both files, but the documents,
+  events and photos listed under Sources are named only: a printed copy has no
+  app to open them in.
+- **Exports are made on request and not kept.** Each download builds the file
+  again from the current article, at the reader's own visibility; nothing is
+  stored. The time it takes grows with the number of photos, each of which is
+  read and re-encoded.
+- **No new dependency.** ReportLab and python-docx were already installed.
+
 ## Department Store — Decisions for the Owner (2026-11-13)
 
 From the department store follow-up

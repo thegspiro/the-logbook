@@ -4533,6 +4533,28 @@ const routes = ({
   ['**/api/v1/history/timeline?**', () => (empty ? [] : [HISTORY_TIMELINE_ENTRY])],
   ['**/api/v1/history/today', () => (empty ? [] : [HISTORY_TIMELINE_ENTRY])],
 
+  // History phase 6: the article list.
+  [
+    '**/api/v1/history/articles?**',
+    () => ({
+      items: empty
+        ? []
+        : [
+            {
+              id: 'e2e-article-1',
+              title: 'The Elm Street station',
+              subtitle: 'A century on Elm Street',
+              byline: 'The department historian',
+              summary: 'How a two-bay firehouse became the department’s home.',
+              cover: null,
+              publication_level: 'members',
+              updated_at: '2026-11-22T12:00:00Z',
+            },
+          ],
+      total: empty ? 0 : 1,
+    }),
+  ],
+
   // Three pages now reject a payload that is valid JSON but not their declared
   // type, rather than substituting empty lists: an audit log that reads "no
   // events" over a broken endpoint, or a check-in board showing blank totals as
