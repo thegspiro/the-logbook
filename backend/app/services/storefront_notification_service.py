@@ -101,7 +101,7 @@ _HEADER_BLUE = ACCENT_BLUE
 # receipts for the member's own order (EmailKind.STORE_RECEIPTS), which are
 # required and so need no lookup.
 _EMAIL_KIND_BY_TEMPLATE: Dict[str, EmailKind] = {
-    "storefront_payment_reminder": EmailKind.STORE_ANNOUNCEMENTS,
+    "storefront_payment_reminder": EmailKind.STORE_BALANCE,
     "storefront_window_open": EmailKind.STORE_ANNOUNCEMENTS,
     "storefront_window_closing": EmailKind.STORE_ANNOUNCEMENTS,
     "storefront_window_closed": EmailKind.STORE_ANNOUNCEMENTS,

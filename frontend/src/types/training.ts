@@ -701,10 +701,12 @@ export interface ComplianceSummary {
   /**
    * The member's compliance matrix standing: green compliant, yellow at risk,
    * red non-compliant. `not_applicable`: no requirement grades the member,
-   * whatever their certificates say. The certificate counts above are
-   * informational and do not set it.
+   * whatever their certificates say. `not_current_member`: the member has
+   * left (their account status is not a current one), so they are not graded
+   * and the compliance matrix has no row for them. The certificate counts
+   * above are informational and do not set it.
    */
-  compliance_status: 'green' | 'yellow' | 'red' | 'exempt' | 'not_applicable';
+  compliance_status: 'green' | 'yellow' | 'red' | 'exempt' | 'not_applicable' | 'not_current_member';
   compliance_label: string;
   hours_this_year: number;
   active_certifications: number;
@@ -2488,6 +2490,13 @@ export interface MemberLeavePeriod {
 export interface MemberRequirementsResponse {
   user_id: string;
   as_of: string;
+  /**
+   * `not_current_member` when the member has left: nothing is graded and the
+   * requirement lists are empty. Null for a current member. Absent from a
+   * server older than the field.
+   */
+  standing?: 'not_current_member' | null;
+  standing_label?: string | null;
   leave_month_rule: LeaveMonthRule;
   requirements_summary: {
     total_requirements: number;
@@ -3134,6 +3143,8 @@ export interface ReportExportRequest {
   end_date?: string | undefined;
   include_details?: boolean | undefined;
   filters?: Record<string, unknown> | undefined;
+  /** End a PDF with Prepared by / Reviewed by / Approved by lines. */
+  signature_lines?: boolean | undefined;
 }
 
 export interface ReportExportResponse {

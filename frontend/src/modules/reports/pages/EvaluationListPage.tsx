@@ -6,7 +6,7 @@
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ClipboardList, Download, Plus, UserRoundCog, Users } from 'lucide-react';
+import { ClipboardList, Download, FileArchive, Plus, UserRoundCog, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { EmptyState } from '../../../components/ux/EmptyState';
@@ -21,6 +21,7 @@ import { ReassignWorkDialog } from '../components/evaluations/ReassignWorkDialog
 import { DeletionRecordList } from '../components/evaluations/DeletionRecordList';
 import { evaluationsService } from '../services/evaluationsApi';
 import { gradeCounts } from '../utils/evaluationRecord';
+import { GradeSpreadPanel } from '../components/evaluations/GradeSpreadPanel';
 import {
   EvaluationTemplateKind,
   type DraftOptions,
@@ -48,6 +49,7 @@ const EvaluationListPage: React.FC = () => {
   const canViewAll = useAuthStore((state) => state.checkPermission('evaluations.view_all'));
   const [periodId, setPeriodId] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [bundling, setBundling] = useState(false);
   const [evaluations, setEvaluations] = useState<EvaluationSummary[]>([]);
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
@@ -110,6 +112,20 @@ const EvaluationListPage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Could not export the review period.'));
     } finally {
       setExporting(false);
+    }
+  };
+
+  // The signed copies only, as signed; the server asks for a re-verified
+  // session first, which the API client handles.
+  const exportPdfs = async () => {
+    if (!periodId) return;
+    setBundling(true);
+    try {
+      saveBlob(await evaluationsService.exportPeriodPdfs(periodId), 'evaluation-pdfs.zip');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not download the signed PDFs.'));
+    } finally {
+      setBundling(false);
     }
   };
 
@@ -242,15 +258,26 @@ const EvaluationListPage: React.FC = () => {
                   {status ? ' (of those shown)' : ''}
                 </p>
               </div>
-              <button
-                type="button"
-                className="btn-secondary inline-flex items-center gap-2 text-sm"
-                disabled={exporting}
-                onClick={() => void exportPeriod()}
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                {exporting ? 'Exporting…' : 'Export CSV'}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary inline-flex items-center gap-2 text-sm"
+                  disabled={exporting}
+                  onClick={() => void exportPeriod()}
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  {exporting ? 'Exporting…' : 'Export CSV'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary inline-flex items-center gap-2 text-sm"
+                  disabled={bundling || finalizedCount === 0}
+                  onClick={() => void exportPdfs()}
+                >
+                  <FileArchive className="h-4 w-4" aria-hidden="true" />
+                  {bundling ? 'Preparing…' : 'Download signed PDFs'}
+                </button>
+              </div>
             </div>
             {gradeCounts(shown).length > 0 && (
               <dl className="mt-3 flex flex-wrap gap-2 text-sm">
@@ -262,6 +289,7 @@ const EvaluationListPage: React.FC = () => {
                 ))}
               </dl>
             )}
+            <GradeSpreadPanel periodId={periodId} />
           </section>
         )}
 
@@ -309,13 +337,15 @@ const EvaluationListPage: React.FC = () => {
                 {shown.map((evaluation) => (
                   <tr key={evaluation.id} className="border-theme-surface-border border-t">
                     <td data-label="Member" className="px-4 py-3">
-                      <Link
-                        to={`/reports/evaluations/${evaluation.id}`}
-                        className="text-theme-text-primary font-medium underline-offset-2 hover:underline"
-                      >
-                        {evaluation.member.name}
-                      </Link>
-                      <span className="text-theme-text-secondary block text-xs">{evaluation.template_name}</span>
+                      <div className="min-w-0">
+                        <Link
+                          to={`/reports/evaluations/${evaluation.id}`}
+                          className="text-theme-text-primary font-medium underline-offset-2 hover:underline"
+                        >
+                          {evaluation.member.name}
+                        </Link>
+                        <span className="text-theme-text-secondary block text-xs">{evaluation.template_name}</span>
+                      </div>
                     </td>
                     <td data-label="Period" className="text-theme-text-secondary px-4 py-3">
                       {evaluation.period_name ?? formatCalendarDate(evaluation.period_end)}

@@ -235,8 +235,10 @@ const DonationsPage: React.FC = () => {
                       data-label="Amount"
                       className="text-theme-text-primary px-4 py-3 text-sm font-semibold whitespace-nowrap"
                     >
-                      {formatCurrency(Number(donation.amount))}
-                      {donation.isRecurring && <span className="ml-1 text-xs text-blue-600">(Recurring)</span>}
+                      <div className="min-w-0">
+                        {formatCurrency(Number(donation.amount))}
+                        {donation.isRecurring && <span className="ml-1 text-xs text-blue-600">(Recurring)</span>}
+                      </div>
                     </td>
                     <td data-label="Method" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                       {PAYMENT_METHOD_LABELS[donation.paymentMethod] ?? donation.paymentMethod}

@@ -32,6 +32,7 @@ from app.models.training import (
 from app.models.user import User
 from app.services.training_compliance import member_position_slugs
 from app.utils.org_scoping import is_in_org
+from app.utils.separation_of_duties import is_own_grant
 
 
 def holds_chief_position(user: User) -> bool:
@@ -106,7 +107,7 @@ class RequirementOverrideService:
         # requirement however few sessions they attended, so the Chief may not
         # grant one to themselves. The Chief's own absence goes through the
         # attendance-waiver workflow, which routes it to someone else.
-        if str(user_id) == str(granted_by):
+        if is_own_grant(granted_by, user_id):
             raise ValueError("You cannot grant an override on your own requirement")
         if not await is_in_org(self.db, User, user_id, organization_id):
             raise ValueError("Member not found")

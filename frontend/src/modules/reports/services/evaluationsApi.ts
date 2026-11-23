@@ -40,6 +40,8 @@ import type {
   TemplateWorkflow,
   ReassignmentHolder,
   ReassignmentPlan,
+  ReviewHistoryEntry,
+  GradeSpread,
 } from '../types/evaluations';
 
 const api = createApiClient();
@@ -151,6 +153,21 @@ export const evaluationsService = {
     return asArray(response.data);
   },
 
+  /** Each evaluator's finalized reviews in a period, counted by grade (evaluations.view_all). */
+  async gradeSpread(periodId: string): Promise<GradeSpread> {
+    const response = await api.get<GradeSpread>('/evaluations/grade-spread', { params: { period_id: periodId } });
+    return { ...response.data, evaluators: asArray(response.data.evaluators) };
+  },
+
+  /** A zip of the signed PDF of every finalized evaluation in a period (evaluations.view_all, step-up). */
+  async exportPeriodPdfs(periodId: string): Promise<Blob> {
+    const response = await api.get<Blob>('/evaluations/export-pdfs', {
+      responseType: 'blob',
+      params: { period_id: periodId },
+    });
+    return response.data;
+  },
+
   /** A review period's evaluations as CSV, with each finalized one's grade. */
   async exportPeriod(periodId: string): Promise<Blob> {
     const response = await api.get<Blob>('/evaluations/export', {
@@ -219,6 +236,12 @@ export const evaluationsService = {
   async get(id: string): Promise<EvaluationDetail> {
     const response = await api.get<EvaluationDetail>(`/evaluations/${id}`);
     return response.data;
+  },
+
+  /** The member's other finalized reviews, newest first (evaluations.view_all). */
+  async history(id: string): Promise<ReviewHistoryEntry[]> {
+    const response = await api.get<ReviewHistoryEntry[]>(`/evaluations/${id}/history`);
+    return asArray(response.data);
   },
 
   async savePart(id: string, kind: EvaluationPartKind, content: PartContent): Promise<EvaluationDetail> {

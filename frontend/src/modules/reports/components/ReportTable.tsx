@@ -5,8 +5,9 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Pagination } from '../../../components/ux/Pagination';
+import { SortableHeader } from '../../../components/ux/SortableHeader';
+import type { SortDirection } from '../../../components/ux/SortableHeader';
 import { toStr } from '../utils/export';
 
 interface Column {
@@ -49,13 +50,11 @@ export const ReportTable: React.FC<ReportTableProps> = ({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
 
-  const handleSort = (key: string) => {
-    if (sortKey === key) {
-      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortKey(key);
-      setSortDir('asc');
-    }
+  // SortableHeader cycles ascending, descending, then none: a third press
+  // returns the rows to the order the report produced them in.
+  const handleSort = (key: string, direction: SortDirection) => {
+    setSortKey(direction ? key : null);
+    if (direction) setSortDir(direction);
     setPage(1);
   };
 
@@ -80,19 +79,11 @@ export const ReportTable: React.FC<ReportTableProps> = ({
     return <p className="text-theme-text-muted py-4 text-sm">{emptyMessage}</p>;
   }
 
-  const SortIcon: React.FC<{ columnKey: string }> = ({ columnKey }) => {
-    if (sortKey !== columnKey) return <ArrowUpDown className="ml-1 inline h-3 w-3 opacity-40" />;
-    return sortDir === 'asc' ? (
-      <ArrowUp className="ml-1 inline h-3 w-3" />
-    ) : (
-      <ArrowDown className="ml-1 inline h-3 w-3" />
-    );
-  };
-
   return (
     <div>
-      {/* Focusable because nothing inside the table is: a keyboard otherwise
-          has no way to scroll to the columns past the dialog's edge. */}
+      {/* Focusable so the arrow keys can scroll it. Tabbing through the header
+          buttons reaches the columns past the dialog's edge, but nothing in the
+          body takes focus, so the rows below the fold need this. */}
       <div
         className="rwd-table-container overflow-x-auto overflow-y-auto"
         style={{ maxHeight }}
@@ -106,11 +97,20 @@ export const ReportTable: React.FC<ReportTableProps> = ({
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`px-4 py-2 ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''} ${col.sortable !== false ? 'hover:text-theme-text-primary cursor-pointer select-none' : ''} ${col.className ?? ''}`}
-                  onClick={col.sortable !== false ? () => handleSort(col.key) : undefined}
+                  scope="col"
+                  className={`px-4 py-2 ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''} ${col.className ?? ''}`}
                 >
-                  {col.header}
-                  {col.sortable !== false && <SortIcon columnKey={col.key} />}
+                  {col.sortable !== false ? (
+                    <SortableHeader
+                      label={col.header}
+                      field={col.key}
+                      currentSort={sortKey}
+                      currentDirection={sortKey === col.key ? sortDir : null}
+                      onSort={handleSort}
+                    />
+                  ) : (
+                    col.header
+                  )}
                 </th>
               ))}
             </tr>

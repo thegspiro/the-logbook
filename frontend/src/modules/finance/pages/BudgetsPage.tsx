@@ -398,10 +398,12 @@ const BudgetsPage: React.FC = () => {
                           data-label="Budgeted"
                           className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap"
                         >
-                          {formatCurrencyWhole(Number(budget.amountBudgeted))}
-                          {budget.amendmentCount ? (
-                            <span className="text-theme-text-secondary ml-1 text-xs font-normal">(amended)</span>
-                          ) : null}
+                          <div className="min-w-0">
+                            {formatCurrencyWhole(Number(budget.amountBudgeted))}
+                            {budget.amendmentCount ? (
+                              <span className="text-theme-text-secondary ml-1 text-xs font-normal">(amended)</span>
+                            ) : null}
+                          </div>
                         </td>
                         <td
                           data-label="Spent"

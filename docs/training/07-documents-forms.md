@@ -921,6 +921,7 @@ Members choose how they are reached under **Settings → Notifications**:
   waitlisted for), **Event changes and cancellations** (an event you said
   Going or Maybe to was cancelled or moved), **Training and certification reminders**, **Shift
   notices**, **Equipment and inventory updates**, **Store announcements**,
+  **Your store balance** (reminders that a store order still has money owing),
   **Volunteer calls**, **Election notices** and **Suggestion box**. Members
   with an officer role also see the emails for their duties (events,
   scheduling, training, elections, quartermaster, membership and store). The

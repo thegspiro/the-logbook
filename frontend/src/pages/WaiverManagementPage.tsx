@@ -87,6 +87,7 @@ export const WaiverManagementPage: React.FC = () => {
   const tz = useTimezone();
   const { formatRank } = useRanks();
   const { checkPermission: _checkPermission } = useAuthStore();
+  const currentUserId = useAuthStore((s) => s.user?.id);
 
   // Data
   const [leaves, setLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
@@ -508,31 +509,35 @@ export const WaiverManagementPage: React.FC = () => {
                           </div>
                         </td>
                         <td data-label="Actions" className="px-4 py-3 text-right whitespace-nowrap">
-                          {waiver.source === 'leave' && (
+                          <div className="min-w-0">
+                            {/* Nobody changes their own leave (ADV2-9); the server
+                                refuses it, so the button is not offered. */}
+                            {waiver.source === 'leave' && waiver.user_id !== currentUserId && (
+                              <button
+                                onClick={() =>
+                                  setEditingLeave({
+                                    id: waiver.id,
+                                    member_name: waiver.member_name,
+                                    start_date: waiver.start_date,
+                                    end_date: waiver.end_date,
+                                    reason: waiver.reason,
+                                  })
+                                }
+                                className="mr-3 text-xs text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                                aria-label={`Edit the leave for ${waiver.member_name}`}
+                              >
+                                Edit
+                              </button>
+                            )}
                             <button
-                              onClick={() =>
-                                setEditingLeave({
-                                  id: waiver.id,
-                                  member_name: waiver.member_name,
-                                  start_date: waiver.start_date,
-                                  end_date: waiver.end_date,
-                                  reason: waiver.reason,
-                                })
-                              }
-                              className="mr-3 text-xs text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                              aria-label={`Edit the leave for ${waiver.member_name}`}
+                              onClick={() => {
+                                void handleDeactivate(waiver);
+                              }}
+                              className="text-xs text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                             >
-                              Edit
+                              Deactivate
                             </button>
-                          )}
-                          <button
-                            onClick={() => {
-                              void handleDeactivate(waiver);
-                            }}
-                            className="text-xs text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                          >
-                            Deactivate
-                          </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -585,6 +590,18 @@ export const WaiverManagementPage: React.FC = () => {
                       </option>
                     ))}
                   </select>
+                  {/* Owner decision 2026-11-22/23: nobody excuses their own
+                      training, a lone Chief included. The server refuses it;
+                      this says why before the officer fills in the rest. */}
+                  {formData.user_id !== '' && formData.user_id === currentUserId && (
+                    <p role="note" className="alert-warning mt-2 text-sm">
+                      You cannot excuse your own requirements. Ask another officer to record your waiver, or{' '}
+                      <Link to="/members/leave-requests" className="font-medium underline">
+                        submit a leave request
+                      </Link>{' '}
+                      for someone else to decide.
+                    </p>
+                  )}
                 </div>
 
                 {/* Waiver Type */}
@@ -753,7 +770,11 @@ export const WaiverManagementPage: React.FC = () => {
                   />
                 </div>
 
-                <button type="submit" disabled={creating} className="btn-primary w-full text-sm font-medium">
+                <button
+                  type="submit"
+                  disabled={creating || (formData.user_id !== '' && formData.user_id === currentUserId)}
+                  className="btn-primary w-full text-sm font-medium"
+                >
                   {creating ? 'Creating...' : 'Create Waiver'}
                 </button>
               </form>

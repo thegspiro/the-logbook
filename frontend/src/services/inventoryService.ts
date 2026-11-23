@@ -1094,11 +1094,17 @@ export const inventoryService = {
     return response.data;
   },
 
-  async importItemsCsv(file: File): Promise<InventoryImportResult> {
+  /**
+   * Import a CSV of items. With `dryRun`, nothing is created: the server checks
+   * every row the way the import would and returns the same report, which the
+   * preview shows before the officer presses Import (W43-5).
+   */
+  async importItemsCsv(file: File, options: { dryRun?: boolean | undefined } = {}): Promise<InventoryImportResult> {
     const formData = new FormData();
     formData.append('file', file);
     const response = await api.post<InventoryImportResult>('/inventory/items/import', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      ...(options.dryRun ? { params: { dry_run: true } } : {}),
     });
     return response.data;
   },

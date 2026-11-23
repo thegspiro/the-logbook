@@ -37,6 +37,74 @@ of this pass; check them against `images/` before saving.
 
 **Made wrong by this range:** `12-19`, `02-75`, `02-79`, `04-20`.
 
+## Captured 2026-11-22 — the shots still failing after the 2026-11-21 pass
+
+The 2026-11-21 capture left 95 shots failing, and three rows open: `14-22`,
+`19-25` and `19-26`. This pass repaired 93 of the 95 and closed all three. Each
+shot was re-run on its own against the same demo department and checked by eye.
+
+**Open rows closed.**
+
+| Image | Disposition | Notes |
+| --- | --- | --- |
+| `14-22-ballot-template-picker` | Re-shot | The Use Template picker opens in view since #4532 |
+| `19-25`, `19-26` | Re-shot as two pairs | `19-25` / `19-26` are now the ballot page before and after a saved ballot is applied. `19-44-voting-method-before` / `19-45-voting-method-after` are the Overview tab's Voting Method card. Guide 14 shows all four |
+| `02-78-my-training-toolbar` | Retired | Its toolbar is gone from My Training; image, manifest entry and baseline line removed |
+
+**Why the 93 were failing, by cause.** Most were the harness, not the app:
+
+- **Session expiry.** A run lasts two hours or more, and the backend signs a
+  session out after 15 idle minutes. Each signed-in context is now rebuilt
+  once it has been idle for 12 minutes (`scripts/test_screenshot_session_idle.py`).
+- **Step-up.** Admin writes now answer 403 `LB-AUTH-013` until the session is
+  confirmed. Calls from the administrator's page step up and retry once. A
+  member's session steps up with its own passkey, never the administrator's
+  code. `00-34` runs in a session of its own (`auth: "admin-unconfirmed"`): a
+  confirmed session saves the switch it pictures, which turned **Allow
+  passkeys** off for the department and failed every passkey shot after it.
+  Its cleanup now restores the policy itself.
+- **UI drift.** Reset Password and Reset MFA moved into each roster row's
+  menu. Pattern cards fold behind **Details**. Planning sections became links
+  rather than tabs. Headings changed level. Some tables reflow into cards at
+  1440px, so their shots are wider. The follow-up answers endpoint moved under
+  `/interview/`, so the mock stopped matching. Each shot was retargeted, and
+  its alt rewritten where the screen changed.
+- **Seed data.** Fixed in `seed_demo_data.py`:
+  - **Internship pipeline:** its shifts and crew.
+  - **Shift reminder:** the administrator's seat.
+  - **Utility 1 Walkaround:** its Present lines, stored as `function` before
+    `presence` existed, are set back and the template republished.
+  - **Attendance-validation event:** finalizing now sets
+    `attendance_finalized_at`, so the event is reopened rather than having its
+    `custom_fields` emptied (`scripts/test_seed_walkaround_presence.py`,
+    `scripts/test_seed_validation_event_reopen.py`).
+- **State a shot needs at run time.** `03-114` needs a shift of the
+  secretary's that is under way. When none of their rotation shifts is
+  running, it makes a four-hour shift, then checks the secretary out and
+  cancels it in cleanup.
+- **The inbox groups notifications.** `19-31` / `19-32` were taken against an
+  inbox that showed each notification as its own card, and `19-32` finalized
+  whichever event had the newest prompt. That had become the check-in
+  monitor's in-progress drill. The pair now frames the attendance validations
+  stack opened, and finalizes the seeder's own event by its title.
+- **The roster count is no longer the cap.** `19-27`'s over-count refusal is
+  now measured against the members eligible for the race (8 for Captain), not
+  the 22 on the roster. The caption in guide 14 says so.
+
+**Still failing (1).** It keeps its committed image:
+
+- `15-02-board-truncated`: needs the opt-in `--bulk-prospects` seed, which
+  this pass did not run because 200 extra applicants would change every other
+  guide 15 shot. See `scripts/screenshots/README.md`.
+
+**`11-28-budget-picker-inactive` was re-shot afterwards.** It failed here on a
+product bug: editing a purchase request linked to a budget showed **No budget
+linked**, because the picker was given its value before its options loaded.
+With that fixed, it shows the saved line marked (inactive category).
+
+**Re-seeding after a capture** no longer fails at the steps the 2026-11-21
+section lists; #4575 fixed them.
+
 ## Captured 2026-11-21 — the Replace and Check rows of every open queue
 
 Taken on a demo department seeded from `main` at `b0187eae`, with malware
@@ -210,7 +278,7 @@ of this pass; check them against `images/` before saving.
 | 02 | **New template** dialog with "Annual Evaluation with Officer Sections" and its **Officer ranks** boxes | Create `02-147-evaluation-officer-starter` |
 | 08 | Compliance profile form with the amber "… also has priority N" warning and the Required / Optional lists | Create `08-124-profile-priority-tie-warning`. `08-70-compliance-profiles` re-shot 2026-11-21; no seeded profile has optional requirements, so no "Optional:" chips are in frame |
 | 03 | Close-out wizard step 1 as a shift officer without `scheduling.manage`: own Start/End/Hours disabled with the hint line | Create `03-138-closeout-own-row-locked`. `03-75-closeout-step1-attendance`, `03-45-finalize-checklist` re-shot 2026-11-21 |
-| 03 | History import Shifts tab: "You chose to add these members to that shift." with **Undo** | Create `03-139-history-import-existing-undo`. **Check** `wiki/images/history-import-shifts.png` |
+| 03 | History import Shifts tab: "You chose to add these members to that shift." with **Undo** | **CURRENT** 2026-11-23 as `03-139-history-import-existing-undo`. `wiki/images/history-import-shifts.png` checked: it shows the per-member **Same shift** / **Keep separate** question, a different one, and every control in it is still on the screen |
 | 01 | Leave request: **Ask a question**; the member's view with changed dates and **Accept these dates**; **Your leave** with **Your first day back** and **End my leave**; the escalation setting | Create `01-59-leave-request-ask-question`, `01-60-leave-request-changed-dates`, `01-61-leave-back-early`, `01-62-leave-escalation-setting` |
 | 01 | `01-49-anonymize-member` (the Removed list has two more lines), `01-08-member-audit-history` (plain-word field names, new position wording) | **Replace** `01-49`: still open, it fails in the 2026-11-21 capture. `01-08` re-shot 2026-11-21 |
 | 01 | `01-29-status-change-modal` (only allowed statuses), `01-46-add-member-password-no-email` (icons replace ✓/○), `01-24-delete-member-modal` (applicant record and file lines) | Check `01-46`: still open, held back as an empty state on 2026-11-21. `01-29`, `01-24` re-shot 2026-11-21 |
@@ -424,7 +492,7 @@ Nothing was captured by this pass.
 | 01    | A row reading **No other positions**                                                                                         | Create                           |
 | 04    | **Postpone Event** dialog                                                                                                    | Create                           |
 | 04    | Event card with the **Postponed** badge; event page "Postponed from" line                                                    | Create                           |
-| 03    | Shift History Import **Rows** tab: an overlap row with **Save times**                                                        | Create                           |
+| 03    | Shift History Import **Rows** tab: an overlap row with **Save times** (now **Save**, with the date editable too, since 0af3d5af7) | **CURRENT** 2026-11-23 as `03-141-history-import-rows-overlap` |
 
 ## Made stale by the one training-event form (2026-11-11)
 
@@ -1407,7 +1475,7 @@ down carry their own dispositions.
 | `03-107-approve-without-qualification`                                     | **CURRENT** 2026-10-17              | New. The review call is answered by a route mock carrying the server's own LB-SCHED-002 refusal; the real state needs a seeded member demoted after raising an exchange, and that member's rank shows in other guides. The mock also keeps Approve from reaching the server                                                                                                                                                                                  |
 | `03-108-member-outside-shifts`, `03-113-member-hours-with-outside`         | **CURRENT** 2026-10-17              | New: the member's Shifts with other departments card, alone and on the full Hours view, with a Not counted entry                                                                                                                                                                                                                                                                                                                                             |
 | `03-109-log-outside-shift-dialog`, `03-112-member-outside-dialog-driver`   | **CURRENT** 2026-10-17              | New: Log a shift with another department, desktop and phone, filled in and never saved                                                                                                                                                                                                                                                                                                                                                                       |
-| `03-110-outside-apparatus-settings`                                        | **CURRENT** 2026-10-17              | New: Township Fire Company with Tanker 23 switched off, and a second department                                                                                                                                                                                                                                                                                                                                                                              |
+| `03-110-outside-apparatus-settings`                                        | **CURRENT** 2026-11-23 (re-shot)    | Re-shot for the merge buttons added 2026-11-16; departments now list alphabetically, each with an Evaluate shifts box. Was: Township Fire Company with Tanker 23 switched off, and a second department                                                                                                                                                                                                                                                                                                                                                                              |
 | `03-111-member-hours-outside-tables`, `03-122-member-hours-report-outside` | **CURRENT** 2026-10-17              | New: Member Hours' outside tables, scrolled to and full page                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `03-114-check-out-early`                                                   | **CURRENT** 2026-10-17              | New: Check out early? on a phone. The shot checks the signed-in captain in to whichever of their shifts is under way, and fails if none is                                                                                                                                                                                                                                                                                                                   |
 | `03-115-requests-nothing-pending`, `03-116-shift-reports-none-yet`         | **CURRENT** 2026-10-17              | New, as a second ordinary member (`auth: "second-member"`): nothing pending in Requests, no shift reports                                                                                                                                                                                                                                                                                                                                                    |

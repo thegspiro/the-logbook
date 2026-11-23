@@ -7,14 +7,29 @@
  * staffed from the request; this card shows that sheet and links there to
  * change it. Rendered only when the detail endpoint says the caller may staff
  * the event (`can_staff_event`).
+ *
+ * Once its own sheet is open, the organizer can email the membership for help
+ * (owner decision, 2026-11-22), as a request's sheet always could.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { Plus, Trash2, UserPlus } from 'lucide-react';
+import { Megaphone, Plus, Send, Trash2, UserPlus } from 'lucide-react';
 import { eventRequestService, eventService } from '../../services/api';
-import type { EventStaffing, OutreachEventTypeConfig, OutreachRole, StaffingRoleNeed } from '../../types/event';
+import MemberAudiencePicker from '../member-audience/MemberAudiencePicker';
+import { EMPTY_AUDIENCE, type MemberAudienceChoice } from '../../types/memberAudience';
+import { useTimezone } from '../../hooks/useTimezone';
+import { formatShortDateTime } from '../../utils/dateFormatting';
+import type {
+  EventStaffing,
+  EventVolunteerSignup,
+  OutreachEventTypeConfig,
+  OutreachRole,
+  StaffingRoleNeed,
+} from '../../types/event';
+import OutreachRoleSignup from '../../modules/scheduling/components/OutreachRoleSignup';
+import { VolunteerRoleList } from './EventVolunteerSignupCard';
 import { asArray } from '../../utils/asArray';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { initialRoleNeeds } from '../../utils/outreachRoles';
@@ -22,9 +37,19 @@ import { requestPagePath } from '../../pages/event-requests/requestInbox';
 
 interface EventStaffingCardProps {
   eventId: string;
+  /** The sheet as the organizer sees it as a member, so they can sign themselves up too. */
+  volunteerSignup?: EventVolunteerSignup | null | undefined;
+  isPast?: boolean;
+  /** After the organizer signs themselves up, so the page re-reads the event. */
+  onSignedUp?: () => void | Promise<void>;
 }
 
-const EventStaffingCard: React.FC<EventStaffingCardProps> = ({ eventId }) => {
+const EventStaffingCard: React.FC<EventStaffingCardProps> = ({
+  eventId,
+  volunteerSignup,
+  isPast = false,
+  onSignedUp,
+}) => {
   const [staffing, setStaffing] = useState<EventStaffing | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [roles, setRoles] = useState<OutreachRole[]>([]);
@@ -32,6 +57,11 @@ const EventStaffingCard: React.FC<EventStaffingCardProps> = ({ eventId }) => {
   const [presetType, setPresetType] = useState('');
   const [needs, setNeeds] = useState<StaffingRoleNeed[]>([]);
   const [busy, setBusy] = useState(false);
+  const [showCall, setShowCall] = useState(false);
+  const [callMessage, setCallMessage] = useState('');
+  const [callAudience, setCallAudience] = useState<MemberAudienceChoice>(EMPTY_AUDIENCE);
+  const [callCount, setCallCount] = useState<number | null>(null);
+  const tz = useTimezone();
 
   const load = useCallback(async () => {
     try {
@@ -87,6 +117,25 @@ const EventStaffingCard: React.FC<EventStaffingCardProps> = ({ eventId }) => {
     }
   };
 
+  const sendCall = async () => {
+    setBusy(true);
+    try {
+      const result = await eventService.sendVolunteerCall(eventId, {
+        ...callAudience,
+        message: callMessage.trim() || undefined,
+      });
+      toast.success(result.message);
+      setShowCall(false);
+      setCallMessage('');
+      setCallAudience(EMPTY_AUDIENCE);
+      await load();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not email the membership.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const presets = types.filter((t) => (t.default_roles?.length ?? 0) > 0);
   const total = needs.reduce((sum, need) => sum + need.count, 0);
 
@@ -118,22 +167,20 @@ const EventStaffingCard: React.FC<EventStaffingCardProps> = ({ eventId }) => {
       {staffing?.shift_id ? (
         <div className="space-y-3">
           <p className="text-theme-text-secondary text-sm">
-            {staffing.slots_filled} of {staffing.slots_total} signed up. Members claim a role from Scheduling → Open
+            {staffing.slots_filled} of {staffing.slots_total} signed up. Members sign up here or from Scheduling → Open
             Shifts.
           </p>
-          <ul className="space-y-1 text-sm">
-            {staffing.roles.map((role) => (
-              <li key={role.role} className="flex justify-between gap-3">
-                <span className="text-theme-text-primary">{role.label}</span>
-                <span
-                  className={role.remaining > 0 ? 'text-amber-800 dark:text-amber-300' : 'text-theme-text-secondary'}
-                >
-                  {role.filled} of {role.total}
-                  {role.remaining > 0 ? ` — ${role.remaining} still needed` : ''}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <VolunteerRoleList roles={staffing.roles} />
+          {staffing.shift_id && volunteerSignup && !volunteerSignup.signed_up && !isPast && (
+            <OutreachRoleSignup
+              shiftId={staffing.shift_id}
+              roles={staffing.roles}
+              onSignedUp={async () => {
+                await load();
+                await onSignedUp?.();
+              }}
+            />
+          )}
           {staffing.volunteers.length > 0 && (
             <ul className="border-theme-surface-border space-y-1 border-t pt-3 text-sm">
               {staffing.volunteers.map((v) => (
@@ -143,6 +190,66 @@ const EventStaffingCard: React.FC<EventStaffingCardProps> = ({ eventId }) => {
                 </li>
               ))}
             </ul>
+          )}
+          {!staffing.request_id && (
+            <div className="border-theme-surface-border space-y-3 border-t pt-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCall(!showCall)}
+                  disabled={busy}
+                  aria-expanded={showCall}
+                  className="btn-info flex items-center gap-1.5 px-3 text-sm font-medium"
+                >
+                  <Megaphone className="h-4 w-4" aria-hidden="true" />
+                  Email the Membership
+                </button>
+                {staffing.volunteer_call_sent_at && (
+                  <span className="text-theme-text-muted text-xs">
+                    Last sent {formatShortDateTime(staffing.volunteer_call_sent_at, tz)}
+                  </span>
+                )}
+              </div>
+              {showCall && (
+                <div className="card-secondary space-y-3 p-4">
+                  <p className="text-theme-text-muted text-xs">
+                    Emails the members you choose with the event details, the roles still open and a link to sign up.
+                    Members who have turned off volunteer call emails are skipped.
+                  </p>
+                  <MemberAudiencePicker value={callAudience} onChange={setCallAudience} onCount={setCallCount} />
+                  <label htmlFor="event-volunteer-call-note" className="form-label">
+                    Note (optional)
+                  </label>
+                  <textarea
+                    id="event-volunteer-call-note"
+                    value={callMessage}
+                    onChange={(e) => setCallMessage(e.target.value)}
+                    rows={3}
+                    maxLength={2000}
+                    placeholder="e.g. Looking for two people with the smoke trailer."
+                    className="form-input placeholder-theme-text-muted text-sm"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void sendCall()}
+                      disabled={busy || !callCount}
+                      className="btn-primary flex items-center gap-1.5 text-sm font-medium"
+                    >
+                      <Send className="h-4 w-4" aria-hidden="true" />
+                      {busy ? 'Sending…' : 'Send Request for Help'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCall(false)}
+                      className="touch-target-phone text-theme-text-muted hover:text-theme-text-primary px-4 py-2 text-sm font-medium"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       ) : (

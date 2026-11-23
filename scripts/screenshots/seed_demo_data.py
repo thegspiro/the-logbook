@@ -294,11 +294,17 @@ ADMIN_SEATS_FULL = re.compile(
     r"Administrative access seats were already filled", re.IGNORECASE
 )
 
+# `_assignment_refusal` declines a member on a leave of absence covering the
+# shift's date. The seeder gives one member a leave running from two days ago
+# to nine days ahead (`seed_backlog_01_leave_badges`), and the day pool rotates
+# every active member through the upcoming roster, so a re-run lands on it.
+MEMBER_ON_LEAVE = re.compile(r"on leave of absence for this date", re.IGNORECASE)
+
 
 def is_expected_seat_refusal(exc: "ApiError") -> bool:
     """Whether a refused shift assignment is the application working correctly.
 
-    Five refusals are ordinary and must not fail the seed:
+    Six refusals are ordinary and must not fail the seed:
 
     * **A conflicting shift.** The night shift runs 19:00-07:00, so its crew is
       still on duty into the next date and the API declines to double-book
@@ -319,8 +325,11 @@ def is_expected_seat_refusal(exc: "ApiError") -> bool:
     * **The shift's administrative seats are full.** A shift caps how many of
       its seats may go to administrative members. The day pool rotates every
       active member through, so it reaches that cap on its own.
+    * **The member is on leave that day.** The seeded leaves are real leave,
+      and the app keeps a member on leave off the roster, which is the rule
+      the leave badges exist to show.
 
-    All five leave the shift a seat short, which is what the Open Shifts tab
+    All six leave the shift a seat short, which is what the Open Shifts tab
     exists to show. Treating any of them as fatal aborted the whole scheduling
     step: a single refusal left the demo with 2 shifts and no scheduling
     apparatus, which silently blocked the close-out fixture, the batch report
@@ -334,6 +343,7 @@ def is_expected_seat_refusal(exc: "ApiError") -> bool:
         or POSITION_NOT_ELIGIBLE.search(exc.detail)
         or SEAT_TAKEN.search(exc.detail)
         or ADMIN_SEATS_FULL.search(exc.detail)
+        or MEMBER_ON_LEAVE.search(exc.detail)
     )
 
 
@@ -2583,25 +2593,36 @@ class Seeder:
         which is write-once.
 
         A capture can finalize the drill once it has ended (19-32 finalizes
-        an event the post-event check names), and a finalized event's times
-        cannot move, so that is reopened first, as the other live fixtures do.
+        an event the post-event check names). A finalized event refuses both
+        steps, removing an attendee (409) and moving its times, so it is
+        reopened before either, as the other live fixtures do.
         """
         start = (NOW - timedelta(hours=2)).replace(minute=0, second=0, microsecond=0)
         window = {
             "start_datetime": iso(start),
             "end_datetime": iso(start + timedelta(hours=4)),
         }
+        self._clear_member_check_ins(event_id)
+        self.api.patch(f"/events/{event_id}", window)
+
+    def _clear_member_check_ins(self, event_id: str) -> None:
+        """Make a live fixture's old window movable again: reopen, then uncheck.
+
+        The API refuses to move an event that a member is checked in at outside
+        the new schedule (400), and a check-in stamp is write-once, so the
+        member's RSVP is deleted, which is the refusal's own remedy. A finalized
+        event refuses that deletion too (409), so it is reopened first.
+        Captures do both to these fixtures: they check members in, and `19-32`
+        finalizes an event the post-event check names. The run that re-dates
+        the event rebuilds whatever attendance it pictures.
+        """
+        event = self.api.get(f"/events/{event_id}")
+        if pick(event, "attendance_finalized_at", "attendanceFinalizedAt"):
+            self.api.post(f"/events/{event_id}/reopen-attendance", {})
         for rsvp in items(self.api.get(f"/events/{event_id}/rsvps"), "rsvps"):
             user_id = pick(rsvp, "user_id", "userId")
             if user_id and pick(rsvp, "checked_in", "checkedIn"):
                 self.api.delete(f"/events/{event_id}/rsvps/{user_id}")
-        try:
-            self.api.patch(f"/events/{event_id}", window)
-        except ApiError as exc:
-            if exc.code != 409 or "finalized" not in exc.detail.lower():
-                raise
-            self.api.post(f"/events/{event_id}/reopen-attendance", {})
-            self.api.patch(f"/events/{event_id}", window)
 
     RECURRING_SERIES_TITLE = "Monthly Officers Meeting"
 
@@ -2714,6 +2735,9 @@ class Seeder:
             updates = dict(guest_settings)
             if ends and ends < iso(NOW):
                 updates.update(window)
+                # A capture checks members in; moving the window would credit
+                # them for the new date, which the API refuses.
+                self._clear_member_check_ins(pick(existing, "id"))
             self.api.patch(f"/events/{pick(existing, 'id')}", updates)
             self._sign_a_guest_in(
                 pick(existing, "id"), pick(room, "display_code", "displayCode")
@@ -2958,9 +2982,12 @@ class Seeder:
         — a fixed past date works exactly once, then the window has closed
         for good. Slid forward like the guest check-in event, and with
         `custom_fields` reset alongside it: finalizing (the manifest's "after"
-        shot) stamps `attendance_finalized` permanently, so a capture run that
-        already used this fixture needs it un-stamped, not just re-dated, to
-        produce a fresh "before" state.
+        shot) locks it, so a capture run that already used this fixture needs
+        it unlocked, not just re-dated, to produce a fresh "before" state.
+        The lock is `attendance_finalized_at`, and only reopening clears it;
+        emptying `custom_fields` cleared the marker that held it before that
+        column existed, and on its own now leaves the event locked, so the
+        task skips it and the "after" shot's finalize is refused.
         """
         end = (NOW - timedelta(minutes=45)).replace(second=0, microsecond=0)
         start = end - timedelta(hours=2)
@@ -2975,6 +3002,8 @@ class Seeder:
             None,
         )
         if existing and pick(existing, "id"):
+            if pick(existing, "attendance_finalized_at"):
+                self.api.post(f"/events/{pick(existing, 'id')}/reopen-attendance", {})
             event = self.api.patch(
                 f"/events/{pick(existing, 'id')}",
                 {**window, "custom_fields": {}},
@@ -3042,19 +3071,19 @@ class Seeder:
             # to do it; the fixture has to survive it, because the seeder must
             # be re-runnable against a database a capture has already touched.
             #
-            # Driven off the refusal rather than off a field: the events *list*
-            # carries no finalized marker at all -- only the detail endpoint
-            # does -- so a guard reading one from `existing` can never fire,
-            # which is exactly how the first attempt at this failed.
-            try:
-                event = self.api.patch(f"/events/{event_id}", window)
-            except ApiError as exc:
-                if exc.code != 409 or "finalized" not in exc.detail.lower():
-                    raise
+            # Read from the detail endpoint: the events *list* carries no
+            # finalized marker at all, so a guard reading one from `existing`
+            # can never fire, which is how the first attempt at this failed.
+            #
+            # The member's check-in goes before the re-date, not after: the API
+            # refuses to move an event a member is checked in at outside the
+            # new schedule (400), and a finalized event refuses removing that
+            # check-in (409), so the order is reopen, clear, then move.
+            detail = self.api.get(f"/events/{event_id}")
+            if pick(detail, "attendance_finalized_at", "attendanceFinalizedAt"):
                 self.api.post(f"/events/{event_id}/reopen-attendance", {})
-                event = self.api.patch(f"/events/{event_id}", window)
             self._clear_early_checkin_rsvp(event_id)
-            return event
+            return self.api.patch(f"/events/{event_id}", window)
         return self.api.post(
             "/events",
             {
@@ -7949,6 +7978,18 @@ class Seeder:
             for c in existing
         ):
             return
+        # A finished check left by an earlier run stays; only the part-answered
+        # one is still owed. Submitting another finished one first spent the
+        # member's only free engine shift on it, and left nothing for the check
+        # this step exists to make.
+        # The list is camelCase and carries no completion flag: an unanswered
+        # check reads "not_started", a part-answered one "in_progress", and a
+        # finished one its overall result ("pass", "fail", ...).
+        has_finished = any(
+            str(pick(c, "status") or "not_started")
+            not in {"not_started", "in_progress", "incomplete"}
+            for c in existing
+        )
 
         untouched = [
             s
@@ -7958,8 +7999,6 @@ class Seeder:
                 "checks",
             )
         ]
-        if len(untouched) < 2:
-            return
 
         detail = self.api.get(f"/equipment-checks/templates/{template_id}")
         rows = self._checkable_rows(detail)
@@ -7992,31 +8031,102 @@ class Seeder:
 
         # Tried against each free shift in turn rather than the first two: this
         # template is engine-only, and a shift on any other apparatus is
-        # refused with "Template is not applicable to this shift".
-        wanted = [rows, part_rows]
-        for shift in untouched:
-            if not wanted:
-                break
-            try:
-                member.post(
-                    f"/equipment-checks/shifts/{pick(shift, 'id')}/checks",
-                    {
-                        "template_id": template_id,
-                        "check_timing": "start_of_shift",
-                        "items": wanted[0],
-                    },
-                )
-            except ApiError as exc:
-                if exc.code == 400:
-                    continue
-                self.blocked.append(f"member checklist states: {exc}")
-                return
-            wanted.pop(0)
+        # refused with "Template is not applicable to this shift". Only once
+        # the member's own shifts are used up is the member seated on more,
+        # because which of them are engines is known only by trying.
+        wanted = [part_rows] if has_finished else [rows, part_rows]
+
+        def submit_into(candidates: list[dict]) -> bool:
+            """Fill `wanted` from these shifts; False once a refusal blocks."""
+            for shift in candidates:
+                if not wanted:
+                    break
+                try:
+                    member.post(
+                        f"/equipment-checks/shifts/{pick(shift, 'id')}/checks",
+                        {
+                            "template_id": template_id,
+                            "check_timing": "start_of_shift",
+                            "items": wanted[0],
+                        },
+                    )
+                except ApiError as exc:
+                    if exc.code == 400:
+                        continue
+                    self.blocked.append(f"member checklist states: {exc}")
+                    return False
+                wanted.pop(0)
+            return True
+
+        if not submit_into(untouched):
+            return
+        if wanted and not submit_into(
+            self._seat_member_on_engine_shifts(member, shifts, len(wanted))
+        ):
+            return
         if wanted:
             self.blocked.append(
                 "member checklist states: no engine shift free for a "
                 "part-answered check"
             )
+
+    def _seat_member_on_engine_shifts(
+        self, member: "Api", their_shifts: list[dict], wanted: int
+    ) -> list[dict]:
+        """Seat the demo member on up to `wanted` more upcoming engine shifts.
+
+        The member checklist states need engine shifts with no check on them,
+        because the seeded template applies to engines only, and the rotation
+        decides how many the member has: on some days one, which left the
+        part-answered check with nowhere to go. Seated as a firefighter by the
+        administrator; a shift the member cannot take that day (already on
+        duty, or the seat is filled) is skipped, as the other seat-fillers do.
+        Returns the shifts as the member's own list reports them.
+        """
+        member_id = next(
+            (
+                str(pick(u, "id"))
+                for u in items(self.api.get("/users?limit=200"), "users")
+                if pick(u, "username") == DEMO_MEMBER_USERNAME
+            ),
+            "",
+        )
+        if not member_id:
+            return []
+        taken = {pick(s, "id") for s in their_shifts}
+        engines = sorted(
+            (
+                s
+                for s in items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+                if pick(s, "id") not in taken
+                and str(pick(s, "shift_date", "shiftDate") or "") > str(TODAY)
+                and str(
+                    pick(s, "apparatus_unit_number", "apparatusUnitNumber")
+                    or pick(s, "apparatus_name", "apparatusName")
+                    or ""
+                ).startswith(("E-", "Engine"))
+            ),
+            key=lambda s: str(pick(s, "shift_date", "shiftDate") or ""),
+        )
+        seated: set[str] = set()
+        for shift in engines:
+            if len(seated) >= wanted:
+                break
+            try:
+                self.api.post(
+                    f"/scheduling/shifts/{pick(shift, 'id')}/assignments",
+                    {"user_id": member_id, "position": "firefighter"},
+                )
+            except ApiError as exc:
+                if not is_expected_seat_refusal(exc):
+                    raise
+                continue
+            seated.add(str(pick(shift, "id")))
+        return [
+            s
+            for s in items(member.get("/scheduling/my-shifts?limit=50"), "shifts")
+            if str(pick(s, "id")) in seated
+        ]
 
     # -- scheduling: count-only call tracking ------------------------
 
@@ -8818,6 +8928,7 @@ class Seeder:
         """State the scheduling guide pictures that nothing else seeds."""
         self._seed_outside_apparatus()
         self._seed_member_exchanges()
+        self._seed_history_import_existing_shift()
         self._seed_history_import_draft()
         self._seed_earlier_month_report()
 
@@ -9065,6 +9176,53 @@ class Seeder:
             },
         )
 
+    HISTORY_IMPORT_EXISTING_NOTE = "Guide 03: the engine shift a history import matches"
+    HISTORY_IMPORT_EXISTING_DAY = date(2026, 8, 7)
+
+    def _seed_history_import_existing_shift(self) -> None:
+        """A shift already on the schedule that the history import half-matches.
+
+        The Shifts tab asks "Add to that shift" or "Import separately" only for
+        a proposed shift that is a 60-89% match for one on the same unit and
+        day, and the demo's past shifts are on no unit. This one is on E-1,
+        07:00-19:00; the draft's crew for that day starts and ends half an
+        hour later, which scores 75%. No one is seated on it, and it is in
+        August, so no hours figure, roster or calendar another guide
+        photographs counts it.
+        """
+        day = self.HISTORY_IMPORT_EXISTING_DAY
+        existing = items(
+            self.api.get(f"/scheduling/shifts?start_date={day}&end_date={day}"),
+            "shifts",
+        )
+        if any(
+            pick(sh, "notes") == self.HISTORY_IMPORT_EXISTING_NOTE for sh in existing
+        ):
+            return
+        engine = next(
+            (
+                a
+                for a in items(self.api.get("/apparatus?limit=50"), "apparatus")
+                if str(pick(a, "unit_number", "unitNumber") or "").upper() == "E-1"
+            ),
+            None,
+        )
+        if engine is None:
+            self.blocked.append("guide 03: no E-1 for the history import's match")
+            return
+        start = datetime.combine(day, time(7), tzinfo=ORG_TIMEZONE)
+        end = start + timedelta(hours=12)
+        self.api.post(
+            "/scheduling/shifts",
+            {
+                "shift_date": str(day),
+                "start_time": iso(start.astimezone(timezone.utc)),
+                "end_time": iso(end.astimezone(timezone.utc)),
+                "apparatus_id": pick(engine, "id"),
+                "notes": self.HISTORY_IMPORT_EXISTING_NOTE,
+            },
+        )
+
     def _seed_history_import_draft(self) -> None:
         """A draft shift-history import, never committed.
 
@@ -9078,8 +9236,14 @@ class Seeder:
         column does: a personal vehicle and a vague "Other EMS" for the Units
         tab's catch-all, and a unit of an outside department the list already
         has but under a name it does not, for adding a unit under a picked
-        department. Each is on a member already in the file, so the Members
-        tab is unchanged.
+        department. Two more put a crew on E-1 half an hour off the shift
+        ``_seed_history_import_existing_shift`` scheduled, for the Shifts
+        tab's "Add to that shift" question, and one gives Sofia Marchetti a
+        second E-2 row that overlaps her night shift, for the Rows tab's inline
+        date and time editor. It has to be a member the file matches: rows on
+        an unmatched name (Gary Whitmore, no longer on the roster) are never
+        joined, so they cannot overlap. Each is on a member already in the
+        file, so the Members tab is unchanged.
         """
         drafts = items(self.api.get("/scheduling/history-import"), "imports")
         if any(
@@ -9200,6 +9364,27 @@ class Seeder:
                 "07:00",
                 "19:00",
                 "2",
+            ),
+            ("Marcus Bell", "E-1", "", "Driver", "2026-08-07", "07:30", "19:30", "2"),
+            (
+                "Priya Raman",
+                "E-1",
+                "",
+                "Firefighter",
+                "2026-08-07",
+                "07:30",
+                "19:30",
+                "2",
+            ),
+            (
+                "Sofia Marchetti",
+                "E-2",
+                "",
+                "Driver",
+                "2026-08-06",
+                "06:00",
+                "10:00",
+                "0",
             ),
         ]
         text = "".join(",".join(f'"{cell}"' for cell in row) + "\r\n" for row in rows)
@@ -9875,17 +10060,29 @@ class Seeder:
                 "has not already covered"
             )
             return
-        target = candidates[0]
-        try:
-            self.api.post(
-                f"/scheduling/shifts/{pick(target, 'id')}/assignments",
-                {"user_id": admin_id, "position": "officer"},
+        # The administrator has to be on the crew before the task runs, or it
+        # marks the shift covered without writing them a reminder. A refused
+        # seat used to be taken for "already aboard"; when the officer seat
+        # was simply filled, the run burned the shift and the inbox stayed
+        # empty, so each seat is tried and the crew is read back.
+        # Engines first: 03-97 pictures the reminder's equipment checklists, and
+        # the seeded check templates apply to engines only, so a reminder for
+        # any other unit reads "No equipment checklists are assigned".
+        engines_first = sorted(
+            candidates[:10],
+            key=lambda s: not str(
+                pick(s, "apparatus_unit_number", "apparatusUnitNumber") or ""
+            ).startswith("E-"),
+        )
+        target = next(
+            (s for s in engines_first if self._seat_admin_on(s, admin_id)), None
+        )
+        if target is None:
+            self.blocked.append(
+                "shift reminder inbox: no seat for the administrator on the "
+                "next ten upcoming shifts"
             )
-        except ApiError as exc:
-            # Already aboard (or the seat is taken) still means the reminder
-            # will name them if they hold any assignment on the shift.
-            if exc.code not in (400, 409):
-                raise
+            return
 
         starts = str(pick(target, "start_time", "startTime"))
         start_dt = datetime.fromisoformat(starts.replace("Z", "+00:00"))
@@ -9905,6 +10102,27 @@ class Seeder:
                 "/organization/settings",
                 {"shift_reminders": {**widened, "lookahead_hours": 2}},
             )
+
+    def _seat_admin_on(self, shift: dict, admin_id: str) -> bool:
+        """Put the administrator on `shift`'s crew; True once they are on it."""
+        path = f"/scheduling/shifts/{pick(shift, 'id')}/assignments"
+
+        def aboard() -> bool:
+            return any(
+                str(pick(row, "user_id")) == admin_id
+                for row in items(self.api.get(path), "assignments")
+            )
+
+        if aboard():
+            return True
+        for position in ("officer", "firefighter", "ems", "driver"):
+            try:
+                self.api.post(path, {"user_id": admin_id, "position": position})
+                return True
+            except ApiError as exc:
+                if exc.code not in (400, 409):
+                    raise
+        return False
 
     def seed_notification_rules(self) -> list[dict]:
         """Automations for the notification rules list.
@@ -17588,14 +17806,38 @@ class Seeder:
                 f"/training/programs/programs/{pick(rope, 'id')}", {"active": False}
             )
 
-    def _backlog02_internship_shift(self, member_ids: set[str]) -> dict | None:
-        """A past, open shift with at least three pool members on its crew.
+    def _backlog02_internship_shift(
+        self, member_ids: set[str], enrolled_on: dict[str, date]
+    ) -> dict | None:
+        """An open shift with at least three pool members on its crew, each
+        enrolled in the internship by the shift's date.
 
-        Neither the oldest past shift (closed out by seed_finalized_shift) nor
-        the newest (every shift-detail shot reaches for it), and not the first
-        Ladder 4 shift seed_batch_report_trainee crews a recruit onto.
+        A shift counts only toward a program the member had joined by then
+        (`_Scope.as_of` in the shift evaluation service), and the API records
+        an enrollment as made today. Picking any past shift, as this used to,
+        chose one dated before the enrollment, whose roster then listed no
+        internship requirement: the evaluations were never written, and the
+        four guide 02 shots that read them failed with "no internship
+        evaluation is on file". `enrolled_on` gives each pool member's
+        enrollment date; a member not yet enrolled will be, today.
+
+        Past shifts are tried newest first, then today's: a member enrolled
+        on an earlier run is eligible for the shifts since, and a fresh
+        enrollment only for today's. Eligible pool members are seated onto
+        the shift to make up three. Neither the oldest past shift (closed out
+        by seed_finalized_shift) nor the newest (every shift-detail shot
+        reaches for it), and not the first Ladder 4 shift
+        seed_batch_report_trainee crews a recruit onto.
         """
         shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        today = [
+            s
+            for s in shifts
+            if pick(s, "id")
+            and str(pick(s, "shift_date", "shiftDate") or "") == str(TODAY)
+            and not pick(s, "is_finalized", "isFinalized")
+            and not pick(s, "is_cancelled", "isCancelled")
+        ]
         past = sorted(
             (
                 s
@@ -17615,36 +17857,115 @@ class Seeder:
             ),
             None,
         )
-        # The rotation crews two or three members a rig, so a shift already
-        # carrying two pool members is topped up to three with a third.
-        for shift in reversed(past[1:-1]):
-            if ladder and pick(shift, "id") == pick(ladder, "id"):
-                continue
-            shift_id = pick(shift, "id")
-            crew = items(self.api.get(f"/training/shift-reports/shift-crew/{shift_id}"))
-            mine = [c for c in crew if str(c.get("user_id")) in member_ids]
-            if len(mine) < 2:
-                continue
-            aboard = {str(c.get("user_id")) for c in crew}
-            for user_id in member_ids - aboard:
-                if len(mine) >= 3:
-                    break
+        candidates = [
+            s
+            for s in [*reversed(past[1:-1]), *today]
+            if not (ladder and pick(s, "id") == pick(ladder, "id"))
+        ]
+        for shift in candidates:
+            found = self._backlog02_crew_three(shift, member_ids, enrolled_on)
+            if found:
+                return found
+        # The rotation books the pool tightly: on a re-run the members
+        # enrolled on an earlier day may share no shift since, and every seat
+        # near them can be taken. A short shift of the seeder's own, early
+        # today, is free of both.
+        fixture = self._backlog02_fixture_shift()
+        if fixture:
+            return self._backlog02_crew_three(fixture, member_ids, enrolled_on)
+        return None
+
+    BACKLOG02_FIXTURE_NOTE = "EMT Field Internship ride-along (screenshot fixture)"
+
+    def _backlog02_fixture_shift(self) -> dict | None:
+        """The seeder's own two-hour ride-along shift, created once.
+
+        Found again by its note, so a re-run reuses it instead of adding
+        another. On the close-out fixture's non-engine unit, so no engine
+        equipment check applies, from midnight to 02:00 in the department's
+        time zone, where the rotation's day crews are off duty.
+        """
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        existing = next(
+            (s for s in shifts if pick(s, "notes") == self.BACKLOG02_FIXTURE_NOTE),
+            None,
+        )
+        if existing:
+            return existing
+        unit = self._closeout_apparatus()
+        if not unit:
+            return None
+        start_at = datetime.combine(TODAY, time(hour=0), tzinfo=ORG_TIMEZONE)
+        try:
+            return self.api.post(
+                "/scheduling/shifts",
+                {
+                    "shift_date": str(TODAY),
+                    "start_time": iso(start_at.astimezone(timezone.utc)),
+                    "end_time": iso(
+                        (start_at + timedelta(hours=2)).astimezone(timezone.utc)
+                    ),
+                    "apparatus_id": pick(unit, "id"),
+                    "min_staffing": 3,
+                    "positions": ["firefighter", "firefighter", "ems"],
+                    "notes": self.BACKLOG02_FIXTURE_NOTE,
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"shift evaluations: fixture shift: {exc}")
+            return None
+
+    def _backlog02_crew_three(
+        self, shift: dict, member_ids: set[str], enrolled_on: dict[str, date]
+    ) -> dict | None:
+        """Make up three eligible pool members on `shift`'s crew, or None.
+
+        On the seeder's own ride-along fixture, and only there, a crew member
+        who is not an eligible intern gives up their seat: the fixture has
+        three, and one held by an intern whose enrollment ended would leave no
+        room for the replacement.
+        """
+        shift_id = pick(shift, "id")
+        if pick(shift, "notes") == self.BACKLOG02_FIXTURE_NOTE:
+            for row in items(
+                self.api.get(f"/scheduling/shifts/{shift_id}/assignments"),
+                "assignments",
+            ):
+                if str(pick(row, "user_id")) not in member_ids:
+                    self.api.delete(f"/scheduling/assignments/{pick(row, 'id')}")
+        shift_date = date.fromisoformat(
+            str(pick(shift, "shift_date", "shiftDate"))[:10]
+        )
+        eligible = {
+            user_id
+            for user_id in member_ids
+            if enrolled_on.get(user_id, TODAY) <= shift_date
+        }
+        crew = items(self.api.get(f"/training/shift-reports/shift-crew/{shift_id}"))
+        mine = [c for c in crew if str(c.get("user_id")) in eligible]
+        if len(eligible) < 3:
+            return None
+        aboard = {str(c.get("user_id")) for c in crew}
+        for user_id in eligible - aboard:
+            if len(mine) >= 3:
+                break
+            # A crew position with no seat left is refused like a member
+            # already on another rig that day, so each seat a pool member
+            # can take without a qualification is tried in turn.
+            for position in ("firefighter", "ems"):
                 try:
                     self.api.post(
                         f"/scheduling/shifts/{shift_id}/assignments",
-                        {"user_id": user_id, "position": "firefighter"},
+                        {"user_id": user_id, "position": position},
                     )
+                    break
                 except ApiError as exc:
-                    # Refused when already on another rig that day.
                     if exc.code not in (400, 409):
                         raise
-                    continue
-                crew = items(
-                    self.api.get(f"/training/shift-reports/shift-crew/{shift_id}")
-                )
-                mine = [c for c in crew if str(c.get("user_id")) in member_ids]
-            if len(mine) >= 3:
-                return {"shift": shift, "crew": mine[:3]}
+            crew = items(self.api.get(f"/training/shift-reports/shift-crew/{shift_id}"))
+            mine = [c for c in crew if str(c.get("user_id")) in eligible]
+        if len(mine) >= 3:
+            return {"shift": shift, "crew": mine[:3]}
         return None
 
     def _backlog02_answers(self, template: dict, rated: int | None) -> dict:
@@ -17726,13 +18047,41 @@ class Seeder:
                     break
             if shift_id:
                 break
+        # Only an active enrollment makes a member eligible. A capture can end
+        # one (02-140 completes an enrollment by hand), and an ended one counts
+        # toward no new shift, so its member is left out rather than re-seated.
+        enrollments = items(
+            self.api.get(f"/training/programs/programs/{program_id}/enrollments"),
+            "enrollments",
+        )
+        enrolled_on = {
+            str(pick(e, "user_id")): date.fromisoformat(
+                str(pick(e, "enrolled_at"))[:10]
+            )
+            for e in enrollments
+            if pick(e, "enrolled_at") and pick(e, "status") == "active"
+        }
+        ended = {
+            str(pick(e, "user_id"))
+            for e in enrollments
+            if pick(e, "status") and pick(e, "status") != "active"
+        }
+        eligible = set(pool_ids) - ended
         if shift_id is None:
-            chosen = self._backlog02_internship_shift(set(pool_ids))
+            chosen = self._backlog02_internship_shift(eligible, enrolled_on)
             if chosen is None:
                 self.blocked.append(
-                    "shift evaluations: no past shift with three pool members"
+                    "shift evaluations: no shift with three pool members enrolled "
+                    "by its date, and no ride-along fixture shift"
                 )
                 return
+        else:
+            # The evaluated shift stays, but an intern on it whose enrollment
+            # has since ended no longer counts, so the crew is made up again.
+            chosen = self._backlog02_crew_three(
+                self.api.get(f"/scheduling/shifts/{shift_id}"), eligible, enrolled_on
+            )
+        if chosen:
             shift_id = str(pick(chosen["shift"], "id"))
             self._backlog02_enroll(
                 program_id, [pool_ids[str(c["user_id"])] for c in chosen["crew"]]
@@ -18069,13 +18418,7 @@ class Seeder:
         follow_up = self._backlog15_applicant(
             self.BACKLOG15_FOLLOW_UP_APPLICANT, pipeline_id
         )
-        if follow_up.get("current_step_name") != self.BACKLOG15_FOLLOW_UP_STAGE:
-            self.api.post(
-                f"/prospective-members/prospects/{pick(follow_up, 'id')}/advance", {}
-            )
-            follow_up = self._backlog15_applicant(
-                self.BACKLOG15_FOLLOW_UP_APPLICANT, pipeline_id
-            )
+        follow_up = self._backlog15_walk_to_follow_up(follow_up, pipeline_id)
         if follow_up.get("current_step_name") != self.BACKLOG15_FOLLOW_UP_STAGE:
             self.blocked.append(
                 "guide 15 backlog: "
@@ -18100,6 +18443,39 @@ class Seeder:
             }
             if (user_id, role) not in held:
                 self.api.post(path, {"user_id": user_id, "role": role})
+
+    def _backlog15_walk_to_follow_up(self, prospect: dict, pipeline_id: str) -> dict:
+        """Move the follow-up applicant to the follow-up stage, from either side.
+
+        A new applicant starts one stage short of it, so one advance used to
+        be enough. A capture can move them past it, though: `15-09` runs a real
+        bulk advance on the newest applicants, and this one ended on the final
+        stage, where a further advance is refused (409) and the shots of the
+        follow-up stage had no applicant on it. So the walk goes back with
+        `regress` when they are past it, and forward with `advance` when short.
+        """
+        steps = sorted(
+            items(
+                self.api.get(f"/prospective-members/pipelines/{pipeline_id}"), "steps"
+            ),
+            key=lambda step: step.get("sort_order") or 0,
+        )
+        names = [step.get("name") for step in steps]
+        if self.BACKLOG15_FOLLOW_UP_STAGE not in names:
+            return prospect
+        target = names.index(self.BACKLOG15_FOLLOW_UP_STAGE)
+        for _ in range(len(names)):
+            current = prospect.get("current_step_name")
+            if current == self.BACKLOG15_FOLLOW_UP_STAGE or current not in names:
+                break
+            verb = "regress" if names.index(current) > target else "advance"
+            self.api.post(
+                f"/prospective-members/prospects/{pick(prospect, 'id')}/{verb}", {}
+            )
+            prospect = self._backlog15_applicant(
+                self.BACKLOG15_FOLLOW_UP_APPLICANT, pipeline_id
+            )
+        return prospect
 
     BACKLOG15_INTEREST = {
         "interest_reason": "My older brother volunteers here and I want to "
@@ -21269,7 +21645,7 @@ class Seeder:
         lands on any shift's checklists or in the reports.
         """
         existing = {
-            str(pick(t, "name"))
+            str(pick(t, "name")): str(pick(t, "id"))
             for t in items(self.api.get("/equipment-checks/templates"), "templates")
         }
 
@@ -21371,7 +21747,49 @@ class Seeder:
                 },
             )
             result["crew"] = "created"
+        else:
+            result["crew"] = self._backlog03_restore_presence_lines(
+                existing[self.BACKLOG_CREW_CHECKLIST]
+            )
         return result
+
+    BACKLOG_CREW_PRESENCE_LINES = (
+        "Portable radio",
+        "Hand light",
+        "Traffic vest",
+        "Spill kit",
+    )
+
+    def _backlog03_restore_presence_lines(self, template_id: str) -> str:
+        """Put the walkaround's Present lines back to `presence`, published.
+
+        A walkaround seeded before 2026-10-18 stored them as `function`, the
+        type `presence` used to collapse into, and the check form then offers
+        Pass and Fail where guide 03 pictures Present and Absent. The template
+        is created once, so a re-run has to settle the lines it already has.
+        Editing a line moves the template back to draft, which takes it off
+        Unscheduled checklist, so it is published again afterwards; an earlier
+        run stopped between the two is published as well.
+        """
+        template = self.api.get(f"/equipment-checks/templates/{template_id}")
+        fixed = 0
+        for compartment in pick(template, "compartments") or []:
+            for item in pick(compartment, "items") or []:
+                if pick(item, "name") not in self.BACKLOG_CREW_PRESENCE_LINES:
+                    continue
+                if pick(item, "check_type", "checkType") == "presence":
+                    continue
+                self.api.put(
+                    f"/equipment-checks/items/{pick(item, 'id')}",
+                    {"check_type": "presence"},
+                )
+                fixed += 1
+        if fixed or not pick(template, "is_active", "isActive"):
+            self.api.put(
+                f"/equipment-checks/templates/{template_id}", {"is_active": True}
+            )
+            return f"{fixed} lines set to presence, published"
+        return "already"
 
     ICAL_INTEGRATION_TYPE = "ical"
 

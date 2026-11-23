@@ -65,6 +65,7 @@ from app.schemas.evaluation import (
     BulkDraftItem,
     EvaluationCreate,
     EvaluationTool,
+    GoalEntry,
     PartContent,
     TemplateDefinition,
     TemplateItem,
@@ -172,6 +173,8 @@ def shape_errors(
             EvaluationTool.GOALS,
         ):
             errors.append(f"'{item.label}' takes a comment, not a written answer.")
+        if answer.goals and item.tool != EvaluationTool.GOALS:
+            errors.append(f"'{item.label}' does not take goals.")
         if answer.justification and kind != EvaluationPartKind.EVALUATOR.value:
             errors.append(f"'{item.label}': only the evaluator justifies a score.")
         if answer.goal_ratings:
@@ -223,9 +226,12 @@ def completeness_errors(
                     f"'{item.label}': explain why the score differs from the "
                     f"{suggested[key]} the figures suggest."
                 )
-        if item.tool in (EvaluationTool.NARRATIVE, EvaluationTool.GOALS):
+        if item.tool == EvaluationTool.NARRATIVE:
             if answer is None or not answer.text:
                 errors.append(f"Answer '{item.label}'.")
+        elif item.tool == EvaluationTool.GOALS:
+            if answer is None or not (answer.goals or answer.text):
+                errors.append(f"Set at least one goal in '{item.label}'.")
         elif item.tool == EvaluationTool.GOAL_REVIEW:
             rated = answer.goal_ratings if answer is not None else {}
             if any(key not in rated or rated[key].result is None for key in goal_keys):
@@ -400,20 +406,57 @@ def standing_overall(
 
 def goals_set(
     definition: TemplateDefinition, evaluator: PartContent
-) -> List[Dict[str, str]]:
-    """The goals an evaluator's part set: each answered Goals item's text,
-    keyed by the item. Read by the last-review summary and by the copy a
-    later evaluation's goal-review item rates."""
-    goals: List[Dict[str, str]] = []
+) -> List[Dict[str, Any]]:
+    """The goals an evaluator's part set, one entry per goal. Read by the
+    last-review summary and by the copy a later evaluation's goal-review item
+    rates, which keys its results by ``key``.
+
+    A goal from the list is keyed ``<item>:<goal id>`` and labelled with its
+    place in the item. A part saved before goals were a list holds them as
+    the item's ``text``: that reads as one goal keyed by the item alone, the
+    key copies and ratings taken before then already use.
+    """
+    goals: List[Dict[str, Any]] = []
     for section in definition.sections:
         for item in section.items:
             if item.tool != EvaluationTool.GOALS:
                 continue
             answer = evaluator.answers.get(item.key)
-            text = (answer.text or "").strip() if answer else ""
+            if answer is None:
+                continue
+            if answer.goals:
+                many = len(answer.goals) > 1
+                for number, goal in enumerate(answer.goals, start=1):
+                    entry: Dict[str, Any] = {
+                        "key": f"{item.key}:{goal.id}",
+                        "label": f"{item.label}, goal {number}" if many else item.label,
+                        "text": goal.text,
+                    }
+                    if goal.target_date is not None:
+                        entry["target_date"] = goal.target_date.isoformat()
+                    goals.append(entry)
+                continue
+            text = (answer.text or "").strip()
             if text:
                 goals.append({"key": item.key, "label": item.label, "text": text})
     return goals
+
+
+def as_goal_list(content: PartContent, items: Dict[str, TemplateItem]) -> PartContent:
+    """``content`` with every Goals item's free-text answer turned into one
+    goal, and goals still blank left out: the shape every save stores (see
+    ``ItemAnswer``). A row the evaluator has added but not yet filled in so
+    does not stop a draft from saving."""
+    converted = content.model_copy(deep=True)
+    for key, answer in converted.answers.items():
+        item = items.get(key)
+        if item is None or item.tool != EvaluationTool.GOALS:
+            continue
+        if answer.text and not answer.goals:
+            answer.goals = [GoalEntry(id="goal-1", text=answer.text)]
+        answer.goals = [goal for goal in answer.goals if goal.text]
+        answer.text = None
+    return converted
 
 
 def goals_under_review(evaluation: Evaluation) -> Optional[Dict[str, Any]]:
@@ -747,6 +790,76 @@ class EvaluationService:
         if previous is None:
             return None
         return previous_review_summary(previous)
+
+    async def review_history(
+        self, organization_id: str, evaluation_id: str, viewer: User
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Every other finalized review of this evaluation's member, newest
+        first, on any form, with the overall result that stood.
+
+        Each is read through :meth:`detail` as ``viewer``, so an entry shows
+        exactly what ``viewer`` could see by opening that review and one they
+        could not open is left out, as the last-review panel does. The grade
+        is :func:`standing_overall`, the one definition the conduct list, the
+        export and that panel share. None when ``viewer`` may not see this
+        evaluation.
+        """
+        evaluation = await self._evaluation(organization_id, evaluation_id)
+        if evaluation is None:
+            return None
+        if (
+            await self.detail(
+                organization_id, evaluation.id, viewer, include_previous=False
+            )
+            is None
+        ):
+            return None
+        ids = (
+            (
+                await self.db.execute(
+                    select(Evaluation.id)
+                    .where(
+                        Evaluation.organization_id == organization_id,
+                        Evaluation.member_id == evaluation.member_id,
+                        Evaluation.status == EvaluationStatus.FINALIZED.value,
+                        Evaluation.id != evaluation.id,
+                    )
+                    .order_by(Evaluation.period_end.desc(), Evaluation.id.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        entries: List[Dict[str, Any]] = []
+        for other_id in ids:
+            view = await self.detail(
+                organization_id, other_id, viewer, include_previous=False
+            )
+            if view is None:
+                continue
+            evaluator = next(
+                (
+                    p["content"]
+                    for p in view.get("parts") or []
+                    if p["kind"] == EvaluationPartKind.EVALUATOR.value
+                ),
+                None,
+            )
+            entries.append(
+                {
+                    "evaluation_id": view["id"],
+                    "template_name": view["template_name"],
+                    "period_name": view.get("period_name"),
+                    "period_start": view["period_start"],
+                    "period_end": view["period_end"],
+                    "overall": (
+                        standing_overall(view["definition"], evaluator)
+                        if evaluator is not None
+                        else None
+                    ),
+                }
+            )
+        return entries
 
     async def _previous_evaluation_id(
         self,
@@ -1266,6 +1379,60 @@ class EvaluationService:
                 ]
             )
         return out.getvalue()
+
+    async def grade_spread(
+        self, organization_id: str, viewer: User, period_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """How each evaluator's finalized reviews in a period are spread across
+        the five grades, beside the department's, or None when the period is
+        not this department's.
+
+        Counted from the rows and grades the conduct list and the period
+        export give a holder of ``evaluations.view_all`` (``list_evaluations``,
+        CLAUDE.md pitfall #29), so the three always agree; the caller's own
+        evaluation is left out as they leave it out. A form graded as a
+        weighted percentage, or with no overall, has no place on the five
+        grades and is counted under ``other``. The spread is shown, not
+        judged (owner decision 2026-11-22).
+        """
+        period = await self.db.scalar(
+            select(EvaluationPeriod.id).where(
+                EvaluationPeriod.id == str(period_id),
+                EvaluationPeriod.organization_id == organization_id,
+            )
+        )
+        if period is None:
+            return None
+        labels = [level.label for level in OVERALL_LEVELS]
+        rows = await self.list_evaluations(organization_id, viewer, period_id=period)
+
+        def tally() -> Dict[str, Any]:
+            return {"counts": [0] * len(labels), "other": 0, "total": 0}
+
+        department = tally()
+        by_evaluator: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            if row["status"] != EvaluationStatus.FINALIZED.value:
+                continue
+            evaluator = row["evaluator"] or {"id": "", "name": "No evaluator"}
+            entry = by_evaluator.setdefault(
+                evaluator["id"],
+                {"evaluator_id": evaluator["id"] or None, "name": evaluator["name"]}
+                | tally(),
+            )
+            for counted in (entry, department):
+                counted["total"] += 1
+                if row["overall_grade"] in labels:
+                    counted["counts"][labels.index(row["overall_grade"])] += 1
+                else:
+                    counted["other"] += 1
+        return {
+            "levels": labels,
+            "evaluators": sorted(
+                by_evaluator.values(), key=lambda e: (e["name"].casefold(), e["name"])
+            ),
+            "department": department,
+        }
 
     async def _finalized_grades(
         self, organization_id: str, evaluations: Sequence[Evaluation]
@@ -2246,7 +2413,7 @@ class EvaluationService:
             )
         )
         part = parts.get(kind)
-        stored = content.model_dump(mode="json")
+        stored = as_goal_list(content, items).model_dump(mode="json")
         if part is None:
             self.db.add(
                 EvaluationPart(

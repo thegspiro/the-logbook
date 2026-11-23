@@ -358,6 +358,60 @@
 }
 
 /*
+ * A checkbox or radio sits beside its label's first line
+ * ------------------------------------------------------
+ * Most choice rows are `<label class="flex items-center">` (or
+ * `mobile-touch-row`) with the input first, and on a phone or touch screen the
+ * base rule above makes every such label at least 44px tall. Centring puts the
+ * box on the middle of the whole text block, so once the text wraps (most
+ * labels do at 390px) the box floats between the lines instead of beside the
+ * first.
+ *
+ * There the label's content is pinned to the top and padded down to where
+ * centring in 44px left a one-line row, and the box is pushed down half the
+ * difference between one line and its own height. A one-line row stays put; a
+ * wrapped one keeps its box beside the first line and grows a few pixels.
+ *
+ * - `--choice-line` is one line of the row's text: `min(1lh, 1.25rem)`. Inputs
+ *   inherit the label's font, so `1lh` is the label's line height, but most
+ *   rows set `text-sm` on a span inside an unstyled label, where the label's
+ *   line is 24px and the text's 20px. The cap makes both `text-sm` shapes
+ *   exact; a base-size row is 2px off, against 10px or more before.
+ * - `--choice-size` is the drawn box: 1rem for form-checkbox / h-4, else 13px
+ *   for an unstyled native one in Chromium (12px in WebKit, half a pixel off).
+ *
+ * Only on a phone or touch screen, where the label's height is known. On a
+ * desktop a label is as tall as its row stretches it: a filter bar makes "Show
+ * inactive" as tall as the selects beside it, and pinning that box lifted it
+ * 10px off its centred text. A row that wraps on a laptop is aligned at its call
+ * site with `items-start`.
+ *
+ * Unlayered, like the reflow-table rules, to beat the `items-center` utility.
+ * Labels that set their own top padding are left alone: the padding here would
+ * override theirs. Kept short because every page loads it, against the
+ * first-load budget in scripts/check-initial-bundle.mjs.
+ * checkbox-first-line.spec.ts holds both halves.
+ */
+input:is(.form-checkbox, [class~='h-4']) {
+  --choice-size: 1rem;
+}
+
+@media (max-width: 767px), (pointer: coarse) {
+  label:is(.flex.items-center, .inline-flex.items-center, .mobile-touch-row):has(
+      > input:is([type='checkbox'], [type='radio'])
+    ):not([class^='p-'], [class*=' p-'], [class^='py-'], [class*=' py-'], [class^='pt-'], [class*=' pt-']) {
+    --choice-line: min(1lh, 1.25rem);
+    align-items: flex-start;
+    padding-top: max(0px, calc((44px - var(--choice-line)) / 2));
+
+    & > input:is([type='checkbox'], [type='radio']) {
+      align-self: flex-start;
+      margin-top: max(0px, calc((var(--choice-line) - var(--choice-size, 13px)) / 2));
+    }
+  }
+}
+
+/*
  * Application page spacing
  * ------------------------
  * Protected routes all pass through PageTransition, making this the single
@@ -3161,10 +3215,11 @@ tbody tr:last-child {
   color: #92400e;
 }
 /* No requirement grades the member: neither a pass nor a warning. An exempt
-   member is excused from grading, so the record prints it muted too, as the
-   profile card and My Crew show it. */
+   member is excused from grading, and a former member is not graded, so the
+   record prints both muted too, as the profile card and My Crew show them. */
 .member-training-print__compliance--exempt,
-.member-training-print__compliance--not_applicable {
+.member-training-print__compliance--not_applicable,
+.member-training-print__compliance--not_current_member {
   color: #555;
 }
 .member-training-print__stats,

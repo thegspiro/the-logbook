@@ -820,7 +820,7 @@ const Members: React.FC = () => {
                         className={`hover:bg-theme-surface-secondary cursor-pointer transition-colors ${selectedIds.has(member.id) ? 'bg-blue-500/5' : ''}`}
                       >
                         {canPrintBadges && (
-                          <td data-label="Select" className="w-10 py-4 pr-1 pl-4">
+                          <td data-label="Select" className="py-4 pr-1 pl-4">
                             <input
                               type="checkbox"
                               checked={selectedIds.has(member.id)}

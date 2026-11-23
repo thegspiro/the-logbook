@@ -93,6 +93,19 @@ _CENTS = Decimal("0.01")
 # department's order history in memory at once.
 _EXPORT_PAGE_SIZE = 200
 
+
+def _past_closing_time(window: StoreOrderWindow, now: datetime) -> bool:
+    """Whether a window set to close itself has reached its closing time.
+
+    The lifecycle job closes such a window, but only every 15 minutes, so the
+    time is checked wherever ordering is offered as well (W67b-15). A window
+    with ``auto_close`` off is closed by an officer, and until then its
+    closing time is only what members were told.
+    """
+    closes_at = _as_aware(window.closes_at)
+    return bool(window.auto_close and closes_at and closes_at <= now)
+
+
 # The orders a vendor order moves to ORDERED. Anything later is already past
 # that step, and a cancelled order was never on the sheet.
 _BEFORE_VENDOR_ORDER_STATUSES = (
@@ -940,6 +953,17 @@ class StorefrontService:
         offerings = data.pop("offerings", None)
         apply_updates(window, data)
 
+        # The opening time is what schedules a window, as create_window
+        # decides it. Set on a draft later, it left the window a draft the
+        # lifecycle job never looks at, so it never opened (W67b-16). Only
+        # the two not-yet-open states move; an open or closed window keeps
+        # its status whatever is edited.
+        if "opens_at" in data:
+            if window.status == StoreWindowStatus.DRAFT and window.opens_at:
+                window.status = StoreWindowStatus.SCHEDULED
+            elif window.status == StoreWindowStatus.SCHEDULED and not window.opens_at:
+                window.status = StoreWindowStatus.DRAFT
+
         opens_at = _as_aware(window.opens_at)
         closes_at = _as_aware(window.closes_at)
         if opens_at and closes_at and closes_at <= opens_at:
@@ -1027,6 +1051,14 @@ class StorefrontService:
             return window
         if window.status in (StoreWindowStatus.FULFILLED, StoreWindowStatus.CANCELLED):
             raise ValueError("A fulfilled or cancelled window cannot be reopened")
+        # Opened past its closing time, the lifecycle job would close it again
+        # within 15 minutes: members got "ordering is open" and then "ordering
+        # has closed" (W67b-16).
+        if _past_closing_time(window, _utcnow()):
+            raise ValueError(
+                "This window's closing time has passed. Move the closing time "
+                "later, or turn off closing automatically, before opening it."
+            )
 
         window.status = StoreWindowStatus.OPEN
         window.opened_at = _utcnow()
@@ -1366,7 +1398,9 @@ class StorefrontService:
     # Shopper view
     # ==================================================================
 
-    async def get_open_windows(self, organization_id: str) -> List[StoreOrderWindow]:
+    async def get_open_windows(
+        self, organization_id: str, taking_orders: bool = False
+    ) -> List[StoreOrderWindow]:
         # Eager-loads the offerings the same way list_windows/get_window do.
         # The admin dashboard renders the open window through the full window
         # payload, which reads window.offerings — a lazy load there raises
@@ -1392,7 +1426,13 @@ class StorefrontService:
             )
             .order_by(StoreOrderWindow.closes_at.is_(None), StoreOrderWindow.closes_at)
         )
-        return list(result.scalars().all())
+        windows = list(result.scalars().all())
+        if taking_orders:
+            # The admin dashboard keeps showing a window until it is closed;
+            # members are not offered one whose closing time has passed.
+            now = _utcnow()
+            windows = [w for w in windows if not _past_closing_time(w, now)]
+        return windows
 
     async def get_storefront(
         self,
@@ -1402,7 +1442,7 @@ class StorefrontService:
     ) -> Dict[str, Any]:
         """Assemble everything the member-facing store needs in one payload."""
         settings = await self.get_settings(organization_id)
-        open_windows = await self.get_open_windows(organization_id)
+        open_windows = await self.get_open_windows(organization_id, taking_orders=True)
 
         window: Optional[StoreOrderWindow] = None
         if window_id:
@@ -1726,7 +1766,7 @@ class StorefrontService:
         if not settings.is_enabled:
             raise ValueError("The store is not currently open")
 
-        open_windows = await self.get_open_windows(organization_id)
+        open_windows = await self.get_open_windows(organization_id, taking_orders=True)
         if not open_windows:
             raise ValueError("There is no open order window")
 
@@ -4096,6 +4136,10 @@ class StorefrontService:
                 and window.auto_open
                 and opens_at
                 and opens_at <= now
+                # A window whose whole period passed without opening (the job
+                # was down) stays scheduled for an officer to reschedule,
+                # rather than opening and closing in the same run.
+                and not _past_closing_time(window, now)
             ):
                 await self.open_window(
                     window.id, organization_id, notify_members=window.notify_on_open

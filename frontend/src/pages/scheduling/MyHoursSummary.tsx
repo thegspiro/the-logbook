@@ -504,22 +504,24 @@ export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
                     {formatNumber(m.shifts)}
                   </td>
                   <td className="text-theme-text-primary px-4 py-3 text-right font-medium" data-label="Hours">
-                    {formatHours(m.hours)}
-                    {m.pending_hours > 0 && (
-                      <span className="text-theme-text-muted ml-1 text-xs font-normal">
-                        (+{formatHours(m.pending_hours)} pending)
-                      </span>
-                    )}
-                    {(m.on_call_hours ?? 0) > 0 && (
-                      <span className="text-theme-text-muted ml-1 text-xs font-normal">
-                        ({formatHours(m.on_call_hours ?? 0)} on call)
-                      </span>
-                    )}
-                    {(m.external_hours ?? 0) > 0 && (
-                      <span className="text-theme-text-muted ml-1 text-xs font-normal">
-                        (+{formatHours(m.external_hours ?? 0)} outside)
-                      </span>
-                    )}
+                    <div className="min-w-0">
+                      {formatHours(m.hours)}
+                      {m.pending_hours > 0 && (
+                        <span className="text-theme-text-muted ml-1 text-xs font-normal">
+                          (+{formatHours(m.pending_hours)} pending)
+                        </span>
+                      )}
+                      {(m.on_call_hours ?? 0) > 0 && (
+                        <span className="text-theme-text-muted ml-1 text-xs font-normal">
+                          ({formatHours(m.on_call_hours ?? 0)} on call)
+                        </span>
+                      )}
+                      {(m.external_hours ?? 0) > 0 && (
+                        <span className="text-theme-text-muted ml-1 text-xs font-normal">
+                          (+{formatHours(m.external_hours ?? 0)} outside)
+                        </span>
+                      )}
+                    </div>
                   </td>
                   {showCalls && (
                     <td className="text-theme-text-secondary px-4 py-3 text-right" data-label="Calls">
@@ -552,17 +554,19 @@ export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
                   {formatNumber(totals.shifts)}
                 </td>
                 <td className="px-4 py-3 text-right" data-label="Hours">
-                  {formatHours(totals.hours)}
-                  {(totals.on_call_hours ?? 0) > 0 && (
-                    <span className="text-theme-text-muted ml-1 text-xs font-normal">
-                      ({formatHours(totals.on_call_hours ?? 0)} on call)
-                    </span>
-                  )}
-                  {(totals.external_hours ?? 0) > 0 && (
-                    <span className="text-theme-text-muted ml-1 text-xs font-normal">
-                      (+{formatHours(totals.external_hours ?? 0)} outside)
-                    </span>
-                  )}
+                  <div className="min-w-0">
+                    {formatHours(totals.hours)}
+                    {(totals.on_call_hours ?? 0) > 0 && (
+                      <span className="text-theme-text-muted ml-1 text-xs font-normal">
+                        ({formatHours(totals.on_call_hours ?? 0)} on call)
+                      </span>
+                    )}
+                    {(totals.external_hours ?? 0) > 0 && (
+                      <span className="text-theme-text-muted ml-1 text-xs font-normal">
+                        (+{formatHours(totals.external_hours ?? 0)} outside)
+                      </span>
+                    )}
+                  </div>
                 </td>
                 {showCalls && (
                   <td className="px-4 py-3 text-right" data-label="Calls">

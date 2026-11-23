@@ -409,6 +409,22 @@ export function clickSettingsSection(label) {
  * record in a particular state should say so.
  */
 /** Unpin every notification of the signed-in member's own inbox. */
+/** The event the seeder leaves ended and unfinalized, for the 19-31 pair. */
+const VALIDATION_EVENT_TITLE = "Wednesday Evening Drill — Attendance Pending";
+
+/** The inbox's stack of attendance-validation prompts. */
+const VALIDATION_STACK =
+  "[data-testid^='notification-stack-']:has(> div > div > button[aria-expanded]:has-text('attendance validations'))";
+
+async function openValidationStack(page) {
+  await unpinAllNotifications(page);
+  await page
+    .locator("button[aria-expanded='false']")
+    .filter({ hasText: "attendance validations" })
+    .first()
+    .click({ timeout: 20_000 });
+}
+
 async function unpinAllNotifications(page) {
   await page.evaluate(async () => {
     const listed = await fetch("/api/v1/notifications/my?limit=100", {
@@ -1065,6 +1081,55 @@ export async function openBylawDraft(page) {
     "elections",
     (election) => (election.title ?? "") === "Bylaw Amendment Vote",
   )(page);
+}
+
+/** The election details card on an election's Overview, Voting Method in it. */
+const BYLAW_DETAILS_CARD =
+  "div.rounded-lg.p-6:has(div:text-is('Voting Method'))";
+
+/**
+ * Go to a section of the election page that is open, by path: since #4297
+ * each section is a route, `/elections/:id/<section>`, and "" is the Overview.
+ */
+async function openBylawSection(page, section) {
+  const election = new URL(page.url()).pathname
+    .split("/")
+    .slice(0, 3)
+    .join("/");
+  await page.goto(
+    new URL(
+      section ? `${election}/${section}` : election,
+      page.url(),
+    ).toString(),
+  );
+}
+
+/**
+ * Apply the saved "Annual officer election" ballot to the open bylaw draft
+ * through the Use Template picker, as a secretary would, and wait the apply
+ * out. Leaves the page on the draft's Ballot section.
+ */
+async function applySavedOfficerBallot(page) {
+  await openBylawSection(page, "ballot");
+  const use = page.getByRole("button", { name: /^Use Template$/ });
+  await use.waitFor({ timeout: 20_000 });
+  await use.click();
+  const popover = page.locator("div:has(> h4:text-is('Select a Template'))");
+  const saved = popover
+    .getByRole("button", { name: /Annual officer election/ })
+    .first();
+  await saved.waitFor({ timeout: 10_000 });
+  await saved.click();
+  await popover.getByRole("button", { name: /^Replace$/ }).click();
+  // Two toasts fire on a successful apply ("Ballot items saved", then
+  // "Applied ..."), and a toast cannot be removed from the DOM. Waited out
+  // instead: react-hot-toast's default is four seconds.
+  await page
+    .getByText(/^Applied "Annual officer election"$/)
+    .waitFor({ timeout: 20_000 });
+  await page
+    .getByText(/^Applied "Annual officer election"$/)
+    .waitFor({ state: "detached", timeout: 20_000 });
 }
 
 export function setCallTracking(mode) {
@@ -1728,6 +1793,25 @@ function openReinstatementApplicantIn(pipeline, name) {
 
 /** A same-origin API call from the signed-in page, with its CSRF header. */
 async function apiFromPage(page, method, path, body) {
+  const result = await rawApiFromPage(page, method, path, body);
+  if (path !== "/auth/step-up" && isStepUpRefusal(result)) {
+    await adminStepUp(page);
+    return await rawApiFromPage(page, method, path, body);
+  }
+  return result;
+}
+
+/**
+ * Whether an answer is the server asking the administrator to confirm their
+ * identity first (403 LB-AUTH-013). Granting positions, creating members,
+ * roles and ranks, and connecting integrations all came to need one, and a
+ * shot that made the call bare failed with the refusal in its error.
+ */
+function isStepUpRefusal(result) {
+  return result.status === 403 && result.body?.code === "LB-AUTH-013";
+}
+
+async function rawApiFromPage(page, method, path, body) {
   return await page.evaluate(
     async ({ method, path, body }) => {
       const csrf =
@@ -2911,12 +2995,13 @@ export async function openTallDialogAtActionRow(page) {
 }
 
 /**
- * Open one member's training history and put its table at the top of the frame.
+ * Open the signed-in member's My Training → History tab, scrolled to its
+ * records table, for the table-to-cards reflow pair.
  *
- * The member is chosen by username rather than by roster position, so both
- * halves of the reflow pair land on the same records — a comparison between
- * two different members' histories would show a difference that is not the
- * one being illustrated.
+ * It used to open a member's Training History page as an administrator, whose
+ * records became a list rather than a table, so the pair had no table left to
+ * picture. The History tab still draws one (`rwd-table-wide`, cards below
+ * 64rem), and it opens with the current year expanded.
  *
  * Both halves are viewport shots rather than element clips. Clipping to the
  * table works at desktop width and does not on a phone: the element is then
@@ -2925,21 +3010,11 @@ export async function openTallDialogAtActionRow(page) {
  * across the middle of the table.
  */
 export async function openTrainingHistoryTable(page) {
-  const id = await page.evaluate(async () => {
-    const response = await fetch("/api/v1/users?limit=200", {
-      credentials: "include",
-    });
-    if (!response.ok) return null;
-    const body = await response.json();
-    const users = Array.isArray(body) ? body : body.users || body.items || [];
-    const target = users.find((u) => u.username === "whalloway");
-    return target ? target.id : null;
-  });
-  if (!id)
-    throw new Error("the demo member whose history this pair uses is missing");
-  await page.goto(`${new URL(page.url()).origin}/members/${id}/training`, {
-    waitUntil: "domcontentloaded",
-  });
+  await page
+    .locator("button[aria-pressed]")
+    .filter({ hasText: /^History$/ })
+    .first()
+    .click({ timeout: 20_000 });
   const table = page.locator("table.rwd-table").first();
   await table.waitFor({ state: "visible", timeout: 20_000 });
   await table.evaluate((el) => {
@@ -3386,22 +3461,11 @@ async function mcpIntegrationId(page) {
 }
 
 async function postIntegration(page, path, body) {
-  const status = await page.evaluate(
-    async ({ path, body }) => {
-      const csrf =
-        document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
-      const response = await fetch(`/api/v1/integrations/${path}`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRF-Token": decodeURIComponent(csrf),
-        },
-        body: body === undefined ? undefined : JSON.stringify(body),
-      });
-      return response.status;
-    },
-    { path, body },
+  const { status } = await apiFromPage(
+    page,
+    "POST",
+    `/integrations/${path}`,
+    body,
   );
   if (status !== 200) {
     throw new Error(`POST /integrations/${path} returned ${status}`);
@@ -3524,6 +3588,122 @@ async function memberHoursSince(page, daysBack) {
  * which seeded shift that is depends on the hour the run happens. Fails the
  * shot rather than photographing a different state.
  */
+/** Notes on the shift 03-114 makes when the secretary has none running. */
+const CHECK_OUT_FIXTURE_NOTE = "Check-out screenshot fixture";
+let checkOutFixture = null;
+
+/**
+ * The id of a shift the signed-in member is on that is under way, making one
+ * if there is none. The secretary's rotation shifts run on only some days and
+ * hours, so leaning on them failed the shot whenever the run fell outside
+ * one. The shift made here started an hour ago and ends three hours from now,
+ * short enough that it rarely meets a rotation shift of theirs. A shift that
+ * has started cannot be deleted, so cleanup checks the member out of it and
+ * cancels it, the way a department withdraws a shift under way; a leftover
+ * from an interrupted run is cancelled first. Cancelling notifies the crew,
+ * which is only the secretary, whose inbox no shot pictures.
+ */
+async function liveShiftOf(page, { lookupPage }) {
+  const admin = await lookupPage();
+  const listed = await apiFromPage(
+    admin,
+    "GET",
+    "/scheduling/shifts?limit=200",
+  );
+  const shifts = Array.isArray(listed.body)
+    ? listed.body
+    : listed.body?.shifts || listed.body?.items || [];
+  let running = null;
+  try {
+    running = await currentShiftOf(page);
+  } catch (error) {
+    if (!String(error.message).startsWith("currentShiftOf:")) throw error;
+  }
+  if (running) {
+    // A fixture an interrupted run left running is still the shot's own, so
+    // cleanup checks the member out of it and cancels it.
+    const own = shifts.find(
+      (s) => s.id === running && s.notes === CHECK_OUT_FIXTURE_NOTE,
+    );
+    if (own) checkOutFixture = { admin, shiftId: running };
+    return running;
+  }
+  for (const stale of shifts.filter(
+    (s) => s.notes === CHECK_OUT_FIXTURE_NOTE && s.status !== "cancelled",
+  )) {
+    await cancelCheckOutShift(admin, stale.id);
+  }
+  const me = await rawApiFromPage(page, "GET", "/auth/me");
+  if (me.status !== 200 || !me.body?.id) {
+    throw new Error(`/auth/me returned ${me.status}`);
+  }
+  const start = new Date(Date.now() - 60 * 60 * 1000);
+  start.setSeconds(0, 0);
+  const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+  // The shift's calendar day is the department's, not the machine's.
+  const shiftDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+  }).format(start);
+  const created = await apiFromPage(admin, "POST", "/scheduling/shifts", {
+    shift_date: shiftDate,
+    start_time: start.toISOString(),
+    end_time: end.toISOString(),
+    min_staffing: 1,
+    positions: ["officer"],
+    notes: CHECK_OUT_FIXTURE_NOTE,
+  });
+  if (created.status >= 300 || !created.body?.id) {
+    throw new Error(`creating the check-out shift returned ${created.status}`);
+  }
+  checkOutFixture = { admin, shiftId: created.body.id };
+  const seated = await apiFromPage(
+    admin,
+    "POST",
+    `/scheduling/shifts/${created.body.id}/assignments`,
+    { user_id: me.body.id, position: "officer" },
+  );
+  if (seated.status >= 300) {
+    throw new Error(
+      `seating the member on the check-out shift returned ${seated.status}: ` +
+        JSON.stringify(seated.body?.detail ?? seated.body),
+    );
+  }
+  return created.body.id;
+}
+
+async function cancelCheckOutShift(admin, shiftId) {
+  const cancelled = await apiFromPage(
+    admin,
+    "POST",
+    `/scheduling/shifts/${shiftId}/cancel`,
+    { reason: "Screenshot fixture, no longer needed" },
+  );
+  if (cancelled.status >= 300) {
+    throw new Error(
+      `cancelling the check-out shift returned ${cancelled.status}`,
+    );
+  }
+}
+
+/**
+ * Only the shot's own shift is checked out: Check out now cannot be undone,
+ * so on one of the secretary's rotation shifts the dialog is left unanswered
+ * and they stay checked in, as before.
+ */
+async function removeCheckOutFixture(page) {
+  const fixture = checkOutFixture;
+  checkOutFixture = null;
+  if (!fixture) return;
+  const checkOut = page.getByRole("button", { name: "Check out now" });
+  if (await checkOut.count()) {
+    await checkOut.click();
+    await page
+      .getByRole("button", { name: /^Check Out$/i })
+      .waitFor({ state: "detached", timeout: 15_000 });
+  }
+  await cancelCheckOutShift(fixture.admin, fixture.shiftId);
+}
+
 async function currentShiftOf(page) {
   const shifts = await page.evaluate(async () => {
     const response = await fetch("/api/v1/scheduling/my-shifts?limit=100", {
@@ -4154,31 +4334,19 @@ function isoDaysFromToday(days) {
 // Shots below that have to write to the database undo it in `cleanup`, so
 // a `--only` run leaves the demo as the seeder made it.
 
-/** A JSON call against /api/v1 from the signed-in page, with its CSRF token. */
+/**
+ * A JSON call against /api/v1 from the signed-in page, with its CSRF token.
+ * Throws on any error answer, after confirming the administrator's identity
+ * once if the server asks for that first (see isStepUpRefusal).
+ */
 async function guide08Api(page, method, path, body) {
-  return page.evaluate(
-    async ({ method, path, body }) => {
-      const csrf =
-        document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
-      const response = await fetch(`/api/v1${path}`, {
-        method,
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRF-Token": decodeURIComponent(csrf),
-        },
-        body: body === undefined ? undefined : JSON.stringify(body),
-      });
-      const text = await response.text();
-      if (!response.ok) {
-        throw new Error(
-          `${method} ${path} -> ${response.status}: ${text.slice(0, 200)}`,
-        );
-      }
-      return text ? JSON.parse(text) : null;
-    },
-    { method, path, body },
-  );
+  const result = await apiFromPage(page, method, path, body);
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(
+      `${method} ${path} -> ${result.status}: ${JSON.stringify(result.body).slice(0, 200)}`,
+    );
+  }
+  return result.body;
 }
 
 /**
@@ -4614,6 +4782,26 @@ export const SHOTS = [
     alt: "An open shift expanded after pressing Sign Up, its position dropdown holding only the positions the member's rank qualifies for",
     auth: "member",
     route: "/dashboard",
+    // The list shows its first six rows in time order, and the seeder's
+    // events for today (the live drill, the guest open house and the rest)
+    // fill all six, so no open shift with its Sign Up was ever in it. The
+    // dashboard's events are answered empty for this shot alone; the shifts
+    // and their sign-up are the real ones.
+    beforeNavigate: async (page) => {
+      await page.route(/\/api\/v1\/events(\?.*)?$/, async (route) => {
+        if (route.request().method() !== "GET") return route.continue();
+        const response = await route.fetch();
+        const body = await response.json();
+        const empty = Array.isArray(body)
+          ? []
+          : { ...body, events: [], total: 0 };
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(empty),
+        });
+      });
+    },
     prepare: async (page) => {
       // The eligibility check happens on press, not on render — every open
       // shift shows Sign Up regardless of rank — so the dropdown this pictures
@@ -5144,7 +5332,7 @@ export const SHOTS = [
       // blank. Scoped to the dialog — the page's own search box is the first
       // input on the document and swallowed the text.
       await dialog
-        .getByRole("textbox", { name: "Name *" })
+        .getByRole("textbox", { name: "Name", exact: true })
         .fill("Uniform Polo Shirt", { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
@@ -5517,7 +5705,7 @@ export const SHOTS = [
         const list = Array.isArray(body) ? body : body.records || [];
         const withFile = list.find((x) => (x.attachments || []).length > 0);
         return withFile
-          ? { userId: withFile.user_id, title: withFile.title }
+          ? { userId: withFile.user_id, course: withFile.course_name }
           : null;
       });
       if (!owner) throw new Error("no training record carries an attachment");
@@ -5526,35 +5714,24 @@ export const SHOTS = [
         { waitUntil: "domcontentloaded" },
       );
       await page.waitForTimeout(2000);
-      // The page opens filtered to this month, which hides older records —
-      // and the seeded certificate is on one of them.
+      // The page opens on this year, which hides older records, and the
+      // seeded certificate is on one of them. The period is a dropdown now;
+      // the "All Time" button this clicked had gone, and a swallowed failure
+      // left the shot timing out on a Files button that was never drawn.
       await page
-        .getByRole("button", { name: /^All Time$/ })
-        .click({ timeout: 10_000 })
-        .catch(() => {});
+        .getByRole("combobox", { name: "Training period" })
+        .selectOption({ label: "All Time" });
       await page.waitForTimeout(1200);
-      const button = page.getByRole("button", { name: /^Files$/ }).first();
-      await button.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
+      // Named for its record ("Files for <course>") since the record list
+      // was redesigned; a bare "Files" matched nothing.
+      const button = page
+        .getByRole("button", { name: `Files for ${owner.course}`, exact: true })
+        .first();
+      await button.scrollIntoViewIfNeeded({ timeout: 10_000 });
       await button.click({ timeout: 15_000, force: true });
       await page.waitForTimeout(1200);
     },
     fullPage: false,
-  },
-  {
-    id: "02-78-my-training-toolbar",
-    doc: "02-training.md",
-    line: 70,
-    anchor: "The My Training records toolbar showing the date-range picker",
-    alt: "The My Training date-range toolbar with its helper text and the two export buttons",
-    // A member's own overview: the toolbar is about exporting *your* records.
-    auth: "member",
-    route: "/training/my-training",
-    // Clipped to the toolbar. It is one bar on a long page, and a page shot
-    // renders the helper text too small to read.
-    // Anchored on the label, with the wrapper matched by the shared `card`
-    // utility rather than the raw `rounded-lg border` it used to carry -- the
-    // same migration that moved the shift-report cards.
-    selector: "div.card:has(label:text-is('Training records date range'))",
   },
   {
     id: "02-89-my-training-upcoming-skills-test",
@@ -6078,7 +6255,9 @@ export const SHOTS = [
       await centre(page.locator(PIPELINE_CARD));
       await page.waitForTimeout(500);
     },
-    expect: "View full progress",
+    // Scoped to the card: the member's other program cards carry the same
+    // link, and the first on the page is not this one.
+    expect: { selector: `${PIPELINE_CARD} :text("View full progress")` },
     selector: PIPELINE_CARD,
   },
   {
@@ -6718,7 +6897,8 @@ export const SHOTS = [
     anchor: "Screenshot of the analysis results showing the four summary cards",
     alt: "Impact planner results with its summary cards, size breakdown and cost estimate",
     route: "/inventory/admin/impact-planner",
-    expect: "Back to Admin",
+    // A summary card, drawn only once an analysis has run.
+    expect: "Members matched",
     prepare: async (page) => {
       await runImpactAnalysis(page);
       // Analysing scrolls the results into view; the summary cards and the
@@ -7768,12 +7948,13 @@ export const SHOTS = [
         );
       }
       await addPasskeyOnCard(page, "My phone");
-      const setup = await apiFromPage(page, "POST", "/auth/mfa/setup");
+      await memberPasskeyStepUp(page);
+      const setup = await rawApiFromPage(page, "POST", "/auth/mfa/setup");
       if (setup.status !== 200 || !setup.body?.secret) {
         throw new Error(`authenticator setup returned ${setup.status}`);
       }
       passkeyShot.secret = setup.body.secret;
-      const verified = await apiFromPage(
+      const verified = await rawApiFromPage(
         page,
         "POST",
         "/auth/mfa/verify-setup",
@@ -8840,12 +9021,26 @@ export const SHOTS = [
     alt: "Reset Password for a member with a weak password typed (masked): the Password rules list ticks the length and character rules and leaves No runs like 123 or abc unmet",
     route: "/members/admin",
     expect: "No runs like 123 or abc",
+    allowEmptyState:
+      '"No runs like 123 or abc" is one of the password rules, not an empty list.',
     prepare: async (page) => {
+      // Reset Password is in the row's More actions menu now, not a button
+      // on the row.
       const row = page.locator("tr").filter({ hasText: "Esme Caldwell" });
       await row.first().waitFor({ timeout: 15_000 });
+      // The menu closes on any scroll, and Playwright scrolls to reach an
+      // item off screen, which closed it under the click. Centred first,
+      // the whole menu opens in view.
       await row
-        .getByRole("button", { name: /Reset Password/i })
         .first()
+        .evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(300);
+      await row
+        .getByRole("button", { name: "More actions for Esme Caldwell" })
+        .first()
+        .click();
+      await page
+        .getByRole("menuitem", { name: "Reset password for Esme Caldwell" })
         .click();
       // The placeholder's own example, typed into a masked field and never
       // submitted. "1234" is the run the rules list flags.
@@ -10214,6 +10409,8 @@ export const SHOTS = [
   },
   {
     id: "05-02-items-pinned",
+    allowEmptyState:
+      '"No location" is the location card for items not yet put away.',
     doc: "05-inventory.md",
     line: 83,
     anchor: "The items list with three items pinned",
@@ -10222,6 +10419,11 @@ export const SHOTS = [
     // Pinned through the UI rather than the API: the picture should show what
     // a quartermaster does, and pinning by hand also proves the control is
     // reachable at this viewport.
+    //
+    // 1920 wide: the items table reflows to cards below its tier, which a
+    // 1440px window with the sidebar does not reach, and the pin control is in
+    // a cell the card layout leaves out.
+    viewport: { width: 1920, height: 1080 },
     prepare: async (page) => {
       await unpinEverything(page);
       for (let i = 0; i < 3; i += 1) {
@@ -10776,19 +10978,36 @@ export const SHOTS = [
       // would picture the design without the closing block the guide points at.
       await page.getByText("Shift Assignment", { exact: true }).first().click();
       await page.waitForTimeout(1_000);
-      // The preview renders beside the editor now; "Desktop preview" selects
-      // the rendering this caption is about. The old `Preview` tab is gone.
-      await clickByName(/^Desktop preview$/)(page);
-      await page.waitForTimeout(2_000);
+      // Choosing it in the long template list scrolls the page down, leaving
+      // the editor and preview above the view under the sticky save bar.
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(500);
+      // At this width the editor and the preview are Edit / Preview tabs; on
+      // a wider screen they sit side by side and there is no tab. Within the
+      // preview, "Desktop preview" is the default rendering, so it is pressed
+      // only when another one is showing.
+      const previewTab = page
+        .getByRole("tab", { name: "Preview", exact: true })
+        .or(page.getByRole("button", { name: "Preview", exact: true }));
+      if (await previewTab.first().isVisible())
+        await previewTab.first().click();
+      const desktop = page.getByRole("button", { name: "Desktop preview" });
+      if (
+        (await desktop.count()) > 0 &&
+        (await desktop.first().getAttribute("aria-pressed")) !== "true"
+      ) {
+        await desktop.first().click();
+      }
+      // The message renders into an iframe, so its text is not on the page
+      // to wait for; the frame itself is.
       await page
-        .getByText(/automated message from|Sent by/i)
-        .first()
-        .scrollIntoViewIfNeeded({ timeout: 10_000 })
-        .catch(() => {});
+        .locator("iframe[title='Email template preview']")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(2_000);
     },
-    // Not `fullPage`: the sixty-entry template list makes the page 2,700px
-    // tall, and the rendered message sits entirely in the first viewport.
-    fullPage: false,
+    // Framed on the preview card: at this width the preview sits below the
+    // sixty-entry template list, some 3,000px down the page.
+    selector: "div.card:has(> iframe[title='Email template preview'])",
   },
 
   // ── 09 Skills Testing ───────────────────────────────────────────────
@@ -10952,7 +11171,7 @@ export const SHOTS = [
       await release.first().scrollIntoViewIfNeeded();
       await release.first().evaluate((button) => {
         button
-          .closest("div[role='button']")
+          .closest("div[role='group']")
           ?.setAttribute("data-shot-subject", "");
       });
       await page.waitForTimeout(400);
@@ -11024,8 +11243,10 @@ export const SHOTS = [
       }
       // Drafts can be cancelled too, and one candidate can hold both, so the
       // row is picked by its template as well as its candidate.
+      // A record card is a role="group" named for its test and candidate
+      // since the training sweeps; it was a role="button" div before.
       const cancel = page
-        .locator("div[role='button']")
+        .locator("div[role='group']")
         .filter({ hasText: open.candidate })
         .filter({ hasText: open.template })
         .getByRole("button", {
@@ -11109,8 +11330,10 @@ export const SHOTS = [
       if (!draft) {
         throw new Error("no draft test to cancel");
       }
+      // A record card is a role="group" named for its test and candidate
+      // since the training sweeps; it was a role="button" div before.
       const cancel = page
-        .locator("div[role='button']")
+        .locator("div[role='group']")
         .filter({ hasText: draft.candidate })
         .filter({ hasText: draft.template })
         .getByRole("button", {
@@ -11156,8 +11379,10 @@ export const SHOTS = [
       if (!open) {
         throw new Error("no in-progress test to cancel");
       }
+      // A record card is a role="group" named for its test and candidate
+      // since the training sweeps; it was a role="button" div before.
       const cancel = page
-        .locator("div[role='button']")
+        .locator("div[role='group']")
         .filter({ hasText: open.candidate })
         .filter({ hasText: open.template })
         .getByRole("button", {
@@ -11203,8 +11428,10 @@ export const SHOTS = [
       if (!open) {
         throw new Error("no in-progress test to cancel");
       }
+      // A record card is a role="group" named for its test and candidate
+      // since the training sweeps; it was a role="button" div before.
       const cancel = page
-        .locator("div[role='button']")
+        .locator("div[role='group']")
         .filter({ hasText: open.candidate })
         .filter({ hasText: open.template })
         .getByRole("button", {
@@ -11766,6 +11993,8 @@ export const SHOTS = [
     route: "/finance/approvals",
     auth: "treasurer",
     expect: "Not assigned to you",
+    // The first request not assigned to the administrator is near 1,500px.
+    viewport: { width: 1440, height: 1600 },
   },
   {
     id: "11-22-approvals-admin-override",
@@ -11783,7 +12012,7 @@ export const SHOTS = [
       // depends on how far the seeded chains have advanced, and the expense
       // report this used to name now sits at the treasurer's own step.
       await page
-        .getByRole("button", { name: /^Approve .+ as approvals admin$/ })
+        .getByRole("button", { name: /^Approve as admin: / })
         .first()
         .click({ timeout: 15_000 });
       await page.getByText("Override reason").first().waitFor();
@@ -11864,7 +12093,9 @@ export const SHOTS = [
         new URL(`/grants/opportunities/${afg.id}/edit`, page.url()).toString(),
         { waitUntil: "domcontentloaded" },
       );
-      await page.locator("#opportunity-name").waitFor({ timeout: 20_000 });
+      await page
+        .locator("#opportunity-field-name")
+        .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(600);
     },
     fullPage: true,
@@ -13036,6 +13267,8 @@ export const SHOTS = [
   // ── Second batch: module sub-pages and detail views ────────────────
   {
     id: "05-02-inventory-dashboard",
+    allowEmptyState:
+      '"No location" is the location card for items not yet put away.',
     doc: "05-inventory.md",
     line: 580,
     anchor:
@@ -13135,6 +13368,8 @@ export const SHOTS = [
     // The status filter's closed <option> carries the same word, so the badge
     // is found inside the table.
     expect: { selector: 'tbody :text-is("Ordered")' },
+    // The Ordered row sits near 1,100px under the page's header and filters.
+    viewport: { width: 1440, height: 1250 },
   },
   {
     id: "05-24-member-inventory",
@@ -13446,7 +13681,7 @@ export const SHOTS = [
       "Screenshot of the Impact Planner page showing the filter panel on the",
     alt: "Inventory impact planner with its filter panel and member analysis",
     route: "/inventory/admin/impact-planner",
-    expect: "Back to Admin",
+    expect: "Who fits the category?",
     fullPage: true,
   },
   {
@@ -14190,8 +14425,11 @@ export const SHOTS = [
       // A field shows its move, duplicate, edit and delete buttons only under
       // the pointer, and the guide's Form Builder Features list is about those
       // buttons. Hover one on purpose rather than wherever the click left it.
+      // Hovered through a field's Required badge rather than a field name,
+      // which follows whichever form the seeder made first.
       await page
-        .getByText("Your Organization", { exact: true })
+        .getByText("Required", { exact: true })
+        .first()
         .hover({ timeout: 15_000 });
       await page.waitForTimeout(300);
     },
@@ -17562,7 +17800,7 @@ export const SHOTS = [
         );
       });
       await page.route(
-        /\/api\/v1\/prospective-members\/prospects\/[^/]+\/follow-up-forms\/[^/]+\/answers$/,
+        /\/api\/v1\/prospective-members\/prospects\/[^/]+\/interview\/follow-up-forms\/[^/]+\/answers$/,
         async (route) => {
           const rec = await recordFor();
           const requestId = route.request().url().split("/").slice(-2)[0];
@@ -17781,7 +18019,7 @@ export const SHOTS = [
     // The template list only: the editor beside it opens on whichever
     // template is first, which is not the subject.
     viewport: { width: 1440, height: 1700 },
-    selector: "div.space-y-1:has(> h3:text-is('Email Templates'))",
+    selector: "div.space-y-1:has(> h2:text-is('Email Templates'))",
   },
   {
     id: "15-09-bulk-action-result",
@@ -20426,21 +20664,27 @@ export const SHOTS = [
     // -- too thin to read as a table at all. The guide's own list of what
     // reflowed names the training table alongside documents.
     id: "10-18-training-table-phone",
+    allowEmptyState:
+      '"No completion date" is a group heading on the History tab.',
     doc: "10-mobile-pwa.md",
     line: 814,
     anchor: "one of the reflowed tables (documents or check-in) at",
-    alt: "One member's training history on a 390px phone: each row has become a stacked card, every value carrying its own column label, with nothing to scroll sideways",
-    route: "/members",
+    alt: "A member's records on the History tab of My Training on a 390px phone: each row has become a stacked card, every value carrying its own column label, with nothing to scroll sideways",
+    auth: "member",
+    route: "/training/my-training",
     viewport: { width: 390, height: 844 },
     prepare: openTrainingHistoryTable,
   },
   {
     id: "10-19-training-table-desktop",
+    allowEmptyState:
+      '"No completion date" is a group heading on the History tab.',
     doc: "10-mobile-pwa.md",
     line: 814,
     anchor: "__paired-with-10-18__",
-    alt: "The same three records at desktop width — one row each across Course, Type, Date, Hours, Expires, Status and Files",
-    route: "/members",
+    alt: "The same records at desktop width — one row each across Course, Type, Date, Hours, Source and Status",
+    auth: "member",
+    route: "/training/my-training",
     prepare: openTrainingHistoryTable,
   },
   {
@@ -20772,75 +21016,82 @@ export const SHOTS = [
     fullPage: false,
   },
   {
-    // The seeder runs `post_event_validation` against a freshly-ended,
-    // unfinalized event on every seed, so the prompt is already in the inbox
-    // -- this shot only has to read it.
+    // Several unread notifications of one kind are folded into a stack, so a
+    // single prompt vanishing cannot be seen on the inbox itself: the
+    // validations stack only counts one fewer. The pair frames that stack
+    // opened, where the prompt for the seeder's fixture event is listed among
+    // the others before, and missing after.
     id: "19-31-notification-before-action",
     doc: "00-getting-started.md",
     line: 334,
     anchor: "same notification before and after completing its related",
-    alt: "The notification inbox with an unread 'Validate attendance' prompt for a just-ended event, beside an unrelated shift-assignment notification",
+    alt: "The attendance validations stack opened in the inbox: unread prompts to validate attendance for several events that have ended, the Wednesday Evening Drill among them",
     route: "/notifications?tab=inbox",
+    expect: `Validate attendance for ${VALIDATION_EVENT_TITLE}`,
     prepare: async (page) => {
+      await openValidationStack(page);
       await page
-        .getByText(/Action Required: Validate attendance/)
-        // .first(): the seeder's validation fixture slides an event forward on
-        // every run, and the post-event task raises a notice for each event
-        // that ended unfinalized, so the inbox accumulates them -- 15 by the
-        // time this broke. A bare waitFor is strict and fails on the second.
+        .getByText(`Validate attendance for ${VALIDATION_EVENT_TITLE}`)
         .first()
         .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(400);
     },
-    fullPage: true,
+    selector: VALIDATION_STACK,
   },
   {
     // Completes the notification's related action directly against the API
     // (finalize-attendance), the same call `EventDetailPage`'s End Event
     // flow makes -- `archive_related_notifications` runs inside that
     // endpoint, so this is the same code path a chief clicking through would
-    // take, not a shortcut around it.
+    // take, not a shortcut around it. The event is the seeder's fixture,
+    // found by its title: the newest validation prompt can be any event that
+    // ended unfinalized, and finalizing the in-progress drill's closed the
+    // check-in monitor's fixture.
     //
     // Real mutation, deliberately unflagged: `mutatesSeedData` would force
     // this to be the last shot of guide 19, and `19-26` already holds that
     // position for unrelated (election) data with its own ordering
     // dependencies. Placed before `19-25`/`19-26` instead, which is what the
     // guard actually requires -- nothing later in guide 19 reads event or
-    // notification state, so no later shot can be broken by this one.
+    // notification state, so no later shot can be broken by this one. The
+    // seeder reopens the event on its next run.
     id: "19-32-notification-after-action",
     doc: "00-getting-started.md",
     line: 336,
     anchor: "__paired-with-19-31__",
-    alt: "The same inbox after finalizing the event's attendance: the validation prompt gone, the unrelated shift-assignment notification still there",
+    alt: "The same stack after the Wednesday Evening Drill's attendance was finalized: its prompt is gone, and the prompts for the other events are still there",
     route: "/notifications?tab=inbox",
+    expect: "Validate attendance for",
     prepare: async (page) => {
-      const eventId = await page.evaluate(async () => {
-        const res = await fetch("/api/v1/notifications/my?limit=100", {
-          credentials: "include",
-        });
-        const body = await res.json();
-        const notif = (body.logs ?? []).find(
-          (log) => log.category === "event_validation",
-        );
-        if (!notif) throw new Error("no event_validation notification found");
-        return notif.metadata?.event_id;
-      });
-      await page.evaluate(async (id) => {
-        const csrf =
-          document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
-        const res = await fetch(`/api/v1/events/${id}/finalize-attendance`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "X-CSRF-Token": decodeURIComponent(csrf) },
-        });
-        if (!res.ok) throw new Error(`finalize-attendance: ${res.status}`);
-      }, eventId);
+      const listed = await apiFromPage(page, "GET", "/events?limit=100");
+      const events = Array.isArray(listed.body)
+        ? listed.body
+        : listed.body?.events || listed.body?.items || [];
+      const event = events.find((e) => e.title === VALIDATION_EVENT_TITLE);
+      if (!event) throw new Error(`no event named ${VALIDATION_EVENT_TITLE}`);
+      const finalized = await apiFromPage(
+        page,
+        "POST",
+        `/events/${event.id}/finalize-attendance`,
+      );
+      if (finalized.status !== 200) {
+        throw new Error(`finalize-attendance returned ${finalized.status}`);
+      }
       await page.reload({ waitUntil: "networkidle" });
+      await openValidationStack(page);
       await page
-        .getByText(/New Shift Assignment/)
+        .getByText("Validate attendance for")
+        .first()
         .waitFor({ state: "visible", timeout: 20_000 });
-      await page.waitForTimeout(300);
+      const stillThere = await page
+        .getByText(`Validate attendance for ${VALIDATION_EVENT_TITLE}`)
+        .count();
+      if (stillThere) {
+        throw new Error("the finalized event's prompt is still in the stack");
+      }
+      await page.waitForTimeout(400);
     },
-    fullPage: true,
+    selector: VALIDATION_STACK,
   },
   {
     // The station board's message rail, framed rather than the whole board.
@@ -20878,7 +21129,7 @@ export const SHOTS = [
     doc: "19-august-2026-release-changes.md",
     line: 74,
     anchor: "closed election results showing manual paper-ballot count and its",
-    alt: "Record Paper Ballots refusing a 24-ballot tally against a 22-member roster, with the override checkbox it offers instead",
+    alt: "Record Paper Ballots refusing a 24-ballot tally for Captain when only 8 members are eligible to vote in that race, with the override checkbox it offers instead",
     route: "/elections",
     prepare: async (page) => {
       await openFirstFromApi(
@@ -20901,7 +21152,7 @@ export const SHOTS = [
       // for the whole state this shot is about.
       await dialog
         .getByRole("alert")
-        .getByText(/only 22 member\(s\) are eligible/)
+        .getByText(/only \d+ member\(s\) are eligible/)
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(400);
     },
@@ -21093,26 +21344,44 @@ export const SHOTS = [
     fullPage: true,
   },
   {
-    // The first half of the pair the marker asks for. Framed on the whole page
-    // rather than the ballot alone, because the two facts that change sit in
-    // different places: the item count inside the builder, and the voting
-    // method in the details card above it. "Simple Majority" here is the
-    // create form's "Supermajority Required (2/3)" -- one control that sets
-    // the method and the victory condition, and only the method is on display.
+    // The ballot half of the "before" pair. The two facts that change sit on
+    // different pages since #4297, the item count on Ballot and the voting
+    // method on Overview, so each state is two shots: this one and 19-44.
     id: "19-25-ballot-template-settings-before",
     doc: "19-august-2026-release-changes.md",
     line: 33,
     anchor: "Ballot Builder → Your saved ballots, showing the visible template",
-    alt: "The bylaw draft before a template is applied: one ballot item, and a details card reading Voting Method — Simple Majority",
+    alt: "The bylaw draft's Ballot page before a template is applied: Ballot Items (1), the Article VII Amendment",
     route: "/elections",
     prepare: async (page) => {
       await openBylawDraft(page);
-      const tab = page.locator("#tab-ballot");
-      await tab.waitFor({ timeout: 20_000 });
-      await tab.click({ timeout: 10_000 });
+      await openBylawSection(page, "ballot");
+      await page.getByText("Ballot Items (1)").waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
+    expect: "Ballot Items (1)",
     fullPage: true,
+  },
+  {
+    // The method half of the "before" pair. "One choice per voter" is the
+    // create form's "Supermajority Required (2/3)": one control sets the
+    // method and the winning rule, and only the method is on this card.
+    id: "19-44-voting-method-before",
+    doc: "19-august-2026-release-changes.md",
+    line: 33,
+    anchor: "__paired-with-19-25__",
+    alt: "The same draft's Overview before the template: the details card reading Voting Method — One choice per voter",
+    route: "/elections",
+    prepare: async (page) => {
+      await openBylawDraft(page);
+      await page
+        .getByText("Voting Method")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: BYLAW_DETAILS_CARD,
+    expect: "One choice per voter",
   },
   {
     id: "19-42-message-detail",
@@ -21145,54 +21414,52 @@ export const SHOTS = [
     allowEmptyState: true,
   },
   {
-    // Applied through the picker rather than the API: the point of the pair is
-    // that nothing in the confirmation says the voting method is about to
+    // Applied through the picker rather than the API: the point of the pairs
+    // is that nothing in the confirmation says the voting method is about to
     // change, so the change has to arrive by the route a secretary takes.
     //
-    // Must stay the last shot of guide 19 -- it leaves the draft holding the
-    // template's four officer seats under ranked choice. `openBylawDraft` puts
-    // it back for the shots that need it seeded, including the one above.
-    // `doc` stays on the guide-19 index although the image is embedded in
-    // 14-elections.md: 14-24-ballot-send-skipped and 19-26 both mutate the
-    // seeded data, and the invariant at the foot of this file allows one
-    // mutating shot per doc. Capture order, which is what the invariant
-    // protects, is unchanged.
+    // Self-contained: `cleanup` puts the draft back, so this leaves nothing
+    // changed for later shots and needs no `mutatesSeedData` flag. It used to
+    // be flagged and kept last in its guide, which ruled out a second "after"
+    // shot (19-45) once the ballot and the method moved to separate pages.
     id: "19-26-ballot-template-settings-after",
     doc: "19-august-2026-release-changes.md",
     line: 33,
     anchor: "__paired-with-19-25__",
-    alt: "The same draft immediately after applying the saved officer ballot: four items replacing the one, and the details card now reading Ranked Choice",
+    alt: "The same draft's Ballot page immediately after applying the saved officer ballot: Ballot Items (4), the template's officer seats replacing the one item",
     route: "/elections",
     prepare: async (page) => {
       await openBylawDraft(page);
-      const tab = page.locator("#tab-ballot");
-      await tab.waitFor({ timeout: 20_000 });
-      await tab.click({ timeout: 10_000 });
-      const use = page.getByRole("button", { name: /^Use Template$/ });
-      await use.waitFor({ timeout: 20_000 });
-      await use.click();
-      const popover = page.locator(
-        "div:has(> h4:text-is('Select a Template'))",
-      );
-      const saved = popover
-        .getByRole("button", { name: /Annual officer election/ })
-        .first();
-      await saved.waitFor({ timeout: 10_000 });
-      await saved.click();
-      await popover.getByRole("button", { name: /^Replace$/ }).click();
-      // Two toasts fire on a successful apply ("Ballot items saved", then
-      // "Applied ..."), and a toast cannot be removed from the DOM. Waited out
-      // instead: react-hot-toast's default is four seconds.
-      await page
-        .getByText(/^Applied "Annual officer election"$/)
-        .waitFor({ timeout: 20_000 });
-      await page
-        .getByText(/^Applied "Annual officer election"$/)
-        .waitFor({ state: "detached", timeout: 20_000 });
+      await applySavedOfficerBallot(page);
+      await page.getByText("Ballot Items (4)").waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
+    cleanup: resetBylawDraft,
+    expect: "Ballot Items (4)",
     fullPage: true,
-    mutatesSeedData: true,
+  },
+  {
+    // The method half of the "after" pair, applied the same way as 19-26 and
+    // put back the same way.
+    id: "19-45-voting-method-after",
+    doc: "19-august-2026-release-changes.md",
+    line: 33,
+    anchor: "__paired-with-19-25__",
+    alt: "The same draft's Overview after the template: the details card now reading Voting Method — Ranked choice",
+    route: "/elections",
+    prepare: async (page) => {
+      await openBylawDraft(page);
+      await applySavedOfficerBallot(page);
+      await openBylawSection(page, "");
+      await page
+        .getByText("Ranked choice", { exact: true })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: resetBylawDraft,
+    selector: BYLAW_DETAILS_CARD,
+    expect: "Ranked choice",
   },
   {
     // 375 wide, not the 390 the rest of the mobile shots use: the marker names
@@ -22263,7 +22530,7 @@ export const SHOTS = [
     line: 548,
     anchor:
       "Scheduling Admin → Settings → Outside Apparatus → one department with two units",
-    alt: "Scheduling Settings on Outside Apparatus: Township Fire Company with Engine 21 on and Tanker 23 switched off, a second department below, and the Add a department field",
+    alt: "Scheduling Settings on Outside Apparatus: the Add a department field above Lakeside Volunteer Rescue with Ambulance 58, and Township Fire Company with Engine 21 on and Tanker 23 switched off and marked hidden from members; each department has its on/off switch, edit, merge and delete buttons and an Evaluate shifts box",
     route: "/scheduling/admin/settings/outside-apparatus",
     fullPage: true,
     expect: "Tanker 23",
@@ -22336,14 +22603,14 @@ export const SHOTS = [
       "Shift Check-In at phone width, one hour into a shift → tap Check Out",
     alt: "Shift Check-In on a phone during a shift: the Check out early? dialog saying when the shift runs until, with Stay checked in and Check out now",
     route: "/scheduling/checkin",
-    // The account seated on a shift that is under way when the run happens.
-    // The secretary is a captain on the rotation; `currentShiftOf` fails the
-    // shot rather than guessing when none of their shifts is in progress.
+    // The account seated on a shift that is under way when the run happens:
+    // one of the secretary's own if it is running, else one made for the
+    // shot and removed again (see liveShiftOf).
     auth: "secretary",
     viewport: { width: 390, height: 844 },
     expect: "Check out early?",
-    prepare: async (page) => {
-      const shiftId = await currentShiftOf(page);
+    prepare: async (page, helpers) => {
+      const shiftId = await liveShiftOf(page, helpers);
       await page.goto(
         new URL(`/scheduling/checkin?shift=${shiftId}`, page.url()).toString(),
       );
@@ -22364,6 +22631,9 @@ export const SHOTS = [
         .click({ timeout: 15_000 });
       await page.getByText("Check out early?").waitFor({ timeout: 10_000 });
       await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await removeCheckOutFixture(page);
     },
   },
   {
@@ -22548,6 +22818,70 @@ export const SHOTS = [
         .selectOption({ label: "Add as an outside agency's unit…" });
       await page
         .getByText("starts hidden from members")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "03-139-history-import-existing-undo",
+    doc: "03-scheduling.md",
+    line: 5030,
+    anchor: "A draft import's Shifts tab: the E-1 shift a 75% match",
+    alt: 'A draft import\'s Shifts tab: the proposed E-1 shift on August 7, a 75% match for the shift already on the schedule, answered Add to that shift and now reading "You chose to add these members to that shift." with an Undo link',
+    route: "/scheduling/admin/history-import",
+    fullPage: true,
+    expect: "You chose to add these members to that shift.",
+    allowEmptyState: true,
+    prepare: async (page) => {
+      await page
+        .getByRole("link", { name: /^Review$/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("tab", { name: /^Shifts/ })
+        .click({ timeout: 20_000 });
+      // Saved to the draft like any reviewer's answer, so a later run finds
+      // it already given; the draft is never committed.
+      const chosen = page.getByText(
+        "You chose to add these members to that shift.",
+      );
+      if (!(await chosen.isVisible())) {
+        await page
+          .getByRole("button", { name: /^Add to that shift$/ })
+          .first()
+          .click({ timeout: 20_000 });
+      }
+      await chosen.waitFor({ timeout: 20_000 });
+      await chosen.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "03-141-history-import-rows-overlap",
+    doc: "03-scheduling.md",
+    line: 5007,
+    anchor:
+      "A draft import's Rows tab on Need attention: two of Sofia Marchetti's E-2 rows",
+    alt: "A draft import's Rows tab on Need attention, filtered to Overlapping times: Sofia Marchetti's two E-2 rows, the night shift and the next morning's 06:00 entry, each with its date, start and end as boxes and a Save button",
+    route: "/scheduling/admin/history-import",
+    fullPage: true,
+    expect: { selector: 'form[aria-label^="Date and times for line"]' },
+    allowEmptyState: true,
+    prepare: async (page) => {
+      await page
+        .getByRole("link", { name: /^Review$/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.getByRole("tab", { name: /^Rows/ }).click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: /^Need attention/ })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: /^Overlapping times/ })
+        .click({ timeout: 20_000 });
+      await page
+        .locator('form[aria-label^="Date and times for line"]')
+        .first()
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
@@ -22805,9 +23139,11 @@ export const SHOTS = [
         priority: 5,
       });
       await page.reload({ waitUntil: "domcontentloaded" });
-      const card = page.locator(`li:has(h3:text-is("${GUIDE08_ROLE}"))`);
+      const card = page.locator(`li:has(h2:text-is("${GUIDE08_ROLE}"))`);
       await card.scrollIntoViewIfNeeded({ timeout: 15_000 });
-      await card.getByRole("button", { name: "Edit", exact: true }).click();
+      await card
+        .getByRole("button", { name: `Edit ${GUIDE08_ROLE}`, exact: true })
+        .click();
       const dialog = page.locator('[aria-labelledby="role-modal-title"]');
       await dialog.waitFor({ timeout: 10_000 });
       await dialog
@@ -22825,7 +23161,7 @@ export const SHOTS = [
         await guide08Api(page, "DELETE", `/roles/${role.id}`);
       }
     },
-    selector: `li:has(h3:text-is("${GUIDE08_ROLE}"))`,
+    selector: `li:has(h2:text-is("${GUIDE08_ROLE}"))`,
   },
   {
     id: "08-90-training-admin-hub",
@@ -23019,7 +23355,7 @@ export const SHOTS = [
     expect: "Previous version (before the redesign)",
     // Tall enough to hold the panel, which sits in the editor column under
     // the template's description, with the old wording opened.
-    viewport: { width: 1440, height: 1500 },
+    viewport: { width: 1440, height: 2650 },
     // A backup is written only by the redesign migration, to templates a
     // department had edited before it, and the demo's templates were never
     // edited. The backup list is therefore served from a fixture; the rest of
@@ -23119,7 +23455,9 @@ export const SHOTS = [
     line: 1026,
     anchor: "__placed-by-hand-08-105__",
     alt: "Customize Department pulse open above the cards: Grant deadlines moved above Budget threshold and Dues retitled Member dues, with Save for me, Save as department default and Close",
-    route: "/dashboard",
+    // The pulse is on the department tab for anyone who can see it, and the
+    // dashboard opens on the personal one.
+    route: "/dashboard?tab=department",
     expect: "Customize Department pulse",
     // Edited in the panel and never saved.
     prepare: async (page) => {
@@ -23143,7 +23481,9 @@ export const SHOTS = [
     line: 1026,
     anchor: "__placed-by-hand-08-106__",
     alt: "Department pulse with every card hidden: All cards are hidden. Choose Customize to show some.",
-    route: "/dashboard",
+    // The pulse is on the department tab for anyone who can see it, and the
+    // dashboard opens on the personal one.
+    route: "/dashboard?tab=department",
     expect: "All cards are hidden",
     // A personal layout with every card hidden, saved for the administrator
     // and removed afterwards; the demo starts with no personal layout.
@@ -23225,9 +23565,12 @@ export const SHOTS = [
     expect: "is the position every member holds",
     // Keep editing, then Cancel: the Member position is never changed.
     prepare: async (page) => {
-      const card = page.locator('li:has(h3:text-is("Member"))');
+      // A role's name is its card's h2, and its Edit button is named for it.
+      const card = page.locator('li:has(h2:text-is("Member"))');
       await card.scrollIntoViewIfNeeded({ timeout: 15_000 });
-      await card.getByRole("button", { name: "Edit", exact: true }).click();
+      await card
+        .getByRole("button", { name: "Edit Member", exact: true })
+        .click();
       const dialog = page.locator('[aria-labelledby="role-modal-title"]');
       await dialog.waitFor({ timeout: 10_000 });
       await dialog
@@ -23404,7 +23747,7 @@ export const SHOTS = [
     alt: "Catalog Links after Link matches automatically: the list of names it linked, each with its catalog item and the checklists it landed on, BVM marked check this because it matched an also-called name, an Undo on each, and the lines it skipped still listed below",
     route: "/inventory/admin/checklists/catalog-links",
     expect: { selector: 'section[aria-labelledby="auto-linked"]' },
-    viewport: { width: 1440, height: 1200 },
+    viewport: { width: 1440, height: 1300 },
     // Runs a real automatic pass, so it changes the data it pictures. The
     // cleanup undoes every link the pass made, and `seed_medical_supplies`
     // also unlinks the Rescue 7 lines on the next seed should a run die
@@ -24041,7 +24384,7 @@ export const SHOTS = [
     alt: "Catalog Links before anything is applied: unlinked checklist lines grouped by name under Likely matches, the exact matches already chosen in their pickers, the others left on Don't link for you to confirm, and Link 5 positions counting what is chosen",
     route: "/inventory/admin/checklists/catalog-links",
     expect: { selector: 'section[aria-labelledby="likely-matches"]' },
-    viewport: { width: 1440, height: 1300 },
+    viewport: { width: 1440, height: 1450 },
   },
   {
     id: "05-110-nfc-put-away",
@@ -25628,7 +25971,7 @@ export const SHOTS = [
     // row is chosen. Change the amount is the way out; nothing is recorded.
     prepare: async (page) => {
       const buttons = page.getByRole("button", {
-        name: /^Record a payment for /,
+        name: /^Record (a )?payment for /,
       });
       await buttons.first().waitFor({ timeout: 20_000 });
       const me = await apiCall(page, "GET", "auth/me");
@@ -25729,10 +26072,13 @@ export const SHOTS = [
     viewport: { width: 1280, height: 900 },
     // The switch asks the server first, and the server answers that a fresh
     // confirmation is needed, which is the box. Cancel leaves the policy as
-    // it was. Should this session already be confirmed the switch would save,
-    // so the policy read before the click is put back in cleanup either way.
+    // it was. A confirmed session would save the switch instead, which
+    // turned passkeys off for the department and failed every passkey shot
+    // after it, so the shot runs in a session nothing confirms, and the
+    // policy read before the click is still put back in cleanup.
+    auth: "admin-unconfirmed",
     prepare: async (page) => {
-      const before = await apiFromPage(page, "GET", "/auth/mfa/policy");
+      const before = await rawApiFromPage(page, "GET", "/auth/mfa/policy");
       if (before.status !== 200) {
         throw new Error(`reading the MFA policy returned ${before.status}`);
       }
@@ -25756,12 +26102,19 @@ export const SHOTS = [
       });
       if (await cancel.count()) await cancel.click();
       if (!held) return;
-      const now = await apiFromPage(page, "GET", "/auth/mfa/policy");
+      const now = await rawApiFromPage(page, "GET", "/auth/mfa/policy");
       if (now.body?.passkeys_enabled === held.policy.passkeys_enabled) return;
-      throw new Error(
-        "the MFA policy changed during 00-34 and could not be restored " +
-          "without a step-up; switch Allow passkeys back by hand",
-      );
+      // Put back through the administrator's step-up, which also confirms
+      // this session; it is not reused by any other shot.
+      const restored = await apiFromPage(page, "PUT", "/auth/mfa/policy", {
+        mfa_required: held.policy.mfa_required,
+        passkeys_enabled: held.policy.passkeys_enabled,
+      });
+      if (restored.status !== 200) {
+        throw new Error(
+          `restoring the MFA policy after 00-34 returned ${restored.status}`,
+        );
+      }
     },
   },
   {
@@ -25781,10 +26134,7 @@ export const SHOTS = [
     // Reset MFA request it was holding is never sent again, so whalloway
     // (the one member enrolled in the app) keeps it.
     prepare: async (page) => {
-      await page
-        .getByRole("button", { name: /^Reset MFA for .*Halloway/ })
-        .first()
-        .click({ timeout: 20_000 });
+      await chooseMemberRowAction(page, "Halloway", "Reset MFA");
       await page
         .getByRole("dialog")
         .getByRole("button", { name: "Reset MFA", exact: true })
@@ -25960,10 +26310,7 @@ export const SHOTS = [
       await addPasskeyOnCard(memberPage, "My phone");
 
       await page.reload({ waitUntil: "domcontentloaded" });
-      const reset = page.getByRole("button", {
-        name: /^Reset MFA for .*Adeyemi/,
-      });
-      await reset.first().click({ timeout: 20_000 });
+      await chooseMemberRowAction(page, "Adeyemi", "Reset MFA");
       const dialog = page.getByRole("dialog");
       await dialog.getByText("My phone").waitFor({ timeout: 20_000 });
       await hideScanNotice(page);
@@ -26270,7 +26617,7 @@ export const SHOTS = [
     doc: "02-training.md",
     line: 2805,
     anchor: "A member's shift evaluation page part-way through",
-    alt: "Priya Raman's EMT Field Internship Evaluation in progress: the three interns on the shift across the top, the Shift (A, B, C) choice, shift statistics, the rating key, and each Clinical Performance item with its rating buttons, a required comment open under a rating of 2, and Save draft and Submit evaluation along the bottom",
+    alt: "An EMT Field Internship Evaluation in progress: the shift's interns with an evaluation begun across the top, the Shift (A, B, C) choice, shift statistics, the rating key, and each Clinical Performance item with its rating buttons, a required comment open under a rating of 2, and Save draft and Submit evaluation along the bottom",
     route: "/scheduling?tab=shift-reports",
     // The draft the seeder left. Viewing it saves nothing: autosave fires only
     // on a change.
@@ -26480,7 +26827,7 @@ export const SHOTS = [
       await page.waitForTimeout(600);
     },
     expect: "Completed by hand:",
-    viewport: { width: 1440, height: 1100 },
+    viewport: { width: 1440, height: 1300 },
   },
   {
     id: "02-141-no-active-requirements",
@@ -26936,7 +27283,7 @@ export const SHOTS = [
     anchor: "The Member ID Cards page on the Cards tab with two cards ticked",
     alt: "The Member ID Cards page on the Cards tab: the search and filters, two cards ticked, and the bar offering Suspend, Reactivate, Report lost and Revoke for them",
     route: "/members/admin/id-cards",
-    expect: "Member ID Cards",
+    expect: { selector: "[aria-label='Actions for selected cards']" },
     fullPage: false,
     prepare: async (page) => {
       const boxes = page.getByRole("checkbox", {
@@ -27019,7 +27366,9 @@ export const SHOTS = [
     anchor: "The Leave of Absence card on a member's profile with three leaves",
     alt: "The Leave of Absence card on Rafael Duarte's profile: a military leave in December badged Future, a leave of absence running now badged Active, and a personal leave that ended in October badged Expired, each with its dates and reason",
     route: "/members",
-    expect: { selector: "div.card:has(> h2:text-is('Leave of Absence'))" },
+    expect: {
+      selector: "div.card:has(> div > h2:text-is('Leave of Absence'))",
+    },
     prepare: async (page) => {
       await openFirstFromApi(
         "/users?limit=100",
@@ -27028,12 +27377,12 @@ export const SHOTS = [
         (user) => user.username === "rduarte",
       )(page);
       await page
-        .locator("div.card:has(> h2:text-is('Leave of Absence'))")
+        .locator("div.card:has(> div > h2:text-is('Leave of Absence'))")
         .getByText("Future", { exact: true })
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
-    selector: "div.card:has(> h2:text-is('Leave of Absence'))",
+    selector: "div.card:has(> div > h2:text-is('Leave of Absence'))",
   },
   {
     id: "01-58-member-class-status",
@@ -27299,6 +27648,9 @@ export const SHOTS = [
       '"No location" is the location summary card and filter option, not an empty list.',
     expect: { selector: "button[aria-label='Rename Structural Coat']" },
     fullPage: false,
+    // The pencil is the table row's; under the reflow tier the row is a card
+    // and that cell is hidden, which it still is at 1440px.
+    viewport: { width: 1920, height: 1080 },
     // Focus only, so the button's ring marks it; nothing is renamed.
     prepare: async (page) => {
       await unpinEverything(page);
@@ -27321,6 +27673,7 @@ export const SHOTS = [
     route: "/inventory/items",
     expect: "Product name",
     selector: '[data-testid="modal-panel"]',
+    viewport: { width: 1920, height: 1080 },
     // Opened and cancelled: the product keeps its name.
     prepare: async (page) => {
       await page
@@ -27603,16 +27956,18 @@ export const SHOTS = [
     anchor:
       "The Edit Pattern form for that pattern, with the inactive template",
     alt: "Edit Pattern for Reserve Engine Weekend Cover: the Reserve Engine — Out of Service template chosen and marked inactive, with the Template inactive warning beneath it",
-    route: "/scheduling/admin/planning/templates",
+    route: "/scheduling/admin/planning/patterns",
     expect: { selector: "[role='dialog'] [role='status']" },
     viewport: { width: 1280, height: 900 },
     selector: "[role='dialog']",
     // "No template" is the picker's first option, not an empty page.
     allowEmptyState: true,
-    // Only opened, never saved.
+    // Only opened, never saved. Each pattern's card opens on its header, and
+    // Edit is inside it.
     prepare: async (page) => {
       await page
-        .getByRole("tab", { name: /Patterns/ })
+        .locator("button[aria-controls^='pattern-details-']")
+        .filter({ hasText: "Reserve Engine Weekend Cover" })
         .click({ timeout: 20_000 });
       await page
         .getByRole("button", { name: "Edit Reserve Engine Weekend Cover" })
@@ -27919,6 +28274,85 @@ async function adminStepUp(page) {
   throw new Error("the administrator's step-up was refused twice");
 }
 
+/**
+ * Choose an action from a member's row menu on /members/admin. Reset
+ * Password and Reset MFA moved from buttons on the row into its More actions
+ * menu. The menu closes on any scroll, and Playwright scrolls to reach an
+ * item off screen, so the row is centred before the menu opens.
+ */
+async function chooseMemberRowAction(page, surname, action) {
+  const row = page.locator("tr").filter({ hasText: surname }).first();
+  await row.waitFor({ timeout: 20_000 });
+  await row.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(300);
+  await row
+    .getByRole("button", { name: new RegExp(`^More actions for .*${surname}`) })
+    .click({ timeout: 15_000 });
+  await page
+    .getByRole("menuitem", { name: new RegExp(`^${action} for .*${surname}`) })
+    .click({ timeout: 15_000 });
+}
+
+/**
+ * Step the signed-in member up with their passkey, the way the step-up box's
+ * Use your passkey button does, through the page's virtual authenticator.
+ * Once a member has a passkey, adding an authenticator app needs this: a
+ * password is weaker than the factor they already hold. adminStepUp cannot
+ * stand in, since the administrator's code is not this member's factor.
+ */
+async function memberPasskeyStepUp(page) {
+  const options = await rawApiFromPage(
+    page,
+    "POST",
+    "/auth/step-up/passkey-options",
+  );
+  if (options.status !== 200) {
+    throw new Error(`step-up passkey options returned ${options.status}`);
+  }
+  const credential = await page.evaluate(async (opts) => {
+    const fromB64 = (value) =>
+      Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/")), (c) =>
+        c.charCodeAt(0),
+      );
+    const toB64 = (buffer) =>
+      btoa(String.fromCharCode(...new Uint8Array(buffer)))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        ...opts,
+        challenge: fromB64(opts.challenge),
+        allowCredentials: (opts.allowCredentials ?? []).map((c) => ({
+          ...c,
+          id: fromB64(c.id),
+        })),
+      },
+    });
+    const r = assertion.response;
+    return {
+      id: assertion.id,
+      rawId: toB64(assertion.rawId),
+      type: assertion.type,
+      response: {
+        authenticatorData: toB64(r.authenticatorData),
+        clientDataJSON: toB64(r.clientDataJSON),
+        signature: toB64(r.signature),
+        ...(r.userHandle ? { userHandle: toB64(r.userHandle) } : {}),
+      },
+      clientExtensionResults: assertion.getClientExtensionResults(),
+    };
+  }, options.body);
+  const confirmed = await rawApiFromPage(page, "POST", "/auth/step-up", {
+    passkey_credential: credential,
+  });
+  if (confirmed.status !== 200) {
+    throw new Error(
+      `the member's passkey step-up returned ${confirmed.status}`,
+    );
+  }
+}
+
 /** State a passkey shot's cleanup needs: the page, its authenticator, the TOTP secret. */
 let passkeyShot = null;
 
@@ -28120,9 +28554,9 @@ async function tearDownPasskeyShot() {
       }
     }
     if (state.secret) {
-      const status = await apiFromPage(page, "GET", "/auth/mfa/status");
+      const status = await rawApiFromPage(page, "GET", "/auth/mfa/status");
       if (status.body?.mfa_enabled) {
-        const off = await apiFromPage(page, "POST", "/auth/mfa/disable", {
+        const off = await rawApiFromPage(page, "POST", "/auth/mfa/disable", {
           code: await nextMemberTotp(page, state),
         });
         if (off.status !== 200) {

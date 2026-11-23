@@ -111,6 +111,7 @@ from app.schemas.inventory import is_inspection_type
 from app.schemas.user import resolve_profile_visibility
 from app.services.inventory_sightings import add_sighting, record_creation_sightings
 from app.utils.color_names import canonical_color, normalize_color
+from app.utils.election_pdf_style import department_identity
 from app.utils.garment_styles import (
     FIT_NEUTRAL,
     FIT_VALUES,
@@ -2162,13 +2163,17 @@ class InventoryService:
         primary = primary_style(attributes)
         data["style"] = GarmentStyle(primary) if primary else None
 
-    async def create_item(
-        self,
-        organization_id: UUID | str,
-        item_data: Dict[str, Any],
-        created_by: UUID | str,
-    ) -> Tuple[Optional[InventoryItem], Optional[str]]:
-        """Create a new inventory item"""
+    async def validate_new_item(
+        self, organization_id: UUID | str, item_data: Dict[str, Any]
+    ) -> Optional[str]:
+        """Why ``create_item`` would refuse ``item_data``, or ``None``.
+
+        Every check ``create_item`` makes before it writes, and nothing else:
+        it reads but never changes ``item_data`` and writes nothing, so the CSV
+        import's dry run (workflow review W43-5) can report exactly what the
+        real import will refuse. ``create_item`` calls this first, so the two
+        cannot drift apart.
+        """
         try:
             date_err = (
                 item_date_error(
@@ -2179,14 +2184,14 @@ class InventoryService:
                 else None
             )
             if date_err:
-                return None, date_err
+                return date_err
 
             # Validate category requirements
             cat_err = await self._validate_category_requirements(
                 item_data, organization_id
             )
             if cat_err:
-                return None, cat_err
+                return cat_err
 
             # INV-4 (XC-1): location/storage/variant-group/assignee must be in-org.
             await self._assert_item_fks_in_org(item_data, organization_id)
@@ -2200,28 +2205,45 @@ class InventoryService:
             # list, where the number is the point.
             tracking = item_data.get("tracking_type", "individual")
             if tracking == "pool" and item_data.get("quantity", 1) < 0:
-                return None, "Pool item quantity cannot be negative"
+                return "Pool item quantity cannot be negative"
 
             # Validate serial number uniqueness within the organization
             sn_err = await self._check_serial_number_unique(
                 item_data.get("serial_number", ""), organization_id
             )
             if sn_err:
-                return None, sn_err
+                return sn_err
 
             for column, label in _UNIQUE_IDENTIFIERS:
                 id_err = await self._check_identifier_unique(
                     column, label, item_data.get(column), organization_id
                 )
                 if id_err:
-                    return None, id_err
+                    return id_err
 
             # Validate status/condition state
             status_val = ItemStatus(item_data.get("status", "available"))
             condition_val = ItemCondition(item_data.get("condition", "good"))
             state_err = self._validate_item_state(status_val, condition_val)
             if state_err:
-                return None, state_err
+                return state_err
+
+        except ValueError as e:
+            # assert_in_org's refusal; create_item reports the same text.
+            return str(e)
+        return None
+
+    async def create_item(
+        self,
+        organization_id: UUID | str,
+        item_data: Dict[str, Any],
+        created_by: UUID | str,
+    ) -> Tuple[Optional[InventoryItem], Optional[str]]:
+        """Create a new inventory item"""
+        try:
+            invalid = await self.validate_new_item(organization_id, item_data)
+            if invalid:
+                return None, invalid
 
             # Initialize current_value from purchase_price so it counts in Total Value
             if "purchase_price" in item_data and "current_value" not in item_data:
@@ -14106,6 +14128,7 @@ class InventoryService:
         organization_id,
         filters: Dict[str, Any],
         contact_visibility: Optional[Dict[str, bool]] = None,
+        report_number: Optional[str] = None,
     ) -> BytesIO:
         """Render the impact-plan analysis to a print-ready PDF.
 
@@ -14153,6 +14176,8 @@ class InventoryService:
         meta = {
             "org_name": org_name,
             "logo": org.logo if org else None,
+            "identity": department_identity(org) or None,
+            "report_number": report_number,
             # Printed on the plan, so it reads in the department's zone.
             "generated_at": datetime.now(timezone.utc).astimezone(
                 scheduling_timezone(org)

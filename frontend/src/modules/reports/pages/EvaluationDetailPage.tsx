@@ -25,6 +25,8 @@ import { DeleteEvaluationDialog } from '../components/evaluations/DeleteEvaluati
 import { EvaluationForm } from '../components/evaluations/EvaluationForm';
 import { FiguresPanel } from '../components/evaluations/FiguresPanel';
 import { PreviousReviewPanel } from '../components/evaluations/PreviousReviewPanel';
+import { ReviewHistoryPanel } from '../components/evaluations/ReviewHistoryPanel';
+import { SelfComparisonPanel } from '../components/evaluations/SelfComparisonPanel';
 import { ResponsePanel } from '../components/evaluations/ResponsePanel';
 import { SignDialog } from '../components/evaluations/SignDialog';
 import { StepList } from '../components/evaluations/StepList';
@@ -86,6 +88,9 @@ const EvaluationDetailPage: React.FC = () => {
   const [assigning, setAssigning] = useState<EvaluationStep | null>(null);
   const navigate = useNavigate();
   const signerName = useAuthStore((state) => state.user?.full_name ?? '');
+  // The member's review history is personnel content: the server serves it
+  // to evaluations.view_all alone, as it does the conduct list's grades.
+  const canViewAll = useAuthStore((state) => state.checkPermission('evaluations.view_all'));
   const sectionPermission = useSectionPermission();
   const conductLabel = conductListLabel(sectionPermission);
   // A crew supervisor reads an evaluation by relationship and may hold no
@@ -137,6 +142,11 @@ const EvaluationDetailPage: React.FC = () => {
 
   const kind = editableKind(detail);
   const readOnlyParts = detail.parts.filter((p) => p.kind !== kind && p.kind in PART_TITLES);
+  // The self-evaluation once the member has submitted it, beside the
+  // evaluator's ratings: their live draft while they write, otherwise the part
+  // the server sent. Each side is only what this page already shows the viewer.
+  const submittedSelf = detail.parts.find((p) => p.kind === 'self_evaluation' && p.status === 'submitted');
+  const evaluatorContent = kind === 'evaluator' ? draft : detail.parts.find((p) => p.kind === 'evaluator')?.content;
 
   const onEdit = (content: PartContent) => {
     editRevision.current += 1;
@@ -462,6 +472,14 @@ const EvaluationDetailPage: React.FC = () => {
               </section>
             )}
 
+            {submittedSelf && evaluatorContent && (
+              <SelfComparisonPanel
+                definition={detail.definition}
+                self={submittedSelf.content}
+                evaluator={evaluatorContent}
+              />
+            )}
+
             {readOnlyParts.map((part) => (
               <section key={part.kind} aria-labelledby={`part-${part.kind}`} className="space-y-4">
                 <h2 id={`part-${part.kind}`} className="text-theme-text-primary text-xl font-semibold">
@@ -509,6 +527,7 @@ const EvaluationDetailPage: React.FC = () => {
             />
             <StepList steps={detail.steps} onAssign={detail.viewer.can_assign_steps ? setAssigning : undefined} />
             {detail.previous_review && <PreviousReviewPanel review={detail.previous_review} />}
+            {canViewAll && <ReviewHistoryPanel evaluationId={detail.id} />}
             {(detail.amendments ?? []).length > 0 && (
               <section aria-labelledby="amendments-heading" className="card p-4 sm:p-6">
                 <h2 id="amendments-heading" className="text-theme-text-primary text-lg font-semibold">

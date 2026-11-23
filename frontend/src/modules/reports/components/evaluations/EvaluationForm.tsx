@@ -16,6 +16,7 @@ import type {
   DataEntry,
   EvaluationDataSource,
   EvaluationPartKind,
+  GoalEntry,
   GoalRating,
   GoalResult,
   GoalsUnderReview,
@@ -27,6 +28,7 @@ import type {
   TemplateItem,
 } from '../../types/evaluations';
 import { GOAL_RESULT_LABELS } from '../../types/evaluations';
+import { formatCalendarDate } from '../../../../utils/dateFormatting';
 import { figureDetail, formatFigure, needsJustification, withAnswer } from '../../utils/evaluationRecord';
 import { GradePanel } from './GradePanel';
 
@@ -51,6 +53,9 @@ interface EvaluationFormProps {
 }
 
 const GOAL_RESULTS = Object.keys(GOAL_RESULT_LABELS) as GoalResult[];
+
+/** As many goals as the server keeps on one Goals item (`MAX_GOALS_PER_ITEM`). */
+const MAX_GOALS = 20;
 
 const MEETS_LEVELS: ScaleLevel[] = [
   { value: 1, label: 'Meets', anchor: null },
@@ -105,6 +110,102 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
     update(itemKey, { goal_ratings: next });
   };
 
+  // A Goals answer saved before goals were a list holds them as one block of
+  // text; it is edited as the list's first goal, which is how a save stores it.
+  const goalsOf = (answer: ItemAnswer | undefined): GoalEntry[] =>
+    answer?.goals && answer.goals.length > 0
+      ? answer.goals
+      : answer?.text
+        ? [{ id: 'goal-1', text: answer.text, target_date: null }]
+        : [];
+
+  const setGoals = (itemKey: string, goals: GoalEntry[]) => update(itemKey, { goals, text: null });
+
+  const renderGoals = (item: TemplateItem, answer: ItemAnswer | undefined, id: string) => {
+    const goals = goalsOf(answer);
+    if (readOnly) {
+      return goals.length === 0 ? (
+        <p className="text-theme-text-secondary mt-2 text-sm">No goals set.</p>
+      ) : (
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
+          {goals.map((goal) => (
+            <li key={goal.id} className="text-theme-text-primary">
+              <span className="whitespace-pre-wrap">{goal.text}</span>
+              {goal.target_date && (
+                <span className="text-theme-text-secondary"> (by {formatCalendarDate(goal.target_date)})</span>
+              )}
+            </li>
+          ))}
+        </ol>
+      );
+    }
+    const change = (index: number, patch: Partial<GoalEntry>) =>
+      setGoals(
+        item.key,
+        goals.map((goal, i) => (i === index ? { ...goal, ...patch } : goal))
+      );
+    const nextId = () => {
+      const taken = new Set(goals.map((goal) => goal.id));
+      let n = goals.length + 1;
+      while (taken.has(`goal-${n}`)) n += 1;
+      return `goal-${n}`;
+    };
+    return (
+      <div className="mt-2 space-y-3">
+        {goals.map((goal, index) => (
+          <div key={goal.id} className="card-secondary space-y-2 p-3">
+            <div>
+              <label htmlFor={`${id}-${goal.id}-text`} className="form-label">
+                Goal {index + 1}
+              </label>
+              <textarea
+                id={`${id}-${goal.id}-text`}
+                className="form-input"
+                value={goal.text}
+                onChange={(e) => change(index, { text: e.target.value })}
+              />
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label htmlFor={`${id}-${goal.id}-date`} className="form-label">
+                  Target date for goal {index + 1} <span className="text-theme-text-muted font-normal">(optional)</span>
+                </label>
+                <input
+                  id={`${id}-${goal.id}-date`}
+                  type="date"
+                  className="form-input"
+                  value={goal.target_date ?? ''}
+                  onChange={(e) => change(index, { target_date: e.target.value || null })}
+                />
+              </div>
+              <button
+                type="button"
+                className="btn-secondary text-sm"
+                onClick={() =>
+                  setGoals(
+                    item.key,
+                    goals.filter((_, i) => i !== index)
+                  )
+                }
+              >
+                Remove goal {index + 1}
+              </button>
+            </div>
+          </div>
+        ))}
+        {goals.length < MAX_GOALS && (
+          <button
+            type="button"
+            className="btn-secondary text-sm"
+            onClick={() => setGoals(item.key, [...goals, { id: nextId(), text: '', target_date: null }])}
+          >
+            Add a goal
+          </button>
+        )}
+      </div>
+    );
+  };
+
   const renderGoalReview = (item: TemplateItem, answer: ItemAnswer | undefined, id: string) => {
     if (goals.length === 0) {
       return (
@@ -126,6 +227,9 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
             <div key={goal.key} className="card-secondary p-3">
               <p className="text-theme-text-secondary text-xs font-medium tracking-wide uppercase">{goal.label}</p>
               <p className="text-theme-text-primary mt-1 text-sm whitespace-pre-wrap">{goal.text}</p>
+              {goal.target_date && (
+                <p className="text-theme-text-secondary mt-1 text-xs">Target: {formatCalendarDate(goal.target_date)}</p>
+              )}
               {readOnly ? (
                 <>
                   <p className="text-theme-text-primary mt-2 text-sm font-medium">
@@ -175,7 +279,9 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
     const id = `${kind}-${item.key}`;
     const levels = levelsFor(item);
     const scored = item.tool === 'labeled_scale' || item.tool === 'numeric_scale' || item.tool === 'meets';
-    const written = item.tool === 'narrative' || item.tool === 'goals';
+    // A Goals item is a list of goals, so it is written in renderGoals, not in
+    // the one text box a narrative item gets.
+    const written = item.tool === 'narrative';
     const source = item.data_block ? sourceByKey.get(item.data_block.source) : undefined;
     const figure = item.data_block && data ? data[item.data_block.source] : undefined;
     const detail = item.data_block ? figureDetail(item.data_block.source, figure) : null;
@@ -274,6 +380,8 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
           )}
 
           {item.tool === 'goal_review' && renderGoalReview(item, answer, id)}
+
+          {item.tool === 'goals' && renderGoals(item, answer, id)}
 
           {written &&
             (readOnly ? (

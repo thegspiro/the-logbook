@@ -110,6 +110,29 @@ out in the same second get distinct numbers rather than one of them getting a 50
 A window is an ordering period. Statuses: `draft` → `scheduled` → `open` →
 `closed` → `fulfilled`, plus `cancelled`.
 
+**Opening and closing times.** A window with an opening time is `scheduled`;
+one without is a `draft`. Setting or clearing the opening time on an edit
+moves a window between those two, as creating it does. An open or closed
+window keeps its status whatever is edited (W67b-16). With "open
+automatically" and "close automatically" on (`auto_open`, `auto_close`), a
+job checks every 15 minutes and moves the window at its times.
+
+The closing time of a window set to close automatically is also checked
+wherever ordering is offered, so the 15-minute job is not a grace period
+(W67b-15):
+
+- The member storefront stops offering the window at its closing time, and an
+  order placed against it is refused.
+- The admin dashboard keeps showing it until the job closes it.
+- Such a window cannot be opened again while its closing time is in the past.
+  Opened, it would be closed again within 15 minutes, and members would be
+  told ordering opened and then closed. Move the closing time later first.
+- The job does not open a scheduled window whose closing time has already
+  passed; it stays scheduled for an officer to reschedule.
+
+With "close automatically" off, an officer closes the window, and until then
+its closing time is only what members were told: orders are still taken.
+
 More than one window can be open at once. The member storefront opens on the
 one closing soonest (undated windows sort last) and offers a switcher for the
 rest, so a department can run "Fall Apparel" and "Class B Uniforms"
@@ -457,6 +480,15 @@ list of the store's outbound mail:
 All nine default to on, which is the behaviour the module had before the
 switches existed.
 
+**A member's own choices sit underneath these switches.** A switch decides
+whether the store sends a notice at all; each member then decides, on their
+notification settings, which optional groups they receive. The window notices
+and the vendor-order update are **Store announcements**. Payment reminders are
+**Your store balance** (`store_balance`), a separate group since 2026-11-22
+(W67b-17), so a member who mutes the announcements still hears what they owe.
+Both are on by default. Receipts and the order notices are **Store receipts**,
+which nobody can turn off.
+
 **Times in these emails are the department's** _(2026-09-25)_. The
 window-opened and last-call notices printed `closes_at` with
 `strftime("… %I:%M %p UTC")`; `storefront_notification_service` now renders it
@@ -481,11 +513,14 @@ address is never disclosed to the rest of the department.
 ### Previewing a notice
 
 `GET /store/settings/notifications/{notice}/preview` (permission
-`storefront.manage`) renders any of the nine against a sample order or window
+`storefront.manage`) renders any of the ten against a sample order or window
 and returns the subject, HTML and plain-text bodies, who receives it, whether
 it is currently switched on, and the other emails the same switch governs. The
 settings screen puts a **Preview** button on each row and shows the result in a
-sandboxed iframe.
+sandboxed iframe. The tenth notice, `order_cancelled`, has no switch of its
+own: **Status changes** governs it, so that row carries a second
+**Cancellation** preview button (W67b-17; before, the email had a template but
+could be neither previewed nor test-sent).
 
 Two properties are load-bearing:
 

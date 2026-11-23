@@ -289,6 +289,7 @@ def _story(data: Dict[str, Any], meta: Dict[str, Any]) -> List[Any]:
             meta.get("logo"),
             styles,
             "Official Ballot",
+            identity=meta.get("identity"),
         ),
         Spacer(1, 8),
         HRFlowable(width="100%", thickness=2, color=INK),

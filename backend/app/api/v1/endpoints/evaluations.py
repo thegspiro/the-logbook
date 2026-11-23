@@ -71,6 +71,7 @@ from app.schemas.evaluation import (
     EvaluationTemplateSummary,
     EvaluationTemplateUpdate,
     GradeRequest,
+    GradeSpread,
     GradesResponse,
     LiveDataResponse,
     PartWrite,
@@ -80,6 +81,7 @@ from app.schemas.evaluation import (
     ReassignmentPlan,
     ReassignmentRequest,
     ResponseWrite,
+    ReviewHistoryEntry,
     SignatureWrite,
     SignResult,
     StepAssignment,
@@ -654,6 +656,63 @@ async def export_period_results(
     )
 
 
+@router.get("/grade-spread", response_model=GradeSpread)
+async def get_grade_spread(
+    period_id: str = Query(min_length=1, max_length=36),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.view_all")),
+):
+    """How each evaluator's finalized reviews in a period fall across the five
+    grades, beside the department's. Requires ``evaluations.view_all``, as
+    the grades it counts do; a period of another department answers 404.
+
+    **Permissions required:** evaluations.view_all
+    """
+    return ensure_found(
+        await EvaluationService(db).grade_spread(
+            current_user.organization_id, current_user, period_id
+        ),
+        "Review period",
+    )
+
+
+@router.get("/export-pdfs")
+async def export_period_pdfs(
+    period_id: str = Query(min_length=1, max_length=36),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.view_all")),
+    _stepup: User = Depends(require_stepup),
+):
+    """A zip of the signed PDF of every finalized evaluation in a period: the
+    copy the signatures attest to, without any later response. Requires
+    ``evaluations.view_all`` and a recently re-verified session, since it
+    hands over a period's personnel records at once (owner decision
+    2026-11-22). Audited, and watched as a bulk export; a period of another
+    department answers 404.
+
+    **Permissions required:** evaluations.view_all
+    """
+    async with handle_service_errors("Failed to prepare the PDFs"):
+        bundle = await EvaluationDocumentService(db).period_bundle(
+            current_user.organization_id, current_user, period_id
+        )
+    content, count = ensure_found(bundle, "Review period")
+    await _audit(
+        db,
+        current_user,
+        "evaluation_period_pdfs_exported",
+        {"period_id": period_id, "documents": count},
+    )
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": 'attachment; filename="evaluation-pdfs.zip"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @router.get("/draft-options", response_model=DraftOptions)
 async def get_draft_options(
     db: AsyncSession = Depends(get_db),
@@ -822,6 +881,22 @@ async def get_evaluation(
     current_user: User = Depends(get_current_user),
 ):
     return await _evaluation(EvaluationService(db), current_user, evaluation_id)
+
+
+@router.get("/{evaluation_id}/history", response_model=List[ReviewHistoryEntry])
+async def get_review_history(
+    evaluation_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.view_all")),
+):
+    """The member's other finalized reviews, newest first, with the overall
+    result each stood at. Requires ``evaluations.view_all``: grades are
+    personnel content. Each review is read as the caller could open it, and
+    a review of another department answers 404."""
+    entries = await EvaluationService(db).review_history(
+        current_user.organization_id, evaluation_id, current_user
+    )
+    return ensure_found(entries, "Evaluation")
 
 
 @router.put("/{evaluation_id}/parts/{kind}", response_model=EvaluationDetail)

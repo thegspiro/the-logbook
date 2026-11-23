@@ -138,6 +138,37 @@ heard right once and "Sked-yool" four times, so 8H's line speaks the second.
 To see what a capture sends while it runs, set `VIDEO_DEBUG=1`: the 8E
 capture logs each request that changes something and each console error.
 
+## Making a guide
+
+A guide is one chapter of a full-length script, rendered as a 16:9 video for
+YouTube. It lives in `guides/<id>/` with the same two files as a short and is
+rendered by the same command:
+
+```sh
+video-production/make-short.sh 6-member-03-events --check
+```
+
+Its `shots.json` differs from a short's in three ways:
+
+- `"kind": "guide"`, plus `"series"` and `"chapter"` for the header bar and
+  the opening title card.
+- A shot that begins a section carries `"section": "<title>"`. That shot's
+  start shows a banner over the screen and becomes a YouTube chapter.
+- Shots need no `"caption"`: the narration is carried by the subtitles.
+
+The output, in `build/<id>/render/`, is `<id>.mp4`, `<id>.chapters.txt` (paste
+it into the video's description; YouTube needs the first at 0:00, at least
+three, each at least ten seconds) and `<id>.srt` (upload it as the video's
+subtitles). Subtitle cues split each line into sentences and time them in
+proportion to their length, which the even pace of the voice keeps within a
+beat of the speech.
+
+Guides record a landscape tablet (1180×820), where the app shows its desktop
+layout with the side navigation. A chapter runs for minutes, so a guide's
+capture raises its own Playwright timeout (`test.setTimeout`) above the two
+minutes the config allows a short. The pilot is Chapter 3 of the Member Guide;
+its narration follows the app where the script has drifted, as the shorts do.
+
 ## How it works
 
 | Stage       | File                                                 | Produces                                              |

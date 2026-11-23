@@ -97,23 +97,27 @@ export const IPExceptionTable: React.FC<IPExceptionTableProps> = ({
                 <span className="min-w-0 break-all">{exc.ipAddress}</span>
               </td>
               <td data-label="Use Case" className="text-theme-text-secondary px-4 py-3">
-                {IP_EXCEPTION_USE_CASE_LABELS[exc.useCase ?? ''] ?? exc.useCase ?? '—'}
-                {/* The justification is what an approver decides on (W74). */}
-                {exc.reason && <p className="text-theme-text-muted mt-0.5 max-w-xs text-xs">{exc.reason}</p>}
+                <div className="min-w-0">
+                  {IP_EXCEPTION_USE_CASE_LABELS[exc.useCase ?? ''] ?? exc.useCase ?? '—'}
+                  {/* The justification is what an approver decides on (W74). */}
+                  {exc.reason && <p className="text-theme-text-muted mt-0.5 max-w-xs text-xs">{exc.reason}</p>}
+                </div>
               </td>
               <td data-label="Status" className="px-4 py-3">
-                <span
-                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${IP_EXCEPTION_STATUS_COLORS[exc.approvalStatus] ?? ''}`}
-                >
-                  {IP_EXCEPTION_STATUS_LABELS[exc.approvalStatus] ?? exc.approvalStatus}
-                </span>
-                {/* W74: a member saw "Rejected" with no word of why. */}
-                {exc.approvalStatus === IPExceptionApprovalStatus.REJECTED && exc.rejectionReason && (
-                  <p className="text-theme-text-muted mt-0.5 max-w-xs text-xs">{exc.rejectionReason}</p>
-                )}
-                {exc.approvalStatus === IPExceptionApprovalStatus.REVOKED && exc.revokeReason && (
-                  <p className="text-theme-text-muted mt-0.5 max-w-xs text-xs">{exc.revokeReason}</p>
-                )}
+                <div className="min-w-0">
+                  <span
+                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${IP_EXCEPTION_STATUS_COLORS[exc.approvalStatus] ?? ''}`}
+                  >
+                    {IP_EXCEPTION_STATUS_LABELS[exc.approvalStatus] ?? exc.approvalStatus}
+                  </span>
+                  {/* W74: a member saw "Rejected" with no word of why. */}
+                  {exc.approvalStatus === IPExceptionApprovalStatus.REJECTED && exc.rejectionReason && (
+                    <p className="text-theme-text-muted mt-0.5 max-w-xs text-xs">{exc.rejectionReason}</p>
+                  )}
+                  {exc.approvalStatus === IPExceptionApprovalStatus.REVOKED && exc.revokeReason && (
+                    <p className="text-theme-text-muted mt-0.5 max-w-xs text-xs">{exc.revokeReason}</p>
+                  )}
+                </div>
               </td>
               <td data-label="Duration" className="text-theme-text-secondary px-4 py-3">
                 {formatDays(exc.approvedDurationDays ?? exc.requestedDurationDays)}

@@ -20,7 +20,7 @@ Responses are snake_case, like the rest of the reports module.
 import re
 from datetime import date, datetime
 from enum import Enum
-from typing import Annotated, List, Literal, Optional
+from typing import Annotated, Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -790,6 +790,35 @@ class GoalRating(BaseModel):
         return _blank_to_none(v)
 
 
+#: Goals one Goals item may hold.
+MAX_GOALS_PER_ITEM = 20
+_GOAL_ID = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
+
+
+class GoalEntry(BaseModel):
+    """One goal on a Goals item. ``id`` is chosen by the form and stays with
+    the goal, so next year's review can rate this goal by it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    # Blank while the goal is still being written; a save drops it.
+    text: str = Field(default="", max_length=MAX_ANSWER_TEXT)
+    target_date: Optional[date] = None
+
+    @field_validator("id")
+    @classmethod
+    def _id(cls, v: str) -> str:
+        if not _GOAL_ID.match(v):
+            raise ValueError("A goal's id is 1 to 40 letters, digits, - or _")
+        return v
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def _strip(cls, v: Any) -> Any:
+        return v.strip() if isinstance(v, str) else v
+
+
 class ItemAnswer(BaseModel):
     """One item's answer in an evaluator's part or a self-evaluation.
 
@@ -800,7 +829,13 @@ class ItemAnswer(BaseModel):
     specific instance a level requires, ``justification`` the evaluator's
     reason for departing from the score the data suggested, and
     ``goal_ratings`` a goal-review item's result for each goal the previous
-    review set, keyed by that review's goals item.
+    review set, keyed by that review's goals item, and ``goals`` a Goals
+    item's goals.
+
+    A Goals item's canonical shape is ``goals``; ``save_part`` turns a
+    ``text`` answer into one goal. A part saved before goals were a list
+    (2026-11-22) keeps its ``text``: a submitted part is in the record hash
+    its signatures attest to, so it is read as it is, never rewritten.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -815,6 +850,9 @@ class ItemAnswer(BaseModel):
     goal_ratings: dict[str, GoalRating] = Field(
         default_factory=dict, max_length=MAX_SECTIONS * MAX_ITEMS_PER_SECTION
     )
+    # A Goals item's goals, each with an optional target date. An answer
+    # written before goals were a list holds its goals as ``text`` instead.
+    goals: List[GoalEntry] = Field(default_factory=list, max_length=MAX_GOALS_PER_ITEM)
 
     @field_validator("text", "comment", "example", "justification")
     @classmethod
@@ -825,6 +863,9 @@ class ItemAnswer(BaseModel):
     def _na_is_unanswered(self) -> "ItemAnswer":
         if self.na and self.rating is not None:
             raise ValueError("An item marked N/A cannot also be rated")
+        ids = [g.id for g in self.goals]
+        if len(set(ids)) != len(ids):
+            raise ValueError("Each goal needs its own id")
         return self
 
 
@@ -1065,6 +1106,7 @@ class PreviousGoal(BaseModel):
     key: str
     label: str
     text: str
+    target_date: Optional[date] = None
 
 
 class GoalsUnderReview(BaseModel):
@@ -1089,6 +1131,17 @@ class PreviousReview(BaseModel):
     overall: Optional[str] = None
     sections: List[PreviousSectionGrade] = Field(default_factory=list)
     goals: List[PreviousGoal] = Field(default_factory=list)
+
+
+class ReviewHistoryEntry(BaseModel):
+    """One of the member's finalized reviews, with the result that stood."""
+
+    evaluation_id: str
+    template_name: str
+    period_name: Optional[str] = None
+    period_start: date
+    period_end: date
+    overall: Optional[str] = None
 
 
 class EvaluationDetail(EvaluationSummary):
@@ -1365,6 +1418,26 @@ class ReassignmentPlan(BaseModel):
     from_name: str
     to_name: str
     rows: List[ReassignmentRow] = Field(default_factory=list)
+
+
+class GradeTally(BaseModel):
+    """Finalized reviews counted by grade: ``counts`` follows ``levels``,
+    ``other`` holds those with no place on the five grades."""
+
+    counts: List[int]
+    other: int
+    total: int
+
+
+class EvaluatorGradeTally(GradeTally):
+    evaluator_id: Optional[str] = None
+    name: str
+
+
+class GradeSpread(BaseModel):
+    levels: List[str]
+    evaluators: List[EvaluatorGradeTally] = Field(default_factory=list)
+    department: GradeTally
 
 
 class StepAssignment(BaseModel):

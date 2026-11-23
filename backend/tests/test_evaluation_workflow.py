@@ -3333,11 +3333,14 @@ class TestGoalReview:
 
         copied = this["goals_under_review"]
         assert copied["evaluation_id"] == last_id
+        # Last year's goals were sent as free text, which a save stores as
+        # one goal on the list.
         assert copied["goals"] == [
             {
-                "key": "goals",
+                "key": "goals:goal-1",
                 "label": "Goals for the coming year",
                 "text": "Lead two drills.",
+                "target_date": None,
             }
         ]
 
@@ -3350,11 +3353,83 @@ class TestGoalReview:
         rated = _answers(
             goals={"text": "Earn Officer I."},
             last_goals={
-                "goal_ratings": {"goals": {"result": "met", "comment": "Led three."}}
+                "goal_ratings": {
+                    "goals:goal-1": {"result": "met", "comment": "Led three."}
+                }
             },
         )
         saved = await evaluator.put(f"{url}/parts/evaluator", json={"content": rated})
         assert saved.status_code == 200, saved.text
+        submitted = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert submitted.status_code == 200, submitted.text
+
+    async def test_each_goal_on_last_years_list_is_rated_on_its_own(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        await _with_goal_review(dept)
+        last = await _draft(await make_client(dept.manager), dept)
+        await _finish(
+            dept,
+            make_client,
+            f"/evaluations/{last['id']}",
+            _answers(
+                goals={
+                    "goals": [
+                        {
+                            "id": "drills",
+                            "text": "Lead two drills.",
+                            "target_date": "2026-06-30",
+                        },
+                        {"id": "officer", "text": "Earn Officer I."},
+                    ]
+                }
+            ),
+        )
+        this = await _draft(
+            await make_client(dept.manager),
+            dept,
+            period_id=(await _next_period(dept)).id,
+        )
+        url = f"/evaluations/{this['id']}"
+        member = await make_client(dept.member)
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+        evaluator = await make_client(dept.evaluator)
+
+        assert this["goals_under_review"]["goals"] == [
+            {
+                "key": "goals:drills",
+                "label": "Goals for the coming year, goal 1",
+                "text": "Lead two drills.",
+                "target_date": "2026-06-30",
+            },
+            {
+                "key": "goals:officer",
+                "label": "Goals for the coming year, goal 2",
+                "text": "Earn Officer I.",
+                "target_date": None,
+            },
+        ]
+        next_goals = {"goals": [{"id": "g1", "text": "Pass the driver course."}]}
+        one_rated = _answers(
+            goals=next_goals,
+            last_goals={"goal_ratings": {"goals:drills": {"result": "met"}}},
+        )
+        await evaluator.put(f"{url}/parts/evaluator", json={"content": one_rated})
+        refused = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert refused.status_code == 400
+        assert "rate each of the last review's goals" in refused.text
+
+        both_rated = _answers(
+            goals=next_goals,
+            last_goals={
+                "goal_ratings": {
+                    "goals:drills": {"result": "met"},
+                    "goals:officer": {"result": "not_met"},
+                }
+            },
+        )
+        await evaluator.put(f"{url}/parts/evaluator", json={"content": both_rated})
         submitted = await evaluator.post(f"{url}/parts/evaluator/submit")
         assert submitted.status_code == 200, submitted.text
 
@@ -3441,7 +3516,10 @@ class TestGoalReview:
                 goals={"text": "Earn Officer I."},
                 last_goals={
                     "goal_ratings": {
-                        "goals": {"result": "partly_met", "comment": "Led one."}
+                        "goals:goal-1": {
+                            "result": "partly_met",
+                            "comment": "Led one.",
+                        }
                     }
                 },
             ),
@@ -3465,6 +3543,218 @@ class TestGoalReview:
                 "Lead two drills.\nResult: Partly met\nComment: Led one.",
             )
         ]
+
+
+class TestGradeSpread:
+    """GET /evaluations/grade-spread: each evaluator's finalized reviews in a
+    period counted by grade, beside the department's, for view_all."""
+
+    async def _evaluator_rated(self, dept: _Dept) -> None:
+        version = (
+            await dept.db.execute(
+                select(EvaluationTemplateVersion).where(
+                    EvaluationTemplateVersion.template_id == dept.template.id
+                )
+            )
+        ).scalar_one()
+        version.definition = {**DEFINITION, "overall_mode": "evaluator"}
+        await dept.db.flush()
+
+    async def _finished(
+        self,
+        dept: _Dept,
+        make_client: ClientFactory,
+        evaluator: User,
+        rating: Optional[int],
+    ) -> None:
+        member_user = await _user(dept.db, dept.org, [])
+        detail = await _draft(
+            await make_client(dept.manager),
+            dept,
+            member=member_user,
+            evaluator_id=evaluator.id,
+        )
+        url = f"/evaluations/{detail['id']}"
+        member = await make_client(member_user)
+        writer = await make_client(evaluator)
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+        content = {**EVALUATOR_ANSWERS}
+        if rating is not None:
+            content["overall_rating"] = rating
+        await writer.put(f"{url}/parts/evaluator", json={"content": content})
+        submitted = await writer.post(f"{url}/parts/evaluator/submit")
+        assert submitted.status_code == 200, submitted.text
+        signed = await member.post(
+            f"{url}/sign",
+            json={
+                "signed_name": member_user.full_name,
+                "disposition": "acknowledged",
+                "intent_confirmed": True,
+            },
+        )
+        assert signed.json()["outcome"] == "finalized", signed.text
+
+    async def test_each_evaluators_finished_reviews_are_counted_by_grade(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        await self._evaluator_rated(dept)
+        second = await _user(dept.db, dept.org, ["evaluations.conduct"])
+        await self._finished(dept, make_client, dept.evaluator, 4)
+        await self._finished(dept, make_client, dept.evaluator, 4)
+        await self._finished(dept, make_client, dept.evaluator, 2)
+        await self._finished(dept, make_client, second, 5)
+        # Not counted: a review still in progress.
+        await _draft(await make_client(dept.manager), dept)
+
+        response = await (await make_client(dept.reader)).get(
+            "/evaluations/grade-spread", params={"period_id": dept.period.id}
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["levels"] == [
+            "Unsatisfactory",
+            "Needs improvement",
+            "Meets expectations",
+            "Exceeds expectations",
+            "Outstanding",
+        ]
+        by_name = {e["name"]: e for e in body["evaluators"]}
+        assert by_name[dept.evaluator.full_name]["counts"] == [0, 1, 0, 2, 0]
+        assert by_name[dept.evaluator.full_name]["total"] == 3
+        assert by_name[second.full_name]["counts"] == [0, 0, 0, 0, 1]
+        assert body["department"] == {
+            "counts": [0, 1, 0, 2, 1],
+            "other": 0,
+            "total": 4,
+        }
+
+    async def test_a_weighted_percentage_is_counted_apart_from_the_grades(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        await _finalized(dept, make_client)
+
+        body = (
+            await (await make_client(dept.reader)).get(
+                "/evaluations/grade-spread", params={"period_id": dept.period.id}
+            )
+        ).json()
+
+        assert body["department"] == {"counts": [0, 0, 0, 0, 0], "other": 1, "total": 1}
+
+    async def test_it_needs_view_all_and_a_period_of_this_department(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        url = f"/evaluations/grade-spread?period_id={dept.period.id}"
+        assert (await (await make_client(dept.evaluator)).get(url)).status_code == 403
+        elsewhere = await _period(dept.db, await _org(dept.db))
+        missing = await (await make_client(dept.reader)).get(
+            f"/evaluations/grade-spread?period_id={elsewhere.id}"
+        )
+        assert missing.status_code == 404
+
+
+class TestPeriodPdfs:
+    """GET /evaluations/export-pdfs: the signed PDF of every finalized
+    evaluation in a period in one zip, for view_all, with step-up."""
+
+    URL = "/evaluations/export-pdfs"
+
+    async def test_view_all_gets_each_finished_reviews_signed_pdf(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        import io
+        import zipfile
+
+        from app.models.audit import AuditLog
+
+        other = await _user(dept.db, dept.org, [])
+        await _finalized(dept, make_client)
+        await _finalized(dept, make_client, member=other)
+        # Not included: a review still in progress.
+        await _draft(
+            await make_client(dept.manager),
+            dept,
+            member=await _user(dept.db, dept.org, []),
+        )
+
+        response = await (await make_client(dept.reader)).get(
+            self.URL, params={"period_id": dept.period.id}
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.headers["content-type"] == "application/zip"
+        assert response.headers["cache-control"] == "no-store"
+        with zipfile.ZipFile(io.BytesIO(response.content)) as bundle:
+            names = sorted(bundle.namelist())
+            assert names == sorted(
+                f"{member.full_name} - {dept.template.name} - 2025-12-31.pdf"
+                for member in (dept.member, other)
+            )
+            assert all(bundle.read(name).startswith(b"%PDF") for name in names)
+        audited = (
+            await dept.db.execute(
+                select(AuditLog).where(
+                    AuditLog.event_type == "evaluation_period_pdfs_exported"
+                )
+            )
+        ).scalar_one()
+        assert audited.event_data == {"period_id": dept.period.id, "documents": 2}
+
+    async def test_a_pdf_missing_from_storage_is_named_not_dropped(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        import io
+        import os
+        import zipfile
+
+        from app.models.evaluation import EvaluationDocument
+        from app.services import file_storage_service as file_storage
+
+        url = await _finalized(dept, make_client)
+        document = (
+            await dept.db.execute(
+                select(EvaluationDocument).where(
+                    EvaluationDocument.evaluation_id == url.rsplit("/", 1)[-1]
+                )
+            )
+        ).scalar_one()
+        stored = file_storage.resolve(
+            document.file_path, dept.org, file_storage.StorageArea.EVALUATIONS
+        )
+        assert stored is not None
+        os.remove(stored)
+
+        response = await (await make_client(dept.reader)).get(
+            self.URL, params={"period_id": dept.period.id}
+        )
+
+        with zipfile.ZipFile(io.BytesIO(response.content)) as bundle:
+            assert bundle.namelist() == ["NOT INCLUDED.txt"]
+            assert dept.member.full_name in bundle.read("NOT INCLUDED.txt").decode()
+
+    async def test_it_needs_view_all_and_a_period_of_this_department(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        params = {"period_id": dept.period.id}
+        conductor = await make_client(dept.evaluator)
+        assert (await conductor.get(self.URL, params=params)).status_code == 403
+        elsewhere = await _period(dept.db, await _org(dept.db))
+        missing = await (await make_client(dept.reader)).get(
+            self.URL, params={"period_id": elsewhere.id}
+        )
+        assert missing.status_code == 404
+
+    @pytest.mark.real_stepup
+    async def test_it_requires_a_recent_re_verification(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        response = await (await make_client(dept.reader)).get(
+            self.URL, params={"period_id": dept.period.id}
+        )
+        assert response.status_code == 403
+        assert response.headers.get("x-stepup-required") == "true"
 
 
 class TestPeriodResults:
@@ -3728,6 +4018,106 @@ class TestReassigningAPeriod:
         )
         assert response.status_code == 403
         assert response.headers.get("x-stepup-required") == "true"
+
+
+class TestReviewHistory:
+    """GET /evaluations/{id}/history: the member's other finalized reviews,
+    newest first, with the grade that stood, for evaluations.view_all."""
+
+    async def test_view_all_sees_the_members_other_finished_reviews_newest_first(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        manager = await make_client(dept.manager)
+        reader = await make_client(dept.reader)
+        older_url = await _finalized(dept, make_client)
+        older = (await reader.get(older_url)).json()
+        # Not listed: another member's finished review.
+        await _finalized(dept, make_client, member=await _user(dept.db, dept.org, []))
+        # 2024's review on another form, finished.
+        other_form = await _template(dept.db, dept.org, name="Other Annual")
+        earliest = await _draft(
+            manager,
+            dept,
+            period_id=(await _next_period(dept, 2024)).id,
+            template_id=other_form.id,
+        )
+        await _lock_evaluator(dept, make_client, f"/evaluations/{earliest['id']}")
+        signed = await (await make_client(dept.member)).post(
+            f"/evaluations/{earliest['id']}/sign",
+            json={
+                "signed_name": dept.member.full_name,
+                "disposition": "acknowledged",
+                "intent_confirmed": True,
+            },
+        )
+        assert signed.json()["outcome"] == "finalized"
+        # Not listed: the review being read, and an unfinished one.
+        this = await _draft(
+            manager,
+            dept,
+            period_id=(await _next_period(dept)).id,
+            template_id=dept.template.id,
+        )
+        await _draft(
+            manager,
+            dept,
+            period_id=(await _next_period(dept, 2027)).id,
+            template_id=dept.template.id,
+        )
+
+        response = await reader.get(f"/evaluations/{this['id']}/history")
+
+        assert response.status_code == 200, response.text
+        assert response.json() == [
+            {
+                "evaluation_id": older["id"],
+                "template_name": dept.template.name,
+                "period_name": dept.period.name,
+                "period_start": "2025-01-01",
+                "period_end": "2025-12-31",
+                "overall": f"{older['weighted_overall']:g}% (weighted)",
+            },
+            {
+                "evaluation_id": earliest["id"],
+                "template_name": "Other Annual",
+                "period_name": earliest["period_name"],
+                "period_start": "2024-01-01",
+                "period_end": "2024-12-31",
+                "overall": f"{older['weighted_overall']:g}% (weighted)",
+            },
+        ]
+
+    async def test_it_needs_view_all_and_an_evaluation_of_this_department(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        this = await _draft(await make_client(dept.manager), dept)
+        url = f"/evaluations/{this['id']}/history"
+        assert (await (await make_client(dept.evaluator)).get(url)).status_code == 403
+        assert (await (await make_client(dept.member)).get(url)).status_code == 403
+
+        other_org = await _org(dept.db)
+        other_template = await _template(dept.db, other_org)
+        version_id = (
+            await dept.db.execute(
+                select(EvaluationTemplateVersion.id).where(
+                    EvaluationTemplateVersion.template_id == other_template.id
+                )
+            )
+        ).scalar_one()
+        elsewhere = Evaluation(
+            organization_id=other_org,
+            member_id=(await _user(dept.db, other_org, [])).id,
+            template_version_id=version_id,
+            period_start=PERIOD[0],
+            period_end=PERIOD[1],
+        )
+        dept.db.add(elsewhere)
+        await dept.db.flush()
+
+        missing = await (await make_client(dept.reader)).get(
+            f"/evaluations/{elsewhere.id}/history"
+        )
+        assert missing.status_code == 404
 
 
 def _approvals(*position_ids: str) -> dict:

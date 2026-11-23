@@ -1802,6 +1802,7 @@ class SecurityMonitoringMiddleware:
         "/api/v1/equipment-checks/reports/export/pdf",
         "/api/v1/errors/export",
         "/api/v1/evaluations/export",
+        "/api/v1/evaluations/export-pdfs",
         "/api/v1/finance/export/advance-accounts",
         "/api/v1/finance/export/chart-of-accounts",
         "/api/v1/finance/export/dues-accounts",
@@ -1822,6 +1823,7 @@ class SecurityMonitoringMiddleware:
         "/api/v1/training/module-config/my-training/export",
         "/api/v1/training/reports/export",
         "/api/v1/training/skills-testing/tests/export/csv",
+        "/api/v1/users/leave-requests/export",
         "/api/v1/users/me/data-export",
     }
     EXPORT_ENDPOINT_TEMPLATES = (
