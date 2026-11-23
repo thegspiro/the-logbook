@@ -143,10 +143,43 @@ for it.
 
 - **"Email the membership that seats are open"** — built 2026-11-20 as
   **Email members** on the crew card; see "Open-seat email" below.
-- **"Coordinator approves self sign-ups."** A claimed seat is taken at once.
-  An approval step needs a pending state on the seat and a reviewer's screen.
+- **"Coordinator approves self sign-ups."** — built 2026-11-23 as a
+  per-template setting; see "Self sign-up approval" below.
 - **"Message crew"** on the night. The existing event reminders reach a
   night's RSVPs, which every seat holder has.
+
+### Self sign-up approval (owner decisions of 2026-11-23)
+
+**Coordinator approves self sign-ups** is a template setting, copied to each
+night it schedules and changeable in **Edit this night**. While it is on,
+**Sign me up** reads **Ask for this seat**. The seat stays open, so several
+members can ask for the same one. Approving one member declines the others.
+The night's organizer and alternate are emailed each request ("Event officer
+duties"), and the member is emailed the answer ("Event changes and
+cancellations"). A request nobody answers is declined when the night starts,
+by the `apparatus_seat_request_lapse` task every 15 minutes. Choices made
+without a ruling:
+
+- **One waiting request per member per night.** A member who wants a
+  different seat withdraws the first request. This matches the one seat per
+  night a member can hold.
+- **The organizer and alternate are told only if they hold
+  `apparatus_events.manage`**, because only they can answer. Failing both,
+  the event's creator is told, if they hold it. When nobody qualifies, the
+  request still waits on the crew card and in the nights list, with no
+  email. Nights scheduled from a template make the person who scheduled them
+  the organizer.
+- **No bell notification.** Email is the channel of record (pitfall #18), and
+  the crew card and nights list show what is waiting.
+- **Switching approval off leaves waiting requests decidable.** They stay on
+  the card for the coordinator. A member who then signs up takes the seat at
+  once, and anyone waiting on that seat is declined.
+- **Lapsing has up to 15 minutes of delay.** Approval is refused from the
+  night's start, so a late answer is never possible, but the "not answered"
+  email can arrive up to a quarter of an hour after the start.
+- **At most once, not at least once.** Each request is closed and committed
+  before its email goes out. A crash between the two loses that member's
+  email; the request is gone from the card either way (pitfall #36).
 
 ### Boundaries chosen without a ruling
 
@@ -11304,9 +11337,10 @@ deleting an event) and the moved-start one.
   correction to a session already held — or one that keeps the same local
   date, such as 19:00 fixed to 19:30 — should reopen the decision at all. Not
   reopening it would change the 2026-11-13 decision, so it was not done here.
-- **`idx_meeting_attendees_meeting` is now a prefix of the new unique
-  `(meeting_id, user_id)` index** and could be dropped; it was left to keep
-  the migration to what the feature needs.
+- ~~**`idx_meeting_attendees_meeting` is now a prefix of the new unique
+  `(meeting_id, user_id)` index** and could be dropped.~~ ✅ Resolved
+  2026-11-23: `b37218495d33` drops it wherever another index leads on
+  `meeting_id` (otherwise MySQL needs it for the foreign key, and it stays).
 
 ## Training — Shift Evaluations: What the 2026-11-13 Review Left Open
 

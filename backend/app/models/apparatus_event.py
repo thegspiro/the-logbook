@@ -67,6 +67,23 @@ class ApparatusEventSeatMethod(str, enum.Enum):
     ASSIGNED = "assigned"
 
 
+class ApparatusEventSeatRequestStatus(str, enum.Enum):
+    """Where a member's request for a seat stands.
+
+    ``pending`` waits for the coordinator. ``approved`` put the member in the
+    seat; ``declined`` did not, whether a coordinator said no or the seat went
+    to someone else; ``withdrawn`` is the member taking it back; ``lapsed`` is
+    a request nobody answered before the night started, was cancelled or was
+    finalized.
+    """
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    DECLINED = "declined"
+    WITHDRAWN = "withdrawn"
+    LAPSED = "lapsed"
+
+
 class ApparatusEventTemplate(Base):
     """A reusable plan for an apparatus event, scheduled onto any number of
     nights. Editing a template changes nights scheduled afterwards only — a
@@ -103,6 +120,12 @@ class ApparatusEventTemplate(Base):
     )
     allow_self_signup: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"
+    )
+    # A self sign-up becomes a request the coordinator approves or declines
+    # instead of taking the seat at once. Off by default, so a template or
+    # night that predates the setting keeps taking seats immediately.
+    require_signup_approval: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
     )
     show_on_schedule: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"
@@ -247,6 +270,12 @@ class EventApparatusPlan(Base):
     )
     allow_self_signup: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"
+    )
+    # A self sign-up becomes a request the coordinator approves or declines
+    # instead of taking the seat at once. Off by default, so a template or
+    # night that predates the setting keeps taking seats immediately.
+    require_signup_approval: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
     )
     show_on_schedule: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"
@@ -411,5 +440,66 @@ class ApparatusEventSeatCall(Base):
             "organization_id",
             "series_id",
             "sent_at",
+        ),
+    )
+
+
+class ApparatusEventSeatRequest(Base):
+    """A member asking for a seat on a night that needs the coordinator's
+    approval. The seat stays open while requests wait, so several members can
+    ask for the same one; approving one declines the rest."""
+
+    __tablename__ = "apparatus_event_seat_requests"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    event_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("events.id", ondelete="CASCADE"), nullable=False
+    )
+    seat_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("event_apparatus_seats.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending", server_default="pending"
+    )
+    # ``user_id`` while the request waits and NULL once it is decided. MySQL
+    # has no partial unique index, and NULLs do not collide in a unique one,
+    # so the unique index on (event_id, pending_user_id) is what holds a
+    # member to one waiting request per night — including two requests sent
+    # at once, which both pass the service's own check.
+    pending_user_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    decided_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    decided_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Shown to the member in the decision email: the coordinator's own words
+    # on a decline, or the system's reason (the seat was filled, the night
+    # started).
+    decision_note: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+
+    __table_args__ = (
+        Index(
+            "ux_apparatus_event_seat_requests_pending",
+            "event_id",
+            "pending_user_id",
+            unique=True,
+        ),
+        Index("ix_apparatus_event_seat_requests_seat", "seat_id", "status"),
+        Index(
+            "ix_apparatus_event_seat_requests_org_status",
+            "organization_id",
+            "status",
         ),
     )
