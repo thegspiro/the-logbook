@@ -335,13 +335,15 @@ const EvaluationListPage: React.FC = () => {
                 {shown.map((evaluation) => (
                   <tr key={evaluation.id} className="border-theme-surface-border border-t">
                     <td data-label="Member" className="px-4 py-3">
-                      <Link
-                        to={`/reports/evaluations/${evaluation.id}`}
-                        className="text-theme-text-primary font-medium underline-offset-2 hover:underline"
-                      >
-                        {evaluation.member.name}
-                      </Link>
-                      <span className="text-theme-text-secondary block text-xs">{evaluation.template_name}</span>
+                      <div className="min-w-0">
+                        <Link
+                          to={`/reports/evaluations/${evaluation.id}`}
+                          className="text-theme-text-primary font-medium underline-offset-2 hover:underline"
+                        >
+                          {evaluation.member.name}
+                        </Link>
+                        <span className="text-theme-text-secondary block text-xs">{evaluation.template_name}</span>
+                      </div>
                     </td>
                     <td data-label="Period" className="text-theme-text-secondary px-4 py-3">
                       {evaluation.period_name ?? formatCalendarDate(evaluation.period_end)}

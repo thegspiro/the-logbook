@@ -110,10 +110,12 @@ export const LotRecallsPanel: React.FC<LotRecallsPanelProps> = ({ canManage, ver
               return (
                 <tr key={recall.id} className="border-theme-surface-border border-b last:border-0">
                   <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
-                    {label}
-                    {recall.reason && (
-                      <span className="text-theme-text-secondary block text-xs font-normal">{recall.reason}</span>
-                    )}
+                    <div className="min-w-0">
+                      {label}
+                      {recall.reason && (
+                        <span className="text-theme-text-secondary block text-xs font-normal">{recall.reason}</span>
+                      )}
+                    </div>
                   </td>
                   <td data-label="Lot" className="text-theme-text-muted px-4 py-3 font-mono text-xs">
                     {recall.lot_number}

@@ -937,7 +937,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
               {/* Calendar period options */}
               {!isOneTime && formData.due_date_type === 'calendar_period' && (
                 <>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 items-end gap-4">
                     <div>
                       <label
                         htmlFor="req-period-start-month"
@@ -989,7 +989,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 items-end gap-4">
                     <div>
                       <label
                         htmlFor="req-period-end-month"

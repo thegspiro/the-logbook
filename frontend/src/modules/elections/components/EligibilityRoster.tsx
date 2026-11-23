@@ -84,7 +84,7 @@ const MemberRow: React.FC<{
         }
       >
         {/* Expand/collapse */}
-        <td data-label="Expand" className="w-8 py-3 pr-1 pl-3">
+        <td data-label="Expand" className="py-3 pr-1 pl-3">
           {hasItems ? (
             expanded ? (
               <ChevronDown className="text-theme-text-muted h-4 w-4" />
@@ -151,13 +151,13 @@ const MemberRow: React.FC<{
             </span>
           ) : member.will_receive_ballot ? (
             <CheckCircle2
-              className="mx-auto h-5 w-5 text-green-700 dark:text-green-400"
+              className="inline-block h-5 w-5 text-green-700 dark:text-green-400"
               role="img"
               aria-label="Will receive ballot"
             />
           ) : (
             <XCircle
-              className="mx-auto h-5 w-5 text-red-500 dark:text-red-400"
+              className="inline-block h-5 w-5 text-red-500 dark:text-red-400"
               role="img"
               aria-label="Will not receive ballot"
             />

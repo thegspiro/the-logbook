@@ -508,31 +508,33 @@ export const WaiverManagementPage: React.FC = () => {
                           </div>
                         </td>
                         <td data-label="Actions" className="px-4 py-3 text-right whitespace-nowrap">
-                          {waiver.source === 'leave' && (
+                          <div className="min-w-0">
+                            {waiver.source === 'leave' && (
+                              <button
+                                onClick={() =>
+                                  setEditingLeave({
+                                    id: waiver.id,
+                                    member_name: waiver.member_name,
+                                    start_date: waiver.start_date,
+                                    end_date: waiver.end_date,
+                                    reason: waiver.reason,
+                                  })
+                                }
+                                className="mr-3 text-xs text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                                aria-label={`Edit the leave for ${waiver.member_name}`}
+                              >
+                                Edit
+                              </button>
+                            )}
                             <button
-                              onClick={() =>
-                                setEditingLeave({
-                                  id: waiver.id,
-                                  member_name: waiver.member_name,
-                                  start_date: waiver.start_date,
-                                  end_date: waiver.end_date,
-                                  reason: waiver.reason,
-                                })
-                              }
-                              className="mr-3 text-xs text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                              aria-label={`Edit the leave for ${waiver.member_name}`}
+                              onClick={() => {
+                                void handleDeactivate(waiver);
+                              }}
+                              className="text-xs text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                             >
-                              Edit
+                              Deactivate
                             </button>
-                          )}
-                          <button
-                            onClick={() => {
-                              void handleDeactivate(waiver);
-                            }}
-                            className="text-xs text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                          >
-                            Deactivate
-                          </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

@@ -1252,20 +1252,24 @@ export const SchedulingReportsPage: React.FC = () => {
                                       </span>
                                     </td>
                                     <td data-label="Shifts" className="text-theme-text-primary px-4 py-2 text-right">
-                                      {member.shift_count}
-                                      {(member.external_shift_count ?? 0) > 0 && (
-                                        <span className="text-theme-text-muted block text-xs">
-                                          incl. {member.external_shift_count} outside
-                                        </span>
-                                      )}
+                                      <div className="min-w-0">
+                                        {member.shift_count}
+                                        {(member.external_shift_count ?? 0) > 0 && (
+                                          <span className="text-theme-text-muted block text-xs">
+                                            incl. {member.external_shift_count} outside
+                                          </span>
+                                        )}
+                                      </div>
                                     </td>
                                     <td data-label="Hours" className="text-theme-text-primary px-4 py-2 text-right">
-                                      {formatHours(member.total_hours)}
-                                      {(member.external_hours ?? 0) > 0 && (
-                                        <span className="text-theme-text-muted block text-xs">
-                                          incl. {formatHours(member.external_hours ?? 0)} outside
-                                        </span>
-                                      )}
+                                      <div className="min-w-0">
+                                        {formatHours(member.total_hours)}
+                                        {(member.external_hours ?? 0) > 0 && (
+                                          <span className="text-theme-text-muted block text-xs">
+                                            incl. {formatHours(member.external_hours ?? 0)} outside
+                                          </span>
+                                        )}
+                                      </div>
                                     </td>
                                     <td data-label="Progress" className="px-4 py-2 text-right">
                                       <div className="flex items-center justify-end gap-2">

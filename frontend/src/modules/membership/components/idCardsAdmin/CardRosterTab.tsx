@@ -337,12 +337,14 @@ export const CardRosterTab: React.FC<CardRosterTabProps> = ({ onShowTaps, refres
                       <div className="text-theme-text-muted text-xs">Issued {formatDateTime(card.issuedAt, tz)}</div>
                     </td>
                     <td className="p-3" data-label="Status">
-                      <span className={`badge ${NFC_CARD_STATUS_COLORS[card.status] ?? ''}`}>
-                        {NFC_CARD_STATUS_LABELS[card.status]}
-                      </span>
-                      {card.autoSuspended && (
-                        <div className="text-theme-text-muted mt-1 text-xs">Holder left — returns if they rejoin</div>
-                      )}
+                      <div className="min-w-0">
+                        <span className={`badge ${NFC_CARD_STATUS_COLORS[card.status] ?? ''}`}>
+                          {NFC_CARD_STATUS_LABELS[card.status]}
+                        </span>
+                        {card.autoSuspended && (
+                          <div className="text-theme-text-muted mt-1 text-xs">Holder left — returns if they rejoin</div>
+                        )}
+                      </div>
                     </td>
                     <td className="text-theme-text-secondary p-3" data-label="Last used">
                       {card.lastUsedAt ? formatDateTime(card.lastUsedAt, tz) : 'Never'}

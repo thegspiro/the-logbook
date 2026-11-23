@@ -150,12 +150,14 @@ export const DuesExportSection: React.FC<DuesExportSectionProps> = ({ dues, onSa
         <AccountCell account={schedule.depositAccount} source={schedule.depositSource} />
       </td>
       <td data-label="Status" className={CELL}>
-        <span className={`badge ${STATUS_COLORS[schedule.status]}`}>{STATUS_LABELS[schedule.status]}</span>
-        {accountHint(schedule.status, schedule.accountsNotInChart) && (
-          <span className="text-theme-text-secondary mt-1 block text-xs">
-            {accountHint(schedule.status, schedule.accountsNotInChart)}
-          </span>
-        )}
+        <div className="min-w-0">
+          <span className={`badge ${STATUS_COLORS[schedule.status]}`}>{STATUS_LABELS[schedule.status]}</span>
+          {accountHint(schedule.status, schedule.accountsNotInChart) && (
+            <span className="text-theme-text-secondary mt-1 block text-xs">
+              {accountHint(schedule.status, schedule.accountsNotInChart)}
+            </span>
+          )}
+        </div>
       </td>
     </tr>
   );
