@@ -3,13 +3,13 @@ import { defineConfig } from '@playwright/test';
 import { SCALE } from './lib/recorder';
 
 /**
- * Captures for the video shorts. Not part of the E2E suite: it records, it
- * does not assert. Run through make-short.sh, which supplies the narration
- * timings each capture reads.
+ * Captures for the video shorts and the longer guides. Not part of the E2E
+ * suite: it records, it does not assert. Run through make-short.sh, which
+ * supplies the narration timings each capture reads.
  */
 export default defineConfig({
-  testDir: './shorts',
-  testMatch: '**/capture.spec.ts',
+  testDir: '.',
+  testMatch: ['shorts/**/capture.spec.ts', 'guides/**/capture.spec.ts'],
   timeout: 120_000,
   workers: 1,
   retries: 0,
