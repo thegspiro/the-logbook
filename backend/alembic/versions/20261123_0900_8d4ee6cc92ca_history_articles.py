@@ -23,7 +23,7 @@ Downgrade drops the six tables and every article recorded in them. Take a
 database backup (``scripts/backup.sh``) before downgrading past this revision.
 
 Revision ID: 8d4ee6cc92ca
-Revises: b6e3d1f47a29
+Revises: e3b8d61f4a27
 Create Date: 2026-11-23 09:00:00.000000
 
 """
@@ -35,7 +35,7 @@ from alembic import op
 from sqlalchemy.dialects import mysql
 
 revision: str = "8d4ee6cc92ca"
-down_revision: Union[str, None] = "b6e3d1f47a29"
+down_revision: Union[str, None] = "e3b8d61f4a27"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

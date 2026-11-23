@@ -67,6 +67,7 @@ import type {
 import type { User } from '../types/user';
 import { STANDING_TEXT_COLORS, isActiveAccount } from '../constants/enums';
 import { StatGrid } from '../components/ux/StatGrid';
+import { SignatureLinesOption } from '../components/SignatureLinesOption';
 
 const inputClass = 'form-input px-3 focus:ring-red-500/50 focus:border-red-500';
 const labelClass = 'form-label';
@@ -1434,6 +1435,7 @@ const ReportsSection: React.FC = () => {
   const [forecasts, setForecasts] = useState<ComplianceForecast[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [signatureLines, setSignatureLines] = useState(false);
   const [memberRecordsPeriod, setMemberRecordsPeriod] = useState<TrainingExportPeriod>(TrainingExportPeriod.YEAR);
 
   const handleExport = async (reportType: string) => {
@@ -1466,6 +1468,7 @@ const ReportsSection: React.FC = () => {
         format,
         start_date: window.start_date,
         end_date: window.end_date,
+        ...(format === 'pdf' && signatureLines ? { signature_lines: true } : {}),
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1563,6 +1566,7 @@ const ReportsSection: React.FC = () => {
                 </option>
               ))}
             </select>
+            <SignatureLinesOption checked={signatureLines} onChange={setSignatureLines} disabled={exporting} />
             <button
               onClick={() => {
                 void handleMemberRecordsExport('csv');

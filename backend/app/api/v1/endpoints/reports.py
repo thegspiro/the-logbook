@@ -261,6 +261,7 @@ async def export_report(
             parameters=parameters,
             identity=department_identity(organization) or None,
             report_number=report_number,
+            signature_lines=request.signature_lines,
         )
         media_type = "application/pdf"
     else:
