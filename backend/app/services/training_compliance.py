@@ -2601,6 +2601,22 @@ def requirement_applies_to_user(req, member) -> bool:
 # percentage's population, numerator or denominator.
 STANDING_NOT_APPLICABLE = "not_applicable"
 
+# The standing of a member who has left: their account status is not one of
+# ACTIVE_ACCOUNT_STATUSES (CLAUDE.md pitfall 32). The compliance matrix lists
+# only current members, so a grade on the profile card or the officer's member
+# view would be a colour no matrix row agrees with (pitfall 29). Those screens
+# report this instead of grading.
+STANDING_NOT_CURRENT_MEMBER = "not_current_member"
+STANDING_NOT_CURRENT_MEMBER_LABEL = "Not a Current Member"
+
+
+def is_current_member(member: Any) -> bool:
+    """Whether the matrix would list this member: a current account, not deleted."""
+    return (
+        getattr(member, "status", None) in ACTIVE_ACCOUNT_STATUSES
+        and getattr(member, "deleted_at", None) is None
+    )
+
 
 def classify_standing(
     completed_count: int,

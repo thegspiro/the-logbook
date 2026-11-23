@@ -46,6 +46,11 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
   complianceSummary,
   tz,
 }) => {
+  // Shown muted: neither a pass nor a warning.
+  const isUngraded =
+    complianceSummary?.compliance_status === 'exempt' ||
+    complianceSummary?.compliance_status === 'not_applicable' ||
+    complianceSummary?.compliance_status === 'not_current_member';
   return (
     <div className="card p-6">
       {/* Compliance Summary Card */}
@@ -53,8 +58,7 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
         <div className="mb-6">
           <div
             className={`rounded-lg border p-4 ${
-              complianceSummary.compliance_status === 'exempt' ||
-              complianceSummary.compliance_status === 'not_applicable'
+              isUngraded
                 ? 'border-theme-surface-border bg-theme-surface-secondary'
                 : complianceSummary.compliance_status === 'green'
                   ? 'border-green-500/30 bg-green-500/5'
@@ -69,8 +73,7 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
               </h3>
               <span
                 className={`rounded-full px-3 py-1 text-xs font-bold ${
-                  complianceSummary.compliance_status === 'exempt' ||
-                  complianceSummary.compliance_status === 'not_applicable'
+                  isUngraded
                     ? 'bg-theme-surface-secondary text-theme-text-muted'
                     : complianceSummary.compliance_status === 'green'
                       ? 'bg-green-500/20 text-green-800 dark:text-green-400'
@@ -82,7 +85,12 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
                 {complianceSummary.compliance_label}
               </span>
             </div>
-            {complianceSummary.is_exempt ? (
+            {complianceSummary.compliance_status === 'not_current_member' ? (
+              <p className="text-theme-text-muted text-sm">
+                This person is not a current member of the department, so their training is not graded against the
+                department&apos;s requirements.
+              </p>
+            ) : complianceSummary.is_exempt ? (
               <p className="text-theme-text-muted text-sm">
                 This member is exempt from compliance requirements (training hours, certificates, shifts, and admin
                 hours).
