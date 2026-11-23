@@ -119,7 +119,12 @@ def rating_scale_max(field: Any) -> Optional[int]:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    # Whole seconds: the stamp columns are DATETIME(0), and MySQL 8 *rounds* a
+    # fraction where MariaDB truncates it, so 12:00:00.7 is stored as 12:00:01
+    # — a response received a moment ago would sit after the report's "now"
+    # and fall outside its period. Flooring keeps every stamp at or before the
+    # clock on both servers.
+    return datetime.now(timezone.utc).replace(microsecond=0)
 
 
 class OutreachFeedbackService:

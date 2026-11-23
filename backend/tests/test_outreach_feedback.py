@@ -33,6 +33,7 @@ from app.models.forms import (
 )
 from app.models.user import Organization, User, UserStatus
 from app.schemas.event import EventSettingsUpdate
+from app.services import outreach_feedback_service
 from app.services.community_engagement_service import CommunityEngagementService
 from app.services.event_request_service import _feedback_link
 from app.services.outreach_feedback_service import (
@@ -468,6 +469,24 @@ class TestTheReport:
         assert data["previous"]["feedback_responses"] == 0
         assert data["previous"]["average_rating"] is None
         assert data["rating_scale_max"] == 5
+
+    def test_a_response_is_stamped_in_whole_seconds(self, monkeypatch):
+        # MySQL 8 rounds a fraction on a DATETIME(0) column, so a stamp of
+        # :52.7 is stored as :53 and lands after the report's "now" — the
+        # period then misses a response received a moment earlier. MariaDB
+        # truncates instead, which is why the report test above failed only
+        # on MySQL, and why this checks the stamp the service writes rather
+        # than the one a MariaDB reads back.
+        moment = datetime(2026, 11, 23, 12, 0, 0, 700000, tzinfo=timezone.utc)
+
+        class _Clock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return moment
+
+        monkeypatch.setattr(outreach_feedback_service, "datetime", _Clock)
+
+        assert outreach_feedback_service._now() == moment.replace(microsecond=0)
 
 
 class TestTheCompletedEmail:
