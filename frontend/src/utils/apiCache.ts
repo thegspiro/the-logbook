@@ -58,6 +58,7 @@ const UNCACHEABLE_PREFIXES = [
   '/testing-checklist', // shared testing run: another tester's mark can land at any moment, and a stale one reads as a lost result
   '/training/waivers', // medical/health waivers (PHI)
   '/training/submissions/', // user-specific training submissions
+  '/training/double-credit', // members' names beside their records (possible double credit)
   '/training/shift-reports/', // attendance/location data
   '/training/shift-evaluations/', // a member's ratings and the officer's comments on them
   '/training/stats/user/', // individual compliance stats
