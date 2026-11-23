@@ -85,6 +85,23 @@ describe('MemberRequirementsSection', () => {
     expect(screen.queryByText(/met$/)).not.toBeInTheDocument();
   });
 
+  it('says a former member is not graded, rather than that nothing applies', async () => {
+    mockGetMemberRequirements.mockResolvedValue(
+      response({
+        standing: 'not_current_member',
+        standing_label: 'Not a Current Member',
+        requirements_detail: [],
+        optional_requirements_detail: [],
+        leaves_of_absence: [],
+        requirements_summary: { total_requirements: 0, met_requirements: 0, avg_compliance: null },
+      })
+    );
+    render(<MemberRequirementsSection userId="member-1" timezone="UTC" />);
+    expect(await screen.findByText(/Not a Current Member: this person has left the department/)).toBeInTheDocument();
+    expect(screen.queryByText('No training requirements apply to this member.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/met$/)).not.toBeInTheDocument();
+  });
+
   it('treats a body that is not a requirements list as a failed load', async () => {
     mockGetMemberRequirements.mockResolvedValue({});
     render(<MemberRequirementsSection userId="member-1" timezone="UTC" />);

@@ -201,12 +201,17 @@ def monthly_hours(
 class MonthlyPace:
     """A member's average hours a month against the department's monthly pace.
 
-    ``average`` is the hours earned in the months nothing excused, over the
-    number of those months, or None when every month so far was excused.
-    Hours earned on leave still count toward the requirement's total. They are
-    left out here because the figure is the member's pace while active:
-    dividing 26 hours, 23 of them earned on leave, by the active months alone
-    would read as 13 a month for a member who logged 3.
+    ``average`` is the member's pace while active: each month weighs its
+    unexcused share (``1 - waived_share``), so a month half excused counts as
+    half a month and its hours, and a fully excused month and its hours are
+    left out; None when every month so far was fully excused. Hours earned on
+    leave still count toward the requirement's total. A fully excused month's
+    are left out here because dividing 26 hours, 23 of them earned on leave,
+    by the active months alone would read as 13 a month for a member who
+    logged 3. A partly excused month's hours cannot be split by the day they
+    were earned, so all of them count against its active share. Dropping
+    every month with any excused share, as this once did, let a few days'
+    leave remove a whole month of work from the figure.
 
     ``needed`` is the requirement's unadjusted level over the months in its
     whole window (72 over 12 is 6). Leave lowers what a member owes, not the
@@ -231,12 +236,22 @@ def monthly_pace(
     The one definition: the compliance matrix and My Training both report it,
     so the two screens cannot print different averages for the same member.
     """
-    active = [r for r in rows if not r.get("waived")]
-    average = (
-        round(sum(float(r.get("hours") or 0) for r in active) / len(active), 2)
-        if active
-        else None
-    )
+    hours = 0.0
+    active_months = 0.0
+    for row in rows:
+        # A row flagged waived without a share predates the share: whole month.
+        if not row.get("waived"):
+            share = 0.0
+        elif row.get("waived_share") is None:
+            share = 1.0
+        else:
+            share = float(row["waived_share"])
+        weight = 1.0 - min(max(share, 0.0), 1.0)
+        if weight <= 0:
+            continue
+        hours += float(row.get("hours") or 0)
+        active_months += weight
+    average = round(hours / active_months, 2) if active_months > 0 else None
     months = (
         total_months_in_period(window_start, window_end)
         if window_start and window_end
@@ -683,6 +698,24 @@ def _require_shift_dates(req, shift_dates: Optional[Sequence[date]]):
 # load_evaluation_credits.
 EvaluationCredits = Mapping[str, Sequence[Tuple[date, float]]]
 
+
+@dataclass(frozen=True)
+class CreditedHours:
+    """Hours credited to an HOURS requirement from somewhere other than a
+    training record: one member's shift hours on one date.
+
+    Shaped like the record attributes the HOURS branch of the grader reads
+    (``completion_date``, ``hours_completed``, ``expiration_date``), so the
+    window, freshness cut-off and monthly breakdown treat them exactly as they
+    treat records. Only the scheduling Shift Compliance report passes these;
+    every training screen grades HOURS from training records.
+    """
+
+    completion_date: date
+    hours_completed: float
+    expiration_date: Optional[date] = None
+
+
 _EVALUATION_TYPE_UNITS = {
     RequirementType.EVALUATED_SHIFTS.value: "evaluated shifts",
     RequirementType.TRANSPORTS.value: "transports",
@@ -1109,6 +1142,7 @@ def evaluate_member_requirement_detail(
     shift_dates: Optional[Sequence[date]] = None,
     held_sessions: Optional[Mapping[str, Sequence[HeldSession]]] = None,
     evaluation_credits: Optional[EvaluationCredits] = None,
+    credited_hours: Optional[Sequence[CreditedHours]] = None,
 ) -> RequirementEvaluation:
     """Evaluate one member against one requirement, honouring a catch-up period.
 
@@ -1129,6 +1163,12 @@ def evaluate_member_requirement_detail(
     ``evaluation_credits`` is the member's entry in
     :func:`load_evaluation_credits`, required whenever ``req`` is counted from
     shift evaluations (:func:`is_evaluation_credited`).
+
+    ``credited_hours``, when given, is what an HOURS requirement counts in
+    place of training records: the Shift Compliance report's shift hours for
+    a shift-credited requirement. Everything else about the grade (window,
+    freshness, waiver proration, cut-off, catch-up) is unchanged, which is
+    the point: the report and the training screens prorate alike.
     """
     ev = _grade_member_requirement(
         req,
@@ -1140,6 +1180,7 @@ def evaluate_member_requirement_detail(
         held_sessions=held_sessions,
         join_date=join_date,
         evaluation_credits=evaluation_credits,
+        credited_hours=credited_hours,
     )
     # Measured against the real day rather than the evaluation cut-off: the
     # deadline is a calendar promise to the member, not a period boundary.
@@ -1164,6 +1205,7 @@ def _grade_member_requirement(
     held_sessions: Optional[Mapping[str, Sequence[HeldSession]]] = None,
     join_date: Optional[date] = None,
     evaluation_credits: Optional[EvaluationCredits] = None,
+    credited_hours: Optional[Sequence[CreditedHours]] = None,
 ) -> RequirementEvaluation:
     """
     Evaluate a single member's status for a single requirement.
@@ -1265,7 +1307,17 @@ def _grade_member_requirement(
 
     # ---- HOURS requirements: sum hours of the records that count ----
     if req_type == RequirementType.HOURS.value:
-        type_matched = [r for r in windowed if hours_record_counts(req, r)]
+        if credited_hours is None:
+            type_matched = [r for r in windowed if hours_record_counts(req, r)]
+        else:
+            # Shift hours are not training: no category, course or type to
+            # match, so the window and freshness cut-off alone decide.
+            type_matched = [
+                h
+                for h in apply_recency(req, list(credited_hours), today)
+                if not (start_date and end_date)
+                or start_date <= h.completion_date <= end_date
+            ]
 
         total_hours = sum(r.hours_completed or 0 for r in type_matched)
         required = req.required_hours or 0
@@ -2632,6 +2684,22 @@ def requirement_applies_to_user(req, member) -> bool:
 # a denominator of nothing is not a pass — and never counted in any
 # percentage's population, numerator or denominator.
 STANDING_NOT_APPLICABLE = "not_applicable"
+
+# The standing of a member who has left: their account status is not one of
+# ACTIVE_ACCOUNT_STATUSES (CLAUDE.md pitfall 32). The compliance matrix lists
+# only current members, so a grade on the profile card or the officer's member
+# view would be a colour no matrix row agrees with (pitfall 29). Those screens
+# report this instead of grading.
+STANDING_NOT_CURRENT_MEMBER = "not_current_member"
+STANDING_NOT_CURRENT_MEMBER_LABEL = "Not a Current Member"
+
+
+def is_current_member(member: Any) -> bool:
+    """Whether the matrix would list this member: a current account, not deleted."""
+    return (
+        getattr(member, "status", None) in ACTIVE_ACCOUNT_STATUSES
+        and getattr(member, "deleted_at", None) is None
+    )
 
 
 def classify_standing(
