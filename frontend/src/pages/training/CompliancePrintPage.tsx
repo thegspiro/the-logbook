@@ -23,11 +23,12 @@ import type {
 import {
   MEMBER_CLASS_LABELS,
   MEMBER_CLASS_ORDER,
+  isCertificationRequirement,
   membersOfClass,
   parseClassFilter,
   requirementsApplyingTo,
 } from './complianceMatrixModel';
-import { formatDate } from '@/utils/dateFormatting';
+import { formatCalendarDate, formatDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import PrintPageStyles from '@/components/print/PrintPageStyles';
 
@@ -46,6 +47,14 @@ const cellMark = (status: string | undefined): string => {
   if (status === 'not_applicable') return 'None held';
   return '✗';
 };
+
+/**
+ * A certification's expiry, short enough for a 60pt column ("3/14/27"). The
+ * server sends it as a calendar date, so it is printed as one, never shifted
+ * by the viewer's timezone.
+ */
+const shortExpiry = (expiry: string): string =>
+  formatCalendarDate(expiry, { month: 'numeric', day: 'numeric', year: '2-digit' });
 
 /** One printed table: a heading (when the roster is split) and its own columns. */
 interface PrintSection {
@@ -282,9 +291,16 @@ const CompliancePrintPage: React.FC = () => {
                           </td>
                           {section.requirements.map((req) => {
                             const memberReq = m.requirements.find((r) => r.requirement_id === req.id);
+                            const expiry =
+                              isCertificationRequirement(req) && memberReq?.expiry_date
+                                ? shortExpiry(memberReq.expiry_date)
+                                : null;
                             return (
                               <td key={req.id} style={{ ...cellStyle, textAlign: 'center', fontSize: '8pt' }}>
                                 {cellMark(memberReq?.status)}
+                                {expiry && (
+                                  <div style={{ fontSize: '6.5pt', color: '#555', whiteSpace: 'nowrap' }}>{expiry}</div>
+                                )}
                               </td>
                             );
                           })}
@@ -297,7 +313,7 @@ const CompliancePrintPage: React.FC = () => {
           ))}
           <p style={{ margin: '4pt 0 0', fontSize: '7.5pt', color: '#555' }}>
             ✓ met · ◐ in progress · ✗ not started · Exp expired · Due existing member, before their catch-up deadline ·
-            — does not apply to this member
+            — does not apply to this member · a date under a certification is when it expires
           </p>
 
           {/* Signature Block */}

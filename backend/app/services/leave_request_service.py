@@ -58,6 +58,7 @@ from app.schemas.leave_of_absence import (
     LeaveApproverCoverResponse,
     LeaveApproverPosition,
     LeaveCoverPerson,
+    LeaveCoverSuggestion,
     LeaveDates,
     LeaveOfAbsenceSettings,
     LeaveProposalResponse,
@@ -431,6 +432,81 @@ class LeaveRequestService:
             ).scalars()
         }
 
+    async def cover_suggestions(
+        self,
+        organization_id: str,
+        member_id: str,
+        *,
+        leave_id: Optional[str] = None,
+    ) -> List[LeaveCoverSuggestion]:
+        """The member's own current and upcoming leaves that want a stand-in.
+
+        Offered only to someone who may be covered (an approver in their own
+        right), in a department that takes requests, with another officer who
+        manages leave to name. A leave already spanned by one of the member's
+        covers on any of its days is not offered again. The dates start no
+        earlier than today and run no longer than one cover may.
+        """
+        org_id = str(organization_id)
+        member = str(member_id)
+        settings = await self.get_settings(org_id)
+        if not settings.requests_enabled:
+            return []
+        pool = await self._pool(org_id, settings)
+        if member not in self._cover_approvers(pool) or not (pool.managers - {member}):
+            return []
+        today = await resolve_org_today(self.db, org_id)
+        query = select(MemberLeaveOfAbsence).where(
+            MemberLeaveOfAbsence.organization_id == org_id,
+            MemberLeaveOfAbsence.user_id == member,
+            MemberLeaveOfAbsence.active.is_(True),
+            or_(
+                MemberLeaveOfAbsence.end_date.is_(None),
+                MemberLeaveOfAbsence.end_date >= today,
+            ),
+        )
+        if leave_id is not None:
+            query = query.where(MemberLeaveOfAbsence.id == str(leave_id))
+        leaves = list(
+            (
+                await self.db.execute(
+                    query.order_by(
+                        MemberLeaveOfAbsence.start_date, MemberLeaveOfAbsence.id
+                    )
+                )
+            ).scalars()
+        )
+        if not leaves:
+            return []
+        covers = list(
+            (
+                await self.db.execute(
+                    select(LeaveApproverCover).where(
+                        LeaveApproverCover.organization_id == org_id,
+                        LeaveApproverCover.approver_id == member,
+                        LeaveApproverCover.end_date >= today,
+                    )
+                )
+            ).scalars()
+        )
+        suggestions: List[LeaveCoverSuggestion] = []
+        for leave in leaves:
+            start = max(leave.start_date, today)
+            end = leave.end_date
+            if end is not None:
+                end = min(end, start + timedelta(days=self.MAX_COVER_DAYS - 1))
+            if any(
+                c.start_date <= (end or date.max) and c.end_date >= start
+                for c in covers
+            ):
+                continue
+            suggestions.append(
+                LeaveCoverSuggestion(
+                    leave_id=str(leave.id), start_date=start, end_date=end
+                )
+            )
+        return suggestions
+
     async def cover_board(
         self, organization_id: str, viewer: User
     ) -> LeaveApproverCoverBoard:
@@ -500,6 +576,7 @@ class LeaveRequestService:
             ],
             approvers=by_name(settable),
             stand_ins=by_name(pool.managers) if settable else [],
+            suggested=await self.cover_suggestions(org_id, viewer_id),
             today=today,
         )
 
@@ -601,8 +678,12 @@ class LeaveRequestService:
 
     async def clear_cover(
         self, organization_id: str, actor: User, cover_id: str
-    ) -> None:
-        """End a cover now. Votes a stand-in already cast keep counting."""
+    ) -> Dict[str, object]:
+        """End a cover now. Votes a stand-in already cast keep counting.
+
+        Returns the cleared cover's fields, as the row is deleted and the
+        stand-in's notice is sent after the response.
+        """
         org_id = str(organization_id)
         cover = (
             await self.db.execute(
@@ -640,8 +721,16 @@ class LeaveRequestService:
             user_id=actor_id,
             username=actor.username,
         )
+        cleared: Dict[str, object] = {
+            "id": str(cover.id),
+            "approver_id": str(cover.approver_id),
+            "stand_in_id": str(cover.stand_in_id),
+            "start_date": cover.start_date,
+            "end_date": cover.end_date,
+        }
         await self.db.delete(cover)
         await self.db.commit()
+        return cleared
 
     # ------------------------------------------------------------------
     # Requests

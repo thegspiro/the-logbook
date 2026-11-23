@@ -308,13 +308,15 @@ const TrainingWaiversTab: React.FC = () => {
                 return (
                   <tr key={waiver.id} className="hover:bg-theme-surface-hover">
                     <td data-label="Member" className="px-4 py-3">
-                      <Link
-                        to={`/members/${waiver.user_id}`}
-                        className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                      >
-                        {waiver.member_name}
-                      </Link>
-                      {waiver.member_rank && <p className="text-theme-text-muted text-xs">{waiver.member_rank}</p>}
+                      <div className="min-w-0">
+                        <Link
+                          to={`/members/${waiver.user_id}`}
+                          className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          {waiver.member_name}
+                        </Link>
+                        {waiver.member_rank && <p className="text-theme-text-muted text-xs">{waiver.member_rank}</p>}
+                      </div>
                     </td>
                     <td data-label="Status" className="px-4 py-3">
                       <span className={`rounded-full px-2 py-1 text-xs font-medium ${badge.color}`}>{badge.label}</span>
@@ -323,9 +325,11 @@ const TrainingWaiversTab: React.FC = () => {
                       {WAIVER_TYPE_LABELS[waiver.waiver_type] || waiver.waiver_type}
                     </td>
                     <td data-label="Period" className="text-theme-text-secondary px-4 py-3 text-sm">
-                      <span>{formatDate(waiver.start_date, tz)}</span>
-                      <span className="text-theme-text-muted mx-1">to</span>
-                      <span>{waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}</span>
+                      <div className="min-w-0">
+                        <span>{formatDate(waiver.start_date, tz)}</span>
+                        <span className="text-theme-text-muted mx-1">to</span>
+                        <span>{waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}</span>
+                      </div>
                     </td>
                     <td data-label="Scope" className="text-theme-text-muted px-4 py-3 text-sm">
                       {waiver.requirement_ids

@@ -12,6 +12,7 @@ import React, { useState } from 'react';
 import { Download, FileText, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+import { SignatureLinesOption } from '@/components/SignatureLinesOption';
 import { saveFile } from '@/utils/fileDownload';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { reportsApiService } from '../services/api';
@@ -30,13 +31,16 @@ const BUTTON_CLASS =
 
 export const ExportControls: React.FC<ExportControlsProps> = ({ reportTitle, source, disabled = false }) => {
   const [busy, setBusy] = useState<ReportExportFormat | null>(null);
+  const [signatureLines, setSignatureLines] = useState(false);
 
   const download = async (format: ReportExportFormat) => {
     if (!source) return;
     setBusy(format);
     try {
       const fallbackName = `${reportTitle.replace(/\s+/g, '_').toLowerCase()}.${format}`;
-      saveFile(await reportsApiService.exportReport(source, format, fallbackName));
+      const request =
+        format === ReportExportFormat.PDF && signatureLines ? { ...source, signature_lines: true } : source;
+      saveFile(await reportsApiService.exportReport(request, format, fallbackName));
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not download the report'));
     } finally {
@@ -47,7 +51,8 @@ export const ExportControls: React.FC<ExportControlsProps> = ({ reportTitle, sou
   const unavailable = disabled || source === null || busy !== null;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      <SignatureLinesOption checked={signatureLines} onChange={setSignatureLines} disabled={unavailable} />
       <button
         type="button"
         disabled={unavailable}

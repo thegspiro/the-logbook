@@ -533,10 +533,10 @@ export const DuesScheduleDialog: React.FC<DuesScheduleDialogProps> = ({ schedule
           ) : (
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" aria-describedby="dues-schedule-types-hint">
               {typeChoices.map((option) => (
-                <label key={option.id} className="flex items-center gap-2 text-sm">
+                <label key={option.id} className="flex items-center gap-2 text-sm md:items-start">
                   <input
                     type="checkbox"
-                    className="form-checkbox"
+                    className="form-checkbox md:mt-0.5"
                     checked={membershipTypes.includes(option.id)}
                     onChange={() => {
                       toggleType(option.id);
@@ -638,10 +638,10 @@ export const DuesScheduleDialog: React.FC<DuesScheduleDialogProps> = ({ schedule
         </fieldset>
 
         {isEdit && (
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex items-center gap-2 text-sm md:items-start">
             <input
               type="checkbox"
-              className="form-checkbox"
+              className="form-checkbox md:mt-0.5"
               checked={isActive}
               onChange={(e) => {
                 setIsActive(e.target.checked);

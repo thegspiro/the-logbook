@@ -39,6 +39,26 @@ describe('ExportControls', () => {
     expect(saved?.filename).toBe('event_attendance_2026-11-15.csv');
   });
 
+  it('asks for signature lines on the PDF only when the box is ticked', async () => {
+    const user = userEvent.setup();
+    render(<ExportControls reportTitle="Event Attendance" source={SOURCE} />);
+
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+    expect(mockExportReport).toHaveBeenLastCalledWith(SOURCE, 'pdf', 'event_attendance.pdf');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Add signature lines to PDF' }));
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+    expect(mockExportReport).toHaveBeenLastCalledWith(
+      { ...SOURCE, signature_lines: true },
+      'pdf',
+      'event_attendance.pdf'
+    );
+
+    // A CSV has no page to sign.
+    await user.click(screen.getByRole('button', { name: 'CSV' }));
+    expect(mockExportReport).toHaveBeenLastCalledWith(SOURCE, 'csv', 'event_attendance.csv');
+  });
+
   it('says why when the server refuses, and saves nothing', async () => {
     const user = userEvent.setup();
     mockExportReport.mockRejectedValue(new Error('This report requires the members.view permission'));

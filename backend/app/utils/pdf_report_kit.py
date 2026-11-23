@@ -55,6 +55,7 @@ from app.utils.election_pdf_style import (
     PANEL,
     base_styles,
     esc,
+    identity_style,
     logo_flowable,
 )
 from app.utils.pdf_fonts import BODY_FONT, BOLD_FONT, body_table_style
@@ -371,6 +372,9 @@ class ReportMeta:
         subject: Optional[str] = None,
         lang: str = "en-US",
         wide: bool = False,
+        identity: Optional[str] = None,
+        report_number: Optional[str] = None,
+        signature_lines: bool = False,
     ):
         self.title = title
         self.org_name = org_name
@@ -384,6 +388,14 @@ class ReportMeta:
         self.lang = lang
         self.wide = wide
         self.pagesize = landscape(letter) if wide else letter
+        # The department's address line and this copy's number
+        # (app.utils.report_number): page 1 shows both, and every later page
+        # carries the number in its running header.
+        self.identity = identity
+        self.report_number = report_number
+        # Asked for at download (owner decision, 2026-11-21): a report going
+        # up the chain is signed on paper; a working copy is not.
+        self.signature_lines = signature_lines
 
     @property
     def width(self) -> float:
@@ -393,6 +405,7 @@ class ReportMeta:
 def _letterhead(meta: ReportMeta, styles: Dict[str, ParagraphStyle]) -> List[Any]:
     text: List[Any] = [
         Paragraph(esc(meta.org_name) or "Report", styles["org"]),
+        *([Paragraph(esc(meta.identity), identity_style())] if meta.identity else []),
         Spacer(1, 3),
         Paragraph(esc(meta.title).upper(), styles["kicker"]),
     ]
@@ -418,28 +431,42 @@ def _letterhead(meta: ReportMeta, styles: Dict[str, ParagraphStyle]) -> List[Any
             style=body_table_style([("LEFTPADDING", (0, 0), (-1, -1), 0)]),
         )
     flowables: List[Any] = [head, Spacer(1, 8)]
-    if meta.parameters:
+    # The report information block: which copy this is, who made it and as
+    # of when, then what it covers. The fields of a formal report's
+    # documentation page, in one strip (owner decision, 2026-11-21).
+    facts: List[Tuple[str, Any]] = [
+        (label, value)
+        for label, value in (
+            ("Report No.", meta.report_number),
+            ("Prepared by", meta.generated_by),
+            ("Data as of", meta.generated_at),
+        )
+        if value
+    ] + list(meta.parameters)
+    if facts:
+        # A grid, three pairs to a row, so a label is never wrapped away from
+        # its value as it was in a single running line.
+        per_row = 3
+        # Paragraphs, then blank strings padding out the last row.
+        cells: List[Any] = [
+            Paragraph(f"<b>{esc(label)}:</b> {esc(value)}", styles["panel"])
+            for label, value in facts
+        ]
+        cells += [""] * (-len(cells) % per_row)
+        rows = [cells[i : i + per_row] for i in range(0, len(cells), per_row)]
         flowables.append(
             Table(
-                [
-                    [
-                        Paragraph(
-                            " &nbsp;·&nbsp; ".join(
-                                f"<b>{esc(label)}:</b> {esc(value)}"
-                                for label, value in meta.parameters
-                            ),
-                            styles["panel"],
-                        )
-                    ]
-                ],
-                colWidths=[meta.width],
+                rows,
+                colWidths=[meta.width / per_row] * per_row,
                 style=body_table_style(
                     [
                         ("LINEABOVE", (0, 0), (-1, 0), 1.5, INK),
-                        ("LINEBELOW", (0, 0), (-1, 0), 0.5, GRID),
+                        ("LINEBELOW", (0, -1), (-1, -1), 0.5, GRID),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
                         ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                        ("TOPPADDING", (0, 0), (-1, -1), 5),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                        ("TOPPADDING", (0, 0), (-1, -1), 4),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
                     ]
                 ),
             )
@@ -490,6 +517,67 @@ def _footer(meta: ReportMeta, total_pages: int) -> Callable[[Any, Any], None]:
     return draw
 
 
+_SIGNATURE_ROLES = ("Prepared by", "Reviewed by", "Approved by")
+_SIGNATURE_ROW = 30
+
+
+def signature_block(
+    meta: ReportMeta, styles: Dict[str, ParagraphStyle]
+) -> KeepTogether:
+    """Prepared by / Reviewed by / Approved by, each a signature line and a
+    date line, kept together at the end of the report.
+
+    The preparer's name and rank go under the first line, since the report
+    already knows them; the reviewer and approver are whoever signs.
+    """
+    width = meta.width
+    label_w, date_label_w, date_w = 1.0 * inch, 0.45 * inch, 1.4 * inch
+    # Capped so a landscape page does not draw a line across its full width.
+    sign_w = min(width - label_w - date_label_w - date_w - 12, 3.5 * inch)
+    rows = []
+    for role in _SIGNATURE_ROLES:
+        under = meta.generated_by if role == "Prepared by" else None
+        rows.append(
+            [
+                Paragraph(esc(role), styles["cell_bold"]),
+                "",
+                Paragraph("Date", styles["cell"]),
+                "",
+            ]
+        )
+        rows.append(
+            [
+                "",
+                Paragraph(esc(under), styles["cell_muted"]) if under else "",
+                "",
+                "",
+            ]
+        )
+    table = Table(
+        rows,
+        colWidths=[label_w, sign_w, date_label_w + 12, date_w],
+        rowHeights=[_SIGNATURE_ROW, 14] * len(_SIGNATURE_ROLES),
+        hAlign="LEFT",
+        style=body_table_style(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ]
+            # Even rows hold the lines; odd rows the name printed under one.
+            + [
+                ("LINEBELOW", (col, row), (col, row), 0.75, INK)
+                for row in range(0, len(rows), 2)
+                for col in (1, 3)
+            ]
+            + [("VALIGN", (0, row), (-1, row), "TOP") for row in range(1, len(rows), 2)]
+        ),
+    )
+    return KeepTogether([table])
+
+
 def render_report(
     meta: ReportMeta, body: Callable[[Dict[str, ParagraphStyle]], List[Any]]
 ) -> bytes:
@@ -508,8 +596,13 @@ def render_report(
         doc = HeadedDocTemplate(
             buf,
             running_header=RunningHeader(
-                meta.org_name, meta.title, _header_detail(meta), meta.logo
+                meta.org_name,
+                meta.title,
+                _header_detail(meta),
+                meta.logo,
+                reference=meta.report_number,
             ),
+            banner=meta.confidentiality,
             # The canvas otherwise declares Helvetica, never embedded, on every page.
             initialFontName=BODY_FONT,
             pagesize=meta.pagesize,
@@ -525,6 +618,8 @@ def render_report(
             displayDocTitle=True,
         )
         story = [*_letterhead(meta, styles), *body(styles)]
+        if meta.signature_lines:
+            story += [Spacer(1, 24), signature_block(meta, styles)]
         doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
         return buf.getvalue()
 

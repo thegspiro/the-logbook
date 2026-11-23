@@ -22,6 +22,8 @@ POST /users/leave-requests/my-leaves/{leave_id}/end-early - A member ends
 GET    /users/leave-requests/covers         - Approver covers, and the choices
 POST   /users/leave-requests/covers         - Name a stand-in for an approver
 DELETE /users/leave-requests/covers/{id}    - End a cover now
+GET    /users/leave-requests/calendar       - One month of leave (managers)
+GET    /users/leave-requests/export         - Leave records as CSV (managers)
 
 Who may decide is not a permission: it is the department's chosen approver
 positions, with the Chief and then everyone who can record leave as the
@@ -30,7 +32,9 @@ a signed-in member and the service decides the rest; a request the caller may
 not see is a 404, never a 403, so its existence is not disclosed.
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from datetime import date
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,6 +48,7 @@ from app.models.user import User
 from app.schemas.leave_of_absence import (
     LeaveApproverCoverBoard,
     LeaveApproverCoverCreate,
+    LeaveCalendarResponse,
     LeaveChangesCreate,
     LeaveChangesResponse,
     LeaveEndEarlyCreate,
@@ -56,11 +61,8 @@ from app.schemas.leave_of_absence import (
     LeaveRequestVoteCreate,
     LeaveSettingsResponse,
 )
-from app.services.leave_of_absence_notices import (
-    RECORDED,
-    UPDATED,
-    send_leave_notice,
-)
+from app.services.leave_calendar_service import LeaveCalendarService
+from app.services.leave_of_absence_notices import RECORDED, UPDATED
 from app.services.leave_request_service import (
     LeaveRequestForbidden,
     LeaveRequestNotFound,
@@ -72,6 +74,9 @@ from app.services.leave_workflow_notices import (
     CHANGES_DECLINED,
     CHANGES_PROPOSED,
     QUESTION_ASKED,
+    send_approval_notice,
+    send_cover_cleared,
+    send_cover_named,
     send_leave_ended_early,
     send_request_denied,
     send_request_event,
@@ -250,6 +255,7 @@ async def get_leave_approver_covers(
 )
 async def set_leave_approver_cover(
     data: LeaveApproverCoverCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -262,11 +268,14 @@ async def set_leave_approver_cover(
     """
     service = LeaveRequestService(db)
     try:
-        await service.set_cover(_org(current_user), current_user, data)
+        cover = await service.set_cover(_org(current_user), current_user, data)
     except LeaveRequestForbidden as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    background_tasks.add_task(
+        send_cover_named, _org(current_user), str(cover.id), str(current_user.id)
+    )
     return await service.cover_board(_org(current_user), current_user)
 
 
@@ -275,6 +284,7 @@ async def set_leave_approver_cover(
 )
 async def clear_leave_approver_cover(
     cover_id: str,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -286,12 +296,88 @@ async def clear_leave_approver_cover(
     """
     service = LeaveRequestService(db)
     try:
-        await service.clear_cover(_org(current_user), current_user, cover_id)
+        cleared = await service.clear_cover(_org(current_user), current_user, cover_id)
     except LeaveRequestNotFound:
         raise HTTPException(status_code=404, detail="Cover not found")
     except LeaveRequestForbidden as exc:
         raise HTTPException(status_code=403, detail=str(exc))
+    background_tasks.add_task(
+        send_cover_cleared, _org(current_user), cleared, str(current_user.id)
+    )
     return await service.cover_board(_org(current_user), current_user)
+
+
+# ==================== Department calendar and export ====================
+# Also declared before ``/leave-requests/{request_id}``.
+
+
+@router.get("/leave-requests/calendar", response_model=LeaveCalendarResponse)
+async def get_leave_calendar(
+    month: str = Query(..., pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    One month of the department's leave: recorded leaves, requests still
+    waiting, and approver covers. Never a leave's reason. Reading it is
+    audited, as it lists who is away.
+
+    **Requires permission: members.manage**
+    """
+    year, number = (int(part) for part in month.split("-"))
+    result = await LeaveCalendarService(db).calendar(_org(current_user), year, number)
+    await log_audit_event(
+        db=db,
+        event_type="leave_calendar_viewed",
+        event_category="user_management",
+        severity="info",
+        event_data={"month": month, "record_count": len(result.entries)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+    return result
+
+
+@router.get("/leave-requests/export")
+async def export_leave_records(
+    start: date = Query(...),
+    end: date = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Every leave request, of any status, and every recorded leave that touches
+    the range, as CSV. No reasons. The export is audited.
+
+    **Requires permission: members.manage**
+    """
+    try:
+        text, count = await LeaveCalendarService(db).export_csv(
+            _org(current_user), start, end
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    await log_audit_event(
+        db=db,
+        event_type="leave_records_exported",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "record_count": count,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+    filename = f"leave-records-{start.isoformat()}-to-{end.isoformat()}.csv"
+    return Response(
+        content=text,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/leave-requests/{request_id}", response_model=LeaveRequestResponse)
@@ -387,7 +473,7 @@ def _queue_outcome(
     if request.status == LeaveRequestStatus.APPROVED and request.leave_id:
         extended = request.extends_leave_id == request.leave_id
         background_tasks.add_task(
-            send_leave_notice,
+            send_approval_notice,
             _org(current_user),
             str(request.leave_id),
             # The approver who decided, not the caller: a member accepting

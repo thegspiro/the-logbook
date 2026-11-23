@@ -1327,15 +1327,17 @@ const MedicalSuppliesPage: React.FC = () => {
                               </td>
                             )}
                             <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
-                              {item.name}
-                              {item.size && (
-                                <span className="text-theme-text-secondary ml-1 text-xs font-normal">
-                                  · {item.size}
-                                </span>
-                              )}
-                              {item.unit_of_measure && (
-                                <span className="text-theme-text-muted ml-1 text-xs">({item.unit_of_measure})</span>
-                              )}
+                              <div className="min-w-0">
+                                {item.name}
+                                {item.size && (
+                                  <span className="text-theme-text-secondary ml-1 text-xs font-normal">
+                                    · {item.size}
+                                  </span>
+                                )}
+                                {item.unit_of_measure && (
+                                  <span className="text-theme-text-muted ml-1 text-xs">({item.unit_of_measure})</span>
+                                )}
+                              </div>
                             </td>
                             <td data-label="Category" className="text-theme-text-muted px-4 py-3">
                               {categoryName(item)}
@@ -1346,30 +1348,32 @@ const MedicalSuppliesPage: React.FC = () => {
                                 isLow ? 'font-semibold text-orange-800 dark:text-orange-300' : 'text-theme-text-primary'
                               }`}
                             >
-                              {item.apparatus_only ? (
-                                // No shelf: the count is what the trucks carry.
-                                <>
-                                  {formatNumber(aboard)}
-                                  {isLow && <span className="ml-1 text-xs"> Low</span>}
+                              <div className="min-w-0">
+                                {item.apparatus_only ? (
+                                  // No shelf: the count is what the trucks carry.
+                                  <>
+                                    {formatNumber(aboard)}
+                                    {isLow && <span className="ml-1 text-xs"> Low</span>}
+                                    <span className="text-theme-text-secondary block text-xs font-normal">
+                                      on {formatNumber(item.apparatus_count ?? 0)} apparatus
+                                      {uncounted > 0 &&
+                                        ` (${formatNumber(uncounted)} uncounted position${uncounted === 1 ? '' : 's'})`}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    {formatNumber(onHandQuantity(item))}
+                                    {isLow && <span className="ml-1 text-xs"> Low</span>}
+                                  </>
+                                )}
+                                {!item.apparatus_only && aboard > 0 && (
                                   <span className="text-theme-text-secondary block text-xs font-normal">
-                                    on {formatNumber(item.apparatus_count ?? 0)} apparatus
+                                    +{formatNumber(aboard)} on trucks
                                     {uncounted > 0 &&
                                       ` (${formatNumber(uncounted)} uncounted position${uncounted === 1 ? '' : 's'})`}
                                   </span>
-                                </>
-                              ) : (
-                                <>
-                                  {formatNumber(onHandQuantity(item))}
-                                  {isLow && <span className="ml-1 text-xs"> Low</span>}
-                                </>
-                              )}
-                              {!item.apparatus_only && aboard > 0 && (
-                                <span className="text-theme-text-secondary block text-xs font-normal">
-                                  +{formatNumber(aboard)} on trucks
-                                  {uncounted > 0 &&
-                                    ` (${formatNumber(uncounted)} uncounted position${uncounted === 1 ? '' : 's'})`}
-                                </span>
-                              )}
+                                )}
+                              </div>
                             </td>
                             <td
                               data-label="Reorder at"
@@ -1378,31 +1382,33 @@ const MedicalSuppliesPage: React.FC = () => {
                               {item.reorder_point == null ? '—' : formatNumber(item.reorder_point)}
                             </td>
                             <td data-label="Next expiry" className={`px-4 py-3 ${nextExpiryTone(item, expiryWindow)}`}>
-                              {item.next_expiration_date ? (
-                                <>
-                                  {formatDate(item.next_expiration_date, tz)}
-                                  <span className="ml-1 text-xs">
-                                    ({expiryLabel(item.days_until_next_expiration ?? undefined)})
-                                  </span>
-                                  {item.next_expiration_location && (
-                                    <span className="text-theme-text-secondary mt-0.5 flex items-start gap-1 text-xs">
-                                      {item.next_expiration_location === 'apparatus' ? (
-                                        <Truck className="mt-0.5 h-3 w-3 shrink-0" aria-label="On an apparatus" />
-                                      ) : (
-                                        <Package className="mt-0.5 h-3 w-3 shrink-0" aria-label="In storage" />
-                                      )}
-                                      <span>
-                                        {item.next_expiration_where ||
-                                          (item.next_expiration_location === 'apparatus'
-                                            ? 'On an apparatus'
-                                            : 'In storage')}
-                                      </span>
+                              <div className="min-w-0">
+                                {item.next_expiration_date ? (
+                                  <>
+                                    {formatDate(item.next_expiration_date, tz)}
+                                    <span className="ml-1 text-xs">
+                                      ({expiryLabel(item.days_until_next_expiration ?? undefined)})
                                     </span>
-                                  )}
-                                </>
-                              ) : (
-                                '—'
-                              )}
+                                    {item.next_expiration_location && (
+                                      <span className="text-theme-text-secondary mt-0.5 flex items-start gap-1 text-xs">
+                                        {item.next_expiration_location === 'apparatus' ? (
+                                          <Truck className="mt-0.5 h-3 w-3 shrink-0" aria-label="On an apparatus" />
+                                        ) : (
+                                          <Package className="mt-0.5 h-3 w-3 shrink-0" aria-label="In storage" />
+                                        )}
+                                        <span>
+                                          {item.next_expiration_where ||
+                                            (item.next_expiration_location === 'apparatus'
+                                              ? 'On an apparatus'
+                                              : 'In storage')}
+                                        </span>
+                                      </span>
+                                    )}
+                                  </>
+                                ) : (
+                                  '—'
+                                )}
+                              </div>
                             </td>
                             <td data-label="Where" className="text-theme-text-muted px-4 py-3">
                               <SupplyWhere
@@ -1413,42 +1419,44 @@ const MedicalSuppliesPage: React.FC = () => {
                               />
                             </td>
                             <td data-label="Actions" className="px-4 py-3 text-right whitespace-nowrap">
-                              {/* Lots for everyone who can see the list: a crew
+                              <div className="min-w-0">
+                                {/* Lots for everyone who can see the list: a crew
                                 member checking what is in date needs them as
                                 much as the officer who maintains them. */}
-                              <button
-                                type="button"
-                                onClick={() => setLotsItem(item)}
-                                className="btn-icon"
-                                aria-label={
-                                  item.apparatus_only
-                                    ? `Where ${supplyLabel(item)} is carried`
-                                    : `Lots for ${supplyLabel(item)}`
-                                }
-                                title={item.apparatus_only ? 'Where it is carried' : 'Stock lots'}
-                              >
-                                <Layers className="h-4 w-4" />
-                              </button>
-                              {canManage && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingItem(item)}
-                                    className="btn-icon"
-                                    aria-label={`Edit ${item.name}`}
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => void handleRetire(item)}
-                                    className="btn-icon"
-                                    aria-label={`Retire ${item.name}`}
-                                  >
-                                    <Archive className="h-4 w-4" />
-                                  </button>
-                                </>
-                              )}
+                                <button
+                                  type="button"
+                                  onClick={() => setLotsItem(item)}
+                                  className="btn-icon"
+                                  aria-label={
+                                    item.apparatus_only
+                                      ? `Where ${supplyLabel(item)} is carried`
+                                      : `Lots for ${supplyLabel(item)}`
+                                  }
+                                  title={item.apparatus_only ? 'Where it is carried' : 'Stock lots'}
+                                >
+                                  <Layers className="h-4 w-4" />
+                                </button>
+                                {canManage && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingItem(item)}
+                                      className="btn-icon"
+                                      aria-label={`Edit ${item.name}`}
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleRetire(item)}
+                                      className="btn-icon"
+                                      aria-label={`Retire ${item.name}`}
+                                    >
+                                      <Archive className="h-4 w-4" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );

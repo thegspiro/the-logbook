@@ -406,12 +406,12 @@ const CriterionEditor: React.FC<{
 
           {/* Required toggle */}
           <div className="flex items-end lg:col-span-2">
-            <label className="flex cursor-pointer items-center gap-2">
+            <label className="flex cursor-pointer items-center gap-2 md:items-start">
               <input
                 type="checkbox"
                 checked={criterion.required}
                 onChange={(e) => onChange({ ...criterion, required: e.target.checked })}
-                className="border-theme-surface-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
+                className="border-theme-surface-border focus:ring-theme-focus-ring rounded-sm text-blue-600 md:mt-1"
               />
               <div>
                 <span className="text-theme-text-primary text-sm">Critical</span>

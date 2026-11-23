@@ -387,9 +387,9 @@ screens adapt:
   itself, so its buttons can always be reached. **Shift Details** opens as a
   window in the middle of the screen, inset from the edges on a phone.
 
-![One member's training history on a 390px phone: each row has become a stacked card, every value carrying its own column label, with nothing to scroll sideways](./images/10-18-training-table-phone.png)
+![A member's records on the History tab of My Training on a 390px phone: each row has become a stacked card, every value carrying its own column label, with nothing to scroll sideways](./images/10-18-training-table-phone.png)
 
-![The same three records at desktop width — one row each across Course, Type, Date, Hours, Expires, Status and Files](./images/10-19-training-table-desktop.png)
+![The same records at desktop width — one row each across Course, Type, Date, Hours, Source and Status](./images/10-19-training-table-desktop.png)
 
 _The same page and the same three records, on a phone and at desktop width.
 On the phone every value keeps the column heading that named it, and there is

@@ -218,63 +218,67 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
                       {formatHours(entry.hours)}
                     </td>
                     <td className="px-4 py-3" data-label="Status">
-                      {rejected ? (
-                        <>
-                          <span className="rounded-sm bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-400">
-                            Not counted
+                      <div className="min-w-0">
+                        {rejected ? (
+                          <>
+                            <span className="rounded-sm bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-400">
+                              Not counted
+                            </span>
+                            {entry.rejection_reason && (
+                              <p className="text-theme-text-muted mt-1 text-xs">
+                                {entry.rejection_reason}
+                                {entry.reviewer_name ? ` — ${entry.reviewer_name}` : ''}
+                              </p>
+                            )}
+                          </>
+                        ) : pending ? (
+                          <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-400">
+                            Awaiting approval
                           </span>
-                          {entry.rejection_reason && (
-                            <p className="text-theme-text-muted mt-1 text-xs">
-                              {entry.rejection_reason}
-                              {entry.reviewer_name ? ` — ${entry.reviewer_name}` : ''}
-                            </p>
-                          )}
-                        </>
-                      ) : pending ? (
-                        <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-400">
-                          Awaiting approval
-                        </span>
-                      ) : (
-                        <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
-                          Counted
-                        </span>
-                      )}
-                      <ExternalShiftEvaluationBadge status={entry.evaluation_status} className="mt-1 block w-fit" />
+                        ) : (
+                          <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
+                            Counted
+                          </span>
+                        )}
+                        <ExternalShiftEvaluationBadge status={entry.evaluation_status} className="mt-1 block w-fit" />
+                      </div>
                     </td>
                     {canManage && (
                       <td className="px-4 py-3 text-right" data-label="Actions">
-                        {pending && (
-                          <button
-                            type="button"
-                            className="mobile-touch-target inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-green-800 hover:bg-green-500/10 dark:text-green-400"
-                            disabled={busyId === entry.id}
-                            onClick={() => void handleApprove(entry)}
-                          >
-                            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                            Approve
-                          </button>
-                        )}
-                        {rejected ? (
-                          <button
-                            type="button"
-                            className="mobile-touch-target text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium"
-                            disabled={busyId === entry.id}
-                            onClick={() => void handleRestore(entry)}
-                          >
-                            <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                            Restore
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="mobile-touch-target inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-red-700 hover:bg-red-500/10 dark:text-red-400"
-                            disabled={busyId === entry.id}
-                            onClick={() => setRejecting(entry)}
-                          >
-                            <XCircle className="h-4 w-4" aria-hidden="true" />
-                            Reject
-                          </button>
-                        )}
+                        <div className="min-w-0">
+                          {pending && (
+                            <button
+                              type="button"
+                              className="mobile-touch-target inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-green-800 hover:bg-green-500/10 dark:text-green-400"
+                              disabled={busyId === entry.id}
+                              onClick={() => void handleApprove(entry)}
+                            >
+                              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                              Approve
+                            </button>
+                          )}
+                          {rejected ? (
+                            <button
+                              type="button"
+                              className="mobile-touch-target text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium"
+                              disabled={busyId === entry.id}
+                              onClick={() => void handleRestore(entry)}
+                            >
+                              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                              Restore
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="mobile-touch-target inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-red-700 hover:bg-red-500/10 dark:text-red-400"
+                              disabled={busyId === entry.id}
+                              onClick={() => setRejecting(entry)}
+                            >
+                              <XCircle className="h-4 w-4" aria-hidden="true" />
+                              Reject
+                            </button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>

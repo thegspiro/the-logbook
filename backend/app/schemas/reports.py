@@ -42,6 +42,9 @@ class ReportExportRequest(BaseModel):
     end_date: Optional[date] = None
     filters: Optional[Dict[str, Any]] = None
     saved_report_id: Optional[str] = Field(default=None, min_length=1, max_length=36)
+    # End a PDF with Prepared by / Reviewed by / Approved by lines; a CSV
+    # ignores it.
+    signature_lines: bool = False
 
     @model_validator(mode="after")
     def _one_source(self) -> "ReportExportRequest":
