@@ -564,9 +564,9 @@ ten to a page: the name and the course it went to ("CPR Refresher → CPR for
 Healthcare Providers"), how many records it changed, and who linked it and
 when. Select **Undo** on a link and confirm (**Undo link** / **Keep it**).
 
-![Recent links on Course Links: Pump Ops linked to Pump Operations with an Undo button, and CPR Refresher's link to CPR for Healthcare Providers reading undone with the date and who undid it](./images/02-151-course-links-recent.png)
+![Recent links on Course Links: Pump Ops linked to Pump Operations with an Undo button, and CPR Refresher's link to CPR for Healthcare Providers reading undone with the date and who undid it](./images/02-152-course-links-recent.png)
 
-![The Undo confirmation for the Pump Ops link to Pump Operations, with Keep it and Undo link](./images/02-152-course-links-undo-confirm.png)
+![The Undo confirmation for the Pump Ops link to Pump Operations, with Keep it and Undo link](./images/02-153-course-links-undo-confirm.png)
 
 - Each record goes back to **no course**, with the category and training type
   it had before the link, so it stops counting toward the requirements that
@@ -608,7 +608,7 @@ would hold the badge up for good with nothing to click. The count is read
 whenever the hub loads, so a provider sync or CSV import that brings in a new
 name shows next time, and it drops as soon as you link, link all or undo.
 
-![Training Admin's attention list with "3 training names can be linked to a course, across 14 records" and its Review links button](./images/02-153-course-links-attention.png)
+![Training Admin's attention list with "3 training names can be linked to a course, across 14 records" and its Review links button](./images/02-154-course-links-attention.png)
 
 When every record names a library course, the page says "Every training record
 names a library course."
@@ -4453,7 +4453,7 @@ department is not on the map.
   way. Long member names wrap within the pinned column rather than being cut
   off. On a keyboard, tab into the map and use the arrow keys to scroll it.
 
-  ![Department Readiness on a 390px phone: the member column pinned on the left with long names wrapping, skill names pinned along the top, and a fade with a chevron on the right edge where more skills lie](./images/02-154-competency-heatmap-phone.png)
+  ![Department Readiness on a 390px phone: the member column pinned on the left with long names wrapping, skill names pinned along the top, and a fade with a chevron on the right edge where more skills lie](./images/02-155-competency-heatmap-phone.png)
 
 - An active member with no evaluations appears as a row of dashes, not left
   off, so a gap in the roster is visible.

@@ -256,7 +256,8 @@ re-shot on 2026-11-21.
 ## Queued by the November 19 – 20 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-19--20-2026).
-Nothing was captured by this pass.
+Nothing was captured by this pass. The Create and Check rows were worked on
+2026-11-23; one Create row (16) is still open.
 
 | Guide | Screen | Action |
 | --- | --- | --- |
@@ -265,25 +266,25 @@ Nothing was captured by this pass.
 | 03 | Hours with outside hours: a card reading "N FCVFD" / "+24 with other departments", **All shifts** below | **Replace** `03-113-member-hours-with-outside` |
 | 03 | A month bar selected on the chart, its shifts highlighted in the list | Optional |
 | 01 | Profile **Shift & Call History** in the new layout, officer view without **Log outside shift** | Optional |
-| 08 | Settings → Profile with **Short Name** and its hint | Create |
-| 03 | Shift template dialog reading "Template saved, except name" with the field flagged; the **Discard changes** confirmation | Create |
-| 03 | Settings → General, Overtime advisory card with a cleared Hours limit flagged "Enter a whole number from 0 to 336." | Create |
-| 16 | Historical import: a committed step's **Undo this step**, the **Undo the training records?** confirmation with counts, the greyed-out "first undo the company drills step" line, the kept-records notice | Create |
-| 02 | Curriculum → Course Links with **Recent links**, one row reading "undone … by …", and the Undo confirmation (**Undo link** / **Keep it**) | Create |
-| 02 | Training Admin attention row "N training names can be linked to a course" with **Review links**, and the Course Links badge | Create |
-| 02 | Competency heat-map at 390px: pinned names, wrapping, scroll cue | Create. **Check** `02-67-competency-matrix`: the name column is now capped at 7rem and long names wrap |
-| 10 | My Training History tab and Expiring Certifications as cards at 390px | Create. `10-18-training-table-phone` stays valid |
-| 02 | `02-107-my-training-history-tab`, `02-01-my-training` | Check only: at 1440px these should still be tables |
+| 08 | Settings → Profile with **Short Name** and its hint | Created `08-125-profile-short-name` |
+| 03 | Shift template dialog reading "Template saved, except name" with the field flagged; the **Discard changes** confirmation | Created `03-143-template-saved-except-name`, `03-144-template-discard-changes` |
+| 03 | Settings → General, Overtime advisory card with a cleared Hours limit flagged "Enter a whole number from 0 to 336." | Created `03-142-overtime-hours-limit-error` |
+| 16 | Historical import: a committed step's **Undo this step**, the **Undo the training records?** confirmation with counts, the greyed-out "first undo the company drills step" line, the kept-records notice | Create. Still open: the demo department has no historical import, and committing one writes training and drill records that every other training shot would then show. Needs a seeder step for an import whose records are kept out of the other shots, or mocks of the import page's own endpoints |
+| 02 | Curriculum → Course Links with **Recent links**, one row reading "undone … by …", and the Undo confirmation (**Undo link** / **Keep it**) | Created `02-152-course-links-recent`, `02-153-course-links-undo-confirm` (history mocked: the demo has no links) |
+| 02 | Training Admin attention row "N training names can be linked to a course" with **Review links**, and the Course Links badge | Created `02-154-course-links-attention`, with the Curriculum card's badge (row mocked: no demo name has a suggestion) |
+| 02 | Competency heat-map at 390px: pinned names, wrapping, scroll cue | Created `02-155-competency-heatmap-phone` (levels mocked: the demo has evaluated no skills). `02-67-competency-matrix` checked: its heat-map shows the empty message, so the name column is not in frame |
+| 10 | My Training History tab and Expiring Certifications as cards at 390px | Created `10-30-expiring-certs-phone`; `10-18-training-table-phone` is the History tab |
+| 02 | `02-107-my-training-history-tab`, `02-01-my-training` | Checked: both are tables at 1440px |
 | 02, 04, 07, 12 | A picker showing a saved "Name (former member)" | Optional |
-| 05 | My Issued Gear row reading **Quartermaster notified** _date_ in place of the button | Create. `05-66-my-equipment`, `05-98-my-equipment-empty` stay valid |
-| 05 | Checklist Settings with the note under an hours box ("24 is the most allowed. 24 was saved.") | Create. `05-153-checklist-settings-phone` stays valid |
-| 06 | Apparatus edit with **These were not saved** and "Apparatus saved, except …" | Create. Check `06-29-add-apparatus-form` (layout unchanged, likely valid) |
-| 06 | A facility extended section (e.g. Insurance) with a field error and a character counter; the "Discard your changes?" dialog | Create |
-| 07 | Suggestion submit step with "Answer “…”." under a question; Step 2 with "Give your suggestion a title." | Create. **Check** `07-15-suggestion-submit-anonymous` and `07-36-compliance-details-step`; replace if Submit appears greyed out |
-| 07 | Suggestion box dialog with a flagged question ("Write the question members will be asked.") | Create. `07-14-suggestion-box-dialog` stays valid |
-| 18 | Store Settings with **Fix these before saving the settings** and a flagged tax rate | Create. `18-02-store-admin` stays valid |
+| 05 | My Issued Gear row reading **Quartermaster notified** _date_ in place of the button | Created `05-155-my-gear-quartermaster-notified` (notice mocked so none waits on Return Requests) |
+| 05 | Checklist Settings with the note under an hours box ("24 is the most allowed. 24 was saved.") | Created `05-156-checklist-hours-clamped`, on Opens before the start (Closes allows up to 72); the old value is restored after |
+| 06 | Apparatus edit with **These were not saved** and "Apparatus saved, except …" | Created `06-37-apparatus-saved-except`. `06-29-add-apparatus-form` checked: layout unchanged |
+| 06 | A facility extended section (e.g. Insurance) with a field error and a character counter; the "Discard your changes?" dialog | Created `06-38-facility-insurance-flagged`, `06-39-facility-discard-changes`. No counter: it appears at 80% of a 100- or 200-character limit, and the guide now says so |
+| 07 | Suggestion submit step with "Answer “…”." under a question; Step 2 with "Give your suggestion a title." | Created `07-50-suggestion-question-unanswered`, `07-51-suggestion-title-missing`. `07-15` and `07-36` checked: Submit is not greyed |
+| 07 | Suggestion box dialog with a flagged question ("Write the question members will be asked.") | Created `07-49-suggestion-box-question-flagged` |
+| 18 | Store Settings with **Fix these before saving the settings** and a flagged tax rate | Created `18-09-store-settings-fix-these`, `18-10-store-settings-tax-flagged` |
 | 08 | Template editor with a flagged CC field and **Save** enabled | Optional. `08-56-template-discard` stays valid |
-| 04 | `04-68-minutes-outlines`: the Default badge is a darker green | Check (colour only) |
+| 04 | `04-68-minutes-outlines`: the Default badge is a darker green | Checked: a fresh capture is identical |
 | wiki | Shift history import edit dialog, "Other lines in these issues" with **Include line N** | Optional |
 
 **Made wrong by this range:** `03-104`, `03-108`, `03-113` (My Hours

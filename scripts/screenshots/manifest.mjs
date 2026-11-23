@@ -2011,6 +2011,26 @@ async function routeCompetencyHeatmap(page) {
   );
 }
 
+/**
+ * Day Shift's edit dialog with its name cleared and Save pressed. An edit saves
+ * every field but the refused one, and the others go back as they were
+ * stored, so the template is unchanged and keeps its name.
+ */
+async function saveTemplateWithoutName(page) {
+  await page
+    .getByRole("button", { name: "Edit Day Shift", exact: true })
+    .click({ timeout: 20_000 });
+  const name = page.locator("#template-name");
+  await name.waitFor({ timeout: 10_000 });
+  await name.fill("");
+  await page.getByRole("button", { name: "Save Template" }).click();
+  await page
+    .getByText("Template saved, except name")
+    .waitFor({ timeout: 15_000 });
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(400);
+}
+
 function withShiftSignoffs(prepare) {
   return async (page) => {
     const config = await apiFromPage(
@@ -14489,10 +14509,10 @@ export const SHOTS = [
     },
   },
   {
-    id: "02-151-course-links-recent",
+    id: "02-152-course-links-recent",
     doc: "02-training.md",
     line: 562,
-    anchor: "__placed-by-hand-02-151__",
+    anchor: "__placed-by-hand-02-152__",
     alt: "Recent links on Course Links: Pump Ops linked to Pump Operations with an Undo button, and CPR Refresher's link to CPR for Healthcare Providers reading undone with the date and who undid it",
     route: "/training/admin?page=curriculum&tab=course-links",
     expect: { selector: "#course-links-recent-heading" },
@@ -14507,10 +14527,10 @@ export const SHOTS = [
     },
   },
   {
-    id: "02-152-course-links-undo-confirm",
+    id: "02-153-course-links-undo-confirm",
     doc: "02-training.md",
     line: 565,
-    anchor: "__placed-by-hand-02-152__",
+    anchor: "__placed-by-hand-02-153__",
     alt: "The Undo confirmation for the Pump Ops link to Pump Operations, with Keep it and Undo link",
     route: "/training/admin?page=curriculum&tab=course-links",
     expect: { selector: "text=Undo link" },
@@ -14532,10 +14552,10 @@ export const SHOTS = [
     fullPage: false,
   },
   {
-    id: "02-153-course-links-attention",
+    id: "02-154-course-links-attention",
     doc: "02-training.md",
     line: 599,
-    anchor: "__placed-by-hand-02-153__",
+    anchor: "__placed-by-hand-02-154__",
     alt: 'Training Admin\'s attention list with "3 training names can be linked to a course, across 14 records" and its Review links button',
     route: "/training/admin",
     expect: { selector: "text=can be linked to a course" },
@@ -14554,10 +14574,10 @@ export const SHOTS = [
     fullPage: false,
   },
   {
-    id: "02-154-competency-heatmap-phone",
+    id: "02-155-competency-heatmap-phone",
     doc: "02-training.md",
     line: 4449,
-    anchor: "__placed-by-hand-02-154__",
+    anchor: "__placed-by-hand-02-155__",
     alt: "Department Readiness on a 390px phone: the member column pinned on the left with long names wrapping, skill names pinned along the top, and a fade with a chevron on the right edge where more skills lie",
     route: "/training/admin?page=enhancements&tab=competency",
     expect: {
@@ -14600,6 +14620,45 @@ export const SHOTS = [
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(600);
     },
+  },
+  {
+    id: "03-143-template-saved-except-name",
+    doc: "03-scheduling.md",
+    line: 3439,
+    anchor: "__placed-by-hand-03-143__",
+    alt: 'Editing the Day Shift template with its name cleared: the Name box flagged "Enter a name for the template." and the dialog reading "Template saved, except name."',
+    route: "/scheduling/admin/planning/templates",
+    expect: { selector: "text=Template saved, except name" },
+    prepare: saveTemplateWithoutName,
+    // The cleared name is unsaved typing, so leaving asks; discard it.
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      const discard = page.getByRole("button", { name: "Discard changes" });
+      if (await discard.count()) await discard.click();
+    },
+    fullPage: false,
+  },
+  {
+    id: "03-144-template-discard-changes",
+    doc: "03-scheduling.md",
+    line: 3434,
+    anchor: "__placed-by-hand-03-144__",
+    alt: "Cancelling the template dialog after typing: the confirmation asking whether to throw the changes away, with Discard changes",
+    route: "/scheduling/admin/planning/templates",
+    expect: { selector: "text=Discard changes" },
+    prepare: async (page) => {
+      await saveTemplateWithoutName(page);
+      await page.getByRole("button", { name: "Cancel", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Discard changes" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const discard = page.getByRole("button", { name: "Discard changes" });
+      if (await discard.count()) await discard.click();
+    },
+    fullPage: false,
   },
   {
     id: "08-01-setup-checklist",

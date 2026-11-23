@@ -3444,6 +3444,10 @@ Select **New Template** to create one, or select a template to edit it.
   back the shift length, so a template never stores a length its times
   contradict. A **new** template is created only once nothing is refused.
 
+![Editing the Day Shift template with its name cleared: the Name box flagged "Enter a name for the template." and the dialog reading "Template saved, except name."](./images/03-143-template-saved-except-name.png)
+
+![Cancelling the template dialog after typing: the confirmation asking whether to throw the changes away, with Discard changes](./images/03-144-template-discard-changes.png)
+
 **Deleting a template or a basic vehicle.** A shift template used by any shift
 or pattern, and a basic apparatus named by any template, shift, pre-work
 session, equipment check or call, is **deactivated** rather than deleted, so
