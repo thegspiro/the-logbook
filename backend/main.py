@@ -49,6 +49,7 @@ from app.core.database import database_manager
 from app.core.error_codes import ErrorCode, resolve_error_code
 from app.core.error_reporting import build_error_type, persist_error_log
 from app.core.logging import setup_logging, setup_sentry
+from app.core.migration_recovery import upgrade_skipping_duplicates
 from app.core.startup_diagnostics import env_presence_report
 from app.core.utils import sanitize_error_message
 from app.mcp.constants import MCP_MOUNT_PATH
@@ -879,6 +880,43 @@ def _wait_for_mysql(engine, startup_status):
             retry_delay = min(retry_delay * 2, max_delay)
 
 
+def _revision_parents(script_dir) -> dict[str, tuple[str, ...]]:
+    """Each revision id mapped to its parent ids, from the migration scripts."""
+    parents: dict[str, tuple[str, ...]] = {}
+    for script in script_dir.walk_revisions():
+        down = script.down_revision
+        if down is None:
+            parents[script.revision] = ()
+        elif isinstance(down, str):
+            parents[script.revision] = (down,)
+        else:
+            parents[script.revision] = tuple(down)
+    return parents
+
+
+def _read_alembic_heads(engine) -> list[str]:
+    """Every row of alembic_version: one per head while branches are unmerged."""
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT version_num FROM alembic_version"))
+        return [row[0] for row in rows]
+
+
+def _write_alembic_heads(engine, heads: list[str]) -> None:
+    """Replace alembic_version with ``heads``, in one transaction."""
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        conn.execute(text(_ALEMBIC_VERSION_DDL))
+        conn.execute(text("DELETE FROM alembic_version"))
+        for head in heads:
+            conn.execute(
+                text("INSERT INTO alembic_version (version_num) VALUES (:rev)"),
+                {"rev": head},
+            )
+
+
 def run_migrations():
     """
     Run Alembic migrations to ensure database schema is up to date.
@@ -1210,7 +1248,28 @@ def run_migrations():
 
         try:
             with timeout_context(1800, "Database migrations"):
-                command.upgrade(alembic_cfg, head_revision)
+                if _walk_ok:
+                    skipped = upgrade_skipping_duplicates(
+                        revisions=_revision_parents(script_dir),
+                        target=head_revision,
+                        upgrade=lambda rev: command.upgrade(alembic_cfg, rev),
+                        read_heads=lambda: _read_alembic_heads(engine),
+                        write_heads=lambda heads: _write_alembic_heads(engine, heads),
+                    )
+                else:
+                    command.upgrade(alembic_cfg, head_revision)
+                    skipped = []
+
+            # Kept off the word "schema": /health treats any startup error
+            # naming it as a broken database, and these are not. The database
+            # error itself is in the log line upgrade_skipping_duplicates wrote.
+            for skip in skipped:
+                startup_status.add_error(
+                    f"Migration {skip.revision} was marked as applied without "
+                    "completing because its change already existed; see the "
+                    "backend log for the database error."
+                )
+            schema_was_stamped = bool(skipped)
 
             startup_status.migrations_completed = total_migrations
             startup_status.set_phase("migrations", "Database migrations complete")
@@ -1225,13 +1284,16 @@ def run_migrations():
                 "Check database logs for locked tables or stuck queries."
             )
         except Exception as upgrade_error:
-            error_str = str(upgrade_error).lower()
-            # Recoverable errors: table/index already exists, or Alembic
-            # revision graph is broken (common on Unraid union filesystems
-            # where bind-mounted files are transiently invisible).
-            _is_dup = "already exists" in error_str or "duplicate" in error_str
+            # Recoverable: the Alembic revision graph is broken (common on
+            # Unraid union filesystems where bind-mounted files are
+            # transiently invisible), so no migration can be run one by one.
             _is_graph = not _walk_ok  # revision graph was already broken
-            if _is_dup or _is_graph:
+            # With a readable graph a duplicate is recovered migration by
+            # migration above; one that reaches here could not be pinned on a
+            # single migration, and stamping to head would skip every
+            # migration still to come, so it stops startup instead. Only a
+            # broken graph, where nothing can be walked, still stamps.
+            if _is_graph:
                 logger.warning(
                     f"Migration failed ({upgrade_error}). Stamping to head..."
                 )
