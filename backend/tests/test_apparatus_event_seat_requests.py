@@ -210,7 +210,10 @@ class TestAsking:
         await w.service.claim_seat(event_id, santa.id, w.org.id, w.elf)
 
         requests = await _requests(db_session, event_id)
-        assert [r.user_id for r in requests] == [w.santa.id, w.elf.id]
+        # Both asked within the same second, and requested_at is stored to the
+        # second, so which one lists first is not defined; both waiting is.
+        assert {r.user_id for r in requests} == {w.santa.id, w.elf.id}
+        assert {r.status for r in requests} == {"pending"}
 
     async def test_asking_twice_for_one_seat_changes_nothing(self, db_session):
         w = await _world(db_session)
