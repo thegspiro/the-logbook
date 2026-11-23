@@ -480,10 +480,9 @@ greyed out.
 **Not yet converted** (F-2 to F-9 still apply to them):
 
 - **Top-level pages:** the locations setup wizard; skill template, course
-  library, external training, training enhancements, knowledge tests and crew
-  training pages; the pipeline create and edit pages; integrations; forms;
-  members admin; the manual shift report and shift detail, reports and
-  patterns tabs.
+  library, external training, knowledge tests and crew training pages; the
+  pipeline create and edit pages; integrations; forms; members admin; the
+  manual shift report and shift detail, reports and patterns tabs.
 - **Inventory and assets:** bulk add, size preferences, catalog quick add, the
   medical create panel, stock lots and seals, and the checklist builder and
   settings pages; the full apparatus form and documents; the facility detail
@@ -706,6 +705,27 @@ Settings); applicant conversion, stage configuration, detail dialog, interviews
 and pipeline settings; onboarding, the public portal, membership, history, the
 org chart node and IP security admin. The other rows are as batches 21 to 23
 left them.
+
+## Rollout status, 2026-11-23 (training batch E, PR 3)
+
+The same steps, on these:
+
+| Area     | Converted                                                                                                         |
+| -------- | ----------------------------------------------------------------------------------------------------------------- |
+| Training | Enhancements' four create dialogs: recertification pathway, competency matrix, instructor qualification, exercise |
+
+Each said a missing name, position, member or date in a toast that named no
+field. They are create forms, so they create nothing until every flagged field
+is fixed. The pathway's day counts, its hours and the exercise's participant
+count are checked against the schema's bounds and named on their box; a 422 on
+the one participating organization (`participating_organizations.0.name`)
+lands on Organization Name. The payloads are unchanged.
+
+The Training Waivers tab was looked at and left: it is a read-only list with a
+status filter and a search box, not a form. The form that creates a training
+waiver is Members › Waivers' Create Waiver tab (`WaiverManagementPage.tsx`),
+which another session is changing for the self-waiver refusal; it is still to
+convert, with the other surfaces listed above.
 
 ## Suggested order
 

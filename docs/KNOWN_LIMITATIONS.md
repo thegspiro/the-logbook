@@ -918,6 +918,15 @@ read-only roster with filters, not a form. Not converted, and still listed in
 reports, eligibility, outside apparatus, notifications, platoons, and the
 defaults cards under the footer's Save Settings).
 
+**Rolled out further on 2026-11-23** (training batch E, PR 3): Training ›
+Enhancements' four create dialogs (recertification pathway, competency matrix,
+instructor qualification, multi-agency exercise). The same rules apply: a
+missing value is named on its field, not in a toast, and nothing is created
+until it is fixed. The Training Waivers tab was looked at and left: it is a
+read-only list. Creating a training waiver happens on Members › Waivers'
+Create Waiver tab, which is not converted yet and is listed in
+`docs/FORMS_REVIEW_2026-11-05.md`.
+
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
 
