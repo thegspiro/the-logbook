@@ -68,9 +68,6 @@ REVIEWED = {
     ("services/training_compliance.py", "_month_rows"): (
         "reads month_waivers' result (MonthWaiver.sources), which drops the excusal"
     ),
-    ("services/scheduling_service.py", "get_shift_compliance"): (
-        "keeps SOURCE_LEAVE periods only"
-    ),
     ("services/scheduling_service.py", "_get_unavailable_dates_by_user"): (
         "reads MemberLeaveOfAbsence rows, not waiver periods"
     ),

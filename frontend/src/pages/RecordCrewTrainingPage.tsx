@@ -19,7 +19,10 @@ import { useTimezone } from '../hooks/useTimezone';
 import { useAuthStore } from '../stores/authStore';
 import { formatTime, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours } from '../utils/hoursFormatting';
-import { getErrorDetail } from '../utils/errorHandling';
+import { ErrorSummary } from '../components/ux/ErrorSummary';
+import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { TRAINING_TYPE_LABELS } from '../constants/enums';
 import type {
   CrewMemberOption,
@@ -40,7 +43,37 @@ const CREW_TRAINING_TYPES: TrainingType[] = [
 const DEFAULT_MINUTES = 60;
 
 const inputClass = 'form-input';
-const labelClass = 'form-label';
+
+type CrewField =
+  | 'course_name'
+  | 'training_type'
+  | 'category_id'
+  | 'description'
+  | 'completion_date'
+  | 'start_time'
+  | 'hours_completed'
+  | 'instructor'
+  | 'location'
+  | 'shift_id'
+  | 'member_ids';
+
+// Ordered as on screen, so the summary and the first focused field follow the
+// page. Keys are the request's, so a 422 lands on the field it names. Limits
+// mirror CrewTrainingCreate (topic, instructor and location 255, notes 5000).
+const CREW_FIELDS: FieldSpecs<CrewField> = {
+  course_name: { id: 'crew-course', label: 'Topic' },
+  training_type: { id: 'crew-type', label: 'Training type' },
+  category_id: { id: 'crew-category', label: 'Category' },
+  description: { id: 'crew-description', label: 'What it covered' },
+  completion_date: { id: 'crew-date', label: 'Date' },
+  start_time: { id: 'crew-start', label: 'Start time' },
+  hours_completed: { id: 'crew-minutes', label: 'Length' },
+  instructor: { id: 'crew-instructor', label: 'Instructor' },
+  location: { id: 'crew-location', label: 'Location' },
+  shift_id: { id: 'crew-shift', label: 'Shift' },
+  member_ids: { id: 'crew-members', label: 'Members present' },
+};
+const CREW_LIMITS = { course_name: 255, description: 5000, instructor: 255, location: 255 } as const;
 
 const RecordCrewTrainingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -70,7 +103,12 @@ const RecordCrewTrainingPage: React.FC = () => {
   const [memberFilter, setMemberFilter] = useState('');
 
   const [saving, setSaving] = useState(false);
+  // Only the load failure; a refused send is said on its fields.
   const [error, setError] = useState('');
+  const crewErrors = useFieldErrors(CREW_FIELDS);
+  const { errors } = crewErrors;
+  const [summaryFocus, setSummaryFocus] = useState(0);
+  const edited = (field: CrewField) => crewErrors.setError(field, null);
   const [recordedCount, setRecordedCount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -133,7 +171,15 @@ const RecordCrewTrainingPage: React.FC = () => {
   const parentCategories = useMemo(() => categories.filter((c) => !c.parent_category_id), [categories]);
   const hours = Number(minutes) / 60;
 
+  // A typed drill is lost on a reload or a closed tab; the browser asks first.
+  useUnsavedChanges({
+    hasChanges:
+      recordedCount === null &&
+      Boolean(courseName.trim() || description.trim() || instructor.trim() || location.trim() || startTime),
+  });
+
   const toggleMember = (id: string) => {
+    edited('member_ids');
     setPresent((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -144,6 +190,7 @@ const RecordCrewTrainingPage: React.FC = () => {
 
   const chooseShift = (id: string) => {
     setShiftId(id);
+    edited('shift_id');
     const shift = shifts.find((s) => s.id === id);
     if (!shift) return;
     setPresent((prev) => new Set([...prev, ...shift.member_ids]));
@@ -151,21 +198,19 @@ const RecordCrewTrainingPage: React.FC = () => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setError('');
-    if (!courseName.trim()) {
-      setError('Enter what the training covered.');
-      return;
-    }
-    if (!completionDate) {
-      setError('Enter the date the training took place.');
-      return;
-    }
-    if (!Number.isFinite(hours) || hours <= 0) {
-      setError('Enter how long the training ran.');
-      return;
-    }
-    if (present.size === 0) {
-      setError('Select at least one member who was present.');
+    if (saving) return;
+    // Recording files a submission per member, so nothing is sent until every
+    // field is fixed; each refusal is said on its field (owner rule, 2026-11-05).
+    const problems: FieldErrors<CrewField> = {};
+    if (!courseName.trim()) problems.course_name = 'Enter what the training covered.';
+    if (!completionDate) problems.completion_date = 'Enter the date the training took place.';
+    else if (completionDate > getTodayLocalDate(tz)) problems.completion_date = 'The date cannot be in the future.';
+    if (!Number.isFinite(hours) || hours <= 0) problems.hours_completed = 'Enter how long the training ran.';
+    if (present.size === 0) problems.member_ids = 'Select at least one member who was present.';
+    crewErrors.setFormError(null);
+    crewErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      setSummaryFocus((n) => n + 1);
       return;
     }
     setSaving(true);
@@ -186,7 +231,9 @@ const RecordCrewTrainingPage: React.FC = () => {
       setRecordedCount(result.submissions.length);
       toast.success('Crew training sent for review');
     } catch (err: unknown) {
-      setError(getErrorDetail(err) || 'Failed to record crew training');
+      // A refusal on a field is said on that field; anything else in the summary.
+      crewErrors.setFromApiError(err, 'Failed to record crew training');
+      setSummaryFocus((n) => n + 1);
     } finally {
       setSaving(false);
     }
@@ -277,190 +324,243 @@ const RecordCrewTrainingPage: React.FC = () => {
       {/* The form keeps its reading width under the full-width strip. */}
       <div className="mx-auto max-w-3xl">
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6" noValidate>
+          <ErrorSummary
+            items={crewErrors.summary}
+            formError={crewErrors.formError}
+            focusKey={summaryFocus}
+            title="Fix these before sending"
+          />
           <section className="card space-y-4 p-4">
             <h2 className="text-theme-text-primary font-semibold">What was the training?</h2>
-            <div>
-              <label htmlFor="crew-course" className={labelClass}>
-                Topic <span aria-hidden="true">*</span>
-              </label>
-              <input
-                id="crew-course"
-                className={inputClass}
-                list="crew-course-suggestions"
-                value={courseName}
-                maxLength={255}
-                required
-                placeholder="Start typing — suggestions appear"
-                onChange={(e) => setCourseName(e.target.value)}
-              />
-              <datalist id="crew-course-suggestions">
-                {suggestions.map((name) => (
-                  <option key={name} value={name} />
-                ))}
-              </datalist>
-              <p className="text-theme-text-muted mt-1 text-xs">
-                Pick a suggestion when one fits, so the same drill is named the same way every time.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="crew-type" className={labelClass}>
-                  Training type
-                </label>
-                <select
-                  id="crew-type"
-                  className={inputClass}
-                  value={trainingType}
-                  onChange={(e) => setTrainingType(e.target.value as TrainingType)}
-                >
-                  {allowedTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {TRAINING_TYPE_LABELS[type] || type}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {parentCategories.length > 0 && (
-                <div>
-                  <label htmlFor="crew-category" className={labelClass}>
-                    Category (optional)
-                  </label>
-                  <select
-                    id="crew-category"
+            <FormField
+              id={CREW_FIELDS.course_name.id}
+              label="Topic"
+              required
+              error={errors.course_name}
+              maxLength={CREW_LIMITS.course_name}
+              count={courseName.length}
+              hint="Pick a suggestion when one fits, so the same drill is named the same way every time."
+            >
+              {(field) => (
+                <>
+                  <input
+                    {...field}
                     className={inputClass}
-                    value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
+                    list="crew-course-suggestions"
+                    value={courseName}
+                    placeholder="Start typing — suggestions appear"
+                    onChange={(e) => {
+                      setCourseName(e.target.value);
+                      edited('course_name');
+                    }}
+                  />
+                  <datalist id="crew-course-suggestions">
+                    {suggestions.map((name) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
+                </>
+              )}
+            </FormField>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField id={CREW_FIELDS.training_type.id} label="Training type" error={errors.training_type}>
+                {(field) => (
+                  <select
+                    {...field}
+                    className={inputClass}
+                    value={trainingType}
+                    onChange={(e) => {
+                      setTrainingType(e.target.value as TrainingType);
+                      edited('training_type');
+                    }}
                   >
-                    <option value="">No category</option>
-                    {parentCategories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
+                    {allowedTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {TRAINING_TYPE_LABELS[type] || type}
                       </option>
                     ))}
                   </select>
-                </div>
+                )}
+              </FormField>
+              {parentCategories.length > 0 && (
+                <FormField id={CREW_FIELDS.category_id.id} label="Category" optional error={errors.category_id}>
+                  {(field) => (
+                    <select
+                      {...field}
+                      className={inputClass}
+                      value={categoryId}
+                      onChange={(e) => {
+                        setCategoryId(e.target.value);
+                        edited('category_id');
+                      }}
+                    >
+                      <option value="">No category</option>
+                      {parentCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </FormField>
               )}
             </div>
-            <div>
-              <label htmlFor="crew-description" className={labelClass}>
-                What it covered (optional)
-              </label>
-              <textarea
-                id="crew-description"
-                className={inputClass}
-                rows={2}
-                maxLength={5000}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
+            <FormField
+              id={CREW_FIELDS.description.id}
+              label="What it covered"
+              optional
+              error={errors.description}
+              maxLength={CREW_LIMITS.description}
+              count={description.length}
+            >
+              {(field) => (
+                <textarea
+                  {...field}
+                  className={inputClass}
+                  rows={2}
+                  value={description}
+                  onChange={(e) => {
+                    setDescription(e.target.value);
+                    edited('description');
+                  }}
+                />
+              )}
+            </FormField>
           </section>
 
           <section className="card space-y-4 p-4">
             <h2 className="text-theme-text-primary font-semibold">When and how long?</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div>
-                <label htmlFor="crew-date" className={labelClass}>
-                  Date <span aria-hidden="true">*</span>
-                </label>
-                <input
-                  id="crew-date"
-                  type="date"
-                  className={inputClass}
-                  value={completionDate}
-                  required
-                  max={getTodayLocalDate(tz)}
-                  onChange={(e) => setCompletionDate(e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="crew-start" className={labelClass}>
-                  Start time (optional)
-                </label>
-                <input
-                  id="crew-start"
-                  type="time"
-                  className={inputClass}
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="crew-minutes" className={labelClass}>
-                  Length (minutes)
-                </label>
-                <input
-                  id="crew-minutes"
-                  type="number"
-                  inputMode="numeric"
-                  min={5}
-                  step={5}
-                  className={inputClass}
-                  value={minutes}
-                  onChange={(e) => setMinutes(e.target.value)}
-                />
-                {hours > 0 && <p className="text-theme-text-muted mt-1 text-xs">{formatHours(hours)} hours</p>}
-              </div>
+              <FormField id={CREW_FIELDS.completion_date.id} label="Date" required error={errors.completion_date}>
+                {(field) => (
+                  <input
+                    {...field}
+                    type="date"
+                    className={inputClass}
+                    value={completionDate}
+                    max={getTodayLocalDate(tz)}
+                    onChange={(e) => {
+                      setCompletionDate(e.target.value);
+                      edited('completion_date');
+                    }}
+                  />
+                )}
+              </FormField>
+              <FormField id={CREW_FIELDS.start_time.id} label="Start time" optional error={errors.start_time}>
+                {(field) => (
+                  <input
+                    {...field}
+                    type="time"
+                    className={inputClass}
+                    value={startTime}
+                    onChange={(e) => {
+                      setStartTime(e.target.value);
+                      edited('start_time');
+                    }}
+                  />
+                )}
+              </FormField>
+              <FormField
+                id={CREW_FIELDS.hours_completed.id}
+                label="Length (minutes)"
+                required
+                error={errors.hours_completed}
+                hint={hours > 0 ? `${formatHours(hours)} hours` : undefined}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    inputMode="numeric"
+                    min={5}
+                    step={5}
+                    className={inputClass}
+                    value={minutes}
+                    onChange={(e) => {
+                      setMinutes(e.target.value);
+                      edited('hours_completed');
+                    }}
+                  />
+                )}
+              </FormField>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="crew-instructor" className={labelClass}>
-                  Instructor (optional)
-                </label>
-                <input
-                  id="crew-instructor"
-                  className={inputClass}
-                  maxLength={255}
-                  value={instructor}
-                  onChange={(e) => setInstructor(e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="crew-location" className={labelClass}>
-                  Location (optional)
-                </label>
-                <input
-                  id="crew-location"
-                  className={inputClass}
-                  maxLength={255}
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                />
-              </div>
+              <FormField
+                id={CREW_FIELDS.instructor.id}
+                label="Instructor"
+                optional
+                error={errors.instructor}
+                maxLength={CREW_LIMITS.instructor}
+                count={instructor.length}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    className={inputClass}
+                    value={instructor}
+                    onChange={(e) => {
+                      setInstructor(e.target.value);
+                      edited('instructor');
+                    }}
+                  />
+                )}
+              </FormField>
+              <FormField
+                id={CREW_FIELDS.location.id}
+                label="Location"
+                optional
+                error={errors.location}
+                maxLength={CREW_LIMITS.location}
+                count={location.length}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    className={inputClass}
+                    value={location}
+                    onChange={(e) => {
+                      setLocation(e.target.value);
+                      edited('location');
+                    }}
+                  />
+                )}
+              </FormField>
             </div>
           </section>
 
           <section className="card space-y-4 p-4">
             <h2 className="text-theme-text-primary font-semibold">Who was there?</h2>
             {shifts.length > 0 && (
-              <div>
-                <label htmlFor="crew-shift" className={labelClass}>
-                  Shift (optional)
-                </label>
-                <select
-                  id="crew-shift"
-                  className={inputClass}
-                  value={shiftId}
-                  onChange={(e) => chooseShift(e.target.value)}
-                >
-                  <option value="">Not tied to a shift</option>
-                  {shifts.map((shift) => (
-                    <option key={shift.id} value={shift.id}>
-                      {[
-                        `${formatTime(shift.start_time, tz)}${shift.end_time ? `–${formatTime(shift.end_time, tz)}` : ''}`,
-                        shift.platoon ? `Platoon ${shift.platoon}` : null,
-                        shift.shift_officer_name ? `Officer: ${shift.shift_officer_name}` : null,
-                        `${shift.member_ids.length} on shift`,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  Choosing a shift checks everyone on it. Uncheck anyone who missed the drill.
-                </p>
-              </div>
+              <FormField
+                id={CREW_FIELDS.shift_id.id}
+                label="Shift"
+                optional
+                error={errors.shift_id}
+                hint="Choosing a shift checks everyone on it. Uncheck anyone who missed the drill."
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    className={inputClass}
+                    value={shiftId}
+                    onChange={(e) => chooseShift(e.target.value)}
+                  >
+                    <option value="">Not tied to a shift</option>
+                    {shifts.map((shift) => (
+                      <option key={shift.id} value={shift.id}>
+                        {[
+                          `${formatTime(shift.start_time, tz)}${shift.end_time ? `–${formatTime(shift.end_time, tz)}` : ''}`,
+                          shift.platoon ? `Platoon ${shift.platoon}` : null,
+                          shift.shift_officer_name ? `Officer: ${shift.shift_officer_name}` : null,
+                          `${shift.member_ids.length} on shift`,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
             )}
             <div className="relative">
               <Search className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
@@ -476,34 +576,42 @@ const RecordCrewTrainingPage: React.FC = () => {
             <p className="text-theme-text-secondary text-sm" aria-live="polite">
               {present.size} {present.size === 1 ? 'member' : 'members'} selected
             </p>
-            <ul className="border-theme-surface-border max-h-80 divide-y overflow-y-auto rounded-lg border">
-              {filteredMembers.map((member) => (
-                <li key={member.id}>
-                  <label className="hover:bg-theme-surface-hover touch:min-h-11 flex cursor-pointer items-center gap-3 px-3 py-2">
-                    <input
-                      type="checkbox"
-                      className="form-checkbox"
-                      checked={present.has(member.id)}
-                      onChange={() => toggleMember(member.id)}
-                    />
-                    <span className="text-theme-text-primary text-sm">
-                      {member.name}
-                      {member.id === currentUserId ? ' (you)' : ''}
-                    </span>
-                  </label>
-                </li>
-              ))}
-              {filteredMembers.length === 0 && (
-                <li className="text-theme-text-muted px-3 py-4 text-center text-sm">No members match.</li>
+            <div
+              id={CREW_FIELDS.member_ids.id}
+              tabIndex={-1}
+              role="group"
+              aria-label="Members present"
+              aria-invalid={errors.member_ids ? true : undefined}
+              aria-describedby={errors.member_ids ? 'crew-members-error' : undefined}
+            >
+              <ul className="border-theme-surface-border max-h-80 divide-y overflow-y-auto rounded-lg border">
+                {filteredMembers.map((member) => (
+                  <li key={member.id}>
+                    <label className="hover:bg-theme-surface-hover touch:min-h-11 flex cursor-pointer items-center gap-3 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        className="form-checkbox"
+                        checked={present.has(member.id)}
+                        onChange={() => toggleMember(member.id)}
+                      />
+                      <span className="text-theme-text-primary text-sm">
+                        {member.name}
+                        {member.id === currentUserId ? ' (you)' : ''}
+                      </span>
+                    </label>
+                  </li>
+                ))}
+                {filteredMembers.length === 0 && (
+                  <li className="text-theme-text-muted px-3 py-4 text-center text-sm">No members match.</li>
+                )}
+              </ul>
+              {errors.member_ids && (
+                <p id="crew-members-error" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+                  {errors.member_ids}
+                </p>
               )}
-            </ul>
-          </section>
-
-          {error && (
-            <div className="alert-danger" role="alert">
-              {error}
             </div>
-          )}
+          </section>
 
           <div className="flex justify-end">
             <button type="submit" className="btn-primary touch:min-h-11" disabled={saving}>
