@@ -2971,11 +2971,28 @@ async def _unapply_meeting_waiver(
     return len(attendees)
 
 
+def _correction_keeps_decision(
+    request: AttendanceWaiverRequest, event: Event, tz: ZoneInfo, now: datetime
+) -> bool:
+    """Whether a moved start leaves an approval as it is (owner decision,
+    2026-11-23): the session had already started when the start was changed,
+    so the edit corrects the record of a session that was held, or the new
+    start keeps the session's local date. Either way the member's reason for
+    missing it still holds. Any other move reopens the request.
+    """
+    if _utc(request.event_start_snapshot) <= now:
+        return True
+    return local_date(event.start_datetime, tz) == request.session_date
+
+
 async def reconfirm_for_rescheduled_events(
     db: AsyncSession, org_id: str, event_ids: Sequence[str]
 ) -> List[MemberNotice]:
     """Send every pending or approved request for a moved session back to its
-    member (owner decision, 2026-11-13).
+    member (owner decision, 2026-11-13), except an approval the move does not
+    unsettle: a correction to a session already held, or a new start on the
+    same local date, keeps it and only updates its snapshot
+    (``_correction_keeps_decision``, owner decision 2026-11-23).
 
     For every path that changes an event's start, inside the caller's
     transaction (it commits) while it holds the events exclusively; like
@@ -3047,6 +3064,15 @@ async def reconfirm_for_rescheduled_events(
         spec = SPECS[request.workflow]
         noun = spec.session_noun
         was = request.status
+        if was == AttendanceWaiverStatus.APPROVED and _correction_keeps_decision(
+            request, event, tz, now
+        ):
+            # Only the snapshot follows the event, so a second run for the
+            # same edit finds nothing moved (pitfall #36).
+            request.event_title_snapshot = (event.title or spec.default_title)[:255]
+            request.event_start_snapshot = _utc(event.start_datetime)
+            request.session_date = local_date(event.start_datetime, tz)
+            continue
         old_date = request.session_date
         old_when = _when_label(request.event_start_snapshot, tz)
         new_when = _when_label(event.start_datetime, tz)

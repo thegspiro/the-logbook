@@ -11188,10 +11188,15 @@ option was taken; each is open for the owner to revisit.
   2026-11-21 the member always gets seven days from that notice to answer
   (`expires_at_for` reads `reconfirm_requested_at`); before, a start fixed
   more than eight days after the session expired the request on the next
-  hourly sweep and charged the meeting as missed. **For the owner:** whether a
-  correction to a session already held — or one that keeps the same local
-  date, such as 19:00 fixed to 19:30 — should reopen the decision at all. Not
-  reopening it would change the 2026-11-13 decision, so it was not done here.
+  hourly sweep and charged the meeting as missed. ~~**For the owner:** whether
+  a correction to a session already held — or one that keeps the same local
+  date, such as 19:00 fixed to 19:30 — should reopen the decision at all.~~ ✅
+  **Owner decision 2026-11-23: it does not.** An approved request keeps its
+  decision (and a meeting waiver stays on the minutes) when the session had
+  already started when its start was changed, or when the new start is on the
+  same local date; only its snapshot follows the event. Any other move reopens
+  it as before, and a pending request still goes back to the member on any
+  move (`_correction_keeps_decision`).
 - **`idx_meeting_attendees_meeting` is now a prefix of the new unique
   `(meeting_id, user_id)` index** and could be dropped; it was left to keep
   the migration to what the feature needs.
