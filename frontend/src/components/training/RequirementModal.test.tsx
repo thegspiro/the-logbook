@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ConfirmProvider } from '../../contexts/ConfirmContext';
+
+// The editor asks before discarding a changed form, which needs the provider
+// the app shell mounts.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
 
 vi.mock('../../hooks/useCourseLibrary', () => ({
   useCourseLibrary: () => ({ courses: [], loading: false, error: null }),

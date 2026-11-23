@@ -7,6 +7,7 @@
 import React from 'react';
 
 import { isEvaluationRequirementType } from '../../utils/shiftEvaluations';
+import { FIELD_ERROR_CLASS } from '../ux/FormField';
 
 interface EvaluationRequirementFieldsProps {
   idPrefix: string;
@@ -21,6 +22,8 @@ interface EvaluationRequirementFieldsProps {
   onTransportsChange: (value: string) => void;
   onRefusalsChange: (value: string) => void;
   onExcludesLowestChange: (value: boolean) => void;
+  /** Why the save refused the target, shown on the field and read on focus. */
+  error?: string | undefined;
 }
 
 const COUNTED_FROM =
@@ -39,6 +42,7 @@ export const EvaluationRequirementFields: React.FC<EvaluationRequirementFieldsPr
   onTransportsChange,
   onRefusalsChange,
   onExcludesLowestChange,
+  error,
 }) => {
   if (!isEvaluationRequirementType(type)) return null;
 
@@ -73,6 +77,7 @@ export const EvaluationRequirementFields: React.FC<EvaluationRequirementFieldsPr
     },
   }[type];
   const hintId = `${field.id}-hint`;
+  const errorId = `${field.id}-error`;
 
   return (
     <div className="space-y-3">
@@ -92,8 +97,14 @@ export const EvaluationRequirementFields: React.FC<EvaluationRequirementFieldsPr
           onChange={(e) => field.onChange(e.target.value)}
           placeholder={field.placeholder}
           aria-required="true"
-          aria-describedby={hintId}
+          aria-describedby={error ? `${errorId} ${hintId}` : hintId}
+          {...(error ? { 'aria-invalid': true as const } : {})}
         />
+        {error && (
+          <p id={errorId} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+            {error}
+          </p>
+        )}
         <p id={hintId} className="text-theme-text-muted mt-1 text-xs">
           {COUNTED_FROM}
         </p>
