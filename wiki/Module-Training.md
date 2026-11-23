@@ -1507,12 +1507,13 @@ record is still on the link's course and untouched since the link
 `56377b666eb3`). A Training event template carries
 `event_templates.training_details`: course (library, one-off name and code,
 or none), training type, credit hours and their source, lead instructor and
-certification settings — not requirement/program links, Counts toward
-attendance or completion settings. Picking the template on Training Admin's
+certification settings, and since 2026-11-23 the category, program and phase,
+requirement link, Counts toward attendance and completion settings (ids
+checked in-org on save). Picking the template on Training Admin's
 **Create Session** or Events' **Create Event** fills **Training Info**;
 `reconcileTemplateTraining` falls back to No course yet for a course no longer
-in the library and clears an instructor who is no longer a current member,
-with a note. Editing is in **Events → Event Templates** (the editor's
+in the library, clears an instructor who is no longer a current member, and
+drops a link no longer active, each with a note. Editing is in **Events → Event Templates** (the editor's
 **Training Details** section); **Save as Template** on a Training event saves
 its session's details. See [Events](Module-Events).
 

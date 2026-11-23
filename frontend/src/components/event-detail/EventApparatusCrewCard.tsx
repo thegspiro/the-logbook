@@ -2,8 +2,10 @@
  * Apparatus & Crew — the seats on an apparatus night, on the event page.
  *
  * Renders nothing for an ordinary event: the board answers 404 there, which
- * is the signal, not an error. A member takes or leaves an open seat; a
- * coordinator also assigns, clears and reshapes the night. Check-in and the
+ * is the signal, not an error. A member takes or leaves an open seat — or,
+ * on a night whose sign-ups need approval, asks for one and waits; a
+ * coordinator also answers those requests, assigns, clears and reshapes the
+ * night. Check-in and the
  * Finalize step that posts the crew's hours stay where they already are on
  * this page, so there is one way to confirm attendance, not two.
  */
@@ -12,12 +14,19 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { isAxiosError } from 'axios';
-import { CheckCircle2, Megaphone, Pencil, Truck, UserMinus, UserPlus } from 'lucide-react';
+import { Check, CheckCircle2, Clock, Megaphone, Pencil, Truck, UserMinus, UserPlus, X } from 'lucide-react';
 import { apparatusEventService } from '../../services/api';
-import { ApparatusEventSeatType, type CrewBoard, type CrewSeat, type CrewUnit } from '../../types/apparatusEvent';
+import {
+  ApparatusEventSeatType,
+  type CrewBoard,
+  type CrewSeat,
+  type CrewUnit,
+  type SeatRequest,
+} from '../../types/apparatusEvent';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { formatCalendarDate, formatShortDateTime, toLocalDateString } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { PromptDialog } from '../ux/PromptDialog';
 import { EVOC_MODE_LABEL, EVOC_MODE_TONE, TONE } from '../../pages/apparatus-events/tones';
 import AssignSeatDialog from './apparatus-crew/AssignSeatDialog';
 import EditNightDialog from './apparatus-crew/EditNightDialog';
@@ -38,6 +47,9 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
   const [assigning, setAssigning] = useState<{ unit: CrewUnit; seat: CrewSeat; label: string } | null>(null);
   const [editing, setEditing] = useState(false);
   const [emailing, setEmailing] = useState(false);
+  const [declining, setDeclining] = useState<{ request: SeatRequest; label: string } | null>(null);
+  const [declineError, setDeclineError] = useState<string | null>(null);
+  const [declineBusy, setDeclineBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -71,16 +83,33 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
 
   const closed = board.is_cancelled || board.attendance_finalized;
   const ended = new Date(board.end_datetime).getTime() <= Date.now();
-  const canTake = !closed && !ended && board.can_sign_up && board.allow_self_signup && board.my_seat_id === null;
+  const started = new Date(board.start_datetime).getTime() <= Date.now();
+  const asks = board.require_signup_approval;
+  const canTake =
+    !closed &&
+    !ended &&
+    !(asks && started) &&
+    board.can_sign_up &&
+    board.allow_self_signup &&
+    board.my_seat_id === null &&
+    board.my_request === null;
+  // Approval and decline are refused once a night starts; what is still
+  // waiting then lapses on its own and the member is emailed.
+  const canAnswer = board.can_manage && !closed && !started;
+  const waiting = board.units.reduce((n, u) => n + u.seats.reduce((m, s) => m + s.requests.length, 0), 0);
   const filled = board.units.reduce((n, u) => n + u.seats.filter((s) => s.user_id).length, 0);
   const total = board.units.reduce((n, u) => n + u.seats.length, 0);
 
-  const act = async (seatId: string, action: () => Promise<CrewBoard>, done: string) => {
+  const act = async (
+    seatId: string,
+    action: () => Promise<CrewBoard>,
+    done: string | ((updated: CrewBoard) => string)
+  ) => {
     setPendingSeat(seatId);
     try {
       const updated = await action();
       updated.warnings.forEach((w) => toast(w.message, { icon: '⚠️' }));
-      toast.success(done);
+      toast.success(typeof done === 'string' ? done : done(updated));
       setBoard(updated);
     } catch (err) {
       toast.error(getErrorMessage(err, 'That did not go through.'));
@@ -109,6 +138,21 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
           : apparatusEventService.assignSeat(board.event_id, seat.id, null),
       mine ? 'You left the seat' : 'Seat cleared'
     );
+  };
+
+  const decline = async (note: string) => {
+    if (!declining) return;
+    setDeclineBusy(true);
+    setDeclineError(null);
+    try {
+      setBoard(await apparatusEventService.declineRequest(board.event_id, declining.request.id, note || undefined));
+      toast.success('Request declined. The member is emailed.');
+      setDeclining(null);
+    } catch (err) {
+      setDeclineError(getErrorMessage(err, 'Could not decline the request.'));
+    } finally {
+      setDeclineBusy(false);
+    }
   };
 
   return (
@@ -144,7 +188,39 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
         <span className={`badge ${TONE.slate}`}>Outreach · not a shift</span>
         <span className={`badge ${EVOC_MODE_TONE[board.evoc_mode]}`}>{EVOC_MODE_LABEL[board.evoc_mode]}</span>
         <span className={`badge ${TONE.slate}`}>Hours: {board.admin_hours_category_name ?? 'by event type'}</span>
+        {asks && board.allow_self_signup && <span className={`badge ${TONE.amber}`}>Sign-ups need approval</span>}
+        {board.can_manage && waiting > 0 && (
+          <span className={`badge ${TONE.amber}`}>
+            {waiting} {waiting === 1 ? 'request' : 'requests'} waiting
+          </span>
+        )}
       </div>
+
+      {board.my_request && !closed && (
+        <div className="alert-info mt-3 flex flex-wrap items-center justify-between gap-2 text-sm" role="status">
+          <span className="flex items-center gap-2">
+            <Clock className="h-4 w-4" aria-hidden="true" />
+            You asked for the {board.my_request.seat_name} seat. The coordinator will approve or decline it, and you’ll
+            be emailed either way.
+          </span>
+          <button
+            type="button"
+            className="btn-secondary btn-sm"
+            disabled={pendingSeat === board.my_request.seat_id}
+            onClick={() => {
+              const request = board.my_request;
+              if (!request) return;
+              void act(
+                request.seat_id,
+                () => apparatusEventService.withdrawRequest(board.event_id, request.id),
+                'Request withdrawn'
+              );
+            }}
+          >
+            Withdraw request
+          </button>
+        </div>
+      )}
 
       {board.last_seat_call && (
         <p className="text-theme-text-muted mt-2 text-xs">
@@ -236,6 +312,9 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
                         {seat.seat_type === ApparatusEventSeatType.DRIVER && (
                           <span className={`badge ml-2 ${TONE.red}`}>Driver · EVOC</span>
                         )}
+                        {board.my_request?.seat_id === seat.id && (
+                          <span className={`badge ml-2 ${TONE.amber}`}>Your request is waiting</span>
+                        )}
                         {seat.note && <p className="text-theme-text-muted mt-0.5 text-xs">{seat.note}</p>}
                       </div>
                       <div className="flex flex-wrap gap-2 sm:justify-end">
@@ -248,12 +327,15 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
                               void act(
                                 seat.id,
                                 () => apparatusEventService.claimSeat(board.event_id, seat.id),
-                                `You’re on the crew as ${label}`
+                                (updated) =>
+                                  updated.my_request
+                                    ? `You asked for ${label}. The coordinator will answer it.`
+                                    : `You’re on the crew as ${label}`
                               )
                             }
                           >
                             <UserPlus className="h-4 w-4" aria-hidden="true" />
-                            Sign me up
+                            {asks ? 'Ask for this seat' : 'Sign me up'}
                           </button>
                         )}
                         {seat.is_me && !closed && !seat.checked_in && (
@@ -288,6 +370,61 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
                           </button>
                         )}
                       </div>
+                      {seat.requests.length > 0 && (
+                        <div className="border-theme-surface-border border-t pt-2 sm:col-span-3">
+                          <p className="text-theme-text-muted text-xs font-semibold">
+                            Waiting for your answer, first asked first
+                          </p>
+                          <ul className="mt-1 space-y-1">
+                            {seat.requests.map((request) => (
+                              <li
+                                key={request.id}
+                                className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                              >
+                                <span className="text-theme-text-primary min-w-0">
+                                  {request.user_name ?? 'A member'}
+                                  <span className="text-theme-text-muted ml-2 text-xs">
+                                    asked {formatShortDateTime(request.requested_at, timezone)}
+                                  </span>
+                                </span>
+                                {canAnswer && (
+                                  <span className="flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      className="btn-primary btn-sm"
+                                      disabled={busy || Boolean(seat.user_id)}
+                                      aria-label={`Approve ${request.user_name ?? 'this member'} for ${label}`}
+                                      onClick={() =>
+                                        void act(
+                                          seat.id,
+                                          () => apparatusEventService.approveRequest(board.event_id, request.id),
+                                          `${request.user_name ?? 'The member'} is on the crew as ${label}`
+                                        )
+                                      }
+                                    >
+                                      <Check className="h-4 w-4" aria-hidden="true" />
+                                      Approve
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn-secondary btn-sm"
+                                      disabled={busy}
+                                      aria-label={`Decline ${request.user_name ?? 'this member'} for ${label}`}
+                                      onClick={() => {
+                                        setDeclineError(null);
+                                        setDeclining({ request, label });
+                                      }}
+                                    >
+                                      <X className="h-4 w-4" aria-hidden="true" />
+                                      Decline
+                                    </button>
+                                  </span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </li>
                   );
                 })}
@@ -303,6 +440,26 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
         count as shift hours.
       </p>
 
+      <PromptDialog
+        isOpen={declining !== null}
+        onClose={() => setDeclining(null)}
+        onSubmit={(note) => void decline(note)}
+        title="Decline this request?"
+        message={
+          declining
+            ? `${declining.request.user_name ?? 'The member'} is emailed that they did not get the ${declining.label} seat.`
+            : undefined
+        }
+        label="Note to the member (optional)"
+        required={false}
+        multiline
+        hint="Up to 300 characters, sent in the email."
+        confirmLabel="Decline request"
+        cancelLabel="Keep it waiting"
+        confirmVariant="warning"
+        loading={declineBusy}
+        error={declineError}
+      />
       <AssignSeatDialog
         eventId={board.event_id}
         target={assigning}
