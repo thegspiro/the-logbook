@@ -80,7 +80,12 @@ export const MemberRequirementsSection: React.FC<MemberRequirementsSectionProps>
         <>
           <LeaveOfAbsenceSummary leaves={data.leaves_of_absence} rule={data.leave_month_rule} />
 
-          {data.requirements_detail.length === 0 && optional.length === 0 ? (
+          {data.standing === 'not_current_member' ? (
+            <p className="text-theme-text-muted text-sm">
+              {data.standing_label || 'Not a Current Member'}: this person has left the department, so their training is
+              not graded against its requirements.
+            </p>
+          ) : data.requirements_detail.length === 0 && optional.length === 0 ? (
             <p className="text-theme-text-muted text-sm">No training requirements apply to this member.</p>
           ) : (
             <div className="space-y-3">

@@ -8,7 +8,7 @@ checkouts, maintenance, and reporting.
 import re
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 from uuid import UUID
 
 from fastapi import (
@@ -1767,9 +1767,48 @@ def _coerce_csv_row(
     return item_data, category_name_raw, row_errors, fatal
 
 
+# The identifiers the import keeps (barcodes are dropped and re-issued), with
+# the label create_item's uniqueness check uses for each.
+_IMPORT_UNIQUE_IDENTIFIERS = (
+    ("serial_number", "Serial number"),
+    ("asset_tag", "Asset tag"),
+)
+
+
+def _repeated_in_file(
+    item_data: Dict[str, Any], row_num: int, seen: Dict[str, int]
+) -> Optional[str]:
+    """The dry run's refusal of an identifier an earlier row of the file used.
+
+    Records this row's identifiers when it passes, so a later repeat is caught.
+    """
+    for column, label in _IMPORT_UNIQUE_IDENTIFIERS:
+        value = item_data.get(column)
+        if value and f"{column}:{value}" in seen:
+            first = seen[f"{column}:{value}"]
+            return f"{label} '{value}' is already used by row {first} of this file"
+    for column, _label in _IMPORT_UNIQUE_IDENTIFIERS:
+        value = item_data.get(column)
+        if value:
+            seen[f"{column}:{value}"] = row_num
+    return None
+
+
 @router.post("/items/import")
 async def import_items_csv(
     file: UploadFile = FastAPIFile(...),
+    # Annotated so the Python default is a real False: a caller that invokes
+    # this function directly (the import tests do) would otherwise receive the
+    # Query object, which is truthy, and silently run a dry run.
+    dry_run: Annotated[
+        bool,
+        Query(
+            description=(
+                "Check every row and return the same report without creating "
+                "anything, for the import preview."
+            ),
+        ),
+    ] = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
@@ -1781,6 +1820,15 @@ async def import_items_csv(
     The 'Barcode' column is intentionally excluded — barcodes are auto-generated.
     Categories are matched by name (case-insensitive); unmatched category names
     are reported as warnings but the row is still imported without a category.
+
+    With ``dry_run=true`` nothing is written: each row goes through the checks
+    ``create_item`` makes (``validate_new_item``) instead of being created, and
+    ``imported`` counts the rows that would import. The preview shows that
+    report, so a row the import will refuse is flagged before Import, not
+    after it (workflow review W43-5).
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
     """
     import csv
     import io
@@ -1875,6 +1923,12 @@ async def import_items_csv(
             detail="CSV file contains no data rows.",
         )
 
+    # A dry run writes nothing, so a serial number or asset tag repeated within
+    # the file never meets its first use in the database. The real import
+    # refuses the repeat, because the earlier row has been created by then; the
+    # dry run has to remember what the file already used to refuse it too.
+    seen_in_file: Dict[str, int] = {}
+
     for row_num, row in enumerate(rows, start=2):
         item_data, category_name_raw, row_errors, fatal = _coerce_csv_row(row, row_num)
         errors.extend(row_errors)
@@ -1926,6 +1980,21 @@ async def import_items_csv(
             failed += 1
             continue
 
+        if dry_run:
+            error = await service.validate_new_item(
+                current_user.organization_id, item_data
+            )
+            if not error:
+                error = _repeated_in_file(item_data, row_num, seen_in_file)
+            if error:
+                errors.append({"row": row_num, "error": error})
+                failed += 1
+            else:
+                imported += 1
+                if unmatched_key:
+                    unmatched_vendors.setdefault(unmatched_key, vendor_raw)
+            continue
+
         new_item, error = await service.create_item(
             organization_id=current_user.organization_id,
             item_data=item_data,
@@ -1945,7 +2014,7 @@ async def import_items_csv(
             if unmatched_key:
                 unmatched_vendors.setdefault(unmatched_key, vendor_raw)
 
-    if imported > 0:
+    if imported > 0 and not dry_run:
         await log_audit_event(
             db=db,
             event_type="inventory_items_imported",
@@ -1992,6 +2061,7 @@ async def import_items_csv(
         "total_rows": len(rows),
         "errors": errors[:50],
         "warnings": warnings[:50],
+        "dry_run": dry_run,
     }
 
 

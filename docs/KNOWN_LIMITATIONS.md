@@ -91,6 +91,27 @@ and the two fixes became two heads until #4560 joined them.
   is still one merge revision, per
   [Parallel branches and a single head](rules/migrations.md#parallel-branches-and-a-single-head).
 
+### Rejoined automatically (2026-11-23)
+
+When `main` forks anyway, the Rejoin Migration Heads workflow opens the merge
+revision as a pull request with auto-merge on, and starts CI on it; see
+[Parallel branches and a single head](rules/migrations.md#parallel-branches-and-a-single-head).
+What it depends on and leaves open:
+
+- **It needs "Allow GitHub Actions to create and approve pull requests"**
+  (Settings → Actions → General → Workflow permissions). Without it the
+  workflow pushes the branch but cannot open the pull request; the run fails
+  and says so, and the next push to `main` with the setting on opens it.
+- **Auto-merge needs "Allow auto-merge"** (Settings → General → Pull Requests).
+  Without it the pull request opens with a warning on the run and waits to be
+  merged by hand.
+- **The fork stands for one CI run.** Every database job on every other branch
+  fails until the rejoin merges, about the length of a full run.
+- **Its pull request is authored by `github-actions[bot]`**, and the
+  ruleset's automatic Copilot review applies to it like any other.
+- **A pull request closed by hand is not reopened.** The workflow warns on
+  each push to `main` until its branch is deleted, then opens a new one.
+
 ### What would reopen this
 
 - **A merge queue** tests each pull request on top of the ones queued ahead of
@@ -200,6 +221,7 @@ managed by the directory anyway), or let a fresh SSO sign-in count as step-up.
 The waiver emails and the template-CC fix (defect D1) follow the owner
 decisions of 2026-11-10. Where those left a gap, the conservative choice was
 taken; each is listed so the owner can confirm or reverse it.
+**Confirmed by the owner 2026-11-23:** the defaults below.
 
 - **A CC copy leaves out the category and the decider's note, not only the
   buttons and the reason.** The decision said a copy carries "no buttons and
@@ -239,7 +261,7 @@ taken; each is listed so the owner can confirm or reverse it.
   remain for the notices no template covers (a question, an answer, a moved
   session, an expiry).
 - **Which training notices a member cannot switch off** _(chosen
-  2026-11-21, owner may redirect)_. A training notice is sent under the
+  2026-11-21; confirmed by the owner 2026-11-23)_. A training notice is sent under the
   required _Changes to your training record_ kind when it changes how the
   member's attendance is graded: the expiry (the session counts as missed), a
   moved start (the approval is cleared and, unanswered, expires as a miss) and
@@ -352,7 +374,8 @@ The annual review can show a member's requests to be excused from training
 sessions and business meetings (`training.session_waivers_summary`,
 `training.session_waiver_history`, `meetings.waivers_summary`,
 `meetings.waiver_history`; see `docs/EVALUATIONS_MODULE.md`). Gaps the owner's
-decisions did not settle, each answered conservatively:
+decisions did not settle, each answered conservatively. **Confirmed by the
+owner 2026-11-23:** every answer below.
 
 - ~~**"Attachment on file" always reads no.**~~ **Resolved 2026-11-15:** the
   flag reads `attendance_waiver_attachments` now that attachments are on
@@ -363,10 +386,12 @@ decisions did not settle, each answered conservatively:
   Attachments are deleted `attachment_retention_days` after a request closes
   (a year by default), so an evaluation drafted after that reads no for a
   request that once had one.
-- **A voided request is listed, and counted only as voided.** Nothing voids a
-  request yet. When something does, the history shows the request and that it
-  was voided, and the summary counts it under `voided` rather than as approved
-  or denied, since a voided approval no longer counts toward the cap.
+- **A voided request is listed, and counted only as voided.** Cancelling or
+  deleting a session voids its pending requests
+  (`attendance_waiver_service.void_pending_for_events`, called from
+  `EventService`); an approved or denied request is kept. The history shows a
+  voided request and that it was voided, and the summary counts it under
+  `voided` rather than as approved or denied.
 - **Deciders are named by their current name**, or "a former member" when the
   account is gone, as the request screens name them. A decision log step
   carries no name snapshot.
@@ -379,7 +404,8 @@ decisions did not settle, each answered conservatively:
 
 The member, approver and settings screens for session waiver requests (the
 backend is #4225) made four conservative choices where the approved design left
-a gap. None blocks the feature; each is the owner's to revisit.
+a gap. None blocks the feature. **Confirmed by the owner 2026-11-23:** the
+choices below as built; who should see a department-wide backlog stays open.
 
 - **The hub count is the viewer's own queue, not the department's.** The
   Training Admin hub badges its Waiver Requests destination with the pending
@@ -389,12 +415,11 @@ a gap. None blocks the feature; each is the owner's to revisit.
   org-wide for every `training.manage` holder: a training manager who is not
   a routed approver would have been shown requests they cannot open. Adding a
   department-wide item means a backend change and a decision on who should see
-  it.
-- **No attachment setting yet.** The policy model forbids unknown keys and has
-  no attachment field, because nothing reads one (pitfall #19). The settings
-  panel says attachments arrive later instead of offering a switch. The
-  attachments work adds the field, the upload control in the request dialog and
-  the list on the decision page.
+  it; that decision is still open.
+- ~~**No attachment setting yet.**~~ **Superseded (#4243):** the policy now
+  has `attachment` and `attachment_retention_days`, the request dialog takes
+  documents and the decision page lists them; see "Training — Waiver Request
+  Documents: What Was Left Out".
 - **The overlap warning reads membership types only.** Saving a
   session-attendance requirement warns when another active one grades the same
   membership types (or both grade every type), the rule
@@ -932,6 +957,14 @@ the API does not enforce (a checklist step with no item, a statement with no
 text, a deduction with no points to come off) still hold the sheet back on
 Save, not only on Publish, as they did before; making them Publish-only would
 let a draft store steps that score nothing, and is the owner's to decide.
+
+**Rolled out further on 2026-11-23** (training batch E, part 2): the course
+library's Add / Edit Course, External Training's Add and Edit Provider, and
+Record Crew Training. The same rules apply. Adding a course or a provider and
+recording crew training create nothing until every flagged field is fixed;
+crew training now flags every open problem at once instead of one banner at a
+time. Editing a course or a provider saves the rest and keeps a refused field
+flagged. An edited provider's cleared description is now saved as cleared.
 
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
@@ -1683,6 +1716,11 @@ limitation:
   `training.manage` holder can no longer excuse their own training this way**;
   another officer must be given the permission, or the leave-request route
   used.
+  Owner confirmed 2026-11-23: no exception for a lone Chief. The Waivers
+  page now says so as soon as an officer picks themselves, links to Leave
+  Requests and keeps the form from submitting, and it offers no Edit on the
+  officer's own leave. Leave, overrides and training waivers share one check,
+  `is_own_grant` in `app/utils/separation_of_duties.py`.
 - ~~**An applicant's edited email or name and birth date can make a coordinator's
   self-access guard hide their file (ADV2-10).**~~ ✅ Resolved 2026-11-21
   (owner: trust only `transferred_user_id` once the applicant edits). An
@@ -1761,12 +1799,39 @@ limitation:
 | **Images run newer runtimes than CI tests** | ✅ Resolved (owner decision 2026-11-01: pin images to tested versions; built 2026-11-03) | `backend/Dockerfile` built on `python:3.14-slim` and `frontend/Dockerfile` on `node:26-alpine`, while every test job in `.github/workflows/ci.yml` runs on Python 3.13 and Node 22, so the suites never ran on the interpreter production used. **Resolved 2026-11-03:** the backend now builds on `python:3.13-slim` and both Node stages of the frontend on `node:22-alpine` (variants unchanged; tags, not digests, as before). The combined Unraid image (`docker/combined/Dockerfile`) is built on top of those two images rather than naming a runtime of its own, so it inherits the same versions. `tests/test_image_runtime_versions.py` reads the `setup-python` / `setup-node` versions out of every workflow and the `FROM` lines out of every Dockerfile and fails when they disagree, and also checks the `engines.node` floor in both `package.json` files names the same major — so the next bump has to move CI and the images together. `nginx:alpine` is not pinned: it runs no code the suites test. Tags float within a minor (`3.13-slim` takes each 3.13.x patch), which is the precision CI itself uses.                                                                                                                             |
 | **No nested `frontend/package-lock.json`**  | ✅ Resolved (2026-08-05)                                                                 | The repo is npm **workspaces** (`workspaces: [backend, frontend]`), so the root `package-lock.json` is the only lockfile `npm ci` reads, and `frontend/Dockerfile` copies just `package.json` and runs `npm install`. A stale nested lock had survived since PR #1071, pinning axios 1.13.6 / form-data 4.0.5 / @remix-run/router 1.23.0 while the root lock carried the patched axios 1.19.0 and form-data 4.0.6. Nothing installed from it — but Trivy scans every lockfile it finds, so it reported 12 HIGH advisories against dependency versions the build does not use. Deleted. Do not re-add a per-workspace lockfile; run `npm install` from the repo root.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
+## Compliance Consistency — Defaults Taken (2026-11-23)
+
+Five screens that disagreed with the shared grader now report what it decided
+(CLAUDE.md pitfall 29). Where the fix needed a choice, the conservative one was
+taken; each can be revisited.
+
+- **Former members are not graded.** The profile card and the training
+  officer's member view report "Not a Current Member" for anyone whose account
+  status is not current (`ACTIVE_ACCOUNT_STATUSES`, pitfall 32) or who is
+  deleted, checked before the compliance exemption. A status of `leave` or
+  `suspended` counts as not current, because the compliance matrix leaves those
+  members out too. The officer view returns no requirement list for them; the
+  member's training records are unchanged and still listed.
+- **Shift Compliance hours count finalized shifts only.** Shift-credited HOURS
+  rows are now graded by the shared grader over the requirement's compliance
+  window, with training waivers, like the SHIFTS rows. Their hours follow the
+  SHIFTS rows' rule: attendance on a shift not yet finalized stops counting
+  until an officer finalizes it. Counted external shifts and approved pre-shift
+  work on finalized shifts still count.
+- **The monthly average weights a partly excused month.** Each month counts for
+  its unexcused share (`1 - waived_share`), so a half-excused month is half a
+  month with all of its hours. Hours earned in such a month cannot be split by
+  the day, so all of them count against the active half, which can read
+  slightly high. A wholly excused month and its hours are still left out.
+- **The dashboard percentage has one decimal**, the Admin hub's figure
+  (`OrgComplianceTally.pct`).
+
 ## Training Module
 
 | Item                                                                                    | Status                                                                            | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **A requirement cannot name one policy acknowledgment**                                 | ✅ Resolved (2026-10-07, owner decision: map provider courses to library courses) | A requirement graded only by training type (`training_compliance.py`) is still met by **any** record of that type. A particular policy is now required by mapping its Target Solutions Course ID to a library course (`external_course_mappings`) and linking a COURSES requirement to that course; imports set `TrainingRecord.course_id` from the mapping. Every version of a course maps to the same library course, so a reissued course never needs the requirement edited. **Residual, accepted:** members who complete a new version read as not current until an officer maps it. Training officers are emailed when a new course resembles a library course, and mapping it backfills the records already imported. See [16-integrations.md](./training/16-integrations.md). |
-| **Requirement grandfathering reads a missing hire date as the account's creation date** | Accepted (owner to note, 2026-10-03)                                              | A requirement's `new_member_cutoff_date` separates existing members from new ones by join date: `hire_date`, else the UTC date the account was created (`training_compliance.member_join_date`). A roster imported into The Logbook without hire dates therefore reads every imported member as having joined on the import day. If that day falls on or after a cutoff, veterans are graded as new members. Before relying on a cutoff, record hire dates for the existing roster, or choose a cutoff earlier than the import. Members already enrolled in a training program are governed separately, by the per-program `apply_to_current_enrollments` choice made when a requirement is added to it.                                                                              |
+| **Requirement grandfathering reads a missing hire date as the account's creation date** | Accepted (owner to note, 2026-10-03; confirmed by the owner 2026-11-23)           | A requirement's `new_member_cutoff_date` separates existing members from new ones by join date: `hire_date`, else the UTC date the account was created (`training_compliance.member_join_date`). A roster imported into The Logbook without hire dates therefore reads every imported member as having joined on the import day. If that day falls on or after a cutoff, veterans are graded as new members. Before relying on a cutoff, record hire dates for the existing roster, or choose a cutoff earlier than the import. Members already enrolled in a training program are governed separately, by the per-program `apply_to_current_enrollments` choice made when a requirement is added to it.                                                                              |
 
 ## Outreach — Vocabulary and Community Risk Reduction Direction (Owner Decisions, 2026-11-21)
 
@@ -1826,20 +1891,14 @@ Decided for later phases, not yet built:
   stored switch).
 - **CRR goals** — yearly targets per measure.
 
-## Outreach Events — What the 2026-11-20 Changes Do Not Cover Yet
+## Outreach Events — Edges Left by the 2026-11-20 Changes (All Closed)
 
 The owner decisions of 2026-11-20 (staff-entered requests, calendar-date
-preferences, event signup sheets, volunteer RSVPs, close-out) left these edges
-for a later decision rather than guessing at them:
-
-- **A seat moved by a shift swap does not update the event's RSVPs.** Volunteer
-  RSVPs follow a seat that is created, edited, declined or removed through
-  `SchedulingService`; a swap trades the seat on another path. The next seat
-  change on the sheet settles the RSVPs again, because the sync compares the
-  whole sheet each time.
-- **An event's own signup sheet has no "Email the membership" call.** A
-  request's sheet does (`send_volunteer_call`, which is written around a
-  request's details). Members find an event's sheet on Open Shifts.
+preferences, event signup sheets, volunteer RSVPs, close-out) left four edges
+for a later decision rather than guessing at them: a series cancel left its
+sheets on the schedule, volunteer RSVPs counted against `max_attendees`, a
+shift swap did not move a volunteer's RSVP, and an event's own sheet could not
+email the membership. Each was closed as follows.
 
 Closed on 2026-11-21: a series cancel or delete now stands down every
 occurrence's own sheet, as a single cancel or delete does; and a volunteer's
@@ -1847,6 +1906,15 @@ RSVP is marked `is_volunteer` and takes no attendee seat (owner decision,
 2026-11-21 — crew, not audience; the sheet's role counts cap the crew). Guests
 a volunteer brings still take seats, and must fit when added, because a
 volunteer is never waitlisted off the crew list.
+
+Closed on 2026-11-22: a seat traded by a shift swap — an officer-approved
+exchange or move, an accepted offer, or a picked-up open swap — now moves the
+going RSVP with it, as any other seat change does; and an event's own signup
+sheet can email the membership for help, the same email a request's sheet
+sends, with the time of the last send recorded on the event
+(`events.volunteer_call_sent_at`).
+
+Every edge this section listed is now closed.
 
 ## Outreach Requests — Two Deliberate Choices in the Public Pipeline (2026-09-09)
 
@@ -3466,7 +3534,7 @@ reader has to know to ask about.
 | **No formal "active/in-progress" shift state**                         | Accepted                                                                     | `ShiftStatus` is `scheduled`/`cancelled` only; a shift's "activeness" is implied by `start_time`/`end_time` vs. now, and `is_finalized` marks closed. The live readiness panel (2026-07-16) covers most of the operational need without a dedicated state.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Count-only call tracking: no cross-unit attach picker**              | ✅ Resolved (2026-10-05, owner decision: build the picker)                   | The close-out wizard's step 2 now lists **Already logged by another unit** — calls another unit recorded while the shift was on, matched by overlapping shift times — and a tick sends `attach_call_ids`, an untick `detach_call_ids` (new; removes only this shift's response, and refuses a call no other unit is on). `attachable_calls` is served from `CallTrackingService.list_attachable_calls` for an unfinalized count-only shift, with `unit_labels` and `attached`. The call-volume report's count-only branch now serves `counts_unit_responses: false` and reads **Total Calls**. What remains is a matter of practice, not code: a second unit that types the incident into its own count instead of ticking it still records a second call, and nothing can match the two afterwards. (SCHED-10)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **`dispatch` / `derived` call sources have no writer**                 | Accepted (forward compatibility)                                             | `CallSource.DISPATCH` / `.DERIVED` and the `uq_org_call_external_ref (organization_id, external_ref)` constraint exist so a CAD integration can be added without a migration — the constraint is what would make a re-sync idempotent. Nothing writes either value today; every row is `manual`. (SCHED-12)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **A program-owned SHIFTS requirement counts shift reports**            | Open (needs product decision)                                                | A SHIFTS requirement created inside a training program (`ProgramRequirement.owns_requirement`) applies to nobody on the compliance screens; only the program's `RequirementProgress` ledger grades it, adding one per shift completion report an officer files for the trainee (`shift_completion_service._update_requirement_progress`). It therefore still counts shift reports, not `ShiftAttendance`. Moving it to attendance would drop the officer's "this shift counts toward the program" step and needs a start date (enrollment, or the requirement's own window), which the shifts-three-sources decision did not settle.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **A program-owned SHIFTS requirement counts shift reports**            | Accepted by the owner (2026-11-01: leave as is)                              | A SHIFTS requirement created inside a training program (`ProgramRequirement.owns_requirement`) applies to nobody on the compliance screens; only the program's `RequirementProgress` ledger grades it, adding one per shift completion report an officer files for the trainee (`shift_completion_service._update_requirement_progress`). It therefore still counts shift reports, not `ShiftAttendance`. Moving it to attendance would drop the officer's "this shift counts toward the program" step and needs a start date (enrollment, or the requirement's own window), which the shifts-three-sources decision did not settle. **Accepted by the owner (2026-11-01):** leave as is — a program-owned SHIFTS requirement keeps counting officer-filed shift reports (see "Owner Decisions of 2026-11-01").                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **`member_call_counts` / `reported_call_types` have no list/dict cap** | ✅ Resolved (2026-11-04, owner decision of 2026-11-01: cap at 100 / 200)     | `ShiftFinalizeRequest.member_call_counts` (a list) and `.reported_call_types` (a dict keyed by call type) take an authenticated `scheduling.manage`/shift-officer submission with no size bound, unlike the sibling `attach_call_ids`/`detach_call_ids` fields, which were capped at 200 (matching `CallTrackingService.MAX_ATTACHABLE_CALLS`) by security review SCH-15 pass 8's addendum (2026-10-15, SCH-18). Each entry costs a per-member/per-type lookup, so an oversized submission is a cost multiplier on one request — abuse-resistance, not a data-isolation gap. `responding_members`'s existing 100-entry cap is a plausible precedent for the list; the dict has no clean existing ceiling since the call-type vocabulary itself is unbounded in org settings.. **Built:** `member_call_counts` takes at most 100 entries (`MAX_MEMBER_CALL_CREDITS`, matching `responding_members`) and `reported_call_types` at most 200 keys (`MAX_REPORTED_CALL_TYPES`) on both `ShiftFinalizeRequest` and `CloseoutCallsRequest`; an oversized request is a 422 naming the field and the limit. Request schemas only, so stored close-outs are read as before. The close-out wizard sends every member while the crew fits under 100 and, above that, only the members credited below the apparatus count (the server credits anyone omitted with that count); more than 100 adjusted members is refused on screen with the reason. (SCH-19)                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ### Shifts With Other Departments — Counted on Entry (2026-09-27)
@@ -3641,7 +3709,7 @@ Per-module docs under `docs/module-audit/` carry the full lower-severity list.
 | **Security/IP: global country-block table + geo fail-open**                                                                                                                     | ✅ Resolved                                                                                                                             | Geo-blocking is a platform-edge control (enforced before any tenant/auth context, against one shared MaxMind DB + one global blocked-country set), so per-org `CountryBlockRule` rows don't fit the enforcement model. Instead: (1) `GEOIP_FAIL_CLOSED` (default False) makes `is_ip_blocked` block any IP whose country can't be resolved — including the missing/corrupt-DB case — closing the "silently disabled app-wide" hole; private/reserved IPs are still allowed first, so an internal operator can recover (correction 2026-08-27: allowlisted IPs are no longer part of that recovery path; resolved 2026-10-05 by a dedicated per-IP allowlist lookup kept separate from this recovery path — see `docs/security-review/SEC2-28-security-audit-ip.md` → SEC2-28-5). (2) The two mutating country-rule endpoints are gated by `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` (default False), so an org admin can no longer alter the shared cross-tenant blocklist via the API — the operator sets it at deploy time via `BLOCKED_COUNTRIES`. The non-destructive audit-chain ops (`/checkpoint`, read-only `/integrity`) remain on `audit.export`/`audit.view`. (SEC-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **Security monitoring: anonymous brute-force alerts on a multi-organization install have no viewer**                                                                            | Open — needs a platform-operator design (narrowed 2026-10-05)                                                                           | The rest of this item is resolved (owner decision SEC2-28-alerts, "build UI + backend fixes"): `/admin/security-alerts` lists, acknowledges and resolves alerts with an attributed audit trail; the exfiltration check sizes exports from the bytes sent rather than a `Content-Length` header and matches parameterized export routes; every export is logged (route, size, member, IP — never the content or query string) and listed under `GET /security/download-activity`; and a failed sign-in against a known account now attributes its brute-force alert to that account's department, while a single-organization install attributes every tenant-less alert to its one department. **What remains:** on an installation hosting **more than one** organization, a brute-force alert against an _unknown_ username belongs to no tenant and is stored with `organization_id = NULL`, which no org-scoped view returns. Showing it needs a decision on who may see login-page activity that is not their department's — a platform-operator role, which this codebase does not have — and that is not inferred here. See `docs/security-review/SEC2-28-security-audit-ip.md` → SEC2-28-7.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **Security/Audit: the hash chain had no write-concurrency control — two simultaneous audit-log writes forked the chain, and `verify_integrity` reported the fork as tampering** | ✅ Resolved (2026-10-12, owner decision: rows stay in the caller's transaction; a separate sealer orders and hashes them)               | **Was:** `AuditLogger.create_log_entry` read the chain's last row (for the new row's `previous_hash`) with a plain, non-locking `SELECT`, inside the caller's transaction. Two writers on two sessions read the same last row and wrote the same `previous_hash` (100% reproduction on a fresh chain); `verify_integrity` then reported `"Chain broken"` and `get_security_status` raised a `LOG_TAMPERING` CRITICAL alert. Reachable unauthenticated through `IPBlockingMiddleware._log_blocked_attempt`, which writes an audit row on its own session for every blocked request. **Now:** the write and the chain are separate steps. `create_log_entry` inserts the row in the caller's transaction exactly as before — a rolled-back action leaves no row, and a caller that aborts when the audit write fails keeps that guarantee — but with `chain_seq`, `previous_hash`, `current_hash`, `hash_version` and `signing_key_id` all NULL. `AuditLogger.seal_pending`, in its own short transaction, locks the single `audit_chain_head` row (`SELECT ... FOR UPDATE`), seals the committed unsealed rows in id order (position, previous hash, HMAC under the existing v4 scheme, key id), advances the head and commits. Two sealers serialize on that row and cannot fork; no lock is taken inside a caller's transaction. Migration `bcd688674099` adds `audit_logs.chain_seq` (unique; backfilled to `id`, the old chain order), makes the two hash columns nullable and creates `audit_chain_head`, seeded from the current tail so existing chains continue without a break. **When the sealer runs:** every commit that carried audit rows starts it in the background (a `Session` `after_commit` hook; one in-flight sealer per process, so a burst of blocked requests cannot open a connection per row), at startup before the integrity check, and from the `audit_chain_seal` scheduled task every minute as the backstop for anything those missed (a worker that exited first, a failed attempt). **Chain order is `chain_seq`, not id:** a transaction that inserts early and commits late is sealed after rows with higher ids. `verify_integrity` and `rehash_chain` walk by `chain_seq`; off-host shipping (SEC2-28-9) ships only sealed rows, in chain order, and its watermark (`audit_ship_state.last_shipped_id`, kept under its old name) now holds a chain position — equal to the id for every row sealed before the change; batches also carry `X-Logbook-First-Seq`/`Last-Seq`; retention purges only at a checkpoint boundary that is a clean prefix of the chain, and checkpoints refuse a range containing an unsealed row. **Left open, by design:** a row is unsealed between its commit and the seal — normally milliseconds, at worst until the next scheduled run (about a minute) if the after-commit seal failed. In that window it is not verified, not shipped and not checkpointable; `verify_integrity` reports it in `pending_seal` instead of as tampering, so a non-zero count that persists past a minute means the sealer is failing, not that the log was altered. The downgrade refuses while any row is unsealed, and after it the previous code verifies in id order, so a row that was sealed out of id order reads as a broken link until re-upgraded. Tests: `tests/test_audit_chain_sealing.py`. See `docs/security-review/SEC2-28-security-audit-ip.md` → SEC2-28-10. |
-| **Compliance: reporting correctness & email abuse-surface polish**                                                                                                              | Partially resolved (LOW/MED)                                                                                                            | **Fixed:** the report email HTML now `html.escape`s the org name, `report_type`, and period label (was raw interpolation of user-controlled values — mail-client HTML/script injection); `report_type` is constrained to `monthly`/`annual` (was free-form, persisted + interpolated). **Still flagged:** report emailing accepts client-supplied recipients (external auditors are a legitimate case — **owner decision 2026-08-09: allow any recipient, but audit-log each send to a non-member address**; `_email_report` now calls `audit_external_recipients`, which writes an `external_recipient_send` audit event listing every out-of-org address); attestation history over-fetch is **resolved** — this row previously said it was still blocked on a deferred `audit_logs.organization_id` column; that column was added and the query updated on 2026-07-30 (`d07a51821`, "Add organization_id to the audit log with org-scoped reads"), and `get_attestation_history` (`compliance_officer_service.py`) has filtered `AuditLog.organization_id == str(organization_id)` directly in the query — not a global fetch with Python-side filtering — since before this row's own last edit; corrected here during the CMP-20 security-review pass 8 re-verification (2026-10-16); `records_with_certification` mislabel left as-is (ambiguous intent). (CS-9)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Compliance: reporting correctness & email abuse-surface polish**                                                                                                              | Partially resolved (LOW/MED)                                                                                                            | **Fixed:** the report email HTML now `html.escape`s the org name, `report_type`, and period label (was raw interpolation of user-controlled values — mail-client HTML/script injection); `report_type` is constrained to `monthly`/`annual` (was free-form, persisted + interpolated). **Still flagged:** report emailing accepts client-supplied recipients (external auditors are a legitimate case — **owner decision 2026-08-09: allow any recipient, but audit-log each send to a non-member address**; `_email_report` now calls `audit_external_recipients`, which writes an `external_recipient_send` audit event listing every out-of-org address); attestation history over-fetch is **resolved** — this row previously said it was still blocked on a deferred `audit_logs.organization_id` column; that column was added and the query updated on 2026-07-30 (`d07a51821`, "Add organization_id to the audit log with org-scoped reads"), and `get_attestation_history` (`compliance_officer_service.py`) has filtered `AuditLog.organization_id == str(organization_id)` directly in the query — not a global fetch with Python-side filtering — since before this row's own last edit; corrected here during the CMP-20 security-review pass 8 re-verification (2026-10-16); `records_with_certification` mislabel **resolved 2026-11-23**: the key is now `records_with_course_name`, the count it always was; certification numbers are not counted (an API change for any JSON reader of the old key). (CS-9)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **Compliance: "notify non-compliant members" / reminder-days settings were stored but never sent**                                                                              | ✅ Resolved 2026-10-11 (owner decision: build the daily email task — settings work as configured, email-first)                          | **Resolved per the owner's decision.** The daily `compliance_member_notices` scheduled task (`app/services/compliance_member_notices.py`, registered in `TASK_RUNNERS`/`TASK_INTERVALS_SECONDS`) reads both settings, each on its own: `notify_days_before_deadline` emails a member a reminder for each unmet requirement whose deadline (the end of its current compliance window, or the member's catch-up deadline) is that many days away — the most urgent begun window, so a missed run still sends; `notify_non_compliant_members` emails a member whose standing is `non_compliant` a notice listing what is unmet. Members are graded by the shared evaluator (`training_compliance.grade_org_members`, the same rules as `compute_org_compliance_tally`), so the emails agree with the dashboard and matrix. Email only (`EmailKind.TRAINING_REMINDERS`, honouring a member's opt-out unless the department requires it); idempotent through email-channel `NotificationLog` rows keyed by (requirement, deadline, offset) and by the unmet (requirement, window) set. The panel's "Not yet active" warning is gone. **Behaviour to know on upgrade:** a department whose saved configuration holds the suggested `[30, 14, 7]` starts sending reminders on the first run; clearing the list stops them. **Not changed:** `grace_period_days` is still not consulted by any grading (outside this decision; the configuration page says so). Tests: `tests/test_compliance_member_notices.py`. (CMP2-1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Finance: no separation of duties on terminal money movement**                                                                                                                 | ✅ Resolved (owner decision: same-person guard, no new role)                                                                            | **Resolved 2026-10-11 per the owner's decision — guard the same person on every disbursement, add no new role.** The request **approval step** calls the shared `assert_different_person` guard, so one person cannot both raise a purchase/check request and approve it. `mark_pr_paid`, `mark_expense_paid`, `issue_check` and `waive_dues` each compare the actor against the request's `requested_by` / the expense's `submitted_by` / the dues member and refuse on a match. **`record_dues_payment` now does the same** (`recorded_by` vs `dues.user_id`, refused before the ledger is touched), matching its storefront analogue `record_payment` and its sibling `waive_dues` on the same record — the gap OPS-8 recorded. `void_check` and `unwaive_dues` take no actor and are reversals that move money _away_ from the actor, so they are correctly unguarded. **Accepted, by decision:** there is no distinct `finance.disburse` permission, so this is self-dealing prevention rather than three-way separation — a `finance.manage` holder can still execute an already-approved payment that somebody else raised. The owner chose this over a new role because a small department would need a second holder of it. A treasurer paying their own dues must have another `finance.manage` holder record it. Tests: `tests/test_dues_payment_guards.py::TestRecordingYourOwnDuesIsRefused`, `tests/test_money_separation_of_duties.py`. (FIN-4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **Finance: dues administration has no UI — every write is API-only**                                                                                                            | ✅ Resolved (owner decision, 2026-10-11)                                                                                                | _Resolved 2026-10-11 (owner: "build it — documented click-paths become real")._ **Finance › Dues** now carries, for a `finance.manage` holder: **New schedule** / **Edit schedule** (`DuesScheduleDialog`), **Generate dues** behind a confirmation, **Record payment** (`DuesPaymentDialog`, amount prefilled with what is owed), **Waive** and **Reverse waiver** (reason required, `PromptDialog`), and a **Payment history** dialog over `GET /finance/dues/{id}/payments` for every reader. `GET /finance/dues` now sends each row's `memberName`, so the list names members instead of showing a user id. ~~**Still open:** the schedule form offers only name, amount, frequency, due date, notes and active, because nothing reads the stored grace period, late fee, fiscal year or membership types (pitfall #19) — generation bills every active member and no late fee is ever charged; the payment history does not show who recorded each payment (the id is stored, the name is not sent).~~ **✅ Resolved (owner decisions 2026-11-01: "Show the name" and "Build them"; built 2026-11-06).** The payment history names who recorded each payment (`recordedByName` on `GET /finance/dues/{id}/payments`; "a former member" when that account is gone). The schedule form offers the grace period, late fee, fiscal year and membership types, and all four now apply (`app/services/dues_terms.py`): generation bills only members whose membership standing is a listed tier (none listed bills everyone, as before; matched by `member_holds_tier`, the rule an event's "mandatory for" list uses), a due date outside the schedule's fiscal year is refused on save, and generation is refused once that year is closing or locked; the daily `dues_late_fees` task adds the late fee to `amount_due` once, recording it in `late_fee_applied`, on dues still owing after the due date plus the grace period. It is a stored charge, not an on-read rule, so every screen, export and report that totals `amount_due` already includes it; its UPDATE requires `late_fee_applied IS NULL`, so a second or concurrent run charges nothing (pitfall #36). **Existing schedules behave as before until saved:** the new `dues_schedules.terms_effective_at` is NULL for every schedule that existed at upgrade, and such a schedule keeps billing every active member and charging no fee whatever it stores (a late fee or membership list written through the API before now did nothing, and still does not). Saving it from the form sets it — the form says so first — and a fee is charged only where the grace period ends after that instant, so turning terms on never charges for lateness that already happened. A fee already charged is not re-priced when the schedule's fee changes. Tests: `tests/test_dues_terms_and_reminders.py`, `duesTerms.test.tsx`. See `docs/training/11-finance.md`, "Dues & Assessments".                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -5707,8 +5775,10 @@ owner.
 
 Still open, each the owner's call:
 
-- The member response still carries the cohort's `notes` and creator ids.
-  They are not displayed, but they are sent.
+- The member response still carries the cohort's creator id
+  (`created_by`). It is not displayed, but it is sent. The cohort's `notes`
+  are no longer sent to a roster member (stripped 2026-11-04,
+  `course_cohorts.py`): they are the training officers' own remarks.
 - `is_roster_member` admits a withdrawn member, while `/mine` lists only
   active ones.
 - A `training.view_all` holder without `training.manage` sees the member view
@@ -7365,15 +7435,16 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   the training-enhancements module, the `competency_matrices` table and its
   endpoints, are a different feature and are unchanged. Test:
   `tests/test_competency_matrix_endpoint_retired.py`.
-- **Profiles: admin hours choose their own profile — open, owner question
-  2026-11-21.** A member's admin-hours targets come from the highest-priority
-  matching profile that _carries_ admin hours (ties now resolved as grading
-  resolves them), not from the profile that grades their training. A member
-  whose grading profile has no admin hours therefore takes targets from a
-  lower-priority profile. `admin_hours_service.get_user_hours_compliance` also
-  matches profiles with its own rules, which lack grading's "junior" chip
-  handling. Whether admin hours should follow the grading profile is not
-  decided.
+- **Profiles: admin hours follow the grading profile — ✅ resolved (owner
+  decision 2026-11-23).** A member's admin-hours targets come from the profile
+  that grades their training, when it sets admin hours; when it sets none, from
+  the highest-priority matching profile that does, the rule that held before.
+  `training_compliance.admin_hours_profile` is the one resolver, built on the
+  same `matching_profiles` list grading takes its profile from, so the
+  tie-break and the "junior" chip are grading's own. A junior member under a
+  "junior" profile used to take targets from the profile matching their legacy
+  "probationary" type instead. Tests:
+  `tests/test_admin_hours_follow_grading_profile.py`.
 - **The compliance exports grade Met / Not Met from the report period's
   records only — fixed (owner decision 2026-11-21: status as of today).**
   Confirmed by running before the fix: a certification completed on 1 March
@@ -8782,6 +8853,15 @@ fails loudly rather than double-booking. The same residual exists for the
 store's per-department lock, and for program enrollment, which takes the same
 kind of lock (scope `program_enrollment`) around its duplicate check.
 
+**Series edits (2026-11-23).** A "this and all future events" edit that moves
+the times or changes the room now checks each moved occurrence at its new slot
+and refuses the save, naming the clashing bookings. It ignores the occurrences
+it is moving, since they vacate their old slots. **Default taken:** earlier
+occurrences of the same series, which the edit does not move, still count as
+bookings, so a shift that lands a moved occurrence on an earlier one is refused. An
+edit that moves no occurrence is not refused over a clash already there
+(`tests/test_event_series_room_overlap.py`).
+
 ## Prospects — Seven Drawer Fields Have Readers and No Producer (2026-09-24, resolved 2026-09-24)
 
 Found by the mapper sweep that followed the `election_title` fix (see below).
@@ -8991,7 +9071,8 @@ rolling series and a duplicate keep their session and links; and
 itself followed on 2026-11-11: see "Training — One Form for Training Events,
 the Form" below.
 
-**Defaults assumed on the owner's "Yes" (2026-11-11), and what they cost:**
+**Defaults assumed on the owner's "Yes" (2026-11-11), and what they cost**
+(all three confirmed by the owner 2026-11-23)**:**
 
 - **A rolling series copies its latest occurrence, not its parent.** This
   fixed a "this and all future events" edit being lost: it never reached the
@@ -9463,7 +9544,10 @@ need an owner decision before anything is built.
 
 Five defects in training events and recurring series were fixed on
 2026-11-21 (owner approval of that date). Where the review left a choice, the
-conservative option was taken; each can be redirected:
+conservative option was taken; each can be redirected. **Confirmed by the
+owner 2026-11-23:** the fourth and fifth below. **Owner decision of
+2026-11-23** on the first and third: rolling series keep all-or-nothing time
+changes, and get no pause or resume for now.
 
 - **Cancelling a series' future ends the series.** "Only cancel future
   events" now sets the series' end date to the last kept occurrence and turns
@@ -11124,7 +11208,8 @@ was not among the questions the owner answered on 2026-11-01. Options:
 
 ## Training — Waiver Request Documents: What Was Left Out (2026-11-11)
 
-**Open, chosen conservatively; the owner may revisit any of these.** Documents
+**Open, chosen conservatively; the owner may revisit any of these.** Every
+item but the first was confirmed by the owner 2026-11-23. Documents
 on session waiver requests (PDF, JPEG, PNG or HEIC, 10 MB each, three per
 request, kept 365 days) shipped with these gaps, each the narrower choice:
 
@@ -11164,7 +11249,9 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
 
 The business-meeting waiver workflow (owner decisions, 2026-11-10) shares the
 training workflow's engine. Where the decisions left a gap, the conservative
-option was taken; each is open for the owner to revisit.
+option was taken; each is open for the owner to revisit. **Confirmed by the
+owner 2026-11-23:** every choice below except the first (cancelling or
+deleting an event) and the moved-start one.
 
 - **Cancelling or deleting an event closes only pending requests.** The brief
   asked for requests to be voided "as the training workflow does", but the
@@ -11186,10 +11273,13 @@ option was taken; each is open for the owner to revisit.
   wording stands, and the attendee row is not linked to the request. A
   Secretary's grant over a waiver an approval wrote replaces the standard text
   and drops the link, so the waiver is the Secretary's.
-- **The meeting screens are not built yet.** A decider's in-app prompt links
-  to `/meetings/waiver-requests/{id}`, which the frontend does not have until
-  the meeting screens land; the member's notice links to the event. Until then
-  the policy can be saved only through the API, so no prompt is sent.
+- ~~**The meeting screens are not built yet.**~~ **No longer true:** the
+  queue and decision page are at `/meetings/waiver-requests` and
+  `/meetings/waiver-requests/{id}` (the path a decider's in-app prompt links
+  to), and the policy is set at `/minutes/attendance/waiver-settings`
+  (`MeetingWaiverSettingsPage`, `meetings.manage`). The policy is off until a
+  department turns it on there; once it is on, deciders are prompted as in
+  training. The member's notice still links to the event.
 - **A moved start reopens a decided request, even when the move is a
   correction made after the session** _(corrected 2026-11-21; this line used
   to say postponing left requests alone, which stopped being true with the
@@ -11354,7 +11444,7 @@ submissions, training records and attendance waiver documents the delete
 cascades away. Both keep any file another row still names. What this leaves:
 
 **Choices made without a further owner ruling** (the conservative option in
-each case):
+each case; confirmed by the owner 2026-11-23):
 
 - ~~**Files uploaded to a training record itself survive anonymisation.**~~
   **Resolved 2026-11-20** (owner decision "Anonymise officer docs too"):
@@ -11386,7 +11476,8 @@ each case):
   on `pending_file_deletions`. **Kept, deliberately:** an event guest
   check-in that created the prospect (`event_external_attendees.prospect_id`, `SET NULL`)
   stays with the event's history, as it does when Purge removes an
-  application. Default taken without a further ruling; it holds the
+  application. Default taken without a further ruling, confirmed by the owner
+  2026-11-23; it holds the
   guest's name and contact details as the event recorded them.
 
 **Accepted residuals:**
@@ -11590,3 +11681,48 @@ ones; the list it opens includes lots already expired and applies the
 shelf rule. A lot that expired yesterday is in the list but not in the count.
 
 **The decision:** which rule both should use.
+
+## Facilities — Four Decisions From App Review B4 Pass 6 (2026-11-23)
+
+Recorded rather than changed. Details in `docs/app-review/facilities.md` →
+Pass 6.
+
+### FAC2-8 — Can a maintenance or inspection record move to another facility?
+
+The edit dialogs used to offer a Facility picker that the server ignored, so a
+"moved" record stayed where it was behind a success message. The picker now
+appears only on create. If records should be movable (a work order filed under
+the wrong station), the update schemas need `facility_id`, validated in-org and
+with the record's system re-checked against the new facility.
+
+### FAC2-11 — Which inspection is current, and what does a missed one look like?
+
+Each inspection keeps its own next-inspection date, and recording the next
+inspection does not retire the previous one's, so an inspection done early
+still counts as upcoming. Every dashboard window starts at today, so a date that
+passes without the work done disappears from the counts instead of showing as
+overdue. Compliance checklists cannot be completed from any screen, so they age
+out the same way.
+
+**The decision:** whether the newest inspection of a type supersedes earlier
+ones, whether missed dates should show as overdue, and whether compliance
+checklists get a completion flow.
+
+### FAC2-12 — Maintenance intervals and system test frequencies are stored, never read
+
+Maintenance types carry seeded intervals and systems carry a test frequency,
+and nothing schedules the next occurrence or reports a test as due. Completing
+a system's maintenance does not update the system's last-serviced date.
+
+**The decision:** build recurrence (and the due-test report), or label the
+fields as reference only.
+
+### FAC2-13 — Renaming or archiving a facility leaves its rooms' locations stale
+
+A room's linked Location is updated when the room changes, not when its
+facility does. A renamed facility's rooms keep the old building name and
+address, and an archived facility's rooms stay offered in the Events and
+Storage pickers.
+
+**The decision:** whether facility changes should carry through to room
+Locations, and whether archiving should deactivate them.
