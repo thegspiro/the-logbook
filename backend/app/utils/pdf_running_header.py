@@ -157,9 +157,10 @@ def banner_painter(banner: str) -> Callable[[Any, Any], None]:
 
 class HeadedDocTemplate(SimpleDocTemplate):
     """``SimpleDocTemplate`` with a :class:`RunningHeader` on pages 2 onward,
-    and an optional handling *banner* atop every page.
+    an optional handling *banner* atop every page, and an optional *overlay*
+    painted on every page after its content, so table fills cannot hide it.
 
-    With neither it behaves exactly as ``SimpleDocTemplate``.
+    With none of them it behaves exactly as ``SimpleDocTemplate``.
     """
 
     def __init__(
@@ -167,10 +168,12 @@ class HeadedDocTemplate(SimpleDocTemplate):
         filename: Any,
         running_header: Optional[RunningHeader] = None,
         banner: Optional[str] = None,
+        overlay: Optional[Callable[[Any], None]] = None,
         **kw: Any,
     ):
         self.running_header = running_header
         self.banner = (banner or "").strip()
+        self.overlay = overlay
         super().__init__(filename, **kw)
 
     def addPageTemplates(
@@ -188,7 +191,7 @@ class HeadedDocTemplate(SimpleDocTemplate):
             if isinstance(pageTemplates, (list, tuple))
             else [pageTemplates]
         )
-        if self.running_header is not None or self.banner:
+        if self.running_header is not None or self.banner or self.overlay:
             templates = [self._dressed(t) for t in templates]
         super().addPageTemplates(templates)
 
@@ -201,9 +204,14 @@ class HeadedDocTemplate(SimpleDocTemplate):
         if later and self.running_header is not None:
             painters.append(header_painter(self.running_header, band))
             band += HEADER_BAND
-        if not painters:
+        if not painters and self.overlay is None:
             return template
         footer = template.onPage
+        overlay = self.overlay
+
+        def on_page_end(canvas: Any, _doc: Any) -> None:
+            if overlay is not None:
+                overlay(canvas)
 
         def on_page(canvas: Any, doc: Any) -> None:
             for paint in painters:
@@ -218,5 +226,9 @@ class HeadedDocTemplate(SimpleDocTemplate):
             id="normal",
         )
         return PageTemplate(
-            id=template.id, frames=[frame], onPage=on_page, pagesize=self.pagesize
+            id=template.id,
+            frames=[frame],
+            onPage=on_page,
+            onPageEnd=on_page_end,
+            pagesize=self.pagesize,
         )

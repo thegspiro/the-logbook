@@ -128,6 +128,16 @@ Letter only, no duplex hint).
     markings are placed. `HeadedDocTemplate(banner=...)` shortens every page's
     frame by `BANNER_BAND` to make room, so the banner sits inside the margins.
   - `tests/test_pdf_provenance.py` checks all four across every document.
+- **Unapproved minutes are marked DRAFT** (owner decision, 2026-11-21). Draft,
+  submitted and rejected minutes, which are every status but approved, carry
+  a pale diagonal "DRAFT" across each page, because a printed copy cut off
+  from the screen that showed its status must still say so. Approved minutes
+  carry none. The mark is drawn **over** the content through
+  `HeadedDocTemplate(overlay=...)`, at 18% opacity, not beneath it: an
+  opaque table-row fill hides anything underneath, and the first attempt was
+  invisible on an attendance page for that reason. PDF/A-2b allows the
+  transparency, and veraPDF passes it. `tests/test_minutes_draft_watermark.py`
+  checks it.
 - **Documents leave scaling to the viewer.** A page shrunk to 97% by "Fit"
   is still readable.
 - **Label sheets and ID cards ask to print at actual size**

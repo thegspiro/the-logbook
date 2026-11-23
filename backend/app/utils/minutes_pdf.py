@@ -61,6 +61,12 @@ _HEADER_BG = colors.HexColor("#1f2937")
 _ROW_ALT = colors.HexColor("#f3f4f6")
 _GRID = colors.HexColor("#d1d5db")
 _MUTED = colors.HexColor("#6b7280")
+# Drawn over the page, because a table row's opaque fill would hide anything
+# beneath it, and translucent so every word still reads through it. PDF/A-2,
+# which these files claim, permits transparency; PDF/A-1 would not.
+_DRAFT_INK = colors.HexColor("#9ca3af")
+_DRAFT_ALPHA = 0.18
+_DRAFT_SIZE = 110
 
 _STATUS_LABELS = {
     "present": "Present",
@@ -287,6 +293,7 @@ def _layout(
             reference=meta.get("report_number"),
         ),
         banner=footer.get("confidentiality_notice"),
+        overlay=None if approval else _draw_draft_mark,
         # The canvas otherwise declares Helvetica, never embedded, on every page.
         initialFontName=BODY_FONT,
         pagesize=letter,
@@ -680,6 +687,26 @@ def _layout(
 
     doc.build(story, onFirstPage=_decorate, onLaterPages=_decorate)
     return buf.getvalue(), doc.page
+
+
+def _draw_draft_mark(canvas: Any) -> None:
+    """A pale diagonal "DRAFT" across the middle of the page.
+
+    Minutes that are not approved are not the record of the meeting (owner
+    decision 2026-11-21), and a printed copy separated from the screen that
+    showed its status must still say so.
+    """
+    width, height = letter
+    canvas.saveState()
+    canvas.setFillColor(_DRAFT_INK)
+    canvas.setFillAlpha(_DRAFT_ALPHA)
+    canvas.setFont(BOLD_FONT, _DRAFT_SIZE)
+    canvas.translate(width / 2, height / 2)
+    canvas.rotate(45)
+    # Centred on its own baseline, lifted by a third of the size so the
+    # letters, not the baseline, sit on the page's centre.
+    canvas.drawCentredString(0, -_DRAFT_SIZE / 3, "DRAFT")
+    canvas.restoreState()
 
 
 def render_minutes_pdf(
