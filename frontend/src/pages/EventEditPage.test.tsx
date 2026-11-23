@@ -2169,5 +2169,25 @@ describe('EventEditPage', () => {
       expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
       await waitFor(() => expect(screen.getByLabelText(/event type/i)).toHaveFocus());
     });
+
+    // Training Info opens on its defaults, and defaults attach no session
+    // (_plan_new_session): the hint promised the save would add details.
+    it('does not promise training details to an event switched to Training on its defaults', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(trainingSessionService.getSessionByEvent).mockResolvedValue(null);
+      vi.mocked(eventService.getVisibleEventTypesWithCategories).mockResolvedValue({
+        ...visibleTypesWith(),
+        visible_event_types: ['business_meeting', 'training'],
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await user.selectOptions(await screen.findByLabelText(/event type/i), 'training');
+
+      expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+      const picker = screen.getByLabelText(/event type/i);
+      expect(picker).toHaveAccessibleDescription(/saving adds training details only if you set some there/i);
+      expect(picker).toHaveAccessibleDescription(/credited under the event's title as Continuing Education/);
+    });
   });
 });
