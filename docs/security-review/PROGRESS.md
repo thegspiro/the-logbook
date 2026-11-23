@@ -16,6 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR TBD (branch `claude/security-review-frontend-shared`)**: Feature 34
+(Frontend shared), pass 16 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). PR #4580 (Feature 33, Core infrastructure, pass 15) had
+already merged (`c01ab8df1`, squash) before this iteration started; row 33
+marked ✅ above.
+
+Baseline: pass 15's merge `f30309984`. 1609 commits since then. Real delta:
+one stale `UNCACHEABLE_PREFIXES` entry removed (`/training/competency-matrix`,
+its backend route retired in the same window), two additive
+`UNCACHEABLE_PREFIXES`/`SUBSTRINGS` entries landed by other feature work
+(`/apparatus-events/`, `/staffing`) re-confirmed correct, two new barrel
+re-exports, two new `errorReporting.ts` redaction patterns, two new
+`errorHandling.ts` message helpers mirroring an existing pattern, an
+offline-sync version-conflict fix in `skillsTestingStore.ts`, and 12 new
+top-level `services`/`utils` files — all read in full. 24 new GET call sites
+on the cached global client traced individually against the denylist; all
+correctly covered or correctly left cacheable. One candidate finding
+(`/training/course-links/history` naming a staff member) traced to full
+coverage by the existing generic `/history` substring, pinned with a new
+regression test rather than a redundant denylist entry. **0 fixed, 0 new
+findings.** Full write-up: `docs/security-review/FE16-34-frontend-shared.md`.
+
+Row 34 → ✅ (pending this PR's merge). **Every row of the rotation is now
+✅** — per `PROGRESS.md`'s Step 1, the next iteration should say the
+rotation lap is complete and reset all 35 rows (00–34) to ⬜ for a fresh
+pass, rather than trusting this note; re-check `list_pull_requests` fresh
+first.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 15, PR #4580, merged), preserved for history</summary>
+
 **PR [#4580](https://github.com/thegspiro/the-logbook/pull/4580) (branch
 `claude/security-review-core-infra-p15`)**:
 Feature 33 (Core infrastructure), pass 15 — watchdog pickup (the dedicated
@@ -35,6 +67,8 @@ findings.** Full write-up: `docs/security-review/CI15-33-core-infra.md`.
 
 Row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend shared)
 — re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 14, PR #4576, merged), preserved for history</summary>
@@ -27540,7 +27574,7 @@ iteration's commit" rule.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                                                   | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                                                                                                          | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                                                                                                          | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
@@ -27601,6 +27635,59 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-23 — Feature 33 (Core infrastructure, pass 15) merged; Feature 34 (Frontend shared, pass 16): watchdog pickup, 0 fixed, 0 new findings
+
+PR #4580 merged as `c01ab8df1` (squash); row 33 marked ✅ above. A fresh
+`list_pull_requests` (state=open, head filter `claude/security-review-`)
+found zero results, confirming row 34 (Frontend shared) as the last pending
+feature.
+
+Baseline: pass 15's merge commit `f30309984`, found by searching the
+unshallowed history (the clone's default depth did not reach it; unshallowed
+per the standing Pitfall #24 risk note). `git diff f30309984..HEAD` against
+this feature's scope files (1609 commits) found real deltas in
+`services/api.ts` (barrel re-exports), `errorReporting.ts` (two additive
+redaction patterns), `apiCache.ts` (one stale entry removed for a retired
+backend route, two additive entries from other feature work re-confirmed
+correct), `errorHandling.ts` (two new message-formatting helpers mirroring
+an existing pattern) and `skillsTestingStore.ts` (an offline-sync
+version-conflict fix, read in full and confirmed it cannot let one
+examiner's save overwrite another's held work). 12 new top-level
+`services`/`utils` files, all read in full — 8 touch neither network nor
+storage.
+
+24 new GET call sites reaching the cached global client (out of 71 raw new
+`api.get` call sites repo-wide; the rest reach uncached per-module
+`createApiClient()` instances) were each traced to its backend response
+schema and checked against `UNCACHEABLE_PREFIXES`/`SUBSTRINGS`. All are
+either already covered by an existing prefix/substring or correctly left
+cacheable (no member-identifying field). One, `/training/course-links/history`
+(officer `linked_by_name`/`undone_by_name`), looked like a gap on first
+reading its schema — the response schema names no field in the backend
+ratchet's `PII_FIELDS` set, so the automated check is structurally blind to
+it, same class of blind spot `test_api_cache_pii_exclusions.py`'s own
+`PINNED_EXCLUSIONS` docstring describes — but tracing it further found the
+existing generic `/history` substring (added for an unrelated route) already
+covers it; verified directly with `isCacheable()` rather than assumed. Pinned
+with a new regression test in `apiCache.test.ts` (seen to pass immediately,
+confirming it documents already-correct behavior rather than a fix) instead
+of adding a redundant denylist entry.
+
+**0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/FE16-34-frontend-shared.md`.
+
+Completion gate: backend linters installed fresh at CI's pinned versions
+(`flake8==7.4.1`, `black==26.10.1`, `isort==9.0.2`) since this sandbox had
+none — all clean; `validate_migrations.py --strict` 821 revisions, single
+head; `npm run typecheck`/`npm run lint` both clean; scoped frontend suite
+(14 files) 448 passed.
+
+Row 34 → ✅ (pending this PR's merge). **Every row of the 35-row rotation
+(00–34) is now ✅** — the next iteration should say the lap is complete and
+reset all rows to ⬜ for a fresh pass, per `PROGRESS.md`'s Step 1, after
+re-confirming fresh against `list_pull_requests` rather than trusting this
+note.
 
 ### 2026-11-22 — Feature 32 (Locations & kiosk, pass 14) merged; Feature 33 (Core infrastructure, pass 15): watchdog pickup, 0 fixed, 0 new findings
 
