@@ -62,22 +62,14 @@ DEFAULT_ATTACHMENT_RETENTION_DAYS = 365
 MAX_ATTACHMENT_RETENTION_DAYS = 3650
 
 
-class AttendanceWaiverPolicy(BaseModel):
-    """How a department runs one waiver workflow.
+class AttendanceWaiverMemberPolicy(BaseModel):
+    """What a member's request form is built from: every field of
+    ``AttendanceWaiverPolicy`` but who decides.
 
-    ``cap`` None means no cap. ``approver_position_ids`` empty means requests
-    go straight to the fallback chain (for training the Chief, then training
-    managers; for business meetings the Secretary, then meetings managers).
-
-    ``attachment`` says whether a member may, or must, file a document with
-    the request. ``attachment_retention_days`` is how long the files are kept
-    after a request is closed; the retention task reads it whatever
-    ``attachment`` says now, so turning attachments off does not keep the
-    files already filed. A policy stored before these fields existed reads
-    them at their defaults: attachments off, a year's retention. Only the
-    training workflow takes documents today: the meeting workflow refuses a
-    policy that asks for them and reads a stored one as off
-    (``WorkflowSpec.takes_documents``).
+    ``GET .../policy`` serves this to anyone who does not manage the
+    workflow. The approver and copy-to positions and the Chief's alternate
+    name the officers a member would be asking, which the form never needs
+    (2026-11-20 review; owner, 2026-11-23).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -95,13 +87,6 @@ class AttendanceWaiverPolicy(BaseModel):
         ge=1,
         le=MAX_ATTACHMENT_RETENTION_DAYS,
     )
-    approver_position_ids: List[str] = Field(default_factory=list)
-    # Positions told of each final decision. Informed only: they cannot decide
-    # and are never shown the member's reason.
-    cc_position_ids: List[str] = Field(default_factory=list)
-    # The member who decides the Chief's own request when no one holds the
-    # President's office (and the President's when no one holds the Chief's).
-    chief_alternate_user_id: Optional[str] = Field(default=None, max_length=36)
 
     @field_validator("categories")
     @classmethod
@@ -127,6 +112,35 @@ class AttendanceWaiverPolicy(BaseModel):
             raise ValueError(f"At most {MAX_CATEGORIES} categories")
         return cleaned
 
+
+class AttendanceWaiverPolicy(AttendanceWaiverMemberPolicy):
+    """How a department runs one waiver workflow.
+
+    ``cap`` None means no cap. ``approver_position_ids`` empty means requests
+    go straight to the fallback chain (for training the Chief, then training
+    managers; for business meetings the Secretary, then meetings managers).
+
+    ``attachment`` says whether a member may, or must, file a document with
+    the request. ``attachment_retention_days`` is how long the files are kept
+    after a request is closed; the retention task reads it whatever
+    ``attachment`` says now, so turning attachments off does not keep the
+    files already filed. A policy stored before these fields existed reads
+    them at their defaults: attachments off, a year's retention. Only the
+    training workflow takes documents today: the meeting workflow refuses a
+    policy that asks for them and reads a stored one as off
+    (``WorkflowSpec.takes_documents``).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    approver_position_ids: List[str] = Field(default_factory=list)
+    # Positions told of each final decision. Informed only: they cannot decide
+    # and are never shown the member's reason.
+    cc_position_ids: List[str] = Field(default_factory=list)
+    # The member who decides the Chief's own request when no one holds the
+    # President's office (and the President's when no one holds the Chief's).
+    chief_alternate_user_id: Optional[str] = Field(default=None, max_length=36)
+
     @field_validator("approver_position_ids", "cc_position_ids")
     @classmethod
     def _clean_position_ids(cls, value: List[str]) -> List[str]:
@@ -147,6 +161,13 @@ class AttendanceWaiverPolicy(BaseModel):
         if self.category_required and not self.categories:
             raise ValueError("A category cannot be required when there are none")
         return self
+
+
+def member_policy(policy: AttendanceWaiverPolicy) -> AttendanceWaiverMemberPolicy:
+    """``policy`` without who decides, for a member's request form."""
+    return AttendanceWaiverMemberPolicy.model_validate(
+        policy.model_dump(include=set(AttendanceWaiverMemberPolicy.model_fields))
+    )
 
 
 def policy_from_settings(raw: Any) -> AttendanceWaiverPolicy:

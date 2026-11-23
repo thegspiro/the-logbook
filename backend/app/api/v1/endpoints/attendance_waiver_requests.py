@@ -40,7 +40,7 @@ someone who may decide it.
 """
 
 from contextlib import contextmanager
-from typing import Iterator, List, Optional
+from typing import Iterator, List, Optional, Union
 
 from fastapi import (
     APIRouter,
@@ -54,7 +54,11 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.attendance_waiver import (
@@ -69,6 +73,7 @@ from app.schemas.attendance_waiver import (
     AttendanceWaiverAttention,
     AttendanceWaiverDecision,
     AttendanceWaiverEligibilityResponse,
+    AttendanceWaiverMemberPolicy,
     AttendanceWaiverMessage,
     AttendanceWaiverOverride,
     AttendanceWaiverPolicy,
@@ -76,6 +81,7 @@ from app.schemas.attendance_waiver import (
     AttendanceWaiverRequestPage,
     AttendanceWaiverRequestResponse,
     AttendanceWaiverSubmit,
+    member_policy,
 )
 from app.services.attendance_waiver_attachments import (
     AttendanceWaiverAttachmentService,
@@ -118,7 +124,12 @@ async def _one(
     return AttendanceWaiverRequestResponse(**bodies[0])
 
 
-@router.get("/policy", response_model=AttendanceWaiverPolicy)
+@router.get(
+    "/policy",
+    # The member's shape first: a full policy fails it on the routing fields
+    # (extra="forbid") and falls through to AttendanceWaiverPolicy.
+    response_model=Union[AttendanceWaiverMemberPolicy, AttendanceWaiverPolicy],
+)
 async def get_attendance_waiver_policy(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -126,13 +137,18 @@ async def get_attendance_waiver_policy(
     """
     The department's policy for session waiver requests: whether members may
     ask, the deadline, the cap, the categories and how a reason is taken.
-    Every member reads it, because the request form is built from it.
+    Every member reads it, because the request form is built from it. Who
+    decides (the approver and copy-to positions, the Chief's alternate) is
+    included only for a training.manage holder, who edits it.
 
     **Authentication required**
     """
-    return await AttendanceWaiverService(db).get_policy(
+    policy = await AttendanceWaiverService(db).get_policy(
         str(current_user.organization_id)
     )
+    if user_has_permission(current_user, "training.manage"):
+        return policy
+    return member_policy(policy)
 
 
 @router.put("/policy", response_model=AttendanceWaiverPolicy)
