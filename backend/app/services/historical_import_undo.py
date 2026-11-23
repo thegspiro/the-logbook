@@ -48,6 +48,7 @@ from app.models.historical_import import (
     ImportedRecordKind,
     ImportedSourceRecord,
 )
+from app.models.pending_file_deletion import PendingDeletionReason
 from app.models.shift_history_import import (
     ShiftHistoryImport,
     ShiftHistoryImportStatus,
@@ -61,6 +62,11 @@ from app.models.training import (
     TrainingSession,
 )
 from app.models.user import User, UserStatus
+from app.services.file_storage_service import StorageArea
+from app.services.member_files import attachment_paths_by_area
+from app.services.pending_file_deletions import (
+    enqueue as enqueue_pending_file_deletions,
+)
 from app.services.qualification_service import QualificationService
 from app.services.user_deletion_service import (
     count_user_references,
@@ -921,6 +927,22 @@ class HistoricalImportUndoService:
                     verified_by=undone_by,
                 )
         regrade = {(str(r.user_id), str(r.course_id)) for r in records if r.course_id}
+        # An officer may have attached files to an imported record since the
+        # import. Queued in the undo's transaction; the hourly sweep removes
+        # each once it commits, keeping any another row still names.
+        orphaned: Dict[str, StorageArea] = {}
+        for r in records:
+            orphaned.update(
+                attachment_paths_by_area(
+                    r.attachments,
+                    org_id,
+                    StorageArea.SELF_REPORTS,
+                    StorageArea.TRAINING_RECORDS,
+                )
+            )
+        enqueue_pending_file_deletions(
+            self.db, org_id, orphaned, PendingDeletionReason.HISTORICAL_IMPORT_UNDONE
+        )
         removed = await self._delete_ids(TrainingRecord, org_id, ids)
         qualifications = QualificationService(self.db)
         for user_id, course_id in sorted(regrade):
@@ -990,6 +1012,18 @@ class HistoricalImportUndoService:
 
         self.waiver_notices.extend(
             await void_pending_for_events(self.db, org_id, event_ids, "deleted")
+        )
+        # Files attached to a drill's event since the import go with it.
+        events = await self._load(Event, org_id, event_ids)
+        orphaned: Dict[str, StorageArea] = {}
+        for event in events.values():
+            orphaned.update(
+                attachment_paths_by_area(
+                    event.attachments, org_id, StorageArea.EVENT_ATTACHMENTS
+                )
+            )
+        enqueue_pending_file_deletions(
+            self.db, org_id, orphaned, PendingDeletionReason.HISTORICAL_IMPORT_UNDONE
         )
         # The session and its requirement links cascade from the event.
         return await self._delete_ids(Event, org_id, event_ids)

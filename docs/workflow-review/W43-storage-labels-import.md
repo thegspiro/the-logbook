@@ -121,11 +121,23 @@ Covered by a new case in `ImportInventory.test.tsx`. Re-driven: Tab reached
 Covered by a new case, and the existing tests now find the toggles by the new
 names.
 
-### W43-5 — NIT — The import preview shows rows it will reject as if they were fine — OPEN
+### W43-5 — NIT — The import preview shows rows it will reject as if they were fine — ✅ FIXED
 
 The preview listed the nameless row, the unknown category and the −3 quantity
 without comment. The problems appear only after Import. Left: the server's
 report is complete, so this is earlier feedback, not missing feedback.
+**Fix:** the preview now shows the server's own report before Import.
+`POST /inventory/items/import?dry_run=true` runs every row through the same
+checks and returns the same report without creating anything. The rows the
+import would create go through `InventoryService.validate_new_item`, the checks
+`create_item` makes before it writes, now shared by both. A serial number or
+asset tag repeated within the file is refused too, since on the real import the
+earlier row exists by then. Under the preview the page says "1 of 3 rows will
+import", lists the rows that will be skipped and why, and lists the warnings
+(an unknown category). If the check cannot run, it says so, and Import works as
+before. Covered by `tests/test_inventory_import_dry_run.py` (the dry run's
+report matches the real import's, and writes nothing) and three cases in
+`ImportInventory.test.tsx`, all failing against the old code.
 
 ### W43-6 — NIT — Room pickers list the station itself as a room — OPEN
 
@@ -143,7 +155,7 @@ Both storage-area room pickers offer "Review Valley Fire Department" alongside
 | 5. Coming back to it    | ✅ areas and imports survive reload; fixed W43-2 (location lost after delete)    |
 | 6. On a phone           | ✅ refusals at 390×844                                                           |
 | 7. Everyone can use it  | Fixed W43-3 (import unusable without a mouse), W43-4                             |
-| 8. What happens around  | ✅ export neutralises formula cells; W43-5, W43-6 open                           |
+| 8. What happens around  | ✅ export neutralises formula cells; fixed W43-5; W43-6 open                     |
 
 ## Completion gate
 

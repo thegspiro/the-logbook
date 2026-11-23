@@ -145,3 +145,44 @@ describe('FacilitiesDashboard ?compliance=due', () => {
     expect(mockGetComplianceChecklists).not.toHaveBeenCalled();
   });
 });
+
+// FAC2-7: both "Upcoming inspections" links opened every inspection ever
+// recorded, while the card counts only those due in the next 30 days, the same
+// window the main dashboard's tile opens with ?dueWithin=30.
+describe('FacilitiesDashboard upcoming inspections', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useFacilitiesStore.setState({ facilities: [], facilitiesTotal: 0, dashboardStats: null, error: null });
+    useAuthStore.setState({
+      user: { permissions: ['facilities.view', 'facilities.manage'] } as never,
+      isAuthenticated: true,
+    });
+    mockGetFacilities.mockReset();
+    mockGetFacilities.mockResolvedValue([station]);
+    mockGetFacilitiesPage.mockReset();
+    mockGetFacilitiesPage.mockResolvedValue({ items: [station], total: 1, skip: 0, limit: 24 });
+    mockGetComplianceChecklists.mockReset();
+    mockGetComplianceChecklists.mockResolvedValue([]);
+    mockGetDashboard.mockReset();
+    mockGetDashboard.mockResolvedValue({
+      totalFacilities: 1,
+      operationalFacilities: 1,
+      overdueMaintenance: 0,
+      upcomingInspections: 1,
+      overdueMaintenanceRecords: [],
+      upcomingInspectionRecords: [],
+      recentMaintenanceCompletions: [],
+    });
+  });
+
+  afterEach(() => {
+    window.history.pushState({}, '', '/');
+  });
+
+  it('opens the inspections list on the same 30-day window it counts', async () => {
+    const user = userEvent.setup();
+    renderAt('/facilities');
+    await user.click(await screen.findByRole('button', { name: /Upcoming Inspections/ }));
+    expect(`${window.location.pathname}${window.location.search}`).toBe('/facilities/inspections?dueWithin=30');
+  });
+});

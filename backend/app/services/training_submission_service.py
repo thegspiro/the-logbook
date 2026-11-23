@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.constants import ROLE_TRAINING_OFFICER
 from app.core.utils import generate_uuid
 from app.models.notification import NotificationChannel, NotificationLog
+from app.models.pending_file_deletion import PendingDeletionReason
 from app.models.training import (
     SelfReportConfig,
     Shift,
@@ -32,7 +33,12 @@ from app.models.training import (
     TrainingType,
 )
 from app.models.user import Role, User, user_roles
+from app.services.file_storage_service import StorageArea
+from app.services.member_files import attachment_paths_by_area
 from app.services.notifications_service import NotificationsService
+from app.services.pending_file_deletions import (
+    enqueue as enqueue_pending_file_deletions,
+)
 from app.services.qualification_service import QualificationService
 from app.services.separation_of_duties import assert_different_person
 from app.utils.member_names import format_display_name
@@ -612,9 +618,24 @@ class TrainingSubmissionService:
         return submission
 
     async def delete_submission(
-        self, submission_id: str, user_id: str, organization_id: str
+        self,
+        submission_id: str,
+        user_id: str,
+        organization_id: str,
+        *,
+        queued: Optional[List[str]] = None,
     ) -> bool:
-        """Delete a submission (only if draft or pending)."""
+        """Delete a submission (only if draft or pending).
+
+        Its stored certificates are queued on ``pending_file_deletions`` in
+        the delete's own transaction, so a failure after the commit (the
+        prompt archiving below, a killed process) cannot leave them behind
+        with nothing recording them. The new rows' ids are appended to
+        *queued* for the caller to process straight away; the hourly sweep
+        finishes whatever it does not. A deletable submission can still
+        share its files (``reverse_approval`` leaves a voided record naming
+        them), and the processing keeps any file another row still names.
+        """
         submission = await self.get_submission(
             submission_id, organization_id, for_update=True
         )
@@ -635,8 +656,18 @@ class TrainingSubmissionService:
                 "Cannot delete a submission that has been approved or rejected"
             )
 
+        ids = enqueue_pending_file_deletions(
+            self.db,
+            str(organization_id),
+            attachment_paths_by_area(
+                submission.attachments, organization_id, StorageArea.SELF_REPORTS
+            ),
+            PendingDeletionReason.SUBMISSION_DELETED,
+        )
         await self.db.delete(submission)
         await self.db.commit()
+        if queued is not None:
+            queued.extend(ids)
         await self._archive_review_prompts(organization_id, submission_id)
         await self._archive_member_notices(organization_id, submission_id)
         return True

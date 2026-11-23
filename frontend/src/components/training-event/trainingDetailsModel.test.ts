@@ -4,7 +4,12 @@ import type { TrainingCourse } from '../../types/training';
 import {
   DEFAULT_TRAINING_DETAILS,
   applyLibraryCourse,
+  TEMPLATE_CATEGORY_GONE_NOTE,
   TEMPLATE_COURSE_GONE_NOTE,
+  TEMPLATE_PHASE_GONE_NOTE,
+  TEMPLATE_PROGRAM_GONE_NOTE,
+  TEMPLATE_REQUIREMENT_GONE_NOTE,
+  templateAttendanceGoneNote,
   TEMPLATE_INSTRUCTOR_GONE_NOTE,
   fromSession,
   fromTemplateTrainingDetails,
@@ -512,12 +517,16 @@ describe('template training details', () => {
     certification_number_prefix: 'PUMP-',
     issuing_agency: 'State Academy',
     expiration_months: '24',
-    // Not carried by a template.
+    // Carried since the owner decision of 2026-11-23.
     category_id: 'cat-app',
     program_id: 'prog-dop',
+    phase_id: 'phase-1',
     requirement_id: 'req-1',
-    attendance_requirement_ids: ['att-1'],
+    attendance_requirement_ids: ['att-1', 'att-2'],
+    counts_toward_certification: false,
+    auto_create_records: false,
     require_completion_confirmation: true,
+    approval_deadline_days: '14',
   });
   const members = [
     { id: 'm-1', name: 'Owen Kittredge', label: 'Capt. Owen Kittredge' },
@@ -539,7 +548,26 @@ describe('template training details', () => {
       certification_number_prefix: 'PUMP-',
       issuing_agency: 'State Academy',
       expiration_months: 24,
+      category_id: 'cat-app',
+      program_id: 'prog-dop',
+      phase_id: 'phase-1',
+      requirement_id: 'req-1',
+      attendance_requirement_ids: ['att-1', 'att-2'],
+      counts_toward_certification: false,
+      auto_create_records: false,
+      require_completion_confirmation: true,
+      approval_deadline_days: 14,
     });
+  });
+
+  it('saves the default deadline without sign-off, and blank links as null', () => {
+    const out = toTemplateTrainingDetails(
+      form({ approval_deadline_days: '21', require_completion_confirmation: false })
+    );
+    expect(out.approval_deadline_days).toBe(7);
+    expect(out.category_id).toBeNull();
+    expect(out.phase_id).toBeNull();
+    expect(out.attendance_requirement_ids).toEqual([]);
   });
 
   it('drops hours that follow the length and certification settings not issued', () => {
@@ -552,22 +580,30 @@ describe('template training details', () => {
     expect(out.course_id).toBeNull();
   });
 
-  it('reads back to the form with every uncarried field at its default', () => {
-    const back = fromTemplateTrainingDetails(toTemplateTrainingDetails(library));
-    expect(back).toEqual({
-      ...DEFAULT_TRAINING_DETAILS,
-      course_mode: 'library',
-      course_id: COURSE.id,
-      training_type: 'skills_practice',
-      credit_hours: '2',
-      credit_hours_source: 'course',
-      instructor_id: 'm-1',
-      instructor: 'Owen Kittredge',
-      issues_certification: true,
-      certification_number_prefix: 'PUMP-',
-      issuing_agency: 'State Academy',
-      expiration_months: '24',
-    });
+  it('reads back to the form it was saved from', () => {
+    expect(fromTemplateTrainingDetails(toTemplateTrainingDetails(library))).toEqual(library);
+  });
+
+  it('reads a template saved before the links were kept as the session defaults', () => {
+    const {
+      category_id: _c,
+      program_id: _p,
+      phase_id: _ph,
+      requirement_id: _r,
+      attendance_requirement_ids: _a,
+      counts_toward_certification: _ct,
+      auto_create_records: _ac,
+      require_completion_confirmation: _rc,
+      approval_deadline_days: _d,
+      ...older
+    } = toTemplateTrainingDetails(library);
+    const back = fromTemplateTrainingDetails(older);
+    expect(back.category_id).toBe('');
+    expect(back.attendance_requirement_ids).toEqual([]);
+    expect(back.counts_toward_certification).toBe(true);
+    expect(back.auto_create_records).toBe(true);
+    expect(back.require_completion_confirmation).toBe(false);
+    expect(back.approval_deadline_days).toBe('7');
   });
 
   it('reads a value it cannot hold as the default rather than failing', () => {
@@ -635,6 +671,71 @@ describe('template training details', () => {
       const { value, notes } = reconcileTemplateTraining(withFormer, withFormer, undefined, undefined);
       expect(value).toEqual(withFormer);
       expect(notes).toEqual([]);
+    });
+
+    describe('the links, against what is still offered', () => {
+      const offered = {
+        categories: [{ id: 'cat-app' }],
+        programs: [{ id: 'prog-dop' }],
+        phases: [{ id: 'phase-1' }],
+        requirements: [{ id: 'req-1' }, { id: 'att-1' }, { id: 'att-2' }],
+      };
+
+      it('keeps every link still offered, without a note', () => {
+        const { value, notes } = reconcileTemplateTraining(seeded, seeded, [COURSE], members, offered);
+        expect(value).toEqual(reconcileTemplateTraining(seeded, seeded, [COURSE], members).value);
+        expect(value.phase_id).toBe('phase-1');
+        expect(notes).toEqual([]);
+      });
+
+      it('drops each link no longer offered, with a note for each', () => {
+        const { value, notes } = reconcileTemplateTraining(seeded, seeded, [COURSE], members, {
+          categories: [],
+          programs: [{ id: 'prog-dop' }],
+          phases: [],
+          requirements: [{ id: 'att-2' }],
+        });
+        expect(value.category_id).toBe('');
+        expect(value.program_id).toBe('prog-dop');
+        expect(value.phase_id).toBe('');
+        expect(value.requirement_id).toBe('');
+        expect(value.attendance_requirement_ids).toEqual(['att-2']);
+        expect(notes).toEqual([
+          TEMPLATE_CATEGORY_GONE_NOTE,
+          TEMPLATE_PHASE_GONE_NOTE,
+          TEMPLATE_REQUIREMENT_GONE_NOTE,
+          templateAttendanceGoneNote(1),
+        ]);
+      });
+
+      it('drops the phase with a program no longer active', () => {
+        const { value, notes } = reconcileTemplateTraining(seeded, seeded, [COURSE], members, {
+          ...offered,
+          programs: [],
+        });
+        expect(value.program_id).toBe('');
+        expect(value.phase_id).toBe('');
+        expect(notes).toEqual([TEMPLATE_PROGRAM_GONE_NOTE]);
+      });
+
+      it('skips a list that failed to load', () => {
+        const { value, notes } = reconcileTemplateTraining(seeded, seeded, [COURSE], members, {});
+        expect(value.category_id).toBe('cat-app');
+        expect(value.requirement_id).toBe('req-1');
+        expect(value.attendance_requirement_ids).toEqual(['att-1', 'att-2']);
+        expect(notes).toEqual([]);
+      });
+
+      it('leaves alone a link the officer changed before the lists loaded', () => {
+        const typed = { ...seeded, category_id: 'cat-other', attendance_requirement_ids: ['att-9'] };
+        const { value } = reconcileTemplateTraining(typed, seeded, [COURSE], members, {
+          ...offered,
+          categories: [],
+          requirements: [],
+        });
+        expect(value.category_id).toBe('cat-other');
+        expect(value.attendance_requirement_ids).toEqual(['att-9']);
+      });
     });
 
     it('keeps course hours saveable while the Course Library is unavailable', () => {

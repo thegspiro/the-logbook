@@ -1,7 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { TrainingDashboardSummary } from '../../../../services/trainingServices';
-import { ComplianceOverviewWidget, PendingValidationWidget, UpcomingExpirationsWidget } from '.';
+import {
+  ComplianceOverviewWidget,
+  PendingValidationWidget,
+  RecentCompletionsWidget,
+  RequirementsStatusWidget,
+  UpcomingExpirationsWidget,
+} from '.';
 import { TRAINING_WIDGET_METADATA } from './metadata';
 
 const data = {
@@ -52,6 +58,40 @@ describe('training dashboard widgets', () => {
     render(<UpcomingExpirationsWidget data={data} days={90} />);
     expect(screen.getByRole('link')).toHaveAttribute('href', expect.stringContaining('days=90'));
   });
+  it('shows each expiry date beside its countdown', () => {
+    render(<UpcomingExpirationsWidget data={data} days={90} />);
+    expect(screen.getByText('Sep 1, 2026', { exact: false })).toHaveTextContent('Sep 1, 2026 · 11d');
+  });
+  it('formats completion and due dates rather than printing them raw', () => {
+    const dated = {
+      ...data,
+      recent_completions: [
+        {
+          id: 'c1',
+          member_id: 'm1',
+          member_name: 'Example Member',
+          course_name: 'Ladders',
+          completion_date: '2026-11-20',
+          hours_completed: 2,
+        },
+      ],
+      requirements: [
+        { id: 'r1', name: 'Annual Hours', due_date: '2026-12-31' },
+        { id: 'r2', name: 'Rolling CPR', due_date: null },
+      ],
+    };
+    render(
+      <>
+        <RecentCompletionsWidget data={dated} />
+        <RequirementsStatusWidget data={dated} />
+      </>
+    );
+    expect(screen.getByText('Nov 20, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Dec 31, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Ongoing')).toBeInTheDocument();
+    expect(screen.queryByText('2026-11-20')).not.toBeInTheDocument();
+    expect(screen.queryByText('2026-12-31')).not.toBeInTheDocument();
+  });
   it('links validation state and does not require names in the count payload', () => {
     render(<PendingValidationWidget data={{ ...data, pending_validation: { count: 3 } }} />);
     expect(screen.getByRole('link')).toHaveAttribute(
@@ -64,6 +104,14 @@ describe('training dashboard widgets', () => {
     render(<ComplianceOverviewWidget data={data} />);
     expect(screen.getByText('50%')).toBeInTheDocument();
     expect(screen.getByText('1 of 2 graded members')).toBeInTheDocument();
+  });
+  it('shows the one-decimal figure the Admin hub shows, unrounded', () => {
+    const twoOfThree = {
+      ...data,
+      stats: { ...data.stats, graded_members: 3, compliant_members: 2, compliance_percentage: 66.7 },
+    };
+    render(<ComplianceOverviewWidget data={twoOfThree} />);
+    expect(screen.getByText('66.7%')).toBeInTheDocument();
   });
   it('counts only graded members, and names the not-applicable ones', () => {
     const mixed = {
