@@ -3272,15 +3272,20 @@ async def _settle_member_notice(
 async def void_pending_for_events(
     db: AsyncSession, org_id: str, event_ids: Sequence[str], cause: str
 ) -> List[MemberNotice]:
-    """Void every pending request, of either workflow, for these events.
+    """Void every pending or approved request, of either workflow, for these
+    events.
 
     For the event's cancellation or deletion, inside the caller's
-    transaction (it commits) while it holds the events exclusively. A pending
+    transaction (it commits) while it holds the events exclusively. The
     request is about a session that will not now be held, so there is nothing
-    left to decide: it is voided, which frees its slot, its deciders' prompts
-    are archived and the member is told: in the app now, and by email once
-    the caller commits, through the returned notices and
-    ``send_member_notices`` (CLAUDE.md pitfall #18). An approved or denied
+    left to decide or excuse: it is voided, which frees its slot. An approved
+    one also gives the waiver back (owner decision 2026-11-23): it stops
+    counting toward the cap, which counts approved requests only, and a
+    meeting waiver it wrote comes off the minutes record. Its deciders'
+    prompts are archived and the member is told: in the app now, and by email
+    once the caller commits, through the returned notices and
+    ``send_member_notices`` (CLAUDE.md pitfall #18). A second run finds
+    nothing left to void, so it owes no second notice (pitfall #36). A denied
     request is the member's record and is kept (the row outlives the event,
     see the model). ``cause`` is "cancelled" or "deleted", for the log and the
     notice.
@@ -3295,7 +3300,12 @@ async def void_pending_for_events(
                 .where(
                     AttendanceWaiverRequest.organization_id == org_id,
                     AttendanceWaiverRequest.event_id.in_(ids),
-                    AttendanceWaiverRequest.status == AttendanceWaiverStatus.PENDING,
+                    AttendanceWaiverRequest.status.in_(
+                        [
+                            AttendanceWaiverStatus.PENDING,
+                            AttendanceWaiverStatus.APPROVED,
+                        ]
+                    ),
                 )
                 .with_for_update()
                 .execution_options(populate_existing=True)
@@ -3307,13 +3317,22 @@ async def void_pending_for_events(
     notices: List[MemberNotice] = []
     for request in pending:
         spec = SPECS[request.workflow]
+        was_approved = request.status == AttendanceWaiverStatus.APPROVED
+        if was_approved and request.workflow == MEETING_WORKFLOW:
+            await _unapply_meeting_waiver(db, org_id, request)
         subject = f"Waiver request closed — {request.event_title_snapshot}"
-        sentence = (
+        sentences = [
             f"Your request to be excused from "
             f'"{request.event_title_snapshot}" on '
             f"{_day_label(request.session_date)} was closed: the "
             f"{spec.session_noun} was {cause}."
-        )
+        ]
+        if was_approved:
+            sentences.append(
+                "It had been approved; since nothing is held, it no longer "
+                "counts toward your limit of waivers."
+            )
+        sentence = " ".join(sentences)
         logged = AttendanceWaiverService._action(
             request,
             AttendanceWaiverAction.VOIDED,
@@ -3325,13 +3344,16 @@ async def void_pending_for_events(
                 request_id=str(request.id),
                 workflow=request.workflow,
                 subject=subject,
-                sentences=(sentence,),
+                sentences=tuple(sentences),
                 action_id=str(logged.id),
             )
         )
         request.status = AttendanceWaiverStatus.VOIDED
         request.live_key = None
         request.info_requested_at = None
+        # A voided request waits on nobody; left set, the row still read as
+        # "member to confirm" and kept the reconfirm expiry candidate.
+        request.reconfirm_requested_at = None
         db.add(logged)
         db.add(
             NotificationLog(
@@ -3356,6 +3378,11 @@ async def void_pending_for_events(
             event_data={
                 **AttendanceWaiverService._ids(request),
                 "cause": cause,
+                "previous_status": (
+                    AttendanceWaiverStatus.APPROVED.value
+                    if was_approved
+                    else AttendanceWaiverStatus.PENDING.value
+                ),
             },
         )
     if pending:

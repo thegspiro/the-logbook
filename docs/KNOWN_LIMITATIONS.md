@@ -11159,10 +11159,13 @@ option was taken; each is open for the owner to revisit.
   asked for requests to be voided "as the training workflow does", but the
   training workflow voided nothing. A pending request is now voided (its slot
   freed, the deciders' prompts archived, the member told in the app), for both
-  workflows. An **approved** request is kept: the model already keeps an
-  approved request as the member's record when its event is deleted. So an
-  approval for a meeting that was then cancelled still counts toward the
-  member's cap. Voiding approved requests as well would give the waiver back.
+  workflows. ~~An **approved** request is kept, so an approval for a meeting
+  that was then cancelled still counts toward the member's cap.~~ ✅ **Owner
+  decision 2026-11-23: cancelling gives the waiver back.** An approved request
+  is voided too, for both workflows: it stops counting toward the cap, a
+  meeting waiver it wrote comes off the minutes record, and the member is
+  emailed. A denied request is still kept, and every voided row still
+  outlives a deleted event.
 - **A member on a leave of absence that covers the meeting cannot ask**
   ("on_leave"): the voting tally already excludes such a meeting, so there is
   nothing to excuse.
