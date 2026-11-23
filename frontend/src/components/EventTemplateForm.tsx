@@ -17,7 +17,7 @@ import { trainingService, userService } from '../services/api';
 import { useRanks } from '../hooks/useRanks';
 import { FIELD_ERROR_CLASS, FormField } from './ux/FormField';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
-import type { TrainingLinkageData } from '../hooks/useTrainingLinkageData';
+import { useTrainingLinkageData } from '../hooks/useTrainingLinkageData';
 import { TrainingInfoStep } from './training-event/TrainingInfoStep';
 import {
   DEFAULT_TRAINING_DETAILS,
@@ -25,6 +25,7 @@ import {
   applyLibraryCourse,
   fromTemplateTrainingDetails,
   reconcileTemplateTraining,
+  templateLinkageLists,
   toTemplateTrainingDetails,
   withCourseChoice,
   type InstructorOption,
@@ -69,6 +70,7 @@ const TEMPLATE_TRAINING_FIELDS = [
   'issuing_agency',
   'certification_number_prefix',
   'expiration_months',
+  'approval_deadline_days',
 ] as const satisfies readonly TrainingField[];
 type TemplateTrainingField = (typeof TEMPLATE_TRAINING_FIELDS)[number];
 
@@ -91,9 +93,6 @@ const TEMPLATE_FIELDS: FieldSpecs<TemplateField> = {
   default_description: { id: 'template-default-description', label: 'Default Description' },
   default_location: { id: 'template-default-location', label: 'Default Location' },
 } as FieldSpecs<TemplateField>;
-
-/** A template carries no requirement or program links, so the step's pickers have nothing to offer. */
-const NO_LINKAGE: TrainingLinkageData = { categories: [], requirements: [], programs: [], phases: [] };
 
 /**
  * The refusals the backend's EventTemplateTrainingDetails makes, checked here
@@ -118,6 +117,12 @@ const checkTemplateTraining = (value: TrainingDetailsForm): FieldErrors<Template
     const months = value.expiration_months.trim();
     if (!/^\d+$/.test(months) || Number(months) < 1) {
       problems.expiration_months = 'Enter a whole number of months, or leave it blank.';
+    }
+  }
+  if (value.require_completion_confirmation) {
+    const days = value.approval_deadline_days.trim();
+    if (!/^\d+$/.test(days) || Number(days) < 1 || Number(days) > 30) {
+      problems.approval_deadline_days = 'Enter between 1 and 30 days.';
     }
   }
   return problems;
@@ -201,15 +206,18 @@ const TemplateTrainingSection: React.FC<TemplateTrainingSectionProps> = ({
     [users, formatRank]
   );
 
+  const linkageData = useTrainingLinkageData(value.program_id || undefined);
+
   // The stored details checked once against the lists they name, as applying
   // the template does, so the editor shows what picking it would fill. A
   // list that failed to load is skipped rather than taken as empty.
   useEffect(() => {
-    if (!seeded || !coursesSettled || !usersSettled) return;
+    if (!seeded || !coursesSettled || !usersSettled || linkageData.settled === false) return;
     const listedCourses = coursesLoaded ? courses : undefined;
     const listedMembers = usersLoaded ? members : undefined;
-    onSeededRead(reconcileTemplateTraining(value, seeded, listedCourses, listedMembers).notes);
-    setValue((prev) => reconcileTemplateTraining(prev, seeded, listedCourses, listedMembers).value);
+    const lists = templateLinkageLists(linkageData, seeded.program_id);
+    onSeededRead(reconcileTemplateTraining(value, seeded, listedCourses, listedMembers, lists).notes);
+    setValue((prev) => reconcileTemplateTraining(prev, seeded, listedCourses, listedMembers, lists).value);
   }, [
     seeded,
     coursesSettled,
@@ -218,6 +226,7 @@ const TemplateTrainingSection: React.FC<TemplateTrainingSectionProps> = ({
     usersLoaded,
     courses,
     members,
+    linkageData,
     value,
     onSeededRead,
     setValue,
@@ -233,8 +242,7 @@ const TemplateTrainingSection: React.FC<TemplateTrainingSectionProps> = ({
   };
   // Pre-fills type, hours, instructor and expiry as the training form does.
   // A course's participant limit is not copied into Max Attendees: the
-  // template's own is authoritative, and the category and program it fills
-  // are not saved on a template.
+  // template's own is authoritative.
   const pickCourse = (course: TrainingCourse | undefined) => {
     if (!course) {
       update({ course_id: '' });
@@ -244,7 +252,7 @@ const TemplateTrainingSection: React.FC<TemplateTrainingSectionProps> = ({
       value,
       course,
       members.filter((m) => !m.former),
-      undefined,
+      linkageData.programs.map((p) => p.id),
       value.course_mode === 'library' ? courses.find((c) => c.id === value.course_id) : undefined
     );
     setValue(picked);
@@ -265,7 +273,7 @@ const TemplateTrainingSection: React.FC<TemplateTrainingSectionProps> = ({
       durationHours={durationHours}
       courses={courses}
       members={members}
-      linkageData={NO_LINKAGE}
+      linkageData={linkageData}
       isSeries={false}
       coursesLoaded={coursesLoaded}
       templateNotes={notes}

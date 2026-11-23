@@ -492,6 +492,32 @@ describe('ShiftHistoryImportReviewPage', () => {
     });
   });
 
+  it('pages through every outside-agency entry rather than stopping at 200', async () => {
+    const external = Array.from({ length: 205 }, (_, i) =>
+      attendance({
+        key: `x${i}`,
+        row_ids: [`x${i}`],
+        line_numbers: [1000 + i],
+        unit_kind: 'external',
+        unit_ref: 'ext-1',
+      })
+    );
+    mockGet.mockResolvedValue(draft({ external }));
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Shifts/ }));
+
+    const card = screen.getByRole('region', { name: 'Outside-agency hours' });
+    expect(within(card).getByText(/205 entries on other agencies' units/)).toBeInTheDocument();
+    expect(within(card).queryByText(/Showing the first 200/)).not.toBeInTheDocument();
+    expect(within(card).getByText(/line 1000$/)).toBeInTheDocument();
+    expect(within(card).queryByText(/line 1204$/)).not.toBeInTheDocument();
+
+    await user.click(within(card).getByRole('button', { name: 'Last page' }));
+    expect(within(card).getByText(/line 1204$/)).toBeInTheDocument();
+    expect(within(card).queryByText(/line 1000$/)).not.toBeInTheDocument();
+  });
+
   it('labels an on-call shift', async () => {
     const [shift] = draft().analysis?.shifts ?? [];
     mockGet.mockResolvedValue(draft({ shifts: shift ? [{ ...shift, duty_type: 'on_call' }] : [] }));

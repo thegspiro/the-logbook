@@ -76,6 +76,7 @@ import {
   validateTrainingDetails,
   withCourseChoice,
   reconcileTemplateTraining,
+  templateLinkageLists,
   withLoadedCourseHours,
   withoutSessionSettingCopies,
   type InstructorOption,
@@ -477,14 +478,21 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   // skipped rather than taken as empty.
   const [templateNotes, setTemplateNotes] = useState<string[]>([]);
   const templateRead = useRef(false);
+  // Phases follow the program on the form, which is the template's until the
+  // officer changes it, and only an untouched link is checked.
+  const linkageData = useTrainingLinkageData(training.program_id || undefined);
   useEffect(() => {
     if (!templateTraining || templateRead.current || !coursesSettled || !usersSettled) return;
+    // The links are checked as well (owner decision 2026-11-23), so their
+    // lists are waited for too. `settled` undefined: nothing to wait for.
+    if (linkageData.settled === false) return;
     templateRead.current = true;
     const listedCourses = coursesLoaded ? courses : undefined;
     const listedMembers = usersLoaded ? members : undefined;
-    setTemplateNotes(reconcileTemplateTraining(training, templateTraining, listedCourses, listedMembers).notes);
+    const lists = templateLinkageLists(linkageData, templateTraining.program_id);
+    setTemplateNotes(reconcileTemplateTraining(training, templateTraining, listedCourses, listedMembers, lists).notes);
     (onReadStoredTraining ?? setTraining)(
-      (prev) => reconcileTemplateTraining(prev, templateTraining, listedCourses, listedMembers).value
+      (prev) => reconcileTemplateTraining(prev, templateTraining, listedCourses, listedMembers, lists).value
     );
   }, [
     templateTraining,
@@ -494,6 +502,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     usersLoaded,
     courses,
     members,
+    linkageData,
     training,
     onReadStoredTraining,
     setTraining,
@@ -508,7 +517,6 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     [originalTraining, trainingAccess, courses, lengthAtOpen]
   );
 
-  const linkageData = useTrainingLinkageData(training.program_id || undefined);
   // The stored links too, so one unticked in this edit keeps its name.
   const linkedAttendanceIds = useMemo(
     () => [...training.attendance_requirement_ids, ...(originalTraining?.attendance_requirement_ids ?? [])],

@@ -87,7 +87,7 @@ describe('RecordCrewTrainingPage', () => {
     renderWithRouter(<RecordCrewTrainingPage />);
 
     await user.type(await screen.findByLabelText(/Topic/), 'Hose Advancement');
-    const minutes = screen.getByLabelText('Length (minutes)');
+    const minutes = screen.getByLabelText(/^Length \(minutes\)/);
     await user.clear(minutes);
     await user.type(minutes, '45');
     await user.click(screen.getByRole('checkbox', { name: 'Ana Crew' }));

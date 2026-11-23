@@ -1828,11 +1828,14 @@ export interface InventoryItemBulkResult {
 }
 
 export interface InventoryImportResult {
+  /** On a dry run, the rows that would import. */
   imported: number;
   failed: number;
   total_rows: number;
   errors: Array<{ row: number; error: string }>;
   warnings: string[];
+  /** True when nothing was written (the preview's check). */
+  dry_run?: boolean;
 }
 
 export interface ItemHistoryEvent {

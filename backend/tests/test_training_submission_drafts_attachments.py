@@ -24,7 +24,8 @@ from app.schemas.training_submission import (
     TrainingSubmissionResponse,
     sanitize_attachments,
 )
-from app.services import file_storage_service, member_files
+from app.services import file_storage_service, member_files, pending_file_deletions
+from app.services.file_storage_service import StorageArea
 from app.services.training_submission_service import TrainingSubmissionService
 
 
@@ -552,8 +553,8 @@ class TestAttachmentRoot:
         )
         assert training_submissions._confined_path("legacy-string", org) is None
         assert (
-            training_submissions._confined_attachment_paths(
-                [{"file_path": "/etc/passwd"}, None], org
+            member_files.confined_attachment_paths(
+                [{"file_path": "/etc/passwd"}, None], org, StorageArea.SELF_REPORTS
             )
             == []
         )
@@ -587,42 +588,39 @@ class TestAttachmentRoot:
 
 
 class TestDeletingASubmission:
-    async def test_stored_evidence_is_removed_with_the_row(self, monkeypatch, tmp_path):
-        """A withdrawn certificate must not outlive its submission on disk."""
-        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
+    async def test_the_files_the_service_queued_are_processed(self, monkeypatch):
+        """A withdrawn certificate must not outlive its submission on disk:
+        the service queues it in the delete's transaction and the endpoint
+        removes it once that has committed."""
         submission = _submission(attachments=[])
-        stored = (
-            tmp_path
-            / str(submission.organization_id)
-            / "self-reports"
-            / str(submission.id)
-            / "cert.pdf"
-        )
-        stored.parent.mkdir(parents=True)
-        stored.write_bytes(b"%PDF")
-        submission.attachments = [{"file_path": str(stored)}]
 
-        service = SimpleNamespace(
-            get_submission=AsyncMock(return_value=submission),
-            delete_submission=AsyncMock(return_value=True),
-        )
+        async def _delete(submission_id, user_id, organization_id, *, queued):
+            queued.extend(["pfd-1", "pfd-2"])
+            return True
+
+        service = SimpleNamespace(delete_submission=_delete)
         monkeypatch.setattr(
             training_submissions, "TrainingSubmissionService", lambda db: service
         )
-        # No other row names the file. The real removal helper still runs.
-        monkeypatch.setattr(
-            member_files, "referenced_elsewhere", AsyncMock(return_value=set())
-        )
+        process = AsyncMock()
+        monkeypatch.setattr(pending_file_deletions, "process", process)
+        db = SimpleNamespace(commit=AsyncMock())
 
         await training_submissions.delete_submission(
             submission.id,
-            db=None,
+            db=db,
             current_user=SimpleNamespace(
                 id=submission.submitted_by, organization_id=submission.organization_id
             ),
         )
 
-        assert not stored.exists()
+        process.assert_awaited_once_with(
+            db,
+            str(submission.organization_id),
+            ["pfd-1", "pfd-2"],
+            areas=(StorageArea.SELF_REPORTS,),
+        )
+        db.commit.assert_awaited_once_with()
 
 
 class TestCreateWithAttachment:

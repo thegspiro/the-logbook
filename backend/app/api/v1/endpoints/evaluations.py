@@ -81,6 +81,7 @@ from app.schemas.evaluation import (
     ReassignmentPlan,
     ReassignmentRequest,
     ResponseWrite,
+    ReviewHistoryEntry,
     SignatureWrite,
     SignResult,
     StepAssignment,
@@ -880,6 +881,22 @@ async def get_evaluation(
     current_user: User = Depends(get_current_user),
 ):
     return await _evaluation(EvaluationService(db), current_user, evaluation_id)
+
+
+@router.get("/{evaluation_id}/history", response_model=List[ReviewHistoryEntry])
+async def get_review_history(
+    evaluation_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.view_all")),
+):
+    """The member's other finalized reviews, newest first, with the overall
+    result each stood at. Requires ``evaluations.view_all``: grades are
+    personnel content. Each review is read as the caller could open it, and
+    a review of another department answers 404."""
+    entries = await EvaluationService(db).review_history(
+        current_user.organization_id, evaluation_id, current_user
+    )
+    return ensure_found(entries, "Evaluation")
 
 
 @router.put("/{evaluation_id}/parts/{kind}", response_model=EvaluationDetail)

@@ -1,5 +1,6 @@
 import React from 'react';
 import { formatHours, formatHoursExact } from '../../../../utils/hoursFormatting';
+import { formatCalendarDate } from '../../../../utils/dateFormatting';
 import { AlertTriangle, Award, Calendar, CheckCircle, Clock, ClipboardCheck, FileText, Users } from 'lucide-react';
 import type { TrainingDashboardSummary } from '../../../../services/trainingServices';
 
@@ -26,7 +27,9 @@ const Card = ({
 );
 const Empty = ({ children }: React.PropsWithChildren) => <p className="text-theme-text-muted text-sm">{children}</p>;
 const Row = ({ children }: React.PropsWithChildren) => (
-  <div className="bg-theme-input-bg/50 mb-2 flex items-center justify-between rounded-sm p-3 text-sm">{children}</div>
+  <div className="bg-theme-input-bg/50 mb-2 flex items-center justify-between gap-3 rounded-sm p-3 text-sm">
+    {children}
+  </div>
 );
 
 // With no requirements defined every member is trivially compliant, and a 100%
@@ -75,7 +78,10 @@ export const UpcomingExpirationsWidget = ({ data, days = 90 }: { data: TrainingD
           <span>
             {x.member_name} · {x.course_name}
           </span>
-          <b>{x.days_left}d</b>
+          {/* The date for planning a renewal, the countdown for how soon. */}
+          <span className="shrink-0 text-right">
+            {formatCalendarDate(x.expiration_date)} · <b>{x.days_left}d</b>
+          </span>
         </Row>
       ))
     ) : (
@@ -95,7 +101,7 @@ export const RecentCompletionsWidget = ({ data }: { data: TrainingDashboardSumma
           <span>
             {x.member_name} · {x.course_name}
           </span>
-          <span>{x.completion_date}</span>
+          <span className="shrink-0 text-right">{formatCalendarDate(x.completion_date)}</span>
         </Row>
       ))
     ) : (
@@ -123,7 +129,7 @@ export const RequirementsStatusWidget = ({ data }: { data: TrainingDashboardSumm
       data.requirements.map((x) => (
         <Row key={x.id}>
           <span>{x.name}</span>
-          <span>{x.due_date ?? 'Ongoing'}</span>
+          <span className="shrink-0 text-right">{x.due_date ? formatCalendarDate(x.due_date) : 'Ongoing'}</span>
         </Row>
       ))
     ) : (
