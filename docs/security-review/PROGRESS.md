@@ -16,15 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (branch `claude/friendly-babbage-2isqey`)**: Feature 02 (Permissions &
+**PR [#4633](https://github.com/thegspiro/the-logbook/pull/4633) (branch
+`claude/friendly-babbage-2isqey`)**: Feature 02 (Permissions &
 roles), pass 17 — watchdog pickup (the dedicated `/loop 30m
 /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
 unreachable). **Branch-name deviation**, same as prior watchdog-run passes
 recorded here (`claude/friendly-babbage-n4b791`,
 `claude/friendly-babbage-v1mcno`): this session's environment restricts
 pushes to its own assigned branch rather than a freely-chosen
-`claude/security-review-permissions-roles-pNN` name. This PR's own number
-follows in a second commit on the same branch once it is known.
+`claude/security-review-permissions-roles-pNN` name.
 
 PR #4625 (Feature 01, Auth & session lifecycle, pass 17) had already
 merged (`5f96b7c2`) before this iteration started; row 01 marked ✅ above.
