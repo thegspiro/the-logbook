@@ -17,7 +17,7 @@ left as they are, so an upgrade after a downgrade does not remind about those
 approvals again.
 
 Revision ID: 5845dae0c277
-Revises: b6e3d1f47a29
+Revises: e3b8d61f4a27
 Create Date: 2026-11-23 07:12:00.000000
 """
 
@@ -28,13 +28,14 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "5845dae0c277"
-down_revision: Union[str, None] = "b6e3d1f47a29"
+down_revision: Union[str, None] = "e3b8d61f4a27"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 _NEW_TEMPLATE_TYPES = ("training_approval_reminder",)
 
-# EmailTemplateType as this revision finds it (b6e3d1f47a29's ALL_TYPES).
+# EmailTemplateType as this revision finds it (b6e3d1f47a29's ALL_TYPES;
+# e3b8d61f4a27 between them adds no template type).
 # Written out rather than imported so a later edit to the enum cannot rewrite
 # this step.
 _EXISTING_TEMPLATE_TYPES = (

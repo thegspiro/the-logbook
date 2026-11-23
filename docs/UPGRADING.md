@@ -835,7 +835,7 @@ should not have to discover by being surprised.
 Nothing blocks a restart. Migration `5845dae0c277` adds the
 `training_approval_reminder` email template type to
 `email_templates.template_type` and `scheduled_emails.template_type`, and
-changes no other table. It builds on `b6e3d1f47a29`.
+changes no other table. It builds on `e3b8d61f4a27`.
 
 - **A one-time burst of sign-off reminders.** The new daily
   `training_approval_reminders` task (07:50) emails the training officers
