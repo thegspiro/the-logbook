@@ -18,7 +18,7 @@ idempotent too: deleting a file that is already gone counts as deleted.
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import Any, Collection, Iterable, Mapping, Optional
 
 from loguru import logger
 from sqlalchemy import delete, func, select, text, update
@@ -71,21 +71,28 @@ def enqueue(
 
 
 async def process(
-    db: AsyncSession, organization_id: str, ids: Iterable[str]
+    db: AsyncSession,
+    organization_id: str,
+    ids: Iterable[str],
+    *,
+    areas: Optional[Collection[StorageArea]] = None,
 ) -> FileRemoval:
     """Remove the files the rows *ids* name, and resolve those rows.
 
     Never raises ``Exception`` and never commits: the caller commits the row
     resolutions with its own audit record. The work runs in a savepoint, so a
     failure discards only this call's row writes and leaves the session
-    usable for that audit record; the rows stay queued.
+    usable for that audit record; the rows stay queued. *areas*, when given,
+    must hold every area the rows lie in; it narrows the reference check as
+    in :func:`member_files.referenced_elsewhere`, so a member-facing request
+    does not read the department's documents, events and minutes.
     """
     wanted = [str(row_id) for row_id in ids]
     if not wanted:
         return FileRemoval()
     try:
         async with db.begin_nested():
-            return await _process(db, str(organization_id), wanted)
+            return await _process(db, str(organization_id), wanted, areas)
     except Exception:
         logger.exception(
             "Could not process pending file deletions for organization {}",
@@ -103,7 +110,12 @@ class _Claimed:
     attempts: int
 
 
-async def _process(db: AsyncSession, org_id: str, ids: list[str]) -> FileRemoval:
+async def _process(
+    db: AsyncSession,
+    org_id: str,
+    ids: list[str],
+    areas: Optional[Collection[StorageArea]] = None,
+) -> FileRemoval:
     rows = [
         _Claimed(r.id, r.organization_id, r.path, r.area, r.attempts)
         for r in (
@@ -131,7 +143,7 @@ async def _process(db: AsyncSession, org_id: str, ids: list[str]) -> FileRemoval
         # Looked up on the module at call time, so a test patching
         # member_files.referenced_elsewhere reaches this caller too.
         shared = await member_files.referenced_elsewhere(
-            db, org_id, {row.path for row in rows}, set()
+            db, org_id, {row.path for row in rows}, set(), areas=areas
         )
     except Exception:
         # Unable to tell, keep every file: an orphan costs disk, while a

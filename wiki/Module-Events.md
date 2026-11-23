@@ -1044,14 +1044,16 @@ modal (`EventTemplateForm`), active toggle and delete confirmation.
 - **A Training template also carries the session's training details**
   _(owner decision 2026-11-20)_ in `event_templates.training_details`: the
   course (library, one-off name and code, or none), training type, credit
-  hours and their source, lead instructor, and certification settings. Not
-  the requirement/program links, Counts toward attendance or the completion
-  settings. The editor's **Training Details** section (TrainingInfoStep's
+  hours and their source, lead instructor, and certification settings, and
+  since 2026-11-23 the category, program and phase, requirement link, Counts
+  toward attendance and the completion settings. The editor's **Training Details** section (TrainingInfoStep's
   `template` variant) edits them; **Save as Template** on a Training event
   saves its session's. Applying one checks the course and instructor against
   the Course Library and member list (`reconcileTemplateTraining`): a course
   no longer listed falls back to No course yet, an instructor no longer a
-  member is cleared, each with a note on Training Info.
+  member is cleared, and a category, program, phase or requirement no longer
+  active is dropped (`reconcileTemplateLinks`, against
+  `useTrainingLinkageData`'s lists), each with a note on Training Info.
 
 ---
 
@@ -1078,6 +1080,16 @@ Administration → Community Outreach → Apparatus Events**
   driver exceptions as shift driver assignment.
 - **Hours**: check in as usual, then **Finalize Attendance**. A night's
   category **replaces** the event type's Admin Hours mapping — never both.
+- **Coordinator approves self sign-ups** (per template, copied to each night,
+  changeable in Edit this night): **Sign me up** becomes **Ask for this seat**
+  and records an `apparatus_event_seat_requests` row while the seat stays
+  open. Several members may ask for one seat; **Approve** seats one and
+  declines the rest (`POST …/events/{id}/requests/{rid}/approve`, `/decline`
+  with an optional note, `/withdraw` by the member). The organizer and
+  alternate holding `apparatus_events.manage` are emailed each request
+  (Event officer duties). The member is emailed the answer (Event changes).
+  `apparatus_seat_request_lapse` (every 15 minutes) declines anything still
+  waiting once a night starts or is cancelled.
 - **Email members** on the crew card emails chosen members about the run's
   open seats: one email listing every upcoming night a member can still take
   a seat on (`POST /apparatus-events/events/{id}/seat-call`). Each send is

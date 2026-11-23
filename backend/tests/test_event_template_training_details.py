@@ -3,7 +3,9 @@
 Owner decision 2026-11-20: a Training template saves the course (a library
 course, a one-off name and code, or none), the training type, credit hours and
 their source, the lead instructor and the certification settings, and picking
-it fills Training Info. ``event_templates.training_details`` holds them in one
+it fills Training Info. Owner decision 2026-11-23 adds the category, program
+and phase, the requirement link, Counts toward attendance and the completion
+and sign-off settings. ``event_templates.training_details`` holds them in one
 canonical shape settled at the write (pitfall #20).
 
 The schema half needs no database. The HTTP half drives the real endpoints
@@ -124,7 +126,42 @@ class TestTheStoredShapeIsSettledAtTheWrite:
 
     def test_a_field_the_template_does_not_carry_is_refused(self) -> None:
         with pytest.raises(ValidationError):
-            _settle(requirement_id=COURSE)
+            _settle(location_id=COURSE)
+
+    def test_links_and_completion_settings_are_kept(self) -> None:
+        """Owner decision 2026-11-23: a template also keeps the category,
+        program and phase, requirement links, Counts toward attendance and the
+        completion and sign-off settings."""
+        ids = [str(uuid.uuid4()) for _ in range(6)]
+        settled = _settle(
+            category_id=ids[0],
+            program_id=ids[1],
+            phase_id=ids[2],
+            requirement_id=ids[3],
+            attendance_requirement_ids=[ids[4], ids[5], ids[4]],
+            counts_toward_certification=False,
+            auto_create_records=False,
+            require_completion_confirmation=True,
+            approval_deadline_days=14,
+        )
+        assert settled["category_id"] == ids[0]
+        assert settled["program_id"] == ids[1]
+        assert settled["phase_id"] == ids[2]
+        assert settled["requirement_id"] == ids[3]
+        # Each requirement once, in the order picked.
+        assert settled["attendance_requirement_ids"] == [ids[4], ids[5]]
+        assert settled["counts_toward_certification"] is False
+        assert settled["auto_create_records"] is False
+        assert settled["require_completion_confirmation"] is True
+        assert settled["approval_deadline_days"] == 14
+
+    def test_without_sign_off_the_deadline_is_the_default(self) -> None:
+        assert _settle(approval_deadline_days=21)["approval_deadline_days"] == 7
+
+    @pytest.mark.parametrize("days", [0, 31])
+    def test_a_deadline_outside_one_to_thirty_days_is_refused(self, days) -> None:
+        with pytest.raises(ValidationError, match="approval_deadline_days"):
+            _settle(require_completion_confirmation=True, approval_deadline_days=days)
 
     def test_an_unknown_training_type_is_refused(self) -> None:
         with pytest.raises(ValidationError, match="training_type"):
@@ -145,6 +182,15 @@ class TestTheStoredShapeIsSettledAtTheWrite:
             "certification_number_prefix": None,
             "issuing_agency": None,
             "expiration_months": None,
+            "category_id": None,
+            "program_id": None,
+            "phase_id": None,
+            "requirement_id": None,
+            "attendance_requirement_ids": [],
+            "counts_toward_certification": True,
+            "auto_create_records": True,
+            "require_completion_confirmation": False,
+            "approval_deadline_days": 7,
         }
 
 
@@ -207,6 +253,43 @@ class _Bench:
         await self.db.commit()
         await self._reset()
         return course_id
+
+    async def linkage(self, org_id: str) -> dict:
+        """A category, a program with one phase, a program requirement and a
+        session-attendance requirement, all in *org_id*."""
+        ids = {k: str(uuid.uuid4()) for k in ("cat", "prog", "phase", "req", "att")}
+        await self.db.execute(
+            text(
+                "INSERT INTO training_categories (id, organization_id, name) "
+                "VALUES (:id, :org, 'Fire')"
+            ),
+            {"id": ids["cat"], "org": org_id},
+        )
+        await self.db.execute(
+            text(
+                "INSERT INTO training_programs (id, organization_id, name) "
+                "VALUES (:id, :org, 'Recruit')"
+            ),
+            {"id": ids["prog"], "org": org_id},
+        )
+        await self.db.execute(
+            text(
+                "INSERT INTO program_phases (id, program_id, phase_number, name) "
+                "VALUES (:id, :p, 1, 'Phase 1')"
+            ),
+            {"id": ids["phase"], "p": ids["prog"]},
+        )
+        for key, kind in (("req", "hours"), ("att", "session_attendance")):
+            await self.db.execute(
+                text(
+                    "INSERT INTO training_requirements (id, organization_id, name, "
+                    "requirement_type, frequency) VALUES (:id, :org, :n, :t, 'annual')"
+                ),
+                {"id": ids[key], "org": org_id, "n": f"Req {key}", "t": kind},
+            )
+        await self.db.commit()
+        await self._reset()
+        return ids
 
     async def stored(self, template_id: str) -> Any:
         await self._reset()
@@ -331,6 +414,15 @@ class TestTrainingTemplatesOverHttp:
             "certification_number_prefix": "LAD-",
             "issuing_agency": "State Fire Academy",
             "expiration_months": 24,
+            "category_id": None,
+            "program_id": None,
+            "phase_id": None,
+            "requirement_id": None,
+            "attendance_requirement_ids": [],
+            "counts_toward_certification": True,
+            "auto_create_records": True,
+            "require_completion_confirmation": False,
+            "approval_deadline_days": 7,
         }
         assert body["training_details"] == expected
         assert await bench.stored(body["id"]) == expected
@@ -390,9 +482,59 @@ class TestTrainingTemplatesOverHttp:
     ) -> None:
         response = await bench.create(
             event_type="training",
-            training_details={"requirement_id": str(uuid.uuid4())},
+            training_details={"location_id": str(uuid.uuid4())},
         )
         assert response.status_code == 422, response.text
+
+    async def test_links_in_the_department_are_saved_and_read_back(
+        self, bench: _Bench
+    ) -> None:
+        ids = await bench.linkage(bench.org_id)
+        response = await bench.create(
+            event_type="training",
+            training_details={
+                "category_id": ids["cat"],
+                "program_id": ids["prog"],
+                "phase_id": ids["phase"],
+                "requirement_id": ids["req"],
+                "attendance_requirement_ids": [ids["att"]],
+                "require_completion_confirmation": True,
+                "approval_deadline_days": 10,
+            },
+        )
+        assert response.status_code == 201, response.text
+        read = response.json()["training_details"]
+        stored = await bench.stored(str(response.json()["id"]))
+        for details in (read, stored):
+            assert details["category_id"] == ids["cat"]
+            assert details["program_id"] == ids["prog"]
+            assert details["phase_id"] == ids["phase"]
+            assert details["requirement_id"] == ids["req"]
+            assert details["attendance_requirement_ids"] == [ids["att"]]
+            assert details["require_completion_confirmation"] is True
+            assert details["approval_deadline_days"] == 10
+
+    @pytest.mark.parametrize(
+        ("field", "key", "as_list"),
+        [
+            ("category_id", "cat", False),
+            ("program_id", "prog", False),
+            ("phase_id", "phase", False),
+            ("requirement_id", "req", False),
+            ("attendance_requirement_ids", "att", True),
+        ],
+    )
+    async def test_another_departments_link_is_refused(
+        self, bench: _Bench, field: str, key: str, as_list: bool
+    ) -> None:
+        """Pitfall #14c: a stored id is checked to be the caller's org's."""
+        other = await bench.org("Elsewhere")
+        foreign = (await bench.linkage(other))[key]
+        response = await bench.create(
+            event_type="training",
+            training_details={field: [foreign] if as_list else foreign},
+        )
+        assert response.status_code == 400, response.text
 
     async def _training_template(self, bench: _Bench) -> str:
         response = await bench.create(
@@ -468,6 +610,15 @@ class TestTrainingTemplatesOverHttp:
             "certification_number_prefix": None,
             "issuing_agency": None,
             "expiration_months": None,
+            "category_id": None,
+            "program_id": None,
+            "phase_id": None,
+            "requirement_id": None,
+            "attendance_requirement_ids": [],
+            "counts_toward_certification": True,
+            "auto_create_records": True,
+            "require_completion_confirmation": False,
+            "approval_deadline_days": 7,
         }
 
     async def test_an_existing_template_reads_back_none(self, bench: _Bench) -> None:
