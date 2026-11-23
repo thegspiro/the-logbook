@@ -621,15 +621,23 @@ class AttendanceWaiverAttachmentService:
         }
 
 
-async def remove_member_attachments(db: AsyncSession, user: User) -> int:
+async def remove_member_attachments(
+    db: AsyncSession, user: User, *, queued: Optional[List[str]] = None
+) -> int:
     """Delete every document filed with the member's requests, files first.
 
     For anonymisation: the requests stay (they are the record that a session
     was excused, and grading reads them), the documents about the member do
-    not. A file that cannot be deleted is logged and its row still goes, as
-    anonymisation does with applicant documents: the member's link to it is
-    what must not survive.
+    not. A file that cannot be deleted still loses its row, as anonymisation
+    does with applicant documents: the member's link to it is what must not
+    survive. So that the file is not lost track of, it is queued on
+    ``pending_file_deletions`` in the caller's transaction for the hourly
+    sweep to retry (owner decision 2026-11-23); the queue rows' ids are
+    appended to *queued*.
     """
+    from app.models.pending_file_deletion import PendingDeletionReason
+    from app.services.pending_file_deletions import enqueue
+
     org_id = str(user.organization_id)
     rows = (
         await db.execute(
@@ -645,10 +653,15 @@ async def remove_member_attachments(db: AsyncSession, user: User) -> int:
             )
         )
     ).all()
+    retry: Dict[str, StorageArea] = {}
     for _attachment_id, stored_path in rows:
-        await file_storage.delete_quietly(
-            file_storage.resolve(stored_path, org_id, AREA)
-        )
+        path = file_storage.resolve(stored_path, org_id, AREA)
+        if path and not await file_storage.delete(path):
+            retry[path] = AREA
+    if retry:
+        ids = enqueue(db, org_id, retry, PendingDeletionReason.MEMBER_ANONYMIZATION)
+        if queued is not None:
+            queued.extend(ids)
     if rows:
         await db.execute(
             delete(AttendanceWaiverAttachment).where(

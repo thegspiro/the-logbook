@@ -67,6 +67,7 @@ export const EditNightDialog: React.FC<EditNightDialogProps> = ({ board, onClose
   const [units, setUnits] = useState<UnitRow[]>([]);
   const [evocMode, setEvocMode] = useState<ApparatusEventEvocMode>(ApparatusEventEvocMode.ENFORCE);
   const [selfSignup, setSelfSignup] = useState(true);
+  const [approval, setApproval] = useState(false);
   const [showOnSchedule, setShowOnSchedule] = useState(true);
   const [categoryId, setCategoryId] = useState('');
   const [options, setOptions] = useState<EditorOptions | null>(null);
@@ -78,6 +79,7 @@ export const EditNightDialog: React.FC<EditNightDialogProps> = ({ board, onClose
     setUnits(rowsFrom(board));
     setEvocMode(board.evoc_mode);
     setSelfSignup(board.allow_self_signup);
+    setApproval(board.require_signup_approval);
     setShowOnSchedule(board.show_on_schedule);
     setCategoryId(board.admin_hours_category_id ?? '');
     void apparatusEventService
@@ -124,6 +126,7 @@ export const EditNightDialog: React.FC<EditNightDialogProps> = ({ board, onClose
     const payload: NightPlanPayload = {
       evoc_mode: evocMode,
       allow_self_signup: selfSignup,
+      require_signup_approval: selfSignup && approval,
       show_on_schedule: showOnSchedule,
       // A cleared category is sent as null so the night falls back to the
       // event type's mapping, instead of an omitted key leaving it as it was.
@@ -235,6 +238,16 @@ export const EditNightDialog: React.FC<EditNightDialogProps> = ({ board, onClose
             onChange={(e) => setSelfSignup(e.target.checked)}
           />
           Members can take open seats themselves
+        </label>
+        <label className="text-theme-text-secondary ml-6 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="form-checkbox"
+            checked={selfSignup && approval}
+            disabled={!selfSignup}
+            onChange={(e) => setApproval(e.target.checked)}
+          />
+          Coordinator approves self sign-ups
         </label>
         <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
           <input

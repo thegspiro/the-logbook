@@ -132,6 +132,7 @@ from app.schemas.attendance_waiver import (
     POLICY_SECTION,
     AttendanceWaiverPolicy,
     CapPeriod,
+    QueueState,
     policy_from_settings,
 )
 from app.services.attendance_waiver_email_service import (
@@ -743,26 +744,11 @@ class AttendanceWaiverService:
             return refuse(code, f"Only a {noun} can be excused.")
         if event.is_cancelled:
             return refuse("cancelled", f"This {noun} was cancelled.")
-        if self.workflow == TRAINING_WORKFLOW:
-            if member.compliance_exempt:
-                return refuse(
-                    "exempt",
-                    "You are exempt from training requirements, so this session "
-                    "does not count against you.",
-                )
-            if not await self._counting_requirements(org_id, member, event):
-                return refuse(
-                    "not_counted",
-                    "This session does not count toward an attendance "
-                    "requirement that applies to you.",
-                )
-        else:
-            if await self._on_leave(org_id, member.id, session_day):
-                return refuse(
-                    "on_leave",
-                    "You are on a leave of absence that covers this meeting, so "
-                    "it does not count against you.",
-                )
+        not_counted = await self._not_counted_refusal(
+            org_id, member, event, session_day
+        )
+        if not_counted is not None:
+            return refuse(*not_counted)
         if existing is not None:
             return refuse(
                 "already_requested",
@@ -796,6 +782,38 @@ class AttendanceWaiverService:
             return refuse("no_decider", undecidable)
         result.allowed = True
         return result
+
+    async def _not_counted_refusal(
+        self, org_id: str, member: User, event: Event, session_day: date
+    ) -> Optional[Tuple[str, str]]:
+        """Why the session does not count against the member, as (code,
+        message), or None.
+
+        Shared by a new request (``_assess``) and a moved session's
+        confirmation (``_reconfirm_refusal``), so neither can skip a refusal
+        the other makes. ``member.positions`` must be loaded.
+        """
+        if self.workflow == TRAINING_WORKFLOW:
+            if member.compliance_exempt:
+                return (
+                    "exempt",
+                    "You are exempt from training requirements, so this session "
+                    "does not count against you.",
+                )
+            if not await self._counting_requirements(org_id, member, event):
+                return (
+                    "not_counted",
+                    "This session does not count toward an attendance "
+                    "requirement that applies to you.",
+                )
+            return None
+        if await self._on_leave(org_id, member.id, session_day):
+            return (
+                "on_leave",
+                "You are on a leave of absence that covers this meeting, so "
+                "it does not count against you.",
+            )
+        return None
 
     async def _no_decider_refusal(
         self, org_id: str, member_id: str, policy: AttendanceWaiverPolicy
@@ -1471,7 +1489,8 @@ class AttendanceWaiverService:
         (``reconfirm_requested_at``). The request then goes back to its
         deciders for a fresh decision. What the new date may have changed is
         checked again, in the eligibility wording: a member now checked in,
-        or (for a meeting) on leave or already excused by the Secretary, has
+        exempt from training or no longer graded by the session (training),
+        or on leave or already excused by the Secretary (a meeting), has
         nothing to excuse and is told to withdraw instead. The deadline and
         the cap are not: the member asked in time, and the cap is enforced
         when the request is approved.
@@ -1522,7 +1541,10 @@ class AttendanceWaiverService:
     ) -> Optional[str]:
         """Why the moved session no longer needs a waiver, or None.
 
-        The part of ``_assess`` a new date can change, in its wording.
+        The part of ``_assess`` a new date can change, in its wording, through
+        the same ``_not_counted_refusal`` a new request gets: an exemption or
+        a requirement link that changed since the request was made refuses
+        here too (2026-11-20 review).
         """
         noun = self.spec.session_noun
         event: Optional[Event] = None
@@ -1539,13 +1561,12 @@ class AttendanceWaiverService:
             return f"This {noun} no longer exists."
         if event.is_cancelled:
             return f"This {noun} was cancelled."
-        if self.workflow == MEETING_WORKFLOW and await self._on_leave(
-            org_id, request.user_id, request.session_date
-        ):
-            return (
-                "You are on a leave of absence that covers this meeting, so "
-                "it does not count against you."
-            )
+        member = await self._member(org_id, request.user_id)
+        not_counted = await self._not_counted_refusal(
+            org_id, member, event, request.session_date
+        )
+        if not_counted is not None:
+            return not_counted[1]
         if await self._checked_in(org_id, request.user_id, event.id):
             return f"You checked in to this {noun}, so it already counts as attended."
         if self.workflow == MEETING_WORKFLOW and await self._meeting_waived(
@@ -1863,8 +1884,14 @@ class AttendanceWaiverService:
         status: Optional[AttendanceWaiverStatus] = None,
         skip: int = 0,
         limit: int = 50,
+        state: Optional[QueueState] = None,
     ) -> Tuple[List[AttendanceWaiverRequest], int]:
-        """The requests ``actor`` may decide or has decided, newest first."""
+        """The requests ``actor`` may decide or has decided, newest first.
+
+        ``state`` "pending" or "decided" (every other status) splits the queue
+        here, so each list's ``total`` and pages count only its own rows; a
+        client dropping pending rows from an unfiltered page came up short.
+        """
         org_id = str(organization_id)
         policy = await self.get_policy(org_id)
         pool = await self._pool(org_id, policy)
@@ -1876,6 +1903,14 @@ class AttendanceWaiverService:
         ]
         if status is not None:
             conditions.append(AttendanceWaiverRequest.status == status)
+        if state == "pending":
+            conditions.append(
+                AttendanceWaiverRequest.status == AttendanceWaiverStatus.PENDING
+            )
+        elif state == "decided":
+            conditions.append(
+                AttendanceWaiverRequest.status != AttendanceWaiverStatus.PENDING
+            )
         total = (
             await self.db.execute(
                 select(func.count(AttendanceWaiverRequest.id)).where(*conditions)

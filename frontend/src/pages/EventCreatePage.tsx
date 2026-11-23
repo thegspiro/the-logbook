@@ -148,7 +148,7 @@ export const EventCreatePage: React.FC = () => {
             templates={templates}
             value={selectedTemplateId}
             onChange={handleTemplateChange}
-            hint="Pick a template to pre-fill common settings, or start blank. A Training template opens the step-by-step form and fills its training details."
+            hint="Pick a template to pre-fill common settings, or start blank. A Training template opens the step-by-step form and fills its training details, links and completion settings."
             markTraining
           />
         )}
