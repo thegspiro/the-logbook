@@ -1839,6 +1839,22 @@ async function rawApiFromPage(page, method, path, body) {
 // held here because a cleanup receives only its page.
 let practicalSkillsRestore = null;
 
+/** Store Settings with a sales tax over 100 typed and saved: refused, unsaved. */
+async function flagStoreTaxRate(page) {
+  await page.locator("#settings-tax").fill("150", { timeout: 20_000 });
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await page.getByText("Fix these before saving the settings").waitFor();
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(500);
+}
+
+/** Leave the store settings without saving what flagStoreTaxRate typed. */
+async function leaveStoreSettingsUnsaved(page) {
+  await page.goto(new URL("/dashboard", page.url()).toString());
+  const discard = page.getByRole("button", { name: "Discard changes" });
+  if (await discard.count()) await discard.click();
+}
+
 function withShiftSignoffs(prepare) {
   return async (page) => {
     const config = await apiFromPage(
@@ -14101,6 +14117,79 @@ export const SHOTS = [
     selector: "section[aria-labelledby='event-headcount-heading']",
   },
   {
+    // Shown, not filled: the profile section saves as it is typed. The demo
+    // department has no short name, so the box shows its example.
+    id: "08-125-profile-short-name",
+    doc: "08-admin-reports.md",
+    line: 297,
+    anchor: "__placed-by-hand-08-125__",
+    alt: "Settings, General, Profile: the Short Name box under the department's name, with its example FCVFD and the hint that it is used where the full name will not fit, such as beside the department's own shifts in a member's hours, and that left blank the full name is used",
+    route: "/settings?tab=general&page=profile",
+    expect: { selector: "#settings-department-short-name" },
+    selector: "div.card:has(#settings-department-short-name)",
+    prepare: async (page) => {
+      await page
+        .locator("#settings-department-short-name")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    // Hours limit cleared and the card saved: the box is refused with its
+    // range and keeps its stored value, and Window (days), unchanged, saves.
+    // Nothing is stored differently afterwards.
+    id: "03-142-overtime-hours-limit-error",
+    doc: "03-scheduling.md",
+    line: 3827,
+    anchor: "__placed-by-hand-03-142__",
+    alt: "Scheduling settings, General, the Overtime advisory card after saving with Hours limit cleared: the box flagged Enter a whole number from 0 to 336., Window (days) beside it, and the line that the card saved except the flagged setting, which keeps its stored value",
+    route: "/scheduling/admin/settings/general",
+    expect: "Enter a whole number from 0 to 336.",
+    selector: "div.card-secondary:has(h3:text-is('Overtime advisory'))",
+    prepare: async (page) => {
+      const card = page.locator(
+        "div.card-secondary:has(h3:text-is('Overtime advisory'))",
+      );
+      await card.locator("#overtime-hours-limit").fill("", { timeout: 20_000 });
+      await card.getByRole("button", { name: "Save", exact: true }).click();
+      await card.getByText("Enter a whole number from 0 to 336.").waitFor();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    // A tax rate over 100 typed and Save settings pressed: nothing is saved,
+    // and the list at the top of the form links to the field. 18-10 is the
+    // field itself, further down the same page.
+    id: "18-09-store-settings-fix-these",
+    doc: "18-storefront.md",
+    line: 130,
+    anchor: "__placed-by-hand-18-09__",
+    alt: "Store Settings after Save settings with a sales tax of 150: the list Fix these before saving the settings at the top of the form, linking to Sales tax (%) with the range it accepts",
+    route: "/inventory/admin/store?tab=settings",
+    expect: "Fix these before saving the settings",
+    allowEmptyState:
+      '"No payment gate" is one of the unpaid-order choices on the same form, not an empty page.',
+    selector:
+      "div[role='alert']:has-text('Fix these before saving the settings')",
+    prepare: flagStoreTaxRate,
+    cleanup: leaveStoreSettingsUnsaved,
+  },
+  {
+    id: "18-10-store-settings-tax-flagged",
+    doc: "18-storefront.md",
+    line: 131,
+    anchor: "__placed-by-hand-18-10__",
+    alt: "The Pricing and delivery section of Store Settings with Sales tax (%) at 150, flagged with the range it accepts: a percentage from 0 to 100, or empty for no tax",
+    route: "/inventory/admin/store?tab=settings",
+    expect: { selector: "#settings-tax" },
+    allowEmptyState:
+      '"No payment gate" is one of the unpaid-order choices on the same form, not an empty page.',
+    selector: "section.card:has(#settings-tax)",
+    prepare: flagStoreTaxRate,
+    cleanup: leaveStoreSettingsUnsaved,
+  },
+  {
     id: "08-01-setup-checklist",
     doc: "08-admin-reports.md",
     line: 43,
@@ -15834,6 +15923,52 @@ export const SHOTS = [
     fullPage: true,
   },
   // ── 07 Suggestion boxes (2026-09-23): seeded by seed_suggestion_boxes ──
+  {
+    // A new box with one question added and left without wording, saved:
+    // nothing is sent, and the question is flagged where it sits. Cancelled.
+    id: "07-49-suggestion-box-question-flagged",
+    doc: "07-documents-forms.md",
+    line: 1043,
+    anchor: "__placed-by-hand-07-49__",
+    alt: "The Questions section of a new suggestion box after Save box with a Short text question left without wording: the question box flagged Write the question members will be asked., and nothing saved",
+    route: "/communications/suggestion-boxes",
+    viewport: { width: 1280, height: 2000 },
+    expect: "Write the question members will be asked.",
+    selector: "section[aria-labelledby='box-questions-heading']",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /New box/ })
+        .first()
+        .click();
+      const dialog = page.locator('[role="dialog"]');
+      await dialog.waitFor({ state: "visible" });
+      await dialog.locator("#box-name").fill("Station improvements");
+      await dialog
+        .getByRole("button", { name: "Add question" })
+        .click({ timeout: 10_000 });
+      // Short text, so the only thing wrong is the missing wording; a choice
+      // question would also be flagged for having no options.
+      await dialog.locator("select[id$='-type']").first().selectOption("text");
+      await dialog
+        .locator("fieldset", {
+          has: page.locator("legend", { hasText: "Reviewer positions" }),
+        })
+        .getByLabel("Secretary", { exact: true })
+        .check();
+      await dialog.getByRole("button", { name: "Save box" }).click();
+      await dialog
+        .getByText("Write the question members will be asked.")
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      const discard = page.getByRole("button", { name: "Discard changes" });
+      if (await discard.count()) await discard.click();
+    },
+  },
   {
     id: "07-14-suggestion-box-dialog",
     doc: "07-documents-forms.md",
@@ -24975,6 +25110,66 @@ export const SHOTS = [
         .waitFor({ timeout: 10_000 });
     },
     selector: '[role="tabpanel"]',
+  },
+  {
+    // The Compliance box's questions left unanswered and Continue pressed:
+    // each required question says what it needs. Nothing is submitted.
+    id: "07-50-suggestion-question-unanswered",
+    doc: "07-documents-forms.md",
+    line: 1136,
+    anchor: "__placed-by-hand-07-50__",
+    alt: "The Compliance box's question step after Continue with nothing chosen: the required question What kind of concern is this? flagged Answer “What kind of concern is this?”., with Continue still available",
+    route: "/suggestions",
+    auth: "member",
+    viewport: { width: 1280, height: 1200 },
+    expect: "Answer “",
+    selector: '[role="tabpanel"]',
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Compliance" });
+      await page
+        .getByRole("button", { name: /Continue/ })
+        .click({ timeout: 10_000 });
+      await page
+        .getByText(/^Answer “/)
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // Step 2 with Title and Details empty and Submit pressed. Nothing is
+    // submitted: the form names what is missing on each field.
+    id: "07-51-suggestion-title-missing",
+    doc: "07-documents-forms.md",
+    line: 1137,
+    anchor: "__placed-by-hand-07-51__",
+    alt: "Step 2 of 2 for the Compliance box after Submit with nothing typed: Title flagged Give your suggestion a title. and Details flagged Describe your suggestion., with Submit still available",
+    route: "/suggestions",
+    auth: "member",
+    viewport: { width: 1280, height: 1200 },
+    expect: "Give your suggestion a title.",
+    selector: '[role="tabpanel"]',
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Compliance" });
+      await page
+        .getByLabel("Safety", { exact: true })
+        .check({ timeout: 10_000 });
+      await page.getByLabel("No", { exact: true }).check({ timeout: 10_000 });
+      await page.getByRole("button", { name: /Continue/ }).click();
+      await page.getByText("Step 2 of 2").waitFor({ timeout: 10_000 });
+      await page
+        .getByRole("button", { name: /^Submit/ })
+        .first()
+        .click();
+      await page.getByText("Give your suggestion a title.").first().waitFor();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
   },
   {
     id: "07-36-compliance-details-step",

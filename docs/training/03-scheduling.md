@@ -3833,6 +3833,8 @@ its own, so if one is refused the other on the same card still saves, and the
 card says _"Saved, except the flagged setting, which keeps its stored value."_
 Pressing Enter in a box saves its card.
 
+![Scheduling settings, General, the Overtime advisory card after saving with Hours limit cleared: the box flagged Enter a whole number from 0 to 336., Window (days) beside it, and the line that the card saved except the flagged setting, which keeps its stored value](./images/03-142-overtime-hours-limit-error.png)
+
 ### What the settings do not do
 
 - **There is no "Require assignment confirmation" setting.** Assignments are
