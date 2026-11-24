@@ -1,6 +1,8 @@
 # Top-level tabs. Staged as build/content/.nav.yml by build.sh.
 nav:
   - Home: index.md
+  - Features: features.md
+  - Why The Logbook: why.md
   - Training guides: docs/training
   - Setup & administration: wiki
   - Reference: docs
