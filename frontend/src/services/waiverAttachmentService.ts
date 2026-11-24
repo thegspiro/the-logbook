@@ -29,12 +29,7 @@ export const WAIVER_ATTACHMENT_ACCEPT =
 export const WAIVER_ATTACHMENT_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png', '.heic', '.heif'] as const;
 export const WAIVER_ATTACHMENT_TYPES_LABEL = 'PDF, JPEG, PNG or HEIC';
 
-export const WaiverAttachmentMode = {
-  OFF: 'off',
-  OPTIONAL: 'optional',
-  REQUIRED: 'required',
-} as const;
-export type WaiverAttachmentMode = (typeof WaiverAttachmentMode)[keyof typeof WaiverAttachmentMode];
+export { WaiverAttachmentMode } from '../constants/enums';
 
 /** One filed document. `filename` is the neutral download name, never the uploader's. */
 export interface WaiverAttachment {
