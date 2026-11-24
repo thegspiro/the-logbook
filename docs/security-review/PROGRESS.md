@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (pending — branch `claude/friendly-babbage-2isqey`)**: Feature 10
+**PR [#4670](https://github.com/thegspiro/the-logbook/pull/4670) (branch
+`claude/friendly-babbage-2isqey`)**: Feature 10
 (Documents & legal), pass 17 — watchdog pickup (the dedicated `/loop 30m
 /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
 unreachable). **Branch-name deviation**, same as prior watchdog-run passes
