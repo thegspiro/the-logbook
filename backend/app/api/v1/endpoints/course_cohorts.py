@@ -341,8 +341,11 @@ async def _build_detail(
     if not include_member_data:
         # Notes are the training officers' own (the wizard says so); a roster
         # member gets the description and the schedule, not the officers'
-        # remarks about the class.
+        # remarks about the class, nor the officers' user ids, which the
+        # class page does not show.
         base.notes = None
+        base.created_by = None
+        base.generated_by = None
     return CourseCohortDetailResponse(
         **base.model_dump(),
         classes=[

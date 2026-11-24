@@ -15,9 +15,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router';
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import FieldRenderer from '../../../components/forms/FieldRenderer';
-import type { FieldDefinition } from '../../../components/forms/FieldRenderer';
+import { toFieldDefinition } from '../../../components/forms/publicFormFields';
 import { publicFollowUpFormService } from '../services/api';
-import type { PublicFollowUpForm, PublicFollowUpFormField } from '../types';
+import type { PublicFollowUpForm } from '../types';
 import { getVisibleFieldIds } from '../../../utils/formVisibility';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -28,28 +28,6 @@ import { FieldType } from '../../../constants/enums';
 const AUTOSAVE_DELAY_MS = 3000;
 
 type PageState = 'loading' | 'ready' | 'not_found' | 'unavailable' | 'submitted';
-
-function toFieldDefinition(field: PublicFollowUpFormField): FieldDefinition {
-  return {
-    id: field.id,
-    label: field.label,
-    field_type: field.field_type,
-    placeholder: field.placeholder ?? undefined,
-    help_text: field.help_text ?? undefined,
-    required: field.required,
-    min_length: field.min_length ?? undefined,
-    max_length: field.max_length ?? undefined,
-    min_value: field.min_value ?? undefined,
-    max_value: field.max_value ?? undefined,
-    options: field.options ?? undefined,
-    condition_field_id: field.condition_field_id ?? undefined,
-    condition_operator: field.condition_operator ?? undefined,
-    condition_value: field.condition_value ?? undefined,
-    sort_order: field.sort_order,
-    width: field.width,
-    is_sensitive: field.is_sensitive,
-  };
-}
 
 const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <main

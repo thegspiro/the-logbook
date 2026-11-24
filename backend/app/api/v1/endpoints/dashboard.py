@@ -7,7 +7,7 @@ including an admin-level summary for Chiefs and department leaders.
 
 import heapq
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -628,6 +628,9 @@ class CommunityReachTotals(BaseModel):
     members_involved: int
     requests_received: int
     requests_completed: int
+    # Requester feedback received in the period, and its average rating.
+    feedback_responses: int = 0
+    average_rating: Optional[float] = None
 
 
 class CommunityTurnout(BaseModel):
@@ -683,6 +686,66 @@ class CommunityEventReach(BaseModel):
     photos: str | None = None
 
 
+class CrrImpactTypeCount(BaseModel):
+    measure_id: str
+    label: str
+    quantity: int
+    previous_quantity: int | None = None
+
+
+class CrrImpactType(BaseModel):
+    """One activity type's work in the period, against the previous one."""
+
+    activity_type_id: str
+    name: str
+    activities: int
+    previous_activities: int | None = None
+    counts: list[CrrImpactTypeCount]
+
+
+class CrrImpactCount(BaseModel):
+    """A measure's total within a tag or ZIP code, named with its type."""
+
+    measure_id: str
+    activity_type_name: str
+    label: str
+    quantity: int
+
+
+class CrrImpactTag(BaseModel):
+    tag_id: str
+    kind: Literal["risk", "population"]
+    label: str
+    activities: int
+    counts: list[CrrImpactCount]
+
+
+class CrrImpactZip(BaseModel):
+    zip_code: str
+    city: str | None = None
+    state: str | None = None
+    # The ZIP's centre from the bundled GeoNames data, for the map.
+    latitude: float | None = None
+    longitude: float | None = None
+    activities: int
+    counts: list[CrrImpactCount]
+
+
+class CrrImpact(BaseModel):
+    """Community risk reduction work in the report's period.
+
+    ``by_tag`` counts an activity under every tag it carries, so its rows do
+    not sum to ``activities``; ``unplaced_activities`` had no ZIP code.
+    """
+
+    activities: int
+    previous_activities: int | None = None
+    by_type: list[CrrImpactType]
+    by_tag: list[CrrImpactTag]
+    by_zip: list[CrrImpactZip]
+    unplaced_activities: int
+
+
 class CommunityEngagement(BaseModel):
     """Outreach Impact metrics for the Community Outreach Manager.
 
@@ -702,11 +765,15 @@ class CommunityEngagement(BaseModel):
     upcoming_events: int
     turnout: CommunityTurnout
     granularity: Literal["month", "year"]
+    # The top of the rating question's scale (5 for the starter form), for
+    # "out of 5"; None when no rating question is set.
+    rating_scale_max: Optional[int] = None
     by_period: list[CommunityReachBucket]
     by_type: list[CommunityTypeBucket]
     # Everything handed out across the period, one line per item, most first.
     materials: list[CommunityMaterial] = []
     recent_events: list[CommunityEventReach]
+    crr: CrrImpact
 
 
 class OperationsItem(BaseModel):

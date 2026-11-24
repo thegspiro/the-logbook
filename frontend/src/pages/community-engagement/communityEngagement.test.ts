@@ -7,6 +7,7 @@ import {
   csvRows,
   describeChange,
   expectedText,
+  feedbackText,
   niceMax,
   parseCommunityPeriod,
   periodRangeText,
@@ -240,5 +241,19 @@ describe('allTypesIn', () => {
       'Fundraiser',
     ]);
     expect(allTypesIn(types, 'department').map((t) => t.label)).toEqual(['Public Education']);
+  });
+});
+
+describe('feedbackText', () => {
+  it("words the backend's average against the rating scale", () => {
+    expect(feedbackText(totals({ feedback_responses: 12, average_rating: 4.6 }), 5)).toBe(
+      '4.6 out of 5, from 12 responses'
+    );
+    expect(feedbackText(totals({ feedback_responses: 1, average_rating: 3 }), null)).toBe('3, from 1 response');
+  });
+
+  it('counts responses without a rating, and says nothing when nobody answered', () => {
+    expect(feedbackText(totals({ feedback_responses: 3, average_rating: null }), 5)).toBe('3 responses');
+    expect(feedbackText(totals(), 5)).toBeNull();
   });
 });

@@ -64,6 +64,8 @@ app/api/v1/endpoints/apparatus.py::list_driver_exception_approvers
 # (403 for a decider, 404 for anyone else).
 # Attention (2026-11-14): answers only about the caller (whether they decide
 # any request, and how many wait on them), for the navigation's link.
+# Removing a document (2026-11-23): the member's alone, on their own pending
+# request (403 for a decider, 404 for anyone else), as adding one is.
 app/api/v1/endpoints/attendance_waiver_requests.py::add_attendance_waiver_attachments
 app/api/v1/endpoints/attendance_waiver_requests.py::approve_attendance_waiver_request
 app/api/v1/endpoints/attendance_waiver_requests.py::confirm_attendance_waiver_request
@@ -76,6 +78,7 @@ app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_reques
 app/api/v1/endpoints/attendance_waiver_requests.py::list_attendance_waiver_requests
 app/api/v1/endpoints/attendance_waiver_requests.py::list_my_attendance_waiver_requests
 app/api/v1/endpoints/attendance_waiver_requests.py::override_attendance_waiver_request
+app/api/v1/endpoints/attendance_waiver_requests.py::remove_attendance_waiver_attachment
 app/api/v1/endpoints/attendance_waiver_requests.py::request_attendance_waiver_info
 app/api/v1/endpoints/attendance_waiver_requests.py::respond_attendance_waiver_request
 app/api/v1/endpoints/attendance_waiver_requests.py::submit_attendance_waiver_request

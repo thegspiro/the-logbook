@@ -158,6 +158,17 @@ _PLAIN_COLUMNS = [
         "id",
         ["contact_phone", "venue_address", "contact_email", "status_token"],
     ),
+    (
+        "crr_activities",
+        "id",
+        [
+            "street_address",
+            "resident_name",
+            "resident_phone",
+            "resident_email",
+            "notes",
+        ],
+    ),
     ("form_submissions", "id", ["sensitive_data"]),
     ("prospect_form_requests", "id", ["token", "draft_data", "changes"]),
     (

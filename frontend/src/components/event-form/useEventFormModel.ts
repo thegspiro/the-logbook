@@ -628,6 +628,10 @@ export const useEventFormModel = ({
     // All members is no member types. An edit sends the empty list, which
     // clears types saved before; a create leaves the key out.
     if (mandatoryForEveryone) submitData.mandatory_membership_types = editingEventId ? [] : undefined;
+    // Unticking Mandatory leaves the types undefined in form state, and an
+    // omitted key is "leave alone" on an update: the old types survived on an
+    // event no longer mandatory (pitfall #1). An edit sends the empty list.
+    if (!submitData.is_mandatory) submitData.mandatory_membership_types = editingEventId ? [] : undefined;
     // An emptied capacity box is undefined in form state; it means unlimited.
     if (typeof submitData.max_attendees !== 'number' || Number.isNaN(submitData.max_attendees)) {
       submitData.max_attendees = cleared;

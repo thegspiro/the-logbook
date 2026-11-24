@@ -19,6 +19,7 @@ describe('attendanceWaiverService.confirm', () => {
       actions: [],
       attachments: [],
       can_attach: false,
+      can_remove_attachment: false,
     });
     expect(mockPost).toHaveBeenCalledWith('/training/waivers/requests/req%2F1/confirm');
   });

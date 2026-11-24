@@ -239,10 +239,11 @@ class WorkflowSpec:
     # The kind for a member's notice that changes how their attendance is
     # graded: the expiry (the session now counts as missed), a moved start
     # (the approval is cleared and, unanswered, expires as a miss) and a
-    # decider's question (unanswered, it expires as a miss). For training this
-    # is the required record-changes kind, the one the decision email already
-    # uses, so a member who turned training reminders off is still told
-    # (CLAUDE.md pitfall #18). A void is not one: its session is not held.
+    # decider's question (unanswered, it expires as a miss). For both
+    # workflows this is the required record-changes kind (for training the one
+    # the decision email already uses), so a member who turned reminders or
+    # event changes off is still told (CLAUDE.md pitfall #18; owner, 2026-11-23
+    # for meetings). A void is not one: its session is not held.
     member_record_email_kind: EmailKind
     # Whether a request may carry documents. Only training has the upload
     # routes and the retention sweep; a meeting policy cannot ask for them.
@@ -281,7 +282,9 @@ MEETING_SPEC = WorkflowSpec(
     member_fallback_url="/events",
     decider_email_kind=EmailKind.EVENT_DUTIES,
     member_email_kind=EmailKind.EVENT_CHANGES,
-    member_record_email_kind=EmailKind.EVENT_CHANGES,
+    # Owner decision 2026-11-23: required, as for training, because each of
+    # these notices can end in a charged absence on the minutes.
+    member_record_email_kind=EmailKind.TRAINING_RECORD_CHANGES,
     takes_documents=False,
 )
 
@@ -2040,6 +2043,13 @@ class AttendanceWaiverService:
                     and r.status == AttendanceWaiverStatus.PENDING
                     and policy.attachment != "off"
                     and len(files.get(str(r.id), [])) < MAX_ATTACHMENTS,
+                    # The removal route's own rule (owner decision
+                    # 2026-11-23): the member, while pending, and never the
+                    # last document a policy requires.
+                    "can_remove_attachment": own
+                    and r.status == AttendanceWaiverStatus.PENDING
+                    and len(files.get(str(r.id), []))
+                    > (1 if policy.attachment == "required" else 0),
                     "attachments": [
                         {
                             "id": str(f.id),
@@ -3003,11 +3013,28 @@ async def _unapply_meeting_waiver(
     return len(attendees)
 
 
+def _correction_keeps_decision(
+    request: AttendanceWaiverRequest, event: Event, tz: ZoneInfo, now: datetime
+) -> bool:
+    """Whether a moved start leaves an approval as it is (owner decision,
+    2026-11-23): the session had already started when the start was changed,
+    so the edit corrects the record of a session that was held, or the new
+    start keeps the session's local date. Either way the member's reason for
+    missing it still holds. Any other move reopens the request.
+    """
+    if _utc(request.event_start_snapshot) <= now:
+        return True
+    return local_date(event.start_datetime, tz) == request.session_date
+
+
 async def reconfirm_for_rescheduled_events(
     db: AsyncSession, org_id: str, event_ids: Sequence[str]
 ) -> List[MemberNotice]:
     """Send every pending or approved request for a moved session back to its
-    member (owner decision, 2026-11-13).
+    member (owner decision, 2026-11-13), except an approval the move does not
+    unsettle: a correction to a session already held, or a new start on the
+    same local date, keeps it and only updates its snapshot
+    (``_correction_keeps_decision``, owner decision 2026-11-23).
 
     For every path that changes an event's start, inside the caller's
     transaction (it commits) while it holds the events exclusively; like
@@ -3079,6 +3106,15 @@ async def reconfirm_for_rescheduled_events(
         spec = SPECS[request.workflow]
         noun = spec.session_noun
         was = request.status
+        if was == AttendanceWaiverStatus.APPROVED and _correction_keeps_decision(
+            request, event, tz, now
+        ):
+            # Only the snapshot follows the event, so a second run for the
+            # same edit finds nothing moved (pitfall #36).
+            request.event_title_snapshot = (event.title or spec.default_title)[:255]
+            request.event_start_snapshot = _utc(event.start_datetime)
+            request.session_date = local_date(event.start_datetime, tz)
+            continue
         old_date = request.session_date
         old_when = _when_label(request.event_start_snapshot, tz)
         new_when = _when_label(event.start_datetime, tz)
@@ -3278,15 +3314,20 @@ async def _settle_member_notice(
 async def void_pending_for_events(
     db: AsyncSession, org_id: str, event_ids: Sequence[str], cause: str
 ) -> List[MemberNotice]:
-    """Void every pending request, of either workflow, for these events.
+    """Void every pending or approved request, of either workflow, for these
+    events.
 
     For the event's cancellation or deletion, inside the caller's
-    transaction (it commits) while it holds the events exclusively. A pending
+    transaction (it commits) while it holds the events exclusively. The
     request is about a session that will not now be held, so there is nothing
-    left to decide: it is voided, which frees its slot, its deciders' prompts
-    are archived and the member is told: in the app now, and by email once
-    the caller commits, through the returned notices and
-    ``send_member_notices`` (CLAUDE.md pitfall #18). An approved or denied
+    left to decide or excuse: it is voided, which frees its slot. An approved
+    one also gives the waiver back (owner decision 2026-11-23): it stops
+    counting toward the cap, which counts approved requests only, and a
+    meeting waiver it wrote comes off the minutes record. Its deciders'
+    prompts are archived and the member is told: in the app now, and by email
+    once the caller commits, through the returned notices and
+    ``send_member_notices`` (CLAUDE.md pitfall #18). A second run finds
+    nothing left to void, so it owes no second notice (pitfall #36). A denied
     request is the member's record and is kept (the row outlives the event,
     see the model). ``cause`` is "cancelled" or "deleted", for the log and the
     notice.
@@ -3301,7 +3342,12 @@ async def void_pending_for_events(
                 .where(
                     AttendanceWaiverRequest.organization_id == org_id,
                     AttendanceWaiverRequest.event_id.in_(ids),
-                    AttendanceWaiverRequest.status == AttendanceWaiverStatus.PENDING,
+                    AttendanceWaiverRequest.status.in_(
+                        [
+                            AttendanceWaiverStatus.PENDING,
+                            AttendanceWaiverStatus.APPROVED,
+                        ]
+                    ),
                 )
                 .with_for_update()
                 .execution_options(populate_existing=True)
@@ -3313,13 +3359,22 @@ async def void_pending_for_events(
     notices: List[MemberNotice] = []
     for request in pending:
         spec = SPECS[request.workflow]
+        was_approved = request.status == AttendanceWaiverStatus.APPROVED
+        if was_approved and request.workflow == MEETING_WORKFLOW:
+            await _unapply_meeting_waiver(db, org_id, request)
         subject = f"Waiver request closed — {request.event_title_snapshot}"
-        sentence = (
+        sentences = [
             f"Your request to be excused from "
             f'"{request.event_title_snapshot}" on '
             f"{_day_label(request.session_date)} was closed: the "
             f"{spec.session_noun} was {cause}."
-        )
+        ]
+        if was_approved:
+            sentences.append(
+                "It had been approved; since nothing is held, it no longer "
+                "counts toward your limit of waivers."
+            )
+        sentence = " ".join(sentences)
         logged = AttendanceWaiverService._action(
             request,
             AttendanceWaiverAction.VOIDED,
@@ -3331,7 +3386,7 @@ async def void_pending_for_events(
                 request_id=str(request.id),
                 workflow=request.workflow,
                 subject=subject,
-                sentences=(sentence,),
+                sentences=tuple(sentences),
                 action_id=str(logged.id),
             )
         )
@@ -3365,6 +3420,11 @@ async def void_pending_for_events(
             event_data={
                 **AttendanceWaiverService._ids(request),
                 "cause": cause,
+                "previous_status": (
+                    AttendanceWaiverStatus.APPROVED.value
+                    if was_approved
+                    else AttendanceWaiverStatus.PENDING.value
+                ),
             },
         )
     if pending:

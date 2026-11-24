@@ -296,6 +296,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
+    path: '/events/crr-activities',
+    source: 'src/modules/events/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
+  },
+  {
     path: '/events/analytics',
     source: 'src/modules/events/routes.tsx',
     coverage: 'ratchet',

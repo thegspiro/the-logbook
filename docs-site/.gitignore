@@ -1,0 +1,3 @@
+# Output of build.sh: the staged sources, the built site and the rendered
+# nginx snippet. Rebuilt from docs/, wiki/ and this folder every time.
+build/

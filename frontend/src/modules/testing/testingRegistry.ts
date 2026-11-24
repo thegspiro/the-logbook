@@ -375,6 +375,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       { path: '/events/templates', label: 'Event templates', permission: 'events.manage' },
       { path: '/events/attendance-requests', label: 'Attendance requests across events' },
+      {
+        path: '/events/crr-activities',
+        label: 'CRR activities',
+        note: 'The community risk reduction log; resident details only with crr.view_contact',
+        anyPermission: ['crr.record', 'events.manage'],
+      },
       { path: '/events/:id/edit', label: 'Edit event', anyPermission: ['events.manage', 'training.manage'] },
       { path: '/events/:id/monitoring', label: 'Check-in monitoring', permission: 'events.manage' },
       { path: '/events/analytics', label: 'Attendance trends', permission: 'analytics.view' },

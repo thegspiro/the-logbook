@@ -1,0 +1,10 @@
+# Build context for docs-site/Dockerfile, which builds from the repository
+# root. BuildKit reads this file instead of the root .dockerignore (which
+# excludes docs/ and wiki/ for the frontend image). Everything is excluded
+# except what the Dockerfile copies.
+*
+!docs
+!wiki
+!docs-site
+docs-site/build
+**/__pycache__
