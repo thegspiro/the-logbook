@@ -3921,6 +3921,40 @@ export interface RequirementOverrideCreate {
   reason: string;
 }
 
+// ── Possible double credit ────────────────────────────────────────
+
+/** One side of a possible double credit (snake_case, as the API serves it). */
+export interface DoubleCreditRecord {
+  id: string;
+  course_name: string;
+  course_id?: string | null;
+  completion_date?: string | null;
+  hours_completed: number;
+  source_event_id?: string | null;
+}
+
+/**
+ * A finalized event's record beside the member's own record of the same class
+ * and day (owner decision 2026-11-23: flagged, never merged).
+ */
+export interface DoubleCreditPair {
+  id: string;
+  user_id: string;
+  member_name: string;
+  /** `same_course`: both name one library course. `same_name`: equal names, ignoring case and punctuation. */
+  match_reason: string;
+  detected_at: string;
+  event_record: DoubleCreditRecord;
+  other_record: DoubleCreditRecord;
+  /** The other record came from an approved self-report; otherwise an officer entered it. */
+  other_from_self_report: boolean;
+}
+
+export interface DoubleCreditView {
+  items: DoubleCreditPair[];
+  total: number;
+}
+
 // ── Course links ──────────────────────────────────────────────────
 
 /** A library course, as the course-links screen offers it. */

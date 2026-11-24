@@ -15362,6 +15362,33 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    id: "03-147-template-delete-confirm",
+    doc: "03-scheduling.md",
+    line: 3527,
+    anchor:
+      "Deleting the Day Shift template: the confirmation saying a template",
+    alt: "Deleting the Day Shift template: the confirmation explaining that a template any shift or pattern uses is deactivated instead of deleted, its shifts keeping it and its patterns pausing, and that an unused one is deleted for good, with Keep it and Delete",
+    route: "/scheduling/admin/planning/templates",
+    expect: { selector: "text=deactivated instead of deleted" },
+    prepare: async (page) => {
+      // The card's actions are revealed on hover for a mouse.
+      const remove = page.getByRole("button", { name: "Delete Day Shift" });
+      await remove.hover();
+      await remove.click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Keep it" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    // Day Shift is used by the demo's shifts and patterns, so confirming would
+    // deactivate it and stop the A/B/C rotation. The shot never confirms.
+    cleanup: async (page) => {
+      const keep = page.getByRole("button", { name: "Keep it" });
+      if (await keep.count()) await keep.click();
+    },
+    fullPage: false,
+  },
+  {
     id: "16-32-import-training-undo-blocked",
     doc: "16-integrations.md",
     line: 1021,
@@ -23241,7 +23268,7 @@ export const SHOTS = [
     fullPage: true,
   },
   {
-    id: "03-142-my-shifts-past-credited",
+    id: "03-145-my-shifts-past-credited",
     doc: "03-scheduling.md",
     line: 429,
     anchor:
@@ -23266,7 +23293,7 @@ export const SHOTS = [
     fullPage: true,
   },
   {
-    id: "03-143-hours-month-selected",
+    id: "03-146-hours-month-selected",
     doc: "03-scheduling.md",
     line: 508,
     anchor: "The Hours view with one month's bar selected on the year chart",

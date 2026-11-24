@@ -426,7 +426,7 @@ higher on Past than on Hours, with nothing to say why. Now:
   recent attended shifts, so a member with more lost the older ones, and their
   hours, without warning. Every shift is now loaded.
 
-![My Shifts on Past: the Year picker, the Hours credited, Credited shifts and Avg hours/shift tiles with the hours awaiting close-out beneath, the hours-by-month chart, and past shifts under month headers giving each month's shifts and credited hours, one shift's pill reading awaiting close-out in amber](./images/03-142-my-shifts-past-credited.png)
+![My Shifts on Past: the Year picker, the Hours credited, Credited shifts and Avg hours/shift tiles with the hours awaiting close-out beneath, the hours-by-month chart, and past shifts under month headers giving each month's shifts and credited hours, one shift's pill reading awaiting close-out in amber](./images/03-145-my-shifts-past-credited.png)
 
 _Added 2026-11-10._ **End-of-shift summary.** The email and the in-app notice
 list call types as counts, most frequent first ("3 × EMS, 1 × Fire Alarm"),
@@ -521,7 +521,7 @@ It also appears on a member's **Shift & Call History** on their profile.
 
 ![My Shifts on its Hours view: This month, this year and all-time cards with the two-colour split bar, the year picker between its Previous year and Next year arrows, the year-at-a-glance chart with its Busiest month, Months with shifts and Avg per active month tiles, and All shifts below](./images/03-104-my-shifts-hours.png)
 
-![The Hours view with October's bar selected on the year-at-a-glance chart, its tooltip giving the month's hours, shifts and calls: the other months dimmed, and October's shift highlighted in All shifts below](./images/03-143-hours-month-selected.png)
+![The Hours view with October's bar selected on the year-at-a-glance chart, its tooltip giving the month's hours, shifts and calls: the other months dimmed, and October's shift highlighted in All shifts below](./images/03-146-hours-month-selected.png)
 
 ### Your shifts on the dashboard
 
@@ -3481,9 +3481,12 @@ edit an existing pattern. Now the **Templates** tab shows templates only, and
 its heading points to **Shift patterns**. Each pattern on the **Patterns** tab
 has an **Edit** button, which opens **Edit Pattern** and saves exactly as the
 old form did: emptying a field clears it, a field the server refuses stays
-flagged while the rest saves, and an inactive template is warned about.
-_Screenshot still to make: a pattern card on the Patterns tab with its **Edit**
-button._
+flagged while the rest saves, and an inactive template is warned about. The
+form has no fields for a weekly pattern's days or a custom pattern's dates, and
+says so: they stay as they are, and changing them means making a new pattern
+with **New Pattern**. The Patterns tab picture under **Deleting a template or
+a basic vehicle**, below, shows a pattern card open with its **Edit** button,
+and the one after it shows **Edit Pattern**.
 
 ### Templates
 
@@ -3521,6 +3524,8 @@ generating shifts_. Shifts it already made stay. It resumes once the template is
 reactivated or the pattern is pointed at another template. To reactivate a
 template, select **Reactivate** on its card on the **Templates** tab
 _(2026-10-24)_; patterns using it generate shifts again.
+
+![Deleting the Day Shift template: the confirmation explaining that a template any shift or pattern uses is deactivated instead of deleted, its shifts keeping it and its patterns pausing, and that an unused one is deleted for good, with Keep it and Delete](./images/03-147-template-delete-confirm.png)
 
 ![The Patterns tab with the Reserve Engine Weekend Cover pattern, its Generate shifts button disabled and the warning that its template is inactive and the pattern is not generating shifts](./images/03-132-pattern-template-inactive.png)
 
