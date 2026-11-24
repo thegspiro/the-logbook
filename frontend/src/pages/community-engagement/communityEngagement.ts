@@ -226,3 +226,17 @@ export const allTypesIn = (types: CommunityTypeBucket[], group: CommunityTypeBuc
   types
     .filter((t) => t.group === group)
     .sort((a, b) => b.people_reached - a.people_reached || b.events - a.events || a.label.localeCompare(b.label));
+
+/**
+ * What requesters said, in one line: "4.6 out of 5, from 12 responses", or
+ * "12 responses" when none carried a rating, or null when nobody responded.
+ * The average is the backend's (pitfall #29); this only words it.
+ */
+export const feedbackText = (totals: CommunityReachTotals, scaleMax?: number | null): string | null => {
+  const responses = totals.feedback_responses ?? 0;
+  if (responses === 0) return null;
+  const count = `${formatNumber(responses)} ${responses === 1 ? 'response' : 'responses'}`;
+  if (totals.average_rating == null) return count;
+  const outOf = scaleMax ? ` out of ${formatNumber(scaleMax)}` : '';
+  return `${formatNumber(totals.average_rating)}${outOf}, from ${count}`;
+};

@@ -73,9 +73,7 @@ describe('SignDialog', () => {
 
     const name = screen.getByLabelText(/^Type your full name/);
     await waitFor(() =>
-      expect(name).toHaveAccessibleDescription(
-        expect.stringContaining('Your full name is too long — keep it to 200 characters.')
-      )
+      expect(name).toHaveAccessibleDescription(/Your full name is too long — keep it to 200 characters\./)
     );
     expect(name).toHaveAttribute('aria-invalid', 'true');
     expect(onClose).not.toHaveBeenCalled();

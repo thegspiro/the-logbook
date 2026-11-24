@@ -293,7 +293,7 @@ describe('the mileage rate setting', () => {
 
     // Named under the field (forms review F-3), not in a separate alert.
     expect(field).toHaveAttribute('aria-invalid', 'true');
-    expect(field).toHaveAccessibleDescription(expect.stringContaining('at most 5'));
+    expect(field).toHaveAccessibleDescription(/at most 5/);
     expect(field).toHaveFocus();
     expect(mockUpdateSettings).not.toHaveBeenCalled();
   });
@@ -333,7 +333,7 @@ describe('the mileage rate setting', () => {
     await user.click(screen.getByRole('button', { name: 'Save rate' }));
 
     await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
-    expect(field).toHaveAccessibleDescription(expect.stringContaining('between 0.001 and 5 dollars a mile'));
+    expect(field).toHaveAccessibleDescription(/between 0\.001 and 5 dollars a mile/);
     expect(field).toHaveFocus();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });

@@ -3358,6 +3358,39 @@ summary does not include them.
 
 ![The Materials handed out card on Outreach Impact for this year: each item recorded at an event's close-out with the total handed out](./images/04-107-materials-handed-out.png)
 
+#### Feedback from requesters
+
+**Who can do this:** officers who can manage events.
+
+Once a request is marked **Completed**, its status page can ask the requester
+how it went, and the **Completed** email links to it. The questions are a form
+from **Forms**, so you write your own and choose when each one appears: a
+question can show only when an earlier answer equals a value, contains it, or
+is at least or at most a number.
+
+To turn it on, open **Manage Events → Settings → Request Handling → Feedback
+From Requesters**:
+
+1. Choose a published form as the **Feedback form**, or select **Create the
+   starter feedback form** for one that asks **How did the visit go?** (1 to
+   5), **What went well?**, and **What could we do better?**, shown only at a
+   rating of 3 or less.
+2. Choose the **Rating question**: the answer the report averages. It must be
+   a number question, or a choice whose options are all whole numbers. The
+   starter form comes with it chosen.
+
+Change the questions in **Forms** like any other form. A requester answers
+once, and cannot change the answer afterwards. Their answers appear on the
+request under **Requester feedback**. An answer to a question marked
+**Sensitive** stays with the submission in **Forms**, and the request only says
+how many there are. The **Community Engagement** tab adds a **Requester
+feedback** line: the average rating and how many responded in the period. The
+printed summary adds the same row once anyone has answered.
+
+The link is added to the built-in status email. A request email template your
+department attached to the **Completed** trigger itself is sent as written,
+without it.
+
 ### Public Request Form
 
 The quickest way to make the public form is **Manage Events → Settings →

@@ -16,7 +16,7 @@ import html as _html
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,6 +51,7 @@ from app.schemas.event_request import (
     EventRequestAssign,
     EventRequestComment,
     EventRequestCreate,
+    EventRequestFeedbackResponse,
     EventRequestListItem,
     EventRequestPostpone,
     EventRequestPublicCancel,
@@ -63,10 +64,13 @@ from app.schemas.event_request import (
     EventRequestStatusUpdate,
     EventRequestVolunteerCall,
     EventRequestVolunteerCallResult,
+    PublicFeedbackForm,
+    PublicFeedbackSent,
     SendTemplateEmail,
     TaskCompletionUpdate,
 )
 from app.schemas.forms import FormResponse, FormsListResponse
+from app.schemas.membership_pipeline import PublicFollowUpAnswers
 from app.services.apparatus_event_service import (
     ApparatusEventService,
     ConflictsNotAcknowledged,
@@ -105,6 +109,11 @@ from app.services.event_request_service import (
     user_names_by_id,
 )
 from app.services.forms_service import FormsService
+from app.services.outreach_feedback_service import (
+    FeedbackAlreadySent,
+    FeedbackError,
+    OutreachFeedbackService,
+)
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import (
@@ -506,6 +515,10 @@ async def check_request_status(
         if row:
             event_date = row[0]
 
+    feedback_offered, feedback_sent = await OutreachFeedbackService(db).status_flags(
+        event_request, org
+    )
+
     # Can cancel if not already in a terminal state
     can_cancel = event_request.status not in (
         EventRequestStatus.CANCELLED,
@@ -527,8 +540,92 @@ async def check_request_status(
         decline_reason=event_request.decline_reason,
         task_progress=task_progress,
         can_cancel=can_cancel,
+        feedback_offered=feedback_offered,
+        feedback_sent=feedback_sent,
         timezone=scheduling_timezone(org).key if org else None,
     )
+
+
+_FEEDBACK_UNAVAILABLE = "Feedback is not open for this request."
+_FEEDBACK_ALREADY_SENT = "Feedback for this request has already been sent. Thank you."
+
+
+def _private(response: Response) -> None:
+    """A status-link response is for the one person holding the link."""
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+
+
+async def _rate_limit_status_link(request: Request) -> None:
+    # Per IP, as cancel is: these public endpoints take a token that is the
+    # only credential, and the submit writes rows.
+    allowed, _count, _limit = await check_ip_rate_limit(
+        get_client_ip(request), limit=10
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please try again later.",
+        )
+
+
+@router.get("/status/{token}/feedback", response_model=PublicFeedbackForm)
+async def get_request_feedback_form(
+    token: str,
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    The department's feedback form for a completed request.
+
+    No authentication: the status token is the credential. 404 when feedback
+    is not open for the request (not completed, no form set, or the token is
+    unknown); 409 once feedback has been sent.
+    """
+    await _rate_limit_status_link(request)
+    _private(response)
+    try:
+        view = await OutreachFeedbackService(db).public_view(token)
+    except FeedbackAlreadySent:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=_FEEDBACK_ALREADY_SENT)
+    if view is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=_FEEDBACK_UNAVAILABLE)
+    return view
+
+
+@router.post("/status/{token}/feedback", response_model=PublicFeedbackSent)
+async def send_request_feedback(
+    token: str,
+    body: PublicFollowUpAnswers,
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Send feedback on a completed request. One response per request, final.
+
+    No authentication: the status token is the credential. 400 names an answer
+    to correct; 404 when feedback is not open; 409 when it was already sent.
+    """
+    await _rate_limit_status_link(request)
+    _private(response)
+    try:
+        submitted_at = await OutreachFeedbackService(db).submit(
+            token,
+            body.data,
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent", "")[:500],
+        )
+    except FeedbackAlreadySent:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=_FEEDBACK_ALREADY_SENT)
+    except FeedbackError as e:
+        await db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e))
+    if submitted_at is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=_FEEDBACK_UNAVAILABLE)
+    return PublicFeedbackSent(submitted_at=submitted_at)
 
 
 @router.post("/status/{token}/cancel")
@@ -982,6 +1079,33 @@ async def get_event_request(
         raise HTTPException(status_code=404, detail="Event request not found")
 
     return await _build_response(db, event_request)
+
+
+@router.get(
+    "/{request_id}/feedback", response_model=Optional[EventRequestFeedbackResponse]
+)
+async def get_event_request_feedback(
+    request_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    The requester's feedback on this request, question by question, or null
+    when none was sent. 404 when the request is not this department's.
+
+    **Requires permission: events.manage**
+    """
+    exists = await db.scalar(
+        select(EventRequest.id).where(
+            EventRequest.id == str(request_id),
+            EventRequest.organization_id == str(current_user.organization_id),
+        )
+    )
+    if exists is None:
+        raise HTTPException(status_code=404, detail="Event request not found")
+    return await OutreachFeedbackService(db).for_request(
+        str(current_user.organization_id), str(request_id)
+    )
 
 
 @router.patch("/{request_id}/status")

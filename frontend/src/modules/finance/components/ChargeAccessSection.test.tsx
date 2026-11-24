@@ -192,7 +192,7 @@ describe('ChargeAccessSection', () => {
 
     const select = screen.getByLabelText('Who can charge these lines');
     await waitFor(() => expect(select).toHaveAttribute('aria-invalid', 'true'));
-    expect(select).toHaveAccessibleDescription(expect.stringContaining("Input should be 'open' or 'restricted'"));
+    expect(select).toHaveAccessibleDescription(/Input should be 'open' or 'restricted'/);
     expect(select).toHaveFocus();
   });
 
