@@ -1363,3 +1363,58 @@ export interface ArticleQuery {
 }
 
 export type ArticleExportFormat = 'pdf' | 'docx';
+
+// --- Public website (phase 7) ---
+
+export type PublicWidgetTheme = 'auto' | 'light' | 'dark';
+
+/** Each part of History the department's website may show. */
+export interface HistoryPublicSwitches {
+  people: boolean;
+  honor_roll: boolean;
+  photos: boolean;
+  documents: boolean;
+  events: boolean;
+  apparatus: boolean;
+  articles: boolean;
+  timeline: boolean;
+  today: boolean;
+}
+
+export interface HistoryPublicSettings extends HistoryPublicSwitches {
+  widget_theme: PublicWidgetTheme;
+  widget_show_branding: boolean;
+  widget_link_exists: boolean;
+  widget_token_created_at: string | null;
+  portal_enabled: boolean;
+  portal_has_key: boolean;
+  /** The department's websites (Organization Settings → Forms), the only pages that may show the widget. */
+  widget_websites: string[];
+}
+
+export type HistoryPublicSettingsUpdate = Partial<HistoryPublicSwitches> & {
+  widget_theme?: PublicWidgetTheme | undefined;
+  widget_show_branding?: boolean | undefined;
+};
+
+export interface HistoryWidgetEntry {
+  key: string;
+  kind: string;
+  date: string;
+  precision: DatePrecision;
+  circa: boolean;
+  label: string;
+  detail: string | null;
+  years_ago: number;
+  anniversary: string;
+}
+
+/** What the "Today in history" widget shows. */
+export interface HistoryWidgetToday {
+  mode: 'today' | 'week' | 'none';
+  date: string;
+  entries: HistoryWidgetEntry[];
+  theme: PublicWidgetTheme;
+  organization_name: string | null;
+  has_logo: boolean;
+}

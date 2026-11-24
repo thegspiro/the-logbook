@@ -109,11 +109,21 @@ async def load_photos(item: HistoryArticle, view: dict[str, Any]) -> dict[str, b
     """JPEG bytes for every photo *view* shows, keyed by media id. Only photos
     already in the view are read, so nothing the reader may not see is ever
     loaded."""
+    return await read_photos(_shown_media(item), view, item.id)
+
+
+async def read_photos(
+    media: dict[str, HistoryMedia], view: dict[str, Any], article_id: str
+) -> dict[str, bytes]:
+    """JPEG bytes for each photo *view* shows that is also in *media*. The
+    public PDF passes the photos of the article's cleared copy, which can
+    differ from the live article's while an edit waits for clearance."""
     wanted = {view["cover"]["id"]} if view.get("cover") else set()
     wanted |= {b["media"]["id"] for b in view["blocks"] if b.get("media")}
-    media = _shown_media(item)
     photos: dict[str, bytes] = {}
     for media_id in wanted:
+        if media_id not in media:
+            continue
         stored = next(
             (f for f in media[media_id].files if f.role == MediaFileRole.DISPLAY),
             None,
@@ -125,7 +135,7 @@ async def load_photos(item: HistoryArticle, view: dict[str, Any]) -> dict[str, b
         except (OSError, UnidentifiedImageError, ValueError) as exc:
             logger.warning(
                 "Article {} export: photo {} could not be read: {}",
-                item.id,
+                article_id,
                 media_id,
                 type(exc).__name__,
             )

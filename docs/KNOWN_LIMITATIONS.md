@@ -1250,6 +1250,33 @@ Phase 6, articles with PDF and Word export (2026-11-22 spec), ships with these:
   read and re-encoded.
 - **No new dependency.** ReportLab and python-docx were already installed.
 
+Phase 7, publishing outward (2026-11-24 spec), ships with these:
+
+- **One switch per part, no field list.** Clearance decides what a record
+  shows; the switches decide which parts of History the website can reach at
+  all. There is no per-field allowlist for History, unlike the portal's other
+  data.
+- **No text search, no RSS.** The cleared copies are stored as JSON, which
+  cannot be searched efficiently, so lists filter by decade only. The "what's
+  new" feed is JSON.
+- **Lists are built in memory.** Each call loads the department's public
+  records of the parts that are on and sorts them. Fine for a department's
+  public archive; tens of thousands of public records would want stored
+  sort keys.
+- **Recordings and films are listed, not played.** Their details and
+  thumbnails are given; no stream. No Word file for articles.
+- **Nothing is cached.** The security middleware's `no-store` holds for these
+  answers too, so the spec's "within the portal's cache time" is in practice
+  "on the next request". A busy website should cache on its own side.
+- **The widget is framed from the forms list** (owner decision, 2026-11-24):
+  the department's websites under Organization Settings → Forms, the list
+  embedded forms use. The Public Portal's own `allowed_origins` stays unread.
+- **A portal that is off answers 503, not 404,** on the API, as every other
+  portal route does. Signed files and the widget answer 404 in every refused
+  case.
+- **No public pages inside the app.** The department's own website shows the
+  records; only the widget is served by the app.
+
 ## Department Store — Decisions for the Owner (2026-11-13)
 
 From the department store follow-up

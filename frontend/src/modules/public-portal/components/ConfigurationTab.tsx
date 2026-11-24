@@ -12,6 +12,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router';
 import { Save, AlertCircle } from 'lucide-react';
 import { usePortalConfig } from '../hooks/usePublicPortal';
 import { formatNumber } from '../../../utils/dateFormatting';
@@ -105,6 +106,19 @@ const ConfigurationTab: React.FC = () => {
             Recommended: 1000 for public websites, 10000 for high-traffic sites
           </p>
         </div>
+      </div>
+
+      {/* History serves through this portal; what it shows is set in History. */}
+      <div className="bg-theme-surface rounded-lg p-6 shadow-sm">
+        <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">History</h3>
+        <p className="text-theme-text-secondary text-sm">
+          The department&rsquo;s History can be shown on its website through this portal, with the same API keys. Which
+          parts, and the &ldquo;Today in history&rdquo; widget, are set in{' '}
+          <Link to="/history/settings" className="font-semibold underline">
+            History settings &rarr; Public website
+          </Link>
+          .
+        </p>
       </div>
 
       {/* Security Notice */}

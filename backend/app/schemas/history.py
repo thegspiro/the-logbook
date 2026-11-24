@@ -1473,5 +1473,57 @@ class ArticleUpdate(_ArticleFields, _ArticleLinks):
     edit_note: Optional[str] = Field(default=None, max_length=2000)
 
 
+# ----------------------------------------------------------------------
+# Public website (phase 7)
+# ----------------------------------------------------------------------
+
+
+class HistoryPublicSettingsView(BaseModel):
+    """What the department's website may show from History, and whether the
+    portal it reaches it through is ready."""
+
+    people: bool
+    honor_roll: bool
+    photos: bool
+    documents: bool
+    events: bool
+    apparatus: bool
+    articles: bool
+    timeline: bool
+    today: bool
+    widget_theme: Literal["auto", "light", "dark"]
+    widget_show_branding: bool
+    #: Whether a widget link exists. The link itself is shown once, when made.
+    widget_link_exists: bool
+    widget_token_created_at: Optional[datetime]
+    portal_enabled: bool
+    portal_has_key: bool
+    #: The department's websites (Organization Settings -> Forms), the only
+    #: pages that may frame the widget.
+    widget_websites: list[str]
+
+
+class HistoryPublicSettingsUpdate(BaseModel):
+    """Only the fields sent change."""
+
+    people: Optional[bool] = None
+    honor_roll: Optional[bool] = None
+    photos: Optional[bool] = None
+    documents: Optional[bool] = None
+    events: Optional[bool] = None
+    apparatus: Optional[bool] = None
+    articles: Optional[bool] = None
+    timeline: Optional[bool] = None
+    today: Optional[bool] = None
+    widget_theme: Optional[Literal["auto", "light", "dark"]] = None
+    widget_show_branding: Optional[bool] = None
+
+
+class HistoryWidgetLink(BaseModel):
+    """A new widget link's secret, returned once and never stored."""
+
+    token: str
+
+
 ClearanceReview.model_rebuild()
 AlbumEntry.model_rebuild()
