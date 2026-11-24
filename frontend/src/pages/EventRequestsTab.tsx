@@ -71,6 +71,7 @@ import { displayNameOf } from '../utils/memberName';
 import { isActiveAccount } from '../constants/enums';
 import { useAuthStore } from '../stores/authStore';
 import RequestApparatusCrewSection from './event-requests/RequestApparatusCrewSection';
+import RequestFeedbackSection from './event-requests/RequestFeedbackSection';
 import MemberAudiencePicker from '../components/member-audience/MemberAudiencePicker';
 import { EMPTY_AUDIENCE, type MemberAudienceChoice } from '../types/memberAudience';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -1499,6 +1500,8 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
                     )}
                   </div>
                 </section>
+
+                {detail.status === 'completed' && <RequestFeedbackSection requestId={detail.id} />}
 
                 <section className="border-theme-surface-border border-t pt-4">
                   <h3 className="text-theme-text-muted mb-3 flex items-center gap-2 text-xs font-semibold tracking-wider uppercase">
