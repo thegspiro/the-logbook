@@ -223,6 +223,15 @@ press **New request** and show **How it came in**.]**
 > "After the visit, finalizing the event's attendance marks the request
 > completed for you."
 
+**[PRODUCTION NOTE — 2026-11-24. The line above about the status link is now
+true until the request is completed. Since 2026-11-23 a department can set a
+feedback form (Events settings → Public Requests → Handling → **Feedback From
+Requesters**), and the built-in Completed email then links to the status page
+to ask the requester how it went. If the demo department sets one, add: "Once
+it's completed, the Completed email asks them for feedback, and their answers
+show on the request." Optional; the current take is not wrong for a
+department without a feedback form.]**
+
 > "For an open house or any event outside a room with a kiosk, the event has its
 > own guest code. Open the event's QR page and the **Guest Check-In** card shows
 > it once check-in opens; **Reset code** issues a new one and stops every
@@ -474,6 +483,13 @@ Waivers**.]**
 
 > "**Active Waivers** shows what's in force, and **Deactivate** ends one early.
 > **All Waivers** keeps the history."
+
+**[PRODUCTION NOTE — 2026-11-24. Since 2026-11-23, picking yourself as the
+member shows "You cannot excuse your own requirements…" with a link to submit
+a leave request, and **Create Waiver** stays off; **Edit** is not offered on
+your own leave. Record the beat with another member selected, as before. If
+there is time, add: "You can't record one for yourself — not even a Chief. The
+form says so and points you to a leave request for someone else to decide."]**
 
 ### FORMS MODULE (13:30 – 14:00)
 

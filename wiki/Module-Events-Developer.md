@@ -87,6 +87,14 @@ POST   /events/{id}/cancel-series                # Cancel series; cancel_future_
 POST   /events/{id}/rsvp-series                  # RSVP to all future occurrences
 ```
 
+`update-future` applies only the keys sent; the edit page sends only the fields
+that changed (`onlyChangedSeriesFields`). Since 2026-11-23 it refuses a change
+of times or `location_id` that would put a moved occurrence on a booked room
+(`_refuse_series_room_clashes`, `tests/test_event_series_room_overlap.py`), and
+answers 404 for an unknown anchor (`EventNotFoundError`). `POST
+/events/recurring` announces the series to chat integrations once, by its
+first occurrence.
+
 ### RSVP and attendees
 
 ```
@@ -352,6 +360,8 @@ POST   /event-requests/public                         # Submit (public; CAPTCHA 
 GET    /event-requests/types/labels                   # Outreach type labels (public)
 GET    /event-requests/status/{token}                 # Public status
 POST   /event-requests/status/{token}/cancel          # Public self-cancel
+GET    /event-requests/status/{token}/feedback        # The department's feedback form for a Completed request (public; 404 when not open, 409 once sent)
+POST   /event-requests/status/{token}/feedback        # One response per request, Forms branching enforced (public; 409 once sent)
 
 GET    /event-requests                                # List (admin)
 POST   /event-requests                                # Enter a request taken by phone, email or in person (manage; no CAPTCHA or public limits)
@@ -370,6 +380,9 @@ GET    /event-requests/{id}/staffing                  # Volunteer signups (manag
 POST   /event-requests/{id}/staffing                  # Open volunteer signup sheet (manage)
 POST   /event-requests/{id}/volunteer-call            # Email members for volunteers (manage)
 POST   /event-requests/{id}/apparatus-crew            # Put an apparatus event template's crew on the request's event (manage + apparatus_events.manage)
+GET    /event-requests/{id}/feedback                  # The requester's response, question by question; Sensitive answers only counted (manage)
+GET    /events/settings/feedback-forms                # Published forms usable as the feedback form (manage)
+POST   /events/settings/feedback-forms/starter        # Create the starter feedback form; returns the existing one on a repeat (manage)
 
 GET    /event-requests/email-templates                # List email templates
 POST   /event-requests/email-templates                # Create

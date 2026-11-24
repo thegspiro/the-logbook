@@ -974,6 +974,9 @@ class, so an administrative member on the Life tier is expected at an event
 mandatory for Life members. A member with no standing recorded at all counts
 as a regular member. A member is not counted as required to attend if they were
 hired after the event date or were on approved leave that day.
+_(2026-11-23)_ Unticking **Mandatory attendance** when editing an event also
+clears its member types. Before, the old types stayed stored on an event that
+was no longer mandatory.
 
 ![Create Event form with type, title, date, location, and reminder fields](./images/04-05-create-event.png)
 
@@ -1005,7 +1008,9 @@ saving it published it. _(2026-11-15)_ Nobody can check in to a draft, by QR
 code, NFC tag, kiosk or self check-in, and its QR code does not work until it
 is published. Its folder and training session stay hidden from anyone who
 cannot see the draft, and the training calendar leaves it out for them too.
-Only an officer who can manage events can publish it.
+A training manager sees draft Training events on the Events page as well, and
+can open them, but no other type's drafts. Only an officer who can manage
+events can publish it.
 
 _(2026-11-15)_ Nobody can check in to a draft: a QR scan, an NFC tap and a
 kiosk all refuse it with "Cannot check in to an unpublished event", and its QR
@@ -1305,6 +1310,14 @@ its attendance is finalized — however the event was created.
    finalized, only **Counts toward attendance** can change among the training
    details.
 
+**Changing an existing event to Training.** Editing an event of another type
+and choosing **Training** switches to the training form, whose **Training
+Info** starts on **No course yet**. _(2026-11-23)_ The note at the top now says what a save on
+those defaults does: "Saving adds training details only if you set some
+there; left as they are, attendance is credited under the event's title as
+Continuing Education." Before, it promised that saving added training details
+whatever you did.
+
 ![Create Event after choosing Training: the Switched to the training form note with its Change back to button, above the training-event form on its Training Info step with a course picked](./images/04-61-training-details-create.png)
 
 **What each member is credited.** Finalizing gives every checked-in member a
@@ -1541,6 +1554,23 @@ the events list. On any occurrence's page:
   outside the new schedule…". Postpone that occurrence on its own, or correct
   or remove those check-ins first. A single event's edit has refused this since
   2026-11-08.
+- _(2026-11-23)_ **Only what you changed is copied.** The save compares the
+  form with the occurrence you opened and sends only the fields that differ.
+  A field you left alone keeps each later occurrence's own value, even where
+  it differs from this one, and a field that is blank here no longer wipes it
+  from every later occurrence. A field you clear on purpose is still cleared
+  on all of them. Start, end and RSVP deadline go together: change one and all
+  three are applied. On a Training event the training details are always
+  applied as the form shows them.
+- _(2026-11-23)_ **A booked room is refused.** A change to the time or the
+  **Location** checks every occurrence it moves, at its new time and in its
+  new room. If any would land on another booking, nothing is saved and the
+  message says how many occurrences clash and with which events: "Location is
+  already booked during this time for 2 of 6 occurrences in this series.
+  Conflicting event(s): …". The series' own occurrences being moved do not
+  count against each other, but earlier occurrences you are not moving still
+  do. An edit that moves no occurrence and keeps the room is never refused
+  over a clash that was already there.
 
 > **Hint:** Deleting a single occurrence does not affect the others. The
 > Logbook warns you when an edit will affect several events.
@@ -1554,9 +1584,9 @@ the events list. On any occurrence's page:
 | Monthly or annual by weekday, **Last**      | Uses the last such weekday of the month, whether the month has four or five of them                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Monthly on the 31st                         | Falls on the last day of shorter months, and goes back to the 31st in longer ones                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Annual event on 29 February                 | Falls on 28 February in other years, and goes back to the 29th in leap years                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| A series using a booked room                | Creating a series does not check the room for double-booking. Check the room's calendar yourself                                                                                                                                                                                                                                                                                                                                                                                                  |
+| A series using a booked room                | Creating a series does not check the room for double-booking. Check the room's calendar yourself. A later "This and all future events" edit that moves the series or changes its room does check every occurrence it moves (2026-11-23)                                                                                                                                                                                                                                                           |
 | Series spanning a daylight-saving change    | Each occurrence keeps its local time — a 7:00 PM drill stays at 7:00 PM                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Editing a series with finalized occurrences | Refused when the save would change a finalized occurrence's times, type, category or check-in rules — for example "(2 of 3 finalized occurrences would change)". Saved from a finalized occurrence, those fields are left out, so a description-only edit goes through. Saved from an open occurrence, its type, category and check-in rules are copied onto every later one, so even a description-only edit is refused when a finalized later one differs. Edit those occurrences one at a time |
+| Editing a series with finalized occurrences | Refused when the save would change a finalized occurrence's times, type, category or check-in rules — for example "(2 of 3 finalized occurrences would change)". Since 2026-11-23 only the fields you changed are sent, so a description-only edit goes through, from an open or a finalized occurrence. Changing the type, category, check-in rules or times is still refused while a later finalized occurrence would take the change; edit those occurrences one at a time                     |
 | Cancelling or deleting a series             | Refused whenever any occurrence is finalized                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Duplicating an occurrence                   | Makes a stand-alone event. The recurrence is not copied. A Training event's training details and **Counts toward attendance** links are copied, but not its finalized attendance (2026-11-11)                                                                                                                                                                                                                                                                                                     |
 
@@ -1679,26 +1709,39 @@ show **Sign-ups need approval**. Members see **Ask for this seat** instead of
 **Sign me up**:
 
 - Asking leaves the seat open. You are not marked as going until a
-  coordinator approves. You can ask for one seat per night, and **Withdraw
-  request** takes it back.
+  coordinator approves; until then the seat shows **Your request is
+  waiting**. You can ask for one seat per night, and **Withdraw request**
+  takes it back.
 - Several members can ask for the same seat. Each seat lists who is waiting,
   first asked first, with **Approve** and **Decline**.
 - **Approve** puts the member in the seat, marks them as going, and declines
   everyone else waiting on that seat. A Driver seat is checked against the
   EVOC rule again when you approve.
-- **Decline** asks for an optional note, which is sent to the member.
+- **Decline** opens **Decline this request?** with an optional note, which
+  is sent to the member. **Decline request** confirms it; **Keep it waiting**
+  backs out. The others declined by an approval are told "The seat went to
+  another member."
 - Assigning the seat to someone yourself, or removing it in **Edit this
   night**, declines anyone waiting on it.
 - A request nobody answers is declined automatically once the night starts,
-  or if the night is cancelled.
+  or if the night is cancelled or its attendance finalized. The member is
+  emailed that it was not answered. The check runs every 15 minutes.
 
 The night's organizer and alternate are emailed each request, if they can
-manage apparatus events. Members are emailed the answer, whichever it is.
+manage apparatus events; when neither can, the officer who created the night
+is, if they can. Members are emailed the answer, whichever it is.
 Both emails follow the recipient's email settings: **Event officer duties**
 for the request, **Event changes and cancellations** for the answer. The
-**Upcoming** list shows how many requests are waiting on each night.
+**Upcoming nights** list shows how many requests are waiting on each night,
+and the night's **Apparatus & Crew** card shows coordinators the same count
+beside **Sign-ups need approval**.
 
 To change the setting for one night only, use **Edit this night**.
+
+> **Screenshot needed** (`04-116-apparatus-seat-requests.png`): an apparatus
+> night's **Apparatus & Crew** card as a coordinator, with the **Sign-ups need
+> approval** and **2 requests waiting** badges and one seat listing two
+> members waiting, each with **Approve** and **Decline**.
 
 ### Emailing members about open seats
 
@@ -1991,14 +2034,31 @@ about the old date, and may not need to be excused from the new one.
   until the request is approved again. Whether the member was marked present
   is not changed.
 - **A denied request stays denied.** The first decision is final.
+- _(2026-11-23)_ **Some moves keep an approval.** An **approved** request
+  stays approved when the event had already started before its start was
+  changed (you are correcting the record of a session that was held), or when
+  the new start is on the same day in your department's timezone. The request
+  just takes the new title and time; the member is not asked anything and is
+  not emailed, and a business meeting's waiver stays on the minutes. A
+  **pending** request still goes back to the member on any move.
 - Changing only the title, location, description or end time does nothing to
-  the requests. Cancelling or deleting the event closes pending requests, as
-  before, and each member is told in the app and by email.
+  the requests.
+- _(2026-11-23)_ **Cancelling or deleting the event gives the excusal back.**
+  Every pending **and approved** request for it is closed as **Voided**, and
+  each member is told in the app and by email. An approved one no longer
+  counts toward any limit on how many waivers the member may have, and for a
+  business meeting its excused row comes off the minutes roll call. Before,
+  only pending requests were closed, and an approval kept counting against the
+  member for a session that never happened. A denied request is kept as it
+  is.
 
 **What if Confirm is refused?** The message says why: the member already
 checked in to the event, or (for a business meeting) a leave of absence now
-covers the new date or the Secretary has already excused them. Nothing is left
-to excuse, so withdraw the request instead.
+covers the new date or the Secretary has already excused them. _(2026-11-23)_
+Confirming now gets every refusal a new request gets, so for a training
+session it is also refused when the member has since been exempted, or the
+session no longer counts toward any requirement. Nothing is left to excuse, so
+withdraw the request instead.
 
 ### Deleting an event or a series
 
@@ -2688,7 +2748,9 @@ any limit and reason categories, **Who decides**, **Copy decisions to**, and the
 alternate for the Chief's and President's own requests, then **Save**. With no
 positions chosen, or nobody holding them, requests go to the Secretary, and
 failing a Secretary to the members who manage meetings. Business-meeting
-requests take no supporting documents.
+requests take no supporting documents, so viewing or removing a document on a
+request (added to training requests on 2026-11-23, see
+[Training](./02-training.md)) does not apply to them.
 
 **Asking.** On a business meeting's event page, a member sees **Request to be
 excused** while the deadline is open, and the same card shows the request
@@ -2720,6 +2782,20 @@ meeting request.
   outcome, who decided and when, and their own note, but no longer the
   member's reason, documents or other people's notes. The same applies to
   training requests.
+- **Three emails can no longer be turned off** _(2026-11-23)_. The email
+  saying a request closed undecided (so the meeting counts as missed), the one
+  saying the meeting moved and the request needs confirming, and the one
+  saying an officer's question is waiting now go out as **Changes to your
+  training record**, a kind members cannot switch off, as the same training
+  notices already did. A member who turned off **Event changes and
+  cancellations** still gets them, because each one changes their attendance
+  record or waits on them. The decision email and the email when a cancelled
+  meeting closes a request still follow **Event changes and cancellations**.
+- **The list pages properly** _(2026-11-23)_. **Waiting for a decision** and
+  **Decided and closed** each load 50 at a time, with **Show more waiting
+  requests** and **Show more decided requests** under them. Before, requests
+  past the 200th waiting could not be reached, and the decided list came up
+  short on each page.
 
 ### Business-meeting waiver requests: asking for more information _(2026-11-13)_
 
@@ -2750,6 +2826,17 @@ are left out of their count automatically. Leaves are created on the
 
 Waivers for single meetings and leave exclusions are shown separately on the
 dashboard. Each lowers the count on its own.
+
+**An officer cannot excuse themselves** _(2026-11-23)_. A leave or waiver an
+officer records for their own account would count them as meeting
+requirements they did not meet, so the Waivers page refuses it, with no
+exception for a Chief who is the department's only officer. Picking yourself
+as the member on **Create Waiver** now shows "You cannot excuse your own
+requirements. Ask another officer to record your waiver, or submit a leave
+request for someone else to decide.", with a link to **Leave Requests**, and
+the **Create Waiver** button stays off. **Edit** is not offered on your own
+leave in **Active Waivers**. Before, the form only said no after you had
+filled it in.
 
 ### A Waived Meeting and the Meeting-Count Voting Rule _(2026-11-13)_
 
@@ -3038,7 +3125,11 @@ On the request's page you can also:
 > screen nor the default acknowledgement email gives the requester the status
 > page. Copying it from here is the only way they get it. This is deliberate
 > (reaffirmed 2026-11-21): you decide whether and when a group gets the link,
-> for example not before you know you can take the request on.
+> for example not before you know you can take the request on. The one
+> exception comes at the end: once the request is **Completed**, the built-in
+> **Completed** email links to the status page to ask for feedback, if your
+> department has set a feedback form (see
+> [Feedback from requesters](#feedback-from-requesters)).
 
 > **What if scheduling or postponing is refused?** The message gives the real
 > reason — for example, that the event's attendance is already closed.
@@ -3150,6 +3241,13 @@ Changes save as you make them. **Juvenile firesetter intervention** is listed
 as **Coming soon**: it will be a separate option, with its own access rules
 because its records concern minors.
 
+> **Screenshot needed** (`04-111-crr-catalogue.png`): **Manage Events →
+> Settings → CRR Catalogue**, showing **Smoke alarm install** with its
+> **Alarms installed** and **Homes** counts, the **Risks** and **Priority
+> populations** ticks, the **Admin Hours category** select, the **Rename**,
+> **Describe** and **Retire** buttons, and **Juvenile firesetter
+> intervention** marked **Coming soon**.
+
 ### CRR Activities
 
 **Who can do this:** members of the Community Outreach Team and anyone who can
@@ -3177,6 +3275,12 @@ at a resident's home, a home safety survey:
    with 60 minutes to start with. Each member's time is credited to Admin
    Hours, in the category the activity type names.
 
+> **Screenshot needed** (`04-112-crr-activity-dialog.png`): the **Log a CRR
+> activity** dialog filled in for a smoke alarm install: **Alarms installed**
+> 3, **Fire** ticked under Risks, a ZIP code with city and state filled in,
+> **Add resident details** unticked, and one member under **Who took part**
+> with 60 minutes.
+
 **At an event,** an outreach event's page has a **CRR activities** card:
 **Record an activity** records what was done there, such as seats checked at a
 car seat event. No members are listed, because the event's attendance already
@@ -3196,10 +3300,11 @@ home page, and the page the **Community Outreach** card opens on. It gathers
 what the other outreach pages hold, and links into them; nothing is edited on
 it.
 
-- **New outreach event**, **Log a request** and **Apparatus nights** across
-  the top. **Log a request** opens **Outreach Requests** with the **New
-  request** form already open, for a request that came in by phone, email or
-  in person.
+- **New outreach event**, **Log a request**, **Log a CRR activity** and
+  **Apparatus nights** across the top. **Log a request** opens **Outreach
+  Requests** with the **New request** form already open, for a request that
+  came in by phone, email or in person. **Log a CRR activity** opens
+  [CRR Activities](#crr-activities) with its form already open.
 - **Needs attention** — three cards:
   - **Waiting for a reply**: new requests nobody has started on, the longest
     wait first, with who has each and whether intake flagged it as short
@@ -3307,6 +3412,11 @@ activities at events:
 
 The printed summary carries the same three lists, without the map.
 
+> **Screenshot needed** (`04-113-crr-impact-map.png`): the **CRR activities**
+> section of **Outreach Impact** for this year, with **By activity** showing
+> a change badge, **By risk**, and **By ZIP code** with **Show map** pressed
+> and two or more circles on the street map.
+
 #### Recording a guest headcount
 
 For an event where guests did not sign in one by one — an assembly, a block
@@ -3370,8 +3480,8 @@ from **Forms**, so you write your own and choose when each one appears: a
 question can show only when an earlier answer equals a value, contains it, or
 is at least or at most a number.
 
-To turn it on, open **Manage Events → Settings → Request Handling → Feedback
-From Requesters**:
+To turn it on, open **Manage Events → Settings → Public Requests → Handling**
+and find **Feedback From Requesters**:
 
 1. Choose a published form as the **Feedback form**, or select **Create the
    starter feedback form** for one that asks **How did the visit go?** (1 to
@@ -3385,13 +3495,19 @@ Change the questions in **Forms** like any other form. A requester answers
 once, and cannot change the answer afterwards. Their answers appear on the
 request under **Requester feedback**. An answer to a question marked
 **Sensitive** stays with the submission in **Forms**, and the request only says
-how many there are. The **Community Engagement** tab adds a **Requester
-feedback** line: the average rating and how many responded in the period. The
+how many there are. **Outreach Impact** adds a **Requester feedback** line: the average rating and how many responded in the period. The
 printed summary adds the same row once anyone has answered.
 
 The link is added to the built-in status email. A request email template your
 department attached to the **Completed** trigger itself is sent as written,
 without it.
+
+> **Screenshots needed:** (`04-114-feedback-form-setting.png`) **Settings →
+> Public Requests → Handling**, the **Feedback From Requesters** block with the
+> starter form chosen as **Feedback form** and **How did the visit go?** as
+> **Rating question**; (`04-115-requester-feedback.png`) a completed request's
+> page showing the **Requester feedback** section with a rating and the two
+> written answers.
 
 ### Public Request Form
 
@@ -3723,7 +3839,7 @@ Scheduled Date: October 7, 9:00 AM
 | Template picker shows no templates                        | No active templates exist. Create one, or switch a deactivated one back on, under **Event Templates**                                                                                                                                                                                        |
 | Waitlist not promoting anyone                             | Promotion happens only when seats are released. Raising the limit does not promote by itself                                                                                                                                                                                                 |
 | CSV import skipped rows                                   | The result lists each skipped row with its reason. Fix those rows and import them again                                                                                                                                                                                                      |
-| Draft event visible to members                            | It was published. Drafts are visible only to officers who can manage events                                                                                                                                                                                                                  |
+| Draft event visible to members                            | It was published. Drafts are visible only to officers who can manage events, and Training drafts to training managers                                                                                                                                                                        |
 | Non-respondent reminder reached someone who answered      | **Non-respondents only** leaves out everyone who answered Going, Not Going or Maybe. Refresh the page and check their answer                                                                                                                                                                 |
 | "Schedule Conflict" on the form                           | The time overlaps an event you have RSVP'd to. It is only a warning                                                                                                                                                                                                                          |
 | Series-end reminder not received                          | It is sent once a series with an end date is within six months of its last occurrence, to the organizer and alternate. A rolling series has no end date                                                                                                                                      |
@@ -3801,6 +3917,13 @@ have moved, been renamed or work differently.
   name before 11 October 2026 keep that name but are not matched to anyone,
   so they do not appear under **Assigned to me**.
 - **Meeting attendance counts only the member's own service window.**
+- **"This and all future events" copies only what you changed**
+  _(2026-11-23)_, and refuses a move or room change that would double-book a
+  room. See [Managing Recurring Event Series](#managing-recurring-event-series).
+- **Cancelling or deleting an event voids approved requests to be excused**
+  _(2026-11-23)_, not only pending ones, and a correction to a held session's
+  time keeps an approval. See
+  [Moving an event that members asked to be excused from](#moving-an-event-that-members-asked-to-be-excused-from-2026-11-13).
 
 ### Things to check if your department has used The Logbook for a while
 

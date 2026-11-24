@@ -1335,6 +1335,15 @@ and `docs/UPGRADING.md`.
   member's reason, and links it by `meeting_attendees.waiver_request_id`. The
   screens are `/minutes/attendance/waiver-settings` and
   `/meetings/waiver-requests`.
+- **Waiver rules of 2026-11-23** (#4608, #4619). Cancelling or deleting the
+  meeting's event voids an approved request too, and `_unapply_meeting_waiver`
+  takes its row off the minutes (only a row the request wrote, by
+  `waiver_request_id`). A start moved after the meeting began, or kept on the
+  same local date, leaves an approved request and its row in place
+  (`_correction_keeps_decision`). The expiry, moved-meeting and
+  decider-question emails are mandatory (`TRAINING_RECORD_CHANGES`). Migration
+  `b37218495d33` drops the redundant `idx_meeting_attendees_meeting` index.
+  The member guide is `docs/training/04-events-meetings.md`.
 - **Where a row came from** — migration `7d4374ffee39` adds `checked_in_at`,
   `recorded_by` (SET NULL) and `recorded_via` to `meeting_attendees`:
   `manual`, `event_check_in`, `event_rsvp`, `waiver` or `waiver_request`
