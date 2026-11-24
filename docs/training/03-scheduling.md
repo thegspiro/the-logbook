@@ -3446,6 +3446,10 @@ Select **New Template** to create one, or select a template to edit it.
   back the shift length, so a template never stores a length its times
   contradict. A **new** template is created only once nothing is refused.
 
+![Editing the Day Shift template with its name cleared: the Name box flagged "Enter a name for the template." and the dialog reading "Template saved, except name."](./images/03-143-template-saved-except-name.png)
+
+![Cancelling the template dialog after typing: the confirmation asking whether to throw the changes away, with Discard changes](./images/03-144-template-discard-changes.png)
+
 **Deleting a template or a basic vehicle.** A shift template used by any shift
 or pattern, and a basic apparatus named by any template, shift, pre-work
 session, equipment check or call, is **deactivated** rather than deleted, so
@@ -3834,6 +3838,8 @@ it as 0, which quietly turned the overtime advisory off. Each setting saves on
 its own, so if one is refused the other on the same card still saves, and the
 card says _"Saved, except the flagged setting, which keeps its stored value."_
 Pressing Enter in a box saves its card.
+
+![Scheduling settings, General, the Overtime advisory card after saving with Hours limit cleared: the box flagged Enter a whole number from 0 to 336., Window (days) beside it, and the line that the card saved except the flagged setting, which keeps its stored value](./images/03-142-overtime-hours-limit-error.png)
 
 ### What the settings do not do
 
