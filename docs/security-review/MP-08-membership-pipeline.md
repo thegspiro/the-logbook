@@ -1,8 +1,176 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10, PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255) — corrected here from the "PR pending" placeholder pass 10's own write-up left unresolved after merge), 2026-10-18 (pass 11, PR [#3420](https://github.com/thegspiro/the-logbook/pull/3420)), 2026-10-23 (pass 12, PR [#3574](https://github.com/thegspiro/the-logbook/pull/3574)), 2026-10-25 (pass 13, PR [#3702](https://github.com/thegspiro/the-logbook/pull/3702) — not recorded here when pass 13 was written; added in pass 14's own commit), 2026-10-28 (pass 14, PR [#3811](https://github.com/thegspiro/the-logbook/pull/3811) — not recorded here when pass 14 was written; added in pass 15's own commit), 2026-11-01 (pass 15, PR [#3910](https://github.com/thegspiro/the-logbook/pull/3910) — not recorded here when pass 15 was written; added in pass 16's own commit), 2026-11-05 (pass 16, PR [#4087](https://github.com/thegspiro/the-logbook/pull/4087) — not recorded here when pass 16 was written; added in this pass's own commit), 2026-11-19 (pass 17) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), [#3255](https://github.com/thegspiro/the-logbook/pull/3255) (pass 10), [#3420](https://github.com/thegspiro/the-logbook/pull/3420) (pass 11), [#3574](https://github.com/thegspiro/the-logbook/pull/3574) (pass 12), [#3702](https://github.com/thegspiro/the-logbook/pull/3702) (pass 13), [#3811](https://github.com/thegspiro/the-logbook/pull/3811) (pass 14), [#3910](https://github.com/thegspiro/the-logbook/pull/3910) (pass 15), [#4087](https://github.com/thegspiro/the-logbook/pull/4087) (pass 16)
+**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10, PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255) — corrected here from the "PR pending" placeholder pass 10's own write-up left unresolved after merge), 2026-10-18 (pass 11, PR [#3420](https://github.com/thegspiro/the-logbook/pull/3420)), 2026-10-23 (pass 12, PR [#3574](https://github.com/thegspiro/the-logbook/pull/3574)), 2026-10-25 (pass 13, PR [#3702](https://github.com/thegspiro/the-logbook/pull/3702) — not recorded here when pass 13 was written; added in pass 14's own commit), 2026-10-28 (pass 14, PR [#3811](https://github.com/thegspiro/the-logbook/pull/3811) — not recorded here when pass 14 was written; added in pass 15's own commit), 2026-11-01 (pass 15, PR [#3910](https://github.com/thegspiro/the-logbook/pull/3910) — not recorded here when pass 15 was written; added in pass 16's own commit), 2026-11-05 (pass 16, PR [#4087](https://github.com/thegspiro/the-logbook/pull/4087) — not recorded here when pass 16 was written; added in this pass's own commit), 2026-11-19 (pass 17, PR [#4438](https://github.com/thegspiro/the-logbook/pull/4438) — not recorded here when pass 17 was written; added in pass 18's own commit), 2026-11-24 (pass 18) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), [#3255](https://github.com/thegspiro/the-logbook/pull/3255) (pass 10), [#3420](https://github.com/thegspiro/the-logbook/pull/3420) (pass 11), [#3574](https://github.com/thegspiro/the-logbook/pull/3574) (pass 12), [#3702](https://github.com/thegspiro/the-logbook/pull/3702) (pass 13), [#3811](https://github.com/thegspiro/the-logbook/pull/3811) (pass 14), [#3910](https://github.com/thegspiro/the-logbook/pull/3910) (pass 15), [#4087](https://github.com/thegspiro/the-logbook/pull/4087) (pass 16), [#4438](https://github.com/thegspiro/the-logbook/pull/4438) (pass 17)
 
 ---
+
+## Pass 18 (2026-11-24, watchdog pickup) — real delta (an applicant who edits their own email/name/date-of-birth through a follow-up form stops being matched to that record by those fields, ADV2-10), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged
+
+**Step 0/1** confirmed fresh: PR #4662 (Feature 07, Users & organizations,
+pass 17) had merged before this iteration started. A fresh
+`list_pull_requests` (state `open`) found no `claude/security-review-*`
+head, and row 08 (Membership pipeline) was the next `⬜` row on a freshly
+fetched `main`. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable; this is a
+watchdog pickup, same as every pass since #4625.
+
+**Scope:** unchanged from pass 17 — the rotation row's two files plus this
+feature's established additional scope: `models/membership_pipeline.py`,
+`schemas/membership_pipeline.py`, `app/services/prospect_access.py`,
+`app/api/prospect_access.py`, `app/api/prospect_privacy.py`,
+`app/services/prospect_assignment_service.py`,
+`app/api/public/follow_up_forms.py`, `app/services/follow_up_form_service.py`,
+`app/utils/prospect_fields.py`, `frontend/src/modules/prospective-members/`.
+
+**Last reviewed at:** `422d7eff` (pass 17's merge, PR #4438) to head.
+`git log --no-merges 422d7eff..HEAD -- <declared files>`: **5 commits**
+touching a declared file directly, out of 1204 commits (624 non-merge) in
+the full window — every one of the 5 read in full via `git show`.
+
+**The delta, in full:**
+
+| Commit     | What                                                                                                                                                                                                           | Judgment                                                                                                        |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `125b34bd` | `ProspectiveMembersPage.tsx`/`PipelineBuilder.tsx`/`PipelineSettingsPage.tsx` empty-state cards gain `px-4` side padding                                                                                       | Pure CSS; no data/auth change — read in full                                                                    |
+| `960795a1` | `SignOffsPage.tsx` sign-off badge recolored `text-green-800` → `text-green-900` (AAA-contrast sweep)                                                                                                           | Styling only                                                                                                    |
+| `09f64da9` | `ProspectiveMembersPage.tsx`'s withdrawal-reason cell moves its `truncate` from the `<td>` onto an inner `title`-bearing `<div>` (Pitfall #39's reflow convention)                                             | Pure markup; same text, same truncation, now with a hover title                                                 |
+| `a9291233` | `FollowUpFormPage.tsx`'s `toFieldDefinition` helper extracted to a shared `publicFormFields.ts` module, for reuse by an unrelated Outreach feedback form                                                       | No behavior change on this page — read the extracted function and the one call site; byte-for-byte same mapping |
+| `a88e4721` | **The real change** — an applicant's own follow-up-form edit to their email, name, or date of birth stops the self-access guard from matching that record on those fields (ADV2-10, owner decision 2026-11-21) | Read closely, below                                                                                             |
+
+**`a88e4721` read closely — the one commit with a security effect.**
+`ProspectiveMember` gains `identity_edited_by_applicant_at`
+(`models/membership_pipeline.py`, nullable `DateTime(timezone=True)`,
+migration `809893462b67`, backfilled from `prospect_activity_log` for
+applications already edited). The guard this protects
+(`app/api/prospect_privacy.py`) matches a signed-in member to a prospect
+record by three independent identifiers: the transfer back-link
+(`transferred_user_id`), an email the member owns, or a matching
+first/last name plus date of birth — all three are "unique in practice"
+identifiers the module's own docstring explains are deliberately
+conservative, because a false match hides a _different_ applicant's file
+from the coordinator who should see it.
+
+The new column closes a gap in that model: an applicant edits their own
+record's email/name/DOB through the follow-up form (the only path that
+lets them touch those fields at all — confirmed by grepping for writes to
+`prospect.email`/`.first_name`/`.last_name`/`.date_of_birth` outside
+`follow_up_form_service.py` and `membership_pipeline_service.py`'s
+coordinator-facing `update_prospect`, finding none), and could in principle
+set them to a _coordinator's_ own identifiers, which would make the guard
+match the coordinator's account to the applicant's file and hide it from
+the coordinator reviewing it. Verified both ends of the fix directly, not
+from the commit message:
+
+- **Stamping is applicant-only.** The write lives in
+  `FollowUpFormService.submit` (`follow_up_form_service.py:878-884`), the
+  one method `app/api/public/follow_up_forms.py` calls (grepped — the only
+  call site in the tree) — a public, token-scoped, applicant-only
+  endpoint. The stamp is set only `if any(c["applied"] and c["field"] in
+PROSPECT_IDENTITY_FIELDS for c in changes)` — `applied` is `False` for a
+  change the service itself refused (e.g. the existing duplicate-email
+  check just above it), so a rejected edit does not trip the guard either.
+- **Clearing is coordinator-only.** The write lives in
+  `MembershipPipelineService.update_prospect`
+  (`membership_pipeline_service.py:2231-2236`), the generic staff-facing
+  edit endpoint MP-9 (pass 6) already hardened against setting/clearing
+  `TRANSFERRED` — confirmed by function name, not inferred. Clearing on a
+  coordinator's own correction is correct: once the department has
+  retyped the identifiers, they are the department's values again and the
+  guard may trust them.
+- **The guard predicate gates exactly the two field-based matches, and
+  only those.** Both `_link_predicate`'s email-fingerprint clause and
+  `load_self_prospect_ids`'s name+DOB clause now additionally require
+  `identity_edited_by_applicant_at IS NULL`; the `transferred_user_id`
+  clause — the one identifier an applicant cannot forge, since it is set
+  by the conversion flow, not user input — is unconditional, exactly as
+  the module docstring's updated explanation says it should be.
+- **The migration is a correct, idempotent backfill**, re-read against
+  Pitfall #35/#36: guarded on both tables existing (Pitfall #26), replays
+  `prospect_activity_log` in `(prospect_id, created_at, id)` order applying
+  the same stamp/clear rule the application now applies live, only writes
+  rows still `NULL` (so a re-run changes nothing), and its own `down_revision`
+  tuple also merges the two heads it inherited — confirmed those two heads
+  (`7d2e4b81c5a3`, `85680aed8332`) are themselves two independent merges of
+  the same underlying pair, so this revision's extra merge is correct, not
+  a third fork.
+
+**Route enumeration (checklist §1/§2), re-run fresh via AST, not diffed:**
+`membership_pipeline.py` still has **64 routes** — unchanged, since the
+file itself has zero line changes in this window (confirmed by
+`git diff --numstat 422d7eff..HEAD -- backend/app/api/v1/endpoints/membership_pipeline.py`,
+empty). `scripts/check_route_permissions.py --strict` (whole app): **339
+routes**, 0 errors, 0 warnings.
+
+**A sweep for any unclaimed new membership/prospect/pipeline/follow-up-named
+file** (`git diff --diff-filter=A --name-only 422d7eff..HEAD`, filtered)
+found the migration and its two guard test files above, plus
+`frontend/src/pages/events-settings/PipelineSection.test.tsx` — traced and
+confirmed **not** this feature's "pipeline": it is the Events module's
+outreach-request workflow, an unrelated use of the word.
+
+**No new `.ilike()`/`.like()` without `escape=LIKE_ESCAPE_CHAR`, no raw
+`csv.writer`, no `window.confirm`/`alert`/`prompt`** in this window's five
+commits (grepped fresh over the full diff).
+
+### Standing items re-verified this pass
+
+- **MP-10 (listing half)** — `list_election_packages` does not appear
+  anywhere in this window's diff. **Still OPEN**, unchanged;
+  `docs/KNOWN_LIMITATIONS.md`'s entry still matches (checked directly).
+- **MP-22** — `delete_prospect_document` and `_delete_inactive_prospects`
+  likewise do not appear in this window's diff. **Still OPEN**, unchanged;
+  owner-accepted tradeoff; `docs/KNOWN_LIMITATIONS.md`'s entry still matches.
+
+Both re-confirmed by searching the actual diff text for the function names,
+not copied from the prior write-up.
+
+### Verified good ✅ (pass 18)
+
+- **ADV2-10's fix closes the self-match gap at both ends**: only the
+  applicant's own public follow-up-form submission can set the new stamp,
+  only a coordinator's staff-facing edit can clear it, and the guard's one
+  unforgeable identifier (the transfer back-link) is never gated by it.
+- **The backfill migration replays history idempotently and correctly
+  merges the two heads it inherited**, verified directly rather than
+  trusted from its docstring.
+- **No regression on any previously-closed finding** (MP-1 through MP-34) —
+  none of their call sites appear in this pass's diff.
+
+### Schema & migration notes
+
+One migration touches this feature's scope since pass 17:
+`20261121_1900_809893462b67_prospect_identity_edited_by_applicant.py` (see
+above) — guarded on table/column existence (Pitfall #26), idempotent
+backfill, real downgrade. `scripts/validate_migrations.py --strict`
+reports a single head `241c1cc27313` (836 revisions) after bringing this
+sandbox's test database current with `alembic upgrade head` — it had been
+one migration behind (an unrelated attendance-waiver-retention column,
+Feature 18's own scope), which is the sandbox's own staleness, not an
+application defect; re-running the scoped suite after the upgrade left 0
+failures.
+
+## Completion gate (pass 18)
+
+Run against CI's pinned toolchain (`flake8==7.5.0`, `black==26.10.1`,
+`isort==9.0.2`) under `python3.13`.
+
+| Check                                                                                        | Result                                                                                                      |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                | ✅ 0 violations                                                                                             |
+| `black --check app/ tests/ alembic/`                                                         | ✅ 3498 files unchanged                                                                                     |
+| `isort --check-only app/ tests/ alembic/`                                                    | ✅ clean                                                                                                    |
+| `python3.13 scripts/validate_migrations.py --strict`                                         | ✅ single head `241c1cc27313`, 836 revisions                                                                |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                            | ✅ 339 routes, 0 errors, 0 warnings                                                                         |
+| `docs/DATABASE_SCHEMA.md` vs generator                                                       | ✅ already current                                                                                          |
+| scoped backend pytest (`-k "membership or prospect or pipeline or follow_up or assignment"`) | ✅ all passed (1 pre-existing environment-only skip, `py_vapid`) — see note above on the sandbox DB upgrade |
+| `cd frontend && npm run typecheck`                                                           | ✅ 0 errors                                                                                                 |
+| `cd frontend && npx eslint src/modules/prospective-members`                                  | ✅ 0 errors, 0 warnings                                                                                     |
+| `cd frontend && npx vitest run src/modules/prospective-members`                              | ✅ 410 passed (45 files)                                                                                    |
+
+No application source file changed this pass (0 fixes — ADV2-10's fix
+already landed on `main` via `a88e4721`, independently tested and already
+merged). Every check above verifies that the delta which landed since pass
+17 is sound.
 
 ## Pass 17 (2026-11-19) — watchdog pickup: no real backend delta since pass 16's merge (UI/accessibility-only commits, plus one incidental line changed by the medical-screening encryption refactor, already reviewed there and re-verified correct here), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged; a route-count correction to pass 16's own write-up
 

@@ -16,6 +16,43 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (pending — branch `claude/friendly-babbage-2isqey`)**: Feature 08
+(Membership pipeline), pass 18 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here: this session's environment restricts pushes to its own
+assigned branch rather than a freely-chosen
+`claude/security-review-membership-pipeline` name.
+
+PR #4662 (Feature 07, Users & organizations, pass 17 — 1 fixed, USR-15,
+MED) had already merged before this iteration started; row 07 marked ✅
+above. A concurrent watchdog session's duplicate pass for the same feature
+(PR #4660, 0 fixed) was closed in #4662's favor — see that PR's own
+comment thread for the reasoning, mirroring the #4643/#4644 precedent.
+
+Real delta since pass 17's merge (`422d7eff`, PR #4438), across 5 commits
+touching a declared file directly (1204 commits/624 non-merge in the full
+window): an applicant who edits their own email, name, or date of birth
+through a follow-up form stops being matched to that prospect record by
+those fields (ADV2-10, owner decision 2026-11-21) — a new
+`identity_edited_by_applicant_at` stamp, set only by the applicant's public
+follow-up-form submission and cleared only by a coordinator's own edit,
+gates the self-access guard's two forgeable identifiers (email, name+DOB)
+while leaving its one unforgeable one (the transfer back-link)
+unconditional. **0 fixed, 0 new findings** — traced both the stamp/clear
+write sites and the guard predicate directly against the live code, not
+the commit message. The other four commits in the window are cosmetic
+(padding, a contrast fix, a reflow tweak, a helper-function extraction with
+no behavior change). Full write-up:
+`docs/security-review/MP-08-membership-pipeline.md`'s **Pass 18** section.
+
+Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
+screening, PHI) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 17, PR #4662, merged), preserved for history</summary>
+
 **PR [#4662](https://github.com/thegspiro/the-logbook/pull/4662) (branch
 `claude/friendly-babbage-ubq8ow`)**: Feature 07
 (Users & organizations), pass 17 — watchdog pickup (the dedicated `/loop 30m
@@ -46,6 +83,8 @@ the existing `TestChiefOverrideOverlapLocking`. Full write-up:
 Row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
 pipeline) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 17, PR #4659, merged), preserved for history</summary>
@@ -27835,7 +27874,7 @@ iteration's commit" rule.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (20 routes, added pass 17; Chief routing, approver cover, escalation, calendar/export added pass 17)                                                                                      | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                                                                                                                            | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py` (64 routes), `membership_pipeline_service.py`, `models/membership_pipeline.py` (`identity_edited_by_applicant_at`, added pass 18)                                                                                                                            | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ⬜     |
