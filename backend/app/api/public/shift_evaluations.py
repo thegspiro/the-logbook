@@ -132,6 +132,10 @@ async def submit_preceptor_evaluation(
             "member_id": str(evaluation.member_id),
             "via": "preceptor_link",
         },
+        # No acting user to infer it from: without this the record is
+        # missing from the department's own audit views (same fix as
+        # zeffy_webhook.py's own log_audit_event call).
+        organization_id=str(evaluation.organization_id),
     )
     return PublicShiftEvaluationSubmitted(
         submitted_at=evaluation.submitted_at or evaluation.updated_at
