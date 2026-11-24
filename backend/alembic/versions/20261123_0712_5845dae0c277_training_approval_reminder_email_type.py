@@ -17,7 +17,7 @@ left as they are, so an upgrade after a downgrade does not remind about those
 approvals again.
 
 Revision ID: 5845dae0c277
-Revises: 241c1cc27313
+Revises: bbb6eac6ae34
 Create Date: 2026-11-23 07:12:00.000000
 """
 
@@ -28,7 +28,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "5845dae0c277"
-down_revision: Union[str, None] = "241c1cc27313"
+down_revision: Union[str, None] = "bbb6eac6ae34"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
