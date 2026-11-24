@@ -1,6 +1,216 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup), 2026-11-16 (pass 16, watchdog pickup) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (PR #3399), pass 11 (PR #3558), pass 13 (PR #3804), pass 15 (PR #4022), pass 16 (this PR)
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup), 2026-11-16 (pass 16, watchdog pickup), 2026-11-24 (pass 17, watchdog pickup) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (PR #3399), pass 11 (PR #3558), pass 13 (PR #3804), pass 15 (PR #4022), pass 16 (PR #4349), pass 17 (this PR)
+
+---
+
+## Pass 17 (2026-11-24, watchdog pickup) — every route re-enumerated fresh (51, unchanged); one audit-stamping gap found and fixed across five call sites (PUB-15); a Feature-22 dues-confirmation change to this feature's own webhook collaborator re-checked and found to not affect the public surface
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable. Step 0:
+`list_pull_requests` (state `open`) against the repo found 0 open PRs with a
+`claude/security-review-*` head — PR #4633 (Feature 02, Permissions & roles,
+pass 17) had merged (`b08491c25`) shortly before this iteration began,
+touching only `PERM-02-permissions-roles.md` and `PROGRESS.md`, neither of
+which is this feature's own file. Row 03 confirmed the next `⬜` row by
+reading `PROGRESS.md`'s table directly on a freshly-fetched `main`.
+**Branch-name deviation**, same as prior watchdog-run passes recorded in
+`PROGRESS.md`'s Open PR history (`claude/friendly-babbage-n4b791`,
+`claude/friendly-babbage-v1mcno`, `claude/friendly-babbage-2isqey`): this
+session's environment restricts pushes to its own assigned branch
+(`claude/friendly-babbage-8lhliy`) rather than a freely-chosen
+`claude/security-review-public-surface-webhooks` name.
+
+**Baseline:** `15d61fa5d` (pass 16's merge, PR #4349). **Head:** `b08491c25`.
+`git diff 15d61fa5d HEAD --stat -- backend/app/api/public/
+backend/app/core/public_portal_security.py
+backend/app/services/integration_services/webhook_service.py
+backend/app/utils/webhook_replay.py backend/app/api/v1/endpoints/shift_evaluations.py
+backend/app/services/shift_evaluation_link_service.py
+backend/app/services/zeffy_sync_service.py
+backend/app/services/integration_services/zeffy_service.py
+backend/app/services/integration_services/paypal_service.py` touches exactly
+**one** file: `app/services/zeffy_sync_service.py` (+216/-63). All 17
+route-bearing files under `app/api/public/`, `public_portal_security.py`,
+`webhook_service.py` and `webhook_replay.py` are byte-identical to pass 16's
+reviewed state (same diff command, no hunks).
+
+**Route re-enumeration (per Step 3's instruction that a repeat pass
+re-derives the count rather than trust it forward):** an AST walk of every
+`@router.<verb>` decorator across all 17 route-bearing files under
+`app/api/public/` (`responses.py`/`__init__.py` excluded — neither defines a
+route), cross-checked against `grep -c '^@router\.\(get\|post\|put\|patch\|delete\)'`
+(both agreeing), finds **51 routes** — unchanged from pass 16. Every one of
+the 17 router imports in `main.py` was independently checked for exactly one
+`app.include_router(...)` mount each, by its actual import alias
+(e.g. `public_shift_evaluations_router`, `sf_webhook_router`), not by
+filename substring: all 17 mounted exactly once, none orphaned, none
+duplicated. Every handler's compensating control (an injected
+`Depends(_rate_limit_*)` on the route decorator, or an explicit
+`validate_ip_rate_limit(request)`/`public_rate_limit(...)` call at the top of
+the handler body) was re-confirmed present for all 51 routes by reading each
+file directly rather than trusting the count forward — `mcp_oauth.py`'s two
+RFC 8414/9728 metadata routes and `portal.py`'s `health_check` are the only
+three with no rate limiter, unchanged from every prior pass's finding that a
+static discovery/health document needs none.
+
+**The one in-scope diff, read in full against this feature's own surface
+rather than deferred to Feature 22:** `zeffy_sync_service.py`'s `_apply_dues`
+was replaced by `_hold_dues` plus a `dues_match`/`confirm_dues` pair (ADV2-11,
+owner decision 2026-11-21, already recorded in `docs/KNOWN_LIMITATIONS.md`
+under "A Zeffy dues payment credits whichever member's email the payer
+typed"). The new authenticated `GET /zeffy/.../dues-match` and
+`POST /zeffy/.../confirm-dues` endpoints live in
+`app/api/v1/endpoints/zeffy.py`, which Feature 22 (Grants & fundraising) owns
+per `PROGRESS.md`'s table — not re-reviewed here. What **is** this feature's
+concern is whether the change altered `zeffy_webhook.py`'s own behavior:
+confirmed it did not. `zeffy_webhook.py` (byte-identical per the diff above)
+still calls only `ZeffySyncService(db).record_payment(...)`, whose
+`DUES_SCHEDULE` branch now calls `_hold_dues` instead of `_apply_dues` —
+read directly: `_hold_dues` only sets `row.state =
+ZeffyPaymentState.UNMATCHED` and a `state_detail` string from
+`_member_by_email` (an email-fingerprint lookup, the same pattern this
+feature's pass 15 already reviewed), and writes nothing else. The webhook
+path is therefore strictly narrower than before — it can no longer credit a
+member's dues or move money on its own, only flag a payment for a treasurer
+to confirm by hand — a reduction in what an unauthenticated delivery can
+cause, not an expansion. `_member_by_email`'s query gained
+`User.status.in_(ACTIVE_ACCOUNT_STATUSES)` (Pitfall #32 — a probationary
+member's dues can still be suggested; a departed one's cannot), which this
+feature's webhook handler benefits from without having to implement it.
+
+**Everything else — the three webhook receivers' signature verification,
+replay handling and org resolution; the token-addressed routes in `display.py`,
+`event_guest.py`, `finance_approvals.py`, `follow_up_forms.py`, `portal.py`,
+`shift_evaluations.py`; the branding/calendar/forms/legal/minutes routes; and
+`mcp_oauth.py`'s OAuth 2.1 authorization server — unchanged, byte-identical to
+pass 16's already-fully-reviewed state:** not re-read line by line this pass,
+per Step 3's instruction to spend a repeat pass's reading on what changed —
+**except** for the audit-logging shape below, which this pass checked across
+every file regardless of diff, because PUB-8's own history is exactly this
+class of defect recurring on a different write path, and nothing in the
+checklist's dimension 5 had previously verified the stamping keyword itself
+rather than the event's PII content.
+
+### PUB-15 — LOW — five public-surface audit events were written platform-level, invisible to the department's own Audit Logs and Security Monitoring screens — ✅ FIXED
+
+**What:** `AuditLogger.create_log_entry` (`app/core/audit.py:319-333`) stamps
+the real `AuditLog.organization_id` column only from an `organization_id=`
+keyword argument the caller passes, or — failing that — resolved from a
+`user_id=` keyword by looking that user's own organization up. It never reads
+a same-named key out of the `event_data` dict the caller also passes; that
+dict is stored as-is, opaque JSON, for display only. Five `log_audit_event(...)`
+calls across this feature's own files put `"organization_id": <id>` **inside**
+`event_data` but never passed the `organization_id=` (or `user_id=`) keyword
+the function actually stamps the column from — every one of them is an
+unauthenticated handler with no `current_user` to fall back on, so with
+neither keyword passed the row's real `organization_id` column is written
+`NULL`.
+
+**Where:**
+
+- `app/api/public/paypal_webhook.py:135` (`store_payment_received`)
+- `app/api/public/salesforce_webhook.py:221` (`salesforce.webhook.received`)
+- `app/api/public/integrations_webhook.py:170` (`documenso.webhook.received`)
+- `app/api/public/integrations_webhook.py:244` (`calcom.webhook.received`)
+- `app/api/public/shift_evaluations.py:123` (`shift_evaluation_submitted`)
+
+**Failure scenario:** a department connects PayPal (or Salesforce, Documenso,
+Cal.com) to The Logbook, or a preceptor submits a shift evaluation through
+their emailed link. Each of those five actions writes a real, correctly
+timestamped `AuditLog` row — the write itself succeeds and nothing is lost —
+but with `organization_id = NULL`. Every org-scoped audit reader filters on
+that column directly: `audit_logs.py:106/179/226`
+(`AuditLog.organization_id == org_id`), `security_monitoring.py:274/491/582`,
+`users.py:3688`, `compliance_officer_service.py:513`, and others. A department
+administrator opening **Audit Logs** or **Security Monitoring** for their own
+organization therefore never sees "a PayPal payment was received", "a
+Salesforce sync ran", "a Documenso signature advanced an applicant" or "a
+preceptor submitted an evaluation crediting Jane Doe's training" — even
+though the row exists, is queryable directly against the database, and the
+org id it should have carried is sitting right there in `event_data` for a
+human to notice only by reading raw JSON. This is the same class of gap
+PUB-8 (above) was built to close for the public-portal 401 log — a legitimate,
+department-owned event that the department's own screens cannot show it —
+on five call sites PUB-8's own fix never touched, because they predate it
+(the three older webhooks) or were added after it without the comment
+`zeffy_webhook.py:159` already carries explaining why the keyword matters
+("No acting user to infer it from: without this the record is missing from
+the department's own audit views").
+
+**Impact:** observability/audit-completeness, not a data leak to another
+party — the row is not shown to a different organization, it is shown to
+_no_ organization's own admin screen, and remains queryable platform-wide by
+anyone with direct database or `audit_logs` super-admin access. Rated LOW to
+match PUB-8's own rating for the identical defect class.
+
+**Fix:** added `organization_id=str(<the id the handler already resolved the
+request against>)` as an explicit keyword to all five calls — `integration.
+organization_id` for the four webhook receivers, `evaluation.organization_id`
+for the preceptor-evaluation submission — mirroring `zeffy_webhook.py:159-178`'s
+own already-correct call exactly, including its comment. No behavior change
+to any response, status code, or the `event_data` payload a department could
+already see once they found the row; only the stamped column changes, from
+`NULL` to the real organization.
+
+**Guard test:** `backend/tests/test_public_audit_organization_scoping.py`,
+new. An AST sweep (in the manner of `test_csv_writer_sweep.py` and
+`test_log_call_shape.py`) over every `log_audit_event(...)` call in
+`app/api/public/*.py`, failing on any call with neither `organization_id=`
+nor `user_id=` among its keywords. Confirmed red against each of the five
+pre-fix call sites (`git show 15d61fa5d:<file>` for each, fed through the
+same AST matcher, flags exactly lines 135/221/170/244/123 respectively) and
+green after the fix, satisfying Pitfall #37. `ALLOWED` is an empty frozenset
+on purpose — every current call in this directory resolves an organization,
+so there is nothing to exempt yet; a genuinely organization-less public route
+added later names itself there with a comment.
+
+### Re-verified still current (pass 16's findings)
+
+PUB-1 through PUB-14 remain fixed, unaffected by this pass's one in-scope
+diff (`zeffy_sync_service.py`, Feature 22's file, read above only for its
+effect on this feature's own webhook). PUB-3 (INFO, `ApprovalChain`'s tables
+remain `create_all`-only, by design) is unchanged and still accurate.
+
+### Schema & migration integrity (dimension 7)
+
+No migration touches this feature's own tables this pass; `zeffy_sync_service.py`'s
+change is service logic only, no model or column changed. **Pre-existing,
+unrelated to this feature, flagged rather than fixed here:**
+`python3 scripts/validate_migrations.py --strict` reports the Alembic chain
+**forked** at two heads (`5c2e8a417d90`, `9c41e7b2d5a3` — from two
+already-merged, unrelated PRs that each added a migration after the same
+parent before the other merged). Neither revision touches any table this
+feature owns or reads. An open PR, #4642
+(`automation/rejoin-heads-5c2e8a-9c41e7`, "Rejoin migration heads:
+5c2e8a417d90 9c41e7b2d5a3"), already exists specifically to resolve this
+exact fork with its own `alembic merge` revision. Creating a second,
+independent merge revision for the same pair of heads here — rather than
+letting #4642 land — would not fix the fork, it would race it: whichever
+merge revision lands second becomes a new, third head pointing at the same
+two parents, re-forking the chain immediately after #4642's own fix merges.
+Escalated rather than fixed, per CLAUDE.md's "Hard Stop" provision: fixing it
+here genuinely risks making it worse, given the dedicated fix already in
+flight. No action needed from this feature's own review beyond this note;
+re-check on the next PUB-03 pass whether #4642 has merged.
+
+### Completion gate (pass 17)
+
+| Check                                                                                                                                                                                                                                                                                                                                                                      | Result                                                                                                            |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pinned version — installed fresh, the sandbox had 7.5.0)                                                                                                                                                                                                                                                                        | ✅ 0 violations                                                                                                   |
+| `black --check app/ tests/ alembic/` (26.10.1, matches CI's pin)                                                                                                                                                                                                                                                                                                           | ✅ 3484 files unchanged (the new guard test was reformatted by `black` itself, not hand-fixed, before this check) |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, matches CI's pin)                                                                                                                                                                                                                                                                                                        | ✅ clean                                                                                                          |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                                          | ❌ pre-existing fork, unrelated to this feature, escalated above (PR #4642 already in flight)                     |
+| scoped pytest (`-k "public or webhook or paypal or salesforce or integrations or minutes or mcp_oauth or calendar or finance_approval or branding or kiosk or guest or event_guest or embed or legal or display or security_txt or portal or next_meeting or follow_up or error_reporting or shift_evaluation or zeffy" -m "not integration and not slow and not docker"`) | ✅ 1982 passed, 1 skipped (`py_vapid`/`pywebpush`, pre-existing)                                                  |
+| standing guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, baseline member grants, logging escaping, log-call-shape sweep, **new:** public-audit-organization-scoping sweep)                                                                                                                                    | ✅ 177 passed, 1 skipped (`py_vapid`, pre-existing)                                                               |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                                                                                                         | ✅ 0 errors                                                                                                       |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                                                                                                              | ✅ 0 errors, 0 warnings                                                                                           |
+
+**1 fixed (PUB-15, across 5 call sites), 0 new flagged findings; 1 pre-existing
+cross-cutting issue (the migration fork) escalated rather than fixed, for the
+reason stated above.** Rotation row 03 → ✅ (pending this PR's merge); next is
+Feature 04 (Storefront & payments).
 
 ---
 
