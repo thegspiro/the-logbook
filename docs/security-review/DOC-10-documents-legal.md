@@ -1,6 +1,121 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14), 2026-11-06 (pass 15), 2026-11-19 (pass 16) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), #3579 (pass 11), #3734 (pass 12), #3816 (pass 13), #3913 (pass 14), #4103 (pass 15), (this PR) (pass 16)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14), 2026-11-06 (pass 15), 2026-11-19 (pass 16), 2026-11-24 (pass 17) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), #3579 (pass 11), #3734 (pass 12), #3816 (pass 13), #3913 (pass 14), #4103 (pass 15), #4440 (pass 16), (this PR) (pass 17)
+
+---
+
+## Pass 17 (2026-11-24, watchdog pickup) — zero real security delta since pass 16's merge; `_delete_folder_subtree` extracted (no behavior change) so LIFE-11's member erasure reuses the DOC-32 History guard; 0 fixed, 0 new findings
+
+**Step 0.** `/loop 30m /security-review` remains unreachable. A fresh
+`list_pull_requests` (state `open`) found no `claude/security-review-*`
+head and no open PR titled for this feature; row 10 (Documents & legal) was
+the next `⬜` in `PROGRESS.md`.
+
+**Baseline** `b3274989` — pass 16's real merge commit (PR #4440), confirmed
+an ancestor of `HEAD` via `git merge-base --is-ancestor`, not assumed from
+the file's own text.
+
+**Backend: two files touched, both read in full; the other twelve declared
+files (`station_documents.py`, `legal_documents.py`, `api/public/legal.py`,
+`document_service.py`, `print_document_service.py` is the exception below,
+`legal_service.py`, `admin_only_folder_digest.py`, `models/document.py`,
+`models/legal.py`, `schemas/documents.py`, `schemas/legal.py`,
+`mcp/tools/documents.py`) are byte-identical to pass 16:**
+
+- **`documents_service.py` (+42/−21) — a pure extraction, not a behavior
+  change.** `delete_folder`'s body (subtree walk, the DOC-32 History guard,
+  the bulk delete, and the file-cleanup loop) is split into a new
+  `_delete_folder_subtree` helper that `delete_folder` now calls and then
+  commits; `delete_folder`'s own observable behavior is unchanged line for
+  line, confirmed by diffing the moved block against its pre-move text.
+  This is in scope rather than a no-op refactor because of who the new
+  helper is written for: `member_documents.py` (a new file this pass swept
+  for and read — see below) calls `_delete_folder_subtree` directly, inside
+  a member erasure's own transaction, bypassing `delete_folder`'s commit so
+  the erasure can roll everything back together. Confirmed the DOC-32 guard
+  (the per-row History check before the bulk `DELETE`) lives **inside** the
+  extracted helper, not in the `delete_folder` wrapper that was left behind
+  — so the erasure path inherits it automatically rather than needing its
+  own copy, the same shape Pitfall #29 asks for (one definition, not a
+  parallel one). The one behavior difference between the two call sites —
+  `delete_folder` passes `current_user` for the per-descendant
+  `_folder_admits_user` write-check, `erase_member_documents` passes `None`
+  and skips it — is correct, not an oversight: the erasure deletes the
+  _target_ member's own personal folder as a system operation already
+  gated by the caller's own grant-ceiling check (Feature 07's
+  `anonymize_member`/`delete_user`, re-verified in that feature's pass 17),
+  not an arbitrary admin browsing someone else's folder through the UI.
+- **`print_document_service.py` (+25/−4) — unrelated feature work, read for
+  this feature's own boundary only.** `build_shift_roster` now titles and
+  labels a community-outreach shift's printed roster using the department's
+  own configured outreach-role vocabulary (`outreach_role_label`,
+  `outreach_sheet_titles` — department-admin-configured settings JSON, not
+  client-supplied free text) instead of the generic seat label. No new
+  query, no new permission (the roster's own existing gate is unchanged),
+  and the outreach organization lookup is by the caller's own
+  `organization_id`, not a client-supplied id.
+
+**New, unclaimed files swept for and read directly, not assumed clean:**
+`git diff --diff-filter=A --name-only` against the baseline, filtered for
+`document`/`legal`, found two:
+
+- **`app/services/member_documents.py`** — LIFE-11's member-erasure helper
+  (owner decision 2026-11-23): redacts a departed member's property-return
+  letter (removes the home address and stated reason, keeps the item list,
+  matched by `source_id` or, for a letter saved before that link existed,
+  by name inside the `is_system` Separations folder — `like_pattern()` +
+  `escape=LIKE_ESCAPE_CHAR`, Pitfall #25 correct) and deletes the member's
+  personal Member Files folders via the shared `_delete_folder_subtree`
+  above. Every query is `organization_id`-scoped; the letters are locked
+  (`with_for_update()`) before the rewrite. This is Feature 07's own erasure
+  flow calling into this feature's data model, reviewed here the same way
+  pass 16 reviewed History's boundary with Documents — not re-reviewing
+  Feature 07's endpoint-level gating, which its own pass 17 already did.
+- **`app/services/document_provenance.py`** — a cross-cutting PDF-metadata
+  helper (report numbers, "Prepared by" labels) already traced end to end
+  by this lap's Elections pass 17 (no new query, no client-supplied input,
+  no unescaped render path); not re-derived here, read only to confirm it
+  is a shared primitive and not Documents-specific state.
+
+**Routes: 26, unchanged from pass 16** (re-enumerated by AST: `documents.py`
+17, `station_documents.py` 2, `legal_documents.py` 7). `api/public/legal.py`
+(1, unauthenticated, rate-limited) unchanged. `check_route_permissions.py
+--strict` — 339 routes repo-wide, 0 errors/warnings.
+
+**No migration in this window touches `document_folders`, `documents`,
+`legal_documents`, or `legal_document_revisions`** — checked every migration
+file added since baseline individually for those table names, not assumed
+from an empty `git diff --stat` on the versions directory as a whole.
+
+**Standing findings — none open.** DOC-31 and DOC-32 are RESOLVED/FIXED
+(pass 15, pass 16); DOC-9 is FIXED (PR #2954, 2026-10-05). No OPEN or
+FLAGGED finding exists for this feature, confirmed against
+`docs/KNOWN_LIMITATIONS.md`'s DOC entries directly rather than trusting
+pass 16's own "no other finding" line.
+
+**0 fixed, 0 new findings.**
+
+## Completion gate (pass 17)
+
+| Check                                                                                                                                            | Result                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.5.0, CI's pin)                                                                                                  | ✅ 0 violations                                                            |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                         | ✅ 3504 files unchanged                                                    |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                                                                      | ✅ clean                                                                   |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                | ✅ 837 revisions, single head `bbb6eac6ae34`                               |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                | ✅ 339 routes, 0 errors, 0 warnings                                        |
+| `docs/DATABASE_SCHEMA.md` vs generator                                                                                                           | ✅ already current (423 tables, 6545 columns)                              |
+| `pytest tests/ -k "document or legal or station_document or facility_folder or folder or admin_only or minutes_attachment or published_minutes"` | ✅ 491 passed, 1 pre-existing environment-only skip (`py_vapid`), 0 failed |
+| `cd frontend && npm run typecheck`                                                                                                               | ✅ 0 errors                                                                |
+| `cd frontend && npm run lint`                                                                                                                    | ✅ 0 errors, 0 warnings                                                    |
+| `npx vitest run src/pages/DocumentsPage.test.tsx src/components/documents src/pages/legal/LegalPage.test.tsx src/utils/fileTypeLabel.test.ts`    | ✅ 85 passed (6 files)                                                     |
+
+Backend linters run under `/usr/local/bin/python3.13`, matching CI's
+interpreter and pinned versions exactly.
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 
