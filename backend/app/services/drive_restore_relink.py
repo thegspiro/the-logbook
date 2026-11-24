@@ -117,9 +117,18 @@ async def _drive_departments(
 
 
 def _verified(backend: GoogleDriveBackend, ref: str) -> bool:
-    """The candidate is one of this installation's files: it reads back
-    whole and decrypts with the file key. Blocking."""
+    """The candidate is one of this installation's files: it carries the
+    file-encryption header, and reads back whole and decrypts with the file
+    key. Blocking.
+
+    The header check is the load-bearing half: a read passes an unencrypted
+    file straight through (for files stored before encryption), so a
+    decrypted copy uploaded under the stored name would otherwise be
+    accepted, and the Logbook never writes a Drive file unencrypted."""
     try:
+        if backend.key_id(ref) is None:
+            logger.warning("Drive relink refused {}: not an encrypted file", ref)
+            return False
         backend.read_bytes(ref)
     except (
         OSError,
