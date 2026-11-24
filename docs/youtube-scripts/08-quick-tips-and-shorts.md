@@ -2513,7 +2513,10 @@ their own dates.]**
 > wrong."
 
 **Production:** create the series in the demo department on camera; the
-department timezone must observe daylight saving.
+department timezone must observe daylight saving. Since 2026-11-23 a series
+move that lands any occurrence on a room another event has booked is refused,
+so give the drill a room that is free at 7:30 PM on every date, or leave the
+location empty. The narration is unchanged.
 
 ---
 

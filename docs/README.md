@@ -6,6 +6,8 @@
 
 Welcome to The Logbook documentation! This directory contains comprehensive guides, references, and troubleshooting resources.
 
+The training guides, the wiki's setup and administration pages and the reference docs are also published, with search, at **[thelogbook.us](https://thelogbook.us/)** _(2026-11-23)_. The site is built from this directory and `wiki/` unedited, by [`docs-site/`](../docs-site/README.md), so an edit here reaches it on the next merge to `main`. Review rotations, audits, agent rules and video scripts are kept off it.
+
 ---
 
 ## 📚 Documentation Index

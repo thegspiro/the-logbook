@@ -1063,6 +1063,10 @@ The rules, and why:
   name rather than "Former member" and their number. An import committed
   before this date did not keep the typed name: retype it before committing
   again.
+- **Attached files go too** _(2026-11-23)_. Files attached to the training
+  records or company drills the undo removes are deleted shortly afterwards,
+  unless another record still uses the same file. Before, the records went and
+  their files stayed on the server with nothing pointing to them.
 
 The toast says how many records (and former members) were removed. Only
 holders of `integrations.historical_import` (the IT Manager by default) can

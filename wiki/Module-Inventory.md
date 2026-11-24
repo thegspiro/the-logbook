@@ -198,7 +198,14 @@ batch scanner is titled **Distribute Items**.
   The downloadable sample includes common medical supplies (no medications);
   its `Category` cells are names matched against categories you have already
   created, and a row that matches none imports uncategorized, which reads as gear
-  (see [Importing supplies from a CSV](Module-Medical-Supplies#importing-supplies-from-a-csv))
+  (see [Importing supplies from a CSV](Module-Medical-Supplies#importing-supplies-from-a-csv)).
+  _(2026-11-23, W43-5)_ Once a file is chosen, the page checks **every row**
+  with a dry run of the same import (`?dry_run=true`, which writes nothing) and
+  shows, under the preview and before **Import**, how many rows will import,
+  **Rows that will be skipped** with each reason, and **Will import, with a
+  warning**. A serial number or asset tag repeated within the file is caught
+  there too. If the check cannot run, the page says so and Import works as
+  before.
 - **CSV Export** — export of the filtered list to CSV (see
   [Item Management](Module-Inventory-Developer#item-management))
 - **Variant Groups, sizes and styles** — see

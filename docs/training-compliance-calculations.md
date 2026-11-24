@@ -60,6 +60,13 @@ disagree about a member (owner decision 2026-11-20):
 | `not_applicable` | Not Applicable | nothing grades the member                         |
 | `exempt`         | Exempt         | the member is exempt from compliance tracking     |
 
+`not_current_member` (label **Not a Current Member**, _2026-11-23_) is a sixth
+status for a person who is not a current member: an account status outside
+`ACTIVE_ACCOUNT_STATUSES` (active, probationary) — so `leave` and `suspended`
+too — or a deleted account. The matrix already left these people out; the card
+now does the same instead of grading them. The officer's member view
+(`standing` / `standing_label`) reports it too, with empty requirement lists.
+
 ### Decision Logic
 
 The requirements counted are the ones that grade the member: their
@@ -77,7 +84,8 @@ The thresholds are the matching profile's overrides, else the department's
 compliance settings, else 100% compliant / 75% at risk.
 
 ```
-IF member is compliance-exempt:          → EXEMPT
+IF member is not a current member:       → NOT A CURRENT MEMBER  (2026-11-23)
+ELSE IF member is compliance-exempt:     → EXEMPT
 ELSE IF requirements_total = 0:          → NOT APPLICABLE
 pct = round(requirements_met / requirements_total × 100, 1)
 IF threshold type is "all required":
@@ -226,16 +234,24 @@ with the member's average against the department's monthly pace, from one
 function, `training_compliance.monthly_pace`:
 
 ```
-active_months   = months in the window, through the as-of date, that no
-                  leave or waiver excused
-monthly_average = SUM(hours in active_months) / COUNT(active_months)
-                  (null when every month so far was excused)
+active_share(m) = 1 - waived_share(m)        (0 for a wholly excused month,
+                                              1 for a month nothing excused)
+active_months   = months in the window, through the as-of date, with
+                  active_share > 0
+monthly_average = SUM(hours in active_months) / SUM(active_share)
+                  (null when every month so far was wholly excused)
 monthly_needed  = requirement.required_hours (unadjusted) / months in the
                   whole window
 ```
 
-Hours earned in an excused month stay in `completed_hours` but are left out
-of the average, which measures the member's pace while active. The waiver
+Hours earned in a wholly excused month stay in `completed_hours` but are left
+out of the average, which measures the member's pace while active. **A partly
+excused month** _(2026-11-23)_ counts for its unexcused share with all of its
+hours — a half-excused month is half a month — because hours cannot be split
+by the day; the average can read slightly high for it. Before, any excused
+month, however little of it was excused, was left out. The officer's monthly
+breakdown applies the same weighting to shift and call requirements, which
+have no server average. The waiver
 does not lower `monthly_needed`: leave reduces what a member owes, not the
 pace the department set. Both figures are display only; `is_complete` above
 still decides the status.
@@ -405,6 +421,20 @@ reads it.
 training records on every screen instead, and it stays off the Shift
 Compliance report, as before. `calls` requirements still count matching
 training records.
+
+**A shift-credited `hours` requirement on the Shift Compliance report**
+_(2026-11-23)_ is graded by the same shared grader, with the member's credited
+shift hours (`CreditedHours`, loaded by `SchedulingService._credited_shift_hours`)
+in place of training records: hours of finalized attendance on the
+department's own shifts, minutes of counted external shifts
+(`ExternalShiftHoursService.counted_minutes_by_user_and_date`), and approved
+pre-shift work on finalized shifts, each dated and counted inside
+`completion_window(requirement, as_of)`. Freshness, waiver proration (leave
+**and** training waivers, by the department's **Months on leave** rule),
+cut-off and catch-up are the grader's own. Before, the report counted
+attendance on shifts not yet finalized, used its own period, and applied a
+leave-only adjustment to rolling requirements only. The training screens still
+grade an hours requirement from training records.
 
 ```
 shifts (shift_credited):

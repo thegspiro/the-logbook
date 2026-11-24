@@ -139,6 +139,20 @@ full link.
 
 > **Tip**: Add the form link to your department website's "Community Programs" or "Request an Event" page. You can also generate a QR code for print materials.
 
+### Step 6 (optional): Ask Requesters for Feedback
+
+_(2026-11-23)_ Once a request is marked **Completed**, its status page can ask
+the requester how the visit went, and the built-in Completed email links to
+it. Under **Events Admin > Settings > Public Requests > Handling**, find
+**Feedback From Requesters**: choose a published form as the **Feedback form**,
+or press **Create the starter feedback form** (a 1 to 5 rating, **What went
+well?**, and **What could we do better?** shown at a rating of 3 or less), and
+choose the **Rating question**. Each requester answers once. Answers appear on
+the request under **Requester feedback**, and **Outreach Impact** shows the
+average rating and how many responded. A template you attached to the
+Completed trigger yourself is sent as written, without the link. See
+[Events & Meetings → Feedback from requesters](https://github.com/thegspiro/the-logbook/blob/main/docs/training/04-events-meetings.md#feedback-from-requesters).
+
 ---
 
 ## Sample Programs
@@ -308,6 +322,16 @@ full link.
 5. Confirm with homeowner(s) — day, time, and access needs
 6. Complete installation and record detector serial numbers
 7. Send follow-up email with maintenance reminders (test monthly, replace after 10 years)
+
+**Recording what was installed** _(2026-11-23)_: log each home visit under
+**Events → CRR Activities → Log a CRR activity**, choosing **Smoke alarm
+install** and filling in its counts (alarms installed, homes), the ZIP code,
+and who took part — each member's minutes go to Admin Hours. Resident details
+are optional, encrypted, seen only by the Community Outreach Manager, the
+chiefs and the president, and cleared after your retention period (24 months
+by default). The installs then appear by activity, risk, priority population
+and ZIP code on **Outreach Impact**. See
+[Events & Meetings → CRR Activities](https://github.com/thegspiro/the-logbook/blob/main/docs/training/04-events-meetings.md#crr-activities).
 
 ---
 

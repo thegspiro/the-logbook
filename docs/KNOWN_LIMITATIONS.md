@@ -161,6 +161,36 @@ What it depends on and leaves open:
   fork when two migration branches merge close together, and Migration Chain
   reports it on the push to `main`.
 
+## Found by the November 23 – 24 Documentation Pass (2026-11-24)
+
+Two gaps the documentation pass found while checking the guides against the
+code. Neither is a regression in the pull request that exposed it, and each
+needs a change larger than a documentation pass makes.
+
+- **The permanent-delete preview counts personal-folder documents as kept.**
+  Since LIFE-11 (#4622), a permanent delete removes every document in the
+  member's personal **Member Files** folder. The preview's **Kept** list still
+  reads "{n} uploaded documents will stay, with no uploader shown", and `n` is
+  every `Document` with `uploaded_by` equal to the member
+  (`get_deletion_impact` in `endpoints/users.py`), so it includes the ones
+  about to be deleted. The **Permanently deleted** list has no line for them.
+  An officer confirming the delete is told those files stay. The fix is a
+  backend count that excludes documents under the member's personal folders,
+  a second count for them, and a line in `DeleteMemberModal`. Until then guide
+  01 tells officers to download anything in the folder first. (The Anonymize
+  dialog had the same gap and was fixed in this pass: it now lists the folder
+  and the separation-letter redaction under **Removed**.)
+- **A member has no link to their own waiver request page.** The training
+  request page, `/attendance-waivers/:id`, is the only place a member can add,
+  view (#4645) or remove (#4619) a supporting document. Nothing in the app
+  links a member there: **My Training > My Waiver Requests** and the session's
+  card open the session, and member notices open the session or My Training;
+  the page is reached from the approver's email. So the remove and view
+  controls are in practice reachable by deciders, or by a member who knows
+  the address. Guide 02 says "on the request's page" without claiming a link.
+  Open for an owner decision: link each row of **My Waiver Requests** to its
+  request page, or move the document controls onto the session's card.
+
 ## Apparatus Events — What the First Release Leaves Out (2026-11-16)
 
 Apparatus events (Events Administration → Community Outreach → Apparatus
@@ -514,7 +544,10 @@ choices below as built; who should see a department-wide backlog stays open.
   scoping can still keep two such requirements apart, so it may warn where the
   backend would pick one; it never stays silent where membership types alone
   make the choice ambiguous. The warning is non-blocking.
-- **The decided list pages through the unfiltered list.** The list endpoint
+- ✅ **Resolved 2026-11-23 (#4608):** the list endpoint now takes
+  `state=pending|decided`, and the queue pages each on its own count, 50 at a
+  time, with **Show more waiting requests** and **Show more decided
+  requests**. The original note follows. ~~**The decided list pages through the unfiltered list.**~~ The list endpoint
   filters by one status at a time, so the queue loads every pending request in
   one call (up to the endpoint's 200) and pages the unfiltered list for the
   decided ones, leaving out the pending rows it repeats. A page can therefore

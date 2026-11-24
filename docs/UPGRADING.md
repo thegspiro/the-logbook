@@ -869,6 +869,70 @@ Nothing blocks a restart, and no migration ships with this change.
 - A file that cannot be removed straight away (an unreachable remote store)
   is retried by the hourly `pending_file_deletions` sweep.
 
+### Erasure repairs, apparatus sign-up approval, requester feedback and waiver rules (2026-11-23)
+
+Nothing blocks a restart. Ten migrations arrive together and run in one
+`alembic upgrade head`; the single head afterwards is `07abf8e6553b`. Two of
+them rewrite stored data and **cannot be undone** by a downgrade, so take the
+backup described above first.
+
+- **`1f3a6c2d9e40` (data only, irreversible, #4615).** For members already
+  anonymised, it renames training attachment entries that kept a file name but
+  no stored file to "certificate" or "attachment", and it re-excuses meeting
+  attendance rows that anonymisation had turned into absences although a
+  waiver was granted. Batched, and safe to run twice.
+- **`9c41e7b2d5a3` (data only, irreversible, #4624).** Writes "Former member"
+  where an anonymised member's name was stored as an instructor:
+  `event_templates.training_details`, `training_sessions.instructor` and the
+  matching attendees' `training_records.instructor`.
+- **`5c8e1f3a9d27` (#4613).** Adds `require_signup_approval` (default off) to
+  apparatus event templates and plans, and creates
+  `apparatus_event_seat_requests`. **New scheduled task**
+  `apparatus_seat_request_lapse`, every 15 minutes. A deployment that drives
+  tasks from an external cron needs the line
+  `*/15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=apparatus_seat_request_lapse`.
+  No new email goes out until a template turns approval on.
+- **`0a4667186b2d` (#4587).** Creates `event_request_feedback`. No email
+  changes until a department picks a feedback form. Once one is picked, the
+  built-in **Completed** email to an outreach requester carries a link to the
+  status page to leave feedback. Two new public, rate-limited routes, `GET`
+  and `POST /api/v1/event-requests/status/{token}/feedback`, serve it.
+- **`07abf8e6553b` (#4614).** Creates the empty table
+  `rolling_requirement_last_met`. It has no backfill: last-met dates start with
+  the first daily compliance run after the upgrade, so a member already told
+  about a lapse is not emailed again until they meet the requirement and lapse
+  again.
+- **`bfb747c095c3` (#4621).** Adds `program_requirement_reopened` to the email
+  template type columns. A downgrade deletes rows of that type.
+- **`b37218495d33` (#4608).** Drops the index `idx_meeting_attendees_meeting`
+  where another index leads on `meeting_id`. It does nothing otherwise, and no
+  rows change.
+- **Merges:** `39818e142d35`, `986d6575af35`, `e7ed388345a4`.
+
+Behaviour that changes on upgrade, with no setting to restore the old one:
+
+- **Cancelling or deleting an event voids approved waiver requests**, not
+  only pending ones (owner decision of 2026-11-23, #4619). Each voided approval
+  stops counting toward the member's yearly limit, comes off the minutes for a
+  meeting, and the member is told. Denied requests are kept.
+- **Meeting-waiver notices are required.** The expiry, moved-meeting and
+  question emails go out under **Changes to your training record**, which a
+  member cannot switch off.
+- **The waiver policy read is narrower.** `GET .../waivers/requests/policy`
+  (training and meetings) no longer returns the approver and copy-to position
+  ids or `chief_alternate_user_id` unless the caller holds the workflow's
+  manage permission.
+- **Report key renamed.** The annual and monthly compliance reports'
+  `record_completeness.records_with_certification` is now
+  `records_with_course_name`. Reports stored before the upgrade keep the old
+  key, so a script reading both needs to accept either.
+- **Draft events.** A holder of `training.manage` now sees and opens draft
+  Training events; members see no drafts anywhere, the training calendar
+  included (#4641).
+- **Webhook audit events.** Five public-webhook audit events are now recorded
+  against the department (#4644). Rows written before the upgrade stay
+  platform-level; there is no backfill.
+
 ### Community risk reduction tracking, and a street map that loads tiles from OpenStreetMap (2026-11-23)
 
 Nothing blocks a restart. Migrations `89c0b481fe55` and `5c2e8a417d90` create

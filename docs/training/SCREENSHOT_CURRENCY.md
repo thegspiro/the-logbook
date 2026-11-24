@@ -1,5 +1,62 @@
 # Screenshot currency
 
+## Queued by the November 23 – 24 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-23--24-2026).
+Nothing was captured by this pass. Numbers continue after the ids the open
+November 21 – 22 (#4568) and November 22 – 23 (#4626) passes reserve; check
+them against `images/` before saving. Guide 04 carries "Screenshot needed"
+placeholders for `04-111` to `04-116`.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 01 | `01-49-anonymize-member`: the **Removed** list now ends with "Their personal Member Files folder and its documents" and "Home address and reason for leaving on their separation letters" | **Replace** (it was also still failing in the 2026-11-21 capture) |
+| 01 | An officer viewing another member's profile: **Certifications** list with one **On file** "(Expires …)", one **Expired** "(date)" and one **Not recorded** row | Create `01-71-profile-certifications` |
+| 01 | A member's own digital ID card: the **Certifications** box above the barcode and **Card valid through** | Create `01-72-id-card-certifications` |
+| 01 | `01-44-member-id-card` (shows the certifications box if taken as the member or a `training.manage` holder), `01-02-member-profile` (training section starts with Certifications) | Check |
+| 17 | `17-03`, `17-04`: the profile's training section | Check |
+| 02 | Training Officer Dashboard: Upcoming Expirations "Dec 19, 2026 · 26d", Recent Completions "Nov 20, 2026", Requirements Status with a date and one **Ongoing** | Create `02-166-dashboard-card-dates` |
+| 02 | `02-17-officer-dashboard`: Department Compliance now one decimal (e.g. 66.7%), card dates | **Replace** |
+| 02 | Requirement form, editing, name cleared: "Give the requirement a name." on the field, **Fix these and save again**, "Requirement saved, except name. Fix it and save again." | Create `02-167-requirement-form-error` |
+| 02 | Edit Course with the code refused: "Course saved, except code…", **Check these fields**, character counters | Create `02-168-course-form-error` |
+| 02 | Record Crew Training with blank topic, no length, nobody ticked: **Fix these before sending** and an error on each field | Create `02-169-crew-training-errors` |
+| 02 | Members › Waivers › **Create Waiver** with yourself selected: the "You cannot excuse your own requirements…" note with its **Leave Requests** link, **Create Waiver** greyed | Create `02-170-self-waiver-refused` |
+| 02 | Request page **Supporting documents**: a PDF and a JPEG row with **View**, **Download**, **Remove**; then the image open in its dialog | Create `02-171-waiver-document-view` |
+| 02 | **Remove this document?** with **Remove document** / **Keep it** | Create `02-172-waiver-document-remove` |
+| 02 | Waiver Requests queue with more than 50 waiting: **Show more waiting requests** | Create `02-173-waiver-queue-show-more` (needs 51+ seeded requests) |
+| 02 | A former member's profile compliance card: grey **Not a Current Member** badge and sentence | Create `02-174-not-current-member` |
+| 02 | Add Recertification Pathway, blank name and Renewal Window 400, both flagged under their fields | Create `02-175-pathway-dialog-errors` |
+| 02 | Add Provider details step, address flagged "Enter a full address, starting with https://." | Optional `02-176-provider-address-error` |
+| 09 | Skill template builder: a blank criterion label flagged, its section opened, **Fix these and save again** with "Section 1, Criterion 2: Give the criterion a label."; on an existing template "Template saved, except template name…" | Create `09-35-builder-errors` |
+| 09 | `09-04-template-builder`, `09-02-create-template` | Check for the old banner |
+| 03 | My Shifts → Hours: **Hours by position** card with the year and **All time** buttons, several seats, **No position recorded** and **Other departments** rows | Create `03-145-hours-by-position` |
+| 03 | `03-104-my-shifts-hours`, `03-143-hours-month-selected`, `03-113`: the new card sits between the chart and All shifts | Check |
+| 04 | **Settings → CRR Catalogue**: Smoke alarm install with its counts, Risks and Priority populations ticks, the Admin Hours category, Rename / Describe / Retire, one type marked **Coming soon** | Create `04-111-crr-catalogue` |
+| 04 | **Log a CRR activity**: Alarms installed 3, Fire ticked, ZIP with city and state, Add resident details unticked, one member at 60 minutes | Create `04-112-crr-activity-dialog` |
+| 04 | Outreach Impact **CRR activities**: By activity with a change badge, By risk, By ZIP code with **Show map** open and two or more circles | Create `04-113-crr-impact-map` |
+| 04 | **Public Requests → Handling → Feedback From Requesters** with the starter form and a rating question chosen | Create `04-114-feedback-form-setting` |
+| 04 | A completed request's **Requester feedback** section with a rating and two written answers | Create `04-115-requester-feedback` |
+| 04 | Apparatus & Crew card as a coordinator: **Sign-ups need approval**, **2 requests waiting**, one seat with two members each with Approve / Decline | Create `04-116-apparatus-seat-requests` |
+| 04 | `04-100-community-engagement` (the **Requester feedback:** line, CRR section below); `04-108-outreach-overview` if #4568 captures it before this merges (**Log a CRR activity** in the header) | Check |
+| 05 | Import Inventory after choosing a file: "2 of 4 rows will import. 2 will be skipped:", **Rows that will be skipped**, **Will import, with a warning** | Create `05-157-import-row-check` |
+| 06 | Inspections opened from the dashboard tile: the amber "Showing only inspections next due in the next 30 days, at facilities that are not archived." and **Show all inspections** | Create `06-40-inspections-due-within` |
+| 06 | Department Maintenance, editing a record: "Facility: Station 1" as text, no picker | Create `06-41-maintenance-edit-facility-text` |
+| 08 | A report at desktop width as a sortable table, sorted by one column, its header button focused | Create `08-127-report-sorted-column` |
+
+**Rows earlier queues still show as open, though the images now exist.**
+Left as they are here, because the open passes rewrite those sections; mark
+them done when #4568 and #4626 merge:
+
+- November 20 – 21 queue: `02-144-evaluation-step-assign`,
+  `02-145-evaluation-last-review`, `02-146-evaluation-period-results` and
+  `03-138-closeout-own-row-locked` were captured by #4607.
+- `04-102-event-request-page` still says "Still open: the phone action bar";
+  check whether #4599 captured it.
+- #4599 also added `01-59` to `01-62`, `02-147` to `02-150` and `04-103` to
+  `04-107`, which have no row in this file or `SCREENSHOT_STATUS.md`.
+
+**Made wrong by this range:** `01-49`, `02-17`.
+
 ## Queued by the November 22 – 23 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-22--23-2026).

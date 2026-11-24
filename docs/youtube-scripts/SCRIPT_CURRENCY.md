@@ -1,5 +1,36 @@
 # Script currency
 
+## 2026-11-24 pass
+
+**Edited:**
+
+- **03 IT Manager, Anonymizing chapter.** One narration paragraph added:
+  anonymising now deletes the member's personal Member Files folder, strips
+  the home address and reason from their separation letters, shows "Former
+  member" for a class they taught, and keeps an excused meeting excused
+  (#4615, #4622, #4624). Without it, the "download first" advice reads as
+  complete. Re-record one beat, about 15 seconds; the Anonymize dialog in the
+  footage now has two more **Removed** lines.
+- **05 Training Officer.** The Upcoming Expirations narration now says each
+  row shows its expiry date and the days left (#4595). A production note asks
+  for the dashboard cards to be re-shot.
+- **07 Secretary.** Production notes: the outreach beat's Completed email now
+  carries a feedback link once a department sets a feedback form (#4587); the
+  Waiver Management beat shows the self-waiver refusal (#4598).
+- **08 Quick Tips, Short 8BM.** Production note: the demo drill's room must be
+  free at the new time, or the series move is refused (#4596). Narration
+  unchanged.
+
+**Flagged, not edited:**
+
+- **06 Member guide.** Could mention certifications on the digital ID card
+  (#4638) and **Hours by position** on the Hours tab (#4600). Nothing it says
+  is wrong.
+- **05, 15 and 16.** The requirement form and skill template builder beats
+  could show the new on-field errors and **Fix these and save again** summary
+  (#4609). The narration is still accurate.
+- **Apparatus events video script.** Checked: #4613 added the approval scene.
+
 ## 2026-11-23 pass
 
 **Edited:**

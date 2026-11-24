@@ -110,6 +110,17 @@ approved a held request cannot give its second approval
 (`FinanceService._held_for_second_approver`, `manual_approve`). See
 `docs/FINANCE_MODULE.md`, "Dual approval".
 
+**Grants that would excuse the officer themselves** are a third control, also
+outside the table: recording a leave of absence (create and edit), a training
+waiver (create, edit or reactivate) or the Chief's requirement override for
+oneself is refused. Since 2026-11-23 all five sites share one comparison,
+`is_own_grant` in `backend/app/utils/separation_of_duties.py`, which, like
+`assert_different_person`, treats a missing grantor (a system-made grant) as
+not one's own. Owner decision 2026-11-23: there is no exception for a lone
+Chief, who must give the training-manage permission to another officer or file
+a leave request. Ending (deactivating) one's own waiver is allowed: it excuses
+nothing.
+
 **Deliberately not guarded**, each for a stated reason — this half is the part
 worth keeping current:
 

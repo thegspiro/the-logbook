@@ -41,6 +41,13 @@ docker compose up -d
 
 ## 📚 Documentation Sections
 
+> **Also on the web** _(2026-11-23)_: this wiki, the training guides and the
+> reference docs are published as one searchable site at
+> **[thelogbook.us](https://thelogbook.us/)**. It is built from the same
+> Markdown, unedited, so a change here appears there after the next merge to
+> `main`. How it is built, and how to run a copy, is in
+> [`docs-site/README.md`](https://github.com/thegspiro/the-logbook/blob/main/docs-site/README.md).
+
 ### 🎯 Getting Started
 
 - **[Installation Guide](Installation)** - Complete setup instructions

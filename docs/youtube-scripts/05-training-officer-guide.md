@@ -96,9 +96,15 @@ your department" guide and the Department Compliance card reading "Not set
 up". Added 2026-10-04; about 12 seconds, re-time Chapter 2.]**
 
 > "**Upcoming Expirations** — this is your early warning system. It looks
-> ninety days ahead and shows you the next five, each with the number of days
-> left. If you see a cluster of CPR certs going in the same month, that's your
-> cue to schedule a class."
+> ninety days ahead and shows you the next five, each with its expiry date and
+> the number of days left. If you see a cluster of CPR certs going in the same
+> month, that's your cue to schedule a class."
+
+**[PRODUCTION NOTE — 2026-11-23. Narration changed: each Upcoming Expirations
+row now reads the date beside the countdown, "Dec 19, 2026 · 26d", and the
+Recent Completions and Requirements Status cards print "Nov 20, 2026" instead
+of "2026-11-20". Any take showing a bare "26d" or a raw date is dated; re-shoot
+the dashboard cards.]**
 
 **[CALLOUT: "Ninety days ahead — and nothing behind you"]**
 
