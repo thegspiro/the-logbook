@@ -16,10 +16,50 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4644](https://github.com/thegspiro/the-logbook/pull/4644) (branch
+`claude/friendly-babbage-8lhliy`)**: Feature 03 (Public surface &
+webhooks), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here (`claude/friendly-babbage-n4b791`,
+`claude/friendly-babbage-v1mcno`, `claude/friendly-babbage-2isqey`): this
+session's environment restricts pushes to its own assigned branch rather
+than a freely-chosen `claude/security-review-public-surface-webhooks` name.
+
+PR #4633 (Feature 02, Permissions & roles, pass 17) had already merged
+(`b08491c25`) before this iteration started; row 02 marked ✅ above.
+
+Baseline: pass 16's merge `15d61fa5d` (PR #4349). Real delta: exactly one
+tracked file changed, `zeffy_sync_service.py` (Feature 22's own ADV2-11
+fix), read for its effect on this feature's `zeffy_webhook.py` and found to
+only narrow what the webhook can do. Route count unchanged (51,
+re-enumerated by AST). **1 fixed (PUB-15, across 5 call sites), 0 new
+flagged findings.** PUB-15: five `log_audit_event()` calls under
+`app/api/public/` carried `organization_id` only inside `event_data`, never
+as the keyword that actually stamps the column, so each row was invisible
+to the department's own Audit Logs / Security Monitoring screens — the same
+gap PUB-8 was built to close, on five sites its own fix never touched. Fixed
+to match `zeffy_webhook.py`'s own already-correct call; new guard test
+(`test_public_audit_organization_scoping.py`) AST-sweeps the directory.
+Also escalated (not fixed): a pre-existing, unrelated 2-head Alembic fork
+that PR #4642 already exists to resolve — opening a second merge revision
+here would race it. Full write-up:
+`docs/security-review/PUB-03-public-surface-webhooks.md`'s **Pass 17**
+section.
+
+Row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
+payments) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (interim "None" note between PR #4633 merging and PR #4644 opening), preserved for history</summary>
+
 **None.** PR #4633 (Feature 02, Permissions & roles, pass 17) merged
 (`b08491c25`) since the last iteration. Row 02 marked ✅ below; next is
 Feature 03 (Public surface & webhooks) — re-checked `list_pull_requests`
 (state `open`) fresh and found no `claude/security-review-*` head.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 17, PR #4633, merged), preserved for history</summary>
