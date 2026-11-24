@@ -12,6 +12,23 @@ _"Could not validate credentials **(Error code: LB-AUTH-002)**"_ — so a member
 can quote it to IT, and IT can look it up here without needing a screenshot or
 a reproduction.
 
+An unhandled server error (`LB-SYS-001`) also carries a `reference`: the id
+of the request that failed.
+
+```json
+{
+  "detail": "Internal server error",
+  "code": "LB-SYS-001",
+  "reference": "3f2a9c1e44aa0b12"
+}
+```
+
+The member sees _"Internal server error **(Error code: LB-SYS-001, reference
+3f2a9c1e44aa0b12)**"_. The code says what kind of error it was; the reference
+says which one. Search the backend log for it (the `Unhandled …` line names
+it, and every JSON log line of that request carries it as `request_id`), or
+find it on the Error Monitoring entry's context as `reference`.
+
 Where to look codes up:
 
 - **In the app:** Admin → Error Monitoring → _Error Code Reference_

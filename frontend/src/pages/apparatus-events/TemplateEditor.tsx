@@ -29,6 +29,7 @@ import {
   type UnitDraft,
 } from './templateForm';
 import { TONE } from './tones';
+import DurationHoursInput from './DurationHoursInput';
 import HoursNotCreditedNote from './HoursNotCreditedNote';
 
 interface TemplateEditorProps {
@@ -184,17 +185,12 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ initial, templat
             </div>
             <div>
               <label className="form-label" htmlFor="ae-duration">
-                Length (minutes)
+                Length (hours)
               </label>
-              <input
+              <DurationHoursInput
                 id="ae-duration"
-                type="number"
-                min={15}
-                max={1440}
-                step={15}
-                className="form-input"
-                value={draft.duration_minutes}
-                onChange={(e) => set('duration_minutes', e.target.value)}
+                minutes={draft.duration_minutes}
+                onChange={(minutes) => set('duration_minutes', minutes)}
               />
             </div>
           </div>
@@ -293,7 +289,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ initial, templat
               <span>
                 Coordinator approves self sign-ups
                 <span className="text-theme-text-muted block text-xs">
-                  Sign me up asks for the seat instead of taking it. The organizer is emailed, and a request nobody
+                  Sign myself up asks for the seat instead of taking it. The organizer is emailed, and a request nobody
                   answers is declined when the night starts.
                 </span>
               </span>
@@ -354,78 +350,98 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ initial, templat
                 </div>
 
                 <ul className="space-y-2">
-                  {unit.seats.map((seat) => (
-                    <li
-                      key={seat.key}
-                      className="border-theme-surface-border grid grid-cols-[minmax(0,1fr)_5rem_auto] items-end gap-2 rounded-lg border p-2 sm:grid-cols-[minmax(0,10rem)_9rem_5rem_minmax(0,1fr)_auto]"
-                    >
-                      <div>
-                        <label className="form-label text-xs" htmlFor={`seat-name-${seat.key}`}>
-                          Seat
-                        </label>
-                        <input
-                          id={`seat-name-${seat.key}`}
-                          className="form-input"
-                          value={seat.name}
-                          maxLength={100}
-                          onChange={(e) => updateSeat(unit.key, seat.key, { name: e.target.value })}
-                        />
-                      </div>
-                      <div className="col-span-3 row-start-2 sm:col-span-1 sm:row-start-auto">
-                        <label className="form-label text-xs" htmlFor={`seat-type-${seat.key}`}>
-                          Type
-                        </label>
-                        <select
-                          id={`seat-type-${seat.key}`}
-                          className="form-input"
-                          value={seat.seat_type}
-                          onChange={(e) =>
-                            updateSeat(unit.key, seat.key, { seat_type: e.target.value as SeatDraft['seat_type'] })
+                  {unit.seats.map((seat, seatIndex) => {
+                    // Column names show once, above the first seat, as a
+                    // table header would; later rows keep them for screen
+                    // readers. Repeated on every row they crowded the card.
+                    const labelClass = seatIndex === 0 ? 'form-label text-xs' : 'sr-only';
+                    return (
+                      <li
+                        key={seat.key}
+                        className="border-theme-surface-border grid grid-cols-[minmax(0,1fr)_4.5rem_auto] items-end gap-2 rounded-lg border p-2 sm:grid-cols-[minmax(0,1fr)_minmax(10.5rem,12rem)_4.5rem_auto]"
+                      >
+                        <div>
+                          <label className={labelClass} htmlFor={`seat-name-${seat.key}`}>
+                            Seat
+                          </label>
+                          <input
+                            id={`seat-name-${seat.key}`}
+                            className="form-input"
+                            value={seat.name}
+                            maxLength={100}
+                            onChange={(e) => updateSeat(unit.key, seat.key, { name: e.target.value })}
+                          />
+                        </div>
+                        <div className="col-span-3 row-start-2 sm:col-span-1 sm:row-start-auto">
+                          <label className={labelClass} htmlFor={`seat-type-${seat.key}`}>
+                            Type
+                          </label>
+                          <select
+                            id={`seat-type-${seat.key}`}
+                            className="form-input"
+                            value={seat.seat_type}
+                            onChange={(e) =>
+                              updateSeat(unit.key, seat.key, { seat_type: e.target.value as SeatDraft['seat_type'] })
+                            }
+                          >
+                            <option value={ApparatusEventSeatType.DRIVER}>Driver · EVOC</option>
+                            <option value={ApparatusEventSeatType.GENERAL}>General</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className={labelClass} htmlFor={`seat-count-${seat.key}`}>
+                            Count
+                          </label>
+                          <input
+                            id={`seat-count-${seat.key}`}
+                            type="number"
+                            min={1}
+                            max={20}
+                            className="form-input"
+                            value={seat.count}
+                            onChange={(e) => updateSeat(unit.key, seat.key, { count: e.target.value })}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="btn-secondary btn-icon col-start-3 row-start-1 self-end sm:col-start-auto sm:row-start-auto"
+                          aria-label={`Remove the ${seat.name || 'seat'} seat`}
+                          disabled={unit.seats.length === 1}
+                          onClick={() =>
+                            updateUnit(unit.key, (u) => ({ ...u, seats: u.seats.filter((s) => s.key !== seat.key) }))
                           }
                         >
-                          <option value={ApparatusEventSeatType.DRIVER}>Driver · EVOC</option>
-                          <option value={ApparatusEventSeatType.GENERAL}>General</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="form-label text-xs" htmlFor={`seat-count-${seat.key}`}>
-                          Count
-                        </label>
-                        <input
-                          id={`seat-count-${seat.key}`}
-                          type="number"
-                          min={1}
-                          max={20}
-                          className="form-input"
-                          value={seat.count}
-                          onChange={(e) => updateSeat(unit.key, seat.key, { count: e.target.value })}
-                        />
-                      </div>
-                      <div className="col-span-3 sm:col-span-1">
-                        <label className="form-label text-xs" htmlFor={`seat-note-${seat.key}`}>
-                          Note for members
-                        </label>
-                        <input
-                          id={`seat-note-${seat.key}`}
-                          className="form-input"
-                          value={seat.note}
-                          maxLength={300}
-                          onChange={(e) => updateSeat(unit.key, seat.key, { note: e.target.value })}
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        className="btn-secondary btn-icon col-start-3 row-start-1 self-end sm:col-start-auto sm:row-start-auto"
-                        aria-label={`Remove the ${seat.name || 'seat'} seat`}
-                        disabled={unit.seats.length === 1}
-                        onClick={() =>
-                          updateUnit(unit.key, (u) => ({ ...u, seats: u.seats.filter((s) => s.key !== seat.key) }))
-                        }
-                      >
-                        <X className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </li>
-                  ))}
+                          <X className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        {/* Full width: beside three other fields it was too narrow to read. */}
+                        <div className="col-span-full flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <label className="text-theme-text-secondary flex shrink-0 items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              className="form-checkbox"
+                              checked={seat.is_essential}
+                              onChange={(e) => updateSeat(unit.key, seat.key, { is_essential: e.target.checked })}
+                              aria-describedby={`seat-essential-help-${unit.key}`}
+                            />
+                            Essential
+                          </label>
+                          <div className="min-w-0 flex-1">
+                            <label className="sr-only" htmlFor={`seat-note-${seat.key}`}>
+                              Note for members
+                            </label>
+                            <input
+                              id={`seat-note-${seat.key}`}
+                              className="form-input"
+                              placeholder="Note for members (optional)"
+                              value={seat.note}
+                              maxLength={300}
+                              onChange={(e) => updateSeat(unit.key, seat.key, { note: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <button
@@ -439,6 +455,10 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ initial, templat
                   <span className="text-theme-text-muted text-xs">
                     Seat names are free text. Only a <span className={`badge ${TONE.red}`}>Driver · EVOC</span> seat
                     checks EVOC.
+                  </span>
+                  <span id={`seat-essential-help-${unit.key}`} className="text-theme-text-muted basis-full text-xs">
+                    Essential seats must be filled before a night counts as staffed. Untick a seat that is welcome but
+                    optional.
                   </span>
                 </div>
               </section>

@@ -88,6 +88,56 @@ async def member_signup_sheet(
     }
 
 
+def seat_board(state: dict[str, Any], user_id: str) -> dict[str, Any]:
+    """One row per seat on a signup sheet, as the shift crew board lays seats out.
+
+    Built from ``get_staffing_state``: each role's holders in signup order, then
+    its open seats, essential roles first and otherwise in the order the sheet
+    asks for them. A role somebody
+    holds that the sheet no longer asks for is listed after them (its total is
+    zero), so the person is still shown as coming.
+    """
+    holders: dict[str, list[dict[str, Any]]] = {}
+    for volunteer in state["volunteers"]:
+        holders.setdefault(volunteer["outreach_role"] or "", []).append(volunteer)
+
+    seats: list[dict[str, Any]] = []
+    # Essential roles first (owner decision, 2026-11-23), so the seats the day
+    # cannot run without are read before the optional ones; sheet order
+    # otherwise, as sorted() is stable.
+    for role in sorted(state["roles"], key=lambda r: not r["essential"]):
+        taken = holders.get(role["role"], [])
+        for volunteer in taken:
+            seats.append(
+                {
+                    "role": role["role"],
+                    "label": role["label"],
+                    "member_name": volunteer["member_name"],
+                    "is_me": str(volunteer["user_id"]) == str(user_id),
+                    "essential": role["essential"],
+                }
+            )
+        for _ in range(max(role["total"] - len(taken), 0)):
+            seats.append(
+                {
+                    "role": role["role"],
+                    "label": role["label"],
+                    "member_name": None,
+                    "is_me": False,
+                    "essential": role["essential"],
+                }
+            )
+    mine = next(
+        (v for v in state["volunteers"] if str(v["user_id"]) == str(user_id)), None
+    )
+    return {
+        "shift_id": str(state["shift_id"]),
+        "seats": seats,
+        "signed_up": mine is not None,
+        "my_role_label": mine["outreach_role_label"] if mine else None,
+    }
+
+
 async def open_event_staffing(
     db: AsyncSession,
     event: Event,

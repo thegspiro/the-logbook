@@ -520,3 +520,33 @@ describe('OpenShiftsTab', () => {
     });
   });
 });
+
+describe('OpenShiftsTab on a shift the member is already on', () => {
+  const seat = (userId: string) => ({
+    assignment_id: `a-${userId}`,
+    user_id: userId,
+    user_name: 'Someone',
+    position: 'firefighter',
+    status: 'assigned',
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockTimezone.value = 'America/New_York';
+    mockPermissions.granted = new Set();
+    mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: false });
+    mockGetOpenShifts.mockReset();
+    mockGetOpenShifts.mockResolvedValue([
+      { ...mockShifts[0], id: 'mine', roster: [seat('user-1')] },
+      { ...mockShifts[1], id: 'theirs', roster: [seat('user-2')] },
+    ]);
+  });
+
+  it('says the member is signed up instead of offering the shift again', async () => {
+    renderWithRouter(<OpenShiftsTab onViewShift={vi.fn()} />);
+
+    expect(await screen.findByText(/You.re signed up/)).toBeInTheDocument();
+    // Only the shift somebody else holds still offers a signup.
+    expect(screen.getAllByRole('button', { name: /^Sign up for shift on/ })).toHaveLength(1);
+  });
+});

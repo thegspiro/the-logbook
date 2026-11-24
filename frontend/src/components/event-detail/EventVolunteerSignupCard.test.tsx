@@ -1,25 +1,58 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const signupForShift = vi.fn();
+const withdrawSignup = vi.fn();
+const createAssignment = vi.fn();
+const getVolunteerSeats = vi.fn();
+// Which permissions the viewer holds; assigning needs scheduling.assign.
+const granted = vi.hoisted(() => ({ current: [] as string[] }));
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     signupForShift: (...args: unknown[]) => signupForShift(...args) as unknown,
+    withdrawSignup: (...args: unknown[]) => withdrawSignup(...args) as unknown,
+    createAssignment: (...args: unknown[]) => createAssignment(...args) as unknown,
+  },
+}));
+vi.mock('../../stores/authStore', () => {
+  const state = () => ({ checkPermission: (p: string) => granted.current.includes(p) });
+  return {
+    useAuthStore: Object.assign(
+      (selector?: (s: ReturnType<typeof state>) => unknown) => (selector ? selector(state()) : state()),
+      { getState: state }
+    ),
+  };
+});
+vi.mock('../../modules/scheduling/store/schedulingStore', () => {
+  const state = {
+    members: [
+      { id: 'm-9', label: 'Pat Doe' },
+      { id: 'm-3', label: 'Lee Park' },
+    ],
+    membersLoaded: true,
+    loadMembers: () => Promise.resolve(),
+  };
+  return { useSchedulingStore: (selector: (s: typeof state) => unknown) => selector(state) };
+});
+vi.mock('../../services/api', () => ({
+  eventService: {
+    getVolunteerSeats: (...args: unknown[]) => getVolunteerSeats(...args) as unknown,
   },
 }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
 import { renderWithRouter } from '../../test/utils';
 import EventVolunteerSignupCard from './EventVolunteerSignupCard';
-import type { EventVolunteerSignup } from '../../types/event';
+import type { EventVolunteerSeatBoard } from '../../types/event';
 
-const sheet = (overrides: Partial<EventVolunteerSignup> = {}): EventVolunteerSignup => ({
+const board = (overrides: Partial<EventVolunteerSeatBoard> = {}): EventVolunteerSeatBoard => ({
   shift_id: 'shift-7',
-  roles: [
-    { role: 'tour_guide', label: 'Tour Guide', total: 2, filled: 0, remaining: 2 },
-    { role: 'educator', label: 'Educator', total: 1, filled: 0, remaining: 1 },
+  seats: [
+    { role: 'tour_guide', label: 'Tour Guide', member_name: 'Gabriel Spiro', is_me: false },
+    { role: 'tour_guide', label: 'Tour Guide', member_name: null, is_me: false },
+    { role: 'educator', label: 'Educator', member_name: null, is_me: false },
   ],
   signed_up: false,
   my_role_label: null,
@@ -28,52 +61,139 @@ const sheet = (overrides: Partial<EventVolunteerSignup> = {}): EventVolunteerSig
 
 describe('EventVolunteerSignupCard', () => {
   beforeEach(() => {
+    granted.current = [];
     signupForShift.mockReset();
     signupForShift.mockResolvedValue({});
+    withdrawSignup.mockReset();
+    withdrawSignup.mockResolvedValue(undefined);
+    createAssignment.mockReset();
+    createAssignment.mockResolvedValue({});
+    getVolunteerSeats.mockReset();
+    getVolunteerSeats.mockResolvedValue(board());
   });
 
-  it('lets a member choose a role and sign up from the event page', async () => {
-    const onSignedUp = vi.fn();
+  it('lists every seat as the shift crew board does, held or open', async () => {
+    renderWithRouter(<EventVolunteerSignupCard eventId="ev-1" isPast={false} />);
+
+    expect(await screen.findByText('Gabriel Spiro')).toBeInTheDocument();
+    expect(screen.getAllByText('Open position')).toHaveLength(2);
+    expect(screen.getByText('1 of 3 signed up')).toBeInTheDocument();
+    expect(screen.getByText('2 open')).toBeInTheDocument();
+    expect(getVolunteerSeats).toHaveBeenCalledWith('ev-1');
+  });
+
+  it('counts essential seats first and marks the optional ones', async () => {
+    getVolunteerSeats.mockResolvedValue(
+      board({
+        seats: [
+          { role: 'tour_guide', label: 'Tour Guide', member_name: 'Gabriel Spiro', is_me: false, essential: true },
+          { role: 'tour_guide', label: 'Tour Guide', member_name: null, is_me: false, essential: true },
+          { role: 'greeter', label: 'Greeter', member_name: 'Lee Park', is_me: false, essential: false },
+          { role: 'educator', label: 'Educator', member_name: null, is_me: false, essential: false },
+        ],
+      })
+    );
+    renderWithRouter(<EventVolunteerSignupCard eventId="ev-1" isPast={false} />);
+
+    expect(await screen.findByText('Essential 1/2 · 2 of 4 signed up')).toBeInTheDocument();
+    expect(screen.getByText('Open position')).toBeInTheDocument();
+    expect(screen.getByText('Optional position')).toBeInTheDocument();
+    expect(screen.getByText('Greeter (optional)')).toBeInTheDocument();
+  });
+
+  it("signs the member up for that seat's role and re-reads the seats", async () => {
     const user = userEvent.setup();
-    renderWithRouter(<EventVolunteerSignupCard signup={sheet()} isPast={false} onSignedUp={onSignedUp} />);
+    renderWithRouter(<EventVolunteerSignupCard eventId="ev-1" isPast={false} />);
 
-    expect(screen.getByText('0 of 2 — 2 still needed')).toBeInTheDocument();
-    await user.selectOptions(screen.getByRole('combobox', { name: 'What would you like to do?' }), 'educator');
-    await user.click(screen.getByRole('button', { name: 'Sign me up' }));
-
-    await waitFor(() => expect(onSignedUp).toHaveBeenCalledTimes(1));
-    expect(signupForShift).toHaveBeenCalledWith('shift-7', { outreach_role: 'educator' });
-  });
-
-  it('says what the member signed up as instead of offering it again', () => {
-    renderWithRouter(
-      <EventVolunteerSignupCard
-        signup={sheet({ signed_up: true, my_role_label: 'Tour Guide' })}
-        isPast={false}
-        onSignedUp={vi.fn()}
-      />
+    getVolunteerSeats.mockResolvedValueOnce(
+      board({
+        seats: [
+          { role: 'tour_guide', label: 'Tour Guide', member_name: 'Gabriel Spiro', is_me: false },
+          { role: 'tour_guide', label: 'Tour Guide', member_name: null, is_me: false },
+          { role: 'educator', label: 'Educator', member_name: 'Pat Doe', is_me: true },
+        ],
+        signed_up: true,
+        my_role_label: 'Educator',
+      })
     );
+    await user.click(await screen.findByRole('button', { name: 'Sign myself up as Educator' }));
 
-    expect(screen.getByText(/You are signed up as Tour Guide/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'My Shifts' })).toHaveAttribute('href', '/scheduling?tab=my-shifts');
-    expect(screen.queryByRole('button', { name: /Sign me up/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(signupForShift).toHaveBeenCalledWith('shift-7', { outreach_role: 'educator' }));
+    expect(await screen.findByText(/You are signed up as Educator/)).toBeInTheDocument();
+    expect(screen.getByText('(You)')).toBeInTheDocument();
+    // Signed up: no seat is offered again, which the cached event detail used to do.
+    expect(screen.queryByRole('button', { name: /Sign myself up/ })).not.toBeInTheDocument();
+    expect(getVolunteerSeats).toHaveBeenCalledTimes(2);
   });
 
-  it('offers no signup once the event is over', () => {
-    renderWithRouter(<EventVolunteerSignupCard signup={sheet()} isPast onSignedUp={vi.fn()} />);
-    expect(screen.queryByRole('button', { name: /Sign me up/ })).not.toBeInTheDocument();
+  it('offers no seat once the event is over', async () => {
+    renderWithRouter(<EventVolunteerSignupCard eventId="ev-1" isPast />);
+    expect(await screen.findByText('Gabriel Spiro')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Sign myself up/ })).not.toBeInTheDocument();
   });
 
-  it('says so when every role is filled', () => {
-    renderWithRouter(
-      <EventVolunteerSignupCard
-        signup={sheet({
-          roles: [{ role: 'tour_guide', label: 'Tour Guide', total: 2, filled: 2, remaining: 0 }],
-        })}
-        isPast={false}
-        onSignedUp={vi.fn()}
-      />
+  it('says why when the seats cannot be read', async () => {
+    getVolunteerSeats.mockReset();
+    getVolunteerSeats.mockRejectedValue(new Error('Network Error'));
+    renderWithRouter(<EventVolunteerSignupCard eventId="ev-1" isPast={false} />);
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('lets a member give up their own spot, after confirming', async () => {
+    const user = userEvent.setup();
+    getVolunteerSeats.mockResolvedValue(
+      board({
+        seats: [{ role: 'educator', label: 'Educator', member_name: 'Pat Doe', is_me: true }],
+        signed_up: true,
+        my_role_label: 'Educator',
+      })
     );
-    expect(screen.getByText('Every role on this sheet is filled.')).toBeInTheDocument();
+    renderWithRouter(<EventVolunteerSignupCard eventId="ev-1" isPast={false} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Give up my spot as Educator' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(withdrawSignup).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Give up my spot' }));
+
+    await waitFor(() => expect(withdrawSignup).toHaveBeenCalledWith('shift-7'));
+    expect(getVolunteerSeats).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the spot when the member changes their mind', async () => {
+    const user = userEvent.setup();
+    getVolunteerSeats.mockResolvedValue(
+      board({ seats: [{ role: 'educator', label: 'Educator', member_name: 'Pat Doe', is_me: true }], signed_up: true })
+    );
+    renderWithRouter(<EventVolunteerSignupCard eventId="ev-1" isPast={false} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Give up my spot as Educator' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Keep it' }));
+
+    expect(withdrawSignup).not.toHaveBeenCalled();
+  });
+
+  it('offers no "Assign someone" without scheduling.assign', async () => {
+    renderWithRouter(<EventVolunteerSignupCard eventId="ev-1" isPast={false} />);
+    expect(await screen.findByText('Gabriel Spiro')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Assign someone/ })).not.toBeInTheDocument();
+  });
+
+  it("lets an officer assign someone to an open seat in that seat's role", async () => {
+    granted.current = ['scheduling.assign'];
+    const user = userEvent.setup();
+    renderWithRouter(<EventVolunteerSignupCard eventId="ev-1" isPast={false} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Assign someone as Educator' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Assign someone as Educator' }), 'm-3');
+    await user.click(screen.getByRole('button', { name: 'Assign' }));
+
+    await waitFor(() =>
+      expect(createAssignment).toHaveBeenCalledWith('shift-7', {
+        user_id: 'm-3',
+        position: 'volunteer',
+        outreach_role: 'educator',
+      })
+    );
+    expect(getVolunteerSeats).toHaveBeenCalledTimes(2);
   });
 });

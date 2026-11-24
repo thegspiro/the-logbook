@@ -1,6 +1,166 @@
 # Security Review 07 — Users & Organizations
 
-**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-13 (pass 8, watchdog pickup), 2026-10-14 (pass 9, PR [#3250](https://github.com/thegspiro/the-logbook/pull/3250) — omitted from this line by that pass, corrected here), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13, watchdog pickup), 2026-11-01 (pass 14, watchdog pickup), 2026-11-05 (pass 15, watchdog pickup), 2026-11-19 (pass 16, watchdog pickup) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4), [#2602](https://github.com/thegspiro/the-logbook/pull/2602) (pass 6)
+**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-13 (pass 8, watchdog pickup), 2026-10-14 (pass 9, PR [#3250](https://github.com/thegspiro/the-logbook/pull/3250) — omitted from this line by that pass, corrected here), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13, watchdog pickup), 2026-11-01 (pass 14, watchdog pickup), 2026-11-05 (pass 15, watchdog pickup), 2026-11-19 (pass 16, watchdog pickup), 2026-11-24 (pass 17, watchdog pickup) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4), [#2602](https://github.com/thegspiro/the-logbook/pull/2602) (pass 6)
+
+---
+
+## Pass 17 (2026-11-24, watchdog pickup) — real delta (approver's own request routed to the Chief, approver cover/stand-in, leave escalation, members end their own leave early, privilege ceiling on anonymization, hard-delete/anonymize file cleanup), 1 fixed (USR-15, MED), 0 new flagged findings; USR-5 and USR-8 re-verified unchanged
+
+**Step 0.** PR #4659 (Feature 06, Elections & ballots, pass 17) merged
+(`af9bbe4dd`) before this iteration started. A fresh `list_pull_requests`
+(state `open`, head `claude/security-review-*`) and a title search for
+`security-review` both found nothing open, and row 07 (Users &
+organizations) was the next `⬜` row. Watchdog pickup — the dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+remains unreachable.
+
+**Scope:** the same thirteen files pass 16 declared. **Baseline:** `c819f1135`
+(pass 16's own commit). **Head:** `origin/main` at review time.
+`git log --no-merges c819f1135..origin/main` narrowed to the declared files:
+**18 commits**, every one read — for several of them, this repository's
+synthetic commit objects carry a full-file rewrite alongside the named
+change, so each was also checked against the `c819f1135..origin/main` tree
+diff directly rather than trusted from `git show` alone.
+
+**Not a zero-delta pass — real feature work, all owner-decided 2026-11-16
+through 2026-11-23:**
+
+- **An approver's own request now routes to the Chief, and nobody grants or
+  extends their own leave of absence (ADV2-9).** `e086445df` closes the gap
+  that let a `members.manage`+`scheduling.assign` holder grant themselves a
+  leave (which auto-creates a training waiver) or, with `members.manage`
+  alone, extend/un-waive one already running — `MemberLeaveService.create_leave`
+  now raises on `granted_by == user_id`, and `PATCH
+/users/leaves-of-absence/{id}` 403s the caller's own leave; ending one's own
+  early stays open, since it excuses nothing. `fc5c009f2` extends the same
+  principle to requests: a request from a member who holds an approver
+  position is marked `routed_to_chief` at creation (stored, so only new
+  requests are affected) and skips the configured approver positions when
+  resolving deciders. `46ca3c364` later extracted the comparison all five
+  separation-of-duty sites (leave grant/edit, Chief override, waiver
+  grant/edit) now share into `is_own_grant` (`app/utils/separation_of_duties.py`),
+  a pure refactor — re-read and confirmed behavior-equivalent.
+- **Approver cover (stand-in), `fc5c009f2`: a real delegation feature, read end
+  to end.** `set_cover`/`clear_cover`/`cover_board` in
+  `leave_request_service.py`. Verified: the actor must be the approver
+  themselves or hold `members.manage` to name another's cover; the approver
+  row and the stand-in are both resolved through org-scoped queries (XC-1/
+  XC-3); the stand-in must hold `members.manage` **both when the cover is set
+  and whenever it is used** — `_pool()` re-checks `stand_in_id in managers`
+  from a fresh, org-scoped, active-only query every time deciders are
+  resolved, not only at creation; a stand-in who is also the request's own
+  requester never gets the seat (`_Pool.deciders`: `stand_in if stand_in !=
+requester else seat`), closing the obvious way around the Chief-routing
+  rule above; an approver whose seat is covered is told why they cannot vote
+  rather than silently losing the ability; votes move from per-voter to
+  per-seat (`seat_id`/`on_behalf_of`) so a stand-in's vote survives the cover
+  ending and a dual-seat stand-in fills both with one decision — read and
+  confirmed this cannot double an approval beyond its own seat count, since
+  `settle()` is still measured against `len(deciders.seats)`.
+  - **USR-15 (MED, Pitfall #27) — fixed.** `set_cover`'s overlap check
+    (`clash = select(LeaveApproverCover.id).where(...)`) locked the approver's
+    `User` row first but read the overlap with a **plain** `SELECT`. The
+    comment above it claimed this already implemented pitfall #27, but the
+    fix requires the overlap read itself to be a locking read — the same
+    half this codebase's own `RequirementOverrideService.grant` (pitfall
+    #27's canonical fix, cited directly in `test_capacity_locking.py`) gets
+    right and this one missed. Concretely: `set_cover` calls
+    `get_settings(org_id)` — a plain read — before taking the approver lock,
+    and in production `get_current_user` has already done a plain read even
+    earlier in the same request transaction. Two `POST
+.../leave-requests/covers` for the same approver with overlapping dates,
+    sent together: the first commits a cover; the second, still holding its
+    pre-commit REPEATABLE READ snapshot from that earlier read, acquires the
+    now-free lock, reads the clash check from its stale snapshot, sees no
+    overlap, and inserts a second overlapping cover — violating the "no
+    overlap per approver" invariant the docstring and commit message both
+    state. Fixed by adding `.with_for_update()` to the clash query, mirroring
+    `RequirementOverrideService.grant` exactly.
+    `backend/tests/test_capacity_locking.py::TestLeaveApproverCoverOverlapLocking`
+    (two tests, source-inspection shape matching the existing
+    `TestChiefOverrideOverlapLocking`) was seen to fail against the unfixed
+    code and pass against the fix.
+- **Stand-in notices, cover prompt, calendar and CSV export (`8e8264412`),
+  read end to end.** Stand-in notices (named/cleared/ended) are claimed in
+  `leave_notice_sends` keyed on the cover's id _before_ sending (pitfall
+  #36), carry no request/reason/type, and an ended cover is only told within
+  a 7-day lookback so an upgrade's first run does not reach back over every
+  old cover. `GET .../calendar` and `GET .../export` are both gated on
+  `members.manage`, both audited, both org-scoped on every query; the export
+  never includes a leave's reason, is written with `SafeCsvWriter` (pitfall
+  #15, confirmed — not a bare `csv.writer`), and is bounded to 5 years
+  (`MAX_EXPORT_DAYS`).
+- **Escalation (`65a4c52cf`) and ending one's own leave early, read
+  directly.** `send_request_escalations` is claimed once per request
+  (pitfall #36), org-scoped, and discloses no reason — only dates and who it
+  is waiting on, to the Chief or `members.manage` holders who could already
+  see the request. `end_own_leave_early`'s by-id query filters `id`,
+  `organization_id`, **and** `user_id == member.id` together (a genuinely
+  self-scoped by-id read), locks the row before checking state transitions,
+  and uses `populate_existing=True` after the lock so the checks that follow
+  read the just-locked row rather than a pre-lock ORM cache.
+- **Privilege ceiling now covers anonymization (`8b407f099`).** `delete_user`,
+  `change_member_status` and `archive_member` already refused a target whose
+  effective permissions exceed the caller's; `anonymize_member` did not,
+  because `get_user_for_anonymization` loaded the target without positions.
+  Read the fix directly: positions are now loaded, and
+  `_enforce_account_reset_ceiling(..., action="member-anonymize")` runs
+  before `service.anonymize_member(user)`, after the existing org-scoped
+  fetch and self-anonymization check.
+- **Hard-delete/anonymize file-cleanup chain (`56baca123`, `e8cb75d46`,
+  `a389f8417`, `820b780e5`, `03db9ab6b`, `feb5e8912`) — same shape pass 16
+  already verified for `dcc9c9461`/`d400cc97d`, re-confirmed rather than
+  re-derived.** Every file removal in this chain still routes through
+  `confined_attachment_path` (grepped across the full diff: present, no new
+  bare `os.remove`/`unlink`), and file collection happens before the
+  delete/anonymize commits so a refused (409) action touches no file.
+- **Three small display/correctness fixes (`8a4496982`, `2061c59a0`,
+  `1a01a7f25`) and two incidental renames/additions (`05b37fa8e` —
+  `organizations.short_name`; `6033e5b53` — outreach vocabulary rename) carry
+  no authz or scoping change** — confirmed by reading each diff; none adds a
+  query, a permission check, or a client-supplied FK.
+
+**All 108 routes across the five principal files re-enumerated by AST**
+(34 `users.py` / 30 `organizations.py` / 17 `member_status.py` /
+7 `member_leaves.py` / **20 `leave_requests.py`**, up from 97/9 at pass 16 —
+`leave_requests.py` gained the 3 cover routes, `calendar`, `export`, and
+`end_own_leave_early` — the last already existed at pass 16's count but under
+a path this AST pass counts correctly). Every route still carries a
+`Depends(...)` resolving to `get_current_user`, `require_permission`,
+`require_all_permissions`, or `require_stepup` — none bare. The 41
+`get_current_user`-only routes (15 `users.py` / 7 `organizations.py` /
+1 `member_status.py` / 2 `member_leaves.py` / 16 `leave_requests.py`) were
+cross-checked programmatically against
+`tests/permissionless_route_baseline.txt`: all 41 are listed under their own
+file; nothing is missing.
+
+**Re-verified against live source, not re-derived:**
+
+- **USR-5** (LOW/MED, unbounded lists; accepted) — `get_archived_members`
+  still a bare `.scalars().all()`/`.all()`. Unchanged.
+- **USR-8** (MED, `GET /users` full-record exposure; accepted) — `list_users`
+  still gated the same way, no row cap. Unchanged.
+- **USR-11, USR-12, USR-14** — unchanged, still closed/fixed as pass 16 left
+  them.
+
+**1 fixed (USR-15, MED), 0 new flagged findings this pass.**
+
+### Completion gate (pass 17)
+
+| Check                                                                                          | Result                                                |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (installed 7.5.0)                                                | ✅ 0 violations                                       |
+| `black --check app/ tests/ alembic/` (installed 26.10.1)                                       | ✅ 3493 files unchanged                               |
+| `isort --check-only app/ tests/ alembic/` (installed 9.0.2)                                    | ✅ clean                                              |
+| `python3 scripts/validate_migrations.py --strict`                                              | ✅ 835 revisions, single head `07abf8e6553b`          |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                              | ✅ 339 routes, 0 errors, 0 warnings                   |
+| `pytest tests/ -q -k "user or organization or member_status or member_leave or leave_request"` | ✅ 1098 passed, 2 pre-existing environment-only skips |
+| `cd frontend && npm run typecheck`                                                             | ✅ 0 errors                                           |
+| `cd frontend && npm run lint`                                                                  | ✅ 0 errors, 0 warnings                               |
+
+One source file fixed this pass: `backend/app/services/leave_request_service.py`
+(USR-15). One new guard test added:
+`backend/tests/test_capacity_locking.py::TestLeaveApproverCoverOverlapLocking`.
 
 ---
 

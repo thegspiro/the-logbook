@@ -719,3 +719,34 @@ describe('errorHandling', () => {
     });
   });
 });
+
+describe('the reference on a server fault', () => {
+  const serverFault = {
+    response: {
+      status: 500,
+      data: { detail: 'Internal server error', code: 'LB-SYS-001', reference: '3f2a9c1e44aa0b12' },
+    },
+  };
+
+  it('is read from the response and shown beside the code', () => {
+    expect(toAppError(serverFault).reference).toBe('3f2a9c1e44aa0b12');
+    expect(getErrorMessage(serverFault)).toBe(
+      'Internal server error (Error code: LB-SYS-001, reference 3f2a9c1e44aa0b12)'
+    );
+  });
+
+  it('reaches the save, load and action messages too', () => {
+    for (const message of [
+      getSaveFailureMessage(serverFault, 'save the request'),
+      getLoadFailureMessage(serverFault, 'requests'),
+      getActionFailureMessage(serverFault, 'delete the request'),
+    ]) {
+      expect(message).toContain('(Error code: LB-SYS-001, reference 3f2a9c1e44aa0b12)');
+    }
+  });
+
+  it('leaves a response without one as it was', () => {
+    const refusal = { response: { status: 403, data: { detail: 'Not allowed', code: 'LB-AUTH-003' } } };
+    expect(getErrorMessage(refusal)).toBe('Not allowed (Error code: LB-AUTH-003)');
+  });
+});

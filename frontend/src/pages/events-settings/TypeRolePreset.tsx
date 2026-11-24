@@ -63,7 +63,7 @@ const TypeRolePreset: React.FC<TypeRolePresetProps> = ({ type, roles, saving, on
     <fieldset className="bg-theme-surface-secondary mt-2 space-y-2 rounded-lg p-3">
       <legend className="text-theme-text-primary text-xs font-semibold">Roles a {type.label} usually needs</legend>
       {draft.map((need, index) => (
-        <div key={need.role} className="flex items-center gap-2">
+        <div key={need.role} className="flex flex-wrap items-center gap-2">
           <select
             value={need.role}
             onChange={(e) => update(index, { role: e.target.value })}
@@ -93,6 +93,16 @@ const TypeRolePreset: React.FC<TypeRolePresetProps> = ({ type, roles, saving, on
             aria-label={`How many for role ${index + 1}`}
             className="form-input-sm w-20"
           />
+          <label className="text-theme-text-secondary flex shrink-0 items-center gap-1.5 text-xs">
+            <input
+              type="checkbox"
+              className="form-checkbox"
+              checked={need.essential !== false}
+              onChange={(e) => update(index, { essential: e.target.checked })}
+              aria-label={`Role ${index + 1} is essential`}
+            />
+            Essential
+          </label>
           <button
             type="button"
             onClick={() => setDraft((prev) => prev.filter((_, i) => i !== index))}
@@ -103,6 +113,9 @@ const TypeRolePreset: React.FC<TypeRolePresetProps> = ({ type, roles, saving, on
           </button>
         </div>
       ))}
+      <p className="text-theme-text-muted text-xs">
+        Essential roles must be filled before the event counts as staffed. Untick a role that is welcome but optional.
+      </p>
       {total > 50 && <p className="text-xs text-red-800 dark:text-red-300">A signup sheet holds at most 50 people.</p>}
       <div className="flex flex-wrap items-center gap-2 pt-1">
         {draft.length < roles.length && (

@@ -14,7 +14,7 @@ import { EmptyState, SkeletonCardGrid } from '../../components/ux';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatTime } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { TONE } from './tones';
+import { TONE, readinessLabel, readinessTone } from './tones';
 
 const EMPTY: Record<NightScope, { title: string; description: string }> = {
   upcoming: {
@@ -29,12 +29,6 @@ const EMPTY: Record<NightScope, { title: string; description: string }> = {
     title: 'No past nights yet',
     description: 'Nights appear here once their crew is confirmed, or if they were cancelled.',
   },
-};
-
-const fillTone = (row: NightSummary): string => {
-  if (row.total === 0) return TONE.slate;
-  if (row.filled >= row.total) return TONE.green;
-  return row.total - row.filled === 1 ? TONE.amber : TONE.red;
 };
 
 export const NightList: React.FC<{ scope: NightScope }> = ({ scope }) => {
@@ -109,8 +103,10 @@ export const NightList: React.FC<{ scope: NightScope }> = ({ scope }) => {
                     {row.pending_requests} {row.pending_requests === 1 ? 'request' : 'requests'} waiting
                   </span>
                 )}
-                <span className={`badge ${fillTone(row)}`}>
-                  {row.filled} of {row.total} seats filled
+                <span
+                  className={`badge ${readinessTone(row.essential_filled, row.essential_total, row.filled, row.total)}`}
+                >
+                  {readinessLabel(row.essential_filled, row.essential_total, row.filled, row.total)}
                 </span>
               </>
             )}

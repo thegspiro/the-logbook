@@ -18,7 +18,7 @@ records the flags pointed at are untouched; an officer's "keep both" decisions
 are lost, so a later re-upgrade and re-finalize would flag those pairs again.
 
 Revision ID: 66f64aabdda2
-Revises: 241c1cc27313
+Revises: bbb6eac6ae34
 Create Date: 2026-11-23 05:42:11.000000
 
 """
@@ -30,7 +30,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "66f64aabdda2"
-down_revision: Union[str, None] = "241c1cc27313"
+down_revision: Union[str, None] = "bbb6eac6ae34"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
