@@ -17,6 +17,7 @@ from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
+    Collection,
     Dict,
     List,
     Optional,
@@ -741,8 +742,12 @@ class EventService:
         recurrence_series_id: UUID | str | None = None,
         skip: int = 0,
         limit: int = 100,
+        include_draft_types: Optional[Collection[EventType]] = None,
     ) -> List[Dict[str, Any]]:
         """List events with filtering.
+
+        ``include_drafts`` lists every draft; without it,
+        ``include_draft_types`` lists the drafts of those types only.
 
         Returns dicts with event fields plus pre-computed rsvp_count,
         going_count, user_rsvp_status and user_attended — avoiding N+1
@@ -859,9 +864,17 @@ class EventService:
         )
 
         if not include_drafts:
-            query = query.where(
-                or_(Event.is_draft.is_(False), Event.is_draft.is_(None))
-            )
+            published = or_(Event.is_draft.is_(False), Event.is_draft.is_(None))
+            if include_draft_types:
+                # Drafts of these types only: a training manager's view.
+                published = or_(
+                    published,
+                    and_(
+                        Event.is_draft.is_(True),
+                        Event.event_type.in_(list(include_draft_types)),
+                    ),
+                )
+            query = query.where(published)
 
         if event_type:
             query = query.where(Event.event_type == event_type)
