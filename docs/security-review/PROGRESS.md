@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #TBD (branch `claude/friendly-babbage-5w0f57`)**: Feature 09 (Medical
+**PR [#4666](https://github.com/thegspiro/the-logbook/pull/4666) (branch
+`claude/friendly-babbage-5w0f57`)**: Feature 09 (Medical
 screening, PHI), pass 17 — watchdog pickup (the dedicated `/loop 30m
 /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
 unreachable). **Branch-name deviation**, same as prior watchdog-run passes
