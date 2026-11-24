@@ -125,6 +125,7 @@ import type {
   RequirementOverride,
   RequirementOverrideCreate,
   MandatoryTiersResponse,
+  FileRemovalReason,
 } from '../types/training';
 import type { ComplianceMatrix, ExpiringCertification } from './communicationsServices';
 
@@ -2370,6 +2371,9 @@ export interface TrainingAttachment {
   file_type: string | null;
   file_size: number | null;
   uploaded_at: string | null;
+  /** Set when the file was removed; the entry then has nothing to download. */
+  removed_at?: string | null;
+  removed_reason?: FileRemovalReason | null;
 }
 
 export const documentService = {

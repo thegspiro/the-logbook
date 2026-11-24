@@ -78,6 +78,22 @@ from are directory information `GET /users/{id}/with-roles` serves to
 is unaffected — `/members/scan` and the check-in station resolve a code without
 rendering anyone's card.
 
+**Certifications and "Card valid through"** _(2026-11-23)_. The card lists the
+member's certification requirements with their state and date (**On file** /
+"Expires …", **Expired**, **Not recorded**, the words of My Training, from
+`certificationStatusOf` in `utils/certificationState.ts`) and **Card valid
+through** the soonest expiry among the certificates held now
+(`cardValidThrough`; owner decision 2026-11-23). It is a renewal date: the
+badge keeps scanning after it, and a card with no expiring certificate shows no
+date. The block shows only to a viewer who may already read the member's
+training, with the training module on: the member on their own card (read from
+`/training/module-config/my-training`, so the department's visibility settings
+apply) or a `training.manage` holder (the officer member endpoint). An officer
+holding only the ID-card permissions sees the card without it. When
+certification status is hidden from members, `/my-training` now also withholds
+`expiry_date` and sets `certification_status_hidden`, so no date leaks onto the
+card. The printed CR80 PDF is unchanged.
+
 **Printing badges follows the same rule** _(2026-10-04)_. Member labels
 (`/members/print-labels` and the label API's `membership` module) require
 `members.manage` or `members.manage_id_cards`. They accepted `members.view`,

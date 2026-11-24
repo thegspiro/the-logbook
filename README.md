@@ -369,6 +369,8 @@ ARMv7 (32-bit) hosts cannot run the stack: the ClamAV image every profile requir
 
 **[The Logbook Wiki](https://github.com/thegspiro/the-logbook/wiki)** — Comprehensive documentation including installation, configuration, troubleshooting, and development guides.
 
+**[thelogbook.us](https://thelogbook.us/)** — The public documentation site _(2026-11-23)_: the [training guides](docs/training/README.md), the wiki's setup and administration pages and the reference docs, with search, an FAQ and a Videos page. It is built from the Markdown in this repository, unedited, by [`docs-site/`](docs-site/README.md) (MkDocs with Material for MkDocs, served by one nginx container); a merge to `main` publishes the image `ghcr.io/thegspiro/the-logbook-docs`. Review rotations, audits, agent rules, video scripts and red-team reports are kept off it. To preview it locally or run your own copy, see [`docs-site/README.md`](docs-site/README.md).
+
 ### Getting Started
 
 - [Onboarding Guide](ONBOARDING.md) — First-time setup wizard
@@ -461,6 +463,7 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
 ## Support
 
 - **Documentation**: [The Logbook Wiki](https://github.com/thegspiro/the-logbook/wiki)
+- **Documentation site**: https://thelogbook.us/ (built from this repository; see [docs-site/README.md](docs-site/README.md))
 - **Issues**: https://github.com/thegspiro/the-logbook/issues
 - **Discussions**: https://github.com/thegspiro/the-logbook/discussions
 - **Security**: [SECURITY.md](SECURITY.md)

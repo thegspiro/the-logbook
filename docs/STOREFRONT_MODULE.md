@@ -214,7 +214,9 @@ offers **Refund** and nothing the server would refuse.
 
 **Cancelling and fulfilling a window** (W67b-12, 2026-11-21):
 
-- **Cancelling a window** cancels every order still open in it, each with the
+- **Cancelling a window** (`POST /store/windows/{id}/cancel`; the console has
+  no button for it, and `storefrontService.cancelWindow` has no caller) cancels
+  every order still open in it, each with the
   reason "The order window was cancelled" and a notice to the member. It is
   refused while any of those orders has money recorded or a payment report
   waiting, naming them; refund or settle those first.
@@ -349,7 +351,15 @@ members chase. It does three things in one call so they cannot drift apart:
    fulfilled is never moved back.
 3. Emails the members whose orders it advanced, with the vendor and expected
    date. The first recording also emails everyone else who ordered, as
-   `_window_customer_emails` names them.
+   `_window_customer_emails` names them (under pay-before-vendor-order, only
+   members whose orders are settled).
+
+The response carries `advanced`, `skipped`, `notified` and the `window`,
+serialized like every other window response (product names, order counters,
+and `vendor_name` / `vendor_reference` / `vendor_ordered_at`, which every
+window response now includes). The Windows tab keys **Update vendor order** and
+its "Already recorded …" note on `vendorOrderedAt`; before 2026-11-21 the
+window payload omitted the vendor fields, so neither ever appeared.
 
 Recording it again is safe. It corrects the vendor details and orders anyone
 who paid since, and only those members are emailed. Nobody is told twice,

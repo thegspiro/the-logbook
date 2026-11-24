@@ -2,11 +2,15 @@
 
 A department sets ``SelfReportConfig.attachment_retention_days``; once a
 submission has been decided (approved or rejected) for longer than that, the
-certificate files it carries are deleted from storage and the references to
-them are removed from the submission and from every training record of the
-same member that copied them on approval. The training record itself, and the
-submission row, are kept: what expires is the uploaded file, not the evidence
-that the training was reported and decided.
+certificate files it carries are deleted from storage, and each reference to
+them, on the submission and on every training record of the same member that
+copied them on approval, is replaced by a removal marker (owner decision
+2026-11-23, ``app.utils.training_attachments.removal_marker``): the entry's id
+and name with ``removed_reason: "retention"`` and the time, and no path. The
+screens then say the file was removed under the department's retention policy
+on that day, rather than the entry vanishing. The training record itself, and
+the submission row, are kept: what expires is the uploaded file, not the
+evidence that the training was reported and decided.
 
 Unset (null) means keep indefinitely, which is what every department had
 before the setting existed, so an upgrade deletes nothing until a department
@@ -38,6 +42,7 @@ from app.models.training import (
 from app.services import file_storage_service as file_storage
 from app.services.file_storage_service import StorageArea
 from app.services.member_files import confined_attachment_path
+from app.utils.training_attachments import REMOVED_RETENTION, removal_marker
 
 # A submission is only swept once its decision is final; draft, pending and
 # revision-requested submissions are still the member's to change, and their
@@ -87,7 +92,9 @@ class SelfReportAttachmentRetention:
 
         for org_id, days in policies:
             try:
-                org_result = await self._sweep_org(org_id, now - timedelta(days=days))
+                org_result = await self._sweep_org(
+                    org_id, now - timedelta(days=days), now
+                )
                 if org_result["files_deleted"] or org_result["submissions"]:
                     await log_audit_event(
                         db=self.db,
@@ -121,7 +128,9 @@ class SelfReportAttachmentRetention:
             )
         return results
 
-    async def _sweep_org(self, org_id: str, cutoff: datetime) -> dict[str, Any]:
+    async def _sweep_org(
+        self, org_id: str, cutoff: datetime, now: datetime
+    ) -> dict[str, Any]:
         files_deleted = 0
         submissions: list[str] = []
         records: set[str] = set()
@@ -147,7 +156,17 @@ class SelfReportAttachmentRetention:
                                 TrainingSubmission.submitted_at,
                             )
                             < cutoff,
-                            func.json_length(TrainingSubmission.attachments) > 0,
+                            # At least one entry still naming a stored file.
+                            # A marker keeps the list non-empty, so a length
+                            # test would fetch and lock every swept
+                            # submission again on every run, for ever.
+                            func.json_search(
+                                TrainingSubmission.attachments,
+                                "one",
+                                "%",
+                                None,
+                                "$[*].file_path",
+                            ).isnot(None),
                             TrainingSubmission.id > after_id,
                         )
                         .order_by(TrainingSubmission.id)
@@ -164,11 +183,11 @@ class SelfReportAttachmentRetention:
             if not batch:
                 break
             for submission in batch:
-                removed = await self._expire_submission_files(submission, org_id)
+                removed = await self._expire_submission_files(submission, org_id, now)
                 if removed:
                     files_deleted += len(removed)
                     submissions.append(str(submission.id))
-                    records.update(await self._strip_records(submission, removed))
+                    records.update(await self._strip_records(submission, removed, now))
             await self.db.flush()
             after_id = str(batch[-1].id)
             if len(batch) < _BATCH_SIZE:
@@ -180,9 +199,10 @@ class SelfReportAttachmentRetention:
         }
 
     async def _expire_submission_files(
-        self, submission: TrainingSubmission, org_id: str
+        self, submission: TrainingSubmission, org_id: str, now: datetime
     ) -> set[str]:
-        """Delete this submission's stored files; return the paths now gone."""
+        """Delete this submission's stored files, leaving a removal marker in
+        each one's place; return the paths now gone."""
         attachments = submission.attachments
         if not isinstance(attachments, list):
             return set()
@@ -192,6 +212,7 @@ class SelfReportAttachmentRetention:
             path = _org_confined_path(attachment, org_id)
             if path is not None and await file_storage.delete(path):
                 removed.add(path)
+                kept.append(removal_marker(attachment, REMOVED_RETENTION, now))
                 continue
             kept.append(attachment)
         if removed:
@@ -202,9 +223,10 @@ class SelfReportAttachmentRetention:
         return removed
 
     async def _strip_records(
-        self, submission: TrainingSubmission, removed: set[str]
+        self, submission: TrainingSubmission, removed: set[str], now: datetime
     ) -> set[str]:
-        """Drop the deleted files from the member's training records.
+        """Replace the deleted files' entries on the member's training records
+        with removal markers.
 
         Approval copies the attachment list onto the record verbatim, and a
         reversed approval leaves a voided record still holding it, so every
@@ -235,13 +257,17 @@ class SelfReportAttachmentRetention:
         for record in rows:
             if not isinstance(record.attachments, list):
                 continue
-            kept = [
-                attachment
-                for attachment in record.attachments
-                if _org_confined_path(attachment, submission.organization_id)
-                not in removed
-            ]
-            if len(kept) != len(record.attachments):
+            changed = False
+            kept: list[Any] = []
+            for attachment in record.attachments:
+                path = _org_confined_path(attachment, submission.organization_id)
+                if path is not None and path in removed:
+                    kept.append(removal_marker(attachment, REMOVED_RETENTION, now))
+                    changed = True
+                else:
+                    kept.append(attachment)
+            if changed:
+                # A new list and flag_modified (Pitfall #12).
                 record.attachments = kept
                 flag_modified(record, "attachments")
                 touched.add(str(record.id))

@@ -654,6 +654,30 @@ describe('MyShiftsTab', () => {
       mockGetMyAttendanceHistory.mockResolvedValue([]);
     });
 
+    it('names a community outreach sheet by its event, with the role the member took', async () => {
+      mockGetMyAssignments.mockResolvedValue([
+        {
+          ...upcoming('tour', '2099-12-05', '11'),
+          position: 'volunteer',
+          outreach_role: 'tour_guide',
+          outreach_role_label: 'Tour Guide',
+          shift: {
+            id: 'shift-tour',
+            shift_date: '2099-12-05',
+            start_time: '2099-12-05T11:00:00Z',
+            end_time: '2099-12-05T12:00:00Z',
+            is_outreach: true,
+            outreach_title: 'Station Tour for Lincoln Elementary',
+          },
+        },
+      ]);
+      renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
+
+      expect(await screen.findByText('Station Tour for Lincoln Elementary')).toBeInTheDocument();
+      expect(screen.getByText('Community outreach')).toBeInTheDocument();
+      expect(screen.getByText('Role: Tour Guide')).toBeInTheDocument();
+    });
+
     it('groups shifts under month headers, soonest month and shift first, across the new year', async () => {
       renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
 

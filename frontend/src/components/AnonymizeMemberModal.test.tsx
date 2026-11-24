@@ -56,6 +56,13 @@ describe('AnonymizeMemberModal', () => {
     expect(screen.getByText('Documents attached to their training records')).toBeInTheDocument();
   });
 
+  it('names the personal folder and separation letters it erases (LIFE-11)', () => {
+    renderModal();
+
+    expect(screen.getByText('Their personal Member Files folder and its documents')).toBeInTheDocument();
+    expect(screen.getByText('Home address and reason for leaving on their separation letters')).toBeInTheDocument();
+  });
+
   it('stays disabled until the member name is typed', async () => {
     const user = userEvent.setup();
     renderModal();

@@ -96,9 +96,15 @@ your department" guide and the Department Compliance card reading "Not set
 up". Added 2026-10-04; about 12 seconds, re-time Chapter 2.]**
 
 > "**Upcoming Expirations** — this is your early warning system. It looks
-> ninety days ahead and shows you the next five, each with the number of days
-> left. If you see a cluster of CPR certs going in the same month, that's your
-> cue to schedule a class."
+> ninety days ahead and shows you the next five, each with its expiry date and
+> the number of days left. If you see a cluster of CPR certs going in the same
+> month, that's your cue to schedule a class."
+
+**[PRODUCTION NOTE — 2026-11-23. Narration changed: each Upcoming Expirations
+row now reads the date beside the countdown, "Dec 19, 2026 · 26d", and the
+Recent Completions and Requirements Status cards print "Nov 20, 2026" instead
+of "2026-11-20". Any take showing a bare "26d" or a raw date is dated; re-shoot
+the dashboard cards.]**
 
 **[CALLOUT: "Ninety days ahead — and nothing behind you"]**
 
@@ -476,11 +482,20 @@ record to open the Attachments panel]**
 
 > "On any existing record, the **Files** action opens its attachments. You can
 > upload a certificate, transcript, or completion letter — PDF, image, or Word
-> doc, up to 25 megabytes — and download it again later. Members can manage
-> files on their own records; as a training officer you can manage them on
-> anyone's."
+> doc, up to 25 megabytes — and download it again later. Uploaded the wrong
+> file? The bin icon beside it removes it, and the record stays. A member can
+> remove a file they uploaded themselves; as a training officer you can remove
+> any file uploaded to a record. The one thing nobody removes here is a
+> certificate that came in with an approved self-report — the approval rests
+> on it, so it has no bin icon."
 
-**[SCREENSHOT NEEDED]:** _The Attachments panel for a training record showing an uploaded certificate with a Download link and an Upload button._
+**[EDITOR — 2026-11-21. Re-record the end of this line (about 15 seconds of
+new narration): removing a file from a training record is new. Show the bin
+icon beside an uploaded file, select it, and the "Remove file" / "Keep it"
+confirmation. Any take that says files can only be uploaded and downloaded is
+dated.]**
+
+**[SCREENSHOT NEEDED]:** _The Attachments panel for a training record showing an uploaded certificate with a Download link, the bin icon beside it, and an Upload button._
 
 ### FINALIZING A TRAINING SESSION (9:00 – 9:30)
 

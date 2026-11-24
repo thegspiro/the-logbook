@@ -286,7 +286,7 @@ stops sending it. All nine start switched on.
 | Ordering is open             | Every active member, when a window opens                                                           |
 | Last call                    | Every active member, the hours set in **Last call reminder (hours before close)** before it closes |
 | Ordering has closed          | Everyone who ordered in that window                                                                |
-| Order placed with the vendor | Everyone who ordered, when you record the vendor order                                             |
+| Order placed with the vendor | Members whose orders went to the vendor, when you record the vendor order                          |
 
 Two of these catch people out:
 
@@ -830,6 +830,21 @@ Orders where the member tapped **I've sent payment** read **Reported — needs
 verification**. That is your queue. Filter the **Orders** tab by that payment
 status, confirm the money arrived, then mark it paid.
 
+**A reported payment that never arrived** _(2026-11-21)_. The order dialog's
+"The member reported paying" note has a **Not received** button. It asks
+"Mark this payment as not received?" first; **Keep checking** backs out. Once
+confirmed, the order goes back to unpaid (or part paid, if some money was
+already recorded) and the reported reference is cleared. The member is emailed
+that the payment they reported could not be verified and the balance is still
+owed. Payment reminders start again, and the member can choose another way to
+pay. Nothing is taken off what was already recorded, because a report never
+added to it.
+
+> **Screenshot needed** (`18-09-payment-not-received.png`): an order dialog
+> with the "The member reported paying (ref …)" note and its **Not received**
+> button, and the "Mark this payment as not received?" confirmation with
+> **Keep checking** and **Not received**.
+
 **A typed payment cannot be more than the balance** _(2026-11-18)_. **Record
 payment** refuses an amount above the balance due, and any payment on an order
 already paid in full. If a member really did send too much, record what was
@@ -922,9 +937,13 @@ Recording it does three things at once, so they cannot drift apart:
 
 1. Records who ordered it, the reference and when. "Has this been ordered
    yet?" is then answered by the record, not by memory.
-2. Marks every eligible order **Ordered from vendor**.
-3. Emails everyone who ordered, with the vendor and expected date (if you leave
-   **Email everyone who ordered** ticked).
+2. Marks every order not yet with the vendor **Ordered from vendor**: those
+   submitted, awaiting payment or paid. An order already **Ready for pickup**
+   or **Fulfilled** is never moved back.
+3. Emails the members whose orders went to the vendor, with the vendor and
+   expected date (if you leave **Email everyone who ordered** ticked). Under
+   **Payment required before the vendor order**, a member whose unpaid order
+   was held back is not told it was placed, because it was not.
 
 That email is the one members actually want. There can be six quiet weeks
 between "ordering closed" and "come and pick it up". Without it, you answer the
@@ -933,6 +952,13 @@ same question a dozen times.
 Orders your payment rule holds back are **skipped**, not marked ordered. They
 were not on the sheet the vendor got. The result tells you how many moved and
 how many were held, so you know who to chase.
+
+**Recording it again is safe** _(2026-11-21)_. Once recorded, the button reads
+**Update vendor order**, and the form says when it was recorded: "Already
+recorded … Saving again updates the details and resets the recorded date to
+today." Use it to correct the vendor or reference, or to send in the members
+who paid since. Only the orders it newly marks **Ordered from vendor** get an
+email, so nobody is told twice.
 
 ---
 
@@ -958,7 +984,10 @@ how many were held, so you know who to chase.
 6. When the goods arrive, set the window's orders to **Ready for pickup** in
    one go.
 7. Hand them out and mark them **Fulfilled**. Then select **Mark fulfilled** on
-   the window.
+   the window. It is refused while any order in the window is still not
+   fulfilled or cancelled, with a message saying how many ("2 orders are not
+   fulfilled or cancelled yet. Finish or cancel them before marking the window
+   fulfilled.").
 
 The outstanding figure is your chase list. Filter the **Orders** tab by
 payment status to see who still owes.
@@ -1019,7 +1048,9 @@ payment status to see who still owes.
 14. Hand them out at drill and mark them **Fulfilled**. The 12 paid orders
     move. The 2 unpaid ones come back by order number with what they owe, so
     you know who to find before handing anything over.
-15. Select **Mark fulfilled** on the window.
+15. Select **Mark fulfilled** on the window once the 2 held-back orders are
+    settled: paid, ordered and handed out, or cancelled. Until then it is
+    refused with "2 orders are not fulfilled or cancelled yet."
 
 ---
 
@@ -1179,3 +1210,9 @@ have moved, been renamed or work differently.
   fulfilment corrections (Ordered, Ready for pickup, Fulfilled) move back now.
 - **Check that positions still hold the store permissions.** An older position
   editor removed them on the first save after setup.
+- **The vendor-order email no longer goes to everyone who ordered**
+  _(2026-11-21)_. It goes to the members whose orders went to the vendor; a
+  member whose unpaid order was held back is not told it was placed.
+  **Mark fulfilled** on a window is refused while any order in it is still
+  open, and a reported payment that never arrived can be turned down with
+  **Not received**.

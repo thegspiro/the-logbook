@@ -112,7 +112,7 @@ PATCH  /assignments/{id}                # Edit assignment
 DELETE /assignments/{id}                # Remove assignment
 POST   /assignments/{id}/confirm        # Member confirms
 POST   /assignments/{id}/decline        # Member declines
-GET    /shifts/{id}/unavailable-members # User ids on leave/time off/already assigned (scheduling.assign)
+GET    /shifts/{id}/unavailable-members # unavailable_user_ids (on leave/time off/already assigned) + leave_requested_user_ids (undecided leave request on the date; still assignable) (scheduling.assign)
 GET    /availability                    # Member availability (scheduling.assign)
 GET    /my-shifts                       # Caller's shifts
 GET    /my-assignments                  # Caller's assignments, with embedded shift data

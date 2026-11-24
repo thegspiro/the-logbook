@@ -306,6 +306,13 @@ a transaction reference cannot be recorded twice.
 - **Finance → My Dues** shows every member their own dues, and members are
   emailed a week before their dues fall due and once when overdue (the optional
   _Your dues_ email kind).
+- **Dues paid through [Zeffy](Integration-Zeffy)** _(2026-11-21)_ are not
+  credited by themselves. Each waits as **Awaiting confirmation** on
+  **Grants & Fundraising → Zeffy** until a `finance.manage` holder selects
+  **Confirm member** and chooses whose dues it pays (the payer's email only
+  suggests one). The ledger then names that treasurer as the recorder; an
+  overpayment needs the extra ticked as a donation, and nobody can confirm a
+  payment onto their own dues.
 
 ## Reports
 

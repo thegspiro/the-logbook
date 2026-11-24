@@ -1,5 +1,38 @@
 # Known Limitations & Open Decisions
 
+## Found by the November 21 – 22 Documentation Pass — Awaiting an Owner Decision (2026-11-22)
+
+None of these is a regression, and none was changed by the documentation
+pass, which records them so they are decided rather than rediscovered.
+
+- **A store window cannot be cancelled from the console.** #4513 rebuilt
+  `POST /store/windows/{id}/cancel` so cancelling a window cancels its
+  orders, but `StoreWindowsTab.tsx` has no Cancel control and
+  `storefrontService.cancelWindow`
+  (`frontend/src/modules/storefront/services/api.ts`) has no caller. The
+  training guide says nothing about cancelling a window until a control
+  exists. Decide whether the console should offer it.
+- **History's settings page has two names.** The overview card reads
+  **Titles, lists and clearance** (`HistoryHomePage.tsx`); the page it opens
+  is headed **Titles and Clearance** (`HistorySettingsPage.tsx`). The guides
+  name both. The History menu also lists only Overview, Past Members and
+  Honor Roll: **Timeline**, **Events** and **Apparatus** (#4537) are reached
+  only from the overview's cards. Probably deliberate; confirm.
+- **The Dashboard card is still titled "Community engagement"**
+  (`DashboardOrganizationWidgets.tsx`), while #4505 renamed the report it
+  summarises to **Outreach Impact**. The owner's vocabulary table does not
+  name the card, so the guides describe it as it reads.
+- **An hours target prorated to zero may read "not met".** When leave
+  prorates a shifts or calls target to zero the requirement reads met
+  ("Nothing owed"), but the shared hours grader marks met only when the
+  target is above zero (`backend/app/services/training_compliance.py`). Not
+  verified whether proration can return exactly zero hours; if it can, the
+  two kinds disagree for the same member.
+- **The goal-review item's empty text assumes a previous review.** On an
+  evaluation whose member has no earlier review on the form at all, the
+  **Last review's goals** item still reads "The member's previous review on
+  this form set no goals…" (`EvaluationForm.tsx`). Wording only.
+
 ## CI — What a Pull Request No Longer Runs (Owner Decisions, 2026-11-19)
 
 Until this date every pull request and every merge to `main` started all 22 CI
@@ -127,6 +160,36 @@ What it depends on and leaves open:
   Turning the setting off returns to the position of 2026-11-16: `main` can
   fork when two migration branches merge close together, and Migration Chain
   reports it on the push to `main`.
+
+## Found by the November 23 – 24 Documentation Pass (2026-11-24)
+
+Two gaps the documentation pass found while checking the guides against the
+code. Neither is a regression in the pull request that exposed it, and each
+needs a change larger than a documentation pass makes.
+
+- **The permanent-delete preview counts personal-folder documents as kept.**
+  Since LIFE-11 (#4622), a permanent delete removes every document in the
+  member's personal **Member Files** folder. The preview's **Kept** list still
+  reads "{n} uploaded documents will stay, with no uploader shown", and `n` is
+  every `Document` with `uploaded_by` equal to the member
+  (`get_deletion_impact` in `endpoints/users.py`), so it includes the ones
+  about to be deleted. The **Permanently deleted** list has no line for them.
+  An officer confirming the delete is told those files stay. The fix is a
+  backend count that excludes documents under the member's personal folders,
+  a second count for them, and a line in `DeleteMemberModal`. Until then guide
+  01 tells officers to download anything in the folder first. (The Anonymize
+  dialog had the same gap and was fixed in this pass: it now lists the folder
+  and the separation-letter redaction under **Removed**.)
+- **A member has no link to their own waiver request page.** The training
+  request page, `/attendance-waivers/:id`, is the only place a member can add,
+  view (#4645) or remove (#4619) a supporting document. Nothing in the app
+  links a member there: **My Training > My Waiver Requests** and the session's
+  card open the session, and member notices open the session or My Training;
+  the page is reached from the approver's email. So the remove and view
+  controls are in practice reachable by deciders, or by a member who knows
+  the address. Guide 02 says "on the request's page" without claiming a link.
+  Open for an owner decision: link each row of **My Waiver Requests** to its
+  request page, or move the document controls onto the session's card.
 
 ## Apparatus Events — What the First Release Leaves Out (2026-11-16)
 
@@ -481,7 +544,10 @@ choices below as built; who should see a department-wide backlog stays open.
   scoping can still keep two such requirements apart, so it may warn where the
   backend would pick one; it never stays silent where membership types alone
   make the choice ambiguous. The warning is non-blocking.
-- **The decided list pages through the unfiltered list.** The list endpoint
+- ✅ **Resolved 2026-11-23 (#4608):** the list endpoint now takes
+  `state=pending|decided`, and the queue pages each on its own count, 50 at a
+  time, with **Show more waiting requests** and **Show more decided
+  requests**. The original note follows. ~~**The decided list pages through the unfiltered list.**~~ The list endpoint
   filters by one status at a time, so the queue loads every pending request in
   one call (up to the endpoint's 200) and pages the unfiltered list for the
   decided ones, leaving out the pending rows it repeats. A page can therefore
@@ -2066,8 +2132,8 @@ and — where the department has enabled `public_progress_visible` — its pipel
 checklist, plus a self-service cancel. Nothing puts that URL in front of the
 requester automatically: the acknowledgement email does not carry it, and the
 public form's confirmation response does not return the token. A coordinator
-hands it out from the **Copy status link** control on the request detail panel
-in Events → Requests.
+hands it out from the **Copy status link** control on the request's own page
+in Events → Community Outreach → Outreach Requests.
 
 That is the chosen posture, not an omission. The membership pipeline mails its
 equivalent (`/application-status/{token}`) because a prospect's application is
@@ -3567,9 +3633,16 @@ no operator has to remember to start it:
   is finished by the next run without a second audit row — and an image is
   cleared from its row in the same transaction as its audit (only if the row
   still holds the scanned value, so a replacement is never wiped).
-  **The row itself is kept**: the document or training record still lists the
-  attachment, and downloading it reports the file as not found. The audit
-  entry is the only account of why; nobody is emailed.
+  **The row itself is kept.** For a self-report or training-record
+  certificate, the entry is replaced by a marker (`removed_at`,
+  `removed_reason: "malware"`; owner decision 2026-11-23): My Training, the
+  training history and the record's Files dialog read "Certificate file
+  removed by the malware scan on <date>: it was found to be infected", in the
+  department's timezone, and a download answers `410` saying the same.
+  **Default taken:** other tables — documents, event, applicant and minutes
+  attachments, and the rest — still list the attachment, and downloading it
+  reports the file as not found; the audit entry is their only account of
+  why. Nobody is emailed.
 
 To run a batch now instead of waiting for the hour, the System Owner
 (`system.run_tasks`) can call

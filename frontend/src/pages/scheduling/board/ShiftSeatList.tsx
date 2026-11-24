@@ -11,17 +11,20 @@ import React from 'react';
 import { ArrowLeftRight, Plus } from 'lucide-react';
 import type { ShiftRecord } from '../../../modules/scheduling';
 import type { SwapRequest } from '../../../types/scheduling';
+import type { ShiftSeat } from '../../../modules/scheduling/utils/shiftBoard';
 import {
   buildSeats,
   canTakeSeat,
   firstClaimableSeat,
   memberInitials,
   memberSignupClosedReason,
-  shiftCrewName,
+  outreachTitle,
+  shiftHeading,
   shiftStatusInfo,
   statusBadgeLabel,
 } from '../../../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../../../modules/scheduling/hooks/useSignupWindow';
+import OutreachTag from '../../../modules/scheduling/components/OutreachTag';
 import { positionLabel } from '../../../modules/scheduling/utils/positionLabels';
 import { formatTime } from '../../../utils/dateFormatting';
 import { STATUS_STYLES } from './statusStyles';
@@ -41,8 +44,12 @@ export interface ShiftSeatListProps {
   unavailableReason?: string | null;
   /** True while a claim or release on this shift is in flight. */
   pending?: boolean;
-  /** Take a specific seat. `position` is null for an unnamed open seat. */
-  onClaim: (shift: ShiftRecord, position: string | null) => void;
+  /**
+   * Take a specific seat. `position` is null for an unnamed open seat. On a
+   * community outreach sheet `outreachRole` is the job the member picked,
+   * which the server requires because every seat there has one position.
+   */
+  onClaim: (shift: ShiftRecord, position: string | null, outreachRole?: string | null) => void;
   onRelease: (shift: ShiftRecord, choice?: 'drop' | 'trade') => void;
   /** Phone sheet: bigger avatars, a full-bleed action at the card's edge. */
   variant?: 'panel' | 'sheet';
@@ -79,7 +86,18 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
   // Accepting an offer seats the member, so it is refused for either reason.
   const acceptBlocked = signupClosed ?? unavailableReason;
   const isSheet = variant === 'sheet';
+  const isOutreach = outreachTitle(shift) !== null;
+  // With more than one job still open the member has to say which they want,
+  // so the single button below gives way to the seats themselves.
+  const openRoleCount = (shift.outreach_roles ?? []).filter((slot) => slot.remaining > 0).length;
   const avatar = isSheet ? 'h-6 w-6 text-[10px]' : 'h-[26px] w-[26px] text-[10px]';
+
+  // A duty seat is claimed by position alone, exactly as before; only an
+  // outreach seat carries a role for the server to check.
+  const claim = (seat: ShiftSeat) => {
+    if (seat.outreachRole) onClaim(shift, seat.position, seat.outreachRole);
+    else onClaim(shift, seat.position);
+  };
 
   const timeRange = shift.end_time
     ? `${formatTime(shift.start_time, timezone)} – ${formatTime(shift.end_time, timezone)}`
@@ -88,7 +106,9 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1">
-        <h4 className="text-theme-text-primary text-[15px] font-bold">{shiftCrewName(shift, timezone)}</h4>
+        <h4 className="text-theme-text-primary text-[15px] font-bold">{shiftHeading(shift, timezone)}</h4>
+        {/* The phone sheet already carries the tag as the card's eyebrow. */}
+        {isOutreach && !isSheet && <OutreachTag />}
         <span className="text-theme-text-muted font-mono text-xs">{timeRange}</span>
         <span
           className={`ml-auto rounded-full border px-2.5 py-[3px] text-[11px] font-bold ${STATUS_STYLES[info.status].chip}`}
@@ -100,7 +120,8 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
       <ul className="mb-3 flex flex-col gap-1.5">
         {seats.map((seat, index) => {
           const key = seat.member?.assignment_id ?? `open-${index}`;
-          const label = seat.position ? positionLabel(seat.position) : 'Open seat';
+          const named = seat.outreachRoleLabel ?? (seat.position ? positionLabel(seat.position) : null);
+          const label = named ?? 'Open seat';
 
           if (seat.member) {
             return (
@@ -137,18 +158,18 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
               <button
                 type="button"
                 disabled={!takeable}
-                onClick={() => onClaim(shift, seat.position)}
+                onClick={() => claim(seat)}
                 className={`bg-theme-surface-secondary border-theme-input-border mobile-touch-target flex w-full items-center gap-2 rounded-md border border-dashed px-2.5 py-[7px] text-left transition-colors ${
                   takeable ? 'hover:border-red-400 hover:bg-red-50 dark:hover:bg-red-500/10' : 'cursor-default'
                 }`}
                 aria-label={
                   takeable
-                    ? `Take the ${seat.position ? label : 'open'} seat on this shift`
+                    ? `Take the ${named ?? 'open'} seat on this shift`
                     : !info.isOpen
-                      ? `${seat.position ? label : 'Open'} seat — this shift is closed to signups`
+                      ? `${named ?? 'Open'} seat — this shift is closed to signups`
                       : unavailableReason
-                        ? `${seat.position ? label : 'Open'} seat — ${unavailableReason}`
-                        : `${seat.position ? label : 'Open'} seat — you are not cleared for it`
+                        ? `${named ?? 'Open'} seat — ${unavailableReason}`
+                        : `${named ?? 'Open'} seat — you are not cleared for it`
                 }
                 title={
                   takeable ? undefined : !info.isOpen ? (signupClosed ?? undefined) : (unavailableReason ?? undefined)
@@ -161,7 +182,7 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
                   <Plus className="h-3 w-3" />
                 </span>
                 <span className="text-theme-text-muted text-[13px]">Open seat</span>
-                {seat.position && (
+                {named && (
                   <span className="text-theme-text-muted ml-auto shrink-0 text-[11px] font-bold tracking-[0.08em] uppercase">
                     {label}
                   </span>
@@ -271,16 +292,26 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
         <p className="text-theme-text-muted border-theme-surface-border rounded-lg border border-dashed px-3 py-3 text-center text-[13px]">
           {unavailableReason}
         </p>
+      ) : claimable && openRoleCount > 1 ? (
+        <p className="text-theme-text-muted border-theme-surface-border rounded-lg border border-dashed px-3 py-3 text-center text-[13px]">
+          Choose a role above to sign up.
+        </p>
       ) : claimable ? (
         <button
           type="button"
           disabled={pending}
-          onClick={() => onClaim(shift, claimable.position)}
+          onClick={() => claim(claimable)}
           className={`btn-primary w-full justify-center rounded-lg text-sm font-bold ${
             isSheet ? 'min-h-[52px]' : 'min-h-[44px]'
           }`}
         >
-          {pending ? 'Working…' : info.capacity === null ? 'Join this shift' : 'Take a seat on this shift'}
+          {pending
+            ? 'Working…'
+            : claimable.outreachRoleLabel
+              ? `Sign up as ${claimable.outreachRoleLabel}`
+              : info.capacity === null
+                ? 'Join this shift'
+                : 'Take a seat on this shift'}
         </button>
       ) : (
         // Naming the reason matters: a greyed-out button with no explanation

@@ -133,6 +133,25 @@ describe('MyTrainingHistory', () => {
     expect(mockGetRecords).toHaveBeenCalledWith(expect.objectContaining({ search: 'zzz' }));
   });
 
+  it('says why a certificate is no longer on a record', async () => {
+    mockGetRecords.mockReset();
+    mockGetRecords.mockImplementation((params: { year?: string; search?: string; page?: number }) => {
+      const result = pageFor(params.year, params.search, params.page);
+      if (params.year === '2026' && result.items[0]) {
+        result.items[0] = {
+          ...result.items[0],
+          file_removals: [{ removed_at: '2026-11-23', removed_reason: 'retention' }],
+        };
+      }
+      return Promise.resolve(result) as unknown;
+    });
+    render(<MyTrainingHistory visibility={visibility} hoursSummary={hoursSummary} />);
+
+    expect(
+      await screen.findByText("Certificate file removed under the department's retention policy on 2026-11-23.")
+    ).toBeInTheDocument();
+  });
+
   it('says where each record came from', async () => {
     render(<MyTrainingHistory visibility={visibility} hoursSummary={hoursSummary} />);
     await screen.findByText('Sepsis');
