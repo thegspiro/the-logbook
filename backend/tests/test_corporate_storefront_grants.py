@@ -54,15 +54,16 @@ _ADDED_SINCE: dict[str, set[str]] = {
 
 
 #: Later revisions that add a grant to every seeded position holding some
-#: other grant, rather than to named slugs. What each adds to a position is
-#: derived from the revision's own ``_EVIDENCE_GRANTS`` so the subtraction
-#: below is exactly what that revision does.
+#: other grant (``_EVIDENCE_GRANTS``), to named slugs (``_SLUG_GRANTS``), or
+#: both. What each adds to a position is derived from the revision's own pairs
+#: so the subtraction below is exactly what that revision does.
 _LATER_EVIDENCE_GRANT_REVISIONS = (
     "20261116_1602_3f8a1c6e2b94_apparatus_events_tables_and_grants.py",
+    "20261122_1613_5c2e8a417d90_crr_activities_and_grants.py",
 )
 
 
-def _evidence_grants_added_since(registry: set[str]) -> set[str]:
+def _evidence_grants_added_since(slug: str, registry: set[str]) -> set[str]:
     added: set[str] = set()
     versions = Path(__file__).resolve().parents[1] / "alembic" / "versions"
     for index, name in enumerate(_LATER_EVIDENCE_GRANT_REVISIONS):
@@ -73,6 +74,9 @@ def _evidence_grants_added_since(registry: set[str]) -> set[str]:
         spec.loader.exec_module(module)
         for permission, evidence in module._EVIDENCE_GRANTS:
             if registry & evidence:
+                added.add(permission)
+        for permission, slugs in getattr(module, "_SLUG_GRANTS", ()):
+            if slug in slugs:
                 added.add(permission)
     return added
 
@@ -172,7 +176,7 @@ class TestBackfillMirrorsTheRegistry:
             registry
             - set(module._GRANTS)
             - _ADDED_SINCE.get(slug, set())
-            - _evidence_grants_added_since(registry)
+            - _evidence_grants_added_since(slug, registry)
         )
         assert module._PRIOR_DEFAULTS[slug] == expected
 

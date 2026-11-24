@@ -118,6 +118,8 @@ export interface Event {
   can_record_guest_headcount?: boolean;
   /** May this caller see and open the event's volunteer signup sheet (detail only). */
   can_staff_event?: boolean;
+  /** crr.record or events.manage, on an outreach event that is not cancelled. */
+  can_record_crr?: boolean;
   /** The live signup sheet as any member sees it, to sign up from the event page (detail only). */
   volunteer_signup?: EventVolunteerSignup | null;
   /** What happened at an outreach event, recorded when it closes. */

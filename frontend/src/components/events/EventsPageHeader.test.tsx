@@ -33,15 +33,21 @@ describe('EventsPageHeader', () => {
     expect(within(strip()).getByRole('link', { name: 'Events' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('adds Templates for events.manage and Attendance Trends for analytics.view, each on its own grant', () => {
+  it('adds Templates for events.manage, Attendance Trends for analytics.view and CRR Activities for crr.record or events.manage, each on its own grant', () => {
     mockCheckPermission.mockImplementation((permission) => permission === 'analytics.view');
     const { unmount } = renderAt('/events', <EventsPageHeader icon={Calendar} title="Events" />);
     expect(stripLinks()).toEqual(['Events', 'Attendance Requests', 'Attendance Trends']);
     unmount();
 
     mockCheckPermission.mockImplementation((permission) => permission === 'events.manage');
+    const { unmount: unmountManager } = renderAt('/events', <EventsPageHeader icon={Calendar} title="Events" />);
+    expect(stripLinks()).toEqual(['Events', 'Attendance Requests', 'Event Templates', 'CRR Activities']);
+    unmountManager();
+
+    // The Community Outreach Team records CRR activities without managing events.
+    mockCheckPermission.mockImplementation((permission) => permission === 'crr.record');
     renderAt('/events', <EventsPageHeader icon={Calendar} title="Events" />);
-    expect(stripLinks()).toEqual(['Events', 'Attendance Requests', 'Event Templates']);
+    expect(stripLinks()).toEqual(['Events', 'Attendance Requests', 'CRR Activities']);
   });
 
   it('traces an event’s own pages back through Events, not Attendance Trends', () => {

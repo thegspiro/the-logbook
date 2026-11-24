@@ -49,10 +49,13 @@ class TestTheRegistryStatesEveryKind:
     @pytest.mark.parametrize("slug", sorted(COMMITTEE_POSITION_SLUGS))
     def test_a_committee_carries_the_baseline_as_a_copy(self, slug):
         """Nothing beyond what every member holds, and never the same list
-        object as the member position (pitfall #23)."""
+        object as the member position (pitfall #23) -- except the one grant
+        the owner gave the Community Outreach Team on 2026-11-22: recording
+        the CRR activities its members deliver."""
         definition = DEFAULT_POSITIONS[slug]
         baseline = DEFAULT_POSITIONS["member"]["permissions"]
-        assert definition["permissions"] == baseline
+        extra = {"community_outreach_team": ["crr.record"]}.get(slug, [])
+        assert definition["permissions"] == baseline + extra
         assert definition["permissions"] is not baseline
         assert definition["is_system"] is True
         assert definition["kind"] == "committee"

@@ -22,6 +22,7 @@ const EventQRCodePage = lazyWithRetry(() => import('../../pages/EventQRCodePage'
 const EventSelfCheckInPage = lazyWithRetry(() => import('../../pages/EventSelfCheckInPage'));
 const GuestCheckInPage = lazyWithRetry(() => import('../../pages/GuestCheckInPage'));
 const EventRequestPage = lazyWithRetry(() => import('../../pages/EventRequestPage'));
+const CrrActivitiesPage = lazyWithRetry(() => import('../../pages/crr/CrrActivitiesPage'));
 const EventsAdminHub = lazyWithRetry(() =>
   import('../../pages/EventsAdminHub').then((m) => ({ default: m.EventsAdminHub }))
 );
@@ -119,6 +120,20 @@ export const getEventsRoutes = () => {
           <ProtectedRoute requiredPermission="analytics.view">
             <Suspense fallback={null}>
               <EventAnalyticsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* CRR activities: the Community Outreach Team records them as well as
+          events managers (owner decision, 2026-11-22), so this is a page of
+          its own rather than only a tab of the admin hub. */}
+      <Route
+        path="/events/crr-activities"
+        element={
+          <ProtectedRoute requiredAnyPermission={['crr.record', 'events.manage']}>
+            <Suspense fallback={null}>
+              <CrrActivitiesPage />
             </Suspense>
           </ProtectedRoute>
         }

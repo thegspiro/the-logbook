@@ -622,6 +622,7 @@ _RANGES = {
     "pos_i32": ("scalar", [1, MAX32], [0, MAX32 + 1]),
     "nonneg_i32": ("scalar", [0, MAX32], [-1, MAX32 + 1]),
     "count_map": ("dict", [0, MAX32], [-1, MAX32 + 1]),
+    "minutes_map": ("dict", [0, 1440], [-1, 1441]),
     "gift_list": ("list", [Decimal("0.01"), MAX_GIFT], [0, MAX_GIFT + Decimal("0.01")]),
     "lead_days": ("list", [0, 30], [-1, 31]),
     "lead_hours": ("list", [0, 720], [-1, 721]),
@@ -709,4 +710,10 @@ DOMAIN_BOUNDED = {
         "i32_any"
     ],
     "app.schemas.grant:CampaignCreate.suggested_amounts": _RANGES["gift_list"],
+    # Each value becomes its own row's quantity / minutes column, whose check
+    # constraints (quantity >= 0; minutes 0..1440, a day) fix the range; the
+    # column-backed check cannot follow a dict value to a column.
+    "app.schemas.crr:CrrActivityCreate.counts": _RANGES["count_map"],
+    "app.schemas.crr:CrrActivityUpdate.counts": _RANGES["count_map"],
+    "app.schemas.crr:CrrActivityCreate.members": _RANGES["minutes_map"],
 }
