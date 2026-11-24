@@ -11,7 +11,7 @@
 
 import api from './apiClient';
 import { asArray } from '../utils/asArray';
-import { WaiverAttachmentMode, waiverAttachmentService } from './waiverAttachmentService';
+import { WaiverAttachmentMode } from '../constants/enums';
 import type { AttendanceWaiverStatus } from '../constants/enums';
 import type {
   AttendanceWaiverAlternateOptions,
@@ -23,6 +23,12 @@ import type {
   AttendanceWaiverRequestPage,
   AttendanceWaiverSubmit,
 } from '../types/attendanceWaiver';
+
+// This service is on the first load (the navigation's waiting count reads
+// it), so the upload code is fetched only when a member files a document:
+// a static import put the whole attachment service in every visit's
+// download, against the first-load budget (scripts/check-initial-bundle.mjs).
+const loadAttachmentService = () => import('./waiverAttachmentService');
 
 export const TRAINING_WAIVER_API_BASE = '/training/waivers/requests';
 export const MEETING_WAIVER_API_BASE = '/meetings/waiver-requests';
@@ -108,12 +114,14 @@ export const createAttendanceWaiverService = (BASE: string, { takesDocuments }: 
   /** Ask to be excused with documents: the request and its files are saved together or not at all. */
   async submitWithAttachments(data: AttendanceWaiverSubmit, files: readonly File[]): Promise<AttendanceWaiverRequest> {
     if (!takesDocuments) throw new Error('Documents cannot be filed with this request.');
+    const { waiverAttachmentService } = await loadAttachmentService();
     return normalizeRequest(await waiverAttachmentService.submitWithAttachments<AttendanceWaiverRequest>(data, files));
   },
 
   /** File more documents with the caller's own pending request. */
   async addAttachments(requestId: string, files: readonly File[]): Promise<AttendanceWaiverRequest> {
     if (!takesDocuments) throw new Error('Documents cannot be filed with this request.');
+    const { waiverAttachmentService } = await loadAttachmentService();
     return normalizeRequest(await waiverAttachmentService.addAttachments<AttendanceWaiverRequest>(requestId, files));
   },
 

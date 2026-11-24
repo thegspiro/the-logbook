@@ -11453,11 +11453,33 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
   the reader now treats any stored value as `off` (the next save stores
   `off`). If the meeting workflow ever takes documents, lift the refusal and
   the read coercion together.
-- **HEIC is stored as filed, not converted.** A decider on Windows may need
-  the HEIF extension to open an iPhone photo; nothing previews it in the page.
-- **The upload field sits in the request dialog and the document list on the
-  decision page; the policy screen sets both new settings.** There is no
-  preview of a document in the page: a decider downloads it.
+- **HEIC is stored as filed, not converted** _(owner approved conversion
+  2026-11-23; held for a licence ruling)_. A decider on Windows may need the
+  HEIF extension to open an iPhone photo, and the page cannot show one.
+  Conversion to JPEG at upload was built-ready but not shipped, because the
+  library's licence needs the owner's ruling first:
+  - `pillow-heif` 1.8.1 bundles libheif, libde265 and x265 in its wheels
+    (only glibc/libstdc++ from the system, so no apt packages and the image
+    would build), but its own `LICENSES_bundled.txt` says the binary wheels
+    are **GPLv2** as a whole, because of x265. This project is MIT and is
+    shipped as Docker images, which would then redistribute GPLv2 binaries.
+  - `pi-heif` 1.4.0, the decode-only build from the same repository
+    (`bigcat88/pillow_heif`), bundles only libheif and libde265 and is
+    **LGPLv3**; decoding is all conversion needs. HEVC decoding may also
+    carry patent questions.
+    **For the owner:** approve `pi-heif` (or `pillow-heif` despite GPLv2), or
+    keep HEIC as filed.
+- ~~**There is no preview of a document in the page.**~~ ✅ Resolved
+  2026-11-23 (owner decision): a JPEG or PNG opens in a dialog on the request
+  page, and a PDF in a new tab under the browser's own viewer. Both are a
+  copy fetched through the same authorised, audited download, held behind a
+  local `blob:` URL, never a public link, under the neutral file name.
+  **A PDF is not shown inside the page** (default taken): the app's
+  Content-Security-Policy allows `blob:` images but neither `blob:` frames
+  (`frame-src` falls back to `default-src 'self'`) nor objects
+  (`object-src 'none'`). Showing one in the page needs either `frame-src
+blob:` in the backend middleware and every `nginx.conf` policy, or a PDF.js
+  dependency: both owner decisions. HEIC has no view.
 
 ## Meetings — Business-Meeting Waiver Requests: Choices Made Without An Owner Ruling (2026-11-11)
 
