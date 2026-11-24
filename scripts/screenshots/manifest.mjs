@@ -2015,6 +2015,329 @@ function departmentDate(days) {
   }).format(new Date(Date.now() + days * 86_400_000));
 }
 
+/** Store Settings with a sales tax over 100 typed and saved: refused, unsaved. */
+async function flagStoreTaxRate(page) {
+  await page.locator("#settings-tax").fill("150", { timeout: 20_000 });
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await page.getByText("Fix these before saving the settings").waitFor();
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(500);
+}
+
+/** Leave the store settings without saving what flagStoreTaxRate typed. */
+async function leaveStoreSettingsUnsaved(page) {
+  await page.goto(new URL("/dashboard", page.url()).toString());
+  const discard = page.getByRole("button", { name: "Discard changes" });
+  if (await discard.count()) await discard.click();
+}
+
+/**
+ * A facility's Insurance section with a new policy typed but no carrier, and
+ * Save pressed. A new record is refused whole, so nothing is written.
+ */
+async function flagInsuranceCarrier(page) {
+  await openFirstFromApi(
+    "/facilities",
+    (id) => `/facilities/${id}`,
+    "facilities",
+  )(page);
+  await page
+    .getByRole("button", { name: /^insurance/i })
+    .first()
+    .click({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByLabel("Policy type").selectOption("property");
+  await page.getByLabel("Policy number").fill("PKG-2027-0418");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByText("Carrier is required").waitFor({ timeout: 10_000 });
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(400);
+}
+
+// The hours 05-156 overwrites with 24, put back by its cleanup.
+let checkinOpensRestore = null;
+
+/**
+ * Answers Course Links' history with one live link and one undone one. The
+ * demo department has never linked a name, and a real link changes members'
+ * compliance in every shot after it, so the list is supplied rather than made.
+ */
+async function routeCourseLinkHistory(page) {
+  const day = 86_400_000;
+  const at = (daysAgo) => new Date(Date.now() - daysAgo * day).toISOString();
+  await page.route("**/api/v1/training/course-links/history*", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: "screenshot-link-live",
+            course_id: "screenshot-course-pump",
+            course_name: "Pump Operations",
+            label: "Pump Ops",
+            record_count: 6,
+            linked_by_name: "Jordan Reyes",
+            linked_at: at(1),
+            undone_at: null,
+            undone_by_name: null,
+          },
+          {
+            id: "screenshot-link-undone",
+            course_id: "screenshot-course-cpr",
+            course_name: "CPR for Healthcare Providers",
+            label: "CPR Refresher",
+            record_count: 12,
+            linked_by_name: "Jordan Reyes",
+            linked_at: at(4),
+            undone_at: at(3),
+            undone_by_name: "Morgan Ellis",
+          },
+        ],
+        total: 2,
+        offset: 0,
+        limit: 10,
+      },
+    }),
+  );
+}
+
+/**
+ * Adds the course-link row to Training Admin's attention queue. The demo
+ * library suggests a course for none of its unlinked names, so the row the
+ * hub raises for a suggested match never appears on its own.
+ */
+async function routeCourseLinkAttention(page) {
+  await page.route("**/api/v1/admin-hub/training/summary*", async (route) => {
+    const response = await route.fetch();
+    const summary = await response.json();
+    summary.attention = [
+      {
+        key: "unlinked_course_names",
+        title: "3 training names can be linked to a course",
+        detail: "across 14 records",
+        actionLabel: "Review links",
+        href: "/training/admin?page=curriculum&tab=course-links",
+        severity: "warning",
+        count: 3,
+        oldestAgeDays: null,
+      },
+      ...(summary.attention ?? []),
+    ];
+    // The fourth tile counts the queue, so it moves with the added row.
+    for (const metric of summary.metrics ?? []) {
+      if (metric.key === "needs_attention") {
+        metric.value = String(summary.attention.length);
+      }
+    }
+    await route.fulfill({ response, json: summary });
+  });
+}
+
+/**
+ * Gives Department Readiness skills and levels. The demo department has
+ * evaluated no skills, so the map would show only its empty message; the
+ * department's own members are kept and a level is drawn for most cells.
+ */
+async function routeCompetencyHeatmap(page) {
+  const skills = [
+    ["skill-scba", "SCBA donning", "Firefighting"],
+    ["skill-hose", "Hose line advancement", "Firefighting"],
+    ["skill-ladder", "Ground ladder raise", "Firefighting"],
+    ["skill-forcible", "Forcible entry", "Firefighting"],
+    ["skill-search", "Primary search", "Rescue"],
+    ["skill-pump", "Pump operations", "Driver/Operator"],
+    ["skill-airway", "Airway management", "EMS"],
+  ].map(([id, name, category]) => ({ id, name, category }));
+  const levels = [
+    "novice",
+    "advanced_beginner",
+    "competent",
+    "proficient",
+    "expert",
+  ];
+  const day = 86_400_000;
+  await page.route(
+    "**/api/v1/training/competency/department*",
+    async (route) => {
+      const response = await route.fetch();
+      const data = await response.json();
+      const members = data.members ?? [];
+      const competencies = [];
+      members.forEach((member, row) => {
+        skills.forEach((skill, column) => {
+          // Every fifth cell has no evaluation, as a real roster would.
+          if ((row * 3 + column) % 5 === 4) return;
+          competencies.push({
+            user_id: member.user_id,
+            skill_evaluation_id: skill.id,
+            current_level: levels[(row + column * 2) % levels.length],
+            last_evaluated_at: new Date(
+              Date.now() - (20 + row) * day,
+            ).toISOString(),
+            next_evaluation_due: new Date(
+              Date.now() + (160 + column) * day,
+            ).toISOString(),
+          });
+        });
+      });
+      await route.fulfill({
+        response,
+        json: { ...data, skills, competencies },
+      });
+    },
+  );
+}
+
+/**
+ * Day Shift's edit dialog with its name cleared and Save pressed. An edit saves
+ * every field but the refused one, and the others go back as they were
+ * stored, so the template is unchanged and keeps its name.
+ */
+async function saveTemplateWithoutName(page) {
+  await page
+    .getByRole("button", { name: "Edit Day Shift", exact: true })
+    .click({ timeout: 20_000 });
+  const name = page.locator("#template-name");
+  await name.waitFor({ timeout: 10_000 });
+  await name.fill("");
+  await page.getByRole("button", { name: "Save Template" }).click();
+  await page
+    .getByText("Template saved, except name")
+    .waitFor({ timeout: 15_000 });
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(400);
+}
+
+/** The legacy import the seeder commits for guide 16's undo shots. */
+const HISTORICAL_SOURCE = "Oakville Legacy Hours DB";
+
+async function historicalImportId(page) {
+  const list = await apiFromPage(
+    page,
+    "GET",
+    "/integrations/historical-imports",
+  );
+  const record = (list.body?.imports ?? []).find(
+    (r) => (r.source_system ?? r.sourceSystem) === HISTORICAL_SOURCE,
+  );
+  if (!record) throw new Error("the seeder has not created the legacy import");
+  return record.id;
+}
+
+async function openHistoricalImport(page) {
+  const id = await historicalImportId(page);
+  await page.goto(
+    new URL(`/integrations/historical-import/${id}`, page.url()).toString(),
+  );
+  for (const name of ["Set up training", "Set up drills"]) {
+    await page.getByRole("button", { name }).click({ timeout: 30_000 });
+  }
+  await page.getByText("Undo this step").first().waitFor({ timeout: 30_000 });
+  await page.waitForTimeout(600);
+  return id;
+}
+
+// The names the seeder gives the legacy file's former members.
+const HISTORICAL_MEMBERS = {
+  501: ["Harold", "Pruitt"],
+  502: ["Doris", "Whitcomb"],
+  503: ["Leon", "Abernathy"],
+  504: ["Marta", "Cole"],
+};
+const HISTORICAL_DRILL_REQUIREMENT =
+  "Company Drill Attendance (legacy records)";
+
+async function checkedApi(page, method, path, body) {
+  const result = await apiFromPage(page, method, path, body);
+  if (result.status >= 400) {
+    throw new Error(`${method} ${path} -> ${result.status}`);
+  }
+  return result.body;
+}
+
+/**
+ * Commits whichever of the legacy import's training and drills steps a shot
+ * undid, as the seeder's step does: names for the members still waiting on a
+ * decision (an undo drops the typed ones), and the drills' requirement active
+ * only for the commit, so no current member is graded on it.
+ */
+async function restoreHistoricalImport(page) {
+  const id = await historicalImportId(page);
+  const base = `/integrations/historical-imports/${id}`;
+  const steps = (await checkedApi(page, "GET", `${base}/undo`)).steps ?? {};
+  if (!steps.training?.committed) {
+    const preview = await checkedApi(page, "GET", `${base}/training`);
+    const waiting = new Set((preview.members ?? []).map((m) => m.key));
+    const members = {};
+    for (const [number, [first, last]] of Object.entries(HISTORICAL_MEMBERS)) {
+      const key = `number:${number}`;
+      if (waiting.has(key)) {
+        members[key] = { action: "create", first_name: first, last_name: last };
+      }
+    }
+    if (Object.keys(members).length) {
+      await checkedApi(page, "PUT", `${base}/members`, { members });
+    }
+    await checkedApi(page, "POST", `${base}/training/commit`);
+  }
+  if (!steps.drills?.committed) {
+    const requirements = await checkedApi(
+      page,
+      "GET",
+      "/training/requirements?active_only=false",
+    );
+    const requirement = requirements.find(
+      (r) => r.name === HISTORICAL_DRILL_REQUIREMENT,
+    );
+    if (!requirement) throw new Error("the legacy drills' requirement is gone");
+    const at = `/training/requirements/${requirement.id}`;
+    await checkedApi(page, "PATCH", at, { active: true });
+    try {
+      await checkedApi(page, "PATCH", `${base}/training-settings`, {
+        drill_requirement_ids: [requirement.id],
+      });
+      await checkedApi(page, "POST", `${base}/drills/commit`);
+    } finally {
+      await checkedApi(page, "PATCH", at, { active: false });
+    }
+  }
+}
+
+/**
+ * Corrects the hours on Marta Cole's imported extrication record, as an
+ * officer would, so the training undo has a record changed since the import
+ * to keep. The undo counts a change only when it came more than two minutes
+ * after the import wrote the record, which the seeding run is well past.
+ */
+async function correctImportedRecord(page) {
+  const records = await checkedApi(
+    page,
+    "GET",
+    "/training/records?start_date=2014-06-14&end_date=2014-06-14",
+  );
+  const record = records.find((r) => r.course_name === "Vehicle Extrication");
+  if (!record) throw new Error("the legacy extrication record is missing");
+  await checkedApi(page, "PATCH", `/training/records/${record.id}`, {
+    hours_completed: 8.5,
+  });
+}
+
+/** Undo the drills, then open the training step's confirmation. */
+async function openTrainingUndoConfirm(page) {
+  await correctImportedRecord(page);
+  const id = await historicalImportId(page);
+  await checkedApi(
+    page,
+    "POST",
+    `/integrations/historical-imports/${id}/undo/drills`,
+  );
+  await openHistoricalImport(page);
+  await page.getByRole("button", { name: "Undo this step" }).first().click();
+  await page
+    .getByRole("button", { name: "Keep it" })
+    .waitFor({ timeout: 10_000 });
+  await page.waitForTimeout(400);
+}
+
 function withShiftSignoffs(prepare) {
   return async (page) => {
     const config = await apiFromPage(
@@ -14671,6 +14994,460 @@ export const SHOTS = [
     selector: "section[aria-labelledby='event-headcount-heading']",
   },
   {
+    // Shown, not filled: the profile section saves as it is typed. The demo
+    // department has no short name, so the box shows its example.
+    id: "08-125-profile-short-name",
+    doc: "08-admin-reports.md",
+    line: 297,
+    anchor: "__placed-by-hand-08-125__",
+    alt: "Settings, General, Profile: the Short Name box under the department's name, with its example FCVFD and the hint that it is used where the full name will not fit, such as beside the department's own shifts in a member's hours, and that left blank the full name is used",
+    route: "/settings?tab=general&page=profile",
+    expect: { selector: "#settings-department-short-name" },
+    selector: "div.card:has(#settings-department-short-name)",
+    prepare: async (page) => {
+      await page
+        .locator("#settings-department-short-name")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    // Hours limit cleared and the card saved: the box is refused with its
+    // range and keeps its stored value, and Window (days), unchanged, saves.
+    // Nothing is stored differently afterwards.
+    id: "03-142-overtime-hours-limit-error",
+    doc: "03-scheduling.md",
+    line: 3827,
+    anchor: "__placed-by-hand-03-142__",
+    alt: "Scheduling settings, General, the Overtime advisory card after saving with Hours limit cleared: the box flagged Enter a whole number from 0 to 336., Window (days) beside it, and the line that the card saved except the flagged setting, which keeps its stored value",
+    route: "/scheduling/admin/settings/general",
+    expect: "Enter a whole number from 0 to 336.",
+    selector: "div.card-secondary:has(h3:text-is('Overtime advisory'))",
+    prepare: async (page) => {
+      const card = page.locator(
+        "div.card-secondary:has(h3:text-is('Overtime advisory'))",
+      );
+      await card.locator("#overtime-hours-limit").fill("", { timeout: 20_000 });
+      await card.getByRole("button", { name: "Save", exact: true }).click();
+      await card.getByText("Enter a whole number from 0 to 336.").waitFor();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    // A tax rate over 100 typed and Save settings pressed: nothing is saved,
+    // and the list at the top of the form links to the field. 18-10 is the
+    // field itself, further down the same page.
+    id: "18-09-store-settings-fix-these",
+    doc: "18-storefront.md",
+    line: 130,
+    anchor: "__placed-by-hand-18-09__",
+    alt: "Store Settings after Save settings with a sales tax of 150: the list Fix these before saving the settings at the top of the form, linking to Sales tax (%) with the range it accepts",
+    route: "/inventory/admin/store?tab=settings",
+    expect: "Fix these before saving the settings",
+    allowEmptyState:
+      '"No payment gate" is one of the unpaid-order choices on the same form, not an empty page.',
+    selector:
+      "div[role='alert']:has-text('Fix these before saving the settings')",
+    prepare: flagStoreTaxRate,
+    cleanup: leaveStoreSettingsUnsaved,
+  },
+  {
+    id: "18-10-store-settings-tax-flagged",
+    doc: "18-storefront.md",
+    line: 131,
+    anchor: "__placed-by-hand-18-10__",
+    alt: "The Pricing and delivery section of Store Settings with Sales tax (%) at 150, flagged with the range it accepts: a percentage from 0 to 100, or empty for no tax",
+    route: "/inventory/admin/store?tab=settings",
+    expect: { selector: "#settings-tax" },
+    allowEmptyState:
+      '"No payment gate" is one of the unpaid-order choices on the same form, not an empty page.',
+    selector: "section.card:has(#settings-tax)",
+    prepare: flagStoreTaxRate,
+    cleanup: leaveStoreSettingsUnsaved,
+  },
+  {
+    id: "06-37-apparatus-saved-except",
+    doc: "06-apparatus-facilities.md",
+    line: 136,
+    anchor: "__placed-by-hand-06-37__",
+    alt: 'Editing E-2 with a year of 1850: "Apparatus saved, except year. Fix it and save again." above a These were not saved list linking to the Year box',
+    route: "/apparatus",
+    expect: { selector: "text=Apparatus saved, except year" },
+    // "No EVOC requirement" is an option in the form, not an empty page.
+    allowEmptyState: true,
+    // Every other field goes back as it was stored, and the year the form
+    // holds back is the only change, so the save writes nothing new.
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}/edit`,
+        "apparatus",
+        (rig) => (rig.unitNumber ?? rig.unit_number) === "E-2",
+      )(page);
+      const year = page.locator("#apparatus-year");
+      await year.waitFor({ timeout: 15_000 });
+      await year.fill("1850");
+      await page.getByRole("button", { name: "Save Changes" }).click();
+      await page
+        .getByText("Apparatus saved, except year")
+        .waitFor({ timeout: 15_000 });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "06-38-facility-insurance-flagged",
+    doc: "06-apparatus-facilities.md",
+    line: 794,
+    anchor: "__placed-by-hand-06-38__",
+    alt: 'Adding an insurance policy to a facility: Property and a policy number filled in, and the empty Carrier box flagged "Carrier is required."',
+    route: "/facilities",
+    expect: { selector: "text=Carrier is required" },
+    prepare: flagInsuranceCarrier,
+    selector: "form:has(button:text-is('Save'))",
+  },
+  {
+    id: "06-39-facility-discard-changes",
+    doc: "06-apparatus-facilities.md",
+    line: 794,
+    anchor: "__placed-by-hand-06-39__",
+    alt: 'Cancelling the insurance form after typing: "Discard your changes?" with Keep editing and Discard changes',
+    route: "/facilities",
+    expect: { selector: "text=Discard your changes?" },
+    // The facility has no policies yet; the list behind the dialog says so.
+    allowEmptyState: true,
+    prepare: async (page) => {
+      await flagInsuranceCarrier(page);
+      await page.getByRole("button", { name: "Cancel", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Discard changes" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    fullPage: false,
+  },
+  {
+    id: "05-155-my-gear-quartermaster-notified",
+    doc: "05-inventory.md",
+    line: 888,
+    anchor: "__placed-by-hand-05-155__",
+    alt: "Issued to Me on My Issued Gear: one item reads Quartermaster notified with the date of the notice, where the others offer Notify quartermaster of return",
+    auth: "member",
+    route: "/inventory/my-equipment",
+    expect: { selector: "text=Quartermaster notified" },
+    // A real notice would sit on Return Requests and in Waiting for action in
+    // every other shot until a quartermaster received it, so the member's own
+    // list of notices is answered with one for their first assigned item.
+    prepare: async (page) => {
+      const me = await apiFromPage(page, "GET", "/auth/me");
+      const inventory = await apiFromPage(
+        page,
+        "GET",
+        `/inventory/users/${me.body.id}/inventory`,
+      );
+      const item = inventory.body.permanent_assignments?.[0];
+      if (!item) throw new Error("the member holds no assigned gear");
+      const sent = new Date(Date.now() - 2 * 86_400_000).toISOString();
+      await page.route("**/api/v1/inventory/return-requests?*", (route) =>
+        route.fulfill({
+          json: [
+            {
+              id: "screenshot-return-notice",
+              organization_id: me.body.organization_id,
+              requester_id: me.body.id,
+              return_type: "assignment",
+              item_id: item.item_id,
+              item_name: item.item_name,
+              assignment_id: item.assignment_id,
+              quantity_returning: 1,
+              reported_condition: item.condition,
+              status: "requested",
+              created_at: sent,
+              updated_at: sent,
+            },
+          ],
+        }),
+      );
+      await page.reload();
+      await page
+        .getByText("Quartermaster notified")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    fullPage: true,
+  },
+  {
+    id: "05-156-checklist-hours-clamped",
+    doc: "05-inventory.md",
+    line: 3077,
+    anchor: "__placed-by-hand-05-156__",
+    alt: 'Checklist Settings after 99 was typed into Opens before the start: the box holds 24, and under it "24 is the most allowed. 24 was saved."',
+    route: "/inventory/admin/checklists/settings",
+    expect: { selector: "text=24 is the most allowed" },
+    selector: "section:has(#checkin-opens)",
+    prepare: async (page) => {
+      const box = page.locator("#checkin-opens");
+      await box.waitFor({ timeout: 20_000 });
+      checkinOpensRestore = await box.inputValue();
+      await box.fill("99");
+      await box.press("Enter");
+      await page
+        .getByText("24 is the most allowed. 24 was saved.")
+        .waitFor({ timeout: 10_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+    // The box saves on Enter, so typing the old value back is the restore.
+    cleanup: async (page) => {
+      if (checkinOpensRestore === null) return;
+      const box = page.locator("#checkin-opens");
+      await box.fill(checkinOpensRestore);
+      await box.press("Enter");
+      await page.waitForTimeout(1000);
+      checkinOpensRestore = null;
+    },
+  },
+  {
+    id: "02-152-course-links-recent",
+    doc: "02-training.md",
+    line: 562,
+    anchor: "__placed-by-hand-02-152__",
+    alt: "Recent links on Course Links: Pump Ops linked to Pump Operations with an Undo button, and CPR Refresher's link to CPR for Healthcare Providers reading undone with the date and who undid it",
+    route: "/training/admin?page=curriculum&tab=course-links",
+    expect: { selector: "#course-links-recent-heading" },
+    beforeNavigate: routeCourseLinkHistory,
+    selector: "section[aria-labelledby='course-links-recent-heading']",
+    prepare: async (page) => {
+      await page
+        .getByText("undone", { exact: false })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "02-153-course-links-undo-confirm",
+    doc: "02-training.md",
+    line: 565,
+    anchor: "__placed-by-hand-02-153__",
+    alt: "The Undo confirmation for the Pump Ops link to Pump Operations, with Keep it and Undo link",
+    route: "/training/admin?page=curriculum&tab=course-links",
+    expect: { selector: "text=Undo link" },
+    beforeNavigate: routeCourseLinkHistory,
+    // Opened and left with Keep it: the link is a mock, never undone.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Undo the link of Pump Ops" })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Keep it" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const keep = page.getByRole("button", { name: "Keep it" });
+      if (await keep.count()) await keep.click();
+    },
+    fullPage: false,
+  },
+  {
+    id: "02-154-course-links-attention",
+    doc: "02-training.md",
+    line: 599,
+    anchor: "__placed-by-hand-02-154__",
+    alt: 'Training Admin\'s attention list with "3 training names can be linked to a course, across 14 records" and its Review links button',
+    route: "/training/admin",
+    expect: { selector: "text=can be linked to a course" },
+    beforeNavigate: routeCourseLinkAttention,
+    allowEmptyState:
+      "Upcoming Session Capacity sits below the frame; the attention list is the subject.",
+    prepare: async (page) => {
+      await page
+        .getByText("can be linked to a course")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    // The attention list and, under it, the Curriculum card's badge.
+    viewport: { width: 1440, height: 1000 },
+    fullPage: false,
+  },
+  {
+    id: "02-155-competency-heatmap-phone",
+    doc: "02-training.md",
+    line: 4449,
+    anchor: "__placed-by-hand-02-155__",
+    alt: "Department Readiness on a 390px phone: the member column pinned on the left with long names wrapping, skill names pinned along the top, and a fade with a chevron on the right edge where more skills lie",
+    route: "/training/admin?page=enhancements&tab=competency",
+    expect: {
+      selector: "[aria-label='Competency levels by member and skill']",
+    },
+    viewport: { width: 390, height: 844 },
+    beforeNavigate: routeCompetencyHeatmap,
+    // The phone's own frame rather than the section: the section is taller
+    // than the screen, and an element crop puts the sticky top and bottom
+    // bars over the middle of it.
+    fullPage: false,
+    prepare: async (page) => {
+      const grid = page.getByRole("group", {
+        name: "Competency levels by member and skill",
+      });
+      await grid.waitFor({ timeout: 20_000 });
+      await page
+        .locator(
+          "section[aria-labelledby='competency-heatmap-heading'] [aria-label='Legend']",
+        )
+        .evaluate((node) => node.scrollIntoView({ block: "start" }));
+      await page.evaluate(() => window.scrollBy(0, -80));
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    id: "10-30-expiring-certs-phone",
+    doc: "10-mobile-pwa.md",
+    line: 362,
+    anchor: "__placed-by-hand-10-30__",
+    alt: "Expiring Certifications on a 390px phone: each certification is a card led by the member's name, with its certification, expiry date and days left labelled beneath",
+    route: "/training/admin?page=dashboard&tab=expiring-certs",
+    expect: { selector: "table.rwd-table" },
+    viewport: { width: 390, height: 844 },
+    selector: "div.rwd-table-container:has(table.rwd-table)",
+    prepare: async (page) => {
+      await page
+        .locator("table.rwd-table td[data-label='Member']")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    id: "03-143-template-saved-except-name",
+    doc: "03-scheduling.md",
+    line: 3439,
+    anchor: "__placed-by-hand-03-143__",
+    alt: 'Editing the Day Shift template with its name cleared: the Name box flagged "Enter a name for the template." and the dialog reading "Template saved, except name."',
+    route: "/scheduling/admin/planning/templates",
+    expect: { selector: "text=Template saved, except name" },
+    prepare: saveTemplateWithoutName,
+    // The cleared name is unsaved typing, so leaving asks; discard it.
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      const discard = page.getByRole("button", { name: "Discard changes" });
+      if (await discard.count()) await discard.click();
+    },
+    fullPage: false,
+  },
+  {
+    id: "03-144-template-discard-changes",
+    doc: "03-scheduling.md",
+    line: 3434,
+    anchor: "__placed-by-hand-03-144__",
+    alt: "Cancelling the template dialog after typing: the confirmation asking whether to throw the changes away, with Discard changes",
+    route: "/scheduling/admin/planning/templates",
+    expect: { selector: "text=Discard changes" },
+    prepare: async (page) => {
+      await saveTemplateWithoutName(page);
+      await page.getByRole("button", { name: "Cancel", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Discard changes" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const discard = page.getByRole("button", { name: "Discard changes" });
+      if (await discard.count()) await discard.click();
+    },
+    fullPage: false,
+  },
+  {
+    id: "16-32-import-training-undo-blocked",
+    doc: "16-integrations.md",
+    line: 1021,
+    anchor: "__placed-by-hand-16-32__",
+    alt: 'The Training step of a committed historical import: Imported 8 training records and 4 former members, and its Undo this step greyed out with "Undo the company drills step first: it builds on the training."',
+    route: "/integrations/historical-import",
+    expect: { selector: "text=Undo the company drills step first" },
+    prepare: openHistoricalImport,
+    selector:
+      "h2:text-is('5. Training') >> xpath=ancestor::*[contains(concat(' ', @class, ' '), ' card ')][1]",
+  },
+  {
+    id: "16-33-import-training-undo-ready",
+    doc: "16-integrations.md",
+    line: 1006,
+    anchor: "__placed-by-hand-16-33__",
+    alt: 'The same Training step once the company drills were undone: Undo this step is available, beside "Undoing removes the training records this step wrote, so you can change the decisions and commit it again."',
+    route: "/integrations/historical-import",
+    expect: { selector: "text=Undoing removes the training records" },
+    // Undoes the drills for real; the cleanup commits them again. The drills
+    // card is not framed: below its undo it says the department has no
+    // session-attendance requirement, true of the demo (the seeder switches
+    // the legacy drills' one off after the commit) and misleading beside it.
+    prepare: async (page) => {
+      const id = await historicalImportId(page);
+      await checkedApi(
+        page,
+        "POST",
+        `/integrations/historical-imports/${id}/undo/drills`,
+      );
+      await openHistoricalImport(page);
+    },
+    cleanup: restoreHistoricalImport,
+    selector:
+      "h2:text-is('5. Training') >> xpath=ancestor::*[contains(concat(' ', @class, ' '), ' card ')][1]",
+  },
+  {
+    id: "16-34-import-undo-training-confirm",
+    doc: "16-integrations.md",
+    line: 1013,
+    anchor: "__placed-by-hand-16-34__",
+    alt: "The Undo the training records? confirmation, once the drills were undone: how many records are removed, the one changed since the import that is kept, and that the former members it created go too, with Keep it and Undo this step",
+    route: "/integrations/historical-import",
+    expect: { selector: "text=Undo the training records?" },
+    // Undoes the drills for real; the cleanup commits them again.
+    allowEmptyState:
+      '"No batches yet" is the shift step, which this file has no rows for.',
+    prepare: openTrainingUndoConfirm,
+    cleanup: async (page) => {
+      const keep = page.getByRole("button", { name: "Keep it" });
+      if (await keep.count()) await keep.click();
+      await restoreHistoricalImport(page);
+    },
+    fullPage: false,
+  },
+  {
+    id: "16-35-import-undo-kept-notice",
+    doc: "16-integrations.md",
+    line: 1030,
+    anchor: "__placed-by-hand-16-35__",
+    alt: "The Training step after its undo: the notice that 1 record was kept because it was changed after the import, naming it, and the step ready to import again",
+    route: "/integrations/historical-import",
+    expect: { selector: "text=changed after the import" },
+    // Undoes the drills and the training for real; the cleanup commits both
+    // again, leaving the corrected record as it is.
+    prepare: async (page) => {
+      await openTrainingUndoConfirm(page);
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Undo this step" })
+        .click();
+      await page
+        .getByText("changed after the import")
+        .waitFor({ timeout: 20_000 });
+      // The success toast sits over the card's corner until it times out.
+      await page
+        .getByText(/records? removed/)
+        .waitFor({ state: "hidden", timeout: 15_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(600);
+    },
+    cleanup: restoreHistoricalImport,
+    selector:
+      "h2:text-is('5. Training') >> xpath=ancestor::*[contains(concat(' ', @class, ' '), ' card ')][1]",
+  },
+  {
     id: "08-01-setup-checklist",
     doc: "08-admin-reports.md",
     line: 43,
@@ -16448,6 +17225,52 @@ export const SHOTS = [
     fullPage: true,
   },
   // ── 07 Suggestion boxes (2026-09-23): seeded by seed_suggestion_boxes ──
+  {
+    // A new box with one question added and left without wording, saved:
+    // nothing is sent, and the question is flagged where it sits. Cancelled.
+    id: "07-49-suggestion-box-question-flagged",
+    doc: "07-documents-forms.md",
+    line: 1043,
+    anchor: "__placed-by-hand-07-49__",
+    alt: "The Questions section of a new suggestion box after Save box with a Short text question left without wording: the question box flagged Write the question members will be asked., and nothing saved",
+    route: "/communications/suggestion-boxes",
+    viewport: { width: 1280, height: 2000 },
+    expect: "Write the question members will be asked.",
+    selector: "section[aria-labelledby='box-questions-heading']",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /New box/ })
+        .first()
+        .click();
+      const dialog = page.locator('[role="dialog"]');
+      await dialog.waitFor({ state: "visible" });
+      await dialog.locator("#box-name").fill("Station improvements");
+      await dialog
+        .getByRole("button", { name: "Add question" })
+        .click({ timeout: 10_000 });
+      // Short text, so the only thing wrong is the missing wording; a choice
+      // question would also be flagged for having no options.
+      await dialog.locator("select[id$='-type']").first().selectOption("text");
+      await dialog
+        .locator("fieldset", {
+          has: page.locator("legend", { hasText: "Reviewer positions" }),
+        })
+        .getByLabel("Secretary", { exact: true })
+        .check();
+      await dialog.getByRole("button", { name: "Save box" }).click();
+      await dialog
+        .getByText("Write the question members will be asked.")
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      const discard = page.getByRole("button", { name: "Discard changes" });
+      if (await discard.count()) await discard.click();
+    },
+  },
   {
     id: "07-14-suggestion-box-dialog",
     doc: "07-documents-forms.md",
@@ -22418,6 +23241,51 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "03-142-my-shifts-past-credited",
+    doc: "03-scheduling.md",
+    line: 429,
+    anchor:
+      "My Shifts on Past: the Hours credited, Credited shifts and Avg hours/shift tiles",
+    alt: "My Shifts on Past: the Year picker, the Hours credited, Credited shifts and Avg hours/shift tiles with the hours awaiting close-out beneath, the hours-by-month chart, and past shifts under month headers giving each month's shifts and credited hours, one shift's pill reading awaiting close-out in amber",
+    route: "/scheduling?tab=my-shifts",
+    // The administrator, not the demo member: the member has no shift closed
+    // out yet, so the credited tiles would read zero. The administrator has
+    // closed-out shifts and one still awaiting close-out, which is the pair
+    // the paragraph is about.
+    expect: "awaiting close-out",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Past/ })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("group", { name: /^Hours credited/ })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    fullPage: true,
+  },
+  {
+    id: "03-143-hours-month-selected",
+    doc: "03-scheduling.md",
+    line: 508,
+    anchor: "The Hours view with one month's bar selected on the year chart",
+    alt: "The Hours view with October's bar selected on the year-at-a-glance chart, its tooltip giving the month's hours, shifts and calls: the other months dimmed, and October's shift highlighted in All shifts below",
+    route: "/scheduling?tab=my-shifts",
+    expect: { selector: 'button[aria-pressed="true"]' },
+    prepare: async (page) => {
+      await clickByName(/^Hours$/)(page);
+      // The latest month with any hours, so the shot does not depend on which
+      // month the demo is seeded in.
+      await page
+        .locator('[aria-label^="Hours by month"] button[aria-pressed]')
+        .last()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: true,
+  },
+  {
     id: "06-28-facility-settings",
     doc: "06-apparatus-facilities.md",
     line: 919,
@@ -25589,6 +26457,66 @@ export const SHOTS = [
         .waitFor({ timeout: 10_000 });
     },
     selector: '[role="tabpanel"]',
+  },
+  {
+    // The Compliance box's questions left unanswered and Continue pressed:
+    // each required question says what it needs. Nothing is submitted.
+    id: "07-50-suggestion-question-unanswered",
+    doc: "07-documents-forms.md",
+    line: 1136,
+    anchor: "__placed-by-hand-07-50__",
+    alt: "The Compliance box's question step after Continue with nothing chosen: the required question What kind of concern is this? flagged Answer “What kind of concern is this?”., with Continue still available",
+    route: "/suggestions",
+    auth: "member",
+    viewport: { width: 1280, height: 1200 },
+    expect: "Answer “",
+    selector: '[role="tabpanel"]',
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Compliance" });
+      await page
+        .getByRole("button", { name: /Continue/ })
+        .click({ timeout: 10_000 });
+      await page
+        .getByText(/^Answer “/)
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // Step 2 with Title and Details empty and Submit pressed. Nothing is
+    // submitted: the form names what is missing on each field.
+    id: "07-51-suggestion-title-missing",
+    doc: "07-documents-forms.md",
+    line: 1137,
+    anchor: "__placed-by-hand-07-51__",
+    alt: "Step 2 of 2 for the Compliance box after Submit with nothing typed: Title flagged Give your suggestion a title. and Details flagged Describe your suggestion., with Submit still available",
+    route: "/suggestions",
+    auth: "member",
+    viewport: { width: 1280, height: 1200 },
+    expect: "Give your suggestion a title.",
+    selector: '[role="tabpanel"]',
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Compliance" });
+      await page
+        .getByLabel("Safety", { exact: true })
+        .check({ timeout: 10_000 });
+      await page.getByLabel("No", { exact: true }).check({ timeout: 10_000 });
+      await page.getByRole("button", { name: /Continue/ }).click();
+      await page.getByText("Step 2 of 2").waitFor({ timeout: 10_000 });
+      await page
+        .getByRole("button", { name: /^Submit/ })
+        .first()
+        .click();
+      await page.getByText("Give your suggestion a title.").first().waitFor();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
   },
   {
     id: "07-36-compliance-details-step",

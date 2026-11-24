@@ -17,6 +17,7 @@ import { getProgressBarColor } from '../../utils/trainingColors';
 import { excusedMonthsPhrase } from '../../utils/requirementMonths';
 import { requirementUnitSuffix } from '../../utils/requirementUnits';
 import { monthlyPaceOf, paceLabel, paceSpoken } from '../../utils/requirementPace';
+import { certificationStatusOf } from '../../utils/certificationState';
 import type { RequirementDetail } from '../../types/training';
 
 interface RequirementDetailCardProps {
@@ -60,17 +61,8 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
   // whether the requirement is met, so it stays on the card.
   const pace = monthlyPaceOf(req.monthly_average, req.monthly_needed);
   // A certification is held or not, so it reads as a state with its date,
-  // not as 1/1 or 0/1: "On file (Expires ...)", "Expired ..." or
-  // "Not recorded". The server reports the date (expiry_date) of the
-  // certificate it graded.
-  const certState: 'on_file' | 'expired' | 'missing' | null =
-    req.requirement_type !== 'certification' || notYetHeld
-      ? null
-      : req.is_met
-        ? 'on_file'
-        : req.expiry_date
-          ? 'expired'
-          : 'missing';
+  // not as 1/1 or 0/1. Null keeps the count, as for any other requirement.
+  const certState = certificationStatusOf(req)?.state ?? null;
 
   return (
     <div
