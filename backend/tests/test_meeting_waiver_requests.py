@@ -788,7 +788,9 @@ class TestCarryOver:
 
 
 class TestEventLifecycle:
-    async def test_cancelling_voids_pending_and_keeps_decided(self, db_session, dept):
+    # Owner decision 2026-11-23: an approved request is voided too, giving the
+    # waiver back; it used to be kept.
+    async def test_cancelling_voids_pending_and_approved(self, db_session, dept):
         pending = await _submit(db_session, dept)
         approved = await _submit(db_session, dept, who=dept.other)
         await _svc(db_session).approve(dept.org, dept.clerk, approved.id)
@@ -803,7 +805,7 @@ class TestEventLifecycle:
         approved_row = await db_session.get(
             AttendanceWaiverRequest, approved.id, populate_existing=True
         )
-        assert approved_row.status == AttendanceWaiverStatus.APPROVED
+        assert approved_row.status == AttendanceWaiverStatus.VOIDED
         actions = (
             (
                 await db_session.execute(
@@ -843,7 +845,7 @@ class TestEventLifecycle:
         ).scalar_one()
         assert audit.event_data["cause"] == "cancelled"
 
-    async def test_deleting_voids_pending_and_keeps_the_history(self, db_session, dept):
+    async def test_deleting_voids_both_and_keeps_the_rows(self, db_session, dept):
         pending = await _submit(db_session, dept)
         approved = await _submit(db_session, dept, who=dept.other)
         await _svc(db_session).approve(dept.org, dept.clerk, approved.id)
@@ -858,7 +860,7 @@ class TestEventLifecycle:
         approved_row = await db_session.get(
             AttendanceWaiverRequest, approved.id, populate_existing=True
         )
-        assert approved_row.status == AttendanceWaiverStatus.APPROVED
+        assert approved_row.status == AttendanceWaiverStatus.VOIDED
         assert approved_row.event_id is None
 
     async def test_training_requests_are_voided_too(self, db_session, dept):

@@ -135,6 +135,8 @@ export interface AttendanceWaiverRequest {
   can_override: boolean;
   /** The member may file another document now (pending, policy takes them, under the limit). */
   can_attach?: boolean;
+  /** The member may remove a filed document now (pending; never the last one a policy requires). */
+  can_remove_attachment?: boolean;
   /** The documents filed with the request; the service always sets this. */
   attachments?: WaiverAttachment[];
   actions: AttendanceWaiverActionEntry[];

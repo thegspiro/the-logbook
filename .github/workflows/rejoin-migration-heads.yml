@@ -51,7 +51,7 @@ jobs:
       # exactly as the backend does. scripts/test_rejoin_migration_heads.py
       # fails if the two drift apart.
       - name: Install alembic
-        run: pip install 'alembic==1.20.1' 'sqlalchemy==2.1.8'
+        run: pip install 'alembic==1.20.1' 'sqlalchemy==2.1.9'
 
       - name: Read the chain, and write the merge revision if it is forked
         id: chain

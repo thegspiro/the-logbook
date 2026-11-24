@@ -449,6 +449,68 @@ describe('EventEditPage', () => {
     });
   });
 
+  // A series save reaches every later occurrence, and the server writes each
+  // field it receives onto all of them. The form resends every field it shows,
+  // so an untouched value was refused when a later occurrence was finalized,
+  // and a field blank on this occurrence wiped it from every later one.
+  describe('This and all future events sends only what changed', () => {
+    const { description: _none, ...withoutDescription } = mockEvent;
+    const occurrence: Event = {
+      ...withoutDescription,
+      // What the API always returns, and the form loads as is.
+      is_draft: false,
+      allow_guest_check_in: false,
+      guest_check_in_creates_prospect: false,
+      recurrence_parent_id: 'series-1',
+      start_datetime: '2026-03-15T22:00:00Z',
+      end_datetime: '2026-03-16T00:00:00Z',
+      check_in_window_type: 'flexible',
+      check_in_minutes_before: 60,
+      check_in_minutes_after: 15,
+      require_checkout: false,
+    };
+
+    beforeEach(() => {
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEvent).mockResolvedValue(occurrence);
+      vi.mocked(eventService.updateEvent).mockReset();
+      vi.mocked(eventService.updateFutureEvents).mockReset();
+      vi.mocked(eventService.updateFutureEvents).mockResolvedValue({ updated_count: 3 });
+    });
+
+    const saveFuture = async (edit: (user: ReturnType<typeof userEvent.setup>) => Promise<void>) => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+      await user.click(await screen.findByLabelText(/this and all future events/i));
+      await edit(user);
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+      await waitFor(() => expect(eventService.updateFutureEvents).toHaveBeenCalledTimes(1));
+      return vi.mocked(eventService.updateFutureEvents).mock.calls[0]?.[1];
+    };
+
+    it('sends a retitle alone, without the blank description or the times', async () => {
+      const payload = await saveFuture(async (user) => {
+        const title = screen.getByLabelText(/^title/i);
+        await user.clear(title);
+        await user.type(title, 'Monday Drill');
+      });
+
+      expect(payload).toEqual({ title: 'Monday Drill' });
+      expect(eventService.updateEvent).not.toHaveBeenCalled();
+    });
+
+    it('sends the times together when the start moves', async () => {
+      const payload = await saveFuture(async (user) => {
+        await user.selectOptions(screen.getByLabelText('Start time minute'), '30');
+      });
+
+      expect(payload).toEqual(expect.objectContaining({ start_datetime: '2026-03-15T22:30:00.000Z' }));
+      expect(payload).toHaveProperty('end_datetime');
+      expect(payload).not.toHaveProperty('title');
+      expect(payload).not.toHaveProperty('description');
+    });
+  });
+
   describe('Loads every field it saves', () => {
     beforeEach(() => {
       vi.mocked(eventService.getEvent).mockReset();
@@ -506,6 +568,26 @@ describe('EventEditPage', () => {
       // (pitfall #1): the empty list the API reads as every member.
       expect(payload?.mandatory_membership_types).toEqual([]);
       expect(screen.queryByText(/select at least one member type/i)).not.toBeInTheDocument();
+    });
+
+    // Unticking Mandatory dropped the member types from the form, so the key
+    // left the save and the update kept them (pitfall #1): an event no longer
+    // mandatory still carried them, and ticking it again brought them back.
+    it('clears the member types when Mandatory is unticked', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        is_mandatory: true,
+        mandatory_membership_types: ['active'],
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await user.click(await screen.findByLabelText(/mandatory attendance/i));
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+      const [, payload] = vi.mocked(eventService.updateEvent).mock.calls[0] ?? [];
+      expect(payload).toEqual(expect.objectContaining({ is_mandatory: false, mandatory_membership_types: [] }));
     });
 
     // Every member is the All members choice. "Only these member types" with
@@ -1089,7 +1171,7 @@ describe('EventEditPage', () => {
 
         const linked = await screen.findByRole('checkbox', { name: /Old Drill Attendance/ });
         expect(linked).toBeChecked();
-        expect(linked).toHaveAccessibleDescription(expect.stringContaining('No longer active'));
+        expect(linked).toHaveAccessibleDescription(/No longer active/);
         expect(screen.getByRole('group', { name: 'Counts toward attendance' })).toBeInTheDocument();
         await toReview(user);
         expect(screen.getByText('Old Drill Attendance (no longer active)')).toBeInTheDocument();
@@ -1176,8 +1258,10 @@ describe('EventEditPage', () => {
       await waitFor(() => expect(eventService.updateFutureEvents).toHaveBeenCalledTimes(1));
       expect(eventService.updateFutureEvents).toHaveBeenCalledWith(
         'evt-1',
-        expect.objectContaining({ title: 'Hose Testing Night', training_details: unchangedDetails })
+        expect.objectContaining({ training_details: unchangedDetails })
       );
+      // The untouched event fields stay behind: only what changed goes.
+      expect(vi.mocked(eventService.updateFutureEvents).mock.calls[0]?.[1]).not.toHaveProperty('title');
       expect(eventService.updateEvent).not.toHaveBeenCalled();
     });
 
@@ -1386,9 +1470,7 @@ describe('EventEditPage', () => {
 
         const hours = await screen.findByLabelText(/Credit Hours/);
         // Once the Course Library has loaded.
-        await waitFor(() =>
-          expect(hours).toHaveAccessibleDescription(expect.stringContaining('From the course (2 hours).'))
-        );
+        await waitFor(() => expect(hours).toHaveAccessibleDescription(/From the course \(2 hours\)\./));
         await toReview(user);
         expect(screen.getByText('2 hours (from the course)')).toBeInTheDocument();
       });
@@ -1426,9 +1508,7 @@ describe('EventEditPage', () => {
       // the backend.
       it("follows the event's length again when the course is left", async () => {
         const user = await openWithStoredHours(2);
-        expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
-          expect.stringContaining('From the course (2 hours).')
-        );
+        expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(/From the course \(2 hours\)\./);
 
         await user.click(screen.getByRole('radio', { name: /No course yet/ }));
         expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(3);
@@ -1458,7 +1538,7 @@ describe('EventEditPage', () => {
         renderWithRouter(<EventEditPage />);
 
         expect(await screen.findByLabelText('Requirement')).toHaveAccessibleDescription(
-          expect.stringContaining('Company Drill Attendance is a session-attendance requirement.')
+          /Company Drill Attendance is a session-attendance requirement\./
         );
         await toReview(user);
         expect(screen.getByText('Company Drill Attendance (currently linked, no longer offered)')).toBeInTheDocument();
@@ -1562,7 +1642,7 @@ describe('EventEditPage', () => {
 
         await waitFor(() =>
           expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
-            expect.stringContaining("Follows the event's length (2 hours) until you change it.")
+            /Follows the event's length \(2 hours\) until you change it\./
           )
         );
         await toReview(user);
@@ -1579,9 +1659,7 @@ describe('EventEditPage', () => {
       it('leaves on Cancel without asking, once the hours read as the length', async () => {
         const user = await open('course-nohours', 2, 'LADDER - Ladder Drills');
         await waitFor(() =>
-          expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
-            expect.stringContaining("Follows the event's length")
-          )
+          expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(/Follows the event's length/)
         );
 
         await user.click(screen.getAllByRole('button', { name: 'Cancel' })[0] as HTMLElement);
@@ -1601,9 +1679,7 @@ describe('EventEditPage', () => {
       it('keeps the stored hours of a course that has hours of its own', async () => {
         const user = await open('course-pump', 2, 'PUMP - Pump Operations');
 
-        expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
-          expect.stringContaining('From the course (2 hours).')
-        );
+        expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(/From the course \(2 hours\)\./);
         await save(user);
         expect(sent()?.training_details).toMatchObject({ course_id: 'course-pump', credit_hours: 2 });
       });
@@ -1649,7 +1725,7 @@ describe('EventEditPage', () => {
       expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
       const hours = screen.getByLabelText(/Credit Hours/);
       await waitFor(() => expect(hours).toHaveFocus());
-      expect(hours).toHaveAccessibleDescription(expect.stringContaining('Input should be a finite number'));
+      expect(hours).toHaveAccessibleDescription(/Input should be a finite number/);
       expect(mockNavigate).not.toHaveBeenCalled();
     });
 
@@ -2084,6 +2160,26 @@ describe('EventEditPage', () => {
 
       expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
       await waitFor(() => expect(screen.getByLabelText(/event type/i)).toHaveFocus());
+    });
+
+    // Training Info opens on its defaults, and defaults attach no session
+    // (_plan_new_session): the hint promised the save would add details.
+    it('does not promise training details to an event switched to Training on its defaults', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(trainingSessionService.getSessionByEvent).mockResolvedValue(null);
+      vi.mocked(eventService.getVisibleEventTypesWithCategories).mockResolvedValue({
+        ...visibleTypesWith(),
+        visible_event_types: ['business_meeting', 'training'],
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await user.selectOptions(await screen.findByLabelText(/event type/i), 'training');
+
+      expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+      const picker = screen.getByLabelText(/event type/i);
+      expect(picker).toHaveAccessibleDescription(/saving adds training details only if you set some there/i);
+      expect(picker).toHaveAccessibleDescription(/credited under the event's title as Continuing Education/);
     });
   });
 });

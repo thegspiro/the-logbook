@@ -322,11 +322,9 @@ describe('TrainingAdminPage', () => {
     window.history.replaceState({}, '', '/training/admin?page=records&tab=sessions');
     renderWithRouter(<TrainingAdminPage />);
 
-    await waitFor(() =>
-      expect(areaTab('Records')).toHaveAccessibleDescription(expect.stringContaining('3 need attention'))
-    );
+    await waitFor(() => expect(areaTab('Records')).toHaveAccessibleDescription(/3 need attention/));
     expect(screen.getByRole('tab', { name: /Submissions to Review/ })).toHaveTextContent('3 need attention');
-    expect(areaTab('Overview')).not.toHaveAccessibleDescription(expect.stringContaining('need attention'));
+    expect(areaTab('Overview')).not.toHaveAccessibleDescription(/need attention/);
   });
 
   it('badges Waiver Requests, beside Submissions to Review, with the caller’s own pending count', async () => {

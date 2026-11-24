@@ -5,12 +5,14 @@
  * (the only callers the backend answers). Each document downloads under its
  * neutral name (`waiver-attachment-1.pdf`) through the authenticated client.
  * When `canAttach` is set (the member, while the request is pending, under a
- * policy that takes documents) it also offers to file more.
+ * policy that takes documents) it also offers to file more. With `onRemove`
+ * (the member, while pending: the server's `can_remove_attachment`) each
+ * document gets a remove button; the page confirms and calls the API.
  */
 
 import React, { useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Download, FileText, Image as ImageIcon, Upload } from 'lucide-react';
+import { Download, FileText, Image as ImageIcon, Trash2, Upload } from 'lucide-react';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDateTime, formatNumber } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -28,6 +30,10 @@ interface WaiverAttachmentListProps {
   canAttach?: boolean;
   /** Called after more documents are filed; the page re-fetches the request. */
   onAttached?: () => void;
+  /** Offered only when the server allows removal; the page confirms first. */
+  onRemove?: (attachment: WaiverAttachment) => void;
+  /** The document being removed, whose button is disabled meanwhile. */
+  removingId?: string | null;
 }
 
 function sizeLabel(bytes: number): string {
@@ -42,6 +48,8 @@ export const WaiverAttachmentList: React.FC<WaiverAttachmentListProps> = ({
   attachments,
   canAttach = false,
   onAttached,
+  onRemove,
+  removingId = null,
 }) => {
   const tz = useTimezone();
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -108,6 +116,17 @@ export const WaiverAttachmentList: React.FC<WaiverAttachmentListProps> = ({
                 >
                   <Download className="h-4 w-4" aria-hidden="true" />
                 </button>
+                {onRemove && (
+                  <button
+                    type="button"
+                    className="btn-icon"
+                    onClick={() => onRemove(attachment)}
+                    disabled={removingId === attachment.id}
+                    aria-label={`Remove ${attachment.filename}`}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                )}
               </li>
             );
           })}

@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<!--
+  The Logbook documentation site (training guides, setup and administration
+  docs, videos and FAQs): one static nginx container, built from
+  docs-site/Dockerfile and published to ghcr.io by
+  .github/workflows/docs-site.yml on every merge to main that changes the docs.
+
+  No database, volumes or secrets. Point a Cloudflare Tunnel public hostname
+  at http://<unraid-ip>:7882, or at http://logbook-docs:8080 when cloudflared
+  runs on the same custom Docker network. See docs-site/README.md.
+-->
+<Container version="2">
+  <Name>logbook-docs</Name>
+  <Repository>ghcr.io/thegspiro/the-logbook-docs:latest</Repository>
+  <Registry>https://ghcr.io/</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/thegspiro/the-logbook/issues</Support>
+  <Project>https://github.com/thegspiro/the-logbook</Project>
+  <Overview>Documentation website for The Logbook: training guides, setup and administration documentation, videos and FAQs, with built-in search. A static site served by unprivileged nginx; it needs no database, storage or secrets.</Overview>
+  <Category>Productivity: Status:Beta</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/thegspiro/the-logbook/main/docs-site/unraid-template.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/thegspiro/the-logbook/main/static/logo.png</Icon>
+  <ExtraParams>--read-only --tmpfs /tmp --cap-drop=ALL --security-opt no-new-privileges:true</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <Config Name="Web Port" Target="8080" Default="7882" Mode="tcp" Description="Port on the Unraid host for the documentation site. Point the Cloudflare Tunnel at http://[unraid-ip]:[this port]." Type="Port" Display="always" Required="true" Mask="false">7882</Config>
+</Container>
