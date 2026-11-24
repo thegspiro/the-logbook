@@ -29,6 +29,9 @@ class PendingDeletionReason(str, Enum):
     EVENT_RECORDS_VOIDED = "event_records_voided"
     HISTORICAL_IMPORT_UNDONE = "historical_import_undone"
     SUBMISSION_DELETED = "submission_deleted"
+    # The files attached to an event, or to the occurrences of a series,
+    # that was deleted (owner decision 2026-11-23).
+    EVENT_DELETED = "event_deleted"
 
 
 class PendingFileDeletion(Base):

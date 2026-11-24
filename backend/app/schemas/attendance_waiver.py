@@ -316,6 +316,11 @@ class AttendanceWaiverRequestResponse(UTCResponseBase):
     # Whether the viewer may remove a filed document now: the member, while
     # the request is pending, keeping one when the policy requires it.
     can_remove_attachment: bool = False
+    # What retention removed from this request, and when (the latest sweep);
+    # None when it never removed anything. Counts and a date only, so anyone
+    # who may see the request reads them.
+    attachments_removed_count: Optional[int] = None
+    attachments_removed_at: Optional[datetime] = None
     attachments: List[AttendanceWaiverAttachmentResponse] = Field(default_factory=list)
     actions: List[AttendanceWaiverActionResponse] = Field(default_factory=list)
 

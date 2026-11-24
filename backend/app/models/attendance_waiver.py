@@ -162,6 +162,16 @@ class AttendanceWaiverRequest(Base):
     reconfirm_requested_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # What the retention sweep removed, so the request can say documents were
+    # once filed after their rows are gone (owner decision 2026-11-23). The
+    # count adds up across sweeps; the time is the latest. NULL means retention
+    # has never removed anything from this request.
+    attachments_removed_count: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    attachments_removed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

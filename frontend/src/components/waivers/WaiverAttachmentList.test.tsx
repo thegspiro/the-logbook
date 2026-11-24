@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockDownload = vi.fn();
 const mockAdd = vi.fn();
+const mockFetch = vi.fn();
 const mockToastError = vi.fn();
 const mockToastSuccess = vi.fn();
 
@@ -14,6 +15,7 @@ vi.mock('../../services/waiverAttachmentService', async (importOriginal) => {
     waiverAttachmentService: {
       downloadAttachment: (...args: unknown[]) => mockDownload(...args) as unknown,
       addAttachments: (...args: unknown[]) => mockAdd(...args) as unknown,
+      fetchAttachment: (...args: unknown[]) => mockFetch(...args) as unknown,
     },
   };
 });
@@ -92,5 +94,99 @@ describe('WaiverAttachmentList', () => {
     rerender(<WaiverAttachmentList requestId="r1" attachments={[attachment]} onRemove={onRemove} />);
     await user.click(screen.getByRole('button', { name: 'Remove waiver-attachment-1.pdf' }));
     expect(onRemove).toHaveBeenCalledWith(attachment);
+  });
+
+  // Owner decision 2026-11-23: the request says retention removed documents.
+  it('says how many documents retention removed, and on which day', () => {
+    render(<WaiverAttachmentList requestId="r1" attachments={[]} removedCount={2} removedAt="2025-11-09T12:00:00Z" />);
+    expect(screen.getByText('2 documents removed under retention on 11/9/2025.')).toBeInTheDocument();
+    expect(screen.queryByText('No documents are on file for this request.')).not.toBeInTheDocument();
+  });
+
+  it('uses the singular for one removed document', () => {
+    render(<WaiverAttachmentList requestId="r1" attachments={[]} removedCount={1} removedAt="2025-11-09T12:00:00Z" />);
+    expect(screen.getByText('1 document removed under retention on 11/9/2025.')).toBeInTheDocument();
+  });
+
+  // Owner decision 2026-11-23: view a document in the page, through the same
+  // authorised download, never a public URL.
+  describe('viewing a document', () => {
+    const image: WaiverAttachment = {
+      ...attachment,
+      id: 'a2',
+      filename: 'waiver-attachment-2.png',
+      mime_type: 'image/png',
+    };
+    const heic: WaiverAttachment = {
+      ...attachment,
+      id: 'a3',
+      filename: 'waiver-attachment-3.heic',
+      mime_type: 'image/heic',
+    };
+    const createObjectURL = vi.fn(() => 'blob:local/doc');
+    const revokeObjectURL = vi.fn();
+    const originalCreate = URL.createObjectURL;
+    const originalRevoke = URL.revokeObjectURL;
+
+    beforeEach(() => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(new Blob(['x']));
+      createObjectURL.mockClear();
+      revokeObjectURL.mockClear();
+      URL.createObjectURL = createObjectURL;
+      URL.revokeObjectURL = revokeObjectURL;
+    });
+
+    afterEach(() => {
+      URL.createObjectURL = originalCreate;
+      URL.revokeObjectURL = originalRevoke;
+      vi.restoreAllMocks();
+    });
+
+    it('shows an image in a dialog and lets the object URL go on close', async () => {
+      render(<WaiverAttachmentList requestId="r1" attachments={[image]} />);
+      await user.click(screen.getByRole('button', { name: 'View waiver-attachment-2.png' }));
+
+      expect(mockFetch).toHaveBeenCalledWith('r1', image);
+      const dialog = await screen.findByRole('dialog', { name: 'waiver-attachment-2.png' });
+      expect(within(dialog).getByRole('img', { name: 'waiver-attachment-2.png' })).toHaveAttribute(
+        'src',
+        'blob:local/doc'
+      );
+
+      await user.click(within(dialog).getByRole('button', { name: /close/i }));
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:local/doc');
+    });
+
+    it('opens a PDF in a new tab from the fetched copy', async () => {
+      const tab = { opener: {}, location: { href: '' }, close: vi.fn() };
+      const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+      render(<WaiverAttachmentList requestId="r1" attachments={[attachment]} />);
+
+      await user.click(screen.getByRole('button', { name: 'View waiver-attachment-1.pdf' }));
+
+      expect(open).toHaveBeenCalledWith('', '_blank');
+      expect(mockFetch).toHaveBeenCalledWith('r1', attachment);
+      expect(tab.location.href).toBe('blob:local/doc');
+      expect(tab.opener).toBeNull();
+    });
+
+    it('offers no view for HEIC, which browsers cannot show', () => {
+      render(<WaiverAttachmentList requestId="r1" attachments={[heic]} />);
+      expect(screen.getByRole('button', { name: 'Download waiver-attachment-3.heic' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'View waiver-attachment-3.heic' })).not.toBeInTheDocument();
+    });
+
+    it('reports a failed fetch and closes the blank tab', async () => {
+      const tab = { opener: {}, location: { href: '' }, close: vi.fn() };
+      vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+      mockFetch.mockRejectedValue(new Error('Request not found'));
+      render(<WaiverAttachmentList requestId="r1" attachments={[attachment]} />);
+
+      await user.click(screen.getByRole('button', { name: 'View waiver-attachment-1.pdf' }));
+
+      expect(mockToastError).toHaveBeenCalledWith('Request not found');
+      expect(tab.close).toHaveBeenCalled();
+    });
   });
 });

@@ -5,6 +5,40 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 22 – 23, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-22--23-2026).
+
+- **Evaluations.** A member's evaluation shows their **Review history** with
+  the grade each review stood at, and their self-evaluation beside the
+  evaluator's ratings. A Goals item is a list of goals, each with a target
+  date. For a review period, officers can see **Grades by evaluator** and
+  **Download signed PDFs** as one zip. See [Evaluations](Module-Evaluations).
+- **Nobody excuses themselves.** An officer cannot create or extend their own
+  training waiver. A department where one officer alone holds
+  `training.manage` needs a second. See [Training](Module-Training).
+- **Certification expiry on the compliance matrix.** Cells show **On file**,
+  **Expired** or **Not recorded** with the date, and the CSV and printout
+  carry the expiry too. The CSV gains columns. See
+  [Compliance](Module-Compliance).
+- **Outreach.** Members sign up to volunteer from the event page or the shift
+  panel by choosing a role. Four checklist steps on a request tick
+  themselves. An event's own signup sheet can **Email the Membership** for
+  help, and a shift swap moves the volunteer's RSVP. A request taken from a
+  caller with only a phone number no longer fails. See [Events](Module-Events).
+- **Printed records.** Unapproved minutes print DRAFT on every page. Report
+  PDFs can add signature lines with **Add signature lines to PDF**. See
+  [Meeting Minutes](Module-Meeting-Minutes).
+- **Leave.** **Leave Requests** gains a **Calendar** and **Export leave
+  records**, and a stand-in approver is told when named, cleared and ended.
+- **Department store.** A window set to close automatically stops taking
+  orders at its exact closing time, and payment reminders are a separate
+  **Your store balance** email choice.
+- **Also:** a purchase request's edit form shows its saved budget line and
+  fiscal year, and the history import pages through every outside-agency
+  entry. See [Scheduling History Import](Scheduling-History-Import).
+
 ## Recent changes: November 20 – 21, 2026
 
 The engineering audit is

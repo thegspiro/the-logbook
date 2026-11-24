@@ -20,19 +20,421 @@
   border: 0;
 }
 
-/* The application's primary red (red-800, #991b1b), chosen there because white
-   on it clears WCAG AAA. Material's stock red is too light for white header
-   text. Links use the same red on light pages and a light red on dark ones,
-   where #991b1b would be unreadable. */
-:root {
+/* The Logbook's look, so the docs read as part of the application.
+   Every value below is copied from the theme tokens in
+   frontend/src/styles/index.css (":root" and ".dark"); change them there
+   first and mirror them here. The application measured its text colours to
+   WCAG AAA, which is why dark mode uses white for every text tier: no grey
+   clears 7:1 on the slate-900 to red-900 gradient. */
+:root,
+[data-md-color-scheme="default"] {
+  --logbook-bg-from: #f1f5f9;
+  --logbook-bg-via: #fef2f2;
+  --logbook-bg-to: #f1f5f9;
+  --logbook-surface: #ffffff;
+  --logbook-surface-secondary: #f8fafc;
+  --logbook-surface-hover: #f1f5f9;
+  --logbook-border: #e2e8f0;
+  --logbook-nav-bg: #ffffff;
+  --logbook-nav-border: #e2e8f0;
+  --logbook-input-bg: #f8fafc;
+  --logbook-input-border: #64748b;
+  --logbook-text: #0f172a;
+  --logbook-text-secondary: #334155;
+  --logbook-text-muted: #475569;
+  --logbook-link: #b91c1c;
+  --logbook-shadow-card:
+    0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+
+  --logbook-info-bg: #eff6ff;
+  --logbook-info-border: #bfdbfe;
+  --logbook-info-icon: #2563eb;
+  --logbook-info-title: #1e40af;
+  --logbook-info-text: #1e3a8a;
+  --logbook-success-bg: #f0fdf4;
+  --logbook-success-border: #bbf7d0;
+  --logbook-success-icon: #16a34a;
+  --logbook-success-title: #166534;
+  --logbook-success-text: #14532d;
+  --logbook-warning-bg: #fffbeb;
+  --logbook-warning-border: #fde68a;
+  --logbook-warning-icon: #d97706;
+  --logbook-warning-title: #92400e;
+  --logbook-warning-text: #78350f;
+  --logbook-purple-bg: #faf5ff;
+  --logbook-purple-border: #e9d5ff;
+  --logbook-purple-icon: #9333ea;
+  --logbook-purple-title: #6b21a8;
+  --logbook-purple-text: #581c87;
+  --logbook-danger-bg: #fef2f2;
+  --logbook-danger-border: #fecaca;
+  --logbook-danger-icon: #dc2626;
+  --logbook-danger-title: #991b1b;
+  --logbook-danger-text: #7f1d1d;
+
+  /* red-800: the application's primary fill, AAA under white text. */
   --md-primary-fg-color: #991b1b;
   --md-primary-fg-color--light: #b91c1c;
   --md-primary-fg-color--dark: #7f1d1d;
   --md-primary-bg-color: #ffffff;
   --md-accent-fg-color: #7f1d1d;
+  --md-typeset-a-color: var(--logbook-link);
+  --md-default-fg-color: var(--logbook-text);
+  --md-default-fg-color--light: var(--logbook-text-secondary);
+  --md-default-fg-color--lighter: var(--logbook-text-muted);
+  --md-default-bg-color: var(--logbook-surface);
+  --md-typeset-color: var(--logbook-text);
+  --md-typeset-table-color: var(--logbook-border);
+  --md-code-bg-color: #f1f5f9;
+  --md-footer-bg-color: var(--logbook-nav-bg);
+  --md-footer-bg-color--dark: var(--logbook-surface-secondary);
+  --md-footer-fg-color: var(--logbook-text);
+  --md-footer-fg-color--light: var(--logbook-text-secondary);
+  --md-footer-fg-color--lighter: var(--logbook-text-muted);
 }
 
 [data-md-color-scheme="slate"] {
-  --md-typeset-a-color: #fca5a5;
+  --logbook-bg-from: #0f172a;
+  --logbook-bg-via: #7f1d1d;
+  --logbook-bg-to: #0f172a;
+  --logbook-surface: rgba(255, 255, 255, 0.06);
+  --logbook-surface-secondary: rgba(255, 255, 255, 0.05);
+  --logbook-surface-hover: rgba(255, 255, 255, 0.08);
+  --logbook-border: rgba(255, 255, 255, 0.2);
+  --logbook-nav-bg: #0f172a;
+  --logbook-nav-border: rgba(255, 255, 255, 0.1);
+  --logbook-input-bg: #1e293b;
+  --logbook-input-border: #94a3b8;
+  --logbook-text: #ffffff;
+  --logbook-text-secondary: #ffffff;
+  --logbook-text-muted: #ffffff;
+  --logbook-link: #fca5a5;
+  --logbook-shadow-card:
+    0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+
+  --logbook-info-bg: rgba(59, 130, 246, 0.1);
+  --logbook-info-border: rgba(59, 130, 246, 0.5);
+  --logbook-info-icon: #60a5fa;
+  --logbook-info-title: #93c5fd;
+  --logbook-info-text: #bfdbfe;
+  --logbook-success-bg: rgba(34, 197, 94, 0.1);
+  --logbook-success-border: rgba(34, 197, 94, 0.5);
+  --logbook-success-icon: #4ade80;
+  --logbook-success-title: #86efac;
+  --logbook-success-text: #bbf7d0;
+  --logbook-warning-bg: rgba(245, 158, 11, 0.1);
+  --logbook-warning-border: rgba(245, 158, 11, 0.5);
+  --logbook-warning-icon: #fbbf24;
+  --logbook-warning-title: #fcd34d;
+  --logbook-warning-text: #fde68a;
+  --logbook-purple-bg: rgba(168, 85, 247, 0.1);
+  --logbook-purple-border: rgba(168, 85, 247, 0.5);
+  --logbook-purple-icon: #c084fc;
+  --logbook-purple-title: #d8b4fe;
+  --logbook-purple-text: #e9d5ff;
+  --logbook-danger-bg: rgba(239, 68, 68, 0.1);
+  --logbook-danger-border: rgba(239, 68, 68, 0.5);
+  --logbook-danger-icon: #f87171;
+  --logbook-danger-title: #fca5a5;
+  --logbook-danger-text: #fecaca;
+
   --md-accent-fg-color: #fecaca;
+  --md-typeset-a-color: var(--logbook-link);
+  --md-default-fg-color: var(--logbook-text);
+  --md-default-fg-color--light: var(--logbook-text);
+  --md-default-fg-color--lighter: rgba(255, 255, 255, 0.85);
+  --md-default-fg-color--lightest: rgba(255, 255, 255, 0.2);
+  /* Opaque: the drawer, search results and the back-to-top button paint it
+     over the page, where a translucent surface would show the text below. */
+  --md-default-bg-color: #0f172a;
+  --md-typeset-color: var(--logbook-text);
+  --md-typeset-table-color: var(--logbook-border);
+  --md-code-bg-color: #1e293b;
+  --md-code-fg-color: #e2e8f0;
+  --md-footer-bg-color: var(--logbook-nav-bg);
+  --md-footer-bg-color--dark: #020617;
+  --md-footer-fg-color: var(--logbook-text);
+  --md-footer-fg-color--light: var(--logbook-text);
+  --md-footer-fg-color--lighter: rgba(255, 255, 255, 0.85);
+}
+
+/* The application's system font stack (body in index.css), on a body that
+   carries Material's scheme attribute, so this wins over the theme's
+   ":root > *" default. */
+[data-md-color-scheme] {
+  --md-text-font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+    Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+}
+
+body {
+  background-image: linear-gradient(
+    to bottom right,
+    var(--logbook-bg-from),
+    var(--logbook-bg-via),
+    var(--logbook-bg-to)
+  );
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Header and tabs: the application's white (dark: slate-900) top bar with a
+   hairline border, rather than a solid red band. */
+.md-header,
+.md-tabs {
+  background-color: var(--logbook-nav-bg);
+  color: var(--logbook-text);
+}
+
+.md-header {
+  border-bottom: 1px solid var(--logbook-nav-border);
+  box-shadow: none;
+}
+
+.md-header--shadow {
+  box-shadow: var(--logbook-shadow-card);
+}
+
+.md-tabs {
+  border-bottom: 1px solid var(--logbook-nav-border);
+}
+
+.md-header__button.md-logo {
+  padding: 0.2rem;
+}
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 2rem;
+  width: auto;
+}
+
+.md-header__title {
+  font-weight: 600;
+}
+
+.md-tabs__link {
+  color: var(--logbook-text-secondary);
+  font-weight: 500;
+  opacity: 1;
+}
+
+.md-tabs__link:is(:hover, :focus) {
+  color: var(--logbook-text);
+}
+
+.md-tabs__item--active .md-tabs__link {
+  color: var(--logbook-text);
+  font-weight: 700;
+  box-shadow: inset 0 -3px 0 #991b1b;
+}
+
+[data-md-color-scheme="slate"] .md-tabs__item--active .md-tabs__link {
+  box-shadow: inset 0 -3px 0 #f87171;
+}
+
+/* Search reads as one of the application's form fields. */
+.md-search__form {
+  background-color: var(--logbook-input-bg);
+  border: 1px solid var(--logbook-input-border);
+  border-radius: 0.5rem;
+}
+
+.md-search__form:hover {
+  background-color: var(--logbook-surface-hover);
+}
+
+.md-search__input,
+.md-search__icon,
+.md-search__input::placeholder {
+  color: var(--logbook-text-secondary);
+}
+
+.md-search__input + .md-search__icon {
+  color: var(--logbook-text-muted);
+}
+
+/* The page body sits in a card, as every screen of the application does. */
+.md-content__inner {
+  margin: 1.2rem 0.8rem 1.2rem;
+  padding: 0.6rem 1.6rem 1.2rem;
+  background-color: var(--logbook-surface);
+  border: 1px solid var(--logbook-border);
+  border-radius: 0.75rem;
+  box-shadow: var(--logbook-shadow-card);
+}
+
+.md-content__inner::before {
+  height: 0.6rem;
+}
+
+@media screen and (max-width: 44.984375em) {
+  .md-content__inner {
+    margin: 0.8rem 0.4rem;
+    padding: 0.4rem 0.8rem 1rem;
+  }
+}
+
+/* Headings in the application's weights: bold titles, semibold sections. */
+.md-typeset h1 {
+  color: var(--logbook-text);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.md-typeset h2,
+.md-typeset h3 {
+  color: var(--logbook-text);
+  font-weight: 600;
+}
+
+/* The current page in the left navigation is the application's active
+   sidebar item: a red-800 fill under white text. */
+.md-sidebar--primary .md-nav__link--active {
+  background-color: #991b1b;
+  color: #ffffff;
+  border-radius: 0.375rem;
+  margin-left: -0.4rem;
+  padding: 0.25rem 0.4rem;
+  font-weight: 600;
+}
+
+.md-sidebar--primary .md-nav__link--active:hover {
+  color: #ffffff;
+}
+
+.md-nav__link:is(:hover, :focus) {
+  color: var(--logbook-link);
+}
+
+/* Tables and the home page's cards as the application's bordered cards. */
+.md-typeset table:not([class]) {
+  border-radius: 0.5rem;
+  box-shadow: none;
+}
+
+.md-typeset table:not([class]) th {
+  background-color: var(--logbook-surface-secondary);
+  color: var(--logbook-text);
+}
+
+.md-typeset .grid.cards > :is(ul, ol) > li,
+.md-typeset .grid > .card {
+  background-color: var(--logbook-surface-secondary);
+  border: 1px solid var(--logbook-border);
+  border-radius: 0.5rem;
+}
+
+.md-typeset .grid.cards > :is(ul, ol) > li:hover,
+.md-typeset .grid > .card:hover {
+  border-color: var(--logbook-border);
+  box-shadow: var(--logbook-shadow-card);
+}
+
+/* Admonitions in the application's alert colours. The [class] attribute
+   raises the selectors to the theme's own specificity, so source order
+   decides and these win. */
+.md-typeset :is(.admonition, details)[class] {
+  --alert-bg: var(--logbook-info-bg);
+  --alert-border: var(--logbook-info-border);
+  --alert-icon: var(--logbook-info-icon);
+  --alert-title: var(--logbook-info-title);
+  --alert-text: var(--logbook-info-text);
+  background-color: var(--alert-bg);
+  border: 1px solid var(--alert-border);
+  border-radius: 0.5rem;
+  box-shadow: none;
+  color: var(--alert-text);
+}
+
+.md-typeset
+  :is(.admonition, details):is(
+    .tip,
+    .hint,
+    .important,
+    .success,
+    .check,
+    .done
+  ) {
+  --alert-bg: var(--logbook-success-bg);
+  --alert-border: var(--logbook-success-border);
+  --alert-icon: var(--logbook-success-icon);
+  --alert-title: var(--logbook-success-title);
+  --alert-text: var(--logbook-success-text);
+}
+
+.md-typeset :is(.admonition, details):is(.warning, .caution, .attention) {
+  --alert-bg: var(--logbook-warning-bg);
+  --alert-border: var(--logbook-warning-border);
+  --alert-icon: var(--logbook-warning-icon);
+  --alert-title: var(--logbook-warning-title);
+  --alert-text: var(--logbook-warning-text);
+}
+
+.md-typeset
+  :is(.admonition, details):is(
+    .failure,
+    .fail,
+    .missing,
+    .danger,
+    .error,
+    .bug
+  ) {
+  --alert-bg: var(--logbook-danger-bg);
+  --alert-border: var(--logbook-danger-border);
+  --alert-icon: var(--logbook-danger-icon);
+  --alert-title: var(--logbook-danger-title);
+  --alert-text: var(--logbook-danger-text);
+}
+
+.md-typeset :is(.admonition, details):is(.example, .quote, .cite) {
+  --alert-bg: var(--logbook-purple-bg);
+  --alert-border: var(--logbook-purple-border);
+  --alert-icon: var(--logbook-purple-icon);
+  --alert-title: var(--logbook-purple-title);
+  --alert-text: var(--logbook-purple-text);
+}
+
+.md-typeset :is(.admonition, details)[class] > :is(.admonition-title, summary) {
+  background-color: transparent;
+  color: var(--alert-title);
+}
+
+.md-typeset
+  :is(.admonition, details)[class]
+  > :is(.admonition-title, summary)::before {
+  background-color: var(--alert-icon);
+}
+
+.md-footer {
+  border-top: 1px solid var(--logbook-nav-border);
+}
+
+/* The sidebar headings are sticky over an opaque band of the default
+   background, which shows as a stripe on the gradient. On wide screens the
+   sidebars sit on the page, so the band goes; in the phone drawer, which
+   Material paints opaque, it stays. */
+@media screen and (min-width: 60em) {
+  .md-sidebar--secondary .md-nav__title {
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+@media screen and (min-width: 76.25em) {
+  .md-sidebar--primary .md-nav__title,
+  .md-nav--lifted > .md-nav__list > .md-nav__item--active > .md-nav__link {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* On a tab holding a single page, Material shows that page as the
+     sidebar's title. It is a heading there, not the active-item pill. */
+  .md-nav--lifted > .md-nav__list > .md-nav__item--active > .md-nav__link {
+    color: var(--logbook-text);
+    font-weight: 700;
+    margin-left: 0;
+    padding: 0;
+  }
 }
