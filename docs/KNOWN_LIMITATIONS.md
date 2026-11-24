@@ -9301,17 +9301,38 @@ ones skipped.
   (`docs/UPGRADING.md`, 2026-11-04). Tests:
   `TestFallbackTypesStopMatchingByNamePastTheCutoff` in
   `tests/test_training_match_key.py`.
-- **Duplicates of a self-reported or hand-entered record are not detected.** A
-  member who submitted the same class, or an officer who entered it by hand as a
-  workaround, gets a second record from finalize; void the manual one.
-- **A session-backed event still adopts a same-named record from its day.**
-  Finalizing looks for a record written before the source link existed by the
-  session's course name and the event's day, as it always has, so a record an
-  officer scheduled for that class that day is completed by it rather than
-  duplicated. Taking credit back is narrower: removing, cancelling or
-  re-typing only reaches the member's own check-in placeholder and completed
-  records for members the session credited — never a record somebody else
-  scheduled or started.
+- **Duplicates of a self-reported or hand-entered record — ✅ flagged, owner
+  decision 2026-11-23 ("flag, never merge").** Finalize (and a sign-off
+  session's approval) compares each credited member's event record with the
+  member's own completed records of the event's day: an approved self-report's
+  record, or one entered by hand (no event source, not a provider import). A
+  pair is flagged when both name the same library course, or when their names
+  have the same match key — equal once case, spacing and punctuation are
+  ignored ("Hose Ops" and "hose-ops." match; "Hose Ops Refresher" does not).
+  Nothing looser is used, so two different classes on one day are never
+  paired. Neither record is changed: the member's hours **count twice until an
+  officer decides**, under Training Admin → Records → Possible Double Credit
+  (also a row in the hub's Needs attention list): keep both, or void either
+  record through the ordinary void. A re-finalize records nothing new — the
+  pair is unique (`training_credit_duplicate_flags`, migration `66f64aabdda2`),
+  and a "keep both" stands. _Defaults taken:_ the match is never fuzzier than
+  the match key; a pending (unapproved) self-report is not checked, since it
+  credits nothing; a provider import is not checked; a pair already credited
+  twice before the upgrade is found only when its event is finalized again.
+  Tests: `tests/test_finalize_duplicate_credit.py`.
+- **A session-backed event adopts a same-named record from its day only when
+  it is the event's own — narrowed 2026-11-23 (owner decision above).**
+  Finalizing still looks for a record written before the source link existed
+  by the session's course name and the event's day. It adopts the member's
+  check-in placeholder, or a record an officer scheduled and never credited;
+  a _completed_ one only when an earlier approved finalize of the session
+  credited that member (the pre-2026-09-29 shape the lookup exists for). A
+  completed record with no such finalize is a hand entry, and an approved
+  self-report's record is never adopted: the event writes its own record and
+  the pair is flagged. Taking credit back is narrower still: removing,
+  cancelling or re-typing only reaches the member's own check-in placeholder
+  and completed records for members the session credited — never a record
+  somebody else scheduled or started, and never a self-report's.
 - **The NFPA completeness report flags a missing instructor** on records from
   events without a course.
 - **A rolling recurring series cannot carry training details — ✅ resolved

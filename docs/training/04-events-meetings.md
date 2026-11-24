@@ -1340,6 +1340,16 @@ linked from their email and from **Review and approve** on the event's
 session is not counted as held for a session-attendance requirement either, so
 no member is charged with missing a class nobody has signed off yet.
 
+**A member who already logged the class** _(2026-11-23)_. If a member had
+already self-reported the class (and it was approved), or an officer entered
+it by hand, finalizing does not merge the two or take the other record over.
+When both name the same library course, or their names match once case,
+spacing and punctuation are ignored, the pair appears under Training Admin →
+**Records → Possible Double Credit** and in the hub's **Needs attention**
+list. Until you choose **Keep both** or void one of the two records, the
+member's hours count twice. Finalizing again does not raise the same pair a
+second time.
+
 **Credit hours that follow the event's length** _(2026-11-21)_. A session with
 no course and no hours typed in is credited for the event's scheduled length.
 That figure now follows the event whenever its time changes — an edit, a
