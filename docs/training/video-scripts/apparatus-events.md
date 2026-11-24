@@ -21,14 +21,22 @@ captions, not to the clock.
 The recording uses demonstration data: _Santamobile — Full_ on Engine 1 with
 Driver, Navigator, Santa and four Elves; a five-night run in December; a
 Holiday Parade that collides with one night; and a scheduled Scout Troop 12
-station tour on the Requests tab. No real member appears in it.
+station tour on the Outreach Requests tab. No real member appears in it.
+
+**Labels changed since the recording (2026-11-21).** The tab the recording
+shows as **Requests** is now **Outreach Requests**, and the **Community
+Outreach** card now opens on a new **Overview** page; **Apparatus Events** is
+the fourth page in the strip rather than the third. Scenes 1 and 8 show the old
+strip. The narration does not name either label and still holds; re-record
+those two scenes' opening seconds (about 5 each) when the video is next
+refreshed.
 
 ## Scenes
 
 ### 1. Where it lives — 0:00
 
 **On screen:** Events Administration, then the Community Outreach area
-scrolled to Apparatus Events and its template cards.
+(it opens on Overview), then Apparatus Events and its template cards.
 
 **Caption:** Events Administration → Community Outreach → Apparatus Events
 
@@ -135,7 +143,7 @@ Officers see the engine is committed…
 
 ### 8. A public request with an apparatus — 1:31
 
-**On screen:** the Requests tab; Scout Troop 12's scheduled request; the
+**On screen:** the Outreach Requests tab; Scout Troop 12's scheduled request; the
 Apparatus Crew section; _Santamobile — Full_ chosen; a conflict acknowledged;
 Add apparatus crew; the crew summary that replaces the picker.
 
@@ -199,7 +207,7 @@ coordinator with the request under the seat and **Approve** pressed.
 ### Scene 8 shows the old request panel
 
 Since 2026-11-21 a request opens on a page of its own rather than in a panel
-over the Requests list, and **Apparatus Crew** sits below **Volunteer
+over the Outreach Requests list, and **Apparatus Crew** sits below **Volunteer
 Staffing** on that page. The 2026-11-17 recording of scene 8 shows the old
 panel. Its captions and narration still hold, but re-record the scene on the
 request's page before publishing, so the footage matches what a coordinator

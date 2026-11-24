@@ -458,6 +458,16 @@ describe('OpenShiftsTab', () => {
       mockGetEligiblePositions.mockResolvedValue({ positions: ['volunteer'], is_excluded: false });
     });
 
+    it('heads the card with the event and tags it as community outreach', async () => {
+      mockGetOpenShifts.mockResolvedValue([
+        { ...outreachShift, outreach_title: 'Station Tour for Lincoln Elementary' },
+      ]);
+      renderWithRouter(<OpenShiftsTab />);
+
+      expect(await screen.findByText('Station Tour for Lincoln Elementary')).toBeInTheDocument();
+      expect(screen.getByText('Community outreach')).toBeInTheDocument();
+    });
+
     it('asks what the member will do instead of which seat they will ride', async () => {
       const user = userEvent.setup();
       renderWithRouter(<OpenShiftsTab />);

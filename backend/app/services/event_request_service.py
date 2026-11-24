@@ -1107,6 +1107,67 @@ def describe_roles(org: Optional[Organization], roles: Any) -> str:
     )
 
 
+async def outreach_sheet_titles(
+    db: AsyncSession,
+    org: Optional[Organization],
+    organization_id: str,
+    shift_ids: Iterable[str],
+) -> dict[str, str]:
+    """What each outreach signup sheet is for, by shift id.
+
+    A station tour is not a duty crew, so the schedule heads its sheet with
+    the event (owner decision, 2026-11-24). A sheet a request opened is named
+    by the event the request became once it has one, and until then by what
+    was asked for and by whom, the same words its notes carry. A sheet an
+    event opened directly is named by that event. Shared by the shift list and
+    a member's own assignments so both name a sheet the same way (pitfall #29).
+    """
+    ids = [str(shift_id) for shift_id in shift_ids]
+    if not ids:
+        return {}
+    titles: dict[str, str] = {}
+
+    event_rows = await db.execute(
+        select(Event.staffing_shift_id, Event.title).where(
+            Event.staffing_shift_id.in_(ids),
+            Event.organization_id == str(organization_id),
+        )
+    )
+    for sheet_id, title in event_rows.all():
+        titles[str(sheet_id)] = title
+
+    request_rows = await db.execute(
+        select(
+            EventRequest.staffing_shift_id,
+            EventRequest.event_id,
+            EventRequest.outreach_type,
+            EventRequest.organization_name,
+            EventRequest.contact_name,
+        ).where(
+            EventRequest.staffing_shift_id.in_(ids),
+            EventRequest.organization_id == str(organization_id),
+        )
+    )
+    requests = request_rows.all()
+    event_ids = [str(row.event_id) for row in requests if row.event_id]
+    event_titles: dict[str, str] = {}
+    if event_ids:
+        title_rows = await db.execute(
+            select(Event.id, Event.title).where(
+                Event.id.in_(event_ids),
+                Event.organization_id == str(organization_id),
+            )
+        )
+        event_titles = {str(event_id): title for event_id, title in title_rows.all()}
+    for row in requests:
+        label = outreach_type_label(org, row.outreach_type)
+        who = row.organization_name or row.contact_name
+        titles[str(row.staffing_shift_id)] = (
+            event_titles.get(str(row.event_id)) or f"{label} for {who}"
+        )
+    return titles
+
+
 def released_seat_statuses() -> list[Any]:
     """Assignment statuses that no longer hold a seat on a signup sheet."""
     return _released_seat_statuses()

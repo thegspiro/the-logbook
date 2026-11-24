@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { ClipboardList, Info, Paperclip, Pencil, Send, Trash2, Users, X } from 'lucide-react';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
+import { FileRemovalNotice } from '../components/training/FileRemovalNotice';
 import {
   AttachmentField,
   Checklist,
@@ -1132,54 +1133,60 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
 
           {storedAttachments.length > 0 && (
             <ul className="flex flex-col gap-1.5">
-              {storedAttachments.map((stored) => (
-                <li key={stored.id ?? stored.index} className="flex items-center gap-2 text-sm">
-                  <Paperclip className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
-                  <a
-                    href={
-                      editSubmission
-                        ? trainingSubmissionService.getAttachmentDownloadUrl(editSubmission.id, stored)
-                        : '#'
-                    }
-                    className="text-theme-text-secondary link-underline truncate"
-                  >
-                    {stored.file_name || `Attachment ${stored.index + 1}`}
-                  </a>
-                  {editSubmission && (
-                    <button
-                      type="button"
-                      aria-label={`Remove ${stored.file_name || 'attachment'}`}
-                      onClick={() => {
-                        const submissionId = editSubmission.id;
-                        const fileName = stored.file_name || `Attachment ${stored.index + 1}`;
-                        void (async () => {
-                          // The file is deleted from the server immediately,
-                          // not when the form is saved, so cancelling the edit
-                          // afterwards does not bring it back.
-                          const agreed = await confirm({
-                            title: `Remove "${fileName}"?`,
-                            message:
-                              'The file is deleted from this submission right away, even if you cancel the rest of your edits.',
-                            confirmLabel: 'Remove file',
-                            cancelLabel: 'Keep it',
-                            variant: 'danger',
-                          });
-                          if (!agreed) return;
-                          try {
-                            await trainingSubmissionService.deleteAttachment(submissionId, stored);
-                            setStoredAttachments(await trainingSubmissionService.getAttachments(submissionId));
-                          } catch {
-                            toast.error('Failed to remove the attachment');
-                          }
-                        })();
-                      }}
-                      className="text-theme-text-muted hover:text-red-700 dark:hover:text-red-400"
+              {storedAttachments.map((stored) =>
+                stored.removed_reason ? (
+                  <li key={stored.id ?? stored.index}>
+                    <FileRemovalNotice removedAt={stored.removed_at} reason={stored.removed_reason} />
+                  </li>
+                ) : (
+                  <li key={stored.id ?? stored.index} className="flex items-center gap-2 text-sm">
+                    <Paperclip className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
+                    <a
+                      href={
+                        editSubmission
+                          ? trainingSubmissionService.getAttachmentDownloadUrl(editSubmission.id, stored)
+                          : '#'
+                      }
+                      className="text-theme-text-secondary link-underline truncate"
                     >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </li>
-              ))}
+                      {stored.file_name || `Attachment ${stored.index + 1}`}
+                    </a>
+                    {editSubmission && (
+                      <button
+                        type="button"
+                        aria-label={`Remove ${stored.file_name || 'attachment'}`}
+                        onClick={() => {
+                          const submissionId = editSubmission.id;
+                          const fileName = stored.file_name || `Attachment ${stored.index + 1}`;
+                          void (async () => {
+                            // The file is deleted from the server immediately,
+                            // not when the form is saved, so cancelling the edit
+                            // afterwards does not bring it back.
+                            const agreed = await confirm({
+                              title: `Remove "${fileName}"?`,
+                              message:
+                                'The file is deleted from this submission right away, even if you cancel the rest of your edits.',
+                              confirmLabel: 'Remove file',
+                              cancelLabel: 'Keep it',
+                              variant: 'danger',
+                            });
+                            if (!agreed) return;
+                            try {
+                              await trainingSubmissionService.deleteAttachment(submissionId, stored);
+                              setStoredAttachments(await trainingSubmissionService.getAttachments(submissionId));
+                            } catch {
+                              toast.error('Failed to remove the attachment');
+                            }
+                          })();
+                        }}
+                        className="text-theme-text-muted hover:text-red-700 dark:hover:text-red-400"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </li>
+                )
+              )}
             </ul>
           )}
         </SectionCard>

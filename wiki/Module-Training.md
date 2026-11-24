@@ -411,7 +411,11 @@ file paths are never returned. The record download route also accepts the
 self-reports storage area, because approving a submission copies its
 attachment entries onto the record verbatim (keeping each entry's `id`). A
 voided record refuses an upload (400), and the record create/update bodies
-refuse an `attachments` field (422); see
+refuse an `attachments` field (422). _(2026-11-21, #4502)_ `DELETE
+.../attachments/{entry}` removes a file uploaded to the record: `training.manage`
+any, the member only an entry whose `uploaded_by` is theirs; never an entry an
+approval copied, and nothing on a voided record. The list carries a
+server-computed `can_remove`; see
 [Member files](#compliance-member-files-and-templates-2026-11-20--21).
 
 ---
@@ -518,9 +522,14 @@ audited the same way. See
 **Review Submissions → Settings → Certificate Files** sets how many days after
 a decision (90 minimum) an approved or rejected submission's files are deleted
 (`attachment_retention_days`). Unset (the default) keeps them indefinitely. The
-daily `self_report_attachment_retention` task unlinks the files and removes the
-references from the submission and the member's training records; the
-submission and record rows stay. Audited per organization as
+daily `self_report_attachment_retention` task unlinks the files and replaces
+each reference on the submission and the member's training records with a
+marker (`removed_at`, `removed_reason: "retention"`; owner decision
+2026-11-23), so My Training, the training history and the record view read
+"Certificate file removed under the department's retention policy on <date>"
+instead of losing the line, and a download answers `410`. A certificate the
+stored-file malware scan deletes is marked the same way with reason
+`malware`. The submission and record rows stay. Audited per organization as
 `self_report_attachment_retention`; changes to the period as
 `self_report_attachment_retention_updated`. The decision date is
 `coalesce(reviewed_at, submitted_at)` _(2026-11-20, #4476)_: a submission
@@ -609,9 +618,13 @@ An officer opens an enrolled member and works one requirement at a time
   overrides an incomplete phase).
 - **Notifications** — on advancement, the member is notified, and so is their
   **mentor** if the enrollment has one.
-- **Reopen on regression** — a completed enrollment that drops below 100% (a
-  new required requirement is added, or an over-count is corrected downward) is
-  set back to **active** and its completion cleared.
+- **Reopen on regression** — a completed enrollment that drops below 100% (for
+  example a new required requirement is added) is set back to **active** and
+  its completion cleared. Since 2026-11-23 a correction to credit already given
+  (an edited shift report, a re-finalized session, a voided credited record)
+  reopens only the requirement it took below target, and the enrollment stays
+  completed (#4621; see
+  [Training, compliance and waivers, 2026-11-23](#training-compliance-and-waivers-2026-11-23)).
 
 ### What updates pipeline progress automatically
 
@@ -793,8 +806,11 @@ A roster member's read of `GET /training/cohorts/{id}` is peer-safe. A
 non-officer (no `training.manage` / `training.view_all`) receives the cohort
 metadata and class timeline only — `members` is empty, `member_count` reads
 `0`, and per-class `rsvp_count` / `checked_in_count` are `null` (withheld,
-distinguishable from a genuine zero). The withheld data is never _queried_, not
-filtered after the fact. `/mine` does not disclose roster sizes either.
+distinguishable from a genuine zero). The withheld roster data is never
+_queried_, not filtered after the fact. The cohort's own officer-only fields
+are blanked in the response: `notes`, and since 2026-11-23 (#4610)
+`created_by` and `generated_by`, the officers' user ids, which the class page
+never showed. `/mine` does not disclose roster sizes either.
 Officers see everything, org-scoped; a non-member gets a 404 rather than
 confirmation the cohort exists. Every query in the detail path (classes, roster
 joins, RSVP aggregates) is org-scoped.
@@ -1054,7 +1070,13 @@ shared table is `EVALUATION_REQUIREMENT_TARGETS` in
   `training_module_configs.shift_evaluation_link_days` (default 7, 1–60) after
   the shift; one open link per evaluation; rejecting the shift or the member
   leaving closes it. Outside shifts awaiting approval are now evaluated too;
-  credit and visibility wait for approval.
+  credit and visibility wait for approval. _(2026-11-23, #4640)_ When the
+  preceptor's submit collides with an officer creating the same evaluation,
+  `ShiftEvaluationService._save`'s retry rolls back and expires the link;
+  `ShiftEvaluationLinkService.submit` now keeps the link id before the save,
+  reloads the link by id and re-sets `used_at`, `submitted_ip` and
+  `submitted_user_agent`. Before, `submit()` failed reading the expired link
+  after the evaluation was saved, leaving the link open and unattached.
 
 ## Shift Completion Reports
 
@@ -1389,6 +1411,144 @@ now excuses no training month; before, it still did.
 
 ---
 
+## Training, compliance and waivers, 2026-11-23
+
+Officer guide: [Training & Certification](https://github.com/thegspiro/the-logbook/blob/main/docs/training/02-training.md).
+
+**Training setup forms follow "save with an error"** (#4609, #4604, #4605;
+owner rule 2026-11-05, `docs/FORMS_REVIEW_2026-11-05.md`). `FormField` +
+`ErrorSummary` + `useFieldErrors`, schema `maxLength` with counters,
+`<form noValidate>` and `useDiscardGuard` on: the requirement editor
+(`RequirementModal`, also Programs' Requirements tab), the skill template
+builder, Add/Edit Course, Add/Edit Provider, Record Crew Training and the four
+Enhancements create dialogs (one `createUnlessFlagged` helper). Creates save
+nothing until every field is fixed; edits go through `saveExceptRefused` and
+stay open with "… saved, except _field_". Specifics:
+
+- `RequirementModal`: a refused target leaves out the type **and** every
+  type-dependent key together; grandfathering cutoff and catch-up deadline
+  travel as a pair; a **new members only** save makes a copy, so it is whole or
+  nothing. Callers' `onSave` gains an optional fourth argument,
+  `{ keepOpen: true }`, for a partial save; a failed save now rejects to the
+  editor instead of being toasted by the page.
+  `EvaluationRequirementFields` and `CourseLibraryPicker` take an optional
+  `error`.
+- Skill template builder: the sheet is replaced whole on update, so it is left
+  out while any section or criterion is flagged; client-only sheet rules still
+  hold it back on Save as well as Publish (making them Publish-only is an open
+  owner question). A 422 on `sections.N.criteria.M.*` lands on the sheet, not
+  the name.
+- Add Provider keeps client-side requirements the schema does not have (API
+  address, key, Target Solutions secret, a full http(s) URL). **Bug fixed:** an
+  edited provider's cleared description is sent as `null` (`blankToNull`); it
+  used to be omitted and kept.
+- Record Crew Training flags every problem at once and asks on reload
+  (`useUnsavedChanges`). Enhancements keep `Number(x) || undefined` for the
+  renewal window and grace period, so a blank box still takes the server
+  default.
+- Not converted: the training-waiver create form on Members › Waivers
+  (`WaiverManagementPage.tsx`); the Training Waivers tab is a read-only list.
+
+**Training dashboard cards** (#4595). The officer dashboard's Upcoming
+Expirations rows show `formatCalendarDate(expiration_date) · Nd`; Recent
+Completions and Requirements Status format their dates the same way
+(`Ongoing` with no due date). `/training/dashboard-summary`'s
+`compliance_percentage` is now `OrgComplianceTally(...).pct` (one decimal, the
+Admin hub's figure) (#4606).
+
+**Screens report what the shared grader decided** (#4606, pitfall 29; defaults
+in `docs/KNOWN_LIMITATIONS.md`, "Compliance Consistency — Defaults Taken"):
+
+- **Former members are not graded.** `training_compliance.is_current_member`
+  (`ACTIVE_ACCOUNT_STATUSES`, not deleted) runs before the exemption. The
+  profile card returns `compliance_status: "not_current_member"`, label "Not a
+  Current Member"; the officer member view adds `standing` / `standing_label`
+  (null for a current member) and empty requirement lists. `leave` and
+  `suspended` count as not current, as on the matrix.
+- **Shift Compliance HOURS rows** go through the shared grader with a new
+  optional `credited_hours` (`CreditedHours`) input in place of training
+  records: finalized attendance, counted external shifts
+  (`ExternalShiftHoursService.counted_minutes_by_user_and_date`) and approved
+  pre-shift work on finalized shifts, loaded by
+  `SchedulingService._credited_shift_hours`. Window, freshness, waiver
+  proration, cut-off and catch-up are the grader's. The report's own
+  rolling-only, leave-only proration is gone.
+- **`monthly_pace`** weights each month by `1 - waived_share`;
+  `RequirementMonthlyHours` uses the same weighting for its shift and call
+  fallback and its "N months not excused" text (now one decimal).
+- **API rename:** the annual and monthly compliance reports'
+  `record_completeness.records_with_certification` is now
+  `records_with_course_name` (what it always counted). No screen reads it; a
+  JSON/API reader must switch. Reports stored before the change keep the old
+  key.
+
+**Admin-hours targets follow the grading profile** (#4612, owner decision
+2026-11-23). `matching_profiles` returns every active matching profile in
+resolution order; `_find_matching_profile` is its first entry, and
+`admin_hours_profile` returns that profile when it sets admin hours, otherwise
+the first matching profile that does. `admin_hours_service.get_user_hours_compliance`
+uses it instead of its own matching loop, which ignored grading's "junior"
+option. See [Compliance Configuration](Compliance-Configuration).
+
+**A rolling requirement's second lapse is notified** (#4614, owner decision
+2026-11-23; migration `07abf8e6553b`). New table
+`rolling_requirement_last_met` (`RollingRequirementLastMet`: one row per member
+and requirement, `last_met_on` as the department's local date, unique on
+`(user_id, requirement_id)`, CASCADE FKs). `_record_rolling_met` advances it
+daily for every graded member meeting a rolling requirement; `_unmet_key` keys
+a rolling requirement `id|met:<date>`, so each lapse is one key. A member with
+no recorded date keeps the bare-id key, so nobody already told is re-emailed by
+the upgrade. Rolling requirements still get no deadline reminder.
+
+**Corrections reopen a completed program requirement** (#4621, owner decision
+2026-11-23; migration `bfb747c095c3` adds the `program_requirement_reopened`
+email type). `TrainingProgramService._reopen_if_below_target` moves a
+COMPLETED row whose figure a correction (shift report edit, session
+re-finalize, voided credit) took below target back to IN_PROGRESS and clears
+`completed_at`; VERIFIED/WAIVED rows and targetless types are untouched, and
+the restate path keeps the original `completed_at` when the corrected figure
+stays at or above target. `keep_enrollment_completion` / `keep_completed`
+stop those correction paths reopening a completed enrollment. The officers are
+told by `program_requirement_reopen.py` (bell always; email per template
+switch and the officer's duty-email setting).
+
+**Training waivers** (#4598, #4608, #4619, #4645; owner decisions 2026-11-23):
+
+- **One self-grant check.** `is_own_grant` in `app/utils/separation_of_duties.py`
+  is used by waiver create and edit, leave create and edit, and the Chief's
+  override. The Waivers page warns as soon as the officer picks themselves,
+  links to Leave Requests and disables **Create Waiver**, and offers no Edit
+  on the officer's own leave. No exception for a lone Chief.
+- **`GET …/waivers/requests/policy`** returns the routing fields (approver and
+  CC position ids, `chief_alternate_user_id`) only to the manage permission's
+  holder; everyone else gets `AttendanceWaiverMemberPolicy`.
+- **Reconfirm** a moved session runs the same `_not_counted_refusal` as a new
+  request (training exemption, requirement link, meeting on-leave).
+- **Queue paging.** Both list routes take `state=pending|decided`, applied in
+  `list_for_decider`, with `total` for that list only; the queue page loads
+  and pages each list 50 at a time (`status=` is unchanged).
+- **Cancel or delete gives an approval back.** `void_pending_for_events` voids
+  pending **and approved** requests (denied are kept), clears
+  `reconfirm_requested_at`, takes a meeting waiver off the minutes, adds a
+  sentence to the member's notice and records `previous_status` on the void
+  audit entry. A second run finds nothing to void.
+- **Held corrections keep an approval.** `_correction_keeps_decision`: when the
+  session had started before the edit, or the new start keeps the local date,
+  an approved request only updates its title, start and date snapshots. A
+  pending request still reopens on any move.
+- **Removing a document.** `DELETE /training/waivers/requests/{id}/attachments/{attachment_id}`:
+  submitter only, pending only, never the last document under a required
+  policy, 200 with the current request for an id already gone; the file is
+  deleted after commit through `member_files.remove_unreferenced_files`. The
+  request response gains a server-decided `can_remove_attachment`.
+- **Viewing a document.** `waiverAttachmentService.fetchAttachment` fetches
+  through the audited download route; JPEG/PNG open in a `Modal` from a
+  `blob:` URL revoked on close, a PDF in a tab opened inside the click
+  (`opener` cleared, closed again on failure), because the CSP has no
+  `frame-src blob:`. HEIC gets no View. HEIC-to-JPEG conversion is held:
+  `pillow-heif` wheels are GPLv2; `pi-heif` (LGPLv3, decode-only) is the
+  option recorded in `docs/KNOWN_LIMITATIONS.md` for the owner.
+
 ## Former members in pickers _(2026-11-19, #4380, #4432)_
 
 `GET /users` returns every account, including the archived, retired, dropped
@@ -1486,14 +1646,14 @@ total.** `RequirementMonthlyHours` prints the server's figure for hours; shifts
 and calls still average client-side.
 
 **The officer views grade through profiles** (#4460 via #4456, owner decision
-2026-11-20). The member period-status roster, competency matrix, compliance
-CSV/PDF cells, compliance forecast and Scheduling's Shift Compliance report
+2026-11-20). The member period-status roster, competency matrix (retired
+2026-11-21, #4540), compliance CSV/PDF cells, compliance forecast and Scheduling's Shift Compliance report
 resolve each member through `ComplianceGrading.for_member`, with one config
 load per request. The roster classifies with the profile's thresholds; the
 others have no member standing, so the profile only narrows cells (a
 requirement outside it reads `not_applicable` / N/A, or the member is not
-listed). The forecast gains `current_standing`; its 30/60/90 projections stay
-plain percentages. The exports and forecast take the department's
+listed). The forecast gains `current_standing`; its 30/60/90 projections
+stayed plain percentages until #4485 gave them standings too (below). The exports and forecast take the department's
 `include_current_month` instead of a hard-coded `True`. The profile card's
 colour is the matrix standing too (see [Compliance](Module-Compliance)).
 
@@ -1540,8 +1700,9 @@ went out daily. A rolling requirement (`get_rolling_period_months`) now has no
 deadline (a catch-up deadline still counts) and its notice key is the
 requirement id alone. `_already_noticed` treats a pre-upgrade
 `id|window_end` log key for the same id as sent, so the first run after the
-upgrade does not re-notify. Known cost (`docs/KNOWN_LIMITATIONS.md`): a member
-who meets it and later falls short again is not told again by this notice.
+upgrade does not re-notify. The known cost this left — a member who met it and
+later fell short again was never told again — was closed on 2026-11-23 (#4614):
+see [Training, compliance and waivers, 2026-11-23](#training-compliance-and-waivers-2026-11-23).
 
 **Course Links under concurrency** (#4479). `_apply` reads the unlinked
 records with a locking read and re-reads and locks them just before each
@@ -1604,8 +1765,74 @@ its session's details. See [Events](Module-Events).
   (`coalesce(reviewed_at, submitted_at)`); `reviewed_at` is written only by an
   officer's review, so an auto-approved submission's files were never deleted.
 - Still open (`docs/KNOWN_LIMITATIONS.md`): a certificate kept for a voided
-  record is outside the retention sweep, a record's own file has no removal
-  route, and file names on path-less entries survive anonymisation.
+  record is outside the retention sweep, and file names on path-less entries
+  survive anonymisation. (A record's own file gained a removal route in
+  #4502, below.)
+
+**My Training, requirement progress and the matrix screen take the grader's
+answer** (#4493). `TrainingService.evaluate_requirement_detail` (My Training,
+the officer's member view, and through it the exports and forecast) takes met
+and expired from `training_compliance`'s shared grader;
+`check_requirement_progress` (requirement progress, the user training report,
+the MCP progress tool) is projected from that detail, follows
+`include_current_month`, and its batch preload now carries the columns
+certification and category matching read. Visible: a certification never held
+reads not met (not "Expired — Renew ASAP"); an hours requirement with a zero
+target is not met by one logged hour; a BIANNUAL courses requirement whose
+newest counted certificate lapsed reads expired; with the current month
+excluded, `days_until_due` counts from the real day, so a due date already
+passed this month reads overdue. `complianceMatrixModel.toneOf` no longer
+demotes a cell the backend graded met because its `expiry` has passed: on an
+hours or courses cell that date is the latest counted record's and never
+lapses the requirement; a lapse arrives as `expired`. Tests:
+`test_requirement_detail_agrees_with_grader.py`,
+`test_my_training_agrees_with_matrix.py`.
+
+**Forecast standings and averages** (#4485, #4517, #4525). `GET
+/training/reports/compliance-forecast` now returns `{members, averages}` (was a
+bare list). Each member carries `forecast_30_standing` / `_60_` / `_90_`,
+classified by the member's own grading as `current_standing` is. The four
+averages are `ComplianceGrading.classify_average`: the mean over graded members,
+rounded to one decimal, classified by the **department's** thresholds; under
+`all_required` an average is compliant only when every graded member is
+compliant at that horizon (owner decision 2026-11-21, #4517). Both screens
+colour with `STANDING_TEXT_COLORS`; the 80/50 and 80/60 bands are gone. Since
+#4525 each projection is `training_compliance.grade_members` run as of
+today plus 30, 60 and 90 days on the records already logged, so an ungraded or
+superseded certificate costs nothing, while a rolling window shedding hours,
+a catch-up period ending and a calendar period rolling over are charged. The
+expiring-certifications list stays informational. The member training print
+page gained an `--exempt` modifier, so an exempt member prints muted rather
+than in the at-risk amber. Tests: `test_compliance_forecast_horizons.py`,
+`TestClassifyAverage` / `TestProjectedStanding`.
+
+**`GET /training/competency-matrix` retired** (#4540, owner decision
+2026-11-21). No screen or MCP tool called it. The route and
+`CompetencyMatrixService` are deleted and the path answers 404
+(`test_competency_matrix_endpoint_retired.py`). Use
+`GET /training/compliance-matrix` for who meets what. The Competency tab's
+heat map (`GET /training/competency/department`) and the per-position
+`competency_matrices` are a different feature and unchanged.
+
+**Member files: removal, orphan sweep, delete audit** (#4502, owner decisions
+2026-11-21):
+
+- `DELETE /training/records/{id}/attachments/{entry}` (see
+  [Attachments](#attachments)): by entry id, a repeat is a 204 no-op, audited
+  as `training_record_attachment_removed` with ids only; the file goes through
+  `remove_unreferenced_files` after the commit. The record's **Files** dialog
+  shows a bin icon where `can_remove` is true.
+- `scripts/sweep_orphaned_member_files.py` (`app/services/orphaned_member_files.py`)
+  finds files in the self-report, training-record and attendance-waiver areas
+  that no row names; dry run by default, counts only, files at least
+  `--min-age-days` (30) old, refused while a relocation or remote migration is
+  unfinalized, uploads volume only. Usage in
+  [`backend/scripts/README.md`](https://github.com/thegspiro/the-logbook/blob/main/backend/scripts/README.md#sweep_orphaned_member_filespy).
+- The permanent delete writes `user_hard_deleted` inside its own transaction
+  (with `files_queued`) and refuses with a 500 when that row cannot be
+  written. The file counts move to a following
+  `pending_file_deletions_completed` event linked by
+  `user_hard_deleted_audit_id`. See `docs/UPGRADING.md`.
 
 ## Cross-Module Connections
 

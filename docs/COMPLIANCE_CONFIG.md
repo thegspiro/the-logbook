@@ -126,8 +126,9 @@ and the department's threshold type. Also since 2026-11-20 the officer views
 read it: the period roster (`/training/records/member-status`) and the
 compliance forecast take both the narrowing and the threshold overrides (the
 forecast reports the current figure's standing as `current_standing`), while
-the competency matrix, the compliance CSV and PDF exports and Scheduling's
-Shift Compliance report show no member standing, so they apply the narrowing
+the compliance CSV and PDF exports and Scheduling's
+Shift Compliance report show no member standing (as did the competency matrix
+until it was retired on 2026-11-21), so they apply the narrowing
 only — a requirement outside the member's profile reads not applicable, prints
 N/A, or does not list the member. Before 2026-10-05 the Department
 Compliance card graded every member against every
@@ -159,6 +160,14 @@ profile see no change.
   existing one already covers. Before this a tie went to whichever row the
   database returned first. A save that creates a tie is accepted; the editor
   warns under **Priority** and on each tied profile's card.
+- **Admin-hours targets follow the grading profile** _(owner decision
+  2026-11-23)_: `training_compliance.admin_hours_profile` returns the profile
+  that grades the member's training when its `admin_hours_requirements` are
+  set, otherwise the first matching profile (same order) that sets them. Both
+  come from one `matching_profiles` list, so admin hours honour grading's
+  `junior` membership-type option. Before, `get_user_hours_compliance` matched
+  profiles itself and ignored it, so a junior member graded under a junior
+  profile took a probationary profile's admin-hours targets.
 - **Optional requirements are shown, never graded** _(owner decision
   2026-11-21)_. The matched profile's `optional_requirement_ids` that apply to
   the member (`requirement_applies_to_user`) are listed on My Training and on

@@ -88,13 +88,19 @@ GET    /api/v1/grants/zeffy/links                  # The department's links
 PUT    /api/v1/grants/zeffy/links/{zeffy_campaign_id}
 DELETE /api/v1/grants/zeffy/links/{zeffy_campaign_id}
 GET    /api/v1/grants/zeffy/payments               # Payments, newest first; ?state= filters
+GET    /api/v1/grants/zeffy/payments/{id}/dues-match    # A held dues payment: amount, email suggestion, members with open dues
+POST   /api/v1/grants/zeffy/payments/{id}/confirm-dues  # Credit a held dues payment to the chosen member
 POST   /api/v1/grants/zeffy/sync                   # Run the hourly sync now
 ```
 
 The `/integrations` endpoints require `integrations.manage`. Of the
 `/grants/zeffy` endpoints, `status`, `links` and `payments` require
 `fundraising.view`; `campaigns`, the link changes and `sync` require
-`fundraising.manage`.
+`fundraising.manage`; `dues-match` and `confirm-dues` require `finance.manage`
+_(2026-11-21, ADV2-11)_. `confirm-dues` takes the member and
+`excess_as_donation`, refuses a member with no open dues on the linked schedule,
+and records the ledger payment under the confirming treasurer, who may not be
+the member.
 
 ### Public Webhook
 

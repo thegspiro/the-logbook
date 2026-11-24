@@ -241,6 +241,10 @@ class ShiftResponse(UTCResponseBase):
     # Open Shifts is offered "Tour Guide" instead of "Firefighter".
     is_outreach: bool = False
     outreach_roles: List[OutreachRoleSlot] = Field(default_factory=list)
+    # What the sheet is for ("Station Tour for Lincoln Elementary"), so the
+    # schedule can head it with the event rather than as a duty crew. None on
+    # every shift that is not an outreach sheet.
+    outreach_title: Optional[str] = None
     # ``in_station`` or ``on_call`` (a recall shift, the crew at home). Every
     # shift but an imported recall shift is ``in_station``.
     duty_type: str = "in_station"
@@ -1373,6 +1377,10 @@ class EmbeddedShiftInfo(BaseModel):
     apparatus_unit_number: Optional[str] = None
     shift_officer_id: Optional[str] = None
     color: Optional[str] = None
+    # A community outreach signup sheet, and the event it staffs, so a
+    # member's own list names the station tour rather than a bare date.
+    is_outreach: bool = False
+    outreach_title: Optional[str] = None
 
 
 class ShiftAssignmentResponse(UTCResponseBase):

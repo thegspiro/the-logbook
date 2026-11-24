@@ -28,7 +28,7 @@ All examples assume **today is October 15, 2025** and the department has
 > date every evening — a certificate on its last valid day read as expired, and
 > "this month" rolled over early. The whole engine moved at once (matrix,
 > dashboard percentage, member status, compliance summary, requirement
-> progress, competency matrix, annual report, forecast, CSV/PDF exports, My
+> progress, competency matrix (retired 2026-11-21), annual report, forecast, CSV/PDF exports, My
 > Training, MCP tools), so no two views disagree about the same member.
 
 ---
@@ -60,6 +60,13 @@ disagree about a member (owner decision 2026-11-20):
 | `not_applicable` | Not Applicable | nothing grades the member                         |
 | `exempt`         | Exempt         | the member is exempt from compliance tracking     |
 
+`not_current_member` (label **Not a Current Member**, _2026-11-23_) is a sixth
+status for a person who is not a current member: an account status outside
+`ACTIVE_ACCOUNT_STATUSES` (active, probationary) — so `leave` and `suspended`
+too — or a deleted account. The matrix already left these people out; the card
+now does the same instead of grading them. The officer's member view
+(`standing` / `standing_label`) reports it too, with empty requirement lists.
+
 ### Decision Logic
 
 The requirements counted are the ones that grade the member: their
@@ -77,7 +84,8 @@ The thresholds are the matching profile's overrides, else the department's
 compliance settings, else 100% compliant / 75% at risk.
 
 ```
-IF member is compliance-exempt:          → EXEMPT
+IF member is not a current member:       → NOT A CURRENT MEMBER  (2026-11-23)
+ELSE IF member is compliance-exempt:     → EXEMPT
 ELSE IF requirements_total = 0:          → NOT APPLICABLE
 pct = round(requirements_met / requirements_total × 100, 1)
 IF threshold type is "all required":
@@ -178,6 +186,18 @@ today as expired.
 Each training requirement is evaluated individually. The evaluation method
 depends on the requirement type.
 
+> **One grader decides met and expired** _(2026-11-21)_. The rules below are
+> applied once, in `app/services/training_compliance.py`. My Training and the
+> officer's member view (`TrainingService.evaluate_requirement_detail`) take
+> the status from it and keep only their display figures (progress bar,
+> monthly average, due date). Requirement progress
+> (`check_requirement_progress`, which feeds the user training report and the
+> MCP progress tool) is built from that detail and follows the
+> include-current-month setting. Before this, each kept its own copy of the
+> rules, and they disagreed with the matrix: a certification never held read
+> "Expired — Renew ASAP", one logged hour met a zero-hour target, and an
+> unrelated certificate outside a biannual window lapsed the requirement.
+
 ### 2a. Hours-Based Requirements
 
 The most common type. A member must accumulate a target number of training
@@ -214,16 +234,24 @@ with the member's average against the department's monthly pace, from one
 function, `training_compliance.monthly_pace`:
 
 ```
-active_months   = months in the window, through the as-of date, that no
-                  leave or waiver excused
-monthly_average = SUM(hours in active_months) / COUNT(active_months)
-                  (null when every month so far was excused)
+active_share(m) = 1 - waived_share(m)        (0 for a wholly excused month,
+                                              1 for a month nothing excused)
+active_months   = months in the window, through the as-of date, with
+                  active_share > 0
+monthly_average = SUM(hours in active_months) / SUM(active_share)
+                  (null when every month so far was wholly excused)
 monthly_needed  = requirement.required_hours (unadjusted) / months in the
                   whole window
 ```
 
-Hours earned in an excused month stay in `completed_hours` but are left out
-of the average, which measures the member's pace while active. The waiver
+Hours earned in a wholly excused month stay in `completed_hours` but are left
+out of the average, which measures the member's pace while active. **A partly
+excused month** _(2026-11-23)_ counts for its unexcused share with all of its
+hours — a half-excused month is half a month — because hours cannot be split
+by the day; the average can read slightly high for it. Before, any excused
+month, however little of it was excused, was left out. The officer's monthly
+breakdown applies the same weighting to shift and call requirements, which
+have no server average. The waiver
 does not lower `monthly_needed`: leave reduces what a member owes, not the
 pace the department set. Both figures are display only; `is_complete` above
 still decides the status.
@@ -383,7 +411,7 @@ code is `load_credited_shift_dates` and `credited_shifts_in_window` in
 `app/services/training_compliance.py`; every grader — the compliance matrix,
 the dashboard percentage, the Department Compliance card, the period roster,
 the profile card, My Training, `/training/requirements/progress` (and the MCP
-tool on it), the annual and monthly reports, the competency matrix, the
+tool on it), the annual and monthly reports, the
 compliance exports and forecast, and the scheduling Shift Compliance report —
 reads it.
 
@@ -393,6 +421,20 @@ reads it.
 training records on every screen instead, and it stays off the Shift
 Compliance report, as before. `calls` requirements still count matching
 training records.
+
+**A shift-credited `hours` requirement on the Shift Compliance report**
+_(2026-11-23)_ is graded by the same shared grader, with the member's credited
+shift hours (`CreditedHours`, loaded by `SchedulingService._credited_shift_hours`)
+in place of training records: hours of finalized attendance on the
+department's own shifts, minutes of counted external shifts
+(`ExternalShiftHoursService.counted_minutes_by_user_and_date`), and approved
+pre-shift work on finalized shifts, each dated and counted inside
+`completion_window(requirement, as_of)`. Freshness, waiver proration (leave
+**and** training waivers, by the department's **Months on leave** rule),
+cut-off and catch-up are the grader's own. Before, the report counted
+attendance on shifts not yet finalized, used its own period, and applied a
+leave-only adjustment to rolling requirements only. The training screens still
+grade an hours requirement from training records.
 
 ```
 shifts (shift_credited):
@@ -1114,8 +1156,14 @@ Note that `expired` and `in_progress` cells do **not** count toward
 
 ### Division by Zero Protection
 
-- If `required_hours = 0`, percentage is set to 100% (automatically
-  complete).
+- A requirement with **no positive target** — `required_hours = 0`, no shifts
+  or calls target, or a courses requirement with no course linked — is
+  **never met**. It reads not started, or in progress once something matching
+  is logged, at 0%. (A shifts or calls target that leave prorates down to
+  zero is different: the member owes nothing for the window and it reads
+  met.) Until 2026-11-21
+  My Training counted one logged hour as meeting a zero-hour target while the
+  matrix did not.
 - If `total_months = 0`, no adjustment is applied (original requirement
   stands).
 - `active_months` is clamped to a minimum of 1 to prevent negative or zero
@@ -1131,8 +1179,9 @@ Note that `expired` and `in_progress` cells do **not** count toward
 
 Riverside FD creates a new continuing-education requirement mid-year with
 `required_hours = 0` (they plan to set the value later). In the meantime,
-every member automatically shows 100% for that requirement because dividing
-by zero would be undefined. The system treats it as automatically met.
+nobody meets it: a zero target is a misconfiguration, not a free pass, so
+every graded member reads it as not met and their standing counts it against
+them. Set the real target, or deactivate the requirement until it is known.
 
 ### Biannual Requirements
 
@@ -1309,10 +1358,10 @@ Every screen that decides who a requirement grades goes through
 `requirement_applies_to_member` / `requirement_applies_to_user` with the join
 date — dashboard, matrix and print view, profile card, My Training, progress
 and MCP, compliance-officer report, member status, scheduling hours report,
-competency matrix, forecast, and the CSV/PDF exports, which print N/A where a
+forecast, and the CSV/PDF exports, which print N/A where a
 requirement does not apply. Most reach it through
 `ComplianceGrading.for_member`, which first narrows to the member's compliance
-profile; the member status roster, competency matrix, forecast, exports and
+profile; the member status roster, forecast, exports and
 scheduling report joined them on 2026-11-20. `tests/test_requirement_grandfathering.py` sweeps
 `app/` for a call that omits it. Passing role ids through the same helper also
 fixed the dashboard, matrix and member-status views, which had ignored

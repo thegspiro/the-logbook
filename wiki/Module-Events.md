@@ -201,6 +201,30 @@ occurrence's new check-in window is refused before anything is written,
 naming the members and occurrences affected — the same rule a single event's
 edit applies (`_count_stranded_check_ins`).
 
+_(2026-11-23)_ **Only changed fields are sent.** `update-future` writes every
+key it receives onto each later occurrence (`exclude_unset`), and the edit
+form used to resend every field, so a save was refused over a field nobody
+touched when a later finalized occurrence differed, and a field blank on the
+anchor wiped it from every later one. `EventEditPage` now passes the payload
+through `onlyChangedSeriesFields` (`utils/eventSeriesChanges.ts`): a field
+equal to the loaded occurrence is dropped (`null`, `''`, missing and `[]` are
+one "none"; times compare as instants), start, end and RSVP deadline go
+together or not at all, and `training_details` is always sent. A cleared field
+is still sent as `null`. **A room clash is refused**: a series edit that
+changes the times or `location_id` checks each occurrence it moves at its new
+slot and room (`_refuse_series_room_clashes`, after taking the room-booking
+lock before the occurrence rows, as `update_event` does), excluding the
+series' own moving occurrences; earlier, unmoved occurrences still count, and
+an occurrence whose room and times are both unchanged is not checked. The
+message names how many occurrences clash and up to three conflicting events.
+An unknown anchor now answers 404 (`EventNotFoundError`), as `update_event`
+does, rather than 400. Creating a series still does not check rooms.
+
+**Chat announcement.** A new series is announced to connected chat
+integrations (Slack, Discord, Teams) once, by its earliest occurrence
+(`_announce_new_event`, shared with `create_event`) _(2026-11-23)_. Before, a
+series was never announced.
+
 ### Series end reminders
 
 A daily scheduled task (`series_end_reminders`) emails the series' organizer
@@ -335,8 +359,11 @@ honoured rather than re-derived in the browser.
 ### Capacity and guests
 
 Capacity (`max_attendees`) is a **sum of seats** — each Going RSVP counts
-itself plus its guests. Guests are accepted only on events with `allow_guests`
-on. A party larger than the whole event is refused at RSVP time. Events already
+itself plus its guests. The exception is a volunteer — a member holding a role
+on the signup sheet that staffs an outreach event — whose own RSVP takes no
+seat (crew, not audience); their guests still do, and must fit at once,
+because a volunteer is never waitlisted _(2026-11-21)_. Guests are accepted
+only on events with `allow_guests` on. A party larger than the whole event is refused at RSVP time. Events already
 over their seat count are not retroactively waitlisted; they simply admit
 nobody new.
 
@@ -1127,8 +1154,8 @@ opt-out applies. `GET /member-audience/options` and `POST
   time), event type distribution chart, monthly trends chart and a top events
   table, with date range filtering (`GET /events/analytics/summary`).
 - **`/events/:id/analytics`** — per-event analytics dashboard.
-- **QR Code Analytics** and **Outreach Impact** (formerly Community Engagement) tabs in the Events admin
-  hub. Outreach Impact (`GET /dashboard/community-engagement?period=`,
+- **QR Code Analytics** and **Outreach Impact** (formerly Community
+  Engagement) tabs in the Events admin hub. Outreach Impact (`GET /dashboard/community-engagement?period=`,
   `events.manage`) reports events held, people reached — a guest headcount
   recorded on the event, else guest sign-ins, else the request's audience
   size, reported separately — member hours, requests completed in the period
@@ -1169,8 +1196,19 @@ opt-out applies. `GET /member-audience/options` and `POST
 
 Community members submit event requests (fire safety demos, station tours,
 school visits, CPR classes, etc.) through a public form. Department
-coordinators manage requests through a configurable workflow on the **Requests**
-tab of the Events admin hub.
+coordinators manage requests through a configurable workflow on the **Outreach
+Requests** tab of the Events admin hub (**Community Outreach** area).
+
+**Outreach Overview** _(2026-11-21)_ — the **Community Outreach** area opens on
+**Overview**, the Community Outreach Manager's home page
+(`GET /events/outreach-calendar`, `events.manage`). It shows **Needs
+attention** (requests **Waiting for a reply**, events **Short of people** in
+the next 60 days, events **Waiting to be closed out** from the last 30 days —
+over, with attendance not finalized), a **Week** / **Month** planning calendar
+of every outreach event with its sheet and crew fill, quick links (**New
+outreach event**, **Log a request**, **Apparatus nights**) and **This year at a
+glance** from Outreach Impact. It counts the same events Outreach Impact does,
+so an apparatus night on a non-public event type is not on it.
 
 > **Public intake is opt-in.** Turn it on under **Event settings → Public Requests →
 > Overview → Accept Public Requests**; it is **off by default**. While it is off the
@@ -1186,7 +1224,7 @@ tab of the Events admin hub.
 ### Pipeline features
 
 - **Requests taken by phone** _(2026-11-21)_ — **New request** on the
-  Requests tab files a request a coordinator took by phone, email or in person
+  Outreach Requests tab (or **Log a request** on the Overview) files a request a coordinator took by phone, email or in person
   (`POST /event-requests`, `events.manage`). It records **How it came in**,
   needs a phone or an email (not both), works while public intake is off, has
   no CAPTCHA or daily limit, and flags a date inside the minimum lead time
@@ -1265,8 +1303,9 @@ tab of the Events admin hub.
   shows the crew and **Check In** lists them first. An outreach event created
   directly, with no request, opens the same sheet from its **Volunteer
   staffing** card; an event scheduled from a request is staffed from the
-  request. Moving the event moves its sheet; cancelling or deleting it stands
-  the sheet down and tells the crew (a series cancel does not yet).
+  request. Moving the event moves its sheet; cancelling or deleting it — or
+  its whole series — stands the sheet down and tells the crew. A volunteer's
+  RSVP takes no attendee seat (see [Capacity and guests](#capacity-and-guests)).
 - **Comment thread** — internal discussion visible to coordinators.
 - **Cancel / postpone** — both the requester (from the status page) and the
   department can cancel or postpone; a postponed request can have a new date or
@@ -1277,7 +1316,12 @@ tab of the Events admin hub.
   showing status, progress (if the department enables it) and a cancel
   button. Coordinators copy the status link from the request detail; neither
   the form's confirmation nor the default emails carry it (reaffirmed
-  2026-11-21).
+  2026-11-21). The one exception _(2026-11-23)_: once the request is
+  Completed, the built-in Completed email links to the status page to ask for
+  feedback while a feedback form is set and none has been sent (see
+  Requester feedback under [Analytics](#analytics)). A template the
+  department attached to the Completed trigger is sent as written, without
+  it.
 - **Completion** _(2026-11-21)_ — finalizing the event's attendance completes
   a still-scheduled request and sends the completion email. **Mark
   completed** is offered, and accepted, only once the event's date has
@@ -1295,6 +1339,60 @@ Any active status → declined / cancelled
 
 ---
 
+## Community Risk Reduction (CRR)
+
+_(2026-11-23)_ CRR tracking records the risk-reduction work a department does
+in the community — smoke and CO alarm installs, home safety surveys, car seat
+checks, hands-only CPR and Stop the Bleed classes — what each one counted,
+which risks and priority populations it reached, and where. The user guide is
+[Events & Meetings → The CRR Catalogue](https://github.com/thegspiro/the-logbook/blob/main/docs/training/04-events-meetings.md#the-crr-catalogue).
+
+**The catalogue** (Event settings → **CRR Catalogue**, `events.manage`) holds
+the activity types, the counts each keeps (for example **Alarms installed**
+and **Homes**), and the **Risks** and **Priority populations** tags. Every
+department starts with the same built-in types, seeded the first time its
+catalogue is read. Built-in types, counts and tags can be renamed, described,
+retired and restored but not deleted; types a department added can be
+deleted. Each type can name the **Admin Hours category** a member's logged
+time is credited to (otherwise the department's Public Education mapping).
+**Resident details → Keep for (months)** (24 by default) sets how long a
+resident's address, name, phone, email and the activity's notes are kept.
+**Juvenile firesetter intervention** is shown as **Coming soon**.
+
+**Recording an activity** needs `crr.record` or `events.manage`:
+
+- **Events → CRR Activities** (`/events/crr-activities`; also **Manage Events
+  → Community Outreach → CRR Activities**, and **Log a CRR activity** on the
+  Outreach Overview) lists activities, newest first, filtered by type and
+  date. **Log a CRR activity** records work away from an event: the type and
+  date, its counts, the tags (the type's defaults ticked), the ZIP code (city
+  and state fill in from bundled GeoNames data in a US department), optional
+  resident details, and **Who took part** with each member's minutes, each
+  credited to Admin Hours.
+- An outreach event's page has a **CRR activities** card with **Record an
+  activity**; no members are listed there, because the event's attendance
+  already credits their time.
+- No screen edits an activity (the API's `PATCH` is unused by the UI);
+  **Delete** it, which removes the Admin Hours it credited, and record it
+  again. A member deletes their own; an events manager any.
+- Resident details are encrypted, shown only to holders of `crr.view_contact`
+  (the Community Outreach Manager, the chiefs and the president), and cleared
+  by a daily task after the retention period. The ZIP code, city, state and
+  counts stay.
+
+**Reporting.** **Outreach Impact** adds a **CRR activities** section for the
+period: counts **By activity** (with the change since the same point last
+period), **By risk**, **By priority population** (an activity with two tags
+counts under both) and **By ZIP code**, with **Show map** drawing a circle
+per ZIP code over an OpenStreetMap street map. The map loads only when opened;
+a network that blocks OpenStreetMap gets the circles over a blank background.
+The printed summary carries the lists without the map.
+
+Endpoints and storage are in
+[Events — Developer](Module-Events-Developer#community-risk-reduction-crr).
+
+---
+
 ## Event Settings
 
 **Event settings** (Events admin hub → Settings) uses the shared
@@ -1308,6 +1406,7 @@ scrollable tab strip on phones. A deep-linked Settings tab scrolls into view.
 | Attendance       | Attendee visibility default; attendance-request fallback positions; mandatory event responses                                                                                                                    |
 | Hour Tracking    | Event → admin hours category mappings                                                                                                                                                                            |
 | Public Requests  | Five pages: **Overview** (Accept Public Requests, lead time), **Request form**, **Types & roles** (types, role presets, outreach roles), **Handling** (coordinator, checklist), **Emails** (triggers, templates) |
+| CRR Catalogue    | CRR activity types, their counts, risk and priority-population tags, each type's Admin Hours category, resident-detail retention                                                                                 |
 | Headline Metrics | The four cards at the top of the admin hub                                                                                                                                                                       |
 
 Settings are stored in `organization.settings.events`; nested JSON writes use
@@ -1325,6 +1424,8 @@ Settings are stored in `organization.settings.events`; nested JSON writes use
 | `events.reopen_attendance`                 | Reopen finalized attendance (deliberately not part of `events.manage`)                                                           |
 | `apparatus_events.signup`                  | Take or leave a crew seat on an apparatus night (seeded wherever `events.view` is)                                               |
 | `apparatus_events.manage`                  | Apparatus event templates, scheduling nights, assigning seats (seeded wherever `events.manage` is)                               |
+| `crr.record`                               | Record and delete CRR activities, see the activity log (seeded wherever `events.manage` is, and to the Community Outreach Team)  |
+| `crr.view_contact`                         | See resident details on CRR activities (Community Outreach Manager, chiefs, president)                                           |
 | `analytics.view`                           | Event analytics pages                                                                                                            |
 | `locations.manage_nfc_tags`                | Write room NFC tags; switch kiosk badge check-in                                                                                 |
 | `apparatus.manage_nfc_tags`                | Write apparatus NFC tags                                                                                                         |

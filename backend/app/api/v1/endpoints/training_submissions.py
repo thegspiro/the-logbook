@@ -73,7 +73,9 @@ from app.services.training_submission_service import (
 from app.utils import download_names
 from app.utils.member_names import format_display_name
 from app.utils.training_attachments import (
+    REMOVED_DOWNLOAD_DETAIL,
     EntryMoved,
+    is_removal_marker,
     new_entry_id,
     parse_entry_ref,
     resolve_entry,
@@ -933,6 +935,11 @@ async def download_submission_attachment(
         raise HTTPException(status_code=404, detail="Attachment not found")
 
     attachment = found[1]
+    if is_removal_marker(attachment):
+        raise HTTPException(
+            status_code=410,
+            detail=REMOVED_DOWNLOAD_DETAIL[attachment["removed_reason"]],
+        )
     real_path = _confined_path(attachment, submission.organization_id)
     # A legacy bare-string attachment has no path to confine, so `real_path` is
     # already None for it; the isinstance narrows the type for what follows.

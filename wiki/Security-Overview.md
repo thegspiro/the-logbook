@@ -872,6 +872,12 @@ preserving the operational history a department must keep:
 is tampering; the anonymization event itself records only the user id, never
 the name) and election records (ballot integrity signatures).
 
+Since 2026-11-23 anonymisation (and a permanent delete) also redacts the
+member's separation letters, deletes their personal Member Files folder,
+writes `Former member` where they are stored as an instructor, and keeps
+excused meetings excused. The full list is in
+[Privacy → Anonymization](Security-Privacy).
+
 ### Consent
 
 Optional processing is consent-gated: photo use, public roster listing, and

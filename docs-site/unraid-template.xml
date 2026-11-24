@@ -5,15 +5,18 @@
   docs-site/Dockerfile and published to ghcr.io by
   .github/workflows/docs-site.yml on every merge to main that changes the docs.
 
-  No database, volumes or secrets. Point a Cloudflare Tunnel public hostname
-  at http://<unraid-ip>:7882, or at http://logbook-docs:8080 when cloudflared
-  runs on the same custom Docker network. See docs-site/README.md.
+  No database, volumes or secrets, and no host port: the container joins the
+  internal Docker network logbook-docs-internal, which has no route to the
+  internet, the LAN or other containers. Create that network once, and give
+  this site its own cloudflared on it, before applying the template. The
+  compose file (docs-site/docker-compose.yml) does all of this in one step and
+  is the recommended install. See docs-site/README.md, "Running it".
 -->
 <Container version="2">
   <Name>logbook-docs</Name>
   <Repository>ghcr.io/thegspiro/the-logbook-docs:latest</Repository>
   <Registry>https://ghcr.io/</Registry>
-  <Network>bridge</Network>
+  <Network>logbook-docs-internal</Network>
   <MyIP/>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
@@ -21,12 +24,11 @@
   <Project>https://github.com/thegspiro/the-logbook</Project>
   <Overview>Documentation website for The Logbook: training guides, setup and administration documentation, videos and FAQs, with built-in search. A static site served by unprivileged nginx; it needs no database, storage or secrets.</Overview>
   <Category>Productivity: Status:Beta</Category>
-  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <WebUI/>
   <TemplateURL>https://raw.githubusercontent.com/thegspiro/the-logbook/main/docs-site/unraid-template.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/thegspiro/the-logbook/main/static/logo.png</Icon>
-  <ExtraParams>--read-only --tmpfs /tmp --cap-drop=ALL --security-opt no-new-privileges:true</ExtraParams>
+  <ExtraParams>--user 101:101 --read-only --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16m --cap-drop=ALL --security-opt no-new-privileges:true --memory=128m --cpus=0.5 --pids-limit=64</ExtraParams>
   <PostArgs/>
   <CPUset/>
   <DateInstalled/>
-  <Config Name="Web Port" Target="8080" Default="7882" Mode="tcp" Description="Port on the Unraid host for the documentation site. Point the Cloudflare Tunnel at http://[unraid-ip]:[this port]." Type="Port" Display="always" Required="true" Mask="false">7882</Config>
 </Container>

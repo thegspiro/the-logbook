@@ -16,6 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4666](https://github.com/thegspiro/the-logbook/pull/4666) (branch
+`claude/friendly-babbage-5w0f57`)**: Feature 09 (Medical
+screening, PHI), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here: this session's environment restricts pushes to its own
+assigned branch rather than a freely-chosen
+`claude/security-review-medical-screening` name.
+
+PR #4664 (Feature 08, Membership pipeline, pass 18 — 0 fixed, 0 new
+findings) had already merged before this iteration started; row 08 marked
+✅ above.
+
+Baseline `b7f84513d` (PR #4439's merge, pass 16). Zero backend delta
+(verified by `git diff --stat`, not `git log -- <paths>`, per this
+feature's own pass-16 note about history-simplification false negatives).
+The only real change — `MedicalScreeningPage.tsx` hiding Add/Edit/Delete
+controls from a `.view`-only reader — was already fixed and dated
+2026-11-16 by app-review's MS2-11, ahead of this rotation's own baseline;
+re-verified here, not re-reported. **0 fixed, 0 new findings.** MS-15 (the
+compliance roster loads every screening record unbounded, LOW, FLAGGED,
+same class as MS-6/FIN-9/ELEC-12/USR-5/MP-10/DOC-9) re-confirmed OPEN,
+unchanged. Full write-up: `docs/security-review/MS-09-medical-screening.md`'s
+**Pass 17** section.
+
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 18, PR #4664, merged), preserved for history</summary>
+
 **PR [#4664](https://github.com/thegspiro/the-logbook/pull/4664) (branch
 `claude/friendly-babbage-2isqey`)**: Feature 08
 (Membership pipeline), pass 18 — watchdog pickup (the dedicated `/loop 30m
@@ -50,6 +82,8 @@ no behavior change). Full write-up:
 Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
 screening, PHI) — re-check `list_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 17, PR #4662, merged), preserved for history</summary>
@@ -27876,7 +27910,7 @@ iteration's commit" rule.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (20 routes, added pass 17; Chief routing, approver cover, escalation, calendar/export added pass 17)                                                                                      | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py` (64 routes), `membership_pipeline_service.py`, `models/membership_pipeline.py` (`identity_edited_by_applicant_at`, added pass 18)                                                                                                                            | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ⬜     |
@@ -53187,3 +53221,42 @@ baseline member grants) — 205 passed. `npm run typecheck` — 0 errors.
 
 Row 13 → ✅ (pending this PR's merge). Next is Feature 14 (Equipment check &
 shifts) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-24 — Feature 08 (Membership pipeline, pass 18) merged; Feature 09 (Medical screening, PHI, pass 17): watchdog pickup, zero backend delta, 0 fixed, 0 new findings
+
+A fresh `list_pull_requests` (state=open) found no `claude/security-review-*`
+head; PR #4664 (Feature 08, pass 18) had already merged with no open rotation
+PR behind it, and row 09 was the next `⬜` row (rows 00–08 all `✅` since the
+2026-11-23 rotation-lap reset).
+
+Baseline `b7f84513d` (PR #4439's merge, pass 16). `git diff --stat` across the
+five declared backend files, `screening_reminder_service.py`, and the full
+`frontend/src/modules/medical-screening/` directory (used instead of a
+path-scoped `git log`, per this feature's own pass-16 note on history
+simplification) found zero backend change and three frontend files: one real
+change plus two new test files. The real change —
+`MedicalScreeningPage.tsx` now hides the requirement/record Add, Edit and
+Delete controls from a `medical_screening.view`-only reader who lacks
+`.manage` — was already fixed and dated 2026-11-16 by app-review's MS2-11,
+ahead of this rotation's own baseline; verified directly against the diff and
+its two new tests rather than re-reported as new. The matching server-side
+`.manage` gate on every mutating route was independently re-confirmed
+unchanged. **0 fixed, 0 new findings.** MS-15 (the compliance roster loads
+every screening record in the organization unbounded, LOW, FLAGGED, same
+class as MS-6/FIN-9/ELEC-12/USR-5/MP-10/DOC-9) re-confirmed OPEN, read
+directly against `get_compliance_roster`, unchanged. Full write-up:
+`docs/security-review/MS-09-medical-screening.md`'s **Pass 17** section.
+
+**Completion gate:** `flake8`, `black --check` (26.10.1, CI's pin) and
+`isort --check-only` (9.0.2, CI's pin) on `app/ tests/ alembic/` all clean.
+`validate_migrations.py --strict` — 836 revisions, single head
+`241c1cc27313`. `check_route_permissions.py --strict` — 339 routes, 0
+errors/warnings. `docs/DATABASE_SCHEMA.md` already current. Scoped backend
+pytest (`-k "medical_screening or medical_screen or screening"`) — 265
+passed, 1 pre-existing environment-only skip (`py_vapid`). `npm run
+typecheck` — 0 errors. `npm run lint` — 0 errors, 0 warnings. `npx vitest run
+src/modules/medical-screening` — 88 passed (16 files, up from 85/15 at pass
+16).
+
+Row 09 → ✅ (pending this PR's merge). Next is Feature 10 (Documents & legal)
+— re-check `list_pull_requests` fresh rather than trusting this note.

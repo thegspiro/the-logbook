@@ -14968,8 +14968,8 @@ export const SHOTS = [
     id: "04-100-community-engagement",
     doc: "04-events-meetings.md",
     line: 2603,
-    anchor: "The Community Engagement tab for this year",
-    alt: "The Community Engagement tab for this year: events held, people reached split into counted and estimated, member hours and requests completed, each with its change since last year; people reached by month; the breakdown by public request type and by department event type; and the recent outreach events table",
+    anchor: "The Outreach Impact tab for this year",
+    alt: "The Outreach Impact tab for this year: events held, people reached split into counted and estimated, member hours and requests completed, each with its change since last year; people reached by month; the breakdown by public request type and by department event type; and the recent outreach events table",
     route: "/events/admin?tab=community",
     // A heading present only once the report has loaded with events in it.
     expect: "Department events",

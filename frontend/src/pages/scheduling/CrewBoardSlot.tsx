@@ -19,6 +19,13 @@ import { PositionEditor } from './PositionEditor';
 
 interface CrewBoardSlotProps {
   position: string;
+  /**
+   * On a community outreach sheet, the job this seat is for (its holder's
+   * role, or a role still needed). Every seat there has the same placeholder
+   * position, so the role is what tells a tour guide's seat from an
+   * educator's.
+   */
+  outreachRoleLabel?: string | null;
   required: boolean;
   assignment: Assignment | null;
   currentUserId: string | undefined;
@@ -57,6 +64,7 @@ interface CrewBoardSlotProps {
 
 export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
   position,
+  outreachRoleLabel = null,
   required,
   assignment,
   currentUserId,
@@ -77,7 +85,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
   onSignup,
 }) => {
   const isCurrentUser = assignment?.user_id === currentUserId;
-  const seatLabel = positionLabel(position);
+  const seatLabel = outreachRoleLabel ?? positionLabel(position);
 
   return (
     <div
@@ -106,7 +114,8 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
                 displayLabel={seatLabel}
                 positionOptions={positionOptions}
                 onSave={onPositionChange}
-                editable={canAssign && !isPast && !rosterLocked}
+                // A role seat has one position behind it, so there is nothing to change it to.
+                editable={canAssign && !isPast && !rosterLocked && !outreachRoleLabel}
                 updatingPosition={pendingStates.updatingPosition}
               />
               {assignment.is_training && (
@@ -133,7 +142,9 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
                 {seatLabel}
                 {!required && <span className="text-theme-text-muted ml-1 text-[10px]">(optional)</span>}
               </p>
-              <p className="text-theme-text-muted text-xs">{required ? 'Open position' : 'Optional position'}</p>
+              <p className="text-theme-text-muted text-xs">
+                {outreachRoleLabel ? 'Open role' : required ? 'Open position' : 'Optional position'}
+              </p>
             </div>
           </>
         )}

@@ -8,7 +8,6 @@ The Compliance module provides organization-wide compliance tracking, reporting,
 
 - **Compliance Dashboard** — Overview of department-wide compliance status
 - **Compliance Matrix** — Triage rail of members grouped by standing (since 2026-09-05; see below), with a printable matrix
-- **Competency Matrix** — Department readiness heat-map
 - **Compliance Summary** — Per-member green/yellow/red indicator on profiles
 - **Certification Tracking** — Monitor certification statuses and expiration dates
 - **Tiered Alerts** — Automated notifications at 90/60/30/7 days before cert expiration
@@ -82,7 +81,7 @@ creation date; `training_compliance.member_join_date`):
 
 All `NULL` (every row before migration `d058b5e7c1f4`) keeps the old behaviour.
 Every screen that decides who a requirement grades — dashboard, matrix and
-print, profile card, My Training, member status, competency matrix, forecast,
+print, profile card, My Training, member status, forecast,
 annual report, CSV/PDF exports (which print N/A) — goes through
 `requirement_applies_to_member` with the join date, and
 `tests/test_requirement_grandfathering.py` fails on a call that omits it. The
@@ -148,8 +147,8 @@ instead of a red "0/0 — 0%" (W29-4, closing CMP4-4).
 ### Profiles in every officer view, ties and optional requirements _(2026-11-20 – 21)_
 
 - **Every officer view now grades through the member's profile** (owner
-  decision 2026-11-20). The member status roster, competency matrix,
-  compliance CSV/PDF export cells, compliance forecast and Scheduling's Shift
+  decision 2026-11-20). The member status roster, competency matrix (since
+  retired, below), compliance CSV/PDF export cells, compliance forecast and Scheduling's Shift
   Compliance report resolve each member through
   `ComplianceGrading.for_member`, as the matrix does. The roster colours with
   the profile's threshold overrides; the others narrow cells to the profile
@@ -180,6 +179,37 @@ instead of a red "0/0 — 0%" (W29-4, closing CMP4-4).
   deadline reminder, and the non-compliance notice lists them once per member.
   See [Compliance Configuration](Compliance-Configuration).
 
+### One grader everywhere, and a forecast that re-grades _(2026-11-21)_
+
+- **My Training, requirement progress and the matrix screen take the shared
+  grader's answer** (#4493). `evaluate_requirement_detail` takes met and
+  expired from `training_compliance`, and `check_requirement_progress` is
+  built from that detail, so My Training, the officer's member view, the user
+  training report and the MCP progress tool agree with the matrix. A
+  certification never held reads not met rather than "Expired — Renew ASAP";
+  with the current month excluded, a due date that passed this month reads
+  overdue. The matrix screen no longer turns a cell the server graded met red
+  because the expiry date it carries has passed.
+- **Forecast colours follow the thresholds** (#4485, owner decision
+  2026-11-21). Each member's 30/60/90-day figure is coloured by that member's
+  own standing, and the four department average cards by the department's
+  thresholds, computed on the server. Under **All required** an average is
+  compliant only when every graded member is (owner decision #4517). A
+  profiled member can read green beside a red department card.
+- **The forecast re-grades at today + 30, 60 and 90 days** (#4525, owner
+  decision 2026-11-21) with the matrix's grader on the records already
+  logged. A certificate no requirement reads, or one a renewal replaced, no
+  longer lowers the projection; hours leaving a rolling window, a catch-up
+  period ending and a new calendar period with nothing logged in it now do.
+  Late in the year, a member who met an annual requirement reads it unmet at
+  60 and 90 days, because those days fall in next year's period.
+- **`GET /training/competency-matrix` is retired** (#4540, owner decision
+  2026-11-21) and answers 404. No screen used it. The compliance matrix
+  answers the same question. The Competency tab's skills heat map is a
+  different feature and is unchanged.
+- **The member training print page** prints an exempt member's status in
+  grey, as Not applicable, instead of the at-risk amber (#4485).
+
 ---
 
 ## API Endpoints
@@ -191,6 +221,48 @@ GET    /api/v1/training/reports/user/{id}    # Individual member report
 GET    /api/v1/training/requirements/progress/{id}    # Per-requirement progress
 POST   /api/v1/training/certifications/process-alerts/all-orgs  # Cert alert cron
 ```
+
+---
+
+## Compliance changes of 2026-11-23
+
+Owner decisions of 2026-11-23 ("start A-E, accept all recommended"). Defaults
+taken are in `docs/KNOWN_LIMITATIONS.md`, "Compliance Consistency — Defaults
+Taken".
+
+- **Former members read "Not a Current Member"** (#4606). The member profile's
+  compliance card and the officer's view of a member (the Training History
+  page's **Requirements** section) no longer grade anyone whose account status
+  is outside **Active** / **Probationary** (so **Leave** and **Suspended**
+  too) or whose account was deleted. The card is grey with one sentence saying
+  the person is not graded; their records are still listed. The matrix
+  already left them out.
+- **Shift Compliance hours rows use the shared grader** (#4606). A
+  shift-credited Hours requirement is graded like a Shifts one: hours on
+  finalized shifts, counted outside shifts and approved pre-shift work on
+  finalized shifts, over the requirement's own window, with training waivers
+  applied. Hours on a shift not yet finalized stop counting until it is.
+  Before, the report used its own period and a leave-only adjustment for
+  rolling requirements.
+- **The monthly average counts a partly excused month for its unexcused
+  share** (#4606): half excused is half a month, with all its hours. A wholly
+  excused month is still left out. The officer's monthly breakdown uses the
+  same rule.
+- **The dashboard compliance percentage has one decimal** (#4606), the Admin
+  hub's figure, so the two cannot differ by rounding.
+- **Annual and monthly report API:** `record_completeness.records_with_certification`
+  is renamed `records_with_course_name` (#4606).
+- **Admin-hours targets come from the profile that grades the member's
+  training** (#4612), falling back to the highest-priority matching profile
+  that sets admin hours. See [Compliance Configuration](Compliance-Configuration#how-a-members-profile-is-chosen).
+- **A rolling requirement missed again is notified again** (#4614). The daily
+  task stores the last date each member met each rolling requirement
+  (`rolling_requirement_last_met`), so the non-compliance notice lists a
+  rolling requirement once per lapse rather than once ever. This updates the
+  2026-11-21 bullet above ("lists them once per member").
+- **A correction reopens a completed program requirement** (#4621) when it
+  takes the member below the target; training officers are emailed and
+  notified. See [Training](Module-Training#training-compliance-and-waivers-2026-11-23).
 
 ---
 

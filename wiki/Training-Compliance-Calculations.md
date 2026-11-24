@@ -44,7 +44,7 @@ server's UTC date. Every compliance view uses the same day.
 | Member                            | Graded?                                                                |
 | --------------------------------- | ---------------------------------------------------------------------- |
 | Active or Probationary account    | Yes                                                                    |
-| Any other account status          | No                                                                     |
+| Any other account status          | No — since 2026-11-23 the profile card reads **Not a Current Member**  |
 | **Exempt from Compliance** ticked | No — the profile card reads **Exempt** and they leave every percentage |
 | No requirement applies to them    | Shown as **Not applicable (N/A)** and left out of every percentage     |
 
@@ -181,7 +181,9 @@ disagree with the matrix in either direction.
 **What an hours requirement shows** _(2026-11-20)_. My Training and the
 matrix detail lead with the member's monthly average against the monthly
 pace ("6.9/6 hrs/mo avg") and put the total underneath. The average is the
-hours in months nothing excused divided by those months; the pace is the
+member's pace while active: a wholly excused month and its hours are left out,
+and since 2026-11-23 a partly excused month counts for the share not excused,
+with all of its hours (half excused is half a month). The pace is the
 unadjusted target over the window's months. It is display only: the table
 above, on the total, decides whether the requirement is met.
 
@@ -206,48 +208,68 @@ Two traps:
 - **A certificate valid today is met today**, even if it expires next week. The
   orange "due soon" marking is a renewal warning, not a failure.
 
+**Every screen takes this answer** _(2026-11-21)_. My Training, the officer's
+view of a member, requirement progress and the member training report used to
+grade with their own copies of these rules and could disagree with the
+matrix; a certification never held, for example, read "Expired — Renew ASAP"
+on My Training. They now take the status from this grader. On the matrix
+screen a requirement graded met stays met even when the expiry date shown
+beside it has passed: on an hours or courses requirement that date belongs to
+the latest record counted and does not lapse the requirement.
+
+**The forecast is this calculation run on a later day** _(2026-11-21)_. The
+Compliance Forecast's 30, 60 and 90-day figures grade each member as of today
+plus that many days, on the records already logged. Anything that changes
+with the date counts: a certificate a requirement reads lapsing, hours leaving
+a rolling window, a catch-up deadline passing, a new calendar period starting
+with nothing in it yet. A certificate no requirement reads does not.
+
 ## Waivers and leave
 
 A training waiver or a leave of absence **reduces the target** of Hours,
 Shifts and Calls requirements in proportion to the months excused. Courses and
 Certification requirements are not adjusted.
 
-1. A calendar month counts as **waived** when the waiver covers **15 or more
-   days** of it. 14 days does not.
-2. Overlapping waivers are counted once per month.
+1. How much of a partly covered month is waived is the department's
+   **Months on leave** setting (since 2026-11-02): by default **any** day of
+   leave excuses the whole month; the alternatives excuse the share of days
+   covered, or half the month at 15 or more days. A month covered entirely is
+   always waived in full. (The older fixed 15-day rule is no longer offered.)
+2. Overlapping waivers are counted once per day.
 3. A waiver can be **blanket** (every requirement) or **targeted** at chosen
    requirements.
 4. The adjusted target is:
 
 ```
 adjusted target = target × (active months ÷ months in the window)
-active months   = months in the window − waived months (never less than 1)
+active months   = months in the window − waived share (never less than 1)
 ```
 
-For a rolling requirement, "months in the window" is its rolling period. The
-result is rounded to two decimal places.
+For a rolling requirement, "months in the window" is the calendar months the
+window spans. Hours targets keep two decimals; shift and call targets are
+rounded down to whole units.
 
 **Example.** A 36-hour annual requirement; the member was on leave 10 March to
-25 July. March (22 days) and July (25 days) both reach 15 days, so March to
-July is 5 waived months:
+25 July. Under the default rule every month the leave touches is excused, so
+March to July is 5 waived months:
 
 ```
 36 × (12 − 5) ÷ 12 = 21.0 hours
 ```
 
-Had the leave ended on 14 July, July would cover only 14 days, 4 months would be
-waived, and the target would be 24.0 hours.
+Under the 15-day rule ("half"), March (22 days) and July (25 days) each count
+as half a month, so 4 months are waived (April–June in full plus two halves)
+and the target is 24.0 hours.
 
 Where they are managed: **Training Admin → Overview → Training Waivers**
 (`training.manage`), and leaves of absence under `/members/admin/waivers`
 (`members.manage`). Creating a leave also creates a linked training waiver for
 the same dates unless the leave is set not to apply to training.
 
-> **Caution — a leave set not to apply to training still reduces targets.** The
-> calculation reads every active leave of absence directly, as well as the
-> training waivers, so a leave whose training waiver was switched off still
-> waives the months it covers. Check a member's leaves when a target looks
-> lower than expected.
+A leave and the training waiver it creates are read as one leave, not as
+months both on leave and waived. Since 2026-11-13 a leave set not to apply to
+training (**Applies To** without **Training Requirements**) excuses no
+training month; before, it still reduced targets.
 
 ## Steps 5 and 6 — From requirements to a standing
 
@@ -290,7 +312,12 @@ Since 2026-11-20 the **Compliance Summary** card on a member's profile (and on
 My Crew and the printed training record) shows the member's matrix standing:
 **Compliant** green, **At Risk** yellow, **Non-Compliant** red, plus
 **Not Applicable** and **Exempt**. It uses the member's profile and the
-thresholds above, so it cannot disagree with the matrix.
+thresholds above, so it cannot disagree with the matrix. Since 2026-11-23 a
+person who is not a current member (any account status but Active or
+Probationary, or a deleted account) reads **Not a Current Member** in grey,
+checked before **Exempt**, instead of being graded against requirements the
+matrix never held them to; the officer's view of the member says the same in
+place of its requirement list.
 
 Its certificate figures are for information only. They count every completed
 record with a certificate number — including an older record a renewal has

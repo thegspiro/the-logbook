@@ -12,7 +12,14 @@ import type { ShiftRecord } from '../../../modules/scheduling';
 import type { CalendarOutreachItem } from '../../../types/apparatusEvent';
 import OutreachDayCard from './OutreachDayCard';
 import type { SwapRequest } from '../../../types/scheduling';
-import { buildSeats, memberInitials, shiftCrewName, toDateKey } from '../../../modules/scheduling/utils/shiftBoard';
+import {
+  buildSeats,
+  memberInitials,
+  OUTREACH_TAG,
+  outreachTitle,
+  shiftCrewName,
+  toDateKey,
+} from '../../../modules/scheduling/utils/shiftBoard';
 import { positionLabel } from '../../../modules/scheduling/utils/positionLabels';
 import { formatCalendarDate, formatTime } from '../../../utils/dateFormatting';
 import ShiftSeatList from './ShiftSeatList';
@@ -31,7 +38,7 @@ export interface PhoneDaySheetProps {
   /** Set once a claim lands, switching the sheet to the confirmation. */
   confirmedShift: ShiftRecord | null;
   onClose: () => void;
-  onClaim: (shift: ShiftRecord, position: string | null) => void;
+  onClaim: (shift: ShiftRecord, position: string | null, outreachRole?: string | null) => void;
   onRelease: (shift: ShiftRecord, choice?: 'drop' | 'trade') => void;
   onOpenStanding: (shift: ShiftRecord) => void;
   /** Pending offers on the day's shifts, keyed by shift id. */
@@ -88,7 +95,10 @@ export const PhoneDaySheet: React.FC<PhoneDaySheetProps> = ({
             {confirmedShift.end_time ? `–${formatTime(confirmedShift.end_time, timezone)}` : ''}
           </span>
           <br />
-          {[confirmedShift.apparatus_unit_number ?? confirmedShift.apparatus_name, mySeat?.position?.replace(/_/g, ' ')]
+          {[
+            outreachTitle(confirmedShift) ?? confirmedShift.apparatus_unit_number ?? confirmedShift.apparatus_name,
+            mySeat?.outreachRoleLabel ?? mySeat?.position?.replace(/_/g, ' '),
+          ]
             .filter(Boolean)
             .join(' · ')}
         </p>
@@ -195,7 +205,7 @@ export const PhoneDaySheet: React.FC<PhoneDaySheetProps> = ({
           {shifts.map((shift) => (
             <section key={shift.id} className="card overflow-hidden p-4">
               <p className="text-theme-text-muted mb-2 text-[10px] font-bold tracking-[0.12em] uppercase">
-                {shiftCrewName(shift, timezone)}
+                {outreachTitle(shift) ? OUTREACH_TAG : shiftCrewName(shift, timezone)}
               </p>
               <ShiftSeatList
                 shift={shift}

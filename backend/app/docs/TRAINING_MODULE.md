@@ -629,7 +629,7 @@ async def fetch_org_waivers(
 ) -> Dict[str, List[WaiverPeriod]]
 ```
 
-Batch-fetches all active waivers/leaves for an entire organization, indexed by `user_id`. Used by compliance matrix, competency matrix, and other batch evaluators to avoid N+1 queries.
+Batch-fetches all active waivers/leaves for an entire organization, indexed by `user_id`. Used by the compliance matrix and other batch evaluators to avoid N+1 queries.
 
 #### Calculation Helpers (Pure, No I/O)
 

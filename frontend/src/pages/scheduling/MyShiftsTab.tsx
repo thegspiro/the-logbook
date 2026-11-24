@@ -33,6 +33,8 @@ import { ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enum
 import { useAuthStore } from '../../stores/authStore';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
+import OutreachTag from '../../modules/scheduling/components/OutreachTag';
+import { outreachTitle } from '../../modules/scheduling/utils/shiftBoard';
 import { CalendarSubscribeCard } from './CalendarSubscribeCard';
 import { MyHoursSummary } from './MyHoursSummary';
 import { PastShiftsHistory } from './PastShiftsHistory';
@@ -636,6 +638,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
                                 ? `${formatTime(shift.start_time, tz)}${shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}`
                                 : ''}
                             </p>
+                            {shift && outreachTitle(shift) && (
+                              <p className="text-theme-text-primary mt-0.5 flex flex-wrap items-center gap-2 text-xs font-medium sm:text-sm">
+                                {outreachTitle(shift)}
+                                <OutreachTag />
+                              </p>
+                            )}
                             <div className="mt-0.5 flex flex-wrap items-center gap-2">
                               {/* Keyed on either field, not on the name. `unit_number`
                             is the required department identifier ("Engine 5")
