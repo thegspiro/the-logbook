@@ -29,6 +29,8 @@ import { useAuthStore } from '../stores/authStore';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { ReactivateMemberModal } from '../components/ReactivateMemberModal';
 import { Breadcrumbs, SkeletonPage, EmptyState, Pagination, Avatar } from '../components/ux';
+import { CardSortControl } from '../components/ux/CardSortControl';
+import type { CardSortOption } from '../components/ux/CardSortControl';
 import { SortableHeader } from '../components/ux/SortableHeader';
 import { sortItems } from '../utils/sortItems';
 import type { SortDirection } from '../components/ux/SortableHeader';
@@ -317,6 +319,16 @@ const Members: React.FC = () => {
     setCurrentPage(1);
   }, [searchQuery, filterStatus, filterClass, filterMemberStatus, sortField, sortDirection]);
 
+  // The roster's sortable columns, offered in card mode where the headers are
+  // hidden. Conditional exactly as the headers are, so a column that is not
+  // shown cannot be sorted by.
+  const rosterSortOptions: CardSortOption[] = [
+    { field: 'name', label: 'Member' },
+    ...(showMemberNumber ? [{ field: 'membership_number', label: 'Member #' }] : []),
+    { field: 'status', label: 'Status' },
+    ...(canManageMembers ? [{ field: 'hire_date', label: 'Hire Date' }] : []),
+  ];
+
   const handleSort = (field: string, direction: SortDirection) => {
     setSortField(direction ? field : null);
     setSortDirection(direction);
@@ -602,6 +614,14 @@ const Members: React.FC = () => {
         ) : (
           <>
             {/* Mobile card view */}
+            {/* No tier: the phone list shows below 768px, which is exactly
+                where an untiered control shows. */}
+            <CardSortControl
+              options={rosterSortOptions}
+              currentSort={sortField}
+              currentDirection={sortDirection}
+              onSort={handleSort}
+            />
             <div className="space-y-3 md:hidden" role="list" aria-label="Members">
               {paginatedMembers.map((member) => (
                 <div
@@ -734,6 +754,14 @@ const Members: React.FC = () => {
             {/* Desktop table view */}
             <div className="card hidden overflow-hidden md:block">
               <div className="rwd-table-container overflow-x-auto">
+                <CardSortControl
+                  options={rosterSortOptions}
+                  currentSort={sortField}
+                  currentDirection={sortDirection}
+                  onSort={handleSort}
+                  tier="xwide"
+                  className="px-4 pt-3"
+                />
                 <table className="rwd-table rwd-table-xwide rwd-table-fields w-full">
                   <thead className="bg-theme-input-bg border-theme-surface-border border-b">
                     <tr>
