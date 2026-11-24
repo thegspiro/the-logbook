@@ -22519,6 +22519,145 @@ class Seeder:
         self.api.put(f"/grants/{pick(created, 'id')}", {"isActive": False})
         return True
 
+    # The legacy export guide 16's undo shots are taken on. Its people left the
+    # department before the app existed, so the import creates each of them as
+    # an archived former member: their records reach no current member's
+    # history, totals or compliance, and no roster or picker lists them.
+    HISTORICAL_SOURCE = "Oakville Legacy Hours DB"
+    HISTORICAL_FILENAME = "legacy-hours-2014.csv"
+    HISTORICAL_DRILL_REQUIREMENT = "Company Drill Attendance (legacy records)"
+    HISTORICAL_MEMBERS = {
+        "501": ("Harold", "Pruitt"),
+        "502": ("Doris", "Whitcomb"),
+        "503": ("Leon", "Abernathy"),
+        "504": ("Marta", "Cole"),
+    }
+    HISTORICAL_CSV = "\n".join(
+        [
+            "VID,Date,Start,End,Training,UniqueID,TrainingSubject,"
+            "TrainingInstructor,Instructor,CompanyDrill",
+            # A held company drill: three members on one evening.
+            "501,2014-03-11,1900,2100,2.0,8101,Hose Advancement,Capt. Pruitt,0,1",
+            "502,2014-03-11,1900,2100,2.0,8102,Hose Advancement,Capt. Pruitt,0,1",
+            "503,2014-03-11,1915,2100,1.75,8103,Hose Advancement,Capt. Pruitt,0,1",
+            # Ordinary training records.
+            "501,2014-04-02,1900,2200,3.0,8104,Pump Operations,Lt. Cole,0,0",
+            "502,2014-04-19,0900,1300,4.0,8105,CPR Refresher,AHA,0,0",
+            "503,2014-05-06,1900,2100,2.0,8106,Ladder Raises,Capt. Pruitt,0,0",
+            "504,2014-05-06,1900,2100,2.0,8107,Ladder Raises,Capt. Pruitt,0,0",
+            "504,2014-06-14,0800,1700,8.0,8108,Vehicle Extrication,County Academy,0,0",
+        ]
+    )
+
+    def seed_backlog_16_historical_import(self) -> dict[str, Any]:
+        """A historical import with its training and company drills committed.
+
+        Guide 16 pictures each committed step's **Undo this step**, the
+        training step greyed out behind the drills, the confirmation and the
+        notice for records kept after an undo. Those shots undo the steps for
+        real and commit them again afterwards; a run that stopped half way is
+        put right here, by committing whichever step is not committed.
+
+        The drills step needs an active session-attendance requirement to link
+        its held drill to. An active one would grade every current member on
+        session attendance and move the department's compliance in every
+        training shot, so it is switched on for the commit and off after it:
+        the 2014 drill keeps its link, and nothing current counts it.
+        """
+        base = "/integrations/historical-imports"
+        record = next(
+            (
+                r
+                for r in items(self.api.get(base), "imports")
+                if pick(r, "source_system", "sourceSystem") == self.HISTORICAL_SOURCE
+            ),
+            None,
+        )
+        result: dict[str, Any] = {}
+        if record is None:
+            record = self.api.post_file(
+                base,
+                {"source_system": self.HISTORICAL_SOURCE},
+                self.HISTORICAL_FILENAME,
+                self.HISTORICAL_CSV.encode(),
+                "text/csv",
+            )
+            result["import"] = "created"
+        import_id = str(pick(record, "id"))
+        result["id"] = import_id
+
+        steps = pick(self.api.get(f"{base}/{import_id}/undo"), "steps") or {}
+
+        def committed(step: str) -> bool:
+            return bool((steps.get(step) or {}).get("committed"))
+
+        if not committed("training"):
+            # Only the members still waiting on a decision. One an undo kept,
+            # because a record of theirs was edited, is already mapped, and a
+            # second "create" would collide on the membership number. An undo
+            # also resets a removed member's decision to a bare "create",
+            # dropping the name typed for it, so the names go in again here.
+            preview = self.api.get(f"{base}/{import_id}/training")
+            waiting = {
+                str(pick(m, "key"))
+                for m in items(pick(preview, "members") or [], "members")
+            }
+            decisions = {
+                f"number:{number}": {
+                    "action": "create",
+                    "first_name": first,
+                    "last_name": last,
+                }
+                for number, (first, last) in self.HISTORICAL_MEMBERS.items()
+                if f"number:{number}" in waiting
+            }
+            if decisions:
+                self.api.put(f"{base}/{import_id}/members", {"members": decisions})
+            self.api.post(f"{base}/{import_id}/training/commit")
+            result["training"] = "committed"
+        if not committed("drills"):
+            requirement_id = self._historical_drill_requirement()
+            # Choosing the requirement is refused while it is inactive too.
+            self.api.patch(f"/training/requirements/{requirement_id}", {"active": True})
+            try:
+                self.api.patch(
+                    f"{base}/{import_id}/training-settings",
+                    {"drill_requirement_ids": [requirement_id]},
+                )
+                self.api.post(f"{base}/{import_id}/drills/commit")
+            finally:
+                self.api.patch(
+                    f"/training/requirements/{requirement_id}", {"active": False}
+                )
+            result["drills"] = "committed"
+        if len(result) == 1:
+            result["steps"] = "already committed"
+        return result
+
+    def _historical_drill_requirement(self) -> str:
+        """The legacy drills' requirement, made inactive if it is new."""
+        for requirement in items(
+            self.api.get("/training/requirements?active_only=false"), "requirements"
+        ):
+            if pick(requirement, "name") == self.HISTORICAL_DRILL_REQUIREMENT:
+                return str(pick(requirement, "id"))
+        created = self.api.post(
+            "/training/requirements",
+            {
+                "name": self.HISTORICAL_DRILL_REQUIREMENT,
+                "description": (
+                    "Company drills held before the department moved to The "
+                    "Logbook, from the legacy hours database."
+                ),
+                "requirement_type": "session_attendance",
+                "frequency": "annual",
+                "required_attendance_pct": 50,
+            },
+        )
+        requirement_id = str(pick(created, "id"))
+        self.api.patch(f"/training/requirements/{requirement_id}", {"active": False})
+        return requirement_id
+
     def run(self) -> int:
         print("Seeding demo data...")
         self.step("enable all modules", self.enable_all_modules)
@@ -22794,6 +22933,9 @@ class Seeder:
         )
         self.step(
             "backlog 12 retired opportunity", self.seed_backlog_12_retired_opportunity
+        )
+        self.step(
+            "backlog 16 historical import", self.seed_backlog_16_historical_import
         )
 
         print(f"\nMembers on file: {len(members)}")

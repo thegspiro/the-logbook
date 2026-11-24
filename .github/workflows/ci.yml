@@ -273,7 +273,7 @@ jobs:
       # fails if this line and the workflow's drift from it.
       - name: Install script-test dependencies
         if: "!cancelled()"
-        run: pip install 'PyYAML==6.0.2' 'Pillow==13.0.0' 'alembic==1.20.1' 'sqlalchemy==2.1.8'
+        run: pip install 'PyYAML==6.0.2' 'Pillow==13.0.0' 'alembic==1.20.1' 'sqlalchemy==2.1.9'
 
       - name: Run repo-root script tests
         if: "!cancelled()"

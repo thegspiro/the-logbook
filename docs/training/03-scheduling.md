@@ -426,9 +426,7 @@ higher on Past than on Hours, with nothing to say why. Now:
   recent attended shifts, so a member with more lost the older ones, and their
   hours, without warning. Every shift is now loaded.
 
-_Screenshot: create the Past view image (still outstanding from
-2026-11-09) after this change, with the **Hours credited** tiles and an amber
-**awaiting close-out** pill in frame._
+![My Shifts on Past: the Year picker, the Hours credited, Credited shifts and Avg hours/shift tiles with the hours awaiting close-out beneath, the hours-by-month chart, and past shifts under month headers giving each month's shifts and credited hours, one shift's pill reading awaiting close-out in amber](./images/03-142-my-shifts-past-credited.png)
 
 _Added 2026-11-10._ **End-of-shift summary.** The email and the in-app notice
 list call types as counts, most frequent first ("3 × EMS, 1 × Fire Alarm"),
@@ -504,6 +502,8 @@ profile, for the member and for officers with **View scheduling reports**;
 an officer sees the list but not **Log outside shift**.
 
 ![My Shifts on its Hours view: This month, this year and all-time cards with the two-colour split bar, the year picker between its Previous year and Next year arrows, the year-at-a-glance chart with its Busiest month, Months with shifts and Avg per active month tiles, and All shifts below](./images/03-104-my-shifts-hours.png)
+
+![The Hours view with October's bar selected on the year-at-a-glance chart, its tooltip giving the month's hours, shifts and calls: the other months dimmed, and October's shift highlighted in All shifts below](./images/03-143-hours-month-selected.png)
 
 ### Your shifts on the dashboard
 
@@ -3446,6 +3446,10 @@ Select **New Template** to create one, or select a template to edit it.
   back the shift length, so a template never stores a length its times
   contradict. A **new** template is created only once nothing is refused.
 
+![Editing the Day Shift template with its name cleared: the Name box flagged "Enter a name for the template." and the dialog reading "Template saved, except name."](./images/03-143-template-saved-except-name.png)
+
+![Cancelling the template dialog after typing: the confirmation asking whether to throw the changes away, with Discard changes](./images/03-144-template-discard-changes.png)
+
 **Deleting a template or a basic vehicle.** A shift template used by any shift
 or pattern, and a basic apparatus named by any template, shift, pre-work
 session, equipment check or call, is **deactivated** rather than deleted, so
@@ -3834,6 +3838,8 @@ it as 0, which quietly turned the overtime advisory off. Each setting saves on
 its own, so if one is refused the other on the same card still saves, and the
 card says _"Saved, except the flagged setting, which keeps its stored value."_
 Pressing Enter in a box saves its card.
+
+![Scheduling settings, General, the Overtime advisory card after saving with Hours limit cleared: the box flagged Enter a whole number from 0 to 336., Window (days) beside it, and the line that the card saved except the flagged setting, which keeps its stored value](./images/03-142-overtime-hours-limit-error.png)
 
 ### What the settings do not do
 

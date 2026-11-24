@@ -117,7 +117,7 @@ describe('facility record dialogs', () => {
 
     await vi.waitFor(() =>
       expect(within(dialog).getByRole('textbox', { name: /^Vendor/ })).toHaveAccessibleDescription(
-        expect.stringContaining('Value is too long.')
+        /Value is too long\./
       )
     );
     expect(screen.getByRole('dialog', { name: 'New Maintenance Record' })).toBeInTheDocument();
@@ -148,7 +148,7 @@ describe('facility record dialogs', () => {
 
     await vi.waitFor(() =>
       expect(within(dialog).getByRole('textbox', { name: /^Inspector Organization/ })).toHaveAccessibleDescription(
-        expect.stringContaining('Value is too long.')
+        /Value is too long\./
       )
     );
   });

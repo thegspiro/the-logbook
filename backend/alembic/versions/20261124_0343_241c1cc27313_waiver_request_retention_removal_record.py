@@ -1,7 +1,7 @@
 """Waiver requests: record what document retention removed
 
 Revision ID: 241c1cc27313
-Revises: 9c41e7b2d5a3
+Revises: 0a4667186b2d
 Create Date: 2026-11-24 03:43:19.624407
 
 Adds two nullable columns to ``attendance_waiver_requests``:
@@ -36,7 +36,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "241c1cc27313"
-down_revision: Union[str, None] = "9c41e7b2d5a3"
+down_revision: Union[str, None] = "0a4667186b2d"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -1413,11 +1413,11 @@ The system now automatically translates technical errors:
 
 ### Session Inactivity Timeout
 
-The application automatically logs users out after **30 minutes of inactivity** (no mouse, keyboard, scroll, or touch events).
+The application automatically logs users out after **15 minutes of inactivity** (no mouse, keyboard, scroll, or touch events), unless the department set a different time (`HIPAA_SESSION_TIMEOUT_MINUTES`).
 
 #### Symptom: "You have been logged out due to inactivity"
 
-**Cause**: No user activity detected for 30 minutes.
+**Cause**: No user activity detected for the inactivity period (15 minutes by default).
 
 **Solutions**:
 
@@ -1499,7 +1499,7 @@ Before 2026-09-28 this showed as "Invalid Reset Link".
 
 ### Account Lockout
 
-After **5 failed login attempts**, accounts are temporarily locked for **30 minutes**.
+After **5 failed login attempts**, accounts are temporarily locked for **15 minutes** (`MAX_LOGIN_ATTEMPTS` and `ACCOUNT_LOCKOUT_DURATION_MINUTES` change both numbers).
 
 #### Symptom: "Account is temporarily locked"
 

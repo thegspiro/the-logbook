@@ -5,6 +5,7 @@ import type { PipelineSectionProps } from './types';
 import { useRanks } from '../../hooks/useRanks';
 import { displayNameOf } from '../../utils/memberName';
 import { isActiveAccount } from '../../constants/enums';
+import FeedbackFormSetting from './FeedbackFormSetting';
 
 const PipelineSection: React.FC<PipelineSectionProps> = ({
   settings,
@@ -12,6 +13,7 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
   members,
   onUpdateDefaultAssignee,
   onTogglePublicVisibility,
+  onSaveFeedback,
   onAddTask,
   onRemoveTask,
   onReorderTask,
@@ -60,6 +62,8 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
           ))}
         </select>
       </div>
+
+      <FeedbackFormSetting pipeline={pipeline} saving={saving} onSave={onSaveFeedback} />
 
       {/* Public progress visibility */}
       <div className="border-theme-surface-border flex items-center justify-between border-t py-3">
