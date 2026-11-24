@@ -43,7 +43,7 @@ from its open list.
 | B2  | apparatus                  | AP2    | ✅     |
 | B3  | inventory                  | INV2   | ✅     |
 | B4  | facilities                 | FAC2   | ✅     |
-| B5  | elections                  | ELEC2  | ⬜     |
+| B5  | elections                  | ELEC2  | ✅     |
 | B6  | meetings & minutes         | MM2    | ⬜     |
 | B7  | equipment-check            | EC2    | ⬜     |
 | B8  | documents                  | DOC2   | ⬜     |
@@ -3707,3 +3707,33 @@ secrets redacted for non-admins. See
   room Locations stale. Facilities still has no feature doc. Gate clean; 328
   backend and 218 frontend facilities tests pass. See facilities.md → Pass 6.
   Next: B5 elections.
+- **B5 elections ✅ (pass 7).** The first pass to check that the **count is
+  right**. Earlier passes and the security review covered who may act. Ran
+  worked examples through the tally, then read every election screen. **8
+  fixes**, each test red first:
+  - ELEC2-10 (HIGH): a one-seat majority, supermajority or threshold race
+    declared every qualifier elected.
+  - ELEC2-11 (HIGH): a motion on a ranked-choice ballot was counted by instant
+    runoff.
+  - ELEC2-12 (HIGH): a merged write-in split its paper ballot into separate
+    ballots.
+  - ELEC2-13 (HIGH): a membership package was elected on a vote the results
+    called failed.
+  - ELEC2-14 (HIGH): moving to another election kept the last one's page
+    state.
+  - ELEC2-15 (MED): Void Batch was hidden after close.
+  - ELEC2-16 (LOW): voiding a vote left the revision banner stale.
+  - ELEC2-17 (LOW): Live Turnout judged quorum differently from the results.
+
+  Results are recomputed live, so past elections that hit those cases now
+  display the corrected result. The owner approved this on 2026-11-24. **5
+  flagged** to KNOWN_LIMITATIONS:
+  - ELEC2-18 (HIGH): instant-runoff ties are settled by candidate id.
+  - ELEC2-19 (MED): the paper-only denominator.
+  - ELEC2-20 (MED): runoff rules.
+  - ELEC2-21 (MED): what a ranked-choice result shows.
+  - ELEC2-22 (MED): the ballot builder saves per keystroke.
+
+  Nine LOW items are recorded as open. Gate clean; 1,070 backend and 260
+  frontend election tests pass. See elections.md → Pass 7. Next: B6 meetings &
+  minutes.

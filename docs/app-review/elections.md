@@ -2,7 +2,205 @@
 
 **Prefix:** `ELEC2` · **Iteration:** B5 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-08-21 (pass 5), 2026-10-13 (pass 6)
+2026-08-21 (pass 5), 2026-10-13 (pass 6), 2026-11-24 (pass 7)
+
+---
+
+## Pass 7 (2026-11-24) — the count itself, and the election screens: 8 fixed, 5 flagged
+
+### Scope, stated plainly
+
+No earlier pass checked whether the **tally is right**. Passes 1–6 and the
+security review's eleven passes covered who may do what. None ran worked
+examples through `_calculate_candidate_results` to see who it declares elected.
+This pass did that. It also read every frontend file under
+`components/election-detail/`, `modules/elections/` and `ElectionDetailPage.tsx`
+for state and refresh defects.
+
+The service is now 12,469 lines and the endpoint file 5,614. This pass read:
+
+- the tally (`_calculate_candidate_results`, `_declare_seat_winners`,
+  `_calculate_ranked_choice_results`, the write-in merge in
+  `get_election_results`);
+- the runoff trigger;
+- the membership-package sync;
+- the election screens.
+
+It did not re-read the ballot, token, proxy or eligibility paths, which the
+security review covers.
+
+**The tally is recomputed on every read.** Results are not snapshotted at close.
+Corrections after close are stamped as revisions (owner decision 2026-10-05).
+So the four tally fixes below change **what past closed elections display** if
+one of them hit a broken case. The owner approved this on 2026-11-24 ("fix the
+clear bugs"), and the pull request says so. Each fix makes the count follow a
+rule the module already states. No new rule was invented.
+
+Each tally finding was first reproduced by a probe script against the real
+service, then by a failing unit test.
+
+### ELEC2-10 — HIGH — A one-seat race could declare two winners — ✅ FIXED
+
+**Seen:** an approval election, one seat, majority: 8 of 10 approve A and 7 of
+10 approve B. Both are over the majority bar, and **both were marked elected to
+the one seat**. A threshold race of 3 votes did the same (A 5, B 4). Only
+multi-seat races went through `_declare_seat_winners`, which caps winners at the
+seat count and applies the tie policy. The majority, supermajority and threshold
+branches marked every qualifier.
+
+**Fix:** those three branches now go through `_declare_seat_winners` with one
+seat. Qualifiers tied for the seat follow `tie_policy`, as multi-seat ties
+already did. `election_service.py`, in `_calculate_candidate_results`.
+
+### ELEC2-11 — HIGH — A motion inside a ranked-choice election was counted by instant runoff — ✅ FIXED
+
+**Seen:** `contest_is_ranked` says an Approve/Deny item is never ranked. The
+tally checked only the election's voting method, so a motion on a ranked-choice
+ballot went through instant runoff:
+
+- a 5–5 split was "carried", its tie broken by candidate id;
+- a 67% motion passed at 6 to 4, because instant runoff ignores the item's
+  victory condition.
+
+**Fix:** an approval item takes the plurality/threshold path and one seat,
+whatever the election's method.
+
+### ELEC2-12 — HIGH — A merged write-in split its paper ballot apart — ✅ FIXED
+
+**Seen:** merging write-in variants ("Smyth" into "Smith") copies each affected
+vote with the target's id. The copy dropped `paper_ballot_id`, and instant
+runoff groups a ranked paper sheet by that id. So every row of a sheet carrying
+a merged write-in became a ballot of its own, and its lower rankings counted as
+first choices.
+
+Worked example: 7 sheets — 3× Smyth>King, 1× Jones>King, 3× King>Jones. King
+should win 4 to 3. Before the fix he was counted 6.
+
+**Fix:** `_remap_merged_votes` copies every field the count reads.
+
+### ELEC2-13 — HIGH — A membership package's status ignored the result — ✅ FIXED
+
+**Seen:** `_sync_package_statuses` re-counted Approve against Deny itself, so it
+ignored the item's victory condition, quorum and write-in merges. A 67%
+membership vote at 6 to 4 was reported **failed** on the results screen, the
+certified PDF and the report email, while the prospect's package was set to
+**elected**. An advisory vote that missed quorum elected too.
+
+**Fix:** the sync reads `get_election_results` and takes the Approve row's
+`is_winner` (pitfall #29).
+
+### ELEC2-14 — HIGH — Moving to another election kept the last one's page state — ✅ FIXED
+
+**Seen (read from code, then reproduced in a test):** `ElectionDetailRoute`
+rendered `ElectionDetailPage` without a key. Moving to another election through
+the runoff chain or a clone reused the instance, so these stayed on screen
+against the new election:
+
+- the integrity result;
+- the forensics report;
+- the paper batches;
+- a pending batch void.
+
+The pending void would have been sent with the new election's id.
+
+**Fix:** the page is keyed by `electionId`.
+
+### ELEC2-15 — MED — Void Batch disappeared once the election closed — ✅ FIXED
+
+The backend never gates a batch void on status, and post-close corrections are
+kept and marked as revisions (owner decision 2026-10-05). The panel hid the
+button whenever the election was not open, so the screen offered no way to make
+the correction the owner decided to keep. Attesting stays open-only, matching
+the backend. `PaperBallotBatchesPanel.tsx`.
+
+### ELEC2-16 — LOW — Voiding a vote left the revised-results banner stale — ✅ FIXED
+
+The batch void re-fetched the election; the single-vote void refreshed only the
+forensics report. A void after close stamps a revision on the election, so the
+banner did not show it until a reload. `handleVoidVote` now re-fetches.
+
+### ELEC2-17 — LOW — Live Turnout could disagree with the results about quorum — ✅ FIXED
+
+The panel compared the backend's two-decimal turnout with a target it worked out
+itself. The results call compares the raw voter count (count quorum) or the raw
+ratio (percentage quorum). Two examples:
+
+- 7 of 30 against a 7-voter quorum read "progress" (23.33 < 23.333…);
+- 2 of 3 against 66.67% read "MET" while the results said not met.
+
+The panel now makes the same comparison as the results call (pitfall #29).
+
+### Flagged for the owner (in `docs/KNOWN_LIMITATIONS.md`)
+
+- **ELEC2-18 (HIGH)** — **Instant-runoff ties are settled by candidate id.**
+  When two candidates tie for elimination, the one with the lower UUID goes out
+  (`_calculate_ranked_choice_results`, the elimination step). `tie_policy` is
+  not consulted. The tie is not reported. Which rule settles it (bylaws, lot,
+  prior-round count, a runoff) is a bylaw decision.
+- **ELEC2-19 (MED)** — **Percentages on paper-only approval and multi-seat
+  races can be inflated.** When a paper batch carries no attested
+  `ballots_cast`, the denominator falls back to the largest candidate's tally,
+  so a majority bar is measured against too few ballots. Requiring the
+  attestation, or reporting the race as unverifiable, changes what an officer
+  must enter.
+- **ELEC2-20 (MED)** — **The runoff rules disagree with the tie policy.**
+  - Runoffs fire on `enable_runoffs` whatever `tie_policy` says.
+  - A quorum failure creates a top-two runoff.
+  - Unfilled seats in a multi-seat race get no runoff.
+  - A tie at the runoff cut-line is settled silently.
+  - Corrections after close re-run neither the runoff check nor the package
+    sync.
+- **ELEC2-21 (MED)** — **Ranked-choice results show the last round only.**
+  Instant runoff ignores the victory condition. Eliminated candidates show 0
+  votes, with no round history. `total_votes` counts rows rather than ballots.
+  What a ranked-choice result should display is a product decision.
+- **ELEC2-22 (MED)** — **The ballot builder saves on every keystroke and does
+  not roll back.** `handleUpdateItem` sends the whole ballot on each change.
+  Responses can land out of order, and a failed save leaves the edit on screen
+  as if saved. Saving on blur or debouncing changes when edits take effect.
+
+### Open, LOW (not flagged)
+
+- Exactly two-thirds fails the default 67% supermajority bar.
+- Abstentions are not stored.
+- Approve/Deny rows are labelled "Elected".
+- The tie banner can contradict a failed quorum.
+- `RecordPaperBallotsModal` parses counts with `parseInt`, and Escape closes it
+  while it is recording.
+- The results progress bar has no accessible name.
+- The attendance table has no table-fit spec.
+- A member's results do not refresh after they vote.
+- Raw ballot-item ids are shown in two places.
+
+### Mechanical checks
+
+- **Route gating:** 76 routes, broken down as follows:
+  - 56 `elections.manage`;
+  - 7 `elections.view`;
+  - 1 view-or-manage;
+  - 7 sign-in only — the member's own ballot, eligibility, vote and proxy
+    routes;
+  - 5 public — ballot lookup, vote, bulk vote, and both receipt checks. Each is
+    documented as public and rate-limited by `_ballot_read_rate_limit` /
+    `_ballot_vote_rate_limit`.
+- **Updates:** no raw `setattr` update loops in the module.
+- **Pass 6 flags still open:** ELEC2-8 (`has_user_voted` has no caller) and
+  ELEC2-9 (seven unread `default_*` settings).
+
+### Completion gate (pass 7)
+
+| Check                                        | Result                                                       |
+| -------------------------------------------- | ------------------------------------------------------------ |
+| election-named backend tests                 | ✅ **1,070 passed**, 1 skipped (optional `pywebpush`)        |
+| new tests                                    | ✅ 9 backend + 7 frontend, each seen to fail on the old code |
+| `flake8` / `black` / `isort` (changed files) | ✅ clean                                                     |
+| mypy ratchet                                 | ✅ 0 errors, matching the baseline                           |
+| elections frontend tests                     | ✅ 260 passed (68 files)                                     |
+| `npm run typecheck` / `npm run lint`         | ✅ 0 errors / 0 warnings                                     |
+
+The first typecheck failed on `leaflet` in `CrrZipMap.tsx`, a file this change
+does not touch. The package is declared, but the local `node_modules` predated
+it. `npm ci` from the lockfile fixed it, and the lockfile is unchanged.
 
 ---
 
