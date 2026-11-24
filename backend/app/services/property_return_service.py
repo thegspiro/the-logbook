@@ -379,8 +379,14 @@ class PropertyReturnService:
         member_name: str,
         html_content: str,
         created_by: str,
+        member_id: Optional[str] = None,
     ) -> Optional[Document]:
         """Save the report as a generated document, leadership-only.
+
+        *member_id* is stored as the document's ``source_id``: it is how an
+        erasure of the member finds the letter to redact
+        (``app.services.member_documents``). Letters saved before it was
+        recorded are matched by their name instead.
 
         The folder is resolved before the document is built and never left
         unset: ``DocumentsService.can_access_document`` treats a document with
@@ -402,6 +408,7 @@ class PropertyReturnService:
             status=DocumentStatus.ACTIVE,
             content_html=html_content,
             source_type="property_return_report",
+            source_id=member_id,
             tags="property-return,member-dropped,inventory",
             uploaded_by=created_by,
         )

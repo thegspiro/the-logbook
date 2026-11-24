@@ -2778,6 +2778,8 @@ Profiles let different groups be held to different standards.
    - **Required Admin Hours** — admin-hours categories and the hours required.
 3. Save.
 
+![A new compliance profile being filled in: Priority 10 with the amber warning that Line Officers also has priority 10 and which profile grades a member who matches both, and the Required and Optional requirement lists with one ticked in each](./images/08-124-profile-priority-tie-warning.png)
+
 How a profile grades the members it matches:
 
 - **The required requirements you tick are the whole list.** A profile with

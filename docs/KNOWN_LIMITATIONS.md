@@ -7623,16 +7623,19 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   due date from `TrainingService.evaluate_requirement_detail`, the only
   evaluator that computes one; it decides no status. Tests:
   `tests/test_compliance_export_period.py`.
-- **Compliance emails: a rolling requirement is in one non-compliance notice
-  per member, ever — open, found 2026-11-21.** A rolling requirement's window
-  ends on the grading day, which made both member emails repeat daily (the
-  reminder called it "due today", and the notice's key moved with the date).
-  The fix gives a rolling requirement no deadline reminder and keys its notice
-  on the requirement alone (`compliance_member_notices.py`). The cost: a member
-  who meets it, and months later falls short again, is not told again unless
-  the same notice is triggered by some other requirement, which then lists it.
-  Telling them again needs a recorded "met again" date to key on, which the
-  task does not keep. Tests: `tests/test_compliance_member_notices.py`.
+- **Compliance emails: a repeat lapse on a rolling requirement is emailed
+  again — ✅ resolved (owner decision 2026-11-23).** A rolling requirement's
+  window ends on the grading day, which made both member emails repeat daily;
+  the 2026-11-21 fix gave it no deadline reminder and keyed its notice on the
+  requirement alone, so a member was told once ever. The daily task now records
+  the last day it finds each member meeting each rolling requirement
+  (`rolling_requirement_last_met`, migration `07abf8e6553b`) and keys the notice
+  on that date: every day of one lapse shares a key, and a lapse after a
+  recovery is emailed once more. **Residual:** the dates start with the first
+  run after the upgrade, so a member already told about a rolling requirement
+  they are still short of on upgrade day keeps the bare key, and is told again
+  only after they next meet it and lapse; rolling requirements still get no deadline reminder. Tests:
+  `tests/test_compliance_member_notices.py` (`TestRollingRequirementLapsesAgain`).
 - **The Compliance Officer dashboard's forecast summary cards keep fixed
   colour bands — ✅ resolved 2026-11-21 (owner direction: follow the
   department's and the member's thresholds).** Each member's 30/60/90-day
@@ -9386,20 +9389,18 @@ single-page form. What it changes, and what it leaves:
   confirms.~~ **Resolved 2026-11-11:** the header leaves Create Session out
   for a viewer without `events.manage`, as the approved mockup draws it, and
   the Sessions tab still shows its notice naming the permission.
-- **A training manager can read a draft Training event's session, but not
-  the draft itself** (2026-11-23). `GET /training/sessions/by-event/{id}` now
-  answers `training.manage` for a draft whose type is Training, so the
-  session no longer reads as "No training details" to the officer who
-  administers it. **Default taken:** `GET /events/{id}` and the events list
-  still hide every draft from a caller without `events.manage`, as ADV-5 set
-  them, so a training manager without it cannot open a draft Training event
-  to see that session. Showing them the draft is a wider visibility change,
-  left for an owner decision (`tests/test_draft_event_side_paths.py`).
-- **The training-session calendar lists draft events' sessions.**
-  `GET /training/sessions/calendar` filters cancelled events but not drafts,
-  so any member can see a draft Training event's title and time there, which
-  `GET /events/{id}` hides from them (ADV-5). Found on 2026-11-23 and left
-  for its own change, since it alters what the calendar shows.
+- **Who sees a draft event** — ✅ **Resolved 2026-11-23 (owner decisions).**
+  One rule, `app/api/draft_visibility.py`, decides every read that shows an
+  event: `events.manage` sees every draft, `training.manage` sees drafts of
+  Training events, and nobody else sees a draft. A training manager without
+  `events.manage` now opens a draft Training event (`GET /events/{id}`, its
+  attachments, folder and training session) and sees draft Training events
+  in the events list; another type's draft stays hidden from them. The
+  training-session calendar, which listed every draft's title and time to
+  any member, and the training dashboard's upcoming-capacity list apply the
+  same rule. Seeing a draft is not acting on it: publishing still needs
+  `events.manage`, and every other action keeps its own permission
+  (`tests/test_draft_event_side_paths.py`, `EventsPage.test.tsx`).
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 
@@ -11342,6 +11343,32 @@ mirrored in the Multi-Tenant Isolation section above.
 
 ## LIFE-11 — Anonymizing a Member Leaves Their Separation Letter, With Home Address, in Documents (2026-11-10, app review A6 pass 6)
 
+**Resolved 2026-11-23** (owner decision of that date: option 1 for the
+letter, delete for the personal folder). Anonymisation and permanent delete
+both call `app.services.member_documents.erase_member_documents` before they
+change or remove the users row:
+
+- The member's separation letters are **redacted in place**: the stored HTML
+  loses the home address and the "Reason:" paragraph, and any remaining copy of
+  the member's street line or stored status reason. The item list and values
+  stay. They are rewritten rather than regenerated, because a regenerated
+  letter would list today's property, not the property owed on the day of the
+  drop. The member's name and membership number stay on the letter: the owner
+  named the address and reason, and the letter is a claim against a named
+  person.
+- Every folder the member owns under **Member Files** is deleted with its
+  sub-folders and documents, through the same code as the folder delete; the
+  files are queued on `pending_file_deletions`.
+
+**Accepted residuals:** a letter saved before 2026-11-23 has no link to its
+member, so it is found by its name, and, when the member has a membership
+number, also by that number (current or previous) printed in it. A letter whose
+name no longer matches (the member was renamed after the drop), or which does
+not print the member's number, is not found and keeps the address. A letter in
+a backup taken before the erasure is not changed.
+
+The original entry follows.
+
 Anonymization (`POST /users/{id}/anonymize`, `MemberAnonymizationService`)
 scrubs the member's personal data from a long list of tables but touches no
 `Document`. The property-return letter generated when the member was dropped is
@@ -11824,8 +11851,8 @@ each case; confirmed by the owner 2026-11-23):
   to `upload_relocation.collect_references` or to a commented allowlist, so
   the shared-file check's "every other row" is enforced rather than assumed.
 
-Related, still open: **LIFE-11** (the separation letter in Documents), and the
-Member Files personal-folder documents, which neither path touches.
+Related, closed 2026-11-23: **LIFE-11**. Both paths now redact the separation
+letters and delete the member's personal Member Files folder.
 
 ## Apparatus — Three Decisions From App Review B2 Pass 6 (2026-11-20)
 
