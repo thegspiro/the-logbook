@@ -10,7 +10,7 @@
  * - Report Exports (compliance CSV/PDF, forecasting)
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '../hooks/useSubmitGuard';
 import {
@@ -27,6 +27,9 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Modal } from '../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import { useDiscardGuard } from '../hooks/useDiscardGuard';
 import { MemberPickerModal } from '../components/MemberPickerModal';
 import { EffectivenessEvaluationModal } from '../components/training/EffectivenessEvaluationModal';
 import { EmptyState } from '../components/ux/EmptyState';
@@ -70,8 +73,58 @@ import { StatGrid } from '../components/ux/StatGrid';
 import { SignatureLinesOption } from '../components/SignatureLinesOption';
 
 const inputClass = 'form-input px-3 focus:ring-red-500/50 focus:border-red-500';
-const labelClass = 'form-label';
 const selectClass = inputClass;
+
+// ==================== Shared create-dialog pieces ====================
+
+type FieldErrorState<F extends string> = ReturnType<typeof useFieldErrors<F>>;
+
+/**
+ * The create step the four dialogs below share. A create form makes nothing
+ * until every flagged field is fixed (owner rule 2026-11-05, "Forms — Save With
+ * an Error" in docs/KNOWN_LIMITATIONS.md): creating the record without the
+ * refused value and then flagging it would leave the flag on a dialog that has
+ * already closed. A 422 lands on the field it names; anything else is said in
+ * the dialog, where it stays until the next attempt, instead of in a toast.
+ *
+ * Returns true once the record was created.
+ */
+async function createUnlessFlagged<F extends string>(
+  fieldErrors: FieldErrorState<F>,
+  problems: FieldErrors<F>,
+  create: () => Promise<unknown>,
+  fallback: string
+): Promise<boolean> {
+  fieldErrors.setFormError(null);
+  fieldErrors.setErrors(problems);
+  if (Object.keys(problems).length > 0) {
+    fieldErrors.focusFirst(problems);
+    return false;
+  }
+  try {
+    await create();
+    return true;
+  } catch (err: unknown) {
+    fieldErrors.focusFirst(fieldErrors.setFromApiError(err, fallback));
+    return false;
+  }
+}
+
+/** A typed whole number inside the schema's bounds, or why not; a blank box passes. */
+function wholeNumberProblem(raw: string, min: number, max?: number): string | undefined {
+  const value = raw.trim();
+  if (!value) return undefined;
+  const n = Number(value);
+  if (Number.isInteger(n) && n >= min && (max === undefined || n <= max)) return undefined;
+  return max === undefined ? `Enter a whole number, ${min} or more.` : `Enter a whole number from ${min} to ${max}.`;
+}
+
+const FormLevelError: React.FC<{ message: string | null }> = ({ message }) =>
+  message ? (
+    <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+      {message}
+    </p>
+  ) : null;
 
 // ==================== Add Pathway Modal ====================
 
@@ -88,48 +141,84 @@ const RENEWAL_TYPES = [
   { value: 'combination', label: 'Combination' },
 ] as const;
 
+type PathwayField =
+  'name' | 'description' | 'renewal_type' | 'required_hours' | 'renewal_window_days' | 'grace_period_days';
+
+// In screen order, so the first refusal takes focus. Bounds mirror
+// RecertificationPathwayBase (name 255; window 1-365; grace 0-365).
+const PATHWAY_FIELDS: FieldSpecs<PathwayField> = {
+  name: { id: 'pathway-name', label: 'Name' },
+  description: { id: 'pathway-description', label: 'Description' },
+  renewal_type: { id: 'pathway-renewal-type', label: 'Renewal Type' },
+  required_hours: { id: 'pathway-required-hours', label: 'Required Hours' },
+  renewal_window_days: { id: 'pathway-renewal-window-days', label: 'Renewal Window (days)' },
+  grace_period_days: { id: 'pathway-grace-period-days', label: 'Grace Period (days)' },
+};
+
+const EMPTY_PATHWAY = {
+  name: '',
+  description: '',
+  renewalType: 'hours' as RecertificationPathwayCreate['renewal_type'],
+  requiredHours: '',
+  renewalWindowDays: '90',
+  gracePeriodDays: '30',
+};
+
 const AddPathwayModal: React.FC<AddPathwayModalProps> = ({ isOpen, onClose, onSaved }) => {
   const [saving, setSaving] = useState(false);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [renewalType, setRenewalType] = useState<RecertificationPathwayCreate['renewal_type']>('hours');
-  const [requiredHours, setRequiredHours] = useState('');
-  const [renewalWindowDays, setRenewalWindowDays] = useState('90');
-  const [gracePeriodDays, setGracePeriodDays] = useState('30');
+  const [form, setForm] = useState(EMPTY_PATHWAY);
+  const fieldErrors = useFieldErrors(PATHWAY_FIELDS);
+  const { clear } = fieldErrors;
+  const requestClose = useDiscardGuard({
+    isDirty: isOpen && JSON.stringify(form) !== JSON.stringify(EMPTY_PATHWAY),
+    onClose,
+  });
 
   useEffect(() => {
     if (isOpen) {
-      setName('');
-      setDescription('');
-      setRenewalType('hours');
-      setRequiredHours('');
-      setRenewalWindowDays('90');
-      setGracePeriodDays('30');
+      setForm(EMPTY_PATHWAY);
+      clear();
     }
-  }, [isOpen]);
+  }, [isOpen, clear]);
+
+  const set = (patch: Partial<typeof EMPTY_PATHWAY>, field: PathwayField) => {
+    setForm((f) => ({ ...f, ...patch }));
+    fieldErrors.setError(field, null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) {
-      toast.error('Name is required');
-      return;
-    }
+    const problems: FieldErrors<PathwayField> = {};
+    if (!form.name.trim()) problems.name = 'Give the pathway a name.';
+    const hours = form.requiredHours.trim();
+    if (hours && !(Number.isFinite(Number(hours)) && Number(hours) >= 0))
+      problems.required_hours = 'Enter a number of hours, 0 or more, or leave it empty.';
+    const windowProblem = wholeNumberProblem(form.renewalWindowDays, 1, 365);
+    if (windowProblem) problems.renewal_window_days = windowProblem;
+    const graceProblem = wholeNumberProblem(form.gracePeriodDays, 0, 365);
+    if (graceProblem) problems.grace_period_days = graceProblem;
+
     setSaving(true);
     try {
       const data: RecertificationPathwayCreate = {
-        name: name.trim(),
-        description: description.trim() || undefined,
-        renewal_type: renewalType,
-        required_hours: requiredHours ? Number(requiredHours) : undefined,
-        renewal_window_days: Number(renewalWindowDays) || undefined,
-        grace_period_days: Number(gracePeriodDays) || undefined,
+        name: form.name.trim(),
+        description: form.description.trim() || undefined,
+        renewal_type: form.renewalType,
+        required_hours: hours ? Number(hours) : undefined,
+        renewal_window_days: Number(form.renewalWindowDays) || undefined,
+        grace_period_days: Number(form.gracePeriodDays) || undefined,
       };
-      await recertificationService.createPathway(data);
-      toast.success('Pathway created');
-      onSaved();
-      onClose();
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to create pathway'));
+      const created = await createUnlessFlagged(
+        fieldErrors,
+        problems,
+        () => recertificationService.createPathway(data),
+        'Failed to create pathway'
+      );
+      if (created) {
+        toast.success('Pathway created');
+        onSaved();
+        onClose();
+      }
     } finally {
       setSaving(false);
     }
@@ -138,9 +227,10 @@ const AddPathwayModal: React.FC<AddPathwayModalProps> = ({ isOpen, onClose, onSa
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title="Add Recertification Pathway"
       size="md"
+      noValidate
       onSubmit={(e) => {
         void handleSubmit(e);
       }}
@@ -154,100 +244,122 @@ const AddPathwayModal: React.FC<AddPathwayModalProps> = ({ isOpen, onClose, onSa
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             {saving ? 'Creating...' : 'Create Pathway'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
+          <button type="button" onClick={requestClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
             Cancel
           </button>
         </>
       }
     >
       <div className="space-y-4">
-        <div>
-          <label htmlFor="pathway-name" className={labelClass}>
-            Name *
-          </label>
-          <input
-            id="pathway-name"
-            className={inputClass}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. NREMT Recertification"
+        <FormLevelError message={fieldErrors.formError} />
+        <FormField
+          id={PATHWAY_FIELDS.name.id}
+          label="Name"
+          required
+          error={fieldErrors.errors.name}
+          maxLength={255}
+          count={form.name.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              className={inputClass}
+              value={form.name}
+              onChange={(e) => set({ name: e.target.value }, 'name')}
+              placeholder="e.g. NREMT Recertification"
+            />
+          )}
+        </FormField>
+        <FormField id={PATHWAY_FIELDS.description.id} label="Description" error={fieldErrors.errors.description}>
+          {(field) => (
+            <textarea
+              {...field}
+              className={inputClass}
+              value={form.description}
+              onChange={(e) => set({ description: e.target.value }, 'description')}
+              rows={2}
+              placeholder="Renewal pathway details..."
+            />
+          )}
+        </FormField>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField
+            id={PATHWAY_FIELDS.renewal_type.id}
+            label="Renewal Type"
             required
-          />
-        </div>
-        <div>
-          <label htmlFor="pathway-description" className={labelClass}>
-            Description
-          </label>
-          <textarea
-            id="pathway-description"
-            className={inputClass}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-            placeholder="Renewal pathway details..."
-          />
-        </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="pathway-renewal-type" className={labelClass}>
-              Renewal Type *
-            </label>
-            <select
-              id="pathway-renewal-type"
-              className={selectClass}
-              value={renewalType}
-              onChange={(e) => setRenewalType(e.target.value as RecertificationPathwayCreate['renewal_type'])}
-            >
-              {RENEWAL_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="pathway-required-hours" className={labelClass}>
-              Required Hours
-            </label>
-            <input
-              id="pathway-required-hours"
-              className={inputClass}
-              type="number"
-              min="0"
-              step="0.5"
-              value={requiredHours}
-              onChange={(e) => setRequiredHours(e.target.value)}
-              placeholder="e.g. 40"
-            />
-          </div>
+            error={fieldErrors.errors.renewal_type}
+          >
+            {(field) => (
+              <select
+                {...field}
+                className={selectClass}
+                value={form.renewalType}
+                onChange={(e) =>
+                  set({ renewalType: e.target.value as RecertificationPathwayCreate['renewal_type'] }, 'renewal_type')
+                }
+              >
+                {RENEWAL_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+          <FormField
+            id={PATHWAY_FIELDS.required_hours.id}
+            label="Required Hours"
+            error={fieldErrors.errors.required_hours}
+          >
+            {(field) => (
+              <input
+                {...field}
+                className={inputClass}
+                type="number"
+                min="0"
+                step="0.5"
+                value={form.requiredHours}
+                onChange={(e) => set({ requiredHours: e.target.value }, 'required_hours')}
+                placeholder="e.g. 40"
+              />
+            )}
+          </FormField>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="pathway-renewal-window-days" className={labelClass}>
-              Renewal Window (days)
-            </label>
-            <input
-              id="pathway-renewal-window-days"
-              className={inputClass}
-              type="number"
-              min="1"
-              value={renewalWindowDays}
-              onChange={(e) => setRenewalWindowDays(e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="pathway-grace-period-days" className={labelClass}>
-              Grace Period (days)
-            </label>
-            <input
-              id="pathway-grace-period-days"
-              className={inputClass}
-              type="number"
-              min="0"
-              value={gracePeriodDays}
-              onChange={(e) => setGracePeriodDays(e.target.value)}
-            />
-          </div>
+          <FormField
+            id={PATHWAY_FIELDS.renewal_window_days.id}
+            label="Renewal Window (days)"
+            error={fieldErrors.errors.renewal_window_days}
+          >
+            {(field) => (
+              <input
+                {...field}
+                className={inputClass}
+                type="number"
+                min="1"
+                max="365"
+                value={form.renewalWindowDays}
+                onChange={(e) => set({ renewalWindowDays: e.target.value }, 'renewal_window_days')}
+              />
+            )}
+          </FormField>
+          <FormField
+            id={PATHWAY_FIELDS.grace_period_days.id}
+            label="Grace Period (days)"
+            error={fieldErrors.errors.grace_period_days}
+          >
+            {(field) => (
+              <input
+                {...field}
+                className={inputClass}
+                type="number"
+                min="0"
+                max="365"
+                value={form.gracePeriodDays}
+                onChange={(e) => set({ gracePeriodDays: e.target.value }, 'grace_period_days')}
+              />
+            )}
+          </FormField>
         </div>
       </div>
     </Modal>
@@ -262,40 +374,63 @@ interface AddMatrixModalProps {
   onSaved: () => void;
 }
 
+type MatrixField = 'name' | 'position' | 'description';
+
+// Limits mirror CompetencyMatrixBase (name 255, position 100).
+const MATRIX_FIELDS: FieldSpecs<MatrixField> = {
+  name: { id: 'matrix-name', label: 'Name' },
+  position: { id: 'matrix-position', label: 'Position' },
+  description: { id: 'matrix-description', label: 'Description' },
+};
+
+const EMPTY_MATRIX = { name: '', position: '', description: '' };
+
 const AddMatrixModal: React.FC<AddMatrixModalProps> = ({ isOpen, onClose, onSaved }) => {
   const [saving, setSaving] = useState(false);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [position, setPosition] = useState('');
+  const [form, setForm] = useState(EMPTY_MATRIX);
+  const fieldErrors = useFieldErrors(MATRIX_FIELDS);
+  const { clear } = fieldErrors;
+  const requestClose = useDiscardGuard({
+    isDirty: isOpen && JSON.stringify(form) !== JSON.stringify(EMPTY_MATRIX),
+    onClose,
+  });
 
   useEffect(() => {
     if (isOpen) {
-      setName('');
-      setDescription('');
-      setPosition('');
+      setForm(EMPTY_MATRIX);
+      clear();
     }
-  }, [isOpen]);
+  }, [isOpen, clear]);
+
+  const set = (field: MatrixField, value: string) => {
+    setForm((f) => ({ ...f, [field]: value }));
+    fieldErrors.setError(field, null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !position.trim()) {
-      toast.error('Name and position are required');
-      return;
-    }
+    const problems: FieldErrors<MatrixField> = {};
+    if (!form.name.trim()) problems.name = 'Give the matrix a name.';
+    if (!form.position.trim()) problems.position = 'Name the position this matrix is for.';
     setSaving(true);
     try {
       const data: CompetencyMatrixCreate = {
-        name: name.trim(),
-        description: description.trim() || undefined,
-        position: position.trim(),
+        name: form.name.trim(),
+        description: form.description.trim() || undefined,
+        position: form.position.trim(),
         skill_requirements: [],
       };
-      await competencyService.createMatrix(data);
-      toast.success('Matrix created');
-      onSaved();
-      onClose();
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to create matrix'));
+      const created = await createUnlessFlagged(
+        fieldErrors,
+        problems,
+        () => competencyService.createMatrix(data),
+        'Failed to create matrix'
+      );
+      if (created) {
+        toast.success('Matrix created');
+        onSaved();
+        onClose();
+      }
     } finally {
       setSaving(false);
     }
@@ -304,9 +439,10 @@ const AddMatrixModal: React.FC<AddMatrixModalProps> = ({ isOpen, onClose, onSave
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title="Add Competency Matrix"
       size="md"
+      noValidate
       onSubmit={(e) => {
         void handleSubmit(e);
       }}
@@ -320,52 +456,62 @@ const AddMatrixModal: React.FC<AddMatrixModalProps> = ({ isOpen, onClose, onSave
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             {saving ? 'Creating...' : 'Create Matrix'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
+          <button type="button" onClick={requestClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
             Cancel
           </button>
         </>
       }
     >
       <div className="space-y-4">
-        <div>
-          <label htmlFor="matrix-name" className={labelClass}>
-            Name *
-          </label>
-          <input
-            id="matrix-name"
-            className={inputClass}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Firefighter I Competency Matrix"
-            required
-          />
-        </div>
-        <div>
-          <label htmlFor="matrix-position" className={labelClass}>
-            Position *
-          </label>
-          <input
-            id="matrix-position"
-            className={inputClass}
-            value={position}
-            onChange={(e) => setPosition(e.target.value)}
-            placeholder="e.g. Firefighter, Lieutenant, Captain"
-            required
-          />
-        </div>
-        <div>
-          <label htmlFor="matrix-description" className={labelClass}>
-            Description
-          </label>
-          <textarea
-            id="matrix-description"
-            className={inputClass}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-            placeholder="Matrix description..."
-          />
-        </div>
+        <FormLevelError message={fieldErrors.formError} />
+        <FormField
+          id={MATRIX_FIELDS.name.id}
+          label="Name"
+          required
+          error={fieldErrors.errors.name}
+          maxLength={255}
+          count={form.name.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              className={inputClass}
+              value={form.name}
+              onChange={(e) => set('name', e.target.value)}
+              placeholder="e.g. Firefighter I Competency Matrix"
+            />
+          )}
+        </FormField>
+        <FormField
+          id={MATRIX_FIELDS.position.id}
+          label="Position"
+          required
+          error={fieldErrors.errors.position}
+          maxLength={100}
+          count={form.position.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              className={inputClass}
+              value={form.position}
+              onChange={(e) => set('position', e.target.value)}
+              placeholder="e.g. Firefighter, Lieutenant, Captain"
+            />
+          )}
+        </FormField>
+        <FormField id={MATRIX_FIELDS.description.id} label="Description" error={fieldErrors.errors.description}>
+          {(field) => (
+            <textarea
+              {...field}
+              className={inputClass}
+              value={form.description}
+              onChange={(e) => set('description', e.target.value)}
+              rows={2}
+              placeholder="Matrix description..."
+            />
+          )}
+        </FormField>
         <p className="text-theme-text-muted text-xs">Skill requirements can be added after creating the matrix.</p>
       </div>
     </Modal>
@@ -387,18 +533,50 @@ const QUALIFICATION_TYPES: { value: InstructorQualificationType; label: string }
   { value: 'mentor', label: 'Mentor' },
 ];
 
+type QualificationField =
+  | 'user_id'
+  | 'qualification_type'
+  | 'certification_level'
+  | 'certification_number'
+  | 'issuing_agency'
+  | 'issued_date'
+  | 'expiration_date';
+
+// Limits mirror InstructorQualificationBase.
+const QUALIFICATION_FIELDS: FieldSpecs<QualificationField> = {
+  user_id: { id: 'qualification-member', label: 'Member' },
+  qualification_type: { id: 'qualification-type', label: 'Qualification Type' },
+  certification_level: { id: 'qualification-certification-level', label: 'Certification Level' },
+  certification_number: { id: 'qualification-certification-number', label: 'Certification Number' },
+  issuing_agency: { id: 'qualification-issuing-agency', label: 'Issuing Agency' },
+  issued_date: { id: 'qualification-issued-date', label: 'Issued Date' },
+  expiration_date: { id: 'qualification-expiration-date', label: 'Expiration Date' },
+};
+
+const EMPTY_QUALIFICATION: Record<Exclude<QualificationField, 'qualification_type'>, string> & {
+  qualification_type: InstructorQualificationType;
+} = {
+  user_id: '',
+  qualification_type: 'instructor',
+  certification_level: '',
+  certification_number: '',
+  issuing_agency: '',
+  issued_date: '',
+  expiration_date: '',
+};
+
 const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, onClose, onSaved }) => {
   const [saving, setSaving] = useState(false);
-  const [userId, setUserId] = useState('');
-  const [qualificationType, setQualificationType] = useState<InstructorQualificationType>('instructor');
-  const [certificationNumber, setCertificationNumber] = useState('');
-  const [issuingAgency, setIssuingAgency] = useState('');
-  const [certificationLevel, setCertificationLevel] = useState('');
-  const [issuedDate, setIssuedDate] = useState('');
-  const [expirationDate, setExpirationDate] = useState('');
+  const [form, setForm] = useState(EMPTY_QUALIFICATION);
   const [members, setMembers] = useState<User[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState<string | null>(null);
+  const fieldErrors = useFieldErrors(QUALIFICATION_FIELDS);
+  const { clear } = fieldErrors;
+  const requestClose = useDiscardGuard({
+    isDirty: isOpen && JSON.stringify(form) !== JSON.stringify(EMPTY_QUALIFICATION),
+    onClose,
+  });
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -429,50 +607,96 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
 
   useEffect(() => {
     if (isOpen) {
-      setUserId('');
-      setQualificationType('instructor');
-      setCertificationNumber('');
-      setIssuingAgency('');
-      setCertificationLevel('');
-      setIssuedDate('');
-      setExpirationDate('');
+      setForm(EMPTY_QUALIFICATION);
+      clear();
     }
-  }, [isOpen]);
+  }, [isOpen, clear]);
+
+  const set = (patch: Partial<typeof EMPTY_QUALIFICATION>) => {
+    setForm((f) => ({ ...f, ...patch }));
+    for (const key of Object.keys(patch)) fieldErrors.setError(key as QualificationField, null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId) {
-      toast.error('Select the member this qualification belongs to');
-      return;
-    }
+    const problems: FieldErrors<QualificationField> = {};
+    if (!form.user_id) problems.user_id = 'Select the member this qualification belongs to.';
     setSaving(true);
     try {
       const data: InstructorQualificationCreate = {
-        user_id: userId,
-        qualification_type: qualificationType,
-        certification_number: certificationNumber.trim() || undefined,
-        issuing_agency: issuingAgency.trim() || undefined,
-        certification_level: certificationLevel.trim() || undefined,
-        issued_date: issuedDate || undefined,
-        expiration_date: expirationDate || undefined,
+        user_id: form.user_id,
+        qualification_type: form.qualification_type,
+        certification_number: form.certification_number.trim() || undefined,
+        issuing_agency: form.issuing_agency.trim() || undefined,
+        certification_level: form.certification_level.trim() || undefined,
+        issued_date: form.issued_date || undefined,
+        expiration_date: form.expiration_date || undefined,
       };
-      await instructorService.createQualification(data);
-      toast.success('Qualification added');
-      onSaved();
-      onClose();
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to add qualification'));
+      const created = await createUnlessFlagged(
+        fieldErrors,
+        problems,
+        () => instructorService.createQualification(data),
+        'Failed to add qualification'
+      );
+      if (created) {
+        toast.success('Qualification added');
+        onSaved();
+        onClose();
+      }
     } finally {
       setSaving(false);
     }
   };
 
+  const textField = (
+    name: 'certification_level' | 'certification_number' | 'issuing_agency',
+    maxLength: number,
+    placeholder: string
+  ) => (
+    <FormField
+      id={QUALIFICATION_FIELDS[name].id}
+      label={QUALIFICATION_FIELDS[name].label}
+      error={fieldErrors.errors[name]}
+      maxLength={maxLength}
+      count={form[name].length}
+    >
+      {(field) => (
+        <input
+          {...field}
+          className={inputClass}
+          value={form[name]}
+          onChange={(e) => set({ [name]: e.target.value })}
+          placeholder={placeholder}
+        />
+      )}
+    </FormField>
+  );
+
+  const dateField = (name: 'issued_date' | 'expiration_date') => (
+    <FormField
+      id={QUALIFICATION_FIELDS[name].id}
+      label={QUALIFICATION_FIELDS[name].label}
+      error={fieldErrors.errors[name]}
+    >
+      {(field) => (
+        <input
+          {...field}
+          className={inputClass}
+          type="date"
+          value={form[name]}
+          onChange={(e) => set({ [name]: e.target.value })}
+        />
+      )}
+    </FormField>
+  );
+
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title="Add Instructor Qualification"
       size="md"
+      noValidate
       onSubmit={(e) => {
         void handleSubmit(e);
       }}
@@ -486,121 +710,71 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             {saving ? 'Adding...' : 'Add Qualification'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
+          <button type="button" onClick={requestClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
             Cancel
           </button>
         </>
       }
     >
       <div className="space-y-4">
+        <FormLevelError message={fieldErrors.formError} />
         <div>
-          <label htmlFor="qualification-member" className={labelClass}>
-            Member *
-          </label>
-          <select
-            id="qualification-member"
-            className={selectClass}
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            disabled={membersLoading}
-            required
-          >
-            <option value="">{membersLoading ? 'Loading members...' : 'Select a member...'}</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {displayNameOf(m) || m.username}
-                {m.membership_number ? ` (#${m.membership_number})` : ''}
-              </option>
-            ))}
-          </select>
+          <FormField id={QUALIFICATION_FIELDS.user_id.id} label="Member" required error={fieldErrors.errors.user_id}>
+            {(field) => (
+              <select
+                {...field}
+                className={selectClass}
+                value={form.user_id}
+                onChange={(e) => set({ user_id: e.target.value })}
+                disabled={membersLoading}
+              >
+                <option value="">{membersLoading ? 'Loading members...' : 'Select a member...'}</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {displayNameOf(m) || m.username}
+                    {m.membership_number ? ` (#${m.membership_number})` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
           {membersError && (
-            <p className="mt-1 text-xs text-red-700 dark:text-red-400" role="alert">
+            <p className={`mt-1 text-xs ${FIELD_ERROR_CLASS}`} role="alert">
               {membersError}
             </p>
           )}
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="qualification-type" className={labelClass}>
-              Qualification Type *
-            </label>
-            <select
-              id="qualification-type"
-              className={selectClass}
-              value={qualificationType}
-              onChange={(e) => setQualificationType(e.target.value as InstructorQualificationType)}
-            >
-              {QUALIFICATION_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="qualification-certification-level" className={labelClass}>
-              Certification Level
-            </label>
-            <input
-              id="qualification-certification-level"
-              className={inputClass}
-              value={certificationLevel}
-              onChange={(e) => setCertificationLevel(e.target.value)}
-              placeholder="e.g. Level I, Level II"
-            />
-          </div>
+          <FormField
+            id={QUALIFICATION_FIELDS.qualification_type.id}
+            label="Qualification Type"
+            required
+            error={fieldErrors.errors.qualification_type}
+          >
+            {(field) => (
+              <select
+                {...field}
+                className={selectClass}
+                value={form.qualification_type}
+                onChange={(e) => set({ qualification_type: e.target.value as InstructorQualificationType })}
+              >
+                {QUALIFICATION_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+          {textField('certification_level', 50, 'e.g. Level I, Level II')}
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="qualification-certification-number" className={labelClass}>
-              Certification Number
-            </label>
-            <input
-              id="qualification-certification-number"
-              className={inputClass}
-              value={certificationNumber}
-              onChange={(e) => setCertificationNumber(e.target.value)}
-              placeholder="Cert #"
-            />
-          </div>
-          <div>
-            <label htmlFor="qualification-issuing-agency" className={labelClass}>
-              Issuing Agency
-            </label>
-            <input
-              id="qualification-issuing-agency"
-              className={inputClass}
-              value={issuingAgency}
-              onChange={(e) => setIssuingAgency(e.target.value)}
-              placeholder="e.g. State Fire Marshal"
-            />
-          </div>
+          {textField('certification_number', 100, 'Cert #')}
+          {textField('issuing_agency', 255, 'e.g. State Fire Marshal')}
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="qualification-issued-date" className={labelClass}>
-              Issued Date
-            </label>
-            <input
-              id="qualification-issued-date"
-              className={inputClass}
-              type="date"
-              value={issuedDate}
-              onChange={(e) => setIssuedDate(e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="qualification-expiration-date" className={labelClass}>
-              Expiration Date
-            </label>
-            <input
-              id="qualification-expiration-date"
-              className={inputClass}
-              type="date"
-              value={expirationDate}
-              onChange={(e) => setExpirationDate(e.target.value)}
-            />
-          </div>
+          {dateField('issued_date')}
+          {dateField('expiration_date')}
         </div>
       </div>
     </Modal>
@@ -623,58 +797,110 @@ const EXERCISE_TYPES = [
   { value: 'full_scale', label: 'Full Scale' },
 ] as const;
 
+type ExerciseField =
+  | 'exercise_name'
+  | 'exercise_type'
+  | 'exercise_date'
+  | 'description'
+  | 'lead_agency'
+  | 'total_participants'
+  | 'org_name';
+
+// Limits mirror MultiAgencyTrainingBase and ParticipatingOrganization (255 each).
+const EXERCISE_FIELDS: FieldSpecs<ExerciseField> = {
+  exercise_name: { id: 'exercise-name', label: 'Exercise Name' },
+  exercise_type: { id: 'exercise-type', label: 'Exercise Type' },
+  exercise_date: { id: 'exercise-date', label: 'Exercise Date' },
+  description: { id: 'exercise-description', label: 'Description' },
+  lead_agency: { id: 'exercise-lead-agency', label: 'Lead Agency' },
+  total_participants: { id: 'exercise-total-participants', label: 'Total Participants' },
+  // A refusal on the one organization the form sends arrives as
+  // participating_organizations.0.name, whose last key is `name`.
+  org_name: { id: 'exercise-organization-name', label: 'Organization Name', apiKeys: ['name'] },
+};
+
+interface ExerciseForm {
+  exerciseName: string;
+  exerciseType: MultiAgencyTrainingCreate['exercise_type'];
+  description: string;
+  exerciseDate: string;
+  leadAgency: string;
+  totalParticipants: string;
+  nimsCompliant: boolean;
+  orgName: string;
+  orgRole: ParticipatingOrganization['role'];
+}
+
 const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, onSaved }) => {
   const tz = useTimezone();
   const [saving, setSaving] = useState(false);
-  const [exerciseName, setExerciseName] = useState('');
-  const [exerciseType, setExerciseType] = useState<MultiAgencyTrainingCreate['exercise_type']>('joint_training');
-  const [description, setDescription] = useState('');
-  const [exerciseDate, setExerciseDate] = useState('');
-  const [leadAgency, setLeadAgency] = useState('');
-  const [totalParticipants, setTotalParticipants] = useState('');
-  const [nimsCompliant, setNimsCompliant] = useState(false);
-  const [orgName, setOrgName] = useState('');
-  const [orgRole, setOrgRole] = useState<ParticipatingOrganization['role']>('participant');
+  const emptyForm = useMemo<ExerciseForm>(
+    () => ({
+      exerciseName: '',
+      exerciseType: 'joint_training',
+      description: '',
+      exerciseDate: getTodayLocalDate(tz),
+      leadAgency: '',
+      totalParticipants: '',
+      nimsCompliant: false,
+      orgName: '',
+      orgRole: 'participant',
+    }),
+    [tz]
+  );
+  const [form, setForm] = useState(emptyForm);
+  const fieldErrors = useFieldErrors(EXERCISE_FIELDS);
+  const { clear } = fieldErrors;
+  const requestClose = useDiscardGuard({
+    isDirty: isOpen && JSON.stringify(form) !== JSON.stringify(emptyForm),
+    onClose,
+  });
 
   useEffect(() => {
     if (isOpen) {
-      setExerciseName('');
-      setExerciseType('joint_training');
-      setDescription('');
-      setExerciseDate(getTodayLocalDate(tz));
-      setLeadAgency('');
-      setTotalParticipants('');
-      setNimsCompliant(false);
-      setOrgName('');
-      setOrgRole('participant');
+      setForm(emptyForm);
+      clear();
     }
-  }, [isOpen, tz]);
+  }, [isOpen, emptyForm, clear]);
+
+  const set = (patch: Partial<ExerciseForm>, field?: ExerciseField) => {
+    setForm((f) => ({ ...f, ...patch }));
+    if (field) fieldErrors.setError(field, null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!exerciseName.trim() || !exerciseDate) {
-      toast.error('Exercise name and date are required');
-      return;
-    }
+    const problems: FieldErrors<ExerciseField> = {};
+    if (!form.exerciseName.trim()) problems.exercise_name = 'Give the exercise a name.';
+    if (!form.exerciseDate) problems.exercise_date = 'Enter the date of the exercise.';
+    const participantsProblem = wholeNumberProblem(form.totalParticipants, 0);
+    if (participantsProblem) problems.total_participants = participantsProblem;
     setSaving(true);
     try {
-      const orgs: ParticipatingOrganization[] = orgName.trim() ? [{ name: orgName.trim(), role: orgRole }] : [];
+      const orgs: ParticipatingOrganization[] = form.orgName.trim()
+        ? [{ name: form.orgName.trim(), role: form.orgRole }]
+        : [];
       const data: MultiAgencyTrainingCreate = {
-        exercise_name: exerciseName.trim(),
-        exercise_type: exerciseType,
-        description: description.trim() || undefined,
-        exercise_date: exerciseDate,
-        lead_agency: leadAgency.trim() || undefined,
-        total_participants: totalParticipants ? Number(totalParticipants) : undefined,
-        nims_compliant: nimsCompliant || undefined,
+        exercise_name: form.exerciseName.trim(),
+        exercise_type: form.exerciseType,
+        description: form.description.trim() || undefined,
+        exercise_date: form.exerciseDate,
+        lead_agency: form.leadAgency.trim() || undefined,
+        total_participants: form.totalParticipants ? Number(form.totalParticipants) : undefined,
+        nims_compliant: form.nimsCompliant || undefined,
         participating_organizations: orgs,
       };
-      await multiAgencyService.createExercise(data);
-      toast.success('Exercise created');
-      onSaved();
-      onClose();
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to create exercise'));
+      const created = await createUnlessFlagged(
+        fieldErrors,
+        problems,
+        () => multiAgencyService.createExercise(data),
+        'Failed to create exercise'
+      );
+      if (created) {
+        toast.success('Exercise created');
+        onSaved();
+        onClose();
+      }
     } finally {
       setSaving(false);
     }
@@ -683,9 +909,10 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title="Add Multi-Agency Exercise"
       size="lg"
+      noValidate
       onSubmit={(e) => {
         void handleSubmit(e);
       }}
@@ -699,123 +926,151 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             {saving ? 'Creating...' : 'Create Exercise'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
+          <button type="button" onClick={requestClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
             Cancel
           </button>
         </>
       }
     >
       <div className="space-y-4">
-        <div>
-          <label htmlFor="exercise-name" className={labelClass}>
-            Exercise Name *
-          </label>
-          <input
-            id="exercise-name"
-            className={inputClass}
-            value={exerciseName}
-            onChange={(e) => setExerciseName(e.target.value)}
-            placeholder="e.g. Regional MCI Drill"
+        <FormLevelError message={fieldErrors.formError} />
+        <FormField
+          id={EXERCISE_FIELDS.exercise_name.id}
+          label="Exercise Name"
+          required
+          error={fieldErrors.errors.exercise_name}
+          maxLength={255}
+          count={form.exerciseName.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              className={inputClass}
+              value={form.exerciseName}
+              onChange={(e) => set({ exerciseName: e.target.value }, 'exercise_name')}
+              placeholder="e.g. Regional MCI Drill"
+            />
+          )}
+        </FormField>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField
+            id={EXERCISE_FIELDS.exercise_type.id}
+            label="Exercise Type"
             required
-          />
+            error={fieldErrors.errors.exercise_type}
+          >
+            {(field) => (
+              <select
+                {...field}
+                className={selectClass}
+                value={form.exerciseType}
+                onChange={(e) =>
+                  set({ exerciseType: e.target.value as MultiAgencyTrainingCreate['exercise_type'] }, 'exercise_type')
+                }
+              >
+                {EXERCISE_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+          <FormField
+            id={EXERCISE_FIELDS.exercise_date.id}
+            label="Exercise Date"
+            required
+            error={fieldErrors.errors.exercise_date}
+          >
+            {(field) => (
+              <input
+                {...field}
+                className={inputClass}
+                type="date"
+                value={form.exerciseDate}
+                onChange={(e) => set({ exerciseDate: e.target.value }, 'exercise_date')}
+              />
+            )}
+          </FormField>
         </div>
+        <FormField id={EXERCISE_FIELDS.description.id} label="Description" error={fieldErrors.errors.description}>
+          {(field) => (
+            <textarea
+              {...field}
+              className={inputClass}
+              value={form.description}
+              onChange={(e) => set({ description: e.target.value }, 'description')}
+              rows={2}
+              placeholder="Exercise scenario and objectives..."
+            />
+          )}
+        </FormField>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="exercise-type" className={labelClass}>
-              Exercise Type *
-            </label>
-            <select
-              id="exercise-type"
-              className={selectClass}
-              value={exerciseType}
-              onChange={(e) => setExerciseType(e.target.value as MultiAgencyTrainingCreate['exercise_type'])}
-            >
-              {EXERCISE_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="exercise-date" className={labelClass}>
-              Exercise Date *
-            </label>
-            <input
-              id="exercise-date"
-              className={inputClass}
-              type="date"
-              value={exerciseDate}
-              onChange={(e) => setExerciseDate(e.target.value)}
-              required
-            />
-          </div>
-        </div>
-        <div>
-          <label htmlFor="exercise-description" className={labelClass}>
-            Description
-          </label>
-          <textarea
-            id="exercise-description"
-            className={inputClass}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-            placeholder="Exercise scenario and objectives..."
-          />
-        </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="exercise-lead-agency" className={labelClass}>
-              Lead Agency
-            </label>
-            <input
-              id="exercise-lead-agency"
-              className={inputClass}
-              value={leadAgency}
-              onChange={(e) => setLeadAgency(e.target.value)}
-              placeholder="e.g. County Fire Authority"
-            />
-          </div>
-          <div>
-            <label htmlFor="exercise-total-participants" className={labelClass}>
-              Total Participants
-            </label>
-            <input
-              id="exercise-total-participants"
-              className={inputClass}
-              type="number"
-              min="1"
-              value={totalParticipants}
-              onChange={(e) => setTotalParticipants(e.target.value)}
-              placeholder="# of participants"
-            />
-          </div>
+          <FormField
+            id={EXERCISE_FIELDS.lead_agency.id}
+            label="Lead Agency"
+            error={fieldErrors.errors.lead_agency}
+            maxLength={255}
+            count={form.leadAgency.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                className={inputClass}
+                value={form.leadAgency}
+                onChange={(e) => set({ leadAgency: e.target.value }, 'lead_agency')}
+                placeholder="e.g. County Fire Authority"
+              />
+            )}
+          </FormField>
+          <FormField
+            id={EXERCISE_FIELDS.total_participants.id}
+            label="Total Participants"
+            error={fieldErrors.errors.total_participants}
+          >
+            {(field) => (
+              <input
+                {...field}
+                className={inputClass}
+                type="number"
+                min="0"
+                step="1"
+                value={form.totalParticipants}
+                onChange={(e) => set({ totalParticipants: e.target.value }, 'total_participants')}
+                placeholder="# of participants"
+              />
+            )}
+          </FormField>
         </div>
         <fieldset className="border-theme-surface-border rounded-lg border p-3">
           <legend className="text-theme-text-secondary px-1 text-sm font-medium">Participating Organization</legend>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField
+              id={EXERCISE_FIELDS.org_name.id}
+              label="Organization Name"
+              error={fieldErrors.errors.org_name}
+              maxLength={255}
+              count={form.orgName.length}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  className={inputClass}
+                  value={form.orgName}
+                  onChange={(e) => set({ orgName: e.target.value }, 'org_name')}
+                  placeholder="Agency name"
+                />
+              )}
+            </FormField>
             <div>
-              <label htmlFor="exercise-organization-name" className={labelClass}>
-                Organization Name
-              </label>
-              <input
-                id="exercise-organization-name"
-                className={inputClass}
-                value={orgName}
-                onChange={(e) => setOrgName(e.target.value)}
-                placeholder="Agency name"
-              />
-            </div>
-            <div>
-              <label htmlFor="exercise-role" className={labelClass}>
+              <label htmlFor="exercise-role" className="form-label">
                 Role
               </label>
               <select
                 id="exercise-role"
                 className={selectClass}
-                value={orgRole}
-                onChange={(e) => setOrgRole(e.target.value as ParticipatingOrganization['role'])}
+                value={form.orgRole}
+                onChange={(e) => set({ orgRole: e.target.value as ParticipatingOrganization['role'] })}
               >
                 <option value="host">Host</option>
                 <option value="participant">Participant</option>
@@ -832,8 +1087,8 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
           <input
             type="checkbox"
             id="nims-compliant"
-            checked={nimsCompliant}
-            onChange={(e) => setNimsCompliant(e.target.checked)}
+            checked={form.nimsCompliant}
+            onChange={(e) => set({ nimsCompliant: e.target.checked })}
             className="border-theme-surface-border rounded"
           />
           <label htmlFor="nims-compliant" className="text-theme-text-secondary text-sm">

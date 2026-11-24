@@ -10,7 +10,9 @@ decisions, 2026-11-10):
   claim, through ``FileStorageService``; HEIC is accepted here and nowhere
   else in the application.
 - **Filed by the member**, with the request or while it is pending. Once it is
-  decided, withdrawn or voided nothing more can be added.
+  decided, withdrawn or voided nothing more can be added. While it is pending
+  the member may also remove one (owner decision 2026-11-23), except the last
+  when the policy requires a document.
 - **Read by the member and the people who may decide the request**
   (``AttendanceWaiverService.may_decide``), and nobody else: not a former
   decider, not a training officer as such. Every download is audited by id.
@@ -44,6 +46,7 @@ from app.models.attendance_waiver import (
 from app.models.user import User
 from app.schemas.attendance_waiver import MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS
 from app.services import file_storage_service as file_storage
+from app.services import member_files
 from app.services.attendance_waiver_service import (
     TRAINING_WORKFLOW,
     AttendanceWaiverNotFound,
@@ -285,15 +288,105 @@ class AttendanceWaiverAttachmentService:
         await self.db.refresh(locked)
         return locked
 
+    async def remove_attachment(
+        self,
+        organization_id: str,
+        member: User,
+        request_id: str,
+        attachment_id: str,
+    ) -> AttendanceWaiverRequest:
+        """Take a document off the member's own pending request (owner
+        decision 2026-11-23), so a wrong or over-sharing file need not wait
+        for retention.
+
+        Repeat-safe (pitfall #36): an id no longer on the request (already
+        removed, by a retry or a second tab) changes nothing and answers with
+        the request as it is. When the department requires a document, the
+        last one cannot be removed: the member files the right one first.
+        The file goes after the commit, through the shared reference check,
+        so a refused removal touches no file and a path another row still
+        names is kept.
+        """
+        org_id = str(organization_id)
+        policy = await self.engine.get_policy(org_id)
+        await self._own(
+            org_id, member, await self.engine._find(org_id, request_id), "remove"
+        )
+        # The engine's lock order (member, then request), then the request's
+        # documents, so two removals at once cannot both pass the last-one
+        # check (pitfall #27).
+        locked = await self.engine._locked_request(org_id, request_id)
+        if str(locked.user_id) != str(member.id):
+            raise AttendanceWaiverNotFound("Request not found")
+        if locked.status != AttendanceWaiverStatus.PENDING:
+            raise ValueError(
+                "Documents can only be removed while the request is pending."
+            )
+        files = list(
+            (
+                await self.db.execute(
+                    select(AttendanceWaiverAttachment)
+                    .where(
+                        AttendanceWaiverAttachment.organization_id == org_id,
+                        AttendanceWaiverAttachment.request_id == str(locked.id),
+                    )
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        target = next((f for f in files if str(f.id) == str(attachment_id)), None)
+        if target is None:
+            # Nothing to remove; the commit only releases the locks.
+            await self.db.commit()
+            await self.db.refresh(locked)
+            return locked
+        if policy.attachment == "required" and len(files) == 1:
+            raise ValueError(
+                "Your department requires a document with each request. "
+                "Attach the right one before removing this one."
+            )
+        stored_path = target.file_path
+        await self.db.delete(target)
+        await log_audit_event(
+            db=self.db,
+            event_type="attendance_waiver_attachment_removed",
+            event_category="training",
+            severity="info",
+            event_data={
+                **AttendanceWaiverService._ids(locked),
+                "attachment_id": str(target.id),
+            },
+            user_id=str(member.id),
+            username=member.username,
+        )
+        await self.db.commit()
+        path = file_storage.resolve(stored_path, org_id, AREA)
+        if path is not None:
+            await member_files.remove_unreferenced_files(
+                self.db,
+                org_id,
+                {path},
+                subject_id=f"waiver request {locked.id}",
+                areas=(AREA,),
+            )
+        await self.db.refresh(locked)
+        return locked
+
     async def _own(
-        self, org_id: str, member: User, request: Optional[AttendanceWaiverRequest]
+        self,
+        org_id: str,
+        member: User,
+        request: Optional[AttendanceWaiverRequest],
+        verb: str = "file",
     ) -> AttendanceWaiverRequest:
         if request is None:
             raise AttendanceWaiverNotFound("Request not found")
         if str(request.user_id) != str(member.id):
             if await self.engine._may_view(org_id, member, request):
                 raise PermissionError(
-                    "Only the member who asked can file documents with it."
+                    f"Only the member who asked can {verb} its documents."
                 )
             raise AttendanceWaiverNotFound("Request not found")
         return request
@@ -528,15 +621,23 @@ class AttendanceWaiverAttachmentService:
         }
 
 
-async def remove_member_attachments(db: AsyncSession, user: User) -> int:
+async def remove_member_attachments(
+    db: AsyncSession, user: User, *, queued: Optional[List[str]] = None
+) -> int:
     """Delete every document filed with the member's requests, files first.
 
     For anonymisation: the requests stay (they are the record that a session
     was excused, and grading reads them), the documents about the member do
-    not. A file that cannot be deleted is logged and its row still goes, as
-    anonymisation does with applicant documents: the member's link to it is
-    what must not survive.
+    not. A file that cannot be deleted still loses its row, as anonymisation
+    does with applicant documents: the member's link to it is what must not
+    survive. So that the file is not lost track of, it is queued on
+    ``pending_file_deletions`` in the caller's transaction for the hourly
+    sweep to retry (owner decision 2026-11-23); the queue rows' ids are
+    appended to *queued*.
     """
+    from app.models.pending_file_deletion import PendingDeletionReason
+    from app.services.pending_file_deletions import enqueue
+
     org_id = str(user.organization_id)
     rows = (
         await db.execute(
@@ -552,10 +653,15 @@ async def remove_member_attachments(db: AsyncSession, user: User) -> int:
             )
         )
     ).all()
+    retry: Dict[str, StorageArea] = {}
     for _attachment_id, stored_path in rows:
-        await file_storage.delete_quietly(
-            file_storage.resolve(stored_path, org_id, AREA)
-        )
+        path = file_storage.resolve(stored_path, org_id, AREA)
+        if path and not await file_storage.delete(path):
+            retry[path] = AREA
+    if retry:
+        ids = enqueue(db, org_id, retry, PendingDeletionReason.MEMBER_ANONYMIZATION)
+        if queued is not None:
+            queued.extend(ids)
     if rows:
         await db.execute(
             delete(AttendanceWaiverAttachment).where(

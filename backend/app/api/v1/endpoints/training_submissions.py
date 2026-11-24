@@ -59,15 +59,12 @@ from app.schemas.training_submission import (
     sanitize_attachments,
 )
 from app.services import file_storage_service as file_storage
-from app.services import member_files
+from app.services import member_files, pending_file_deletions
 from app.services.file_storage_service import (
     FileRules,
     StorageArea,
 )
-from app.services.member_files import (
-    confined_attachment_path,
-    confined_attachment_paths,
-)
+from app.services.member_files import confined_attachment_path
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.services.training_submission_service import (
     TrainingSubmissionService,
@@ -562,39 +559,28 @@ async def delete_submission(
     """Delete a submission (only by submitter, before approval)."""
     service = TrainingSubmissionService(db)
     async with handle_service_errors("Failed to delete submission"):
-        # Collected before the row goes: a withdrawn submission's certificate
-        # can carry PHI, and deleting only the row leaves the file in the
-        # uploads volume — and in its backups — indefinitely.
-        #
-        # A deletable submission can still share its files: reverse_approval
-        # reopens the submission and voids the record approval copied from
-        # it, and the voided record keeps naming the same certificates. So
-        # the reference check, after the commit, decides what goes.
-        # Locked, so the paths come from the list as it stands when the
-        # delete commits, and an approval in flight is waited for and then
-        # refuses the delete below rather than losing its submission.
-        submission = await service.get_submission(
-            submission_id, current_user.organization_id, for_update=True
-        )
-        stored_paths = (
-            _confined_attachment_paths(
-                submission.attachments, submission.organization_id
-            )
-            if submission
-            else []
-        )
-
+        # A withdrawn submission's certificate can carry PHI, and deleting
+        # only the row leaves the file in the uploads volume, and in its
+        # backups, indefinitely. The service queues the files in the delete's
+        # own transaction; they are removed here once it has committed, and
+        # the hourly sweep finishes any this does not (a failure after the
+        # commit, a killed process). A file another row still names, such as
+        # the voided record a reversal left, is kept.
+        queued: list[str] = []
         await service.delete_submission(
-            submission_id, current_user.id, current_user.organization_id
+            submission_id,
+            current_user.id,
+            current_user.organization_id,
+            queued=queued,
         )
-
-        await member_files.remove_unreferenced_files(
-            db,
-            str(current_user.organization_id),
-            set(stored_paths),
-            subject_id=f"submission {submission_id}",
-            areas=(StorageArea.SELF_REPORTS,),
-        )
+        if queued:
+            await pending_file_deletions.process(
+                db,
+                str(current_user.organization_id),
+                queued,
+                areas=(StorageArea.SELF_REPORTS,),
+            )
+            await db.commit()
 
 
 # ==================== Officer Review ====================
@@ -812,12 +798,6 @@ def _confined_path(attachment, organization_id) -> str | None:
     see :func:`app.services.member_files.confined_attachment_path`."""
     return confined_attachment_path(
         attachment, organization_id, StorageArea.SELF_REPORTS
-    )
-
-
-def _confined_attachment_paths(attachments, organization_id) -> list[str]:
-    return confined_attachment_paths(
-        attachments, organization_id, StorageArea.SELF_REPORTS
     )
 
 

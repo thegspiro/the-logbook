@@ -144,6 +144,17 @@ export const DEMO_ON_LEAVE_CREDENTIALS = {
 };
 
 /**
+ * A firefighter who runs a shift: its Shift Officer, without
+ * scheduling.manage, which every officer rank in the demo holds. Shots marked
+ * `auth: "shiftofficer"` sign in as this account. Must match
+ * OFFICER_CLOSEOUT_OFFICER in seed_demo_data.py.
+ */
+export const DEMO_SHIFT_OFFICER_CREDENTIALS = {
+  username: "ytanaka",
+  password: "DemoMember!2026",
+};
+
+/**
  * A member who reviews no suggestion box and has one suggestion forwarded to
  * them, so the Review tab reaches them through the forward alone.
  *
@@ -9545,6 +9556,75 @@ export const SHOTS = [
     })),
   },
   {
+    // This year's review for Ingrid Solberg (seed_backlog_02_evaluations),
+    // drafted on the template version with a calibration step, which shows
+    // Assign while pending. The dialog is opened and nothing is chosen.
+    id: "02-144-evaluation-step-assign",
+    doc: "02-training.md",
+    line: 5800,
+    anchor: "__placed-by-hand-02-144__",
+    alt: "An evaluation's page with the Who takes “Calibration” dialog open from the Assign button on the step list's Calibration step: who can and cannot be named, the Completed by list still on No one named, and Cancel beside a greyed button",
+    route: "/reports/evaluations",
+    viewport: { width: 1440, height: 1000 },
+    expect: "Who takes “Calibration”",
+    allowEmptyState:
+      '"No longer applies" belongs to the evaluation form behind the dialog, not an empty page.',
+    prepare: async (page, helpers) => {
+      await openFirstFromApi(
+        "/evaluations",
+        (id) => `/reports/evaluations/${id}`,
+        "evaluations",
+        (e) => e.member?.name === "Ingrid Solberg" && e.period_name === "2026",
+      )(page, helpers);
+      await page
+        .getByRole("button", { name: "Assign Calibration" })
+        .click({ timeout: 20_000 });
+      await page.getByText("Who takes “Calibration”").waitFor();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // The same review's Last review card: last year's finalized review for
+    // the same member on the same form, with the goal it set.
+    id: "02-145-evaluation-last-review",
+    doc: "02-training.md",
+    line: 5824,
+    anchor: "__placed-by-hand-02-145__",
+    alt: "The Last review card on this year's evaluation: last year's period, its overall grade and each section's grade, the goal set then under Goals set then, and Open the last review",
+    route: "/reports/evaluations",
+    expect: "Goals set then",
+    selector: "section[aria-labelledby='previous-review-heading']",
+    prepare: openFirstFromApi(
+      "/evaluations",
+      (id) => `/reports/evaluations/${id}`,
+      "evaluations",
+      (e) => e.member?.name === "Ingrid Solberg" && e.period_name === "2026",
+    ),
+  },
+  {
+    // Last year's period chosen: three of its four reviews finalized, with
+    // their grades, as the administrator, who holds evaluations.view_all.
+    id: "02-146-evaluation-period-results",
+    doc: "02-training.md",
+    line: 5843,
+    anchor: "__placed-by-hand-02-146__",
+    alt: "Evaluations I conduct with the 2025 period chosen: the Period results card reading 3 of 4 complete with how many stand at each grade and Export CSV, above the list with its Overall grade column, blank for the review still in progress",
+    route: "/reports/evaluations/conduct",
+    viewport: { width: 1440, height: 1200 },
+    expect: "Period results",
+    prepare: async (page) => {
+      await page
+        .locator("#evaluation-period")
+        .selectOption({ label: "2025" }, { timeout: 20_000 });
+      await page.getByText("Period results").waitFor();
+      await page.waitForTimeout(800);
+    },
+  },
+  {
     id: "02-01-my-training",
     expect: "Required Training",
     doc: "02-training.md",
@@ -15275,6 +15355,50 @@ export const SHOTS = [
         .scrollIntoViewIfNeeded();
     },
     fullPage: false,
+  },
+  {
+    // The seeder's officer close-out fixture, opened by its Shift Officer,
+    // who lacks scheduling.manage: their own row is read-only. Step 1 only;
+    // nothing is saved. Found through the administrator's page, since a
+    // member's shift list is not the whole schedule.
+    id: "03-138-closeout-own-row-locked",
+    doc: "03-scheduling.md",
+    line: 1599,
+    anchor: "__placed-by-hand-03-138__",
+    alt: "Close-out step 1 as a Shift Officer who cannot manage scheduling: their own row's Start, End and Hours read-only, with no Until shift end or Full shift button and the line that their times come from their check-in and check-out, under the crew member's row, which they can still change",
+    route: "/scheduling",
+    auth: "shiftofficer",
+    expect: "Your own times come from your check-in and check-out",
+    prepare: async (page, { lookupPage }) => {
+      const admin = await lookupPage();
+      const listed = await apiFromPage(
+        admin,
+        "GET",
+        "/scheduling/shifts?limit=200",
+      );
+      const shifts = Array.isArray(listed.body)
+        ? listed.body
+        : listed.body?.shifts || listed.body?.items || [];
+      const shift = shifts.find(
+        (s) => (s.notes || "").trim() === "Shift officer close-out fixture",
+      );
+      if (!shift)
+        throw new Error("no officer close-out fixture; re-run the seeder");
+      // The three-step wizard is the count-only close-out, as for 03-75; in
+      // the other modes Close out shift is a single confirmation. Set on the
+      // administrator's page, since the setting is theirs.
+      await setCallTracking("count_only")(admin);
+      await page.goto(
+        new URL(`/scheduling?shift=${shift.id}`, page.url()).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await clickByName(/^Close out shift$/i)(page);
+      await page
+        .getByText("Your own times come from your check-in and check-out")
+        .waitFor({ timeout: 20_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(500);
+    },
   },
   {
     id: "03-75-closeout-step1-attendance",

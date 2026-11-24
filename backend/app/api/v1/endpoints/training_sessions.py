@@ -24,7 +24,7 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
-from app.models.event import Event
+from app.models.event import Event, EventType
 from app.models.training import TrainingApproval, TrainingSession
 from app.models.user import User
 from app.schemas.training_session import (
@@ -293,18 +293,25 @@ async def get_training_session_by_event(
         return None
 
     # A draft event's session is hidden from a non-organizer, as the event
-    # itself is (ADV-5): the same null an event with no session answers.
+    # itself is (ADV-5): the same null an event with no session answers. A
+    # training manager administers every Training event, drafts included, so
+    # a Training draft's session is theirs to read too.
     if not user_has_permission(current_user, "events.manage"):
+        in_org = (
+            Event.id == str(event_id),
+            Event.organization_id == str(current_user.organization_id),
+        )
         is_draft = (
-            await db.execute(
-                select(Event.is_draft).where(
-                    Event.id == str(event_id),
-                    Event.organization_id == str(current_user.organization_id),
-                )
-            )
+            await db.execute(select(Event.is_draft).where(*in_org))
         ).scalar_one_or_none()
         if is_draft:
-            return None
+            if not user_has_permission(current_user, "training.manage"):
+                return None
+            event_type = (
+                await db.execute(select(Event.event_type).where(*in_org))
+            ).scalar_one_or_none()
+            if event_type != EventType.TRAINING:
+                return None
 
     return await _session_payload(service, training_session)
 

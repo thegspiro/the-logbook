@@ -238,6 +238,9 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "A session you asked to be excused from moved, so the request "
             "needs your confirmation",
             "A question about your request to be excused, which it waits on",
+            "The same three notices for a business meeting you asked to be "
+            "excused from: the request closed undecided, the meeting moved, "
+            "or a question waits on you",
             "A leave of absence recorded, changed or removed, and what it does "
             "to your training requirements",
         ),
@@ -290,6 +293,8 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "An event you said you are going to, or might go to, changed its "
             "title, time or location",
             "A follow-up an event's organizer sends about the event",
+            "Your request for a seat on an apparatus night was approved, "
+            "declined, or not answered before the night",
         ),
         rationale=(
             "The bell carries the same notice and the event page shows the "
@@ -448,6 +453,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "A member asked to be marked present at your event",
             "You were made an event's organizer or alternate, or relieved of it",
             "An event request was assigned to you",
+            "A member asked for a seat on an apparatus night you organize",
         ),
         rationale="The task also waits in the bell and on the event.",
     ),

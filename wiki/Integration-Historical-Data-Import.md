@@ -93,7 +93,10 @@ A member's **profile** has a _Shift & Call History_ section with the same
 figures as their own **My Hours** screen: hours by month and year, how many of
 them were on call, calls, and hours and calls with other departments. The
 member sees their own; officers holding `scheduling.report` (the chiefs,
-captains, lieutenants and scheduling officer by default) see anyone's.
+captains, lieutenants and scheduling officer by default) see anyone's. Its
+**Hours by position** card breaks the credited hours, shifts and calls down by
+the seat the member held, which the staffing roster's pairing supplies for
+imported history.
 
 ## Running it twice is safe
 

@@ -132,9 +132,9 @@ describe('TrainingEnhancementsTab instructor qualifications', () => {
 
     const member = within(dialog).getByRole('combobox', { name: /Member/ });
     expect(member).toBeRequired();
-    expect(member).toBeInvalid();
     await user.click(within(dialog).getByRole('button', { name: 'Add Qualification' }));
 
+    await waitFor(() => expect(member).toBeInvalid());
     expect(createQualification).not.toHaveBeenCalled();
   });
 

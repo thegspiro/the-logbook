@@ -1,9 +1,170 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup), 2026-11-16 (pass 16, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), #3212 (pass 9), #3398 (pass 10), #3557 (pass 11, the header's own "this PR" placeholder was never filled in after merge; corrected here), #3685 (pass 12), #3803 (pass 13, same stale-placeholder correction applied here), #3871 (pass 14), #4022 (pass 15), pass 16 (this PR)
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup), 2026-11-16 (pass 16, watchdog pickup), 2026-11-23 (pass 17, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), #3212 (pass 9), #3398 (pass 10), #3557 (pass 11, the header's own "this PR" placeholder was never filled in after merge; corrected here), #3685 (pass 12), #3803 (pass 13, same stale-placeholder correction applied here), #3871 (pass 14), #4022 (pass 15), #4348 (pass 16, same stale-placeholder correction applied here), pass 17 (this PR)
 
 Passes are recorded in this one file rather than a new `PERM<n>-02-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 17 (2026-11-23, watchdog pickup) — 0 fixed, 0 new findings
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable — confirmed via
+`ListAgents`, no reachable agents at all. Step 0 re-checked fresh against
+GitHub (`list_pull_requests`, state `open`): 0 results for a
+`claude/security-review-*` head. PR #4625 (Feature 01, Auth & session
+lifecycle, pass 17) had just merged (`5f96b7c2`). Row 01 is `✅`; row 02
+(Permissions & roles) is the next `⬜` row.
+
+**Baseline:** `7ba683ce2` (PR #4332's merge, pass 16's own head, read
+directly from pass 16's write-up rather than re-derived). **Head:** current
+`main` (`5f96b7c2`, PR #4625's merge).
+
+### Route inventory — re-enumerated by AST, not diffed
+
+**28 routes, unchanged from pass 16** — re-walked a fresh AST script over all
+four endpoint files: `roles.py` (13), `operational_ranks.py` (7),
+`officers.py` (3), `org_chart.py` (5). Same counts, same method, as pass 16.
+
+### What changed since pass 16
+
+`git diff --stat` against every file/pair this feature tracks
+(`dependencies.py`, `core/permissions.py`, `roles.py` + `role_service.py`,
+`operational_ranks.py` + `operational_rank_service.py`, `officers.py` +
+`officer_service.py`, `org_chart.py` + `org_chart_service.py`,
+`admin_continuity_service.py`, and the rank/role-assignment surface in
+`users.py`) is non-empty in exactly two: `core/permissions.py` (+59/-2) and
+`users.py` (+207/-18, computed excluding unrelated file-deletion/history
+wording noise below). `roles.py`, `role_service.py`, `operational_ranks.py`,
+`operational_rank_service.py`, `officers.py`, `officer_service.py`,
+`org_chart.py`, `org_chart_service.py`, and `admin_continuity_service.py` are
+byte-identical to pass 16. The underlying models/schemas this feature's
+registry touches (`models/operational_rank.py`, `models/org_chart.py`,
+`models/organization_officer.py`, `schemas/officer.py`,
+`schemas/operational_rank.py`, `schemas/org_chart.py`, `schemas/role.py`) are
+also byte-identical to pass 16 — checked directly, not assumed from the
+tracked-file list.
+
+- **`core/permissions.py` — two new permissions, `apparatus_events.manage`
+  and `apparatus_events.signup`, seeded by evidence pairing.** Not this
+  feature's own module (Apparatus Events is Feature 13's surface, reviewed as
+  a whole module by PR #4616/Feature 00 pass 18), but seeding a new
+  permission into `DEFAULT_POSITIONS`/`OPERATIONAL_RANKS` is exactly this
+  feature's cross-cutting concern (Pitfall #23's class), so the registration
+  was checked directly:
+  - **The pairing invariant holds across every seeded list, machine-checked,
+    not just read.** A script iterating every `DEFAULT_POSITIONS` and
+    `OPERATIONAL_RANKS` entry confirmed: every list holding `events.manage`
+    also holds `apparatus_events.manage`, and every list holding
+    `events.view` (or `events.manage`) also holds `apparatus_events.signup` —
+    0 mismatches. `tests/test_apparatus_event_grants.py` pins the same rule
+    by parametrizing over every seeded list (97 tests), including that the
+    `member` baseline can sign up but not manage, and that holding
+    `events.*` is **not** itself sufficient at runtime
+    (`permission_matches(MANAGE, {"events.*"})` is `False` — a different
+    module prefix) even though it counts as migration evidence. Ran the
+    suite directly: 97 passed.
+  - **Migration `3f8a1c6e2b94`** adds the two grants to stored `is_system`
+    positions by the same evidence rule, guarded on `_has_table("positions")`
+    (Pitfall #26), idempotent (`_grant` only adds a permission not already
+    held; a second run changes nothing), and its evidence set is a frozen
+    local tuple rather than imported from the registry (Pitfall #20 — "a
+    migration keeps doing what it did the day it ran"). `downgrade()`
+    reverses the exact two grants it added, nothing else. Its own test file
+    runs the migration against a real SQLite connection with rows present
+    (Pitfall #35) and asserts a second run is a no-op.
+  - **No OR-gate or baseline widened beyond the two new strings** — confirmed
+    by the pairing script above finding zero mismatches, which would have
+    caught a seed landing on a list that should not have gained it.
+- **`users.py` — `assign_user_roles`'s audit payload gained `roles_added`/
+  `roles_removed` (role names), and `delete_user`'s hard-delete path gained
+  file-queueing/applicant-deletion machinery.** Only the first is this
+  feature's own surface; the second is Feature 07/erasure territory and not
+  re-reviewed here beyond confirming it does not touch the role/rank-grant
+  ceiling.
+  - `roles_added`/`roles_removed` (`users.py:1524-1525`) are computed from
+    `held` (the role ids the user had **before** reassignment) and
+    `kept_ids` (the ids being kept), both already-defined local sets, against
+    `roles` — the org-scoped `Role` rows fetched earlier
+    (`Role.organization_id == current_user.organization_id`,
+    `users.py:1475`) — and `user.roles`, the eagerly-loaded collection on the
+    org-scoped `user` (`users.py:1459`). Nothing here is client-supplied text;
+    the values are role **names** already stored by an org admin, and they
+    land only in an audit-log payload, not in any authorization decision.
+  - **Placement is correct relative to the existing guards.** Both new lines
+    sit after `_enforce_role_grant_ceiling` (`users.py:1502`) and after
+    `assert_positions_retain_administrator`'s last-administrator check
+    (`users.py:1512-1521`), and before `user.roles = roles` reassigns the
+    collection — so `roles_removed`'s comparison against `user.roles` reads
+    the pre-reassignment collection, not a stale or post-mutation one.
+    Confirmed by reading the function in order, the same method pass 16 used
+    for its own `role_service.py` audit-wiring finding.
+  - **No new permission string, no new OR-gate, no ceiling change.** This is
+    audit-trail enrichment (W11-13, "the member history says which positions
+    were added or removed") riding along in a tracked file, not a grant or
+    authorization change.
+
+### Frontend
+
+Three files changed in this feature's frontend footprint, all read in full:
+
+- **`OfficersPanel.tsx`** — the "who holds this office" picker now filters to
+  `isActiveAccount(m.status) || m.id === office.user_id` (keeping the
+  currently-seated member visible even if they since left, labelled "(former
+  member)"). Uses the correct helper (Pitfall #32: a current-member gate asks
+  `isActiveAccount`, never a literal `=== 'active'` comparison) — confirmed
+  `isActiveAccount` itself checks `ACTIVE_ACCOUNT_STATUSES`
+  (`ACTIVE`/`PROBATIONARY`), not a single-status equality
+  (`constants/enums.ts:217-221`). Client-side display filter only; the save
+  still round-trips through `setOfficer`, which is the actual authority and
+  is unchanged (`officers.py`/`officer_service.py` byte-identical to pass
+  16).
+- **`OrgChartNodeModal.tsx`** — adds `type="tel"`/`autoComplete="off"` to a
+  position's contact-phone field (so the browser doesn't autofill the
+  officer's own number into what is the position's line, not theirs). UX
+  only, no permission or data-exposure surface touched.
+- **`RoleManagementPage.tsx`** — a load-error-message improvement
+  (`getLoadFailureMessage`), an `h3`→`h2` heading-level fix, and the
+  established AAA-contrast palette shift (blue-800/red-800 →
+  blue-900/red-900, matching CLAUDE.md's documented convention). No
+  permission-gating, role-fetch, or save-path logic touched.
+
+### Findings
+
+**0 new findings.** PERM-1 through PERM-12 remain closed: every file that
+carried one of them is byte-identical to pass 16, so nothing could have
+regressed.
+
+### Pitfall #23 (seeded-grant machinery)
+
+**Yes, and handled correctly** — see the `apparatus_events.*` pairing above.
+This is the one pass since PERM-12 where a new permission was actually
+seeded into `DEFAULT_POSITIONS`/`OPERATIONAL_RANKS`, and it follows the
+evidence-pairing pattern with both a migration backfill and a dedicated,
+parametrized test pinning the invariant across every seeded list — the
+shape this feature's own findings (PERM-12, PERM-23-class issues elsewhere
+in the repo) exist to guard against.
+
+### Completion gate
+
+| Check                                                                                                                                           | Result                                                                      |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                                                                                           | ✅ 0 violations                                                             |
+| `black --check app/ tests/ alembic/` (26.10.1)                                                                                                  | ✅ clean, 3436 files unchanged                                              |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                                                                               | ✅ clean                                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                                                                               | ✅ single head `e3b8d61f4a27`, 823 revisions                                |
+| `tests/test_apparatus_event_grants.py`                                                                                                          | ✅ 97 passed                                                                |
+| Scoped backend tests (`-k "permission or role or rank or officer or org_chart or passkey or stepup or position_term or apparatus_event_grant"`) | ✅ 2116 passed, 1 pre-existing environment-only skip (`py_vapid`), 0 failed |
+| `cd frontend && npm run typecheck`                                                                                                              | ✅ 0 errors                                                                 |
+| `cd frontend && npm run lint`                                                                                                                   | ✅ 0 errors, 0 warnings                                                     |
+
+Backend linters installed fresh at CI's pinned versions, matching
+`requirements.txt`'s Code Quality block and `.github/workflows/ci.yml`.
+
+Row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public surface &
+webhooks) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ---
 

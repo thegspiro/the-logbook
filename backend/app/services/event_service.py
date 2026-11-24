@@ -59,8 +59,12 @@ from app.models.event import (
 )
 from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import (
+    ProgramPhase,
+    TrainingCategory,
     TrainingCourse,
+    TrainingProgram,
     TrainingRecord,
+    TrainingRequirement,
     TrainingSession,
     TrainingSessionRequirement,
     TrainingStatus,
@@ -264,6 +268,10 @@ def resolve_attendee_visibility(
 # program-linked session is ahead of the member's current phase. The endpoint
 # turns this into a 409 the client can override (proceed anyway).
 PHASE_GATE_PREFIX = "PHASE_GATE::"
+
+
+class EventNotFoundError(LookupError):
+    """The event id names no event in the caller's organization (a 404)."""
 
 
 class SeriesPhaseGateWarning(Exception):
@@ -1702,6 +1710,9 @@ class EventService:
     ) -> int:
         """Update this event and all future events in the same recurring series.
 
+        Raises ``EventNotFoundError`` when *event_id* names no event in the
+        org.
+
         With *only_event_type*, refuse (``PermissionError``) when any occurrence
         the update would reach is of another type. A training manager may edit
         a Training series, and an occurrence an events manager re-typed is no
@@ -1720,7 +1731,9 @@ class EventService:
         anchor = result.scalar_one_or_none()
 
         if not anchor:
-            raise ValueError("Event not found")
+            # Not a ValueError: the route answers 404, as update_event's
+            # does, rather than a 400 for a refused change.
+            raise EventNotFoundError("Event not found")
 
         if anchor.is_cancelled:
             raise ValueError("Cannot update cancelled event")
@@ -6278,6 +6291,51 @@ class EventService:
             ):
                 raise ValueError("Location not found")
 
+    async def _assert_template_links_in_org(
+        self, settled: Dict[str, Any], organization_id: UUID | str
+    ) -> None:
+        """Refuse a template link to another department's row (pitfall #14c).
+
+        Only membership is checked, as for the course: a category, program or
+        requirement since deactivated still saves, so Save as Template from an
+        older event never fails. Applying the template drops what is no longer
+        offered. The messages are the generic ones the session paths use, so
+        they cannot probe another department for an id.
+        """
+        for key, model, message in (
+            ("category_id", TrainingCategory, "Invalid training category"),
+            ("program_id", TrainingProgram, "Invalid training program"),
+            ("requirement_id", TrainingRequirement, "Invalid training requirement"),
+        ):
+            if settled.get(key) and not await is_in_org(
+                self.db, model, settled[key], organization_id
+            ):
+                raise ValueError(message)
+        phase_id = settled.get("phase_id")
+        if phase_id:
+            # ProgramPhase carries no organization_id: scoped through its
+            # program, as _validate_linkage_ids does.
+            found = await self.db.execute(
+                select(ProgramPhase.id)
+                .join(TrainingProgram, ProgramPhase.program_id == TrainingProgram.id)
+                .where(
+                    ProgramPhase.id == str(phase_id),
+                    TrainingProgram.organization_id == str(organization_id),
+                )
+            )
+            if found.scalar_one_or_none() is None:
+                raise ValueError("Invalid program phase")
+        attendance_ids = settled.get("attendance_requirement_ids") or []
+        if attendance_ids:
+            found = await self.db.execute(
+                select(func.count(TrainingRequirement.id)).where(
+                    TrainingRequirement.id.in_(attendance_ids),
+                    TrainingRequirement.organization_id == str(organization_id),
+                )
+            )
+            if found.scalar_one() != len(attendance_ids):
+                raise ValueError("Invalid attendance requirement")
+
     async def _settle_template_training(
         self,
         data: Dict[str, Any],
@@ -6297,10 +6355,11 @@ class EventService:
         with ``mode="json"`` here: the column always holds the complete
         canonical shape (pitfall #20).
 
-        The course and instructor are checked to be in the caller's org
-        (pitfall #14c) and nothing more: a course since deactivated, or an
-        instructor who has since left, still saves, so Save as Template from
-        an older event never fails. Applying the template falls back for both.
+        The course, instructor and links are checked to be in the caller's
+        org (pitfall #14c) and nothing more: a course or link since
+        deactivated, or an instructor who has since left, still saves, so Save
+        as Template from an older event never fails. Applying the template
+        falls back for each.
         """
         resulting = data.get("event_type", current_type)
         if isinstance(resulting, Enum):
@@ -6324,6 +6383,7 @@ class EventService:
                 self.db, User, instructor_id, organization_id
             ):
                 raise ValueError("Invalid instructor")
+            await self._assert_template_links_in_org(settled, organization_id)
             data["training_details"] = settled
         elif resulting != EventType.TRAINING.value:
             data["training_details"] = None

@@ -28,6 +28,7 @@ from app.models.event import (
     default_reminder_target,
 )
 from app.models.location import Location
+from app.models.pending_file_deletion import PendingDeletionReason
 from app.models.training import (
     ApprovalStatus,
     EnrollmentStatus,
@@ -62,7 +63,12 @@ from app.services.event_service import (
     attendance_is_finalized,
     attendance_locked_error,
 )
+from app.services.file_storage_service import StorageArea
 from app.services.location_service import LocationService
+from app.services.member_files import attachment_paths_by_area
+from app.services.pending_file_deletions import (
+    enqueue as enqueue_pending_file_deletions,
+)
 from app.services.training_compliance import (
     MandatoryTiers,
     mandatory_tiers_for_requirements,
@@ -788,15 +794,24 @@ class TrainingSessionService:
             )
         )
         sessions = {str(s.event_id): s for s in result.scalars().all()}
-        # A lead instructor is picked from current members only. One these
-        # sessions already name may stay after leaving, so an edit that leaves
-        # the instructor alone still saves.
-        if payload.get("instructor_id"):
+        # A lead instructor is picked from current members only. One who has
+        # since left may stay where already named, so an edit that leaves the
+        # instructor alone still saves. Judged per session: a series edit
+        # writes the instructor onto every occurrence, so one later session
+        # naming a former member must not let the edit put them on the rest,
+        # nor on an occurrence that has no session yet.
+        instructor_id = payload.get("instructor_id")
+        if instructor_id:
+            named_everywhere = all(
+                (session := sessions.get(str(event.id))) is not None
+                and str(session.instructor_id) == str(instructor_id)
+                for event in events
+            )
             await assert_current_members(
                 self.db,
-                [payload["instructor_id"]],
+                [instructor_id],
                 organization_id,
-                keep=[s.instructor_id for s in sessions.values()],
+                keep=[instructor_id] if named_everywhere else None,
                 label="the lead instructor",
             )
         stored_links = await self.attendance_requirement_ids(
@@ -2247,6 +2262,7 @@ class TrainingSessionService:
 
         changed = 0
         touched_courses: List[Tuple[str, str]] = []
+        orphaned: Dict[str, StorageArea] = {}
         for record in records:
             status = getattr(record.status, "value", record.status)
             if status == TrainingStatus.CANCELLED.value:
@@ -2259,6 +2275,14 @@ class TrainingSessionService:
                 and record.completion_date is None
             )
             if never_credited:
+                orphaned.update(
+                    attachment_paths_by_area(
+                        record.attachments,
+                        org,
+                        StorageArea.SELF_REPORTS,
+                        StorageArea.TRAINING_RECORDS,
+                    )
+                )
                 await self.db.delete(record)
             else:
                 label = f"'{event_title}'" if event_title else "the event"
@@ -2280,6 +2304,15 @@ class TrainingSessionService:
                 record.hours_completed = 0.0
                 record.updated_at = datetime.now(timezone.utc)
             changed += 1
+
+        if orphaned:
+            # Queued in the caller's transaction, so a rolled-back void leaves
+            # no row, and the hourly sweep removes each file once it commits.
+            # A file another row still names (a pending submission's
+            # certificate copied onto the placeholder) is kept by the sweep.
+            enqueue_pending_file_deletions(
+                self.db, org, orphaned, PendingDeletionReason.EVENT_RECORDS_VOIDED
+            )
 
         if touched_courses:
             await self.db.flush()

@@ -352,10 +352,12 @@ export const learningPaths: LearningPath[] = [
         how: [
           'Open the night’s event. The Apparatus & Crew card lists every seat on the apparatus.',
           'Press Sign me up on an open seat. You can hold one seat per night.',
+          'If the night says Sign-ups need approval, the button reads Ask for this seat: the seat stays open until the coordinator approves, and you are emailed the answer. Withdraw request takes it back.',
           'A Driver seat may need the apparatus’s EVOC level. If you are not eligible the seat says so; ask the coordinator.',
           'Plans changed? Press Leave seat before the night. Once you have checked in, the coordinator corrects attendance instead.',
         ],
-        success: 'Your name is on a seat and the event shows you as going.',
+        success:
+          'Your name is on a seat and the event shows you as going — or, where sign-ups need approval, your request is waiting.',
       },
       {
         id: 'template',

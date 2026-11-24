@@ -23,6 +23,7 @@ import {
   QrCode,
   ScanLine,
   Settings,
+  ShieldCheck,
   Truck,
 } from 'lucide-react';
 import type { AdminHubCardTab } from '../components/admin/AdminHubCardTabs';
@@ -32,6 +33,7 @@ export type EventsAdminTab =
   | 'past_events'
   | 'overview'
   | 'requests'
+  | 'crr_activities'
   | 'analytics'
   | 'community'
   | 'apparatus_events'
@@ -65,6 +67,12 @@ export const EVENTS_ADMIN_TABS: AdminHubCardTab<EventsAdminTab>[] = [
     icon: Inbox,
   },
   { id: 'analytics', label: 'QR Code Analytics', description: 'Check-ins by QR code, device and error', icon: QrCode },
+  {
+    id: 'crr_activities',
+    label: 'CRR Activities',
+    description: 'Alarm installs, safety surveys, car seat checks and classes',
+    icon: ShieldCheck,
+  },
   {
     id: 'community',
     label: 'Outreach Impact',
@@ -126,7 +134,13 @@ export const EVENTS_ADMIN_AREAS: EventsAdminArea[] = [
     label: 'Community Outreach',
     description: 'Requests from the community, outreach events, and their impact',
     icon: Megaphone,
-    destinations: [tabById('overview'), tabById('requests'), tabById('community'), tabById('apparatus_events')],
+    destinations: [
+      tabById('overview'),
+      tabById('requests'),
+      tabById('crr_activities'),
+      tabById('community'),
+      tabById('apparatus_events'),
+    ],
   },
   {
     id: 'check_ins',

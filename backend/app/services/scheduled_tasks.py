@@ -67,6 +67,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 7:40 AM — ask the officer running an outreach event that ended yesterday to record its guest headcount
 40 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=guest_headcount_reminders
 
+# Every 15 minutes — decline apparatus seat requests left unanswered when the night starts
+*/15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=apparatus_seat_request_lapse
+
 # Every 30 minutes — post-shift validation notifications
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=post_shift_validation
 
@@ -508,6 +511,16 @@ SCHEDULE = {
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
     },
+    "apparatus_seat_request_lapse": {
+        "description": (
+            "Decline seat requests on apparatus nights that nobody answered "
+            "before the night started, was cancelled or was finalized, and "
+            "email each member that their request lapsed"
+        ),
+        "frequency": "every 15 minutes",
+        "recommended_time": "*/15",
+        "cron": "*/15 * * * *",
+    },
     "guest_headcount_reminders": {
         "description": (
             "Email and notify the organizer, alternate or creator holding "
@@ -566,6 +579,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "03:45",
         "cron": "45 3 * * *",
+    },
+    "crr_resident_details_retention": {
+        "description": "Clear the resident address, name, phone, email and notes from CRR activities older than the department's retention period (CRR Catalogue settings, 24 months by default). The ZIP code, city, state, county and counts are kept for audit.",
+        "frequency": "daily",
+        "recommended_time": "03:55",
+        "cron": "55 3 * * *",
     },
     "attendance_waiver_attachment_retention": {
         "description": "Delete documents filed with attendance waiver requests once the request has been closed (decided, withdrawn or voided) for longer than the department's retention period (the waiver policy's attachment_retention_days, a year by default). The request and its decision log are kept.",
@@ -2021,6 +2040,29 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
         "total_emails_sent": total_emails,
         "organizations": results,
     }
+
+
+async def run_apparatus_seat_request_lapse(db: AsyncSession) -> Dict[str, Any]:
+    """Close seat requests left waiting past their night's start.
+
+    Approval and decline are refused once a night starts, so a request still
+    waiting then can never be answered; without this sweep the member would
+    never hear that they are not on the crew. Each request is closed and
+    committed before its email goes out, so a second run finds nothing to
+    send (see ``ApparatusEventService.lapse_unanswered_requests``).
+    """
+    from app.services.apparatus_event_service import ApparatusEventService
+    from app.services.apparatus_seat_request_notices import (
+        send_seat_request_notices,
+    )
+
+    async def _process(db_session, org):
+        service = ApparatusEventService(db_session)
+        lapsed = await service.lapse_unanswered_requests(str(org.id))
+        await send_seat_request_notices(service, str(org.id))
+        return lapsed
+
+    return await _for_each_org(db, "apparatus_seat_request_lapse", _process)
 
 
 async def run_guest_headcount_reminders(db: AsyncSession) -> Dict[str, Any]:
@@ -4747,6 +4789,59 @@ async def run_self_report_attachment_retention(db: AsyncSession) -> Dict[str, An
     result = await SelfReportAttachmentRetention(db).sweep()
     result["task"] = "self_report_attachment_retention"
     return result
+
+
+async def run_crr_resident_details_retention(db: AsyncSession) -> Dict[str, Any]:
+    """Clear CRR resident details past each department's retention period.
+
+    The reader of ``settings["crr"]["resident_details_retention_months"]``
+    (owner decision, 2026-11-22). Commits per organization, so one
+    department's failure leaves another's sweep done, and a second run finds
+    nothing left to clear.
+    """
+    from app.core.audit import log_audit_event
+    from app.models.user import Organization
+    from app.services.crr_activity_service import CrrActivityService
+
+    organizations = (
+        (await db.execute(select(Organization).where(Organization.active.isnot(False))))
+        .scalars()
+        .all()
+    )
+    cleared_total = 0
+    failed = 0
+    for organization in organizations:
+        try:
+            cleared = await CrrActivityService(db).clear_expired_resident_details(
+                organization
+            )
+            await db.commit()
+        except Exception as exc:
+            failed += 1
+            await db.rollback()
+            logger.error(
+                "CRR resident-details retention failed for organization {}: {}",
+                organization.id,
+                exc,
+            )
+            continue
+        if cleared:
+            cleared_total += cleared
+            await log_audit_event(
+                db=db,
+                event_type="crr_resident_details_retention",
+                event_category="events",
+                severity="info",
+                event_data={
+                    "organization_id": str(organization.id),
+                    "activities_cleared": cleared,
+                },
+            )
+    return {
+        "task": "crr_resident_details_retention",
+        "activities_cleared": cleared_total,
+        "organizations_failed": failed,
+    }
 
 
 async def run_attendance_waiver_attachment_retention(
@@ -8760,6 +8855,7 @@ TASK_RUNNERS = {
     "inventory_notifications": run_inventory_notifications,
     "event_reminders": run_event_reminders,
     "post_event_validation": run_post_event_validation,
+    "apparatus_seat_request_lapse": run_apparatus_seat_request_lapse,
     "guest_headcount_reminders": run_guest_headcount_reminders,
     "post_shift_validation": run_post_shift_validation,
     "shift_reminders": run_shift_reminders,
@@ -8771,6 +8867,7 @@ TASK_RUNNERS = {
     "audit_log_ship": run_audit_log_ship,
     "retention_enforcement": run_retention_enforcement,
     "self_report_attachment_retention": run_self_report_attachment_retention,
+    "crr_resident_details_retention": run_crr_resident_details_retention,
     "attendance_waiver_attachment_retention": (
         run_attendance_waiver_attachment_retention
     ),
@@ -8860,6 +8957,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "shift_auto_checkout": 900,
     "publish_scheduled_messages": 900,
     "storefront_window_lifecycle": 900,
+    # Each request lapses once: only a still-pending one is picked up.
+    "apparatus_seat_request_lapse": 900,
     # Idempotent per (department, NWS alert id); see weather_alert_service.
     "weather_alert_poll": 900,
     # Every 30 minutes
@@ -8966,6 +9065,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Daily — org-configured records retention
     "retention_enforcement": 86400,
     "self_report_attachment_retention": 86400,
+    "crr_resident_details_retention": 86400,
     # Idempotent: the file goes first, then its row, and a missing file
     # counts as deleted (attendance_waiver_attachments.sweep).
     "attendance_waiver_attachment_retention": 86400,

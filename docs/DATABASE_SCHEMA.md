@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**412 tables · 6454 columns · 1372 foreign keys**
+**421 tables · 6528 columns · 1399 foreign keys**
 
 ---
 
@@ -58,7 +58,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`admin_hours_categories`](#admin_hours_categories) | `AdminHoursCategory` | 14 | Defines the types of administrative work members can log hours for. |
-| [`admin_hours_entries`](#admin_hours_entries) | `AdminHoursEntry` | 17 | Records a single session of administrative work by a member. |
+| [`admin_hours_entries`](#admin_hours_entries) | `AdminHoursEntry` | 18 | Records a single session of administrative work by a member. |
 | [`event_hour_mappings`](#event_hour_mappings) | `EventHourMapping` | 10 | Maps event types/custom categories to admin hours categories. |
 
 ### Analytics
@@ -111,10 +111,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`apparatus_event_seat_calls`](#apparatus_event_seat_calls) | `ApparatusEventSeatCall` | 9 | One "email members about open seats" send for a run of nights. |
+| [`apparatus_event_seat_requests`](#apparatus_event_seat_requests) | `ApparatusEventSeatRequest` | 11 | A member asking for a seat on a night that needs the coordinator's |
 | [`apparatus_event_template_seats`](#apparatus_event_template_seats) | `ApparatusEventTemplateSeat` | 8 | A named job on a template's apparatus, ``count`` seats wide ("Elf", |
 | [`apparatus_event_template_units`](#apparatus_event_template_units) | `ApparatusEventTemplateUnit` | 5 | One apparatus on a template, with its seats. |
-| [`apparatus_event_templates`](#apparatus_event_templates) | `ApparatusEventTemplate` | 17 | A reusable plan for an apparatus event, scheduled onto any number of |
-| [`event_apparatus_plans`](#event_apparatus_plans) | `EventApparatusPlan` | 10 | Marks an ``Event`` as an apparatus night and carries the rules copied |
+| [`apparatus_event_templates`](#apparatus_event_templates) | `ApparatusEventTemplate` | 18 | A reusable plan for an apparatus event, scheduled onto any number of |
+| [`event_apparatus_plans`](#event_apparatus_plans) | `EventApparatusPlan` | 11 | Marks an ``Event`` as an apparatus night and carries the rules copied |
 | [`event_apparatus_seats`](#event_apparatus_seats) | `EventApparatusSeat` | 12 | One seat on one night's apparatus — open when ``user_id`` is NULL. |
 | [`event_apparatus_units`](#event_apparatus_units) | `EventApparatusUnit` | 7 | One apparatus committed to one night. |
 
@@ -166,6 +167,21 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`user_consents`](#user_consents) | `UserConsent` | 7 |  |
+
+### Crr
+
+<sub>`app/models/crr.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`crr_activities`](#crr_activities) | `CrrActivity` | 18 | One CRR activity a department carried out: a log entry, or an activity |
+| [`crr_activity_counts`](#crr_activity_counts) | `CrrActivityCount` | 4 | How many of one measure an activity achieved ("3 alarms installed"). |
+| [`crr_activity_measures`](#crr_activity_measures) | `CrrActivityMeasure` | 8 | A count an activity type records, such as "alarms installed". |
+| [`crr_activity_members`](#crr_activity_members) | `CrrActivityMember` | 4 | A member who carried out an activity, and for how long. |
+| [`crr_activity_tags`](#crr_activity_tags) | `CrrActivityTag` | 3 | A risk or population an activity was tagged with, copied from its type's |
+| [`crr_activity_type_tags`](#crr_activity_type_tags) | `CrrActivityTypeTag` | 3 | A tag an activity type carries by default. |
+| [`crr_activity_types`](#crr_activity_types) | `CrrActivityType` | 11 | A kind of CRR activity a department records. |
+| [`crr_tags`](#crr_tags) | `CrrTag` | 9 | A risk or a priority population an activity can be tagged with. |
 
 ### Directory_Account
 
@@ -994,9 +1010,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `clock_out_at` | DATETIME | yes |  |  |  |
 | `duration_minutes` | INTEGER | yes |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `entry_method` | ENUM(`qr_scan`, `nfc_station`, `manual`, `event_attendance`, `import`) | no |  | `'manual'` |  |
+| `entry_method` | ENUM(`qr_scan`, `nfc_station`, `manual`, `event_attendance`, `import`, `crr_activity`) | no |  | `'manual'` |  |
 | `source_event_id` | VARCHAR(36) | yes | FK |  | → `events.id` ON DELETE SET NULL |
 | `source_rsvp_id` | VARCHAR(36) | yes | FK, IDX |  | → `event_rsvps.id` ON DELETE SET NULL |
+| `source_crr_activity_id` | VARCHAR(36) | yes | FK, IDX |  | → `crr_activities.id` ON DELETE SET NULL |
 | `status` | ENUM(`active`, `pending`, `approved`, `rejected`, `withdrawn`) | no |  | `active` |  |
 | `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `approved_at` | DATETIME | yes |  |  |  |
@@ -1007,6 +1024,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_admin_hours_entries_category_id` (`category_id`)
+- `ix_admin_hours_entries_source_crr` (`source_crr_activity_id`)
 - `ix_admin_hours_entries_source_rsvp` (`source_rsvp_id`, `category_id`)
 - `ix_admin_hours_entries_status` (`organization_id`, `status`)
 - `ix_admin_hours_entries_user_active` (`user_id`, `status`)
@@ -2071,6 +2089,32 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `ix_apparatus_event_seat_calls_series` (`organization_id`, `series_id`, `sent_at`)
 
+### `apparatus_event_seat_requests`
+
+**ApparatusEventSeatRequest** · `app/models/apparatus_event.py`
+
+> A member asking for a seat on a night that needs the coordinator's approval. The seat stays open while requests wait, so several members can ask for the same one; approving one declines the rest.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `event_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `events.id` ON DELETE CASCADE |
+| `seat_id` | VARCHAR(36) | no | FK, IDX |  | → `event_apparatus_seats.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `status` | VARCHAR(20) | no |  | `pending` |  |
+| `pending_user_id` | VARCHAR(36) | yes |  |  |  |
+| `requested_at` | DATETIME | no |  | `now()` |  |
+| `decided_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `decided_at` | DATETIME | yes |  |  |  |
+| `decision_note` | VARCHAR(300) | yes |  |  |  |
+
+**Indexes**
+
+- `ix_apparatus_event_seat_requests_org_status` (`organization_id`, `status`)
+- `ix_apparatus_event_seat_requests_seat` (`seat_id`, `status`)
+- UNIQUE `ux_apparatus_event_seat_requests_pending` (`event_id`, `pending_user_id`)
+
 ### `apparatus_event_template_seats`
 
 **ApparatusEventTemplateSeat** · `app/models/apparatus_event.py`
@@ -2129,6 +2173,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `admin_hours_category_id` | VARCHAR(36) | yes | FK |  | → `admin_hours_categories.id` ON DELETE SET NULL |
 | `evoc_mode` | VARCHAR(20) | no |  | `enforce` |  |
 | `allow_self_signup` | BOOL | no |  | `1` |  |
+| `require_signup_approval` | BOOL | no |  | `0` |  |
 | `show_on_schedule` | BOOL | no |  | `1` |  |
 | `duplicated_from_id` | VARCHAR(36) | yes | FK |  | → `apparatus_event_templates.id` ON DELETE SET NULL |
 | `is_archived` | BOOL | no |  | `0` |  |
@@ -2156,6 +2201,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `admin_hours_category_id` | VARCHAR(36) | yes | FK |  | → `admin_hours_categories.id` ON DELETE SET NULL |
 | `evoc_mode` | VARCHAR(20) | no |  | `enforce` |  |
 | `allow_self_signup` | BOOL | no |  | `1` |  |
+| `require_signup_approval` | BOOL | no |  | `0` |  |
 | `show_on_schedule` | BOOL | no |  | `1` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
@@ -2581,6 +2627,194 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `idx_user_consent_unique` (`user_id`, `consent_type`)
 - `ix_user_consents_organization_id` (`organization_id`)
+
+## Crr
+
+### `crr_activities`
+
+**CrrActivity** · `app/models/crr.py`
+
+> One CRR activity a department carried out: a log entry, or an activity recorded against an outreach event. Location is kept in two tiers (owner decisions, 2026-11-21/22). ZIP, city, state and county are plain, because reporting by area reads them and they are kept for audit. The street address, the resident's name, phone and email, and the notes are encrypted at rest, are recorded only when the recorder ticks "add resident details", are shown only to holders of ``crr.view_contact``, and are cleared after the department's retention period (``resident_details_cleared_at`` marks that it happened).
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `activity_type_id` | VARCHAR(36) | no | FK, IDX |  | → `crr_activity_types.id` ON DELETE RESTRICT |
+| `event_id` | VARCHAR(36) | yes | FK, IDX |  | → `events.id` ON DELETE SET NULL |
+| `occurred_at` | DATETIME | no |  |  |  |
+| `zip_code` | VARCHAR(10) | yes |  |  |  |
+| `city` | VARCHAR(100) | yes |  |  |  |
+| `state` | VARCHAR(50) | yes |  |  |  |
+| `county` | VARCHAR(100) | yes |  |  |  |
+| `street_address` | TEXT | yes |  |  |  |
+| `resident_name` | TEXT | yes |  |  |  |
+| `resident_phone` | TEXT | yes |  |  |  |
+| `resident_email` | TEXT | yes |  |  |  |
+| `notes` | TEXT | yes |  |  |  |
+| `resident_details_cleared_at` | DATETIME | yes |  |  |  |
+| `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_crr_activities_event` (`event_id`)
+- `ix_crr_activities_org_when` (`organization_id`, `occurred_at`)
+- `ix_crr_activities_type` (`activity_type_id`)
+
+### `crr_activity_counts`
+
+**CrrActivityCount** · `app/models/crr.py`
+
+> How many of one measure an activity achieved ("3 alarms installed").
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `activity_id` | VARCHAR(36) | no | PK, FK |  | → `crr_activities.id` ON DELETE CASCADE |
+| `measure_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `crr_activity_measures.id` ON DELETE RESTRICT |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `quantity` | INTEGER | no |  |  |  |
+
+**Indexes**
+
+- `ix_crr_activity_counts_measure` (`measure_id`)
+- `ix_crr_activity_counts_org` (`organization_id`)
+
+**Constraints**
+
+- CHECK `ck_crr_activity_counts_ck_crr_activity_counts_quantity`: `quantity >= 0`
+
+### `crr_activity_measures`
+
+**CrrActivityMeasure** · `app/models/crr.py`
+
+> A count an activity type records, such as "alarms installed". Phase 4's yearly goals are set per measure, which is why a count is a row of its own rather than a label inside the type.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `activity_type_id` | VARCHAR(36) | no | FK |  | → `crr_activity_types.id` ON DELETE CASCADE |
+| `code` | VARCHAR(64) | no |  |  |  |
+| `label` | VARCHAR(120) | no |  |  |  |
+| `is_active` | BOOL | no |  | `1` |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_crr_activity_measures_org` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_crr_activity_measures_code` (`activity_type_id`, `code`)
+
+### `crr_activity_members`
+
+**CrrActivityMember** · `app/models/crr.py`
+
+> A member who carried out an activity, and for how long. The minutes are what Admin Hours is credited from, for a log entry only: an activity recorded against an event credits nothing, because the event's own attendance already does (owner decision, 2026-11-22).
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `activity_id` | VARCHAR(36) | no | PK, FK |  | → `crr_activities.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `minutes` | INTEGER | no |  |  |  |
+
+**Indexes**
+
+- `ix_crr_activity_members_org` (`organization_id`)
+- `ix_crr_activity_members_user` (`user_id`)
+
+**Constraints**
+
+- CHECK `ck_crr_activity_members_ck_crr_activity_members_minutes`: `minutes >= 0 AND minutes <= 1440`
+
+### `crr_activity_tags`
+
+**CrrActivityTag** · `app/models/crr.py`
+
+> A risk or population an activity was tagged with, copied from its type's defaults when recorded and changeable afterwards.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `activity_id` | VARCHAR(36) | no | PK, FK |  | → `crr_activities.id` ON DELETE CASCADE |
+| `tag_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `crr_tags.id` ON DELETE RESTRICT |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+
+**Indexes**
+
+- `ix_crr_activity_tags_org` (`organization_id`)
+- `ix_crr_activity_tags_tag` (`tag_id`)
+
+### `crr_activity_type_tags`
+
+**CrrActivityTypeTag** · `app/models/crr.py`
+
+> A tag an activity type carries by default. An activity copies its type's tags when it is recorded and can change them there, so editing a type's defaults never rewrites what was recorded.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `activity_type_id` | VARCHAR(36) | no | PK, FK |  | → `crr_activity_types.id` ON DELETE CASCADE |
+| `tag_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `crr_tags.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+
+**Indexes**
+
+- `ix_crr_activity_type_tags_org` (`organization_id`)
+- `ix_crr_activity_type_tags_tag` (`tag_id`)
+
+### `crr_activity_types`
+
+**CrrActivityType** · `app/models/crr.py`
+
+> A kind of CRR activity a department records.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `code` | VARCHAR(64) | no |  |  |  |
+| `name` | VARCHAR(120) | no |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `is_system` | BOOL | no |  | `0` |  |
+| `is_active` | BOOL | no |  | `1` |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `admin_hours_category_id` | VARCHAR(36) | yes | FK |  | → `admin_hours_categories.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_crr_activity_types_org` (`organization_id`, `is_active`)
+
+**Constraints**
+
+- UNIQUE `uq_crr_activity_types_code` (`organization_id`, `code`)
+
+### `crr_tags`
+
+**CrrTag** · `app/models/crr.py`
+
+> A risk or a priority population an activity can be tagged with.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `kind` | VARCHAR(20) | no |  |  |  |
+| `code` | VARCHAR(64) | no |  |  |  |
+| `label` | VARCHAR(120) | no |  |  |  |
+| `is_system` | BOOL | no |  | `0` |  |
+| `is_active` | BOOL | no |  | `1` |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_crr_tags_code` (`organization_id`, `kind`, `code`)
 
 ## Directory_Account
 
@@ -3060,7 +3294,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `leave_request_for_member`, `leave_request_update`, `leave_request_reminder`, `leave_request_escalation`, `leave_ended_early`, `leave_cover_named`, `leave_cover_cleared`, `leave_cover_ended`, `guest_headcount_reminder`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `leave_request_for_member`, `leave_request_update`, `leave_request_reminder`, `leave_request_escalation`, `leave_ended_early`, `leave_cover_named`, `leave_cover_cleared`, `leave_cover_ended`, `guest_headcount_reminder`, `program_requirement_reopened`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -3124,7 +3358,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `leave_request_for_member`, `leave_request_update`, `leave_request_reminder`, `leave_request_escalation`, `leave_ended_early`, `leave_cover_named`, `leave_cover_cleared`, `leave_cover_ended`, `guest_headcount_reminder`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `leave_request_for_member`, `leave_request_update`, `leave_request_reminder`, `leave_request_escalation`, `leave_ended_early`, `leave_cover_named`, `leave_cover_cleared`, `leave_cover_ended`, `guest_headcount_reminder`, `program_requirement_reopened`, `custom`) | no |  |  |  |
 | `to_emails` | TEXT | no |  |  |  |
 | `cc_emails` | TEXT | yes |  |  |  |
 | `bcc_emails` | TEXT | yes |  |  |  |
@@ -9242,7 +9476,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_meeting_attendees_meeting` (`meeting_id`)
 - `idx_meeting_attendees_organization` (`organization_id`)
 - `idx_meeting_attendees_user` (`user_id`)
 - `idx_meeting_attendees_waiver_request` (`waiver_request_id`)
@@ -13942,7 +14175,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (498 references)
+### → `users` (502 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13964,6 +14197,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus_documents` | `uploaded_by` | SET NULL | yes |
 | `apparatus_equipment` | `assigned_by` | SET NULL | yes |
 | `apparatus_event_seat_calls` | `sent_by` | SET NULL | yes |
+| `apparatus_event_seat_requests` | `decided_by` | SET NULL | yes |
+| `apparatus_event_seat_requests` | `user_id` | CASCADE | no |
 | `apparatus_event_templates` | `created_by` | SET NULL | yes |
 | `apparatus_fuel_logs` | `recorded_by` | SET NULL | yes |
 | `apparatus_location_history` | `created_by` | SET NULL | yes |
@@ -14018,6 +14253,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `course_cohort_missed_classes` | `recorded_by` | SET NULL | yes |
 | `course_cohorts` | `created_by` | SET NULL | yes |
 | `course_cohorts` | `generated_by` | SET NULL | yes |
+| `crr_activities` | `recorded_by` | SET NULL | yes |
+| `crr_activity_members` | `user_id` | CASCADE | no |
 | `department_message_deliveries` | `recipient_id` | CASCADE | no |
 | `department_message_reads` | `user_id` | CASCADE | no |
 | `department_message_recipients` | `user_id` | CASCADE | no |
@@ -14445,7 +14682,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (330 references)
+### → `organizations` (339 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14461,6 +14698,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus_documents` | `organization_id` | CASCADE | no |
 | `apparatus_equipment` | `organization_id` | CASCADE | no |
 | `apparatus_event_seat_calls` | `organization_id` | CASCADE | no |
+| `apparatus_event_seat_requests` | `organization_id` | CASCADE | no |
 | `apparatus_event_templates` | `organization_id` | CASCADE | no |
 | `apparatus_fuel_logs` | `organization_id` | CASCADE | no |
 | `apparatus_location_history` | `organization_id` | CASCADE | no |
@@ -14498,6 +14736,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `course_cohort_members` | `organization_id` | CASCADE | no |
 | `course_cohort_missed_classes` | `organization_id` | CASCADE | no |
 | `course_cohorts` | `organization_id` | CASCADE | no |
+| `crr_activities` | `organization_id` | CASCADE | no |
+| `crr_activity_counts` | `organization_id` | CASCADE | no |
+| `crr_activity_measures` | `organization_id` | CASCADE | no |
+| `crr_activity_members` | `organization_id` | CASCADE | no |
+| `crr_activity_tags` | `organization_id` | CASCADE | no |
+| `crr_activity_type_tags` | `organization_id` | CASCADE | no |
+| `crr_activity_types` | `organization_id` | CASCADE | no |
+| `crr_tags` | `organization_id` | CASCADE | no |
 | `department_message_recipients` | `organization_id` | CASCADE | no |
 | `department_messages` | `organization_id` | CASCADE | no |
 | `departure_clearance_items` | `organization_id` | CASCADE | no |
@@ -14780,6 +15026,33 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `zeffy_campaign_links` | `organization_id` | CASCADE | no |
 | `zeffy_payments` | `organization_id` | CASCADE | no |
 
+### → `events` (22 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `admin_hours_entries` | `source_event_id` | SET NULL | yes |
+| `apparatus_event_seat_requests` | `event_id` | CASCADE | no |
+| `attendance_waiver_requests` | `event_id` | SET NULL | yes |
+| `course_cohort_classes` | `event_id` | SET NULL | yes |
+| `crr_activities` | `event_id` | SET NULL | yes |
+| `elections` | `event_id` | SET NULL | yes |
+| `event_apparatus_plans` | `event_id` | CASCADE | no |
+| `event_apparatus_seats` | `event_id` | CASCADE | no |
+| `event_apparatus_units` | `event_id` | CASCADE | no |
+| `event_attendance_petitions` | `event_id` | CASCADE | no |
+| `event_external_attendees` | `event_id` | CASCADE | no |
+| `event_requests` | `event_id` | SET NULL | yes |
+| `event_rsvps` | `event_id` | CASCADE | no |
+| `events` | `recurrence_parent_id` | RESTRICT | yes |
+| `fundraising_events` | `event_id` | SET NULL | yes |
+| `meeting_minutes` | `event_id` | SET NULL | yes |
+| `meetings` | `event_id` | SET NULL | yes |
+| `prospect_event_links` | `event_id` | CASCADE | no |
+| `rsvp_history` | `event_id` | CASCADE | no |
+| `training_approvals` | `event_id` | CASCADE | no |
+| `training_records` | `source_event_id` | SET NULL | yes |
+| `training_sessions` | `event_id` | CASCADE | no |
+
 ### → `inventory_items` (22 references)
 
 | From table | Column | On delete | Nullable |
@@ -14831,31 +15104,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_checkoffs` | `apparatus_id` | SET NULL | yes |
 | `training_records` | `apparatus_id` | SET NULL | yes |
 | `training_sessions` | `apparatus_id` | SET NULL | yes |
-
-### → `events` (20 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `admin_hours_entries` | `source_event_id` | SET NULL | yes |
-| `attendance_waiver_requests` | `event_id` | SET NULL | yes |
-| `course_cohort_classes` | `event_id` | SET NULL | yes |
-| `elections` | `event_id` | SET NULL | yes |
-| `event_apparatus_plans` | `event_id` | CASCADE | no |
-| `event_apparatus_seats` | `event_id` | CASCADE | no |
-| `event_apparatus_units` | `event_id` | CASCADE | no |
-| `event_attendance_petitions` | `event_id` | CASCADE | no |
-| `event_external_attendees` | `event_id` | CASCADE | no |
-| `event_requests` | `event_id` | SET NULL | yes |
-| `event_rsvps` | `event_id` | CASCADE | no |
-| `events` | `recurrence_parent_id` | RESTRICT | yes |
-| `fundraising_events` | `event_id` | SET NULL | yes |
-| `meeting_minutes` | `event_id` | SET NULL | yes |
-| `meetings` | `event_id` | SET NULL | yes |
-| `prospect_event_links` | `event_id` | CASCADE | no |
-| `rsvp_history` | `event_id` | CASCADE | no |
-| `training_approvals` | `event_id` | CASCADE | no |
-| `training_records` | `source_event_id` | SET NULL | yes |
-| `training_sessions` | `event_id` | CASCADE | no |
 
 ### → `facilities` (18 references)
 
@@ -15207,6 +15455,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_effectiveness_evaluations` | `training_session_id` | SET NULL | yes |
 | `training_session_requirements` | `session_id` | CASCADE | no |
 
+### → `admin_hours_categories` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `admin_hours_entries` | `category_id` | CASCADE | no |
+| `apparatus_event_templates` | `admin_hours_category_id` | SET NULL | yes |
+| `crr_activity_types` | `admin_hours_category_id` | SET NULL | yes |
+| `event_apparatus_plans` | `admin_hours_category_id` | SET NULL | yes |
+| `event_hour_mappings` | `admin_hours_category_id` | CASCADE | no |
+
 ### → `budget_categories` (5 references)
 
 | From table | Column | On delete | Nullable |
@@ -15267,15 +15525,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_status_events` | `suggestion_id` | CASCADE | no |
 | `suggestion_votes` | `suggestion_id` | CASCADE | no |
 
-### → `admin_hours_categories` (4 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `admin_hours_entries` | `category_id` | CASCADE | no |
-| `apparatus_event_templates` | `admin_hours_category_id` | SET NULL | yes |
-| `event_apparatus_plans` | `admin_hours_category_id` | SET NULL | yes |
-| `event_hour_mappings` | `admin_hours_category_id` | CASCADE | no |
-
 ### → `attendance_waiver_requests` (4 references)
 
 | From table | Column | On delete | Nullable |
@@ -15284,6 +15533,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `attendance_waiver_email_sends` | `request_id` | CASCADE | no |
 | `attendance_waiver_request_actions` | `request_id` | CASCADE | no |
 | `meeting_attendees` | `waiver_request_id` | SET NULL | yes |
+
+### → `crr_activities` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `admin_hours_entries` | `source_crr_activity_id` | SET NULL | yes |
+| `crr_activity_counts` | `activity_id` | CASCADE | no |
+| `crr_activity_members` | `activity_id` | CASCADE | no |
+| `crr_activity_tags` | `activity_id` | CASCADE | no |
 
 ### → `department_messages` (4 references)
 
@@ -15434,6 +15692,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `course_cohort_members` | `cohort_id` | CASCADE | no |
 | `course_cohort_missed_classes` | `cohort_id` | CASCADE | no |
 
+### → `crr_activity_types` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `crr_activities` | `activity_type_id` | RESTRICT | no |
+| `crr_activity_measures` | `activity_type_id` | CASCADE | no |
+| `crr_activity_type_tags` | `activity_type_id` | CASCADE | no |
+
 ### → `form_submissions` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -15532,6 +15798,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `check_item_deployed_lots` | `template_item_id` | CASCADE | no |
 | `shift_equipment_check_items` | `template_item_id` | SET NULL | yes |
+
+### → `crr_tags` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `crr_activity_tags` | `tag_id` | RESTRICT | no |
+| `crr_activity_type_tags` | `tag_id` | CASCADE | no |
 
 ### → `departure_clearances` (2 references)
 
@@ -15780,6 +16053,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `course_cohort_missed_classes` | `cohort_member_id` | CASCADE | no |
 
+### → `crr_activity_measures` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `crr_activity_counts` | `measure_id` | RESTRICT | no |
+
 ### → `donations` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -15815,6 +16094,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `event_apparatus_units` | `plan_id` | CASCADE | no |
+
+### → `event_apparatus_seats` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `apparatus_event_seat_requests` | `seat_id` | CASCADE | no |
 
 ### → `event_apparatus_units` (1 references)
 

@@ -618,6 +618,7 @@ class TestTheChoiceIsAudited:
                     attendance_requirement_ids=[drills]
                 ),
             ),
+            background_tasks=BackgroundTasks(),
             db=db_session,
             current_user=actor,
         )

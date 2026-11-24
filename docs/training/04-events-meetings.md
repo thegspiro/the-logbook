@@ -904,7 +904,8 @@ of **Manage Events**.
 
 1. Optionally pick a template under **Start from a Template** — _"Pick a
    template to pre-fill common settings, or start blank. A Training template
-   opens the step-by-step form and fills its training details."_
+   opens the step-by-step form and fills its training details, links and
+   completion settings."_
 2. Set the **event type**, **title**, start and end date and time. Moving the
    start past the end carries the end with it, keeping the event's length.
 3. Add a **location** and a **description**.
@@ -938,8 +939,9 @@ of **Manage Events**.
 > to …** button; picking another type also brings the single-page form back,
 > again with your entries. A Training template that saved training details
 > also fills **Training Info** _(2026-11-20)_: the course, training type,
-> credit hours, lead instructor and certification settings (see
-> [Templates](#templates)). See
+> credit hours, lead instructor and certification settings, and since
+> 2026-11-23 its links, **Counts toward attendance** and completion settings
+> (see [Templates](#templates)). See
 > [Training Credit from Events](#training-credit-from-events).
 
 > **What if Require RSVP is on but there is no deadline?** On a single event,
@@ -1400,10 +1402,17 @@ _(2026-11-20)_: the course (from the Course Library, a one-off name and code,
 or none), the training type, the credit hours and where they come from (the
 event's length, the course, or a typed figure), the lead instructor, and the
 certification settings — whether it issues one, the number prefix, the
-issuing agency and the expiry in months. Picking the template fills
-**Training Info** with them, replacing what was there. A template does not
-save requirement or program links, **Counts toward attendance**, or the
-completion settings; those start on their defaults for each session.
+issuing agency and the expiry in months. Since 2026-11-23 it also saves the
+category, program and phase, the requirement link, **Counts toward
+attendance** and the **Training completion** settings (counts toward
+certification, auto-create records, completion sign-off and its deadline).
+Picking the template fills **Training Info** with them, replacing what was
+there; each can still be changed.
+
+- If a category, program or requirement the template names is no longer
+  active, or its phase is no longer in the program, that link is left out,
+  with a note saying so on **Training Info**. The same goes for each
+  **Counts toward attendance** requirement no longer active.
 
 - If the template's course is no longer in the Course Library, the session
   starts on **No course yet**, with a note saying so on **Training Info**.
@@ -1421,8 +1430,9 @@ completion settings; those start on their defaults for each session.
   template is not saved and a message says so; try again; or
 - on the Events page, open the **⋯** menu → **Event Templates** and select
   **Create Template**. With **Event Type** set to **Training**, a **Training
-  Details** section offers the course, type, hours, lead instructor and
-  certification. Picking a library course fills type, hours, instructor and
+  Details** section offers the course, type, hours, lead instructor,
+  certification, the requirement and program links, **Counts toward
+  attendance** and the completion settings. Picking a library course fills type, hours, instructor and
   expiry from it, but leaves the template's **Max Attendees** alone. Saving
   a template as another type clears any training details it had.
 
@@ -1618,7 +1628,10 @@ needs, and how many of each.
    - **Warn only** — anyone can take it; a member below the level is flagged.
    - **Don't check** — for a static display where nobody drives.
 5. Leave **Members can take open seats themselves** on unless a coordinator
-   should fill every seat. Select **Save template**.
+   should fill every seat. Tick **Coordinator approves self sign-ups** if a
+   member should ask for a seat and wait for a yes (see
+   [Approving sign-ups](#approving-sign-ups-coordinators)). Select **Save
+   template**.
 
 > **A smaller or larger version.** Select **Duplicate** on a template's card.
 > Give the copy a name, change the apparatus if you like, and set a count for
@@ -1656,6 +1669,34 @@ the seat says so.
 Coordinators see **Assign…** and **Change…** on every seat. For a Driver seat,
 the list starts with the members who qualify, each judged by the same EVOC
 rule the seat uses.
+
+### Approving sign-ups (coordinators)
+
+When a template has **Coordinator approves self sign-ups** ticked, its nights
+show **Sign-ups need approval**. Members see **Ask for this seat** instead of
+**Sign me up**:
+
+- Asking leaves the seat open. You are not marked as going until a
+  coordinator approves. You can ask for one seat per night, and **Withdraw
+  request** takes it back.
+- Several members can ask for the same seat. Each seat lists who is waiting,
+  first asked first, with **Approve** and **Decline**.
+- **Approve** puts the member in the seat, marks them as going, and declines
+  everyone else waiting on that seat. A Driver seat is checked against the
+  EVOC rule again when you approve.
+- **Decline** asks for an optional note, which is sent to the member.
+- Assigning the seat to someone yourself, or removing it in **Edit this
+  night**, declines anyone waiting on it.
+- A request nobody answers is declined automatically once the night starts,
+  or if the night is cancelled.
+
+The night's organizer and alternate are emailed each request, if they can
+manage apparatus events. Members are emailed the answer, whichever it is.
+Both emails follow the recipient's email settings: **Event officer duties**
+for the request, **Event changes and cancellations** for the answer. The
+**Upcoming** list shows how many requests are waiting on each night.
+
+To change the setting for one night only, use **Edit this night**.
 
 ### Emailing members about open seats
 
@@ -1715,7 +1756,7 @@ down. Manage the crew on that event's page.
 > cancelled event, so add it again from the request once it is rescheduled.
 > A moved date is not re-checked for apparatus conflicts; look at **Shift
 > Scheduling** for that day if the engine might be committed elsewhere. **Volunteer signups** for the same request stay
-available; a visit can have an engine crew and extra educators.
+> available; a visit can have an engine crew and extra educators.
 
 ---
 
@@ -2023,12 +2064,12 @@ creation tab. Both are pages of **Events Administration**, which is laid out
 like Training, Scheduling and Inventory Administration: four area cards, and
 under them a strip of the chosen area's pages with a line naming the open one.
 
-| Area                   | Pages                                                                      |
-| ---------------------- | -------------------------------------------------------------------------- |
-| **Events**             | **Create Event**, **Past Events**                                          |
-| **Community Outreach** | **Overview**, **Outreach Requests**, **Outreach Impact**, **Apparatus Events** |
-| **Check-ins**          | **QR Code Analytics**, **Card Check-ins** |
-| **Settings**           | **Settings**                              |
+| Area                   | Pages                                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------- |
+| **Events**             | **Create Event**, **Past Events**                                                                  |
+| **Community Outreach** | **Overview**, **Outreach Requests**, **CRR Activities**, **Outreach Impact**, **Apparatus Events** |
+| **Check-ins**          | **QR Code Analytics**, **Card Check-ins**                                                          |
+| **Settings**           | **Settings**                                                                                       |
 
 An area card and the page under it carry a red count when the **Needs
 attention** list has items there.
@@ -2048,6 +2089,7 @@ and who may see the list, is covered in
 | **Categories**       | Your **Custom Event Categories** and their colours                              |
 | **Attendance**       | _"Who sees who's going; who takes requests"_, and **Mandatory event responses** |
 | **Hour Tracking**    | Mapping events to admin hours                                                   |
+| **CRR Catalogue**    | Community risk reduction activities, their counts and tags                      |
 | **Public Requests**  | Everything about outreach events the public asks for — see below                |
 | **Headline Metrics** | The four numbers at the top of the page                                         |
 
@@ -2928,11 +2970,11 @@ back button. **All requests** at the top returns to the list. The page leads
 with the one action that moves the request forward; on a phone that button
 stays in a bar at the bottom of the screen while you scroll:
 
-| Status                   | Main button                                     |
-| ------------------------ | ----------------------------------------------- |
-| New, nobody assigned     | **Take it**                                     |
-| New, assigned            | **Start working**                               |
-| In progress or postponed | **Schedule event**                              |
+| Status                   | Main button                                       |
+| ------------------------ | ------------------------------------------------- |
+| New, nobody assigned     | **Take it**                                       |
+| New, assigned            | **Start working**                                 |
+| In progress or postponed | **Schedule event**                                |
 | Scheduled                | **Mark completed**, once the event's date is past |
 
 **Completing a request** _(2026-11-21)_. **Finalizing the event's
@@ -3069,6 +3111,79 @@ is on Open Shifts.
 
 ![The Volunteer staffing card on an outreach event created directly: 3 of 5 signed up, each role with how many it needs and has, and the members who signed up with the role each took](./images/04-105-event-volunteer-staffing.png)
 
+### The CRR Catalogue
+
+**Who can do this:** officers who can manage events — usually the Community
+Outreach Manager.
+
+**Manage Events → Settings → CRR Catalogue** lists the community risk
+reduction activities your department records, what each one counts, and the
+risks and priority populations they are tagged with. Activities are recorded
+against it under [CRR Activities](#crr-activities).
+
+Every department starts with the same built-in types: smoke alarm install, CO
+alarm install, home safety survey, car seat inspection, extinguisher training,
+hands-only CPR, Stop the Bleed, fall prevention and school program. Each has
+its counts (for example, **Alarms installed** and **Homes**) and default tags
+(for example, **Fire**).
+
+- **Rename**, **Describe**, **Retire** or **Restore** any type. A built-in
+  type cannot be deleted: retire it, and it stops being offered while past
+  records keep naming it.
+- **Add a count** to a type, and rename or retire a count.
+- Tick the **Risks** and **Priority populations** a type carries by default.
+- **Add an activity type** with a name and, optionally, its counts separated by
+  commas. A type you added can be deleted.
+- Under **Tags**, add, rename or retire risks and priority populations.
+- **Admin Hours category**, on each type: the category a member's time on a
+  logged activity of that type is credited to. Left at **The Public Education
+  mapping**, it follows whatever your Hour Tracking mapping for public
+  education events says.
+- **Resident details → Keep for (months)**: how long a resident's address,
+  name, phone, email and the activity's notes are kept, 24 months unless you
+  change it. After that they are cleared automatically; the ZIP code, city,
+  state and counts stay.
+
+Changes save as you make them. **Juvenile firesetter intervention** is listed
+as **Coming soon**: it will be a separate option, with its own access rules
+because its records concern minors.
+
+### CRR Activities
+
+**Who can do this:** members of the Community Outreach Team and anyone who can
+manage events. Only the Community Outreach Manager, the chiefs and the
+president see a resident's details.
+
+**Events → CRR Activities** (also **Manage Events → Community Outreach → CRR
+Activities**) lists the community risk reduction work your department has
+recorded, newest first, filtered by **Activity type** and **When**.
+
+**Log a CRR activity** records work done away from an event — an alarm install
+at a resident's home, a home safety survey:
+
+1. Choose the **Activity type** and when it happened, and fill in its counts
+   (for example, **Alarms installed: 3**). Blank counts are left out.
+2. Tick the **Risks** and **Priority populations** it addressed; the type's
+   defaults are ticked for you.
+3. Enter the **ZIP code**. In a US department the city and state fill in from
+   it; the form starts with your department's own city and state.
+4. Tick **Add resident details** only when you need to record the address,
+   name, phone or email. They are encrypted, shown only to the Community
+   Outreach Manager and above, and cleared after your department's retention
+   period.
+5. Under **Who took part**, list the members and their minutes. You are listed
+   with 60 minutes to start with. Each member's time is credited to Admin
+   Hours, in the category the activity type names.
+
+**At an event,** an outreach event's page has a **CRR activities** card:
+**Record an activity** records what was done there, such as seats checked at a
+car seat event. No members are listed, because the event's attendance already
+credits their time.
+
+An activity cannot be edited once recorded. To correct one, **Delete** it —
+which also removes the Admin Hours it credited — and record it again. You can
+delete activities you recorded; anyone who manages events can delete any.
+
 ### The Outreach Overview
 
 **Who can do this:** officers who can manage events — usually the Community
@@ -3171,6 +3286,24 @@ Under the figures:
 - **Recent outreach events** lists the latest fifty with their crew and hours.
   **Export CSV** downloads every event in the period, not only the fifty, so a
   spreadsheet totals to the figures on the screen.
+
+**Community risk reduction.** Beneath those, the
+[CRR activities](#crr-activities) recorded in the period, both log entries and
+activities at events:
+
+- **By activity** — each activity type's counts (**Alarms installed: 23**),
+  each with its change since the same point last period.
+- **By risk** and **By priority population** — how many activities, and how
+  much of each count, went to Fire, Falls, Older adults and so on. An activity
+  tagged with two risks counts under both, so these lists do not add up to the
+  total.
+- **By ZIP code** — each ZIP code with its city and state, its activities and
+  counts. **Show map** opens a street map with a circle at each ZIP code,
+  sized by its activities. The map is drawn from OpenStreetMap, so it loads
+  only when you open it; if your network blocks OpenStreetMap, the circles
+  still show, over a blank background.
+
+The printed summary carries the same three lists, without the map.
 
 #### Recording a guest headcount
 

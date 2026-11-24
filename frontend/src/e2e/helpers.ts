@@ -253,6 +253,102 @@ const requestDay = (days: number) => new Date(Date.now() + days * 86_400_000).to
  * with none — because each draws a different cell, and the long organization
  * name is the one that wraps on a phone.
  */
+const CRR_CATALOGUE = {
+  activity_types: [
+    {
+      id: 'crr-smoke',
+      code: 'smoke_alarm_install',
+      name: 'Smoke alarm install',
+      description: "Smoke alarms installed in a resident's home.",
+      is_system: true,
+      is_active: true,
+      sort_order: 0,
+      measures: [
+        { id: 'crr-m1', code: 'alarms_installed', label: 'Alarms installed', is_active: true, sort_order: 0 },
+        { id: 'crr-m2', code: 'homes', label: 'Homes', is_active: true, sort_order: 1 },
+      ],
+      tag_ids: ['crr-fire'],
+    },
+    {
+      id: 'crr-knox',
+      code: 'knox_box_check',
+      name: 'Knox box check',
+      description: null,
+      is_system: false,
+      is_active: false,
+      sort_order: 1,
+      measures: [{ id: 'crr-m3', code: 'boxes_checked', label: 'Boxes checked', is_active: true, sort_order: 0 }],
+      tag_ids: [],
+    },
+  ],
+  tags: [
+    { id: 'crr-fire', kind: 'risk', code: 'fire', label: 'Fire', is_system: true, is_active: true, sort_order: 0 },
+    {
+      id: 'crr-older',
+      kind: 'population',
+      code: 'older_adults',
+      label: 'Older adults',
+      is_system: true,
+      is_active: true,
+      sort_order: 0,
+    },
+  ],
+};
+
+const crrActivities = () => [
+  {
+    id: 'crr-a1',
+    activity_type_id: 'crr-smoke',
+    activity_type_name: 'Smoke alarm install',
+    event_id: null,
+    event_title: null,
+    occurred_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+    zip_code: '22046',
+    city: 'Falls Church',
+    state: 'VA',
+    county: 'Falls Church (city)',
+    counts: [
+      { measure_id: 'crr-m1', label: 'Alarms installed', quantity: 3 },
+      { measure_id: 'crr-m2', label: 'Homes', quantity: 1 },
+    ],
+    tags: [{ id: 'crr-fire', label: 'Fire' }],
+    members: [{ user_id: 'user-1', name: 'Alex Rivera', minutes: 90 }],
+    recorded_by_name: 'Alex Rivera',
+    has_resident_details: true,
+    resident_details_cleared: false,
+    street_address: '1200 West Broad Street, Apartment 4B',
+    resident_name: 'Jordan Whitfield-Castellanos',
+    resident_phone: '703-555-0142',
+    resident_email: 'jordan.whitfield@example.test',
+    notes: 'Second-floor bedroom had no working alarm; replaced the hallway unit as well.',
+    can_edit: true,
+  },
+  {
+    id: 'crr-a2',
+    activity_type_id: 'crr-smoke',
+    activity_type_name: 'Smoke alarm install',
+    event_id: 'oc-today',
+    event_title: 'Car seat check at the library',
+    occurred_at: new Date(Date.now() - 800 * 24 * 3600 * 1000).toISOString(),
+    zip_code: '22044',
+    city: 'Falls Church',
+    state: 'VA',
+    county: 'Fairfax',
+    counts: [{ measure_id: 'crr-m1', label: 'Alarms installed', quantity: 12 }],
+    tags: [],
+    members: [],
+    recorded_by_name: null,
+    has_resident_details: false,
+    resident_details_cleared: true,
+    street_address: null,
+    resident_name: null,
+    resident_phone: null,
+    resident_email: null,
+    notes: null,
+    can_edit: false,
+  },
+];
+
 /** Outreach events for the Overview, placed around the moment the test runs. */
 const outreachCalendar = () => {
   const at = (days: number, hours: number) => new Date(Date.now() + (days * 24 + hours) * 3600 * 1000).toISOString();
@@ -412,6 +508,113 @@ const COMMUNITY_ENGAGEMENT = {
       member_hours: 70,
     },
   ],
+  // CRR breakdowns with long names, so the cards are measured at their widest.
+  crr: {
+    activities: 14,
+    previous_activities: 9,
+    by_type: [
+      {
+        activity_type_id: 'crr-type-smoke',
+        name: 'Smoke alarm install',
+        activities: 8,
+        previous_activities: 5,
+        counts: [
+          { measure_id: 'crr-m-alarms', label: 'Alarms installed', quantity: 23, previous_quantity: 14 },
+          { measure_id: 'crr-m-homes', label: 'Homes', quantity: 8, previous_quantity: 5 },
+        ],
+      },
+      {
+        activity_type_id: 'crr-type-seats',
+        name: 'Car seat inspection and installation',
+        activities: 6,
+        previous_activities: 4,
+        counts: [
+          { measure_id: 'crr-m-inspected', label: 'Seats inspected', quantity: 31, previous_quantity: 20 },
+          { measure_id: 'crr-m-installed', label: 'Seats installed or corrected', quantity: 12, previous_quantity: 12 },
+        ],
+      },
+    ],
+    by_tag: [
+      {
+        tag_id: 'crr-tag-fire',
+        kind: 'risk',
+        label: 'Fire',
+        activities: 8,
+        counts: [
+          {
+            measure_id: 'crr-m-alarms',
+            activity_type_name: 'Smoke alarm install',
+            label: 'Alarms installed',
+            quantity: 23,
+          },
+          { measure_id: 'crr-m-homes', activity_type_name: 'Smoke alarm install', label: 'Homes', quantity: 8 },
+        ],
+      },
+      {
+        tag_id: 'crr-tag-mvc',
+        kind: 'risk',
+        label: 'Motor vehicle crashes',
+        activities: 6,
+        counts: [
+          {
+            measure_id: 'crr-m-inspected',
+            activity_type_name: 'Car seat inspection and installation',
+            label: 'Seats inspected',
+            quantity: 31,
+          },
+        ],
+      },
+      {
+        tag_id: 'crr-tag-children',
+        kind: 'population',
+        label: 'Children',
+        activities: 6,
+        counts: [
+          {
+            measure_id: 'crr-m-installed',
+            activity_type_name: 'Car seat inspection and installation',
+            label: 'Seats installed or corrected',
+            quantity: 12,
+          },
+        ],
+      },
+    ],
+    by_zip: [
+      {
+        zip_code: '22046',
+        city: 'Falls Church',
+        state: 'VA',
+        latitude: 38.8856,
+        longitude: -77.1802,
+        activities: 9,
+        counts: [
+          {
+            measure_id: 'crr-m-alarms',
+            activity_type_name: 'Smoke alarm install',
+            label: 'Alarms installed',
+            quantity: 17,
+          },
+        ],
+      },
+      {
+        zip_code: '22044',
+        city: 'Falls Church',
+        state: 'VA',
+        latitude: 38.8589,
+        longitude: -77.1513,
+        activities: 4,
+        counts: [
+          {
+            measure_id: 'crr-m-inspected',
+            activity_type_name: 'Car seat inspection and installation',
+            label: 'Seats inspected',
+            quantity: 22,
+          },
+        ],
+      },
+    ],
+    unplaced_activities: 1,
+  },
 };
 
 const HISTORY_ALBUMS: AlbumSummary[] = [
@@ -689,10 +892,18 @@ const MEETING_WAIVER_REQUESTS: AttendanceWaiverRequest[] = [
   }),
 ];
 
-/** The approver queue reads pending requests and the full history with separate calls. */
+/** The approver queue reads pending and decided requests with separate calls
+ *  (`state`); `status` filters to one status, as the API does. */
 const meetingWaiverPage = (request: Request) => {
-  const status = new URL(request.url()).searchParams.get('status');
-  const items = status ? MEETING_WAIVER_REQUESTS.filter((row) => row.status === status) : MEETING_WAIVER_REQUESTS;
+  const params = new URL(request.url()).searchParams;
+  const status = params.get('status');
+  const state = params.get('state');
+  const items = MEETING_WAIVER_REQUESTS.filter(
+    (row) =>
+      (!status || row.status === status) &&
+      (state !== 'pending' || row.status === 'pending') &&
+      (state !== 'decided' || row.status !== 'pending')
+  );
   return { items, total: items.length, skip: 0, limit: 50 };
 };
 
@@ -5512,6 +5723,25 @@ const routes = ({
   // The Outreach Overview's calendar and attention cards: one event short of
   // volunteers, one with a full crew, one waiting to be closed out.
   ['**/api/v1/events/outreach-calendar**', () => (empty ? [] : outreachCalendar())],
+  // Events Settings -> CRR Catalogue: one built-in type, one the department
+  // added, and a tag of each kind, so every control the section draws renders.
+  ['**/api/v1/crr/catalogue', () => (empty ? { activity_types: [], tags: [] } : CRR_CATALOGUE)],
+  // The CRR log and its form: one activity with resident details (the
+  // signed-in manager may see them), one at an event with a cleared address.
+  [
+    '**/api/v1/crr/form-options',
+    () => ({
+      activity_types: CRR_CATALOGUE.activity_types.filter((t) => t.is_active),
+      tags: CRR_CATALOGUE.tags,
+      default_city: 'Falls Church',
+      default_state: 'VA',
+      zip_lookup_enabled: true,
+      members: [{ id: 'user-1', name: 'Alex Rivera' }],
+      retention_months: 24,
+      can_view_contact: true,
+    }),
+  ],
+  ['**/api/v1/crr/activities**', () => (empty ? { items: [], total: 0 } : { items: crrActivities(), total: 2 })],
   ['**/api/v1/admin-hub/events/metrics', eventMetricSettings],
   ['**/api/v1/admin-hub/training/metrics', trainingMetricSettings],
   // The notifications page lists rules and needs a list, not the catch-all
