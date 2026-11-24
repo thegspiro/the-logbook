@@ -77,7 +77,9 @@ describe('MemberAdminEditPage › refusals on their fields', () => {
     await user.type(middle, 'Quinn');
     const phone = screen.getByLabelText(/^Phone/, { selector: '#member-phone' });
     await user.clear(phone);
-    await user.type(phone, '703-555-0101 ext 4400');
+    // The field's maxLength (20) stops a 21st character, as a browser does, so
+    // this types the most it accepts; the refusal is the mocked server's.
+    await user.type(phone, '703-555-0101 ext 440');
     await user.click(screen.getByRole('button', { name: /save/i }));
 
     await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalledTimes(2));
@@ -89,7 +91,7 @@ describe('MemberAdminEditPage › refusals on their fields', () => {
         'Phone is too long — keep it to 20 characters.'
       )
     );
-    expect(screen.getByLabelText(/^Phone/, { selector: '#member-phone' })).toHaveValue('703-555-0101 ext 4400');
+    expect(screen.getByLabelText(/^Phone/, { selector: '#member-phone' })).toHaveValue('703-555-0101 ext 440');
     expect(screen.getByRole('alert')).toHaveTextContent('Phone was not saved.');
   });
 
