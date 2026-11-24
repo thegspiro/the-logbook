@@ -238,6 +238,9 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "A session you asked to be excused from moved, so the request "
             "needs your confirmation",
             "A question about your request to be excused, which it waits on",
+            "The same three notices for a business meeting you asked to be "
+            "excused from: the request closed undecided, the meeting moved, "
+            "or a question waits on you",
             "A leave of absence recorded, changed or removed, and what it does "
             "to your training requirements",
         ),

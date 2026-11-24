@@ -12,13 +12,16 @@ its commit. Pinned:
 * cancelling a whole series emails each member once;
 * nothing is sent before the commit, so a deferred batch sends only once it
   has committed (``complete_deferred_writes``);
-* an approved request is not voided, so its member gets no closing email.
+* an approved request is voided too, giving the waiver back: it no longer
+  counts toward the cap, a meeting waiver comes off the minutes, and the
+  member is emailed (owner decision 2026-11-23); a denied one is kept.
 """
 
 from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import select
 
 from app.models.attendance_waiver import (
     AttendanceWaiverRequest,
@@ -26,6 +29,7 @@ from app.models.attendance_waiver import (
     AttendanceWaiverWorkflow,
 )
 from app.models.event import Event
+from app.models.meeting import MeetingAttendee
 from app.services import attendance_waiver_service as engine
 from app.services.attendance_waiver_service import (
     AttendanceWaiverService,
@@ -38,6 +42,7 @@ from tests.waiver_request_support import (
     load,
     make_meeting_event,
     make_member,
+    make_minutes_record,
     make_org,
     make_position,
     make_requirement,
@@ -114,6 +119,20 @@ def _closing(outbox):
     return [m for m in outbox if m.subject.startswith("Waiver request closed")]
 
 
+async def _attendee(db, minutes, user_id) -> MeetingAttendee:
+    row: MeetingAttendee = (
+        await db.execute(
+            select(MeetingAttendee)
+            .where(
+                MeetingAttendee.meeting_id == minutes,
+                MeetingAttendee.user_id == user_id,
+            )
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one()
+    return row
+
+
 async def _status(db, request_id):
     row = await db.get(AttendanceWaiverRequest, request_id, populate_existing=True)
     return row.status
@@ -166,7 +185,8 @@ class TestCancelling:
         await service.complete_deferred_writes(dept.org)
         assert [m.to_emails for m in _closing(outbox)] == [[dept.member.email]]
 
-    async def test_an_approved_request_gets_no_closing_email(
+    # Owner decision 2026-11-23: cancelling the event gives the waiver back.
+    async def test_an_approved_request_is_voided_and_its_member_emailed(
         self, db_session, dept, outbox
     ):
         request = await _submit(db_session, dept)
@@ -175,8 +195,85 @@ class TestCancelling:
         )
         outbox.clear()
         await EventService(db_session).cancel_event(dept.drill, dept.org, "Snow")
+
+        row = await db_session.get(
+            AttendanceWaiverRequest, request.id, populate_existing=True
+        )
+        assert row.status == AttendanceWaiverStatus.VOIDED
+        assert row.live_key is None
+        assert row.reconfirm_requested_at is None
+        (mail,) = _closing(outbox)
+        assert mail.to_emails == [dept.member.email]
+        assert "no longer counts toward your limit" in mail.text_body
+        assert "Knee" not in mail.text_body
+
+    async def test_a_denied_request_is_left_alone(self, db_session, dept, outbox):
+        request = await _submit(db_session, dept)
+        await AttendanceWaiverService(db_session).deny(
+            dept.org, dept.officer, request.id, None
+        )
+        outbox.clear()
+        await EventService(db_session).cancel_event(dept.drill, dept.org, "Snow")
         assert _closing(outbox) == []
-        assert await _status(db_session, request.id) == AttendanceWaiverStatus.APPROVED
+        assert await _status(db_session, request.id) == AttendanceWaiverStatus.DENIED
+
+
+class TestTheWaiverIsGivenBack:
+    async def test_it_stops_counting_toward_the_cap(self, db_session, dept, outbox):
+        current = await AttendanceWaiverService(db_session).get_policy(dept.org)
+        await set_policy(
+            db_session,
+            dept.org,
+            cap=1,
+            approver_position_ids=current.approver_position_ids,
+        )
+        requirement = await make_requirement(db_session, dept.org)
+        second = await make_session(
+            db_session, dept.org, DRILL + timedelta(days=7), link=[requirement]
+        )
+        service = AttendanceWaiverService(db_session)
+        request = await _submit(db_session, dept)
+        await service.approve(dept.org, dept.officer, request.id, None)
+        before = await service.eligibility(dept.org, dept.member, second)
+        assert before.cap_remaining == 0
+
+        await EventService(db_session).cancel_event(dept.drill, dept.org, "Snow")
+
+        after = await service.eligibility(dept.org, dept.member, second)
+        assert after.cap_remaining == 1
+
+    async def test_a_meeting_waiver_comes_off_the_minutes(
+        self, db_session, dept, outbox
+    ):
+        minutes = await make_minutes_record(
+            db_session, dept.org, str(dept.clerk.id), event_id=dept.meeting
+        )
+        service = AttendanceWaiverService(db_session, MEETINGS)
+        request = await service.submit(dept.org, dept.member, dept.meeting, None, None)
+        await service.approve(dept.org, dept.clerk, request.id, None)
+        attendee = await _attendee(db_session, minutes, str(dept.member.id))
+        assert attendee.waiver_request_id == request.id
+
+        await EventService(db_session).cancel_event(dept.meeting, dept.org, "Moved")
+
+        attendee = await _attendee(db_session, minutes, str(dept.member.id))
+        assert attendee.waiver_request_id is None
+        assert attendee.excused is False
+        assert await _status(db_session, request.id) == AttendanceWaiverStatus.VOIDED
+
+    async def test_a_second_run_owes_nothing(self, db_session, dept):
+        request = await _submit(db_session, dept)
+        await AttendanceWaiverService(db_session).approve(
+            dept.org, dept.officer, request.id, None
+        )
+        first = await void_pending_for_events(
+            db_session, dept.org, [dept.drill], "cancelled"
+        )
+        again = await void_pending_for_events(
+            db_session, dept.org, [dept.drill], "cancelled"
+        )
+        assert len(first) == 1
+        assert again == []
 
 
 class TestDeleting:

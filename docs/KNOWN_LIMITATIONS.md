@@ -294,7 +294,8 @@ taken; each is listed so the owner can confirm or reverse it.
   remain for the notices no template covers (a question, an answer, a moved
   session, an expiry).
 - **Which training notices a member cannot switch off** _(chosen
-  2026-11-21; confirmed by the owner 2026-11-23)_. A training notice is sent under the
+  2026-11-21; confirmed, and extended to meetings, by owner decision
+  2026-11-23)_. A training notice is sent under the
   required _Changes to your training record_ kind when it changes how the
   member's attendance is graded: the expiry (the session counts as missed), a
   moved start (the approval is cleared and, unanswered, expires as a miss) and
@@ -302,8 +303,11 @@ taken; each is listed so the owner can confirm or reverse it.
   these went under the optional _Training and certification reminders_, so a
   member who had turned reminders off learned of a charged miss only from the
   bell. A **void** stays optional: its session was cancelled or deleted, so
-  nothing is graded and the cap slot is freed. Meeting notices are unchanged
-  (`EVENT_CHANGES`, optional, as above). `member_record_email_kind` on
+  nothing is graded and the cap slot is freed. ✅ **Meetings follow, owner
+  decision 2026-11-23:** the meeting workflow's expiry, moved-start and
+  decider-question emails now go under the same required kind, since each can
+  end in a charged absence on the minutes; its decision and void emails stay
+  under the optional _Event changes_. `member_record_email_kind` on
   `WorkflowSpec` holds the choice.
 
 ## Elections — Voter Rules by Member Type (Owner Decisions, 2026-11-13)
@@ -420,9 +424,10 @@ owner 2026-11-23:** every answer below.
   (a year by default), so an evaluation drafted after that reads no for a
   request that once had one.
 - **A voided request is listed, and counted only as voided.** Cancelling or
-  deleting a session voids its pending requests
+  deleting a session voids its pending and approved requests
   (`attendance_waiver_service.void_pending_for_events`, called from
-  `EventService`); an approved or denied request is kept. The history shows a
+  `EventService`; approved ones too since the owner decision of 2026-11-23);
+  a denied request is kept. The history shows a
   voided request and that it was voided, and the summary counts it under
   `voided` rather than as approved or denied.
 - **Deciders are named by their current name**, or "a former member" when the
@@ -11391,11 +11396,15 @@ item but the first was confirmed by the owner 2026-11-23. Documents
 on session waiver requests (PDF, JPEG, PNG or HEIC, 10 MB each, three per
 request, kept 365 days) shipped with these gaps, each the narrower choice:
 
-- **A filed document cannot be removed by the member.** Once filed it stays
-  until the retention task deletes it. A member who filed the wrong file can
-  withdraw a pending request and ask again; the withdrawn request's documents
-  then age out with it. Allowing removal would have needed a rule for removing
-  the last document under a `required` policy, which nothing decided.
+- ~~**A filed document cannot be removed by the member.**~~ ✅ **Owner
+  decision 2026-11-23: it can, while the request is pending.** The request
+  page offers a remove button on each document to its member
+  (`DELETE /training/waivers/requests/{id}/attachments/{attachment_id}`,
+  submitter only, by entry id, a repeat changing nothing). Under a `required`
+  policy the last document cannot be removed: the member files the right one
+  first. The file is deleted after the commit through the shared reference
+  check (`member_files.remove_unreferenced_files`), and the removal is audited
+  by id.
 - **The uploader's filename is not kept at all**, not only hidden from
   downloads: a doctor's note's name can say what it is about. A decider sees
   `waiver-attachment-1.pdf`, its type, size and date.
@@ -11435,10 +11444,13 @@ deleting an event) and the moved-start one.
   asked for requests to be voided "as the training workflow does", but the
   training workflow voided nothing. A pending request is now voided (its slot
   freed, the deciders' prompts archived, the member told in the app), for both
-  workflows. An **approved** request is kept: the model already keeps an
-  approved request as the member's record when its event is deleted. So an
-  approval for a meeting that was then cancelled still counts toward the
-  member's cap. Voiding approved requests as well would give the waiver back.
+  workflows. ~~An **approved** request is kept, so an approval for a meeting
+  that was then cancelled still counts toward the member's cap.~~ ✅ **Owner
+  decision 2026-11-23: cancelling gives the waiver back.** An approved request
+  is voided too, for both workflows: it stops counting toward the cap, a
+  meeting waiver it wrote comes off the minutes record, and the member is
+  emailed. A denied request is still kept, and every voided row still
+  outlives a deleted event.
 - **A member on a leave of absence that covers the meeting cannot ask**
   ("on_leave"): the voting tally already excludes such a meeting, so there is
   nothing to excuse.
@@ -11467,10 +11479,15 @@ deleting an event) and the moved-start one.
   2026-11-21 the member always gets seven days from that notice to answer
   (`expires_at_for` reads `reconfirm_requested_at`); before, a start fixed
   more than eight days after the session expired the request on the next
-  hourly sweep and charged the meeting as missed. **For the owner:** whether a
-  correction to a session already held — or one that keeps the same local
-  date, such as 19:00 fixed to 19:30 — should reopen the decision at all. Not
-  reopening it would change the 2026-11-13 decision, so it was not done here.
+  hourly sweep and charged the meeting as missed. ~~**For the owner:** whether
+  a correction to a session already held — or one that keeps the same local
+  date, such as 19:00 fixed to 19:30 — should reopen the decision at all.~~ ✅
+  **Owner decision 2026-11-23: it does not.** An approved request keeps its
+  decision (and a meeting waiver stays on the minutes) when the session had
+  already started when its start was changed, or when the new start is on the
+  same local date; only its snapshot follows the event. Any other move reopens
+  it as before, and a pending request still goes back to the member on any
+  move (`_correction_keeps_decision`).
 - ~~**`idx_meeting_attendees_meeting` is now a prefix of the new unique
   `(meeting_id, user_id)` index** and could be dropped.~~ ✅ Resolved
   2026-11-23: `b37218495d33` drops it wherever another index leads on
