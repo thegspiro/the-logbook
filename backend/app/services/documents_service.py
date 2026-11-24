@@ -1242,6 +1242,47 @@ class DocumentsService:
         if folder.is_system:
             raise PermissionError("Cannot delete a system folder")
 
+        _document_ids, file_paths = await self._delete_folder_subtree(
+            folder, organization_id, current_user
+        )
+        await self.db.commit()
+
+        # Best-effort file cleanup — a missing file is not an error, and the DB
+        # rows are already gone. Only paths inside this organization's upload
+        # subtree are ever unlinked (same boundary as the download, DOC-24).
+        for file_path in file_paths:
+            confined = file_storage.resolve(
+                file_path, organization_id, StorageArea.DOCUMENTS
+            )
+            if confined is None:
+                logger.warning(
+                    "Not removing a backing file outside the organization's "
+                    f"upload storage for deleted folder {folder_id}"
+                )
+                continue
+            if not await file_storage.delete(confined):
+                logger.warning(
+                    "Could not remove backing file for a document in deleted "
+                    f"folder {folder_id}: {file_path}"
+                )
+        return True
+
+    async def _delete_folder_subtree(
+        self,
+        folder: DocumentFolder,
+        organization_id: UUID | str,
+        current_user: Optional[User] = None,
+    ) -> Tuple[Set[str], List[str]]:
+        """Delete *folder*, its subtree and their documents; never commits.
+
+        The body of :meth:`delete_folder` after its system-folder check, kept
+        separate so the member erasures can remove a personal folder inside
+        their own transaction. Returns the deleted documents' ids and the
+        subtree's stored ``file_path`` values; the caller removes (or queues)
+        the files once its commit has made the deletion durable.
+        """
+        folder_id = folder.id
+
         # Walk the folder subtree (this folder + all descendants via
         # parent_id) *without* an organization_id filter, then check each row
         # found. The ORM's ``children`` cascade (``cascade="all,
@@ -1446,27 +1487,7 @@ class DocumentsService:
             )
 
         await self.db.delete(folder)
-        await self.db.commit()
-
-        # Best-effort file cleanup — a missing file is not an error, and the DB
-        # rows are already gone. Only paths inside this organization's upload
-        # subtree are ever unlinked (same boundary as the download, DOC-24).
-        for file_path in file_paths:
-            confined = file_storage.resolve(
-                file_path, organization_id, StorageArea.DOCUMENTS
-            )
-            if confined is None:
-                logger.warning(
-                    "Not removing a backing file outside the organization's "
-                    f"upload storage for deleted folder {folder_id}"
-                )
-                continue
-            if not await file_storage.delete(confined):
-                logger.warning(
-                    "Could not remove backing file for a document in deleted "
-                    f"folder {folder_id}: {file_path}"
-                )
-        return True
+        return document_ids, file_paths
 
     async def _lock_subtree_folders(self, subtree_ids: Set[str]) -> None:
         """FAC-34: lock every ``DocumentFolder`` row in the subtree being
