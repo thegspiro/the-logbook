@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this PR — branch `claude/friendly-babbage-2isqey`)**: Feature 07
+(Users & organizations), pass 17 — watchdog pickup (the dedicated `/loop
+30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here: this session's environment restricts pushes to its own
+assigned branch rather than a freely-chosen
+`claude/security-review-users-organizations-p17` name.
+
+PR #4659 (Feature 06, Elections & ballots, pass 17 — 0 fixed, 0 new
+findings) had already merged before this iteration started; row 06 marked
+✅ above.
+
+Real delta since pass 16's merge (`c552cd3cd`, PR #4436), across 19 commits
+touching a declared file directly: leave requests grew substantially
+(extensions, questions, changed-date counter-proposals, escalation,
+approver stand-in cover, ending one's own leave early), plus a privilege-
+ceiling fix on member anonymisation, hard-delete transaction-integrity
+hardening, applicant-record and instructor-name erasure cleanup, and three
+UX/history-readability changes — all owner-decided and all traced directly
+against the live code (separation of duties, capacity locking, org/FK
+scoping) rather than taken on the commit messages' word. **0 fixed, 0 new
+findings.** Full write-up:
+`docs/security-review/USR-07-users-organizations.md`'s **Pass 17** section.
+
+Row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
+pipeline) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 17, PR #4659, merged), preserved for history</summary>
+
 **PR [#4659](https://github.com/thegspiro/the-logbook/pull/4659) (branch
 `claude/friendly-babbage-2isqey`)**: Feature 06
 (Elections & ballots), pass 17 — watchdog pickup (the dedicated `/loop 30m
@@ -44,6 +75,8 @@ findings.** Full write-up:
 Row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
 organizations) — re-check `list_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 17, PR #4655, merged), preserved for history</summary>
@@ -27798,7 +27831,7 @@ iteration's commit" rule.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (9 routes, added pass 17)                                                                                                                                                                 | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (19 routes, up from 9 at pass 17 — questions, changed dates, approver cover/calendar/export, end-early)                                                                                   | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                                                                                                                            | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ⬜     |
@@ -27886,6 +27919,57 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-24 — Feature 06 (Elections & ballots, pass 17) merged (PR #4659); Feature 07 (Users & organizations, pass 17): watchdog pickup, real delta (leave requests grow substantially, privilege-ceiling and hard-delete hardening, erasure cleanup), 0 fixed, 0 new findings
+
+PR #4659 merged; row 06 confirmed ✅ above. A fresh `list_pull_requests`
+(state=open) found zero `claude/security-review-*` heads, so this
+iteration continued to Step 1: row 07 (Users & organizations) was the next
+⬜ row.
+
+Baseline: pass 16's merge `c552cd3cd` (PR #4436). Real delta across 19
+commits touching a declared file directly: leave requests grew from a
+simple vote to a full negotiation/escalation workflow (extensions,
+questions, changed-date counter-proposals, reminders, escalation to the
+Chief/managers, approver stand-in cover, ending one's own leave early) —
+the feature's largest-ever single-window delta. Traced directly against
+the live code rather than the commit messages: `_Pool.approvers_for`/
+`deciders` exclude the requester from a seat **and** refuse to let a
+stand-in decide a request where the stand-in is the requester; `vote()`
+locks the request row then takes a locking read of votes (Pitfall #27);
+the new cover endpoints org-scope and lock the target approver, validate
+the stand-in is an in-org leave manager, and gate setting another
+approver's cover behind the leave-management permission; escalation and
+stand-in notices are both claimed in `leave_notice_sends` before sending
+(Pitfall #36). Also in this window: `8b407f09` closes a real privilege-
+ceiling gap on member anonymisation (now matches `delete_user`/
+`change_member_status`/`archive_member`'s existing ceiling check);
+`56baca12`/`e8cb75d4` make the hard-delete's file-queueing and audit-row
+write part of the same transaction as the delete; `a389f841`/`03db9ab6`/
+`feb5e891`/`28a447c2` close applicant-record, waiver/applicant-file, and
+instructor-name-reference gaps on anonymisation/erasure — all owner-
+decided, already landed correctly, read in full rather than assumed.
+Route count: `leave_requests.py` 9 → 19 (re-enumerated by AST); every new
+route still carries an auth dependency, self- or request-scoped by the
+service layer the same way the file's original nine were. **0 fixed, 0
+new findings** — USR-5 and USR-8 re-confirmed unchanged (owner-accepted);
+USR-11/12/14 re-confirmed still closed/fixed. Full write-up:
+`docs/security-review/USR-07-users-organizations.md`'s **Pass 17** section.
+
+**Completion gate:** `flake8`, `black --check` (26.10.1) and
+`isort --check-only` (9.0.2) on `app/ tests/ alembic/` all clean (via
+`python3.13`, matching CI's pins — the sandbox's bare `python3` resolved to
+3.11, which lacks the app's dependencies). `validate_migrations.py
+--strict` — 835 revisions, single head `07abf8e6553b`. `check_route_
+permissions.py --strict` — 339 routes, 0 errors/warnings. Schema docs
+already current. Scoped backend pytest (`-k "user or organization or
+member_status or member_leave or leave_request"`) — 747 passed, 1
+pre-existing environment-only skip (`pywebpush`). `npm run typecheck` — 0
+errors. `npm run lint` — 0 errors, 0 warnings.
+
+Row 07 → ✅ (pending this PR's merge). Next is Feature 08 (Membership
+pipeline) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-11-24 — Feature 05 (Finance & approvals, pass 17) merged (PR #4655); Feature 06 (Elections & ballots, pass 17): watchdog pickup, real delta (report numbers and a letterhead identity line on two PDF exports), 0 fixed, 0 new findings
 

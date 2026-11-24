@@ -1,6 +1,88 @@
 # Security Review 07 — Users & Organizations
 
-**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-13 (pass 8, watchdog pickup), 2026-10-14 (pass 9, PR [#3250](https://github.com/thegspiro/the-logbook/pull/3250) — omitted from this line by that pass, corrected here), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13, watchdog pickup), 2026-11-01 (pass 14, watchdog pickup), 2026-11-05 (pass 15, watchdog pickup), 2026-11-19 (pass 16, watchdog pickup) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4), [#2602](https://github.com/thegspiro/the-logbook/pull/2602) (pass 6)
+**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-13 (pass 8, watchdog pickup), 2026-10-14 (pass 9, PR [#3250](https://github.com/thegspiro/the-logbook/pull/3250) — omitted from this line by that pass, corrected here), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13, watchdog pickup), 2026-11-01 (pass 14, watchdog pickup), 2026-11-05 (pass 15, watchdog pickup), 2026-11-19 (pass 16, watchdog pickup), 2026-11-24 (pass 17, watchdog pickup) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4), [#2602](https://github.com/thegspiro/the-logbook/pull/2602) (pass 6)
+
+---
+
+## Pass 17 (2026-11-24, watchdog pickup) — real delta (leave-request extensions/questions/changed-dates, escalation, approver cover/stand-in, end-own-leave-early, privilege-ceiling on anonymisation, hard-delete transaction integrity, applicant/instructor-name erasure), 0 fixed, 0 new findings; USR-5 and USR-8 re-verified unchanged
+
+**Step 0.** PR #4659 (Feature 06, Elections & ballots, pass 17) merged
+before this iteration started. A fresh `list_pull_requests` (state `open`)
+found no `claude/security-review-*` head, and row 07 (Users &
+organizations) was the next `⬜` row, confirmed against a freshly fetched
+main.
+
+**Branch-name deviation**, same as every watchdog-run pass since #4625:
+this session's git remote only accepts pushes to its own assigned branch
+(`claude/friendly-babbage-2isqey`), not a freely-chosen
+`claude/security-review-users-organizations-p17` name.
+
+**Scope:** the same twelve declared files (`endpoints/users.py`,
+`endpoints/organizations.py`, `endpoints/member_status.py`,
+`endpoints/member_leaves.py`, `endpoints/leave_requests.py`,
+`services/user_service.py`, `services/organization_service.py`,
+`services/member_leave_service.py`, `services/leave_request_service.py`,
+`models/user.py`, `schemas/user.py`, `schemas/organization.py`,
+`app/mcp/tools/members.py`, `app/mcp/tools/organization.py`). **Baseline:**
+`c552cd3cd` (PR #4436's merge, pass 16's own head). **Head:** `origin/main`
+at review time. `git diff --stat c552cd3cd..HEAD` across the twelve: 9
+files touched — `leave_requests.py` (+437), `leave_request_service.py`
+(+1451/−~100), `users.py` (+276), `member_leaves.py` (+23), `member_status.py`
+(+7), `organizations.py` (+2), `models/user.py` (+6),
+`schemas/organization.py` (+10), `member_leave_service.py` (+11);
+`user_service.py`, `organization_service.py`, `schemas/user.py`, both MCP
+files are byte-identical to pass 16. `git log --no-merges c552cd3cd..HEAD
+-- <declared files>` narrows this to **19 commits** touching a declared
+file directly; every one read in full via `git show`, not sampled.
+
+**Not a zero-delta pass — substantial real feature work, all read end to
+end:**
+
+- **`c5f68376`/`65a4c52c`/`fc5c009f`/`8e826441` are the bulk of the window: leave requests grew from a simple vote to a full negotiation/escalation workflow (extensions, questions, changed-date counter-proposals, reminders, routing a Chief/officer's own request around them, escalation to the Chief or managers, approver stand-in cover, ending one's own leave early).** This is the feature's largest-ever single-window delta and got the most scrutiny:
+  - **Separation of duties holds at both layers it needs to.** `_Pool.approvers_for` (`leave_request_service.py:181-199`) excludes the requester from the seat set itself (`step - {requester}`) before a stand-in is even considered. `_Pool.deciders` (`:201-210`) then separately refuses to let a stand-in hold a seat for a request where the stand-in **is** the requester — read directly: `holder[seat] = stand_in if stand_in and stand_in != requester else seat` — so a member cannot engineer self-approval by becoming the cover for whichever approver would otherwise decide their own request. `_as_approver` (`:993-1020`) is the single gate every vote/question/answer/changes-respond call routes through (confirmed at 4 call sites): a non-decider who is also not the requester, not a manager, and not the approver being stood in for gets 404 (no existence disclosure); the requester themselves gets an explicit 403 naming why; an approver whose seat a stand-in currently holds gets a 403 explaining that, rather than a silent no-op.
+  - **Capacity/decision locking (Pitfall #27) is correct in `vote()` (`:1047-1120`):** locks the request row first, then takes a locking read of the votes, so two concurrent votes serialize on the row lock and the second recounts from the post-commit state rather than a stale snapshot — the same shape pass 16 verified for `vote()`'s predecessor and unchanged in kind, just now also handling "a stand-in who is also an approver in their own right holds two seats, and one decision fills both" (`open_seats_of`) without creating a double-count path.
+  - **FK/org validation on the new cover endpoints (`set_cover`, `:583-677`):** the target approver is loaded with `WHERE id = ... AND organization_id = ... FOR UPDATE` (org-scoped and locked, closing the same race pass 16's `vote()` review flagged this shape for) and must already be in the approver pool; the stand-in must be a current member of `pool.managers` (in-org, holds `members.manage` leave permission) — both reject with a plain `ValueError`→400 if not, never silently accepted. Setting another approver's cover (vs one's own) requires the caller hold the leave-management permission (`:601-606`). `clear_cover` (`:679-733`) org-scopes and locks the same way, and restricts who may clear a cover to the approver, the stand-in, or a manager.
+  - **Routing a request to the Chief (`routed_to_chief`) is decided once, at creation, from whether the requester holds an approver position that moment** (confirmed in `create_leave_request`'s call into the pool) **and stored on the row**, so a position change after the fact does not retroactively reroute an already-decided or already-waiting request — matches the commit's own stated intent, verified against the persisted column rather than a live re-derivation.
+  - **Escalation (`65a4c52c`) and stand-in notices (`8e826441`) are both claimed in `leave_notice_sends` keyed on the request/cover id before sending (Pitfall #36)** — read `leave_request_upkeep`'s claim-then-send structure directly; a re-run or a second worker finds the claim already taken and sends nothing twice. No notice carries the request's reason or type (grepped the notification-building code for `.reason`/`.leave_type`, 0 hits in the email/in-app payload construction).
+  - **End-own-leave-early (`65a4c52c`, `POST /users/leave-requests/my-leaves/{leave_id}/end-early`)** is self-only by construction: the service method takes the acting user as the leave's own `user_id` filter, not a path-supplied target id, so there is no by-id parameter to validate in the first place.
+- **`e086445d` (landed before this window's baseline on `main` via owner decision ADV2-9, re-confirmed unchanged here, not re-derived): `MemberLeaveService.create_leave` refuses `granted_by == user_id`; `PATCH /users/leaves-of-absence/{id}` refuses the caller's own leave (403); deactivating one's own leave stays allowed.** Grepped `member_leave_service.py`/`member_leaves.py` directly — both guards still present, line numbers only shifted.
+- **`46ca3c36`** surfaces the same ADV2-9 refusal as inline form validation and consolidates five duplicated "is this one's own grant" comparisons behind one `is_own_grant` helper in `app/utils/separation_of_duties.py` — behavior unchanged, confirmed by reading the helper and its five call sites; no new bypass introduced by the consolidation.
+- **`8b407f09` closes a real privilege-ceiling gap: `anonymize_member` asked only for `members.manage` + step-up, unlike its siblings (`delete_user`, `change_member_status`, `archive_member`), which all additionally refuse a target whose effective permissions exceed the caller's.** Confirmed the refused case directly: `get_user_for_anonymization` now eager-loads the target's positions, and the endpoint calls `_enforce_account_reset_ceiling(action="member-anonymize", ...)` before any scrubbing — the same ceiling helper, not a re-derived parallel check.
+- **`56baca12`/`e8cb75d4` (hard-delete transaction integrity) and `a389f841` (applicant-record purge) and `03db9ab6`/`feb5e891`/`28a447c2` (anonymisation/erasure file and reference cleanup) all read in full — each is a security-positive hardening fix already landed correctly, matching this feature's established patterns:** `pending_file_deletions.enqueue` is session-add-only before `db.delete(user)`, so a refused delete's rollback queues nothing (idempotent, Pitfall #36-shaped); `user_hard_deleted` is now written and flushed inside the same transaction as the delete, with the delete rolled back (500, member untouched) if the audit row cannot be written; `delete_transferred_applications` locks the member's own transferred applications (org-scoped via the existing relationship, not a client-supplied id) before deleting them and their dependent rows; file-path resolution for every deletion routes through `confined_attachment_path`, which was not re-derived here but re-confirmed still the only path used.
+- **`1a01a7f2`/`2061c59a`/`8a449698` (W11-11/13/14) and `6033e5b5` (outreach vocabulary rename) are UX/history-readability and display-text-only changes** — no permission, query, or validation logic touched; confirmed by reading each diff's hunks against `users.py`, the only declared file any of the four touch.
+- **`05b37fa8` adds `organizations.short_name` (nullable `VARCHAR(20)`, migration `a541e82fef9f` guarded on table/column existence with a real downgrade) and echoes it on the two existing profile endpoints.** No new query shape, no permission change; the column is read-only-fallback (`org.short_name or ""`) so an installation that never sets it loses nothing.
+
+**All 97 routes across the five principal files re-enumerated by AST, not diffed against the prior count:** 34 `users.py` / 30 `organizations.py` / 17 `member_status.py` / 7 `member_leaves.py` / **19 `leave_requests.py`** (up from 9 at pass 16 — the cover-board, calendar, export, question/answer, changed-dates, and end-early routes this pass's delta added). Every one of the resulting 107 routes still carries a `Depends(...)` resolving to `get_current_user`, `require_permission`, `require_all_permissions`, or `require_stepup` — none bare (verified by grepping every `async def` in the five files for its dependency line, not by decorator inspection alone, since this file's auth lives in the function signature rather than the route decorator). The ten new `leave_requests.py` routes with only `get_current_user` (covers board, calendar, question/answer, changed-dates propose/respond, end-early) are self- or request-scoped by the service layer the same way the file's original nine were — none is a bare sign-in gate on org-wide data.
+
+**Re-verified against live source, not re-derived:**
+
+- **USR-5** (LOW/MED, unbounded lists; narrowed by the owner, partially fixed, remainder accepted) — `get_archived_members` read directly: still a bare `.scalars().all()`/`.all()` with no pagination. Unchanged; still accepted per the owner's recorded decision.
+- **USR-8** (MED, `GET /users` sends the full roster record to every `members.view`/`users.view` holder; narrowed via `GET /users/directory`, remainder accepted) — `list_users` read directly: same gate (`require_permission("users.view", "members.view", "members.manage")`), no row cap added. Unchanged, still open per the owner's decision.
+- **USR-11, USR-12, USR-14** — all re-confirmed still closed/fixed; the handlers and checks each pass pinned are still present, unchanged in substance.
+
+**0 fixed, 0 new flagged findings this pass.** Every real behavior change in this window is either an owner-decided feature expansion whose new separation-of-duties, locking, and org/FK-scoping invariants were traced directly against the live code (not assumed from the commit message), or a security-positive hardening fix landed outside the rotation. Nothing in the delta introduces an unscoped query, an unvalidated client-supplied FK, a missing or weakened permission check, or a self-approval/self-grant path.
+
+### Completion gate (pass 17)
+
+| Check                                                                                          | Result                                                        |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (installed 7.5.0, CI's pin)                                      | ✅ 0 violations                                               |
+| `black --check app/ tests/ alembic/` (installed 26.10.1, CI's pin)                             | ✅ 3493 files unchanged                                       |
+| `isort --check-only app/ tests/ alembic/` (installed 9.0.2, CI's pin)                          | ✅ clean                                                      |
+| `python3 scripts/validate_migrations.py --strict`                                              | ✅ 835 revisions, single head `07abf8e6553b`                  |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                              | ✅ 339 routes, 0 errors, 0 warnings                           |
+| `docs/DATABASE_SCHEMA.md` vs generator                                                         | ✅ already current (423 tables, 6541 columns)                 |
+| `pytest tests/ -q -k "user or organization or member_status or member_leave or leave_request"` | ✅ 747 passed, 1 pre-existing environment-only skip, 0 failed |
+| `cd frontend && npm run typecheck`                                                             | ✅ 0 errors                                                   |
+| `cd frontend && npm run lint`                                                                  | ✅ 0 errors, 0 warnings                                       |
+
+Backend linters installed fresh at CI's pinned versions, under the same
+Python 3.13 interpreter CI's job uses (the sandbox's bare `python3` resolved
+to 3.11, which does not have the app's dependencies installed; verified the
+mismatch directly via `sys.executable`/`sys.version` before switching to
+`/usr/local/bin/python3.13` for every gate command).
+
+No source file needed a fix this pass — review only, 0 findings to act on.
 
 ---
 
