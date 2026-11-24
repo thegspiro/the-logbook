@@ -125,6 +125,9 @@ class RequestPipelineUpdate(BaseModel):
     # toggle still read as open, which is a confusing way to spell the thing
     # `accept_public_requests: false` already says plainly.
     public_daily_limit: Optional[int] = Field(None, ge=1, le=INT32_MAX)
+    # A null clears either one: no feedback form, or no rating question.
+    feedback_form_id: Optional[str] = Field(None, max_length=36)
+    feedback_rating_field_id: Optional[str] = Field(None, max_length=36)
     tasks: Optional[List[RequestPipelineTask]] = None
     email_triggers: Optional[Dict[str, EmailTriggerConfig]] = None
 
@@ -707,6 +710,10 @@ class EventResponse(EventBase, UTCResponseBase):
     # events.manage, on an outreach event that is not cancelled. Detail
     # endpoint only (owner decision, 2026-11-20).
     can_staff_event: bool = False
+    # May this caller record CRR activities on it and see the event's list:
+    # crr.record or events.manage, on an outreach event that is not cancelled
+    # (owner decisions, 2026-11-22). Detail endpoint only.
+    can_record_crr: bool = False
     # The event's live volunteer signup sheet as any member sees it, so they
     # can sign up from the event page. Detail endpoint only; None when there is
     # no sheet. Carries no other volunteer's name: that list stays behind

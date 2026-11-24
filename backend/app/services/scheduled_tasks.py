@@ -580,6 +580,12 @@ SCHEDULE = {
         "recommended_time": "03:45",
         "cron": "45 3 * * *",
     },
+    "crr_resident_details_retention": {
+        "description": "Clear the resident address, name, phone, email and notes from CRR activities older than the department's retention period (CRR Catalogue settings, 24 months by default). The ZIP code, city, state, county and counts are kept for audit.",
+        "frequency": "daily",
+        "recommended_time": "03:55",
+        "cron": "55 3 * * *",
+    },
     "attendance_waiver_attachment_retention": {
         "description": "Delete documents filed with attendance waiver requests once the request has been closed (decided, withdrawn or voided) for longer than the department's retention period (the waiver policy's attachment_retention_days, a year by default). The request and its decision log are kept.",
         "frequency": "daily",
@@ -4785,6 +4791,59 @@ async def run_self_report_attachment_retention(db: AsyncSession) -> Dict[str, An
     return result
 
 
+async def run_crr_resident_details_retention(db: AsyncSession) -> Dict[str, Any]:
+    """Clear CRR resident details past each department's retention period.
+
+    The reader of ``settings["crr"]["resident_details_retention_months"]``
+    (owner decision, 2026-11-22). Commits per organization, so one
+    department's failure leaves another's sweep done, and a second run finds
+    nothing left to clear.
+    """
+    from app.core.audit import log_audit_event
+    from app.models.user import Organization
+    from app.services.crr_activity_service import CrrActivityService
+
+    organizations = (
+        (await db.execute(select(Organization).where(Organization.active.isnot(False))))
+        .scalars()
+        .all()
+    )
+    cleared_total = 0
+    failed = 0
+    for organization in organizations:
+        try:
+            cleared = await CrrActivityService(db).clear_expired_resident_details(
+                organization
+            )
+            await db.commit()
+        except Exception as exc:
+            failed += 1
+            await db.rollback()
+            logger.error(
+                "CRR resident-details retention failed for organization {}: {}",
+                organization.id,
+                exc,
+            )
+            continue
+        if cleared:
+            cleared_total += cleared
+            await log_audit_event(
+                db=db,
+                event_type="crr_resident_details_retention",
+                event_category="events",
+                severity="info",
+                event_data={
+                    "organization_id": str(organization.id),
+                    "activities_cleared": cleared,
+                },
+            )
+    return {
+        "task": "crr_resident_details_retention",
+        "activities_cleared": cleared_total,
+        "organizations_failed": failed,
+    }
+
+
 async def run_attendance_waiver_attachment_retention(
     db: AsyncSession,
 ) -> Dict[str, Any]:
@@ -8808,6 +8867,7 @@ TASK_RUNNERS = {
     "audit_log_ship": run_audit_log_ship,
     "retention_enforcement": run_retention_enforcement,
     "self_report_attachment_retention": run_self_report_attachment_retention,
+    "crr_resident_details_retention": run_crr_resident_details_retention,
     "attendance_waiver_attachment_retention": (
         run_attendance_waiver_attachment_retention
     ),
@@ -9005,6 +9065,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Daily — org-configured records retention
     "retention_enforcement": 86400,
     "self_report_attachment_retention": 86400,
+    "crr_resident_details_retention": 86400,
     # Idempotent: the file goes first, then its row, and a missing file
     # counts as deleted (attendance_waiver_attachments.sweep).
     "attendance_waiver_attachment_retention": 86400,

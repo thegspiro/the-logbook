@@ -90,6 +90,7 @@ import EventGuestHeadcountCard from '../components/event-detail/EventGuestHeadco
 import EventStaffingCard from '../components/event-detail/EventStaffingCard';
 import EventVolunteerSignupCard from '../components/event-detail/EventVolunteerSignupCard';
 import EventOutreachCloseoutCard from '../components/event-detail/EventOutreachCloseoutCard';
+import EventCrrActivitiesCard from '../components/event-detail/EventCrrActivitiesCard';
 import { GuestCheckInQRCard } from '../components/events/GuestCheckInQRCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
@@ -1835,6 +1836,11 @@ export const EventDetailPage: React.FC = () => {
               <EventStaffingCard eventId={event.id} isPast={isPastEvent} />
             ) : (
               event.volunteer_signup && <EventVolunteerSignupCard eventId={event.id} isPast={isPastEvent} />
+            )}
+
+            {/* Community risk reduction done at this outreach event. */}
+            {event.can_record_crr && (
+              <EventCrrActivitiesCard eventId={event.id} eventTitle={event.title} timezone={tz} />
             )}
 
             {/* The headcount for an outreach event nobody signed in at.

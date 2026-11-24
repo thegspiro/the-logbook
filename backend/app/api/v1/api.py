@@ -24,6 +24,7 @@ from app.api.v1.endpoints import (
     compliance_officer,
     course_cohorts,
     course_syllabus,
+    crr,
     dashboard,
     documents,
     elections,
@@ -178,6 +179,7 @@ api_router.include_router(event_requests.router, tags=["event-requests"])
 api_router.include_router(
     apparatus_events.router, prefix="/apparatus-events", tags=["apparatus-events"]
 )
+api_router.include_router(crr.router, prefix="/crr", tags=["crr"])
 api_router.include_router(
     member_audience.router, prefix="/member-audience", tags=["member-audience"]
 )

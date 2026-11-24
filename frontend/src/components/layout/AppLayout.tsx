@@ -167,6 +167,20 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         </p>
         <p className="text-theme-text-muted mt-1.5 hidden text-center text-xs tracking-wide sm:block">
           Powered by The Logbook
+          {/* GeoNames' ZIP code data (CC BY 4.0) asks for credit with a link;
+              the owner chose the footer for it. Hidden on a phone with the rest
+              of this line, where a footer link on every page would be a tap
+              target too small to meet the 44px rule. */}
+          <span aria-hidden="true"> &middot; </span>
+          ZIP code data &copy;{' '}
+          <a
+            href="https://www.geonames.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="focus-visible:ring-theme-focus-ring touch:min-h-11 inline-flex items-center underline focus-visible:ring-2 focus-visible:outline-none"
+          >
+            GeoNames
+          </a>
         </p>
         <p className="text-theme-text-muted mt-2 hidden text-center text-[11px] sm:block">
           End-to-end encrypted &middot; Self-hosted &middot; HIPAA-aware

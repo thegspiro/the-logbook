@@ -37,6 +37,14 @@ _EMPTY_REPORT = {
     "by_period": [],
     "by_type": [],
     "recent_events": [],
+    "crr": {
+        "activities": 0,
+        "previous_activities": None,
+        "by_type": [],
+        "by_tag": [],
+        "by_zip": [],
+        "unplaced_activities": 0,
+    },
 }
 
 

@@ -23,6 +23,7 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from app.api.v1.endpoints.shift_evaluations import _entry_for_link
@@ -357,6 +358,62 @@ class TestSubmitting:
         assert detail.link_created_by_member is True
         assert detail.preceptor_name == "Pat Preceptor"
         assert detail.evaluator_id is None
+
+
+class TestACollisionWithAnOfficer:
+    async def test_the_retry_keeps_the_submitting_device(self, db_session):
+        """An officer creates the same evaluation while the preceptor submits.
+
+        The preceptor's first commit loses the race on the evaluation's unique
+        key; ShiftEvaluationService._save rolls back and applies the save to
+        the officer's row. That rollback also discards what submit() had set
+        on the link, and the link must still record the submitting device.
+        """
+        scene = await _scene(db_session)
+        _, entry = await _outside(db_session, scene)
+        link = await _link(db_session, scene, entry)
+        token, link_id, entry_id = link.token, link.id, entry.id
+        scope_key, org_id = link.scope_key, scene.org_id
+        officer_id = scene.officer.id
+        real_commit = db_session.commit
+        collided = []
+
+        async def commit_after_the_officer():
+            if collided:
+                return await real_commit()
+            collided.append(True)
+            # The officer's save lands first; the preceptor's then fails on
+            # the unique key, as it does when the two race.
+            await db_session.rollback()
+            service = ShiftEvaluationService(db_session)
+            officer_entry = await service.get_entry(entry_id, org_id)
+            officer = await db_session.get(User, officer_id)
+            await service.save_for_entry(
+                officer_entry,
+                scope_key,
+                org_id,
+                _complete(preceptor_name="Pat Preceptor", submit=False),
+                officer,
+            )
+            raise IntegrityError("INSERT INTO shift_evaluations", {}, Exception())
+
+        with patch.object(db_session, "commit", commit_after_the_officer):
+            evaluation = await ShiftEvaluationLinkService(db_session).submit(
+                token, _answers(), ip_address="203.0.113.9", user_agent="Phone"
+            )
+
+        assert collided == [True]
+        assert evaluation.status == "submitted"
+        stored = (
+            await db_session.execute(
+                select(ShiftEvaluationLink).where(ShiftEvaluationLink.id == link_id)
+            )
+        ).scalar_one()
+        await db_session.refresh(stored)
+        assert stored.used_at is not None
+        assert stored.evaluation_id == evaluation.id
+        assert stored.submitted_ip == "203.0.113.9"
+        assert stored.submitted_user_agent == "Phone"
 
 
 class TestAShiftAwaitingApproval:

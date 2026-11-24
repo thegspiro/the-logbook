@@ -278,6 +278,22 @@ class TestASeriesUpdateRefusesTheSameNulls:
         assert await bench.stored("event", row_id, "title") == "Series retitled"
 
 
+class TestAnUnknownEventIsNotFound:
+    """update_event answers 404 for an id that names no event in the
+    caller's organization; the series door answered 400 for the same id."""
+
+    @pytest.mark.parametrize("path", ["/events/{id}", "/events/{id}/update-future"])
+    async def test_answers_404(self, bench: _Bench, path: str) -> None:
+        # Commits the bench's department, which the refused request rolls back.
+        await bench.make("event")
+        response = await bench.client.patch(
+            path.format(id=uuid.uuid4()), json={"title": "Renamed"}
+        )
+        await bench.reset()
+        assert response.status_code == 404, response.text
+        assert response.json()["detail"] == "Event not found"
+
+
 class TestAnExternalAttendeeEditRefusesANullName:
     async def _attendee(self, bench: _Bench) -> tuple[str, str]:
         event_id = await bench.make("event")

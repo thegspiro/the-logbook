@@ -604,6 +604,15 @@ The Member Hours report still keeps outside hours in their own column. Data
 comes from `GET /scheduling/my-shift-history` and
 `GET /scheduling/members/{id}/shift-history` (self, or `scheduling.report`).
 
+**Hours by position** _(2026-11-23)_. The same screens show a member's credited
+shifts by the seat they held (Driver/Operator, Officer, a department's own
+seats), for the selected year or **All time**: hours, shifts and calls per
+seat, shifts with no seat recorded last, and one **Other departments** row from
+the outside hours, so the rows add up to the cards above them. Only finalized
+shifts count, as on the cards; approved pre-shift work counts under the seat
+held on that shift. The figures are `positions` and `all_time_positions` on
+`GET /scheduling/my-hours-history` and `GET /scheduling/members/{id}/hours-history`.
+
 A member who rides a neighbouring jurisdiction's apparatus gets credit for it
 from **My Shifts → Hours → All shifts**, with **Log outside shift**:
 

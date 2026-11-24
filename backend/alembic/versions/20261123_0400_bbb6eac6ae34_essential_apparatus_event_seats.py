@@ -1,7 +1,7 @@
 """Apparatus event seats: essential or not
 
 Revision ID: bbb6eac6ae34
-Revises: 986d6575af35
+Revises: 0a4667186b2d
 Create Date: 2026-11-23 04:00:00.000000
 
 Owner decision, 2026-11-23: a seat on an apparatus event can be marked
@@ -29,7 +29,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "bbb6eac6ae34"
-down_revision: Union[str, None] = "986d6575af35"
+down_revision: Union[str, None] = "0a4667186b2d"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

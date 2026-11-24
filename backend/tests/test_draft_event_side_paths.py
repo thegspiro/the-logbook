@@ -113,3 +113,36 @@ async def test_a_drafts_training_session_reads_as_none(db_session, draft):
 
     assert hidden is None
     assert organizer_view == "payload"
+
+
+async def _session_read(db_session, draft, permissions):
+    with (
+        patch.object(
+            sessions_endpoint.TrainingSessionService,
+            "get_session_by_event",
+            AsyncMock(return_value=MagicMock()),
+        ),
+        patch.object(
+            sessions_endpoint, "_session_payload", AsyncMock(return_value="payload")
+        ),
+    ):
+        return await sessions_endpoint.get_training_session_by_event(
+            uuid.UUID(draft["event"]),
+            db=db_session,
+            current_user=_caller(draft, permissions),
+        )
+
+
+async def test_a_training_manager_reads_a_training_drafts_session(db_session, draft):
+    """training.manage administers every Training event, drafts included, and
+    was told "No training details" on one whose details were attached."""
+    assert await _session_read(db_session, draft, ["training.manage"]) == "payload"
+
+
+async def test_a_training_manager_does_not_read_another_types_draft(db_session, draft):
+    await db_session.execute(
+        text("UPDATE events SET event_type = 'business_meeting' WHERE id = :id"),
+        {"id": draft["event"]},
+    )
+
+    assert await _session_read(db_session, draft, ["training.manage"]) is None

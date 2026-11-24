@@ -391,6 +391,14 @@ export interface MemberHoursTotals {
   on_call_hours?: number;
 }
 
+/** A member's credited department shifts in one seat; `position` null when none was recorded. */
+export interface MemberPositionTotals {
+  position: string | null;
+  shifts: number;
+  hours: number;
+  calls: number;
+}
+
 export interface MemberHoursHistory {
   year: number;
   /** Earliest year the member has any attendance in; null when they have none. */
@@ -417,6 +425,12 @@ export interface MemberHoursHistory {
    * `all_time` are cut from. Absent on responses from before it was added.
    */
   history?: MemberHoursMonth[];
+  /**
+   * Credited department shifts by seat, most hours first: the selected year,
+   * and all time. Absent on responses from before they were added.
+   */
+  positions?: MemberPositionTotals[];
+  all_time_positions?: MemberPositionTotals[];
 }
 
 export interface MemberHoursYear {

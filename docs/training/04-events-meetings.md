@@ -1756,7 +1756,7 @@ down. Manage the crew on that event's page.
 > cancelled event, so add it again from the request once it is rescheduled.
 > A moved date is not re-checked for apparatus conflicts; look at **Shift
 > Scheduling** for that day if the engine might be committed elsewhere. **Volunteer signups** for the same request stay
-available; a visit can have an engine crew and extra educators.
+> available; a visit can have an engine crew and extra educators.
 
 ---
 
@@ -2064,12 +2064,12 @@ creation tab. Both are pages of **Events Administration**, which is laid out
 like Training, Scheduling and Inventory Administration: four area cards, and
 under them a strip of the chosen area's pages with a line naming the open one.
 
-| Area                   | Pages                                                                      |
-| ---------------------- | -------------------------------------------------------------------------- |
-| **Events**             | **Create Event**, **Past Events**                                          |
-| **Community Outreach** | **Overview**, **Outreach Requests**, **Outreach Impact**, **Apparatus Events** |
-| **Check-ins**          | **QR Code Analytics**, **Card Check-ins** |
-| **Settings**           | **Settings**                              |
+| Area                   | Pages                                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------- |
+| **Events**             | **Create Event**, **Past Events**                                                                  |
+| **Community Outreach** | **Overview**, **Outreach Requests**, **CRR Activities**, **Outreach Impact**, **Apparatus Events** |
+| **Check-ins**          | **QR Code Analytics**, **Card Check-ins**                                                          |
+| **Settings**           | **Settings**                                                                                       |
 
 An area card and the page under it carry a red count when the **Needs
 attention** list has items there.
@@ -2089,6 +2089,7 @@ and who may see the list, is covered in
 | **Categories**       | Your **Custom Event Categories** and their colours                              |
 | **Attendance**       | _"Who sees who's going; who takes requests"_, and **Mandatory event responses** |
 | **Hour Tracking**    | Mapping events to admin hours                                                   |
+| **CRR Catalogue**    | Community risk reduction activities, their counts and tags                      |
 | **Public Requests**  | Everything about outreach events the public asks for — see below                |
 | **Headline Metrics** | The four numbers at the top of the page                                         |
 
@@ -2904,6 +2905,7 @@ scheduling and communication.
    > with one type reading "Usually needs 2 × Tour Guide, 1 × Greeter" and
    > another open for editing, showing **Add a role**, **Clear preset** and
    > **Save roles**.
+
 4. Under **Handling** (**Request Handling**), set:
    - **Default Coordinator** — the member assigned every new request. The
      list shows each member's rank by name ("Jordan Avery — Firefighter").
@@ -2972,11 +2974,11 @@ back button. **All requests** at the top returns to the list. The page leads
 with the one action that moves the request forward; on a phone that button
 stays in a bar at the bottom of the screen while you scroll:
 
-| Status                   | Main button                                     |
-| ------------------------ | ----------------------------------------------- |
-| New, nobody assigned     | **Take it**                                     |
-| New, assigned            | **Start working**                               |
-| In progress or postponed | **Schedule event**                              |
+| Status                   | Main button                                       |
+| ------------------------ | ------------------------------------------------- |
+| New, nobody assigned     | **Take it**                                       |
+| New, assigned            | **Start working**                                 |
+| In progress or postponed | **Schedule event**                                |
 | Scheduled                | **Mark completed**, once the event's date is past |
 
 **Completing a request** _(2026-11-21)_. **Finalizing the event's
@@ -3122,6 +3124,79 @@ is on Open Shifts.
 > **Volunteer staffing** card on an outreach event with an open sheet: "3 of 5 signed up", each role's count and the names of
 > the members who signed up.
 
+### The CRR Catalogue
+
+**Who can do this:** officers who can manage events — usually the Community
+Outreach Manager.
+
+**Manage Events → Settings → CRR Catalogue** lists the community risk
+reduction activities your department records, what each one counts, and the
+risks and priority populations they are tagged with. Activities are recorded
+against it under [CRR Activities](#crr-activities).
+
+Every department starts with the same built-in types: smoke alarm install, CO
+alarm install, home safety survey, car seat inspection, extinguisher training,
+hands-only CPR, Stop the Bleed, fall prevention and school program. Each has
+its counts (for example, **Alarms installed** and **Homes**) and default tags
+(for example, **Fire**).
+
+- **Rename**, **Describe**, **Retire** or **Restore** any type. A built-in
+  type cannot be deleted: retire it, and it stops being offered while past
+  records keep naming it.
+- **Add a count** to a type, and rename or retire a count.
+- Tick the **Risks** and **Priority populations** a type carries by default.
+- **Add an activity type** with a name and, optionally, its counts separated by
+  commas. A type you added can be deleted.
+- Under **Tags**, add, rename or retire risks and priority populations.
+- **Admin Hours category**, on each type: the category a member's time on a
+  logged activity of that type is credited to. Left at **The Public Education
+  mapping**, it follows whatever your Hour Tracking mapping for public
+  education events says.
+- **Resident details → Keep for (months)**: how long a resident's address,
+  name, phone, email and the activity's notes are kept, 24 months unless you
+  change it. After that they are cleared automatically; the ZIP code, city,
+  state and counts stay.
+
+Changes save as you make them. **Juvenile firesetter intervention** is listed
+as **Coming soon**: it will be a separate option, with its own access rules
+because its records concern minors.
+
+### CRR Activities
+
+**Who can do this:** members of the Community Outreach Team and anyone who can
+manage events. Only the Community Outreach Manager, the chiefs and the
+president see a resident's details.
+
+**Events → CRR Activities** (also **Manage Events → Community Outreach → CRR
+Activities**) lists the community risk reduction work your department has
+recorded, newest first, filtered by **Activity type** and **When**.
+
+**Log a CRR activity** records work done away from an event — an alarm install
+at a resident's home, a home safety survey:
+
+1. Choose the **Activity type** and when it happened, and fill in its counts
+   (for example, **Alarms installed: 3**). Blank counts are left out.
+2. Tick the **Risks** and **Priority populations** it addressed; the type's
+   defaults are ticked for you.
+3. Enter the **ZIP code**. In a US department the city and state fill in from
+   it; the form starts with your department's own city and state.
+4. Tick **Add resident details** only when you need to record the address,
+   name, phone or email. They are encrypted, shown only to the Community
+   Outreach Manager and above, and cleared after your department's retention
+   period.
+5. Under **Who took part**, list the members and their minutes. You are listed
+   with 60 minutes to start with. Each member's time is credited to Admin
+   Hours, in the category the activity type names.
+
+**At an event,** an outreach event's page has a **CRR activities** card:
+**Record an activity** records what was done there, such as seats checked at a
+car seat event. No members are listed, because the event's attendance already
+credits their time.
+
+An activity cannot be edited once recorded. To correct one, **Delete** it —
+which also removes the Admin Hours it credited — and record it again. You can
+delete activities you recorded; anyone who manages events can delete any.
+
 ### The Outreach Overview
 
 **Who can do this:** officers who can manage events — usually the Community
@@ -3225,6 +3300,24 @@ Under the figures:
   **Export CSV** downloads every event in the period, not only the fifty, so a
   spreadsheet totals to the figures on the screen.
 
+**Community risk reduction.** Beneath those, the
+[CRR activities](#crr-activities) recorded in the period, both log entries and
+activities at events:
+
+- **By activity** — each activity type's counts (**Alarms installed: 23**),
+  each with its change since the same point last period.
+- **By risk** and **By priority population** — how many activities, and how
+  much of each count, went to Fire, Falls, Older adults and so on. An activity
+  tagged with two risks counts under both, so these lists do not add up to the
+  total.
+- **By ZIP code** — each ZIP code with its city and state, its activities and
+  counts. **Show map** opens a street map with a circle at each ZIP code,
+  sized by its activities. The map is drawn from OpenStreetMap, so it loads
+  only when you open it; if your network blocks OpenStreetMap, the circles
+  still show, over a blank background.
+
+The printed summary carries the same three lists, without the map.
+
 #### Recording a guest headcount
 
 For an event where guests did not sign in one by one — an assembly, a block
@@ -3279,6 +3372,39 @@ summary does not include them.
 > event, with an outcome note, one apparatus ticked, two materials and **Photos taken, with
 > the host's consent** chosen; and the **Materials handed out** card on
 > Outreach Impact.
+
+#### Feedback from requesters
+
+**Who can do this:** officers who can manage events.
+
+Once a request is marked **Completed**, its status page can ask the requester
+how it went, and the **Completed** email links to it. The questions are a form
+from **Forms**, so you write your own and choose when each one appears: a
+question can show only when an earlier answer equals a value, contains it, or
+is at least or at most a number.
+
+To turn it on, open **Manage Events → Settings → Request Handling → Feedback
+From Requesters**:
+
+1. Choose a published form as the **Feedback form**, or select **Create the
+   starter feedback form** for one that asks **How did the visit go?** (1 to
+   5), **What went well?**, and **What could we do better?**, shown only at a
+   rating of 3 or less.
+2. Choose the **Rating question**: the answer the report averages. It must be
+   a number question, or a choice whose options are all whole numbers. The
+   starter form comes with it chosen.
+
+Change the questions in **Forms** like any other form. A requester answers
+once, and cannot change the answer afterwards. Their answers appear on the
+request under **Requester feedback**. An answer to a question marked
+**Sensitive** stays with the submission in **Forms**, and the request only says
+how many there are. The **Community Engagement** tab adds a **Requester
+feedback** line: the average rating and how many responded in the period. The
+printed summary adds the same row once anyone has answered.
+
+The link is added to the built-in status email. A request email template your
+department attached to the **Completed** trigger itself is sent as written,
+without it.
 
 ### Public Request Form
 

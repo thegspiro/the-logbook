@@ -479,8 +479,8 @@ greyed out.
 
 **Not yet converted** (F-2 to F-9 still apply to them):
 
-- **Top-level pages:** the locations setup wizard; skill template, training
-  enhancements and knowledge tests pages; the pipeline create and edit pages; integrations; forms;
+- **Top-level pages:** the locations setup wizard; the knowledge tests page;
+  the pipeline create and edit pages; integrations; forms;
   members admin; the manual shift report and shift detail, reports and
   patterns tabs.
 - **Inventory and assets:** bulk add, size preferences, catalog quick add, the
@@ -706,6 +706,35 @@ and pipeline settings; onboarding, the public portal, membership, history, the
 org chart node and IP security admin. The other rows are as batches 21 to 23
 left them.
 
+## Rollout status, 2026-11-23 (training batch E, part 1)
+
+The same steps, on these:
+
+| Area     | Converted                                                                                                                  |
+| -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Training | the requirement editor, from Training Admin's requirements page and Programs' Requirements tab; the skill template builder |
+
+The requirement editor toasted one refusal at a time ("Name is required") and
+sent nothing. Every open refusal (name, the target its type needs, who it
+applies to, the grandfathering dates, the year) is now said on its field and in
+a summary. A new requirement is not created until every one is fixed. An edit
+saved for everyone saves the rest; the type and its target are left out
+together when the target is refused, so a new type is never paired with the
+stored target of another, and the cutoff and catch-up deadline likewise. An
+edit saved for new members only makes a new copy, so it saves whole or not at
+all. The two pages no longer swallow a failed save in a toast: it reaches the
+editor, which puts it on its field. Programs has no form of its own; its
+requirement saves are this editor's.
+
+The skill template builder listed its open errors in a banner and saved
+nothing. Each is now flagged on its control (settings, a section's name, a
+criterion's label, points, checklist items, statement text). A new template
+creates nothing until fixed. Save on an existing template saves the settings
+and leaves out a refused one; the sheet is replaced whole by the update, so a
+sheet with an open error keeps the stored sheet while the settings save.
+Publish stays refused until every error is fixed. The settings and sheet are a
+`<form>`; Cancel and leaving the page ask before discarding.
+
 ## Rollout status, 2026-11-23 (training batch E, part 2)
 
 The same steps, on these:
@@ -730,6 +759,27 @@ summary at the top. A future date is refused on the field, as the schema does.
 
 The provider mapping pickers on the same page save as each picker changes and
 hold no typed field; they were looked at and left.
+
+## Rollout status, 2026-11-23 (training batch E, PR 3)
+
+The same steps, on these:
+
+| Area     | Converted                                                                                                         |
+| -------- | ----------------------------------------------------------------------------------------------------------------- |
+| Training | Enhancements' four create dialogs: recertification pathway, competency matrix, instructor qualification, exercise |
+
+Each said a missing name, position, member or date in a toast that named no
+field. They are create forms, so they create nothing until every flagged field
+is fixed. The pathway's day counts, its hours and the exercise's participant
+count are checked against the schema's bounds and named on their box; a 422 on
+the one participating organization (`participating_organizations.0.name`)
+lands on Organization Name. The payloads are unchanged.
+
+The Training Waivers tab was looked at and left: it is a read-only list with a
+status filter and a search box, not a form. The form that creates a training
+waiver is Members › Waivers' Create Waiver tab (`WaiverManagementPage.tsx`),
+which another session is changing for the self-waiver refusal; it is still to
+convert, with the other surfaces listed above.
 
 ## Suggested order
 

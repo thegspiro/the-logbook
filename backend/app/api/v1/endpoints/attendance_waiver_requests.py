@@ -30,6 +30,8 @@ POST   /training/waivers/requests/{id}/override      - The Chief approves a deni
 POST   /training/waivers/requests/{id}/request-info  - Ask the member a question
 POST   /training/waivers/requests/{id}/respond       - Answer the open question
 POST   /training/waivers/requests/{id}/attachments   - File documents (pending)
+DELETE /training/waivers/requests/{id}/attachments/{attachment_id} - Remove one
+                                                       (pending)
 GET    /training/waivers/requests/{id}/attachments/{attachment_id} - Download one
 
 Who may decide is a matter of holding a position, not a permission (the
@@ -554,6 +556,34 @@ async def add_attendance_waiver_attachments(
     with _refusals():
         request = await AttendanceWaiverAttachmentService(db).add_attachments(
             str(current_user.organization_id), current_user, request_id, files
+        )
+    return await _one(AttendanceWaiverService(db), current_user, request)
+
+
+@router.delete(
+    "/{request_id}/attachments/{attachment_id}",
+    response_model=AttendanceWaiverRequestResponse,
+)
+async def remove_attendance_waiver_attachment(
+    request_id: str,
+    attachment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Remove one document from the caller's own pending request; answers with
+    the request. Removing one already gone changes nothing. 400 once it is
+    decided or withdrawn, or for the last document when the department
+    requires one; 403 for a decider, 404 for anyone else.
+
+    **Authentication required**
+    """
+    with _refusals():
+        request = await AttendanceWaiverAttachmentService(db).remove_attachment(
+            str(current_user.organization_id),
+            current_user,
+            request_id,
+            attachment_id,
         )
     return await _one(AttendanceWaiverService(db), current_user, request)
 

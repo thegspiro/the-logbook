@@ -569,6 +569,30 @@ async def apply_default_assignee(
     return default_assignee
 
 
+async def _feedback_link(
+    db: AsyncSession, event_request: EventRequest, org: Optional[Organization]
+) -> Optional[str]:
+    """The status page link that asks for feedback, on a Completed request's
+    email, while the department has a feedback form and none has been sent.
+
+    The link is the requester's status link, whose token is the credential,
+    as the status page already is; it goes only to the requester's address.
+    """
+    from app.core.config import settings as app_settings
+    from app.services.outreach_feedback_service import OutreachFeedbackService
+
+    if org is None or event_request.status != EventRequestStatus.COMPLETED:
+        return None
+    token = event_request.status_token
+    if not token:
+        return None
+    offered, _sent = await OutreachFeedbackService(db).status_flags(event_request, org)
+    if not offered:
+        return None
+    base = (app_settings.FRONTEND_URL or "").rstrip("/")
+    return f"{base}/event-request/status/{token}"
+
+
 def render_request_template(
     template: Any, event_request: EventRequest, org: Optional[Organization]
 ) -> tuple[str, str, Optional[str]]:
@@ -716,6 +740,16 @@ async def send_request_notification(
                     f"<p><strong>Reason:</strong> {_html.escape(decline_reason)}</p>"
                 )
                 detail_lines.append(f"Reason: {decline_reason}")
+            feedback_url = await _feedback_link(db, event_request, org)
+            if feedback_url:
+                detail_rows.append(
+                    "<p>How did it go? We would be glad to hear: "
+                    f'<a href="{_html.escape(feedback_url)}">share your feedback</a>.'
+                    "</p>"
+                )
+                detail_lines.append(
+                    f"How did it go? Share your feedback: {feedback_url}"
+                )
 
             context = {
                 "contact_name": event_request.contact_name or "",
