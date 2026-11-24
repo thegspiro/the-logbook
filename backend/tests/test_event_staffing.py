@@ -768,9 +768,9 @@ class TestTheSeatBoard:
         event.is_draft = True
         await db_session.flush()
         member = await _member(db_session, org, "casey")
-        with patch(
-            "app.api.v1.endpoints.events.user_has_permission", return_value=False
-        ):
+        # The draft rule is draft_visibility's (can_see_draft), so its
+        # permission lookup is the one the member is denied through.
+        with patch("app.api.draft_visibility.user_has_permission", return_value=False):
             with pytest.raises(HTTPException) as exc:
                 await self._board(db_session, event, member)
         assert exc.value.status_code == 404

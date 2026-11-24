@@ -997,13 +997,15 @@ department's location list and another event already has it at that time,
 saving is refused. The message names up to three of the clashing events.
 Choose another room or time.
 
-**Drafts.** A draft is visible only to officers who can manage events. When it
+**Drafts.** A draft is visible only to officers who can manage events, and,
+_(2026-11-23)_ for a Training event, to training managers. When it
 is ready, open it and select **Publish**. Editing and saving a draft keeps it a
 draft; before 2026-10-26 the edit form did not know the event was a draft, and
 saving it published it. _(2026-11-15)_ Nobody can check in to a draft, by QR
 code, NFC tag, kiosk or self check-in, and its QR code does not work until it
 is published. Its folder and training session stay hidden from anyone who
-cannot manage events.
+cannot see the draft, and the training calendar leaves it out for them too.
+Only an officer who can manage events can publish it.
 
 _(2026-11-15)_ Nobody can check in to a draft: a QR scan, an NFC tap and a
 kiosk all refuse it with "Cannot check in to an unpublished event", and its QR
