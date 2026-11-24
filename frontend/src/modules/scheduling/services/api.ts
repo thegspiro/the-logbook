@@ -102,6 +102,8 @@ export interface OutreachRoleSlot {
   total: number;
   filled: number;
   remaining: number;
+  /** Absent from an older backend, which treated every role as essential. */
+  essential?: boolean;
 }
 
 export interface ShiftRecord {

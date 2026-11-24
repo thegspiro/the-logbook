@@ -4,10 +4,15 @@
  */
 import type { OutreachEventTypeConfig, OutreachRole, StaffingRoleNeed } from '../types/event';
 
-/** "2 × Tour Guide, 1 × Greeter", naming a role removed from settings by its value. */
+/** "2 × Tour Guide, 1 × Greeter (optional)", naming a role removed from settings by its value. */
 export const describePreset = (preset: StaffingRoleNeed[] | undefined, roles: OutreachRole[]): string =>
   (preset ?? [])
-    .map((need) => `${need.count} × ${roles.find((r) => r.value === need.role)?.label ?? need.role}`)
+    .map(
+      (need) =>
+        `${need.count} × ${roles.find((r) => r.value === need.role)?.label ?? need.role}${
+          need.essential === false ? ' (optional)' : ''
+        }`
+    )
     .join(', ');
 
 /**

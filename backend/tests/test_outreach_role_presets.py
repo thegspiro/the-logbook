@@ -44,10 +44,27 @@ class TestSettlingPresets:
                 "value": "station_tour",
                 "label": "Station Tour",
                 "default_roles": [
-                    {"role": "tour_guide", "count": 3},
-                    {"role": "greeter", "count": 1},
+                    {"role": "tour_guide", "count": 3, "essential": True},
+                    {"role": "greeter", "count": 1, "essential": True},
                 ],
             }
+        ]
+
+    def test_a_preset_keeps_an_optional_role(self):
+        # Through the schema, as a save arrives: OutreachRoleNeed once dropped
+        # the flag, and every preset role read back as essential.
+        typed = OutreachEventType(
+            value="station_tour",
+            label="Station Tour",
+            default_roles=[
+                {"role": "tour_guide", "count": 2},
+                {"role": "greeter", "count": 1, "essential": False},
+            ],
+        )
+        settled = settle_type_role_presets([typed.model_dump()], ROLES)
+        assert settled[0]["default_roles"] == [
+            {"role": "tour_guide", "count": 2, "essential": True},
+            {"role": "greeter", "count": 1, "essential": False},
         ]
 
     @pytest.mark.parametrize("preset", [None, []])
@@ -141,7 +158,9 @@ class TestSavingPresets:
             {
                 "value": "station_tour",
                 "label": "Station Tour",
-                "default_roles": [{"role": "tour_guide", "count": 2}],
+                "default_roles": [
+                    {"role": "tour_guide", "count": 2, "essential": True}
+                ],
             },
             {"value": "other", "label": "Other"},
         ]
@@ -161,7 +180,7 @@ class TestSavingPresets:
             ],
         )
         assert merged["outreach_event_types"][0]["default_roles"] == [
-            {"role": "car_seat_tech", "count": 2}
+            {"role": "car_seat_tech", "count": 2, "essential": True}
         ]
 
     async def test_an_unknown_role_is_a_400(self, db_session):

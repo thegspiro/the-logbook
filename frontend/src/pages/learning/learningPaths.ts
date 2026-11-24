@@ -351,10 +351,10 @@ export const learningPaths: LearningPath[] = [
         why: 'A Santamobile run or a parade needs a named crew on one apparatus, not a shift. Taking a seat tells the coordinator who is riding and puts you down as going.',
         how: [
           'Open the night’s event. The Apparatus & Crew card lists every seat on the apparatus.',
-          'Press Sign me up on an open seat. You can hold one seat per night.',
+          'Press Sign myself up on an open seat. You can hold one seat per night.',
           'If the night says Sign-ups need approval, the button reads Ask for this seat: the seat stays open until the coordinator approves, and you are emailed the answer. Withdraw request takes it back.',
           'A Driver seat may need the apparatus’s EVOC level. If you are not eligible the seat says so; ask the coordinator.',
-          'Plans changed? Press Leave seat before the night. Once you have checked in, the coordinator corrects attendance instead.',
+          'Plans changed? Press Give up my spot before the night. Once you have checked in, the coordinator corrects attendance instead.',
         ],
         success:
           'Your name is on a seat and the event shows you as going — or, where sign-ups need approval, your request is waiting.',
@@ -380,7 +380,7 @@ export const learningPaths: LearningPath[] = [
         why: 'Each night becomes its own event with its own crew, so members sign up for the nights they can make, and every night checks in and credits hours like any event.',
         how: [
           'Press Schedule nights on the template and give the run a title.',
-          'Add each night’s date, start, length and route. Repeat weekly adds the same night a week apart.',
+          'Add each night’s date, start, length and route. Every week adds the same night a week apart, and Every day the next night.',
           'A night whose apparatus is committed elsewhere is flagged with the reason. Tick Schedule anyway only after confirming the apparatus can cover both.',
           'Each night can be changed on its own later from its event page with Edit this night.',
         ],

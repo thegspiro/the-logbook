@@ -1111,3 +1111,160 @@ class TestOverHttp:
             },
         )
         assert acknowledged.status_code == 201
+
+
+# ---------------------------------------------------------------------------
+# Essential seats (owner decision, 2026-11-23)
+# ---------------------------------------------------------------------------
+
+
+def _essential_body(w: _World) -> ApparatusEventTemplateCreate:
+    """Driver and Santa essential, two Elves welcome but optional."""
+    return _template_body(
+        w,
+        units=[
+            {
+                "apparatus_id": w.engine.id,
+                "seats": [
+                    {"name": "Driver", "seat_type": "driver", "count": 1},
+                    {"name": "Santa", "count": 1},
+                    {"name": "Elf", "count": 2, "is_essential": False},
+                ],
+            }
+        ],
+    )
+
+
+class TestEssentialSeats:
+    async def _schedule(self, w, nights=None):
+        template = await w.service.create_template(
+            _essential_body(w), w.org.id, w.coordinator.id
+        )
+        _series, event_ids = await w.service.schedule_nights(
+            template.id,
+            ScheduleNightsRequest(
+                title="Santamobile 2026", nights=nights or [_night()]
+            ),
+            w.org.id,
+            w.coordinator.id,
+        )
+        return template, event_ids
+
+    async def test_a_seat_omitting_the_flag_is_essential(self):
+        """A client written before the flag sends none; nothing it saves changes."""
+        spec = ApparatusEventTemplateCreate(
+            name="T",
+            event_type="public_education",
+            duration_minutes=60,
+            evoc_mode="enforce",
+            units=[{"apparatus_id": "a", "seats": [{"name": "Driver"}]}],
+        )
+        assert spec.units[0].seats[0].is_essential is True
+
+    async def test_the_template_keeps_the_flag_and_each_night_copies_it(
+        self, db_session: AsyncSession
+    ):
+        w = await _world(db_session)
+        template, (event_id,) = await self._schedule(w)
+
+        assert [(s.name, s.is_essential) for s in template.units[0].seats] == [
+            ("Driver", True),
+            ("Santa", True),
+            ("Elf", False),
+        ]
+        rows = (
+            await db_session.execute(
+                select(EventApparatusSeat.name, EventApparatusSeat.is_essential)
+                .where(EventApparatusSeat.event_id == event_id)
+                .order_by(EventApparatusSeat.sort_order)
+            )
+        ).all()
+        assert [tuple(r) for r in rows] == [
+            ("Driver", True),
+            ("Santa", True),
+            ("Elf", False),
+            ("Elf", False),
+        ]
+
+    async def test_the_night_list_counts_the_essential_seats_apart(
+        self, db_session: AsyncSession
+    ):
+        w = await _world(db_session)
+        _t, (event_id,) = await self._schedule(w)
+        santa = await _seat(w, event_id, "Santa")
+        await w.service.claim_seat(event_id, santa.id, w.org.id, w.santa)
+        elf = await _seat(w, event_id, "Elf")
+        await w.service.claim_seat(event_id, elf.id, w.org.id, w.elf)
+
+        (row,) = [
+            r
+            for r in await w.service.list_nights(w.org.id, "upcoming")
+            if r["event_id"] == event_id
+        ]
+        assert (row["filled"], row["total"]) == (2, 4)
+        assert (row["essential_filled"], row["essential_total"]) == (1, 2)
+
+    async def test_the_series_reports_essential_counts_per_night(
+        self, db_session: AsyncSession
+    ):
+        w = await _world(db_session)
+        _t, (first, second) = await self._schedule(w, nights=[_night(0), _night(1)])
+        santa = await _seat(w, first, "Santa")
+        await w.service.claim_seat(first, santa.id, w.org.id, w.santa)
+
+        _event, plan = await w.service.get_night(first, w.org.id)
+        series = await w.service.series_nights(w.org.id, plan.series_id)
+        counts = {row[0]: row[4:] for row in series}
+        assert counts == {first: (1, 2), second: (0, 2)}
+
+    async def test_one_night_can_change_which_seats_are_essential(
+        self, db_session: AsyncSession
+    ):
+        w = await _world(db_session)
+        _t, (event_id,) = await self._schedule(w)
+        _event, plan = await w.service.get_night(event_id, w.org.id)
+        units = [
+            {
+                "id": u.id,
+                "apparatus_id": u.apparatus_id,
+                "seats": [
+                    {
+                        "id": s.id,
+                        "name": s.name,
+                        "seat_type": s.seat_type,
+                        # A rainy night: Santa can ride without a navigator,
+                        # but this night the first Elf is required.
+                        "is_essential": s.name != "Santa"
+                        and s.name != "Elf"
+                        or s.id == plan.units[0].seats[2].id,
+                    }
+                    for s in u.seats
+                ],
+            }
+            for u in plan.units
+        ]
+
+        await w.service.update_night_plan(
+            event_id,
+            NightPlanUpdate(
+                evoc_mode="enforce",
+                allow_self_signup=True,
+                show_on_schedule=True,
+                units=units,
+            ),
+            w.org.id,
+        )
+
+        rows = (
+            await db_session.execute(
+                select(EventApparatusSeat.name, EventApparatusSeat.is_essential)
+                .where(EventApparatusSeat.event_id == event_id)
+                .order_by(EventApparatusSeat.sort_order)
+            )
+        ).all()
+        assert [tuple(r) for r in rows] == [
+            ("Driver", True),
+            ("Santa", False),
+            ("Elf", True),
+            ("Elf", False),
+        ]

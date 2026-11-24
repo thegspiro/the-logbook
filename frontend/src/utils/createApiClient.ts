@@ -17,6 +17,7 @@ import { API_TIMEOUT_MS } from '../constants/config';
 import { handleExpiredSession, performSharedRefresh } from '../services/apiClient';
 import { reportApiError } from '../services/errorReporting';
 import { holdDuringPasswordChange } from '../services/passwordChangeGate';
+import { invalidateAfterMutation } from './apiCache';
 import { isStepUpRequired, requestStepUp } from './stepUp';
 
 declare module 'axios' {
@@ -30,6 +31,20 @@ declare module 'axios' {
 function getCookie(name: string): string | null {
   const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
   return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+/** The cache is keyed by path under `/api/v1`, as the global client requests it. */
+const CACHE_BASE = '/api/v1';
+
+/**
+ * A request's path in the cache's key space, or null for a client whose base
+ * URL is outside `/api/v1` (the cache holds nothing of it).
+ */
+export function toCachePath(baseURL: string, url: string | undefined): string | null {
+  if (!url) return null;
+  const base = baseURL.replace(/\/+$/, '');
+  if (base !== CACHE_BASE && !base.startsWith(`${CACHE_BASE}/`)) return null;
+  return `${base.slice(CACHE_BASE.length)}/${url.replace(/^\/+/, '')}`;
 }
 
 /**
@@ -70,7 +85,18 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
   // instances (which would trigger the backend's replay detection
   // and revoke all sessions).
   api.interceptors.response.use(
-    (response) => response,
+    (response) => {
+      // The response cache is shared with the global client, which writes and
+      // reads it. A write made through a module client changes what that
+      // cache holds just as much, and left it serving the old answer: a
+      // volunteer signup here kept the event page showing the seat open.
+      const method = (response.config.method || '').toUpperCase();
+      const cachePath = toCachePath(baseURL, response.config.url);
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && cachePath) {
+        invalidateAfterMutation(cachePath);
+      }
+      return response;
+    },
     async (error: AxiosError) => {
       // A request made with `responseType: 'blob'` (CSV/file exports) still
       // gets `error.response.data` decoded as a Blob even when the server
