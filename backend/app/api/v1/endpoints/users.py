@@ -105,6 +105,7 @@ from app.services.email_policy import (
 )
 from app.services.email_service import welcome_email_can_send
 from app.services.instructor_erasure import replace_instructor_name
+from app.services.member_documents import erase_member_documents
 from app.services.member_files import collect_member_files
 from app.services.member_position_term_service import past_positions_for
 from app.services.member_service_history_service import MemberServiceHistoryService
@@ -2685,10 +2686,29 @@ async def delete_user(
         applications = await delete_transferred_applications(
             db, str(user_id), str(current_user.organization_id)
         )
+        # LIFE-11 (owner decision 2026-11-23): the separation letters are
+        # redacted and kept, the personal Member Files folder goes with its
+        # documents. Before the delete, while the users row still holds the
+        # name and address that find the letters. A document delete_folder
+        # would refuse (catalogued in History, a receipt a submitted finance
+        # record relies on) refuses the whole delete, with nothing changed.
+        try:
+            documents = await erase_member_documents(
+                db, user, str(current_user.organization_id)
+            )
+        except ValueError as e:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+            )
         pending_ids = enqueue_pending_file_deletions(
             db,
             str(current_user.organization_id),
-            {**owned_files.paths_by_area(), **applications.document_paths},
+            {
+                **owned_files.paths_by_area(),
+                **applications.document_paths,
+                **documents.document_paths,
+            },
             PendingDeletionReason.MEMBER_HARD_DELETE,
         )
         # The member's name as an instructor reads "Former member" (owner
@@ -2748,6 +2768,9 @@ async def delete_user(
                 },
                 "files_queued": len(pending_ids),
                 "applicant_records_deleted": applications.applications,
+                "separation_letters_redacted": documents.separation_letters_redacted,
+                "personal_folders_deleted": documents.personal_folders_deleted,
+                "personal_documents_deleted": documents.personal_documents_deleted,
                 "instructor_templates_scrubbed": instructor.templates,
                 "instructor_sessions_scrubbed": instructor.sessions,
                 "instructor_records_scrubbed": instructor.records,
@@ -3912,6 +3935,12 @@ async def anonymize_member(
             "training_record_files_shared_kept": summary[
                 "training_record_files_shared_kept"
             ],
+            # LIFE-11 (owner decision 2026-11-23): letters redacted, the
+            # personal Member Files folder deleted.
+            "separation_letters_redacted": summary["separation_letters_redacted"],
+            "personal_folders_deleted": summary["personal_folders_deleted"],
+            "personal_documents_deleted": summary["personal_documents_deleted"],
+            "personal_document_files_queued": summary["personal_document_files_queued"],
             "instructor_templates_scrubbed": summary["instructor_templates_scrubbed"],
             "instructor_sessions_scrubbed": summary["instructor_sessions_scrubbed"],
             "instructor_records_scrubbed": summary["instructor_records_scrubbed"],
@@ -3923,6 +3952,32 @@ async def anonymize_member(
         **_request_origin(request),
     )
     await db.commit()
+
+    # The personal documents' files, queued in the transaction just
+    # committed. Never raises; what it cannot remove stays queued for the
+    # hourly sweep, which keeps any file another row still names.
+    pending_ids = service.queued_file_deletion_ids
+    if pending_ids:
+        removal = await process_pending_file_deletions(
+            db, str(current_user.organization_id), pending_ids
+        )
+        await log_audit_event(
+            db=db,
+            event_type="pending_file_deletions_completed",
+            event_category="security",
+            severity="info",
+            user_id=str(current_user.id),
+            organization_id=str(current_user.organization_id),
+            event_data={
+                "files_deleted": removal.deleted,
+                "files_shared_kept": removal.shared_kept,
+                "files_still_pending": removal.not_deleted,
+                "trigger": "member_anonymization",
+                "anonymized_user_id": str(user_id),
+            },
+            **_request_origin(request),
+        )
+        await db.commit()
     return summary
 
 
