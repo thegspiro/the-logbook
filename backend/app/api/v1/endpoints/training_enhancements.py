@@ -61,7 +61,12 @@ from app.services.training_enhancement_service import (
     TrainingEffectivenessService,
     XAPIService,
 )
-from app.utils.training_attachments import new_entry_id, resolve_entry
+from app.utils.training_attachments import (
+    REMOVED_DOWNLOAD_DETAIL,
+    is_removal_marker,
+    new_entry_id,
+    resolve_entry,
+)
 
 router = APIRouter()
 
@@ -955,9 +960,16 @@ def _sanitize_attachments(record, user) -> list:
             "file_type": a.get("file_type") if isinstance(a, dict) else None,
             "file_size": a.get("file_size") if isinstance(a, dict) else None,
             "uploaded_at": a.get("uploaded_at") if isinstance(a, dict) else None,
+            "removed_at": a.get("removed_at") if isinstance(a, dict) else None,
+            "removed_reason": (
+                a.get("removed_reason") if isinstance(a, dict) else None
+            ),
+            # A removal marker records why a file is gone; there is no file
+            # left to remove.
             "can_remove": bool(
                 isinstance(a, dict)
                 and a.get("id")
+                and not is_removal_marker(a)
                 and _removal_refusal(record, a, user) is None
             ),
         }
@@ -997,6 +1009,11 @@ async def download_record_attachment(
         raise HTTPException(status_code=404, detail="Attachment not found")
 
     attachment = found[1]
+    if is_removal_marker(attachment):
+        raise HTTPException(
+            status_code=410,
+            detail=REMOVED_DOWNLOAD_DETAIL[attachment["removed_reason"]],
+        )
     if not isinstance(attachment, dict) or not attachment.get("file_path"):
         raise HTTPException(status_code=404, detail="Attachment file unavailable")
 

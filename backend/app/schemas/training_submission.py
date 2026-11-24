@@ -209,6 +209,10 @@ class SubmissionAttachment(BaseModel):
     file_type: Optional[str] = None
     file_size: Optional[int] = None
     uploaded_at: Optional[str] = None
+    # Set on a removal marker (owner decision 2026-11-23): the file was
+    # deleted by retention or by the malware scan, and when.
+    removed_at: Optional[str] = None
+    removed_reason: Optional[str] = None
 
 
 def sanitize_attachments(attachments: Optional[list]) -> list[dict]:
@@ -228,6 +232,8 @@ def sanitize_attachments(attachments: Optional[list]) -> list[dict]:
                     "file_type": a.get("file_type"),
                     "file_size": a.get("file_size"),
                     "uploaded_at": a.get("uploaded_at"),
+                    "removed_at": a.get("removed_at"),
+                    "removed_reason": a.get("removed_reason"),
                 }
             )
         else:

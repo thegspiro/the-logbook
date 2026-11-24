@@ -406,6 +406,33 @@ describe('MemberTrainingHistoryPage removing a record file', () => {
     await waitFor(() => expect(mockGetRecordAttachments).toHaveBeenCalledTimes(2));
   });
 
+  it('shows why a removed certificate is gone, with nothing to download or remove', async () => {
+    mockGetRecordAttachments.mockResolvedValue({
+      record_id: 'rec-1',
+      attachments: [
+        {
+          index: 0,
+          id: 'entry-3',
+          file_name: 'old.pdf',
+          file_type: null,
+          file_size: null,
+          uploaded_at: null,
+          can_remove: false,
+          removed_at: '2026-11-23',
+          removed_reason: 'malware',
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    const dialog = await openFiles(user);
+
+    expect(
+      await within(dialog).findByText(/Certificate file removed by the malware scan on .*found to be infected\./)
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByRole('link', { name: /download/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /remove old\.pdf/i })).not.toBeInTheDocument();
+  });
+
   it('keeps the file when the confirmation is declined', async () => {
     const user = userEvent.setup();
     const dialog = await openFiles(user);

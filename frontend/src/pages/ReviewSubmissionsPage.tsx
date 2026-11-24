@@ -29,6 +29,7 @@ import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { blankToNull } from '../utils/formValues';
 import { SubmissionStatus, TRAINING_TYPE_LABELS } from '../constants/enums';
 import { EmptyState } from '../components/ux';
+import { FileRemovalNotice } from '../components/training/FileRemovalNotice';
 import type {
   TrainingSubmission,
   SelfReportConfig,
@@ -743,19 +744,25 @@ const SubmissionCard: React.FC<{
               <div className="mt-3">
                 <span className="text-theme-text-muted text-sm">Attached: </span>
                 <ul className="mt-1 flex flex-col gap-1">
-                  {submission.attachments.map((attachment) => (
-                    <li key={attachment.id ?? attachment.index} className="flex items-center space-x-1 text-sm">
-                      <Paperclip className="text-theme-text-muted h-3 w-3 shrink-0" />
-                      <a
-                        href={trainingSubmissionService.getAttachmentDownloadUrl(submission.id, attachment)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-theme-text-secondary link-underline truncate"
-                      >
-                        {attachment.file_name || `Attachment ${attachment.index + 1}`}
-                      </a>
-                    </li>
-                  ))}
+                  {submission.attachments.map((attachment) =>
+                    attachment.removed_reason ? (
+                      <li key={attachment.id ?? attachment.index}>
+                        <FileRemovalNotice removedAt={attachment.removed_at} reason={attachment.removed_reason} />
+                      </li>
+                    ) : (
+                      <li key={attachment.id ?? attachment.index} className="flex items-center space-x-1 text-sm">
+                        <Paperclip className="text-theme-text-muted h-3 w-3 shrink-0" />
+                        <a
+                          href={trainingSubmissionService.getAttachmentDownloadUrl(submission.id, attachment)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-theme-text-secondary link-underline truncate"
+                        >
+                          {attachment.file_name || `Attachment ${attachment.index + 1}`}
+                        </a>
+                      </li>
+                    )
+                  )}
                 </ul>
               </div>
             )}

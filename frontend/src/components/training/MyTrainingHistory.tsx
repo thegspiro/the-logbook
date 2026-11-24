@@ -22,6 +22,7 @@ import { formatHours } from '../../utils/hoursFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { getTrainingStatusColor, getTrainingStatusLabel } from '../../utils/trainingColors';
 import { useTimezone } from '../../hooks/useTimezone';
+import { FileRemovalNotice } from './FileRemovalNotice';
 import type {
   MemberVisibility,
   MyTrainingHistoryMonth,
@@ -80,7 +81,14 @@ const HistoryRow: React.FC<{ record: MyTrainingHistoryRecord; showHours: boolean
   return (
     <tr className="text-theme-text-secondary">
       <td className="rwd-table-lead px-4 py-2" data-label="Course">
-        {record.course_name}
+        <div className="min-w-0">
+          {record.course_name}
+          {(record.file_removals ?? []).map((removal, i) => (
+            <div key={i}>
+              <FileRemovalNotice removedAt={removal.removed_at} reason={removal.removed_reason} className="text-xs" />
+            </div>
+          ))}
+        </div>
       </td>
       <td className="px-4 py-2 whitespace-nowrap" data-label="Type">
         {TRAINING_TYPE_LABELS[record.training_type] ?? record.training_type.replace('_', ' ')}

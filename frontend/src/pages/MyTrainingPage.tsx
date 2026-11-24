@@ -40,6 +40,7 @@ import { MyShiftEvaluationsList } from '../components/training/MyShiftEvaluation
 import { MyAttendanceWaiverRequests } from '../components/training/MyAttendanceWaiverRequests';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { MyTrainingHistory } from '../components/training/MyTrainingHistory';
+import { FileRemovalNotice } from '../components/training/FileRemovalNotice';
 import { RequirementDetailCard } from '../components/training/RequirementDetailCard';
 import { OptionalRequirementsGroup } from '../components/training/OptionalRequirementsGroup';
 import { LeaveOfAbsenceSummary } from '../components/training/LeaveOfAbsenceSummary';
@@ -1254,7 +1255,18 @@ const MyTrainingPage: React.FC = () => {
                     {data.submissions.map((s) => (
                       <tr key={s.id} className="text-theme-text-secondary">
                         <td className="rwd-table-lead px-4 py-2" data-label="Course">
-                          {s.course_name}
+                          <div className="min-w-0">
+                            {s.course_name}
+                            {(s.file_removals ?? []).map((removal, i) => (
+                              <div key={i}>
+                                <FileRemovalNotice
+                                  removedAt={removal.removed_at}
+                                  reason={removal.removed_reason}
+                                  className="text-xs"
+                                />
+                              </div>
+                            ))}
+                          </div>
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap" data-label="Date">
                           {formatDate(s.completion_date, tz)}

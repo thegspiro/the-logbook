@@ -20,6 +20,7 @@ import { EditTrainingRecordModal } from '../components/training/EditTrainingReco
 import { MemberRequirementsSection } from '../components/training/MemberRequirementsSection';
 import { useAuthStore } from '../stores/authStore';
 import { Ban, GraduationCap, Download, Paperclip, Pencil, Trash2, Upload, X } from 'lucide-react';
+import { FileRemovalNotice } from '../components/training/FileRemovalNotice';
 import { formatDate } from '../utils/dateFormatting';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
@@ -158,39 +159,45 @@ const RecordAttachmentsModal: React.FC<{
           <p className="text-theme-text-muted py-2 text-sm">No attachments yet.</p>
         ) : (
           <ul className="mb-4 space-y-2">
-            {attachments.map((a) => (
-              <li
-                key={a.id ?? a.index}
-                className="border-theme-surface-border flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
-              >
-                <span className="text-theme-text-primary truncate text-sm">
-                  {a.file_name || `Attachment ${a.index + 1}`}
-                </span>
-                <div className="flex shrink-0 items-center gap-2">
-                  <a
-                    href={documentService.getAttachmentDownloadUrl(recordId, a)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex shrink-0 items-center gap-1 text-sm text-red-600 hover:text-red-500"
-                  >
-                    <Download className="h-4 w-4" /> Download
-                  </a>
-                  {a.can_remove && a.id && (
-                    <button
-                      type="button"
-                      aria-label={`Remove ${a.file_name || `attachment ${a.index + 1}`}`}
-                      disabled={removingId !== null}
-                      onClick={() => {
-                        if (a.id) void handleRemove(a, a.id);
-                      }}
-                      className="btn-icon text-theme-text-muted hover:text-red-700 dark:hover:text-red-400"
+            {attachments.map((a) =>
+              a.removed_reason ? (
+                <li key={a.id ?? a.index} className="border-theme-surface-border rounded-lg border px-3 py-2">
+                  <FileRemovalNotice removedAt={a.removed_at} reason={a.removed_reason} />
+                </li>
+              ) : (
+                <li
+                  key={a.id ?? a.index}
+                  className="border-theme-surface-border flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+                >
+                  <span className="text-theme-text-primary truncate text-sm">
+                    {a.file_name || `Attachment ${a.index + 1}`}
+                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <a
+                      href={documentService.getAttachmentDownloadUrl(recordId, a)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex shrink-0 items-center gap-1 text-sm text-red-600 hover:text-red-500"
                     >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
+                      <Download className="h-4 w-4" /> Download
+                    </a>
+                    {a.can_remove && a.id && (
+                      <button
+                        type="button"
+                        aria-label={`Remove ${a.file_name || `attachment ${a.index + 1}`}`}
+                        disabled={removingId !== null}
+                        onClick={() => {
+                          if (a.id) void handleRemove(a, a.id);
+                        }}
+                        className="btn-icon text-theme-text-muted hover:text-red-700 dark:hover:text-red-400"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
+                </li>
+              )
+            )}
           </ul>
         )}
 

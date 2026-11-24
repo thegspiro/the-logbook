@@ -21,6 +21,7 @@ be digits.
 import copy
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Optional
 
 from app.core.utils import generate_uuid
@@ -98,3 +99,78 @@ def resolve_entry(
         if current != expected_id:
             raise EntryMoved(entry)
     return ref.index, found
+
+
+# --- removal markers ---------------------------------------------------------
+#
+# Owner decision 2026-11-23: when a stored file is deleted by the department's
+# certificate retention, or by the malware rescan, its entry is replaced by a
+# marker rather than dropped, so the member and the officers can see that a
+# file was there and why it is gone. A marker keeps the entry's id and name and
+# never a file_path: every reader that looks for a stored file finds none, the
+# same way it treats a path-less entry, so collect_references, the downloads,
+# the shared-file check and anonymisation need no special case beyond what
+# they do for those. The JSON column has no schema, so no migration.
+
+REMOVED_RETENTION = "retention"
+REMOVED_MALWARE = "malware"
+REMOVAL_REASONS = (REMOVED_RETENTION, REMOVED_MALWARE)
+
+
+def removal_marker(entry: Any, reason: str, removed_at: datetime) -> dict:
+    """The marker that replaces *entry* once its file is deleted for *reason*.
+
+    Keeps the entry's id (routes address it) and its name; drops the path,
+    size and type, which described a file that no longer exists.
+    """
+    if reason not in REMOVAL_REASONS:
+        raise ValueError(f"Unknown removal reason: {reason}")
+    marker: dict[str, Any] = {
+        "removed_at": removed_at.isoformat(),
+        "removed_reason": reason,
+    }
+    if isinstance(entry, dict):
+        if entry.get("id"):
+            marker["id"] = entry["id"]
+        if entry.get("file_name"):
+            marker["file_name"] = entry["file_name"]
+    elif isinstance(entry, str) and entry:
+        marker["file_name"] = entry
+    return marker
+
+
+def is_removal_marker(entry: Any) -> bool:
+    return (
+        isinstance(entry, dict)
+        and entry.get("removed_reason") in REMOVAL_REASONS
+        and not entry.get("file_path")
+    )
+
+
+#: What a download of a marker answers (410 Gone): the file existed and was
+#: removed on purpose, which a 404 would hide.
+REMOVED_DOWNLOAD_DETAIL = {
+    REMOVED_RETENTION: (
+        "This certificate file was removed under the department's retention " "policy."
+    ),
+    REMOVED_MALWARE: (
+        "This certificate file was removed because the malware scan found it "
+        "infected."
+    ),
+}
+
+
+def removal_notices(attachments: Any) -> list[dict[str, Any]]:
+    """``{"removed_at", "removed_reason"}`` for each marker in *attachments*,
+    for a screen that shows why a certificate is no longer there. Nothing
+    else about the entry, and never a path."""
+    if not isinstance(attachments, list):
+        return []
+    return [
+        {
+            "removed_at": entry.get("removed_at"),
+            "removed_reason": entry.get("removed_reason"),
+        }
+        for entry in attachments
+        if is_removal_marker(entry)
+    ]
