@@ -1,28 +1,107 @@
-# The documentation site on its own: one static nginx container, no database,
-# no secrets. Independent of the application's compose files.
+# The documentation site with its own Cloudflare Tunnel, isolated from every
+# other container on the host. Independent of the application's compose files.
 #
-#   docker compose -f docs-site/docker-compose.yml up -d            # published image
-#   docker compose -f docs-site/docker-compose.yml up -d --build    # build from this checkout
+#   cp docs-site/.env.example docs-site/.env    # then paste the tunnel token
+#   docker compose -f docs-site/docker-compose.yml up -d
 #
-# Point a Cloudflare Tunnel (or any reverse proxy) at http://<host>:${DOCS_PORT}
-# or, from a container on the same Docker network, http://logbook-docs:8080.
-# See docs-site/README.md.
+# Isolation, and why each piece is there:
+# - logbook-docs is attached ONLY to docs-internal, an `internal` network: it
+#   has no route to the internet, the LAN, the host or any other container, and
+#   it publishes no port. The only thing that can reach it is the tunnel.
+# - logbook-docs-tunnel joins docs-internal to reach the site and docs-egress
+#   to reach Cloudflare. It carries this site only, so a problem with the
+#   application's tunnel (or this one) does not cross over.
+# - Both run read-only, as non-root, with every capability dropped and with
+#   memory, CPU, process and log caps, so a flood of traffic cannot starve the
+#   rest of the host.
+#
+# See docs-site/README.md, "Running it".
 services:
   logbook-docs:
-    image: ghcr.io/thegspiro/the-logbook-docs:latest
+    image: ghcr.io/thegspiro/the-logbook-docs:${DOCS_IMAGE_TAG:-latest}
     build:
       context: ..
       dockerfile: docs-site/Dockerfile
     container_name: logbook-docs
     restart: unless-stopped
-    ports:
-      - "${DOCS_PORT:-7882}:8080"
+    networks:
+      - docs-internal
+    # nginx-unprivileged's own user; stated so a future base image that
+    # defaults to root cannot silently run the site as root.
+    user: "101:101"
     # The site is files nginx only reads; nginx-unprivileged keeps its pid and
-    # temp files under /tmp.
+    # temp files under /tmp, which needs neither exec nor setuid.
     read_only: true
     tmpfs:
-      - /tmp
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  logbook-docs-tunnel:
+    # Pinned rather than :latest, so a tunnel update is a reviewed change.
+    image: cloudflare/cloudflared:2026.10.7
+    container_name: logbook-docs-tunnel
+    restart: unless-stopped
+    # Metrics bound to loopback: the default 0.0.0.0 would expose them to the
+    # docs container. Management diagnostics (remote pprof and metrics through
+    # Cloudflare) are off because nothing here uses them.
+    command:
+      - tunnel
+      - --no-autoupdate
+      - --metrics
+      - 127.0.0.1:20241
+      - --management-diagnostics=false
+      - run
+    environment:
+      TUNNEL_TOKEN: ${DOCS_TUNNEL_TOKEN:?Set DOCS_TUNNEL_TOKEN in docs-site/.env (see .env.example)}
+    networks:
+      - docs-internal
+      - docs-egress
+    depends_on:
+      logbook-docs:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "cloudflared",
+          "tunnel",
+          "--metrics",
+          "127.0.0.1:20241",
+          "ready",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  docs-internal:
+    name: logbook-docs-internal
+    internal: true
+  docs-egress:
+    name: logbook-docs-egress
