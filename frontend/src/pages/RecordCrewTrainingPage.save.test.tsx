@@ -78,7 +78,7 @@ describe('RecordCrewTrainingPage saves with an error (batch E)', () => {
 
     const topic = screen.getByLabelText(/^Topic/);
     expect(topic).toHaveAttribute('aria-invalid', 'true');
-    expect(topic).toHaveAccessibleDescription(expect.stringContaining('Enter what the training covered.'));
+    expect(topic).toHaveAccessibleDescription(/Enter what the training covered\./);
     expect(screen.getByLabelText(/^Length \(minutes\)/)).toHaveAttribute('aria-invalid', 'true');
     expect(recordCrewTraining).not.toHaveBeenCalled();
   });

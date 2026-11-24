@@ -77,7 +77,7 @@ describe('AssignTermsModal', () => {
     );
     const date = screen.getByLabelText('Return date');
     expect(date).toHaveAttribute('aria-invalid', 'true');
-    expect(date).toHaveAccessibleDescription(expect.stringContaining('Return date must be in the future.'));
+    expect(date).toHaveAccessibleDescription(/Return date must be in the future\./);
   });
 
   it('asks before Escape discards terms already chosen', async () => {

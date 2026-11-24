@@ -35,6 +35,7 @@ const normalizeRequest = (request: AttendanceWaiverRequest): AttendanceWaiverReq
   actions: asArray(request.actions),
   attachments: asArray(request.attachments ?? []),
   can_attach: request.can_attach === true,
+  can_remove_attachment: request.can_remove_attachment === true,
 });
 
 const normalizePolicy = (policy: AttendanceWaiverPolicy): AttendanceWaiverPolicy => ({

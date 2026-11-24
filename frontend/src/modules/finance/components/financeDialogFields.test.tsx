@@ -154,9 +154,7 @@ describe('ExpenseLineDialog', () => {
     await user.type(screen.getByLabelText('Merchant'), 'Supply');
     await user.click(screen.getByRole('button', { name: 'Add line' }));
 
-    expect(await flagged('Merchant')).toHaveAccessibleDescription(
-      expect.stringContaining('Merchant is too long — keep it to 300 characters.')
-    );
+    expect(await flagged('Merchant')).toHaveAccessibleDescription(/Merchant is too long — keep it to 300 characters\./);
     expect(api.addLineItem).toHaveBeenCalledTimes(1);
     expect(props.onSaved).not.toHaveBeenCalled();
   });
@@ -178,9 +176,7 @@ describe('ExpenseLineDialog', () => {
     await user.type(screen.getByLabelText('Merchant'), 'New');
     await user.click(screen.getByRole('button', { name: 'Save line' }));
 
-    expect(await flagged('Merchant')).toHaveAccessibleDescription(
-      expect.stringContaining('Merchant must be plain text.')
-    );
+    expect(await flagged('Merchant')).toHaveAccessibleDescription(/Merchant must be plain text\./);
     expect(api.updateLineItem).toHaveBeenCalledTimes(2);
     expect(api.updateLineItem.mock.calls[1]?.[2]).not.toHaveProperty('merchant');
     expect(screen.getByLabelText('Merchant')).toHaveValue('New');
@@ -208,7 +204,7 @@ describe('DuesPaymentDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Record payment' }));
 
     expect(await flagged(/^Reference/)).toHaveAccessibleDescription(
-      expect.stringContaining('Reference is too long — keep it to 200 characters.')
+      /Reference is too long — keep it to 200 characters\./
     );
   });
 
@@ -237,9 +233,7 @@ describe('AdvanceReturnDialog', () => {
     await user.selectOptions(screen.getByLabelText(/^Method/), 'cash');
     await user.click(screen.getByRole('button', { name: 'Record return' }));
 
-    expect(await flagged(/^Method/)).toHaveAccessibleDescription(
-      expect.stringContaining('Method is too long — keep it to 50 characters.')
-    );
+    expect(await flagged(/^Method/)).toHaveAccessibleDescription(/Method is too long — keep it to 50 characters\./);
   });
 
   it('asks before Escape or Cancel throws a typed return away', async () => {
@@ -271,7 +265,7 @@ describe('BudgetRequestDialog', () => {
     await user.type(screen.getByLabelText('Justification'), 'More hose');
     await user.click(screen.getByRole('button', { name: 'Save draft' }));
 
-    expect(await flagged('Justification')).toHaveAccessibleDescription(expect.stringContaining('must not be blank'));
+    expect(await flagged('Justification')).toHaveAccessibleDescription(/must not be blank/);
   });
 
   it('asks before Escape or Cancel throws a typed request away', async () => {
@@ -306,9 +300,7 @@ describe('AmendmentDialog', () => {
     await fillApproval(user);
     await user.click(screen.getByRole('button', { name: 'Record amendment' }));
 
-    expect(await flagged('Approval date')).toHaveAccessibleDescription(
-      expect.stringContaining('Approval date needs a valid date.')
-    );
+    expect(await flagged('Approval date')).toHaveAccessibleDescription(/Approval date needs a valid date\./);
   });
 
   it('asks before Escape or Cancel throws a typed amendment away', async () => {
@@ -337,7 +329,7 @@ describe('ReverseAmendmentDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Record reversal' }));
 
     expect(await flagged('Approved by')).toHaveAccessibleDescription(
-      expect.stringContaining('Approved by is too long — keep it to 200 characters.')
+      /Approved by is too long — keep it to 200 characters\./
     );
   });
 
@@ -367,9 +359,7 @@ describe('ReimbursementClaimDialog', () => {
     await user.type(screen.getByLabelText(/^Where/), 'Supply house');
     await user.click(screen.getByRole('button', { name: 'Start expense report' }));
 
-    expect(await flagged(/^Where/)).toHaveAccessibleDescription(
-      expect.stringContaining('Where is too long — keep it to 300 characters.')
-    );
+    expect(await flagged(/^Where/)).toHaveAccessibleDescription(/Where is too long — keep it to 300 characters\./);
     expect(onClaimed).not.toHaveBeenCalled();
   });
 
@@ -390,9 +380,7 @@ describe('MarkPaidDialog', () => {
     renderIn(<MarkPaidDialog purchase={purchase} onClose={vi.fn()} onPaid={vi.fn()} />);
     await user.click(screen.getByRole('button', { name: 'Mark paid' }));
 
-    expect(await flagged('Amount paid')).toHaveAccessibleDescription(
-      expect.stringContaining('Amount paid needs a number.')
-    );
+    expect(await flagged('Amount paid')).toHaveAccessibleDescription(/Amount paid needs a number\./);
   });
 
   it('asks before Escape or Cancel throws a changed amount away', async () => {
@@ -415,9 +403,7 @@ describe('PayByCheckDialog', () => {
     await user.type(screen.getByLabelText(/^Memo/), 'Boots');
     await user.click(screen.getByRole('button', { name: 'Request check' }));
 
-    expect(await flagged(/^Memo/)).toHaveAccessibleDescription(
-      expect.stringContaining('Memo is too long — keep it to 500 characters.')
-    );
+    expect(await flagged(/^Memo/)).toHaveAccessibleDescription(/Memo is too long — keep it to 500 characters\./);
   });
 
   it('asks before Escape or Cancel throws typed values away', async () => {
@@ -447,7 +433,7 @@ describe('ApprovalDecisionDialog override form', () => {
     await user.click(screen.getByRole('button', { name: 'Approve as approvals admin' }));
 
     expect(await flagged('Override reason')).toHaveAccessibleDescription(
-      expect.stringContaining('Override reason is too long — keep it to 2000 characters.')
+      /Override reason is too long — keep it to 2000 characters\./
     );
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -508,9 +494,7 @@ describe('BudgetAdoptionDialog', () => {
     await user.type(screen.getByLabelText('Motion or minutes reference'), 'Motion 4');
     await user.click(screen.getByRole('button', { name: 'Record adoption' }));
 
-    expect(await flagged('Motion or minutes reference')).toHaveAccessibleDescription(
-      expect.stringContaining('keep it to 500 characters.')
-    );
+    expect(await flagged('Motion or minutes reference')).toHaveAccessibleDescription(/keep it to 500 characters\./);
   });
 
   it('asks before Escape or Cancel throws a typed adoption away', async () => {
@@ -535,9 +519,7 @@ describe('FiscalYearLockDialog', () => {
     await screen.findByText(/Nothing is open/);
     await user.click(screen.getByRole('button', { name: 'Lock the year' }));
 
-    expect(await flagged('Reconciliation notes')).toHaveAccessibleDescription(
-      expect.stringContaining('keep it to 4000 characters.')
-    );
+    expect(await flagged('Reconciliation notes')).toHaveAccessibleDescription(/keep it to 4000 characters\./);
     expect(onLocked).not.toHaveBeenCalled();
   });
 
@@ -568,9 +550,7 @@ describe('BudgetRequestLeadershipDialog', () => {
     await user.type(screen.getByLabelText('Why'), 'Board cut');
     await user.click(screen.getByRole('button', { name: 'Record change' }));
 
-    expect(await flagged('Why')).toHaveAccessibleDescription(
-      expect.stringContaining('Why is too long — keep it to 4000 characters.')
-    );
+    expect(await flagged('Why')).toHaveAccessibleDescription(/Why is too long — keep it to 4000 characters\./);
   });
 
   it('asks before Escape or Cancel throws a typed change away', async () => {
@@ -591,9 +571,7 @@ describe('BudgetRequestDecisionDialog', () => {
     await user.type(screen.getByLabelText(/^Note/), 'Fine');
     await user.click(screen.getByRole('button', { name: 'Record decision' }));
 
-    expect(await flagged(/^Note/)).toHaveAccessibleDescription(
-      expect.stringContaining('Note is too long — keep it to 4000 characters.')
-    );
+    expect(await flagged(/^Note/)).toHaveAccessibleDescription(/Note is too long — keep it to 4000 characters\./);
   });
 
   it('asks before Escape or Cancel throws a typed decision away', async () => {
@@ -618,9 +596,7 @@ describe('ApprovalChainEditDialog', () => {
     await user.type(screen.getByLabelText('Description'), 'Over $5,000');
     await user.click(screen.getByRole('button', { name: 'Save chain' }));
 
-    expect(await flagged('Name')).toHaveAccessibleDescription(
-      expect.stringContaining('Name is too long — keep it to 200 characters.')
-    );
+    expect(await flagged('Name')).toHaveAccessibleDescription(/Name is too long — keep it to 200 characters\./);
     expect(save).toHaveBeenLastCalledWith({ description: 'Over $5,000', is_active: true });
     expect(screen.getByLabelText('Name')).toHaveValue('Large purchases over');
     expect(onSaved).not.toHaveBeenCalled();
@@ -648,7 +624,7 @@ describe('ExportMappingDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Add mapping' }));
 
     expect(await flagged('QuickBooks account')).toHaveAccessibleDescription(
-      expect.stringContaining('QuickBooks account is too long — keep it to 200 characters.')
+      /QuickBooks account is too long — keep it to 200 characters\./
     );
     expect(onSaved).not.toHaveBeenCalled();
   });

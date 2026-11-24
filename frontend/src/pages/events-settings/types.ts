@@ -1,4 +1,10 @@
-import type { EventModuleSettings, EventType, EmailTemplate, StaffingRoleNeed } from '../../types/event';
+import type {
+  EventModuleSettings,
+  EventType,
+  EmailTemplate,
+  RequestPipelineSettings,
+  StaffingRoleNeed,
+} from '../../types/event';
 
 /** Props shared by all settings section components. */
 export interface SettingsSectionProps {
@@ -51,6 +57,8 @@ export interface PipelineSectionProps extends SettingsSectionProps {
   members: OrgMember[];
   onUpdateDefaultAssignee: (userId: string | null) => void;
   onTogglePublicVisibility: () => void;
+  /** Saves the feedback form and rating question. */
+  onSaveFeedback: (patch: Partial<RequestPipelineSettings>) => void;
   onAddTask: () => void;
   onRemoveTask: (taskId: string) => void;
   onReorderTask: (index: number, direction: 'up' | 'down') => void;

@@ -9,6 +9,9 @@
  *   number and the member's id, which every member can read off the
  *   directory, so anyone could make a working copy of a colleague's badge.
  * - Member status badge
+ * - The member's certifications with their expiry dates, and the date the card
+ *   is valid through (the soonest current expiry), for a viewer who may read
+ *   the member's training
  *
  * Accessible at /members/:userId/id-card. Any authenticated user can view
  * their own card; another member's card is limited to members.manage or
@@ -30,7 +33,11 @@ import { memberBadgeService } from '../services/memberBadgeService';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
-import { formatDate, formatDateCustom } from '../utils/dateFormatting';
+import { formatCalendarDate, formatDate, formatDateCustom } from '../utils/dateFormatting';
+import { useEnabledModules } from '../hooks/useEnabledModules';
+import { useMemberRequirements } from '../hooks/useMemberRequirements';
+import { cardValidThrough, certificationStatusOf } from '../utils/certificationState';
+import type { CertificationStatus } from '../utils/certificationState';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
 import type { UserWithRoles } from '../types/role';
@@ -48,6 +55,19 @@ const STATUS_COLORS: Record<string, string> = {
   probationary: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400',
 };
 
+// A certificate's line on the card: short, since the card is printed.
+const CERT_LINE: Record<CertificationStatus['state'], { label: string; className: string }> = {
+  on_file: { label: 'On file', className: 'text-green-700 dark:text-green-400 print:text-green-800' },
+  expired: { label: 'Expired', className: 'text-red-700 dark:text-red-400 print:text-red-800' },
+  missing: { label: 'Not recorded', className: 'text-red-700 dark:text-red-400 print:text-red-800' },
+};
+
+const certDate = (status: CertificationStatus): string | null => {
+  if (!status.expiry) return null;
+  const date = formatCalendarDate(status.expiry);
+  return status.state === 'on_file' ? `Expires ${date}` : date;
+};
+
 function getStatusColor(status: string): string {
   return STATUS_COLORS[status] ?? STATUS_COLORS['inactive'] ?? '';
 }
@@ -59,6 +79,18 @@ export const MemberIdCardPage: React.FC = () => {
   // Reissuing cancels every badge printed before, so it is the badge
   // officers' decision — never the member's own.
   const canReissue = VIEW_OTHER_MEMBER_ID_CARD_PERMISSIONS.some((permission) => checkPermission(permission));
+  // Certifications show only to a viewer who may read this member's
+  // training anyway: the member, or a training officer. Another ID-card
+  // officer sees the card without them (owner decision, 2026-11-23).
+  const isSelf = currentUser?.id === userId;
+  const { isModuleOn } = useEnabledModules();
+  const canViewTraining = allowed && isModuleOn('training') && (isSelf || checkPermission('training.manage'));
+  const requirements = useMemberRequirements(userId, canViewTraining, isSelf);
+  const certifications = requirements.flatMap((req) => {
+    const status = certificationStatusOf(req);
+    return status ? [{ req, status }] : [];
+  });
+  const validThrough = cardValidThrough(requirements);
   const { confirm } = useConfirm();
   const { formatRank } = useRanks();
   const tz = useTimezone();
@@ -290,6 +322,47 @@ export const MemberIdCardPage: React.FC = () => {
                       {formatDateCustom(member.service_since, { year: 'numeric' }, tz)}
                     </p>
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* The member's certifications with their dates, and the date the
+                card is good through: the soonest current expiry. */}
+            {certifications.length > 0 && (
+              <div
+                className="bg-theme-surface-hover mb-4 rounded-lg px-3 py-2 print:border print:border-gray-200 print:bg-gray-50"
+                data-testid="card-certifications"
+              >
+                <p className="text-theme-text-muted mb-1 text-xs tracking-wider uppercase print:text-gray-500">
+                  Certifications
+                </p>
+                <ul className="space-y-1">
+                  {certifications.map(({ req, status }) => {
+                    const date = certDate(status);
+                    return (
+                      <li key={req.id} className="flex items-baseline justify-between gap-3 text-sm">
+                        <span className="text-theme-text-primary min-w-0 print:text-black">{req.name}</span>
+                        <span className="shrink-0 text-right text-xs">
+                          <span className={`font-semibold ${CERT_LINE[status.state].className}`}>
+                            {CERT_LINE[status.state].label}
+                          </span>
+                          {date && (
+                            <span className="text-theme-text-muted block whitespace-nowrap print:text-gray-500">
+                              {date}
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {validThrough && (
+                  <p className="border-theme-surface-border text-theme-text-secondary mt-2 border-t pt-2 text-xs print:border-gray-200 print:text-gray-600">
+                    Card valid through{' '}
+                    <span className="text-theme-text-primary font-semibold print:text-black">
+                      {formatCalendarDate(validThrough)}
+                    </span>
+                  </p>
                 )}
               </div>
             )}

@@ -62,15 +62,23 @@ FRONTEND_ROOT_FILES = {"package.json", "package-lock.json"}
 PROSE_PREFIXES = ("docs/", "wiki/", ".claude/")
 PROSE_ROOT_FILES = {"LICENSE"}
 
+# The documentation site's build, hook and container files. No job in ci.yml
+# reads them; .github/workflows/docs-site.yml builds the site strictly, runs
+# its tests and builds its image whenever they change.
+DOCS_SITE_PREFIX = "docs-site/"
+
 
 def area_of(path):
-    """Return "backend", "frontend", "prose", or None for an unknown path."""
+    """Return "backend", "frontend", "prose", "docs-site", or None for an
+    unknown path."""
     if path.startswith("backend/"):
         return "backend"
     if path.startswith("frontend/") or path in FRONTEND_ROOT_FILES:
         return "frontend"
     if path.startswith(PROSE_PREFIXES) or path in PROSE_ROOT_FILES:
         return "prose"
+    if path.startswith(DOCS_SITE_PREFIX):
+        return "docs-site"
     if "/" not in path and path.endswith(".md"):
         return "prose"
     return None

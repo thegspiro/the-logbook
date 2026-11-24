@@ -40,6 +40,7 @@ import { formatHours } from '../../utils/hoursFormatting';
 import { formatNumber } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { HoursByMonthChart } from './HoursByMonthChart';
+import { HoursByPosition } from './HoursByPosition';
 import { monthTotalHours } from './hoursMonths';
 import { MemberShiftHistory } from './MemberShiftHistory';
 
@@ -437,6 +438,16 @@ export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
           {showTable ? 'Hide table' : 'Show as table'}
         </button>
       </section>
+
+      <HoursByPosition
+        idPrefix={idPrefix}
+        year={history.year}
+        positions={history.positions ?? []}
+        allTimePositions={history.all_time_positions ?? []}
+        totals={totals}
+        allTime={allTime}
+        showCalls={showCalls}
+      />
 
       {showTable && (
         <div id={`${idPrefix}-table`} className="card overflow-hidden p-0">

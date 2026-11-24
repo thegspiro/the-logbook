@@ -202,9 +202,7 @@ describe('SavedReportsPage', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
 
     const recipients = within(dialog).getByLabelText('Email to');
-    await waitFor(() =>
-      expect(recipients).toHaveAccessibleDescription(expect.stringContaining('value is not a valid email address'))
-    );
+    await waitFor(() => expect(recipients).toHaveAccessibleDescription(/value is not a valid email address/));
     expect(recipients).toHaveAttribute('aria-invalid', 'true');
     expect(update).toHaveBeenCalledTimes(2);
     expect('email_recipients' in (update.mock.calls[1]?.[1] as object)).toBe(false);

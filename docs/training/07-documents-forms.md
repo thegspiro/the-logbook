@@ -1044,9 +1044,11 @@ anonymous, and follow-up is allowed.
 Before anything is sent, **Save box** checks each question: one with no
 wording reads "Write the question members will be asked.", a choice question
 with no options "Add at least one option to choose from.", and an option with
-no label "Give every option a label." The top of the dialog says "Fix the
-flagged question." A question the server refuses is flagged in the
-**Questions** section in the same way, not in a line at the top of the dialog.
+no label "Give every option a label." Nothing is sent, and the message sits
+under the question itself, not at the top of the dialog. A question the server
+refuses is flagged in the **Questions** section in the same way.
+
+![The Questions section of a new suggestion box after Save box with a Short text question left without wording: the question box flagged Write the question members will be asked., and nothing saved](./images/07-49-suggestion-box-question-flagged.png)
 
 ![The New suggestion box dialog filled in: name, description, the Questions section with Add question directly under the description, Anonymity set to Submitter chooses, Allow follow-up and Public idea board ticked, the note that managing boxes does not let you read them, two reviewer positions ticked, and the Also notify pickers below](./images/07-14-suggestion-box-dialog.png)
 
@@ -1136,6 +1138,10 @@ missing, the form says what, on the field: an unanswered required question
 reads "Answer “_question_”.", an empty title "Give your suggestion a title.",
 empty details "Describe your suggestion." If the server refuses an answer, the
 form goes back to the questions step with the reason under that question.
+
+![The Compliance box's question step after Continue with nothing chosen: the required question What kind of concern is this? flagged Answer “What kind of concern is this?”., with Continue still available](./images/07-50-suggestion-question-unanswered.png)
+
+![Step 2 of 2 for the Compliance box after Submit with nothing typed: Title flagged Give your suggestion a title. and Details flagged Describe your suggestion., with Submit still available](./images/07-51-suggestion-title-missing.png)
 
 Named submissions appear under **My submissions**, where you can follow the
 status and reply if the box allows follow-up. In a follow-up box, **Status

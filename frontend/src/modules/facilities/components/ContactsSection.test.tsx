@@ -52,7 +52,7 @@ describe('ContactsSection form', () => {
     await user.click(screen.getByRole('button', { name: 'Save Contact' }));
 
     expect(screen.getByLabelText('Company Name')).toHaveAccessibleDescription(
-      expect.stringContaining('Enter a company name or a contact name.')
+      /Enter a company name or a contact name\./
     );
     expect(createEmergencyContact).not.toHaveBeenCalled();
   });

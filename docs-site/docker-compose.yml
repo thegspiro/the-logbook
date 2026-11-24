@@ -1,0 +1,28 @@
+# The documentation site on its own: one static nginx container, no database,
+# no secrets. Independent of the application's compose files.
+#
+#   docker compose -f docs-site/docker-compose.yml up -d            # published image
+#   docker compose -f docs-site/docker-compose.yml up -d --build    # build from this checkout
+#
+# Point a Cloudflare Tunnel (or any reverse proxy) at http://<host>:${DOCS_PORT}
+# or, from a container on the same Docker network, http://logbook-docs:8080.
+# See docs-site/README.md.
+services:
+  logbook-docs:
+    image: ghcr.io/thegspiro/the-logbook-docs:latest
+    build:
+      context: ..
+      dockerfile: docs-site/Dockerfile
+    container_name: logbook-docs
+    restart: unless-stopped
+    ports:
+      - "${DOCS_PORT:-7882}:8080"
+    # The site is files nginx only reads; nginx-unprivileged keeps its pid and
+    # temp files under /tmp.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
