@@ -11337,9 +11337,8 @@ change or remove the users row:
   the member's street line or stored status reason. The item list and values
   stay. They are rewritten rather than regenerated, because a regenerated
   letter would list today's property, not the property owed on the day of the
-  drop. The member's name and membership number stay on the letter: the owner
-  named the address and reason, and the letter is a claim against a named
-  person.
+  drop. The member's name and membership number stay on the letter (owner
+  decision 2026-11-23): it records what that person owes.
 - Every folder the member owns under **Member Files** is deleted with its
   sub-folders and documents, through the same code as the folder delete; the
   files are queued on `pending_file_deletions`.
@@ -11802,12 +11801,15 @@ each case; confirmed by the owner 2026-11-23):
   `submission_deleted`). The submission delete processes its rows right after
   the commit; the other two leave them to the hourly sweep. A file another row
   still names is kept.
-- **Deleting an event leaves its attachment files.** `EventService.delete_event`
-  and the series delete remove the row and every `events.attachments` file it
-  named stays on the volume, named by nothing. Found while closing the drill
-  undo above, which now queues them for the drills it deletes; the ordinary
-  event delete was out of that change's scope. Open for an owner decision on
-  whether event deletes should queue their files the same way.
+- ~~**Deleting an event leaves its attachment files.**~~ **Resolved
+  2026-11-24** (owner decision 2026-11-23): `EventService.delete_event` and
+  `delete_event_series` queue every `events.attachments` file on
+  `pending_file_deletions` in the delete's own transaction (`event_deleted`)
+  and remove them right after the commit; a file another event or any other
+  collected row still names is kept, and one that will not delete stays queued
+  for the hourly sweep. A refused delete (finalized attendance) queues nothing.
+  Not covered: an event's folder under Event Attachments in Documents, which
+  holds Documents of its own and is not deleted with the event.
 - ~~**A training record's own uploaded file has no removal route.**~~
   **Resolved 2026-11-21** (owner decision 2026-11-21, (d)):
   `DELETE /training/records/{id}/attachments/{entry}` and a Remove button in
