@@ -1074,8 +1074,19 @@ export interface RequestPipelineSettings {
   accept_public_requests: boolean;
   /** Per-day ceiling on accepted public requests; counts valid submissions only. */
   public_daily_limit: number;
+  /** The form a requester is offered once their request is Completed; null asks nothing. */
+  feedback_form_id?: string | null;
+  /** The question on that form whose answer the report averages as the rating. */
+  feedback_rating_field_id?: string | null;
   tasks: PipelineTaskConfig[];
   email_triggers: Record<string, EmailTriggerConfig>;
+}
+
+/** A published form that can be the outreach feedback form, and its rating-capable questions. */
+export interface FeedbackFormOption {
+  id: string;
+  name: string;
+  rating_fields: { id: string; label: string }[];
 }
 
 export type EventRequestStatus =
@@ -1348,6 +1359,29 @@ export interface EventRequestPublicStatus {
   decline_reason?: string;
   task_progress?: TaskProgressPublic;
   can_cancel: boolean;
+  /** A Completed request whose department asks for feedback, not yet given. */
+  feedback_offered?: boolean;
+  /** The requester has already sent their one response. */
+  feedback_sent?: boolean;
   /** The department's IANA timezone, which the page shows times in. */
   timezone?: string | null;
+}
+
+/** The department's feedback form, as the requester's status page shows it. */
+export interface PublicFeedbackForm {
+  form_name: string;
+  form_description?: string | null;
+  organization_name?: string | null;
+  contact_name: string;
+  fields: import('../components/forms/publicFormFields').PublicFormField[];
+}
+
+/** A request's feedback, as officers read it on the request. */
+export interface EventRequestFeedback {
+  rating: number | null;
+  submitted_at: string;
+  form_name: string | null;
+  answers: { question: string; answer: string }[];
+  /** Answers to Sensitive questions, kept with the submission in Forms. */
+  sensitive_answers: number;
 }
