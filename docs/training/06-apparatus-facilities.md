@@ -141,6 +141,9 @@ one, open it and select **Edit**.
   except _field_. Fix it and save again.", and the refused box keeps what you
   typed, under **These were not saved**. A status that needs a reason is never
   saved without one, so a refused reason holds the status change back too.
+
+  ![Editing E-2 with a year of 1850: "Apparatus saved, except year. Fix it and save again." above a These were not saved list linking to the Year box](./images/06-37-apparatus-saved-except.png)
+
 - **Cancel asks first.** Cancelling or leaving the form after typing asks
   _"Discard your changes?"_ with **Keep editing** and **Discard changes**. The
   **Documents** tab's upload form does the same, and names a missing title on
@@ -793,10 +796,15 @@ the **Utilities** (and their readings), **Access Keys**, **Shutoff
 Locations**, **Capital Projects**, **Insurance** and **Occupants** forms, a
 refused value is shown under its own field. When you are editing, the rest is
 saved and the refused field stays flagged with what you typed, so fix it and
-save again. In the extended sections, boxes with a length limit show a
-character counter. Closing one of these forms after typing asks _"Discard your
-changes?"_ (**Keep editing** / **Discard changes**). The **Files** section's
-caption and description also name a refused value on the field.
+save again. In the extended sections, a box with a length limit shows a
+character counter once what you have typed reaches 80% of the limit. Closing
+one of these forms after typing asks _"Discard your changes?"_ (**Keep
+editing** / **Discard changes**). The **Files** section's caption and
+description also name a refused value on the field.
+
+![Adding an insurance policy to a facility: Property and a policy number filled in, and the empty Carrier box flagged "Carrier is required."](./images/06-38-facility-insurance-flagged.png)
+
+![Cancelling the insurance form after typing: "Discard your changes?" with Keep editing and Discard changes](./images/06-39-facility-discard-changes.png)
 
 **Rooms and event locations.** A facility created during setup is linked to an
 event location, so it appears in the event location picker. Each room you add

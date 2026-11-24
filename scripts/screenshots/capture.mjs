@@ -33,6 +33,7 @@ import {
   DEMO_MFA_GRACE_CREDENTIALS,
   DEMO_SECOND_MEMBER_CREDENTIALS,
   DEMO_SECRETARY_CREDENTIALS,
+  DEMO_SHIFT_OFFICER_CREDENTIALS,
   DEMO_TREASURER_CREDENTIALS,
   SHOTS,
 } from "./manifest.mjs";
@@ -673,6 +674,9 @@ function makeSessions(browser, baseOptions) {
         // for ten minutes after that a switch needing confirmation saves at
         // once instead of opening the Confirm it's you box it pictures.
         await login(page, DEMO_CREDENTIALS);
+      } else if (auth === "shiftofficer") {
+        // Runs a shift without scheduling.manage, for the close-out row lock.
+        await login(page, DEMO_SHIFT_OFFICER_CREDENTIALS);
       } else if (auth !== "anonymous") {
         throw new Error(`unknown auth mode '${auth}' on shot ${shot.id}`);
       }

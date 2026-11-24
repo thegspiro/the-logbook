@@ -313,6 +313,9 @@ class AttendanceWaiverRequestResponse(UTCResponseBase):
     # request is pending, the policy takes attachments and fewer than the
     # limit are filed.
     can_attach: bool = False
+    # Whether the viewer may remove a filed document now: the member, while
+    # the request is pending, keeping one when the policy requires it.
+    can_remove_attachment: bool = False
     attachments: List[AttendanceWaiverAttachmentResponse] = Field(default_factory=list)
     actions: List[AttendanceWaiverActionResponse] = Field(default_factory=list)
 

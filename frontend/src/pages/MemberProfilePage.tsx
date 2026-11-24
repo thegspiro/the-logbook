@@ -55,6 +55,7 @@ import type {
   UserProfileUpdate,
 } from '../types/user';
 import type { TrainingRecord, ComplianceSummary } from '../types/training';
+import { useMemberRequirements } from '../hooks/useMemberRequirements';
 import { AVAILABLE_MODULES } from '../types/modules';
 import { MAX_AVATAR_SIZE } from '../constants/config';
 import { ANONYMIZABLE_STATUSES, SEPARATED_STATUSES, UserStatus } from '../constants/enums';
@@ -316,6 +317,9 @@ export const MemberProfilePage: React.FC = () => {
   // permission the backend honors for target-scoped reads.
   const isSelf = currentUser?.id === userId;
   const canViewTargetTraining = isSelf || checkPermission('training.manage');
+  // For the certifications list in the training section, which shows to
+  // exactly the viewers that section does.
+  const memberRequirements = useMemberRequirements(userId, trainingEnabled && canViewTargetTraining, isSelf);
   const canViewTargetAdminHours = isSelf || checkPermission('admin_hours.manage');
   // Officers: `scheduling.report` already shows them every member's hours in
   // the department's member-hours report, which is what the backend checks.
@@ -1044,6 +1048,7 @@ export const MemberProfilePage: React.FC = () => {
                   trainings={trainings}
                   trainingsLoading={trainingsLoading}
                   complianceSummary={complianceSummary}
+                  requirements={memberRequirements}
                   tz={tz}
                 />
               )}

@@ -100,13 +100,16 @@ async def approved_pre_work_minutes(
     db: AsyncSession,
     *shift_filters: Any,
     group_by: Iterable[Any] = (),
+    outer_joins: Iterable[Tuple[Any, Any]] = (),
 ) -> List[Any]:
     """Sum approved pre-shift minutes, joined to ``Shift`` for scoping.
 
     The one place hours readers get pre-shift time from, so every report
     credits exactly the same thing: ``approved`` sessions, at the minutes the
     officer approved. Pending, rejected and still-running sessions never count.
-    Returns rows of ``(*group_by, minutes)``.
+    ``outer_joins`` adds ``(target, onclause)`` pairs after the ``Shift`` join,
+    for a ``group_by`` column that lives in another table. Returns rows of
+    ``(*group_by, minutes)``.
     """
     group_cols = list(group_by)
     query = (
@@ -121,6 +124,8 @@ async def approved_pre_work_minutes(
         .where(ShiftPreWorkSession.status == PreWorkStatus.APPROVED)
         .where(*shift_filters)
     )
+    for target, onclause in outer_joins:
+        query = query.outerjoin(target, onclause)
     if group_cols:
         query = query.group_by(*group_cols)
     return list((await db.execute(query)).all())

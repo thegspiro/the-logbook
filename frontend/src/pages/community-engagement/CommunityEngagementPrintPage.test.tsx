@@ -155,6 +155,69 @@ describe('CommunityEngagementPrintPage', () => {
     expect(within(cpr).getByText('25 counted')).toBeInTheDocument();
   });
 
+  it('prints the CRR breakdowns as tables, without the map', async () => {
+    getCommunityEngagement.mockResolvedValue(
+      report({
+        crr: {
+          activities: 2,
+          previous_activities: 1,
+          by_type: [
+            {
+              activity_type_id: 't-smoke',
+              name: 'Smoke alarm install',
+              activities: 2,
+              previous_activities: 1,
+              counts: [{ measure_id: 'm-alarms', label: 'Alarms installed', quantity: 5, previous_quantity: 3 }],
+            },
+          ],
+          by_tag: [
+            {
+              tag_id: 'tag-fire',
+              kind: 'risk',
+              label: 'Fire',
+              activities: 2,
+              counts: [
+                {
+                  measure_id: 'm-alarms',
+                  activity_type_name: 'Smoke alarm install',
+                  label: 'Alarms installed',
+                  quantity: 5,
+                },
+              ],
+            },
+          ],
+          by_zip: [
+            {
+              zip_code: '22046',
+              city: 'Falls Church',
+              state: 'VA',
+              latitude: 38.8856,
+              longitude: -77.1802,
+              activities: 1,
+              counts: [
+                {
+                  measure_id: 'm-alarms',
+                  activity_type_name: 'Smoke alarm install',
+                  label: 'Alarms installed',
+                  quantity: 3,
+                },
+              ],
+            },
+          ],
+          unplaced_activities: 1,
+        },
+      })
+    );
+    renderPage();
+
+    const types = await screen.findByRole('table', { name: /By activity \(2 activities\)/ });
+    expect(within(types).getByRole('row', { name: /Smoke alarm install 2 Alarms installed 5/ })).toBeInTheDocument();
+    const tags = screen.getByRole('table', { name: /By risk and priority population/ });
+    expect(within(tags).getByRole('rowheader', { name: 'Fire (risk)' })).toBeInTheDocument();
+    const zips = screen.getByRole('table', { name: /By ZIP code \(1 activity had no ZIP code\)/ });
+    expect(within(zips).getByRole('rowheader', { name: '22046 Falls Church, VA' })).toBeInTheDocument();
+  });
+
   it('opens the print dialog once the report has loaded', async () => {
     renderPage();
 

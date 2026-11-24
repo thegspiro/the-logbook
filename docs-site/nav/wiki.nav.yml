@@ -1,0 +1,40 @@
+# Staged as build/content/wiki/.nav.yml by build.sh. Grouped the way
+# wiki/_Sidebar.md groups the same pages on GitHub.
+nav:
+  - Home.md
+  - Getting started:
+      - Installation.md
+      - Onboarding.md
+      - Quick-Reference.md
+  - Deployment:
+      - "Deployment-*.md"
+      - Backup-Recovery.md
+  - Configuration:
+      - "Configuration-*.md"
+      - Compliance-Configuration.md
+      - Role-System.md
+  - Modules:
+      - glob: "Module-*.md"
+        ignore: "*-Developer.md"
+      - Compliance-Hub.md
+      - Administration-Pages.md
+      - Inventory-NFC-Tags.md
+      - Member-ID-Cards.md
+      - Public-Programs.md
+      - Scheduling-History-Import.md
+      - Training-Compliance-Calculations.md
+  - Integrations:
+      - "Integration-*.md"
+  - Security:
+      - "Security-*.md"
+  - Development:
+      - "Development-*.md"
+      - "*-Developer.md"
+      - API-Reference.md
+      - Database-Schema.md
+      - Technology-Stack.md
+      - Contributing.md
+  - Recent changes:
+      - glob: "Recent-Changes-*.md"
+        sort:
+          direction: desc

@@ -249,6 +249,36 @@ class TestCohortDetailPrivacy:
         assert detail.description == "Fall academy"
         assert detail.notes == ("Two recruits on probation" if officer else None)
 
+    @pytest.mark.parametrize("officer", [False, True])
+    async def test_officer_ids_are_withheld_from_a_roster_member(self, officer):
+        # Who created and generated the cohort are officers' user ids, which
+        # the class page does not show; a roster member's response omits them
+        # as it omits the notes.
+        course = _course()
+        created_by, generated_by = uuid4(), uuid4()
+        cohort = _cohort(
+            course.id,
+            created_by=str(created_by),
+            generated_by=str(generated_by),
+            created_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+        )
+        service = MagicMock()
+        service.get_cohort_detail = AsyncMock(
+            return_value={
+                "cohort": cohort,
+                "course_name": course.name,
+                "classes": [],
+                "members": [],
+            }
+        )
+
+        detail = await cohort_endpoints._build_detail(
+            service, cohort.id, ORG, include_member_data=officer
+        )
+
+        assert detail.created_by == (created_by if officer else None)
+        assert detail.generated_by == (generated_by if officer else None)
+
     async def test_member_detail_does_not_query_or_return_roster(self):
         course = _course()
         cohort = _cohort(course.id)

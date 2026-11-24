@@ -798,15 +798,24 @@ class TrainingSessionService:
             )
         )
         sessions = {str(s.event_id): s for s in result.scalars().all()}
-        # A lead instructor is picked from current members only. One these
-        # sessions already name may stay after leaving, so an edit that leaves
-        # the instructor alone still saves.
-        if payload.get("instructor_id"):
+        # A lead instructor is picked from current members only. One who has
+        # since left may stay where already named, so an edit that leaves the
+        # instructor alone still saves. Judged per session: a series edit
+        # writes the instructor onto every occurrence, so one later session
+        # naming a former member must not let the edit put them on the rest,
+        # nor on an occurrence that has no session yet.
+        instructor_id = payload.get("instructor_id")
+        if instructor_id:
+            named_everywhere = all(
+                (session := sessions.get(str(event.id))) is not None
+                and str(session.instructor_id) == str(instructor_id)
+                for event in events
+            )
             await assert_current_members(
                 self.db,
-                [payload["instructor_id"]],
+                [instructor_id],
                 organization_id,
-                keep=[s.instructor_id for s in sessions.values()],
+                keep=[instructor_id] if named_everywhere else None,
                 label="the lead instructor",
             )
         stored_links = await self.attendance_requirement_ids(
