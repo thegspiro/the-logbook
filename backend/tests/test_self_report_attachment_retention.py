@@ -8,6 +8,7 @@ import os
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
+from unittest.mock import ANY
 
 import pytest
 from pydantic import ValidationError
@@ -127,6 +128,16 @@ def _record(org_id, user_id, attachments, status=TrainingStatus.COMPLETED):
     )
 
 
+def _removed(entry: dict) -> dict:
+    """The marker the sweep leaves in *entry*'s place (owner decision
+    2026-11-23): its name, the reason and the sweep's time, and no path."""
+    return {
+        "file_name": entry["file_name"],
+        "removed_reason": "retention",
+        "removed_at": ANY,
+    }
+
+
 async def _set_retention(db_session, org_id, days):
     db_session.add(
         SelfReportConfig(organization_id=org_id, attachment_retention_days=days)
@@ -190,13 +201,13 @@ class TestSweep:
 
         for row in (approved, rejected, recent, pending, live, voided):
             await db_session.refresh(row)
-        assert approved.attachments == [link]
-        assert rejected.attachments == []
+        assert approved.attachments == [_removed(approved_file), link]
+        assert rejected.attachments == [_removed(rejected_file)]
         assert recent.attachments == [recent_file]
         assert pending.attachments == [pending_file]
-        # Records survive; only the dead file reference goes.
-        assert live.attachments == [link]
-        assert voided.attachments == []
+        # Records survive; the dead file's entry becomes a marker.
+        assert live.attachments == [_removed(approved_file), link]
+        assert voided.attachments == [_removed(approved_file)]
 
         audits = await _audit_rows(db_session, org_id)
         assert len(audits) == 1
@@ -232,7 +243,7 @@ class TestSweep:
         assert result["files_deleted"] == 1
         await db_session.refresh(old)
         await db_session.refresh(recent)
-        assert old.attachments == []
+        assert old.attachments == [_removed(old_file)]
         assert recent.attachments == [recent_file]
 
     async def test_unset_retention_keeps_everything(self, db_session, upload_root):
@@ -275,7 +286,7 @@ class TestSweep:
         assert result["files_deleted"] == 1
         assert not os.path.exists(legacy["file_path"])
         await db_session.refresh(submission)
-        assert submission.attachments == []
+        assert submission.attachments == [_removed(legacy)]
 
     @pytest.mark.parametrize("legacy", [False, True])
     async def test_never_deletes_another_organizations_file(
@@ -313,7 +324,7 @@ class TestSweep:
         await SelfReportAttachmentRetention(db_session).sweep()
 
         await db_session.refresh(submission)
-        assert submission.attachments == []
+        assert submission.attachments == [_removed(missing)]
 
     async def test_runs_as_a_scheduled_task(self, db_session, upload_root):
         org_id, user_id = await _org_and_member(db_session)
