@@ -162,8 +162,19 @@ accounts on camera.]**
 
 **[SCREEN: Click View in Documents; show the published minutes document]**
 
-**[PRODUCTION NOTE — 2026-10-04. There is no PDF export on minutes (none in the
-frontend or the API); the previous cue could not be filmed. Pre-existing.]**
+**[PRODUCTION NOTE — 2026-11-23. Superseded: the 2026-10-04 note here said
+minutes had no PDF export. **Download PDF** has been on the minutes page since
+2026-10-14. Since 2026-11-23 a copy of minutes that are not yet adopted prints
+a pale diagonal DRAFT across every page, and every copy carries a report
+number. The optional cue below can be filmed; nothing above needs
+re-recording.]**
+
+**[SCREEN (optional): On the same adopted minutes, select **Download PDF** and
+page through it; then download a draft set and show the DRAFT mark.]**
+
+> "Need it on paper? **Download PDF** prints the minutes with signature lines.
+> Until they're adopted, every page says DRAFT, so nobody mistakes a working
+> copy for the record."
 
 **[TRANSITION: Event management]**
 

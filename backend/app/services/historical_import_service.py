@@ -1739,12 +1739,20 @@ class HistoricalImportService:
             # A "create" decision is spent once the member exists. Left as it
             # was, the next step of this import (or a second run of this one)
             # would create them again, and the second record collides on the
-            # membership number. It now names the member it made.
+            # membership number. It now names the member it made, and keeps the
+            # name the reviewer typed: an undo that removes the member turns
+            # the decision back into "create", and without the name there a
+            # recommit would call them "Former member <number>".
             stored = copy.deepcopy(record.member_mappings or {})
             for resolution in resolutions:
                 made = created.get(resolution.ref or "")
                 if made:
-                    stored[resolution.key] = {"action": "map", "user_id": made}
+                    decision = {"action": "map", "user_id": made}
+                    if resolution.new_first:
+                        decision["first_name"] = resolution.new_first
+                    if resolution.new_last:
+                        decision["last_name"] = resolution.new_last
+                    stored[resolution.key] = decision
             record.member_mappings = stored
         return created, user_by_key
 

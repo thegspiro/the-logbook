@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="fireGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff6b35;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#dc2626;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Fire icon representing firefighters -->
+  <circle cx="50" cy="50" r="48" fill="#0f172a" stroke="url(#fireGradient)" stroke-width="3"/>
+
+  <!-- Flame shape -->
+  <path d="M50 25 C45 35, 40 40, 40 50 C40 60, 44 65, 50 65 C56 65, 60 60, 60 50 C60 40, 55 35, 50 25 Z"
+        fill="url(#fireGradient)"/>
+
+  <!-- Inner flame highlight -->
+  <path d="M50 30 C48 37, 46 42, 46 48 C46 55, 48 58, 50 58 C52 58, 54 55, 54 48 C54 42, 52 37, 50 30 Z"
+        fill="#fbbf24" opacity="0.7"/>
+</svg>

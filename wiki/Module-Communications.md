@@ -281,6 +281,11 @@ The same week added the training-session waiver, preceptor-link
 Certifications**, and the business-meeting waiver templates under **Meetings &
 Minutes** (#4248, #4264, #4303).
 
+Three more leave templates joined them on 2026-11-22 (#4569): **Leave Cover:
+Stand-in Named**, **Leave Cover: Cleared** and **Leave Cover: Ended**, the
+emails to an officer named to decide leave requests in an approver's place.
+None of them carries a request or its reason.
+
 ### Officer Signature Variables
 
 A notice sent by a member-services clerk, or by a nightly scheduled task, had no

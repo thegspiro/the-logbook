@@ -1603,6 +1603,152 @@ input:is(.form-checkbox, [class~='h-4']) {
   }
 }
 
+/*
+ * Opt-in: a reflowed card that is itself wide sets its fields out in columns.
+ *
+ * The stacked view puts each label at the card's left edge and its value at
+ * the right. That reads on a phone, where the two are a thumb's width apart.
+ * A tier table also reflows on a tablet, where the card is 600px or more: the
+ * member roster's eight lines then ran a label and its value the width of the
+ * screen from each other, and one member filled half of it.
+ *
+ * Add `rwd-table-fields` beside the tier class. While the table is reflowed
+ * and its container is at least 30rem wide, each row is a grid: the
+ * `rwd-table-lead` cell spans the card as its title, and every other cell is
+ * a field with its label above its value. Under 30rem the stacked view stays.
+ * 30rem is the smallest card that holds two 10rem fields beside each other
+ * with room to spare, and is what an 820px iPad leaves the page with the side
+ * navigation open.
+ *
+ * `rwd-table-corner` on a cell that holds only a control with its own
+ * accessible name (the roster's selection checkbox) pins it to the card's top
+ * right corner without its label, instead of giving it a field of its own
+ * above the title.
+ *
+ * One block per tier, for the reason the tiers themselves repeat: an
+ * @container condition cannot vary per class. The narrow tier has none: it
+ * reflows only under 32rem, which leaves the stacked view alone to cover.
+ * `rwdTableTiers.test.ts` holds the three to one text.
+ */
+@media screen {
+  @container rwd-table (width >= 30rem) and (width < 64rem) {
+    .rwd-table.rwd-table-wide.rwd-table-fields :is(tbody, tfoot) tr {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+      gap: 0.5rem 1.5rem;
+      padding: 0.75rem;
+    }
+    .rwd-table.rwd-table-wide.rwd-table-fields :is(tbody td, tfoot td, tfoot th) {
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: flex-start;
+      gap: 0.125rem;
+      min-width: 0;
+      padding: 0;
+      text-align: left;
+    }
+    .rwd-table.rwd-table-wide.rwd-table-fields :is(tbody td, tfoot td, tfoot th)[data-label]::before {
+      font-size: 0.75rem;
+      line-height: 1rem;
+    }
+    .rwd-table.rwd-table-wide.rwd-table-fields :is(tbody td, tfoot td, tfoot th).rwd-table-lead {
+      grid-column: 1 / -1;
+    }
+    .rwd-table.rwd-table-wide.rwd-table-fields
+      tr:has(.rwd-table-corner)
+      :is(tbody td, tfoot td, tfoot th).rwd-table-lead {
+      padding-right: 3rem;
+    }
+    .rwd-table.rwd-table-wide.rwd-table-fields :is(tbody td, tfoot td, tfoot th).rwd-table-corner {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+    }
+    .rwd-table.rwd-table-wide.rwd-table-fields :is(tbody td, tfoot td, tfoot th).rwd-table-corner::before {
+      content: none;
+    }
+  }
+
+  @container rwd-table (width >= 30rem) and (width < 78rem) {
+    .rwd-table.rwd-table-xwide.rwd-table-fields :is(tbody, tfoot) tr {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+      gap: 0.5rem 1.5rem;
+      padding: 0.75rem;
+    }
+    .rwd-table.rwd-table-xwide.rwd-table-fields :is(tbody td, tfoot td, tfoot th) {
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: flex-start;
+      gap: 0.125rem;
+      min-width: 0;
+      padding: 0;
+      text-align: left;
+    }
+    .rwd-table.rwd-table-xwide.rwd-table-fields :is(tbody td, tfoot td, tfoot th)[data-label]::before {
+      font-size: 0.75rem;
+      line-height: 1rem;
+    }
+    .rwd-table.rwd-table-xwide.rwd-table-fields :is(tbody td, tfoot td, tfoot th).rwd-table-lead {
+      grid-column: 1 / -1;
+    }
+    .rwd-table.rwd-table-xwide.rwd-table-fields
+      tr:has(.rwd-table-corner)
+      :is(tbody td, tfoot td, tfoot th).rwd-table-lead {
+      padding-right: 3rem;
+    }
+    .rwd-table.rwd-table-xwide.rwd-table-fields :is(tbody td, tfoot td, tfoot th).rwd-table-corner {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+    }
+    .rwd-table.rwd-table-xwide.rwd-table-fields :is(tbody td, tfoot td, tfoot th).rwd-table-corner::before {
+      content: none;
+    }
+  }
+
+  @container rwd-table (width >= 30rem) and (width < 96rem) {
+    .rwd-table.rwd-table-2xwide.rwd-table-fields :is(tbody, tfoot) tr {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+      gap: 0.5rem 1.5rem;
+      padding: 0.75rem;
+    }
+    .rwd-table.rwd-table-2xwide.rwd-table-fields :is(tbody td, tfoot td, tfoot th) {
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: flex-start;
+      gap: 0.125rem;
+      min-width: 0;
+      padding: 0;
+      text-align: left;
+    }
+    .rwd-table.rwd-table-2xwide.rwd-table-fields :is(tbody td, tfoot td, tfoot th)[data-label]::before {
+      font-size: 0.75rem;
+      line-height: 1rem;
+    }
+    .rwd-table.rwd-table-2xwide.rwd-table-fields :is(tbody td, tfoot td, tfoot th).rwd-table-lead {
+      grid-column: 1 / -1;
+    }
+    .rwd-table.rwd-table-2xwide.rwd-table-fields
+      tr:has(.rwd-table-corner)
+      :is(tbody td, tfoot td, tfoot th).rwd-table-lead {
+      padding-right: 3rem;
+    }
+    .rwd-table.rwd-table-2xwide.rwd-table-fields :is(tbody td, tfoot td, tfoot th).rwd-table-corner {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+    }
+    .rwd-table.rwd-table-2xwide.rwd-table-fields :is(tbody td, tfoot td, tfoot th).rwd-table-corner::before {
+      content: none;
+    }
+  }
+}
+
 /* Comparison matrices intentionally scroll instead of reflowing. Keeping the
  * region focusable gives keyboard users the same access as touch users. */
 .responsive-matrix {

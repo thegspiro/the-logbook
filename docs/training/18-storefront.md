@@ -294,6 +294,15 @@ Two of these catch people out:
   whose order is cancelled hears nothing.
 - **Payment receipts** covers refunds and waivers as well as payments.
 
+**Members choose too.** A switch here decides whether the store sends a notice
+at all. Each member then chooses, under **Settings → Notifications**, which
+optional groups they receive. The window notices and the vendor-order email are
+**Store announcements**. Payment reminders are **Your store balance**
+_(2026-11-22)_, a group of their own, so a member who mutes announcements is
+still told what they owe. Both are on unless the member turns them off. The
+confirmation, status, cancellation and receipt emails are **Store receipts**,
+which nobody can turn off.
+
 **Nobody learns who else got a notice.** The four window notices go as a
 separate email to each member, never one email to everyone. Every order notice
 goes only to the member whose order it is. The **New order alert** is the one
@@ -330,11 +339,18 @@ way to check: _is my cashtag right? does the Zelle handle read properly? did I
 leave a method ticked that I never filled in?_ A method you do not accept is
 simply not there.
 
-Two things to know:
+Three things to know:
 
 - The preview uses **saved** settings. Save your changes before you look.
+- **Status changes** has a second button, **Cancellation**, under
+  **Preview** _(2026-11-22)_. It shows the cancellation email that switch also
+  governs, and **Send this to me** works on it too.
 - You can preview a notice that is switched off. The preview says so at the
   top. That way you can see what you are deciding about.
+
+> **Screenshot needed** (`18-11-preview-cancellation.png`): the **Status
+> changes** row with **Preview** and **Cancellation** under it, and the
+> cancellation email open in the preview.
 
 Previewing sends nothing and records nothing. It does not create an order,
 touch a window or email anybody, including you.
@@ -516,8 +532,8 @@ you place one bulk order with the vendor.
 
 | Status    | Meaning                                              |
 | --------- | ---------------------------------------------------- |
-| Draft     | Being set up, hidden from members                    |
-| Scheduled | Has dates but is not open yet                        |
+| Draft     | No opening time set; hidden from members             |
+| Scheduled | Has an opening time but is not open yet              |
 | Open      | Members can order                                    |
 | Closed    | No new orders; existing ones carry on to fulfillment |
 | Fulfilled | Everything handed out                                |
@@ -530,8 +546,38 @@ side.
 
 When you create a window, offer either **all active products** or a chosen
 list. The chosen list is how you run a "Class B uniforms only" window without
-archiving the rest of the catalog. The closing date goes in **Ordering
-closes**.
+archiving the rest of the catalog. The dates go in **Opens** and **Closes**.
+
+**Opening and closing on its own** _(2026-11-22)_. A window with an **Opens**
+time is **Scheduled**; one without is a **Draft**, which only **Open
+ordering** opens. Adding an opening time to a draft later, or clearing it from
+a scheduled window, moves it between the two. Before 2026-11-22 a draft given
+its opening time afterwards stayed a draft and never opened. An open or closed
+window keeps its status whatever you edit.
+
+With **Open automatically at the scheduled time** and **Close automatically at
+the scheduled time** ticked, The Logbook opens and closes the window at those
+times, checking every 15 minutes. When it is set to close automatically, the
+closing time is exact for members:
+
+- The window drops out of the member store at its closing time, and an order
+  placed against it after that is refused, even if the console still shows it
+  open for a few minutes until it is closed.
+- **Open ordering** is refused once that closing time has passed: "This
+  window's closing time has passed. Move the closing time later, or turn off
+  closing automatically, before opening it." Opened, it would close again
+  within 15 minutes, and members would get "ordering is open" and then
+  "ordering has closed".
+- A scheduled window whose whole period passed without it opening stays
+  **Scheduled**. Edit its dates, then open it.
+
+With **Close automatically at the scheduled time** unticked, the closing time
+is only what members are told. Orders keep coming in until you select **Close
+ordering**.
+
+> **Screenshot needed** (`18-10-window-auto-open-close.png`): the order window
+> form with **Opens** and **Closes** filled in and **Open automatically at the
+> scheduled time** and **Close automatically at the scheduled time** ticked.
 
 Each window row has **Open ordering** and **Close ordering**, and the
 confirmation button repeats the same words.
@@ -984,6 +1030,27 @@ Check that a window is **Open** (not Draft or Scheduled) and that the items are
 **Active (for sale)**. If the window offers a chosen list of items, check the
 items are on it. Also check **Store is live for members** is on.
 
+**Members can't order, but the console still shows the window open.**
+Its closing time has passed. A window set to **Close
+automatically at the scheduled time** leaves the member store at its closing
+time, and orders after that are refused with "That order window is not open"
+or "There is no open order window". The console shows it open for up to 15
+minutes more, until it is closed for good.
+
+**Open ordering says the closing time has passed.**
+Edit the window and move **Closes** later, or untick **Close automatically at
+the scheduled time**, then open it.
+
+**A scheduled window never opened.**
+Check **Open automatically at the scheduled time** is ticked. A window whose
+closing time passed before it opened stays **Scheduled**: edit its dates. A
+window with no **Opens** time is a **Draft** and opens only when you select
+**Open ordering**.
+
+**A member who turned off store emails still gets payment reminders.**
+Reminders are **Your store balance**, not **Store announcements**, since
+2026-11-22. The member turns that group off separately.
+
 **A member cannot find the store.**
 The sidebar entry is **Department Store**. It appears only when the module is
 on and the member's position lets them browse the store.
@@ -1085,6 +1152,13 @@ have moved, been renamed or work differently.
 
 ### Works differently now
 
+- **A window's closing time is exact for members** _(2026-11-22)_ when it
+  closes automatically. Older notes may say ordering ran on for up to 15
+  minutes. A draft given an opening time now becomes **Scheduled**, and opens
+  by itself if set to; before, it stayed a draft.
+- **Payment reminders are their own email choice**, **Your store balance**
+  _(2026-11-22)_. Older notes may say turning off **Store announcements** stops
+  them.
 - **Refund asks for an amount and a reason, then confirms** _(2026-11-18)_.
   Older notes describe a one-tap **Refund** that refunded everything. The
   button reads **Record refund**.

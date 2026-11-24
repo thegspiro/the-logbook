@@ -1544,6 +1544,14 @@ _(2026-11-21)_ Every page's footer reads **Page 2 of 4**, not just **Page 2**,
 so a missing page shows. The pre-meeting package is numbered the same way, and
 the printable ballot already was.
 
+_(2026-11-23)_ The certified results and the pre-meeting package also print the
+department's mailing address, phone and FDID under its name, and a **Report
+No.** such as `RPT-20261123-7K2Q` on page 1 and in every later page's header.
+Each download gets its own number, recorded in the audit log, so a page found
+loose can be traced to the copy it came from. The printable blank ballot has
+no number on purpose: a serial on a voting paper, tied to who printed it, is
+not something a ballot should carry.
+
 File the signed copy with the meeting minutes. Together with the forensics
 report, it is your full defence if the result is disputed.
 
