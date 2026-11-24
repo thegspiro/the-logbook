@@ -644,11 +644,12 @@ class ExternalShiftHoursService:
     async def counted_totals_by_user(
         self,
         organization_id: str,
-        start_date: date,
-        end_date: date,
+        start_date: Optional[date],
+        end_date: Optional[date],
         user_ids: Optional[Sequence[str]] = None,
     ) -> Dict[str, Dict[str, int]]:
-        """``{user_id: {"shift_count", "minutes"}}`` of counted entries."""
+        """``{user_id: {"shift_count", "minutes", "calls"}}`` of counted
+        entries. Either bound may be None, for an open-ended period."""
         query = (
             select(
                 ExternalShiftHours.user_id,
@@ -656,13 +657,18 @@ class ExternalShiftHoursService:
                 func.coalesce(func.sum(ExternalShiftHours.duration_minutes), 0).label(
                     "minutes"
                 ),
+                func.coalesce(func.sum(ExternalShiftHours.call_count), 0).label(
+                    "calls"
+                ),
             )
             .where(ExternalShiftHours.organization_id == str(organization_id))
             .where(ExternalShiftHours.status == _COUNTED)
-            .where(ExternalShiftHours.shift_date >= start_date)
-            .where(ExternalShiftHours.shift_date <= end_date)
             .group_by(ExternalShiftHours.user_id)
         )
+        if start_date is not None:
+            query = query.where(ExternalShiftHours.shift_date >= start_date)
+        if end_date is not None:
+            query = query.where(ExternalShiftHours.shift_date <= end_date)
         if user_ids is not None:
             if not user_ids:
                 return {}
@@ -672,6 +678,7 @@ class ExternalShiftHoursService:
             row.user_id: {
                 "shift_count": int(row.shift_count or 0),
                 "minutes": int(row.minutes or 0),
+                "calls": int(row.calls or 0),
             }
             for row in result.all()
         }

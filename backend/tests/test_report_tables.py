@@ -28,7 +28,7 @@ def test_the_contract_covers_exactly_the_reports_the_service_generates():
         name for name in export_spec() if f'"{name}": self._generate_{name}' in source
     )
     assert generated == set(export_spec())
-    assert len(export_spec()) == 13
+    assert len(export_spec()) == 14
 
 
 def test_a_plain_report_takes_its_rows_and_columns_from_the_contract():

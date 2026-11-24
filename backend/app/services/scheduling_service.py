@@ -10057,40 +10057,93 @@ class SchedulingService:
         they held: raw ``shifts``, ``minutes`` and ``calls``.
 
         The same credit :meth:`get_member_month_totals` counts, cut by seat
-        instead of month: finalized shifts only, attendance plus approved
-        pre-shift work, scoped through ``Shift.organization_id``. The seat is
-        read through a subquery on the member's own assignment so a shift is
-        never counted twice, and is None when no seat was recorded.
-
-        The seat is an outer-joined derived table of one row per shift rather
-        than a correlated subquery: MySQL 8's ONLY_FULL_GROUP_BY rejects
-        grouping on a subquery that reads ``shifts.id`` (error 1055), which
-        MariaDB's default mode lets through.
+        instead of month: see :meth:`_credited_seat_totals`.
         """
-        uid = str(user_id)
+        cells = await self._credited_seat_totals(
+            organization_id,
+            by_year=True,
+            attendance_filters=[ShiftAttendance.user_id == str(user_id)],
+            pre_work_filters=[ShiftPreWorkSession.user_id == str(user_id)],
+            seat_filters=[ShiftAssignment.user_id == str(user_id)],
+        )
+        return {int(year): by_seat for year, by_seat in cells.items()}
+
+    async def get_department_position_totals(
+        self,
+        organization_id: UUID | str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> Dict[str, Dict[Optional[str], Dict[str, int]]]:
+        """Every member's credited department shifts in a period, by the
+        position held: ``{user_id: {position: {shifts, minutes, calls}}}``.
+
+        The department's view of what each member's own hours screen shows
+        (Reports → Hours by Position), from the same query, so the two cannot
+        disagree. Shifts are matched on ``shift_date``, the department-local
+        day the shift starts; either bound may be left open.
+        """
+        dated: List[Any] = []
+        if start_date:
+            dated.append(Shift.shift_date >= start_date)
+        if end_date:
+            dated.append(Shift.shift_date <= end_date)
+        cells = await self._credited_seat_totals(
+            organization_id,
+            by_year=False,
+            attendance_filters=dated,
+            pre_work_filters=dated,
+            seat_filters=[],
+        )
+        return {str(user): by_seat for user, by_seat in cells.items()}
+
+    async def _credited_seat_totals(
+        self,
+        organization_id: UUID | str,
+        *,
+        by_year: bool,
+        attendance_filters: List[Any],
+        pre_work_filters: List[Any],
+        seat_filters: List[Any],
+    ) -> Dict[Any, Dict[Optional[str], Dict[str, int]]]:
+        """Credited shifts and minutes keyed by year (``by_year``) or by
+        member, then by the seat held.
+
+        Credit is what :meth:`get_member_month_totals` counts: finalized
+        shifts only, attendance plus approved pre-shift work, scoped through
+        ``Shift.organization_id``. The seat is the member's own assignment on
+        that shift, None when no seat was recorded; a member seated twice on
+        one shift is read once, so a shift is never counted twice.
+
+        The seat is an outer-joined derived table of one row per shift and
+        member rather than a correlated subquery: MySQL 8's
+        ONLY_FULL_GROUP_BY rejects grouping on a subquery that reads
+        ``shifts.id`` (error 1055), which MariaDB's default mode lets through.
+        """
         seats = (
             select(
                 ShiftAssignment.shift_id.label("shift_id"),
+                ShiftAssignment.user_id.label("user_id"),
                 func.min(ShiftAssignment.position).label("position"),
             )
-            .where(ShiftAssignment.user_id == uid)
-            .group_by(ShiftAssignment.shift_id)
+            .where(*seat_filters)
+            .group_by(ShiftAssignment.shift_id, ShiftAssignment.user_id)
             .subquery()
         )
         seat = seats.c.position
         year_col = func.year(Shift.shift_date)
-        found: Dict[int, Dict[Optional[str], Dict[str, int]]] = {}
+        found: Dict[Any, Dict[Optional[str], Dict[str, int]]] = {}
 
-        def _cell(year: Any, position: Any) -> Dict[str, int]:
+        def _cell(key: Any, position: Any) -> Dict[str, int]:
             value = getattr(position, "value", position)
-            key = str(value) if value else None
-            return found.setdefault(int(year), {}).setdefault(
-                key, {"shifts": 0, "minutes": 0, "calls": 0}
+            seat_key = str(value) if value else None
+            return found.setdefault(key, {}).setdefault(
+                seat_key, {"shifts": 0, "minutes": 0, "calls": 0}
             )
 
+        attended_key = year_col if by_year else ShiftAttendance.user_id
         attended = await self.db.execute(
             select(
-                year_col.label("year"),
+                attended_key.label("key"),
                 seat.label("position"),
                 func.count(ShiftAttendance.id).label("shifts"),
                 func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0).label(
@@ -10099,29 +10152,44 @@ class SchedulingService:
                 func.coalesce(func.sum(ShiftAttendance.call_count), 0).label("calls"),
             )
             .join(Shift, ShiftAttendance.shift_id == Shift.id)
-            .outerjoin(seats, seats.c.shift_id == Shift.id)
-            .where(ShiftAttendance.user_id == uid)
+            .outerjoin(
+                seats,
+                and_(
+                    seats.c.shift_id == Shift.id,
+                    seats.c.user_id == ShiftAttendance.user_id,
+                ),
+            )
+            .where(*attendance_filters)
             .where(Shift.organization_id == str(organization_id))
             .where(Shift.is_finalized.is_(True))
-            .group_by(year_col, seat)
+            .group_by(attended_key, seat)
         )
         for row in attended.all():
-            cell = _cell(row.year, row.position)
+            cell = _cell(row.key, row.position)
             cell["shifts"] += int(row.shifts or 0)
             cell["minutes"] += int(row.minutes or 0)
             cell["calls"] += int(row.calls or 0)
 
         from app.services.pre_shift_work_service import approved_pre_work_minutes
 
+        pre_work_key = year_col if by_year else ShiftPreWorkSession.user_id
         for row in await approved_pre_work_minutes(
             self.db,
-            ShiftPreWorkSession.user_id == uid,
+            *pre_work_filters,
             Shift.organization_id == str(organization_id),
             Shift.is_finalized.is_(True),
-            group_by=[year_col.label("year"), seat.label("position")],
-            outer_joins=[(seats, seats.c.shift_id == Shift.id)],
+            group_by=[pre_work_key.label("key"), seat.label("position")],
+            outer_joins=[
+                (
+                    seats,
+                    and_(
+                        seats.c.shift_id == Shift.id,
+                        seats.c.user_id == ShiftPreWorkSession.user_id,
+                    ),
+                )
+            ],
         ):
-            _cell(row.year, row.position)["minutes"] += int(row.minutes or 0)
+            _cell(row.key, row.position)["minutes"] += int(row.minutes or 0)
         return found
 
     @staticmethod

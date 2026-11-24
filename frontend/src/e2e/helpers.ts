@@ -11,6 +11,7 @@ import type {
   InventoryStatusReport,
   MemberRosterReport,
   PipelineOverviewReport,
+  PositionHoursReport,
   TrainingProgressReport,
   TrainingSummaryReport,
 } from '../modules/reports/types';
@@ -6554,6 +6555,14 @@ const emptyReport = (type: string): unknown => {
         summary: { total_hours: 0, total_entries: 0, unique_members: 0, hours_by_category: {} },
         entries: [],
       } satisfies AdminHoursReport;
+    case 'position_hours':
+      return {
+        report_type: 'position_hours',
+        generated_at: GENERATED_AT,
+        ...PERIOD,
+        summary: { total_hours: 0, total_shifts: 0, total_calls: 0, members: 0, by_position: [] },
+        entries: [],
+      } satisfies PositionHoursReport;
     case 'department_overview':
       return {
         report_type: 'department_overview',

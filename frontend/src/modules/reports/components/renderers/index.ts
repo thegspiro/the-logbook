@@ -8,6 +8,8 @@ export { EventAttendanceRenderer, getEventAttendanceExportData } from './EventAt
 export { TrainingProgressRenderer, getTrainingProgressExportData } from './TrainingProgressRenderer';
 export { AnnualTrainingRenderer, getAnnualTrainingExportData } from './AnnualTrainingRenderer';
 export { AdminHoursRenderer, getAdminHoursExportData } from './AdminHoursRenderer';
+export { PositionHoursRenderer } from './PositionHoursRenderer';
+export { getPositionHoursExportData } from './positionHoursExport';
 export { DepartmentOverviewRenderer, getDepartmentOverviewExportData } from './DepartmentOverviewRenderer';
 export { CertExpirationRenderer, getCertExpirationExportData } from './CertExpirationRenderer';
 export { ApparatusStatusRenderer, getApparatusStatusExportData } from './ApparatusStatusRenderer';

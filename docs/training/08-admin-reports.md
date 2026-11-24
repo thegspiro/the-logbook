@@ -885,8 +885,20 @@ now.
 | **Program Requirement Progress**        | Compliance |            | Each member's progress on training requirements through their training programs, with outstanding items and upcoming deadlines — not requirement compliance |
 | **Fleet / Apparatus Status**            | Operations |            | Vehicle status, inspection due dates, mileage, and open work orders                                                                                         |
 | **Inventory Status**                    | Operations |            | Stock levels, assigned equipment, and low-stock alerts                                                                                                      |
+| **Hours by Position**                   | Operations | ✓          | Each member's credited shift hours, shifts, and calls by the seat they held, with time on other departments' apparatus                                      |
 | **Incident / Call Volume**              | Operations | ✓          | Call volume trends, incident type breakdown, and peak activity                                                                                              |
 | **Pipeline Overview**                   | Member     | ✓          | Applicants in the prospective member pipeline, by stage, year, and referral source                                                                          |
+
+**Hours by Position** lists one row per member per seat (Driver/Operator,
+Officer, the department's own seats) for credited shifts that start in the
+period: finalized shifts only, with approved pre-shift work under the seat held.
+Shifts with no seat recorded read **No position recorded**, and time logged on
+another department's apparatus is one **Other departments** row. The figures
+are the same ones each member sees on **My Shifts > Hours** for the same days.
+The **Position** list narrows the table to one seat and states its total; the
+CSV and PDF carry every row. Because it lists every member's hours, it also
+needs **scheduling.report**, the permission that shows one member another's
+hours history.
 
 > **Important: two reports measure training-program progress, not
 > compliance.** **Program Requirement Progress** and the **Program Progress by

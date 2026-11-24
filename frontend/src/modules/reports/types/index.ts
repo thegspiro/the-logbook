@@ -306,6 +306,43 @@ export interface AdminHoursReport {
 }
 
 // ============================================================================
+// Report Data: Hours by Position
+// ============================================================================
+
+/** One member's credited shift time in one seat. The seat arrives labelled:
+ *  "No position recorded" and "Other departments" are rows of their own. */
+export interface PositionHoursEntry {
+  member_name: string;
+  position: string;
+  hours: number;
+  shifts: number;
+  calls: number;
+}
+
+export interface PositionHoursTotal {
+  position: string;
+  hours: number;
+  shifts: number;
+  calls: number;
+  members: number;
+}
+
+export interface PositionHoursReport {
+  report_type: 'position_hours';
+  generated_at: string;
+  period_start?: string | null;
+  period_end?: string | null;
+  summary: {
+    total_hours: number;
+    total_shifts: number;
+    total_calls: number;
+    members: number;
+    by_position: PositionHoursTotal[];
+  };
+  entries: PositionHoursEntry[];
+}
+
+// ============================================================================
 // Report Data: Department Overview
 // ============================================================================
 
@@ -663,6 +700,7 @@ export type ReportData =
   | TrainingProgressReport
   | AnnualTrainingReport
   | AdminHoursReport
+  | PositionHoursReport
   | DepartmentOverviewReport
   | CertExpirationReport
   | ApparatusStatusReport

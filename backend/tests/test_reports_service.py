@@ -103,6 +103,7 @@ class TestGenerateReport:
             "annual_training",
             "department_overview",
             "admin_hours",
+            "position_hours",
             "certification_expiration",
             "apparatus_status",
             "inventory_status",
@@ -179,6 +180,18 @@ class TestGetAvailableReports:
 
         for report_id, report in new_reports.items():
             assert report["available"] is True, f"{report_id} should be available"
+
+    async def test_lists_the_position_hours_report(self, service):
+        # Saved Reports builds its picker from this list, and /available
+        # hides an entry from a caller without its source permission.
+        reports = {
+            r["id"]: r
+            for r in (await service.get_available_reports())["available_reports"]
+        }
+
+        assert reports["position_hours"]["title"] == "Hours by Position"
+        assert reports["position_hours"]["category"] == "operations"
+        assert reports["position_hours"]["usesDateRange"] is True
 
     async def test_categories_include_operations(self, service):
         result = await service.get_available_reports()

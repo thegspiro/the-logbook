@@ -53,6 +53,8 @@ import {
   getAnnualTrainingExportData,
   AdminHoursRenderer,
   getAdminHoursExportData,
+  PositionHoursRenderer,
+  getPositionHoursExportData,
   DepartmentOverviewRenderer,
   getDepartmentOverviewExportData,
   CertExpirationRenderer,
@@ -75,6 +77,7 @@ import type {
   TrainingProgressReport,
   AnnualTrainingReport,
   AdminHoursReport,
+  PositionHoursReport,
   DepartmentOverviewReport,
   CertExpirationReport,
   ApparatusStatusReport,
@@ -96,6 +99,7 @@ const REPORT_TYPE_MAP: Record<string, string> = {
   'training-progress': 'training_progress',
   'annual-training': 'annual_training',
   'admin-hours': 'admin_hours',
+  'position-hours': 'position_hours',
   'department-overview': 'department_overview',
   'certification-expiration': 'certification_expiration',
   'apparatus-status': 'apparatus_status',
@@ -235,6 +239,15 @@ const REPORT_CARDS: ReportCardDefinition[] = [
     usesDateRange: true,
   },
   {
+    id: 'position-hours',
+    title: 'Hours by Position',
+    description: "Each member's credited shift hours, shifts, and calls by the seat they held",
+    icon: 'Truck',
+    category: 'operations',
+    available: true,
+    usesDateRange: true,
+  },
+  {
     id: 'pipeline-overview',
     title: 'Pipeline Overview',
     description: 'Applicants in the prospective member pipeline, by stage, year, and referral source',
@@ -281,6 +294,7 @@ function getExportData(data: ReportData, reportType: string) {
     training_progress: (d) => getTrainingProgressExportData(d as TrainingProgressReport),
     annual_training: (d) => getAnnualTrainingExportData(d as AnnualTrainingReport),
     admin_hours: (d) => getAdminHoursExportData(d as AdminHoursReport),
+    position_hours: (d) => getPositionHoursExportData(d as PositionHoursReport),
     department_overview: (d) => getDepartmentOverviewExportData(d as DepartmentOverviewReport),
     certification_expiration: (d) => getCertExpirationExportData(d as CertExpirationReport),
     apparatus_status: (d) => getApparatusStatusExportData(d as ApparatusStatusReport),
@@ -440,6 +454,8 @@ export const ReportsPage: React.FC = () => {
         return <AnnualTrainingRenderer data={data as AnnualTrainingReport} formatRank={formatRank} />;
       case 'admin_hours':
         return <AdminHoursRenderer data={data as AdminHoursReport} />;
+      case 'position_hours':
+        return <PositionHoursRenderer data={data as PositionHoursReport} />;
       case 'department_overview':
         return <DepartmentOverviewRenderer data={data as DepartmentOverviewReport} />;
       case 'certification_expiration':

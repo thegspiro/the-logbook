@@ -188,6 +188,7 @@ class ReportsService:
             "annual_training": self._generate_annual_training,
             "department_overview": self._generate_department_overview,
             "admin_hours": self._generate_admin_hours,
+            "position_hours": self._generate_position_hours,
             "certification_expiration": self._generate_certification_expiration,
             "apparatus_status": self._generate_apparatus_status,
             "inventory_status": self._generate_inventory_status,
@@ -1777,6 +1778,14 @@ class ReportsService:
                     "usesDateRange": True,
                 },
                 {
+                    "id": "position_hours",
+                    "title": "Hours by Position",
+                    "description": "Each member's credited shift hours, shifts, and calls by the seat they held, with time on other departments' apparatus.",
+                    "category": "operations",
+                    "available": True,
+                    "usesDateRange": True,
+                },
+                {
                     "id": "department_overview",
                     "title": "Department Overview",
                     "description": "Cross-module department health report: member counts, training rates, event attendance, and action item status.",
@@ -2147,6 +2156,144 @@ class ReportsService:
                 "total_entries": total_entries,
                 "unique_members": len(unique_members),
                 "hours_by_category": hours_by_category,
+            },
+            "entries": entries,
+        }
+
+    # ============================================
+    # Hours by Position Report
+    # ============================================
+
+    async def _generate_position_hours(
+        self,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Each member's credited shift time in the period, one row per seat.
+
+        The figures are the ones each member's own My Hours screen shows for
+        the same days: :meth:`SchedulingService.get_department_position_totals`
+        is the query behind both (CLAUDE.md pitfall 29), and time on another
+        department's apparatus is the same counted outside entries that screen
+        totals, as one Other departments row (owner decisions, 2026-11-24).
+
+        Each row's hours are rounded from its own minutes; the totals and the
+        per-position summary are summed from those rounded rows, so a printed
+        total always equals the rows beneath it.
+        """
+        from app.services.external_shift_hours_service import (
+            ExternalShiftHoursService,
+        )
+        from app.services.scheduling_module_config_service import (
+            department_seat_labels,
+        )
+        from app.services.scheduling_service import SchedulingService
+        from app.utils.positions import position_label
+
+        by_member = await SchedulingService(self.db).get_department_position_totals(
+            organization_id, start_date, end_date
+        )
+        outside = await ExternalShiftHoursService(self.db).counted_totals_by_user(
+            str(organization_id), start_date, end_date
+        )
+        member_ids = set(by_member) | set(outside)
+        names: Dict[str, Tuple[str, str]] = {}
+        if member_ids:
+            name_rows = await self.db.execute(
+                select(User.id, User.first_name, User.last_name)
+                .where(User.organization_id == str(organization_id))
+                .where(User.id.in_(member_ids))
+            )
+            names = {
+                str(row.id): (row.first_name or "", row.last_name or "")
+                for row in name_rows.all()
+            }
+        labels = await department_seat_labels(self.db, organization_id)
+
+        entries: List[Dict[str, Any]] = []
+        members_listed = 0
+        # A member is listed by name, last name first for the order only; a
+        # credit row whose member is not in this department is not listed.
+        for uid in sorted(
+            names, key=lambda u: (names[u][1].casefold(), names[u][0].casefold(), u)
+        ):
+            first, last = names[uid]
+            member_name = f"{first} {last}".strip()
+            seats: List[Dict[str, Any]] = [
+                {
+                    "member_name": member_name,
+                    "position": (
+                        position_label(position, labels)
+                        if position
+                        else "No position recorded"
+                    ),
+                    "recorded": position is not None,
+                    "hours": hours_from_minutes(raw["minutes"]),
+                    "shifts": raw["shifts"],
+                    "calls": raw["calls"],
+                }
+                for position, raw in by_member.get(uid, {}).items()
+                if raw["shifts"] or raw["minutes"]
+            ]
+            seats.sort(key=lambda r: (not r["recorded"], -r["hours"], r["position"]))
+            before = len(entries)
+            entries.extend(
+                {key: value for key, value in row.items() if key != "recorded"}
+                for row in seats
+            )
+            away = outside.get(uid)
+            if away and (away["shift_count"] or away["minutes"]):
+                entries.append(
+                    {
+                        "member_name": member_name,
+                        "position": "Other departments",
+                        "hours": hours_from_minutes(away["minutes"]),
+                        "shifts": away["shift_count"],
+                        "calls": away["calls"],
+                    }
+                )
+            if len(entries) > before:
+                members_listed += 1
+
+        by_position: Dict[str, Dict[str, Any]] = {}
+        for row in entries:
+            total = by_position.setdefault(
+                row["position"],
+                {
+                    "position": row["position"],
+                    "hours": 0.0,
+                    "shifts": 0,
+                    "calls": 0,
+                    "members": 0,
+                },
+            )
+            total["hours"] = round_hours_to_quarter(total["hours"] + row["hours"])
+            total["shifts"] += row["shifts"]
+            total["calls"] += row["calls"]
+            total["members"] += 1
+        trailing = ("No position recorded", "Other departments")
+        position_totals = sorted(
+            by_position.values(),
+            key=lambda t: (
+                trailing.index(t["position"]) + 1 if t["position"] in trailing else 0,
+                -t["hours"],
+                t["position"],
+            ),
+        )
+
+        return {
+            "report_type": "position_hours",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "period_start": str(start_date) if start_date else None,
+            "period_end": str(end_date) if end_date else None,
+            "summary": {
+                "total_hours": sum_hours_to_quarter(row["hours"] for row in entries),
+                "total_shifts": sum(row["shifts"] for row in entries),
+                "total_calls": sum(row["calls"] for row in entries),
+                "members": members_listed,
+                "by_position": position_totals,
             },
             "entries": entries,
         }
