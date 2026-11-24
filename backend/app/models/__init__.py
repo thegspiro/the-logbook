@@ -154,6 +154,7 @@ from app.models.event_request import (
     EventRequest,
     EventRequestActivity,
     EventRequestEmailTemplate,
+    EventRequestFeedback,
     EventRequestStatus,
 )
 from app.models.external_shift_hours import (
@@ -845,6 +846,7 @@ __all__ = [
     "EventApparatusUnit",
     "EventRequest",
     "EventRequestActivity",
+    "EventRequestFeedback",
     "EventRequestEmailTemplate",
     "EventRequestStatus",
     # Training models
