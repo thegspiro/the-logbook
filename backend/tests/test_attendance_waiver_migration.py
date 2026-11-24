@@ -72,6 +72,26 @@ def _followups():
 
 FOLLOWUPS = _followups()
 
+# The retention record's two columns (2026-11-23): the model carries them, so
+# the chain built here must too.
+_RETENTION_PATH = _PATH.with_name(
+    "20261124_0343_241c1cc27313_waiver_request_retention_removal_record.py"
+)
+
+
+def _retention():
+    spec = importlib.util.spec_from_file_location(
+        "_attendance_waiver_retention_record", _RETENTION_PATH
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+RETENTION = _retention()
+
 _PREFIXED = ("REQUESTS", "ACTIONS", "ORGANIZATIONS", "USERS", "EVENTS")
 _MODELS = {
     "REQUESTS": AttendanceWaiverRequest,
@@ -111,6 +131,7 @@ def scratch(monkeypatch):
         monkeypatch.setattr(MIGRATION, attr, f"{prefix}{getattr(MIGRATION, attr)}")
     for attr in ("REQUESTS", "ACTIONS"):
         monkeypatch.setattr(FOLLOWUPS, attr, getattr(MIGRATION, attr))
+    monkeypatch.setattr(RETENTION, "TABLE", MIGRATION.REQUESTS)
     engine = sa.create_engine(settings.SYNC_DATABASE_URL)
     try:
         yield SimpleNamespace(engine=engine, prefix=prefix)
@@ -182,6 +203,7 @@ class TestAgainstARealDatabase:
         _parents(engine)
         _run(engine, MIGRATION.upgrade)
         _run(engine, FOLLOWUPS.upgrade)
+        _run(engine, RETENTION.upgrade)
         referred = {
             "organizations": MIGRATION.ORGANIZATIONS,
             "users": MIGRATION.USERS,

@@ -87,6 +87,25 @@ async def _admin_committed(db_session):
     return service, org, admin, record
 
 
+async def _admin_named_and_committed(db_session):
+    org, admin, _, record = await _admin_world(db_session)
+    from app.services.historical_import_service import HistoricalImportService
+
+    service = HistoricalImportService(db_session)
+    await service.update_member_mappings(
+        await service.get(org, record.id),
+        {
+            "number:6178": {
+                "action": "create",
+                "first_name": "Ruth",
+                "last_name": "Okafor",
+            }
+        },
+    )
+    await service.commit_admin(org, record.id, admin)
+    return service, org, admin, record
+
+
 async def _undo(db, service, org, record_id, step, by):
     record = await service.get(org, record_id, for_update=True)
     counts = await HistoricalImportUndoService(db).undo(record, step, by)
@@ -133,6 +152,30 @@ class TestAdminHours:
 
         assert counts == {"entries_created": 4, "members_created": 1}
         assert await _count(db_session, AdminHoursEntry, org) == 4
+
+    async def test_a_typed_name_survives_the_undo(self, db_session):
+        # The file knows 6178 only by number, so the reviewer named them. The
+        # commit spends the decision as a "map" to the member it made; the
+        # undo removes the member, and the name must come back with "create".
+        service, org, admin, record = await _admin_named_and_committed(db_session)
+
+        await _undo(db_session, service, org, record.id, "admin", admin)
+
+        stored = await service.get(org, record.id)
+        assert stored.member_mappings["number:6178"] == {
+            "action": "create",
+            "first_name": "Ruth",
+            "last_name": "Okafor",
+        }
+
+    async def test_committing_again_gives_the_member_the_typed_name(self, db_session):
+        service, org, admin, record = await _admin_named_and_committed(db_session)
+        await _undo(db_session, service, org, record.id, "admin", admin)
+
+        await service.commit_admin(org, record.id, admin)
+
+        member = await _former_member(db_session, org)
+        assert (member.first_name, member.last_name) == ("Ruth", "Okafor")
 
     async def test_an_edited_entry_is_kept_and_not_written_again(self, db_session):
         service, org, admin, record = await _admin_committed(db_session)

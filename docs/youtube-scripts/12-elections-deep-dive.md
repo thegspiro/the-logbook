@@ -949,6 +949,12 @@ signature lines]**
 > next 'are we sure about that count?' is answered with a document instead
 > of a debate."
 
+**[PRODUCTION NOTE — 2026-11-23. Since #4588 the certified results print the
+department's mailing address, phone and FDID under its name and a report
+number (RPT-…) on page 1 and in each later page's header. Narration still
+holds; footage recorded before then shows neither, so re-shoot the page-through
+(about 10 seconds) when this chapter is next refreshed.]**
+
 **[CALLOUT: "Close → verify → certify → sign → file with the minutes"]**
 
 ---
@@ -1477,6 +1483,11 @@ PDF]**
 > hand them a document, not an argument."
 
 **[CALLOUT: "Tallies + attestations + integrity check + signatures = done"]**
+
+**[PRODUCTION NOTE — 2026-11-23. As in Chapter 16's certified-results beat:
+the PDF now carries the department's identity line and a report number on
+every page. Narration holds; re-shoot the page-through if it was recorded
+before 2026-11-23.]**
 
 ---
 

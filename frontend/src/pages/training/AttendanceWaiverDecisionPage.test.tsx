@@ -159,6 +159,19 @@ describe('AttendanceWaiverDecisionPage', () => {
     });
   });
 
+  it('shows the documents section when retention removed what was filed', async () => {
+    mockGet.mockResolvedValue(
+      request({
+        attachments: [],
+        can_attach: false,
+        attachments_removed_count: 3,
+        attachments_removed_at: '2025-11-09T12:00:00Z',
+      })
+    );
+    renderAt('/attendance-waivers/req-1');
+    expect(await screen.findByText('3 documents removed under retention on 11/9/2025.')).toBeInTheDocument();
+  });
+
   it('shows no documents section when none are filed and none can be', async () => {
     mockGet.mockResolvedValue(request({ attachments: [], can_attach: false }));
     renderAt('/attendance-waivers/req-1');

@@ -17,6 +17,9 @@ theme:
   # Fonts and icons are bundled rather than fetched from Google Fonts, so the
   # pages make no third-party request and the CSP in nginx.conf can stay 'self'.
   font: false
+  # The application's own logo and favicon, copied from frontend/public/.
+  logo: images/logo-128.png
+  favicon: images/favicon.svg
   features:
     - navigation.tabs
     - navigation.sections

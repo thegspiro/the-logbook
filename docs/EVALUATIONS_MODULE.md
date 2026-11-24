@@ -81,13 +81,13 @@ a member with evaluation history cannot be hard-deleted, only archived.
 
 ## Permissions
 
-| Permission              | Grants                                                                                   | Seeded to |
-| ----------------------- | ---------------------------------------------------------------------------------------- | --------- |
-| `evaluations.configure` | build templates and their workflows                                                      | Chief     |
-| `evaluations.manage`    | open and close periods, draft for anyone and pick the evaluator, bulk drafting, amending | Chief     |
-| `evaluations.conduct`   | be assigned as an evaluator; draft an evaluation they conduct themselves                 | Chief     |
-| `evaluations.view_all`  | read every member's evaluations; complete calibration                                    | Chief     |
-| `evaluations.delete`    | delete an evaluation, with a reason                                                      | Chief     |
+| Permission              | Grants                                                                                                                                                                                                    | Seeded to |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `evaluations.configure` | build templates and their workflows                                                                                                                                                                       | Chief     |
+| `evaluations.manage`    | open and close periods, draft for anyone and pick the evaluator, bulk drafting, amending, naming who takes a step, handing over a person's open work in a period                                          | Chief     |
+| `evaluations.conduct`   | be assigned as an evaluator; draft an evaluation they conduct themselves                                                                                                                                  | Chief     |
+| `evaluations.view_all`  | read every member's evaluations; complete calibration; see finalized grades on the conduct list, the grades by evaluator and a member's review history; export a period as CSV or as a zip of signed PDFs | Chief     |
+| `evaluations.delete`    | delete an evaluation, with a reason                                                                                                                                                                       | Chief     |
 
 There is no `view_own`: a member reaches their own evaluations on sign-in
 alone. Nobody reads, amends or deletes their own evaluation through an
@@ -120,8 +120,10 @@ on each read, so an assignment that has ended grants nothing. No write path
 reads it: a supervisor cannot draft, write, sign, calibrate, amend or delete
 on the relationship alone.
 
-Signing and deleting require a recently re-verified session (step-up), as
-listed in `wiki/Security-Authentication.md`.
+Signing, deleting, naming who takes a step, handing over a person's open work
+and downloading a period's signed PDFs require a recently re-verified session
+(step-up); `STEPUP_HANDLERS` in `tests/test_mfa_policy.py` is the list that is
+enforced.
 
 ## Templates
 
@@ -373,6 +375,8 @@ marks the items **far apart**: two or more levels on a scale, or opposite
 answers on meets / does not meet. Those are the points worth raising when the
 review is discussed. An unrated item or one marked not applicable is never
 marked. For the evaluator writing their part it follows their unsaved ratings.
+Only the scored items the self-evaluation includes are listed, and **Show only
+those** narrows the list to the far-apart ones.
 
 It is drawn on the screen from the two parts the server already sends, so it
 shows nobody anything new: the evaluator sees the self-evaluation only once it
@@ -409,8 +413,10 @@ carries `previous_review`: the member's most recent finalized evaluation on the
 same template, whatever its version, whose period ended before this one began.
 It holds that review's period, the overall grade and each section's grade that
 stood (the evaluator's where they changed the calculated one; a weighted form
-gives its percentage, an evaluator-rated form its overall rating), and the text
-of its Goals items, so this year's review can say whether they were met.
+gives its percentage, an evaluator-rated form its overall rating), and the goals
+its Goals items set, one entry per goal with its target date where it has one
+(`goals_set`, the same reading the goal review copies), so this year's review
+can say whether they were met.
 
 It is read through `EvaluationService.detail` as the caller, so it shows exactly
 what the caller could see by opening that review, and is `null` when they could
@@ -425,8 +431,9 @@ A `goal_review` item rates each goal the member's previous review set. The
 previous review is the one the last-review panel shows: the most recent
 finalized evaluation on the same template, whatever its version, whose period
 ended before this one began. Its goals are the goals on each `goals` item in
-its evaluator's part, one entry per goal, keyed `<item>:<goal id>` and
-labelled with its place in the item ("Goals for the coming year, goal 2").
+its evaluator's part, one entry per goal, keyed `<item>:<goal id>`. When the
+item holds more than one goal each is labelled with its place in the item
+("Goals for the coming year, goal 2"); a single goal takes the item's label.
 
 **Goals are a list since 2026-11-22.** A `goals` item holds up to 20 goals
 (`ItemAnswer.goals`), each with an id the form chooses, its text and an
@@ -587,11 +594,16 @@ table `create_all` has not built (pitfall #26).
 
 - `tests/test_evaluation_workflow.py`: drafting, visibility, the workflow,
   figures, signing, notices and the daily scan, bulk drafting, deletion,
-  amendments, responses and calibration flags, driven over HTTP.
+  amendments, responses and calibration flags, review history, grades by
+  evaluator and the period's signed-PDF zip, driven over HTTP.
 - `tests/test_evaluation_waiver_sources.py`: the four waiver-request sources.
 - `tests/test_evaluation_rules.py`, `test_evaluation_template_schema.py`,
   `test_evaluation_models.py`: definition, workflow and model rules.
 - `tests/test_evaluation_pdf.py`: the PDF text.
+- `tests/test_evaluation_goal_list.py`: a Goals item stored as a list, the
+  free-text answer turned into one goal, and parts saved before then read as
+  they are.
+- `tests/test_evaluation_pdf_bundle_names.py`: the period zip's entry names.
 - `tests/test_evaluation_*_grant_migration.py`: the Chief grants.
 - Frontend: `modules/reports/pages/Evaluation*.test.tsx`,
   `MyEvaluationsPage.test.tsx` and the component tests beside them.
