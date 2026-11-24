@@ -139,6 +139,46 @@ describe('MemberIdCardPrintPage', () => {
     expect(screen.queryByText(/two-sided printing/)).not.toBeInTheDocument();
   });
 
+  describe('certifications on the card', () => {
+    const checkbox = () => screen.getByRole('checkbox', { name: /Certifications and valid-through date/ });
+
+    it('starts from the department layout and prints with it', async () => {
+      mockGetLayout.mockReset();
+      mockGetLayout.mockResolvedValue({ ...SAVED, certifications: true });
+      const user = userEvent.setup();
+      renderAt('?ids=u1,u2');
+
+      await screen.findByText('Laura Adams');
+      expect(checkbox()).toBeChecked();
+      await user.click(screen.getByRole('button', { name: /Download 2 cards/ }));
+
+      expect(mockGeneratePdf).toHaveBeenCalledWith(['u1', 'u2'], { ...SAVED, certifications: true });
+    });
+
+    it('is off for a department that never chose, and saving it on saves it with the layout', async () => {
+      mockGetLayout.mockReset();
+      mockGetLayout.mockResolvedValue({ ...SAVED, certifications: false });
+      const user = userEvent.setup();
+      renderAt('?ids=u1');
+
+      await screen.findByText('Laura Adams');
+      expect(checkbox()).not.toBeChecked();
+      await user.click(checkbox());
+      await user.click(screen.getByRole('button', { name: /Save as department layout/ }));
+
+      expect(mockSaveLayout).toHaveBeenCalledWith({ ...SAVED, certifications: true });
+    });
+
+    it('says a front-only card carries the date but not the list', async () => {
+      mockGetLayout.mockReset();
+      mockGetLayout.mockResolvedValue({ ...SAVED, sides: 'front', certifications: false });
+      renderAt('?ids=u1');
+
+      await screen.findByText('Laura Adams');
+      expect(screen.getByText(/The certifications themselves need a two-sided card/)).toBeInTheDocument();
+    });
+  });
+
   it('says how many selected records were not found', async () => {
     renderAt('?ids=u1,u2,u3');
 

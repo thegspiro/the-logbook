@@ -35,6 +35,10 @@ class IdCardLayout(BaseModel):
     orientation: Option
     sides: Option
     symbology: Option
+    # The member's certifications on the back and "Valid through" on the
+    # front. Off unless saved on; a client that predates the option saves it
+    # off, which is the card it was already printing.
+    certifications: bool = False
 
 
 class IdCardPrintBody(BaseModel):
@@ -43,6 +47,7 @@ class IdCardPrintBody(BaseModel):
     orientation: Optional[Option] = None
     sides: Optional[Option] = None
     symbology: Optional[Option] = None
+    certifications: Optional[bool] = None
 
 
 @router.get("/layout", response_model=IdCardLayout)
@@ -66,7 +71,10 @@ async def save_id_card_layout(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(*ID_CARD_PERMISSIONS)),
 ):
-    """Save the department's ID card layout (orientation, sides, symbology).
+    """Save the department's ID card layout.
+
+    Orientation, sides, symbology, and whether cards carry the member's
+    certifications.
 
     **Permissions required:** members.manage or members.manage_id_cards
     """
@@ -76,6 +84,7 @@ async def save_id_card_layout(
             data.orientation,
             data.sides,
             data.symbology,
+            data.certifications,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -106,12 +115,25 @@ async def print_id_cards(
     **Permissions required:** members.manage or members.manage_id_cards
     """
     try:
-        pdf, count = await MemberIdCardService(db).generate(
+        service = MemberIdCardService(db)
+        # Resolved here rather than inside generate() so the audit entry
+        # below records the value the cards were printed with.
+        with_certifications = (
+            data.certifications
+            if data.certifications is not None
+            else bool(
+                (await service.get_layout(current_user.organization_id))[
+                    "certifications"
+                ]
+            )
+        )
+        pdf, count = await service.generate(
             current_user.organization_id,
             data.user_ids,
             data.orientation,
             data.sides,
             data.symbology,
+            with_certifications,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -122,7 +144,10 @@ async def print_id_cards(
         event_type="id_cards_printed",
         event_category="data_access",
         severity="info",
-        event_data={"count": count},
+        # Whether the cards carried certification dates: the printing officer
+        # sees them in the PDF whatever training access they hold (owner
+        # decision, 2026-11-24), so the record says when they did.
+        event_data={"count": count, "certifications": with_certifications},
         user_id=str(current_user.id),
         username=current_user.username,
     )
