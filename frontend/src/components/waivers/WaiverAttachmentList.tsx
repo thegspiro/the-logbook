@@ -21,7 +21,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Download, Eye, FileText, Image as ImageIcon, Trash2, Upload } from 'lucide-react';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateTime, formatNumber } from '../../utils/dateFormatting';
+import { formatDate, formatDateTime, formatNumber } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import {
   WaiverAttachmentMode,
@@ -42,6 +42,9 @@ interface WaiverAttachmentListProps {
   onRemove?: (attachment: WaiverAttachment) => void;
   /** The document being removed, whose button is disabled meanwhile. */
   removingId?: string | null;
+  /** How many documents retention removed, and when (the request's own record). */
+  removedCount?: number | null | undefined;
+  removedAt?: string | null | undefined;
 }
 
 function sizeLabel(bytes: number): string {
@@ -67,6 +70,8 @@ export const WaiverAttachmentList: React.FC<WaiverAttachmentListProps> = ({
   onAttached,
   onRemove,
   removingId = null,
+  removedCount = null,
+  removedAt = null,
 }) => {
   const tz = useTimezone();
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -148,8 +153,14 @@ export const WaiverAttachmentList: React.FC<WaiverAttachmentListProps> = ({
       <h3 id={`waiver-docs-${requestId}`} className="text-theme-text-primary mb-2 text-sm font-semibold">
         Supporting documents
       </h3>
+      {removedCount && removedCount > 0 && removedAt ? (
+        <p className="text-theme-text-muted mb-2 text-sm">
+          {removedCount} {removedCount === 1 ? 'document' : 'documents'} removed under retention on{' '}
+          {formatDate(removedAt, tz)}.
+        </p>
+      ) : null}
       {attachments.length === 0 ? (
-        <p className="text-theme-text-muted text-sm">No documents are on file for this request.</p>
+        !removedCount && <p className="text-theme-text-muted text-sm">No documents are on file for this request.</p>
       ) : (
         <ul className="space-y-2">
           {attachments.map((attachment) => {

@@ -137,6 +137,10 @@ export interface AttendanceWaiverRequest {
   can_attach?: boolean;
   /** The member may remove a filed document now (pending; never the last one a policy requires). */
   can_remove_attachment?: boolean;
+  /** Documents the retention sweep removed from this request; null when it never removed any. */
+  attachments_removed_count?: number | null;
+  /** When the latest sweep removed them (UTC). */
+  attachments_removed_at?: string | null;
   /** The documents filed with the request; the service always sets this. */
   attachments?: WaiverAttachment[];
   actions: AttendanceWaiverActionEntry[];
