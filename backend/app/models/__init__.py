@@ -154,6 +154,7 @@ from app.models.event_request import (
     EventRequest,
     EventRequestActivity,
     EventRequestEmailTemplate,
+    EventRequestFeedback,
     EventRequestStatus,
 )
 from app.models.external_shift_hours import (
@@ -566,6 +567,7 @@ from app.models.training import (
     ProgramPhase,
     ProgramRequirement,
     RequirementProgress,
+    RollingRequirementLastMet,
     Shift,
     ShiftAttendance,
     ShiftCall,
@@ -845,6 +847,7 @@ __all__ = [
     "EventApparatusUnit",
     "EventRequest",
     "EventRequestActivity",
+    "EventRequestFeedback",
     "EventRequestEmailTemplate",
     "EventRequestStatus",
     # Training models
@@ -854,6 +857,7 @@ __all__ = [
     "TrainingRequirement",
     "TrainingSession",
     "TrainingSessionRequirement",
+    "RollingRequirementLastMet",
     "TrainingRequirementOverride",
     "TrainingApproval",
     "TrainingProgram",

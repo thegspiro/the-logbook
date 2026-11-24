@@ -997,13 +997,15 @@ department's location list and another event already has it at that time,
 saving is refused. The message names up to three of the clashing events.
 Choose another room or time.
 
-**Drafts.** A draft is visible only to officers who can manage events. When it
+**Drafts.** A draft is visible only to officers who can manage events, and,
+_(2026-11-23)_ for a Training event, to training managers. When it
 is ready, open it and select **Publish**. Editing and saving a draft keeps it a
 draft; before 2026-10-26 the edit form did not know the event was a draft, and
 saving it published it. _(2026-11-15)_ Nobody can check in to a draft, by QR
 code, NFC tag, kiosk or self check-in, and its QR code does not work until it
 is published. Its folder and training session stay hidden from anyone who
-cannot manage events.
+cannot see the draft, and the training calendar leaves it out for them too.
+Only an officer who can manage events can publish it.
 
 _(2026-11-15)_ Nobody can check in to a draft: a QR scan, an NFC tap and a
 kiosk all refuse it with "Cannot check in to an unpublished event", and its QR
@@ -3372,6 +3374,39 @@ summary does not include them.
 > event, with an outcome note, one apparatus ticked, two materials and **Photos taken, with
 > the host's consent** chosen; and the **Materials handed out** card on
 > Outreach Impact.
+
+#### Feedback from requesters
+
+**Who can do this:** officers who can manage events.
+
+Once a request is marked **Completed**, its status page can ask the requester
+how it went, and the **Completed** email links to it. The questions are a form
+from **Forms**, so you write your own and choose when each one appears: a
+question can show only when an earlier answer equals a value, contains it, or
+is at least or at most a number.
+
+To turn it on, open **Manage Events → Settings → Request Handling → Feedback
+From Requesters**:
+
+1. Choose a published form as the **Feedback form**, or select **Create the
+   starter feedback form** for one that asks **How did the visit go?** (1 to
+   5), **What went well?**, and **What could we do better?**, shown only at a
+   rating of 3 or less.
+2. Choose the **Rating question**: the answer the report averages. It must be
+   a number question, or a choice whose options are all whole numbers. The
+   starter form comes with it chosen.
+
+Change the questions in **Forms** like any other form. A requester answers
+once, and cannot change the answer afterwards. Their answers appear on the
+request under **Requester feedback**. An answer to a question marked
+**Sensitive** stays with the submission in **Forms**, and the request only says
+how many there are. The **Community Engagement** tab adds a **Requester
+feedback** line: the average rating and how many responded in the period. The
+printed summary adds the same row once anyone has answered.
+
+The link is added to the built-in status email. A request email template your
+department attached to the **Completed** trigger itself is sent as written,
+without it.
 
 ### Public Request Form
 

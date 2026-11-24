@@ -27,6 +27,7 @@ from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.attendance_lock import attendance_lock_http_error
 from app.api.dependencies import (
@@ -34,6 +35,7 @@ from app.api.dependencies import (
     require_permission,
     user_has_permission,
 )
+from app.api.draft_visibility import can_see_draft, visible_draft_types
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
@@ -45,6 +47,8 @@ from app.models.event import (
     EventType,
     RSVPStatus,
 )
+from app.models.forms import Form as FeedbackFormModel
+from app.models.forms import FormStatus
 from app.models.historical_import import ImportedRecordKind
 from app.models.notification import NotificationChannel
 from app.models.user import (
@@ -127,6 +131,7 @@ from app.services.event_organizer_service import (
     can_manage_organizers,
     is_event_organizer,
 )
+from app.services.event_request_service import get_pipeline_settings
 from app.services.event_service import (
     BULK_ADD_MAX_SIZE,
     DEFAULT_ALLOWED_RSVP_STATUSES,
@@ -163,6 +168,10 @@ from app.services.integration_services.notification_dispatch import (
 from app.services.membership_pipeline_service import MembershipPipelineService
 from app.services.notifications_service import NotificationsService
 from app.services.outreach_calendar_service import OutreachCalendarService
+from app.services.outreach_feedback_service import (
+    OutreachFeedbackService,
+    is_rating_field,
+)
 from app.services.qr_check_in_analytics import (
     device_type_from_user_agent,
     record_check_in_outcome,
@@ -842,6 +851,7 @@ async def list_events(
     if exclude_event_types:
         exclude_list = [t.strip() for t in exclude_event_types.split(",") if t.strip()]
 
+    draft_types = visible_draft_types(current_user)
     service = EventService(db)
     rows = await service.list_events(
         organization_id=current_user.organization_id,
@@ -854,11 +864,12 @@ async def list_events(
         end_after=end_after,
         end_before=end_before,
         include_cancelled=include_cancelled,
-        # Drafts are unannounced and for organizers only. The flag is the
-        # client's request, not its authority: the page sends it as
-        # `canManage`, and a member who sends it anyway gets published events.
-        include_drafts=include_drafts
-        and user_has_permission(current_user, "events.manage"),
+        # Drafts are unannounced and for those who may see them
+        # (draft_visibility). The flag is the client's request, not its
+        # authority: a member who sends it anyway gets published events, and
+        # a training manager gets Training drafts only.
+        include_drafts=include_drafts and draft_types is None,
+        include_draft_types=draft_types if include_drafts else None,
         mandatory_only=mandatory_only,
         recurrence_series_id=recurrence_series_id,
         skip=skip,
@@ -1086,6 +1097,11 @@ EVENT_SETTINGS_DEFAULTS = {
         # with the forms module, where counting rejects let anonymous traffic
         # exhaust a department's allowance and lock out legitimate submitters.
         "public_daily_limit": 50,
+        # The form a requester is offered once their request is Completed, and
+        # the question on it whose answer the report averages as the rating.
+        # None until a department chooses one: no feedback is asked for.
+        "feedback_form_id": None,
+        "feedback_rating_field_id": None,
         "tasks": [
             {
                 "id": "review_request",
@@ -1295,6 +1311,88 @@ async def list_fallback_position_options(
     return [{"id": r.id, "name": r.name, "slug": r.slug} for r in result.all()]
 
 
+@router.get("/settings/feedback-forms")
+async def list_feedback_form_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    The department's published forms, each with the questions that can serve
+    as its rating, for choosing the outreach feedback form in settings.
+
+    Listed here rather than read from Forms because choosing one is an events
+    setting: an officer who runs outreach need not be able to open Forms.
+
+    **Requires permission: events.manage**
+    """
+    forms = (
+        (
+            await db.execute(
+                select(FeedbackFormModel)
+                .where(
+                    FeedbackFormModel.organization_id
+                    == str(current_user.organization_id),
+                    FeedbackFormModel.status == FormStatus.PUBLISHED,
+                )
+                .options(selectinload(FeedbackFormModel.fields))
+                .order_by(FeedbackFormModel.name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        {
+            "id": str(form.id),
+            "name": form.name,
+            "rating_fields": [
+                {"id": str(f.id), "label": f.label}
+                for f in sorted(form.fields, key=lambda f: f.sort_order)
+                if is_rating_field(f)
+            ],
+        }
+        for form in forms
+    ]
+
+
+@router.post("/settings/feedback-forms/starter")
+async def create_starter_feedback_form(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Create the starter outreach feedback form and make it the department's.
+
+    A rating from 1 to 5, "What went well?", and "What could we do better?"
+    shown at a rating of 3 or less. The department can then edit it in Forms.
+    Calling it again returns the form already chosen rather than a second one.
+
+    **Requires permission: events.manage**
+    """
+    org = await db.get(Organization, str(current_user.organization_id))
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    form = await OutreachFeedbackService(db).create_starter_form(
+        org, str(current_user.id)
+    )
+    org = await db.get(Organization, str(current_user.organization_id))
+    pipeline = get_pipeline_settings(org)
+    await log_audit_event(
+        db=db,
+        event_type="events.feedback_form_set",
+        event_category="events",
+        severity="info",
+        event_data={"form_id": str(form.id), "starter": True},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return {
+        "form_id": str(form.id),
+        "form_name": form.name,
+        "rating_field_id": pipeline.get("feedback_rating_field_id"),
+    }
+
+
 @router.patch("/settings")
 async def update_event_settings(
     updates: EventSettingsUpdate,
@@ -1372,6 +1470,31 @@ async def update_event_settings(
                     )
                 ],
                 label="default coordinator",
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    # XC-1: the feedback form and its rating question are client-supplied ids
+    # the public status page then serves, so both are checked against this
+    # department, as the pair they will be after the save.
+    # Checked only when either value changes: the settings screen sends the
+    # whole pipeline on every save, and an unrelated save (a reordered task)
+    # must not fail because the chosen form has since been unpublished.
+    stored_pipeline = current_events.get("request_pipeline") or {}
+    form_id = pipeline_update.get(
+        "feedback_form_id", stored_pipeline.get("feedback_form_id")
+    )
+    rating_id = pipeline_update.get(
+        "feedback_rating_field_id", stored_pipeline.get("feedback_rating_field_id")
+    )
+    form_changed = form_id != stored_pipeline.get("feedback_form_id")
+    if form_changed and "feedback_rating_field_id" not in pipeline_update:
+        # A new form cannot keep the old form's question.
+        rating_id = None
+        pipeline_update["feedback_rating_field_id"] = None
+    if form_changed or rating_id != stored_pipeline.get("feedback_rating_field_id"):
+        try:
+            await OutreachFeedbackService(db).validate_settings(
+                str(current_user.organization_id), form_id, rating_id
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -1596,11 +1719,10 @@ async def get_event(
         user_id=current_user.id,
     )
 
-    # A draft answers 404 to a non-organizer, as the attachments route does, so
-    # a guessed id does not confirm an unannounced event exists.
-    if not event or (
-        event.is_draft and not user_has_permission(current_user, "events.manage")
-    ):
+    # A draft answers 404 to a caller who may not see it (can_see_draft), as
+    # the attachments route does, so a guessed id does not confirm an
+    # unannounced event exists.
+    if not event or (event.is_draft and not can_see_draft(event, current_user)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
         )
@@ -4222,7 +4344,7 @@ async def _load_event_for_attachment_read(
     event: Optional[Event] = result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    if event.is_draft and not user_has_permission(current_user, "events.manage"):
+    if event.is_draft and not can_see_draft(event, current_user):
         raise HTTPException(status_code=404, detail="Event not found")
     return event
 
@@ -4402,11 +4524,9 @@ async def get_event_folder(
     """
     service = EventService(db)
     event, _ = await service.get_event(event_id, current_user.organization_id)
-    # A draft's folder is named after its unannounced title; a non-organizer
-    # gets the same 404 the event itself answers (ADV-5).
-    if not event or (
-        event.is_draft and not user_has_permission(current_user, "events.manage")
-    ):
+    # A draft's folder is named after its unannounced title; a caller who
+    # may not see the draft gets the same 404 the event itself answers (ADV-5).
+    if not event or (event.is_draft and not can_see_draft(event, current_user)):
         raise HTTPException(status_code=404, detail="Event not found")
 
     docs_service = DocumentsService(db)

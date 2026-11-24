@@ -108,8 +108,11 @@ Info too _(2026-11-20)_.
 - **Description** is a textarea with a formatting toolbar that inserts
   Markdown around the selection.
 - **Drafts** — an event can be saved as a draft and published later
-  (`POST /events/{id}/publish`); drafts are hidden from members without
-  `events.manage`.
+  (`POST /events/{id}/publish`, `events.manage`). Who sees a draft is one
+  rule, `app/api/draft_visibility.py` _(2026-11-23)_: `events.manage` sees
+  every draft, `training.manage` sees Training drafts, nobody else sees one —
+  on the event, its attachments, folder and session, the events list and the
+  training calendar.
 - **Require RSVP** on a single event requires an **RSVP Deadline**
   (`EventCreate.validate_dates`); the form asks for it before submitting.
 - **Location double-booking is refused** by the server ("Location is already
@@ -1149,7 +1152,16 @@ opt-out applies. `GET /member-audience/options` and `POST
   whether photos were taken with the host's consent. The tab totals
   **Materials handed out** for the period, and the CSV export gains
   **Materials handed out**, **Photos** and **Outcome** columns; the printed
-  summary does not show them.
+  summary does not show them. _(2026-11-23)_ **Requester feedback**:
+  `request_pipeline.feedback_form_id` names a published form from Forms, and
+  `feedback_rating_field_id` the question averaged as the rating
+  (`GET /events/settings/feedback-forms`, `POST .../starter`, `events.manage`).
+  Once a request is Completed, `GET`/`POST /event-requests/status/{token}/feedback`
+  serve that form and take one response per request (the status token is the
+  credential; the Forms module's branching rules are enforced on submit; 409
+  once sent), stored in `event_request_feedback` with the rating copied in.
+  Officers read it at `GET /event-requests/{id}/feedback`, and the report adds
+  `feedback_responses`, `average_rating` and `rating_scale_max`.
 
 ---
 

@@ -253,6 +253,10 @@ export interface CommunityReachTotals {
   members_involved: number;
   requests_received: number;
   requests_completed: number;
+  /** Requester feedback received in the period. */
+  feedback_responses?: number;
+  /** Mean rating among those responses; null when none carried one. */
+  average_rating?: number | null;
 }
 
 /** Events that recorded both an expected audience and sign-ins. */
@@ -379,6 +383,8 @@ export interface CommunityEngagement {
   upcoming_events: number;
   turnout: CommunityTurnout;
   granularity: 'month' | 'year';
+  /** Top of the rating question's scale, for "out of 5"; null when no rating question is set. */
+  rating_scale_max?: number | null;
   by_period: CommunityReachBucket[];
   by_type: CommunityTypeBucket[];
   /** Everything handed out across the period, one line per item, most first. */

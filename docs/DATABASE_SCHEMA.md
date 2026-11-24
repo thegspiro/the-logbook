@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**421 tables · 6528 columns · 1399 foreign keys**
+**423 tables · 6541 columns · 1406 foreign keys**
 
 ---
 
@@ -260,6 +260,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`event_request_activity`](#event_request_activity) | `EventRequestActivity` | 9 | Audit trail for event request pipeline actions. |
 | [`event_request_email_templates`](#event_request_email_templates) | `EventRequestEmailTemplate` | 12 | Reusable email templates for the event request pipeline. |
+| [`event_request_feedback`](#event_request_feedback) | `EventRequestFeedback` | 7 | A requester's answers to the department's feedback form, one per request. |
 | [`event_requests`](#event_requests) | `EventRequest` | 37 | Public outreach event request. |
 
 ### Events
@@ -865,6 +866,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`renewal_tasks`](#renewal_tasks) | `RenewalTask` | 18 | Renewal Task model |
 | [`requirement_progress`](#requirement_progress) | `RequirementProgress` | 18 | Requirement Progress model |
 | [`requirement_progress_credits`](#requirement_progress_credits) | `RequirementProgressCredit` | 10 | Idempotency ledger for automated requirement-progress credit. |
+| [`rolling_requirement_last_met`](#rolling_requirement_last_met) | `RollingRequirementLastMet` | 6 | The last day the daily compliance-notice task found a member meeting a |
 | [`self_report_configs`](#self_report_configs) | `SelfReportConfig` | 15 | Self-Report Configuration model |
 | [`shift_assignments`](#shift_assignments) | `ShiftAssignment` | 15 | Assigns a specific member to a specific shift with a designated position. |
 | [`shift_attendance`](#shift_attendance) | `ShiftAttendance` | 8 | Shift Attendance model (Framework) |
@@ -3753,6 +3755,30 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_email_tpl_org` (`organization_id`)
+
+### `event_request_feedback`
+
+**EventRequestFeedback** · `app/models/event_request.py`
+
+> A requester's answers to the department's feedback form, one per request. Sent once a request is Completed, through the requester's status link. The answers themselves are a ``FormSubmission`` of the department's feedback form, so the Forms module's own screens can read them; this row ties that submission to the request. ``request_id`` is unique: the response is final once sent, and the constraint is what makes a second send (a double tap, a retried POST) a refusal rather than a second response (pitfall #36). ``rating`` is the answer to the question the department named as the rating, copied here when the response arrived, so the report's average does not move when the form is later edited or a question removed.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `request_id` | VARCHAR(36) | no | FK, UQ |  | → `event_requests.id` ON DELETE CASCADE |
+| `form_id` | VARCHAR(36) | yes | FK |  | → `forms.id` ON DELETE SET NULL |
+| `form_submission_id` | VARCHAR(36) | yes | FK |  | → `form_submissions.id` ON DELETE SET NULL |
+| `rating` | INTEGER | yes |  |  |  |
+| `submitted_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `idx_event_req_feedback_org_submitted` (`organization_id`, `submitted_at`)
+
+**Constraints**
+
+- UNIQUE `uq_event_request_feedback_request_id` (`request_id`)
 
 ### `event_requests`
 
@@ -12528,6 +12554,29 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_progress_credit_source` (`progress_id`, `source_type`, `source_id`)
 
+### `rolling_requirement_last_met`
+
+**RollingRequirementLastMet** · `app/models/training.py`
+
+> The last day the daily compliance-notice task found a member meeting a rolling requirement. A rolling requirement has no period to key a non-compliance notice on: its window ends on the grading day. Keying the notice on the requirement alone stopped the daily repeat (#4482) but told a member only once ever. The notice key carries this date instead (owner decision 2026-11-23), so every day of one lapse shares a key and a lapse after a recovery has a new one. Written by ``compliance_member_notices`` only; one row per member and requirement, moved forward on each run that finds the requirement met.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `requirement_id` | VARCHAR(36) | no | FK |  | → `training_requirements.id` ON DELETE CASCADE |
+| `last_met_on` | DATE | no |  |  |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_rolling_requirement_last_met_organization_id` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_rolling_last_met_user_req` (`user_id`, `requirement_id`)
+
 ### `self_report_configs`
 
 **SelfReportConfig** · `app/models/training.py`
@@ -14175,7 +14224,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (502 references)
+### → `users` (503 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14568,6 +14617,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `requirement_progress_credits` | `applied_by` | SET NULL | yes |
 | `return_requests` | `requester_id` | CASCADE | no |
 | `return_requests` | `reviewed_by` | SET NULL | yes |
+| `rolling_requirement_last_met` | `user_id` | CASCADE | no |
 | `rsvp_history` | `changed_by` | SET NULL | yes |
 | `rsvp_history` | `user_id` | CASCADE | no |
 | `saved_ballot_templates` | `created_by` | SET NULL | yes |
@@ -14682,7 +14732,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (339 references)
+### → `organizations` (341 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14781,6 +14831,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `event_external_attendees` | `organization_id` | CASCADE | no |
 | `event_hour_mappings` | `organization_id` | CASCADE | no |
 | `event_request_email_templates` | `organization_id` | CASCADE | no |
+| `event_request_feedback` | `organization_id` | CASCADE | no |
 | `event_requests` | `organization_id` | CASCADE | no |
 | `event_rsvps` | `organization_id` | CASCADE | no |
 | `event_templates` | `organization_id` | CASCADE | no |
@@ -14949,6 +15000,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `reorder_receipts` | `organization_id` | CASCADE | no |
 | `reorder_requests` | `organization_id` | CASCADE | no |
 | `return_requests` | `organization_id` | CASCADE | no |
+| `rolling_requirement_last_met` | `organization_id` | CASCADE | no |
 | `saved_ballot_templates` | `organization_id` | CASCADE | no |
 | `saved_reports` | `organization_id` | CASCADE | no |
 | `scheduled_emails` | `organization_id` | CASCADE | no |
@@ -15185,6 +15237,24 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_forwards` | `position_id` | CASCADE | yes |
 | `user_positions` | `position_id` | CASCADE | no |
 
+### → `training_requirements` (13 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_classes` | `requirement_id` | SET NULL | yes |
+| `course_cohort_classes` | `requirement_id` | SET NULL | yes |
+| `knowledge_test_attempts` | `requirement_id` | SET NULL | yes |
+| `knowledge_tests` | `requirement_id` | SET NULL | yes |
+| `program_requirements` | `requirement_id` | CASCADE | no |
+| `recertification_pathways` | `source_requirement_id` | CASCADE | yes |
+| `requirement_progress` | `requirement_id` | CASCADE | no |
+| `rolling_requirement_last_met` | `requirement_id` | CASCADE | no |
+| `skill_templates` | `requirement_id` | SET NULL | yes |
+| `skill_tests` | `requirement_id` | SET NULL | yes |
+| `training_requirement_overrides` | `requirement_id` | CASCADE | no |
+| `training_session_requirements` | `requirement_id` | CASCADE | no |
+| `training_sessions` | `requirement_id` | SET NULL | yes |
+
 ### → `training_courses` (12 references)
 
 | From table | Column | On delete | Nullable |
@@ -15201,23 +15271,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_effectiveness_evaluations` | `course_id` | SET NULL | yes |
 | `training_records` | `course_id` | SET NULL | yes |
 | `training_sessions` | `course_id` | SET NULL | yes |
-
-### → `training_requirements` (12 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `course_classes` | `requirement_id` | SET NULL | yes |
-| `course_cohort_classes` | `requirement_id` | SET NULL | yes |
-| `knowledge_test_attempts` | `requirement_id` | SET NULL | yes |
-| `knowledge_tests` | `requirement_id` | SET NULL | yes |
-| `program_requirements` | `requirement_id` | CASCADE | no |
-| `recertification_pathways` | `source_requirement_id` | CASCADE | yes |
-| `requirement_progress` | `requirement_id` | CASCADE | no |
-| `skill_templates` | `requirement_id` | SET NULL | yes |
-| `skill_tests` | `requirement_id` | SET NULL | yes |
-| `training_requirement_overrides` | `requirement_id` | CASCADE | no |
-| `training_session_requirements` | `requirement_id` | CASCADE | no |
-| `training_sessions` | `requirement_id` | SET NULL | yes |
 
 ### → `meeting_minutes` (11 references)
 
@@ -15505,6 +15558,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `evaluation_signatures` | `evaluation_id` | CASCADE | no |
 | `evaluation_steps` | `evaluation_id` | CASCADE | no |
 
+### → `forms` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_request_feedback` | `form_id` | SET NULL | yes |
+| `form_fields` | `form_id` | CASCADE | no |
+| `form_integrations` | `form_id` | CASCADE | no |
+| `form_submissions` | `form_id` | CASCADE | no |
+| `prospect_form_requests` | `form_id` | SET NULL | yes |
+
 ### → `history_documents` (5 references)
 
 | From table | Column | On delete | Nullable |
@@ -15561,14 +15624,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_template_equipment_checks` | `equipment_check_template_id` | CASCADE | no |
 | `template_change_logs` | `template_id` | CASCADE | no |
 
-### → `forms` (4 references)
+### → `form_submissions` (4 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `form_fields` | `form_id` | CASCADE | no |
-| `form_integrations` | `form_id` | CASCADE | no |
-| `form_submissions` | `form_id` | CASCADE | no |
-| `prospect_form_requests` | `form_id` | SET NULL | yes |
+| `event_request_feedback` | `form_submission_id` | SET NULL | yes |
+| `event_requests` | `form_submission_id` | SET NULL | yes |
+| `prospect_form_requests` | `submission_id` | SET NULL | yes |
+| `prospective_members` | `form_submission_id` | SET NULL | yes |
 
 ### → `grant_applications` (4 references)
 
@@ -15700,14 +15763,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `crr_activity_measures` | `activity_type_id` | CASCADE | no |
 | `crr_activity_type_tags` | `activity_type_id` | CASCADE | no |
 
-### → `form_submissions` (3 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `event_requests` | `form_submission_id` | SET NULL | yes |
-| `prospect_form_requests` | `submission_id` | SET NULL | yes |
-| `prospective_members` | `form_submission_id` | SET NULL | yes |
-
 ### → `inventory_vendors` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -15833,6 +15888,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `member_dues` | `dues_schedule_id` | CASCADE | no |
 | `zeffy_campaign_links` | `dues_schedule_id` | SET NULL | yes |
+
+### → `event_requests` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_request_activity` | `request_id` | CASCADE | no |
+| `event_request_feedback` | `request_id` | CASCADE | no |
 
 ### → `event_rsvps` (2 references)
 
@@ -16106,12 +16168,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `event_apparatus_seats` | `unit_id` | CASCADE | no |
-
-### → `event_requests` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `event_request_activity` | `request_id` | CASCADE | no |
 
 ### → `event_templates` (1 references)
 

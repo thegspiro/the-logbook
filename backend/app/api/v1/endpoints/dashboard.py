@@ -7,7 +7,7 @@ including an admin-level summary for Chiefs and department leaders.
 
 import heapq
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -628,6 +628,9 @@ class CommunityReachTotals(BaseModel):
     members_involved: int
     requests_received: int
     requests_completed: int
+    # Requester feedback received in the period, and its average rating.
+    feedback_responses: int = 0
+    average_rating: Optional[float] = None
 
 
 class CommunityTurnout(BaseModel):
@@ -762,6 +765,9 @@ class CommunityEngagement(BaseModel):
     upcoming_events: int
     turnout: CommunityTurnout
     granularity: Literal["month", "year"]
+    # The top of the rating question's scale (5 for the starter form), for
+    # "out of 5"; None when no rating question is set.
+    rating_scale_max: Optional[int] = None
     by_period: list[CommunityReachBucket]
     by_type: list[CommunityTypeBucket]
     # Everything handed out across the period, one line per item, most first.
