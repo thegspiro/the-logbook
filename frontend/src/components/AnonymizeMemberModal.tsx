@@ -99,6 +99,8 @@ export const AnonymizeMemberModal: React.FC<AnonymizeMemberModalProps> = ({
               <li>Their original application</li>
               <li>Certificates uploaded with their training reports</li>
               <li>Documents attached to their training records</li>
+              <li>Their personal Member Files folder and its documents</li>
+              <li>Home address and reason for leaving on their separation letters</li>
             </ul>
           </div>
           <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-3">

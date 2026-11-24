@@ -1960,6 +1960,12 @@ requirement exempts, because they joined before it, are left out. See
 >   period.
 > - An **hours** requirement is graded here from shift attendance only when it
 >   is ticked. The Training screens still grade it from training records.
+>   _(2026-11-23)_ A ticked hours row now counts the same hours as My Hours:
+>   shifts an officer has closed out, counted outside shifts and approved
+>   pre-shift work, inside the requirement's own compliance period, with
+>   training waivers and leave applied the way the Training screens apply
+>   them. Before, it counted open shifts too and used the report's own period,
+>   so its figure could disagree with My Hours.
 
 ![Shift Compliance: the Requirements, Requirement Checks, Checks Met and Checks Not Met cards above each requirement, a requirement nobody is held to reading Not applicable](./images/03-14-scheduling-reports.png)
 

@@ -1278,22 +1278,25 @@ department keeps its record of what they did.
 3. Read what is removed and what is kept. Type the member's name to confirm,
    and select **Anonymize**. To back out, select **Keep their details**.
 
-| Removed                                                                 | Kept                                      |
-| ----------------------------------------------------------------------- | ----------------------------------------- |
-| Name, email, phone numbers and address                                  | Training, attendance and hours            |
-| Date of birth, photo and emergency contacts                             | Equipment custody and dues history        |
-| Sign-in credentials                                                     | Audit log and election records, unchanged |
-| Medical screening details, and the reasons given for leaves and waivers |                                           |
-| Their original application                                              |                                           |
-| Certificates uploaded with their training reports _(2026-11-17)_        |                                           |
-| Documents attached to their training records _(2026-11-20)_             |                                           |
+| Removed                                                                        | Kept                                      |
+| ------------------------------------------------------------------------------ | ----------------------------------------- |
+| Name, email, phone numbers and address                                         | Training, attendance and hours            |
+| Date of birth, photo and emergency contacts                                    | Equipment custody and dues history        |
+| Sign-in credentials                                                            | Audit log and election records, unchanged |
+| Medical screening details, and the reasons given for leaves and waivers        |                                           |
+| Their original application                                                     |                                           |
+| Certificates uploaded with their training reports _(2026-11-17)_               |                                           |
+| Documents attached to their training records _(2026-11-20)_                    |                                           |
+| Their personal Member Files folder and its documents _(2026-11-23)_            |                                           |
+| Home address and reason for leaving on their separation letters _(2026-11-23)_ |                                           |
 
 What is kept stays linked to a placeholder named "Former Member".
 
-**Also removed, though the dialog does not list them yet** _(2026-11-23)_:
-the member's personal **Member Files** folder in Documents, with everything in
-it, and the home address and reason for leaving on their separation letters
-(the letters and their item lists stay). Where the member is named as a
+**The personal folder and separation letters** _(2026-11-23)_: the
+member's personal **Member Files** folder in Documents is deleted with
+everything in it, and their separation letters lose the home address and the
+reason for leaving (the letters and their item lists stay). The dialog lists
+both under **Removed** since 2026-11-24. Where the member is named as a
 class's instructor, the name becomes **Former member**. An excused meeting
 stays excused. If a document in their personal folder is catalogued in History
 or backs a submitted finance record, anonymizing is refused until it is

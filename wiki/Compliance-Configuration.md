@@ -111,7 +111,12 @@ catch-up periods included). Neither sends a text message.
 A **rolling** requirement ("72 hours in any 12 months") has no deadline: it is
 met or short on every day. It gets no reminder (a catch-up deadline aside), and
 the non-compliance notice lists it once, not again each day while it stays
-short (fixed 2026-11-21; it used to send both emails daily).
+short (fixed 2026-11-21; it used to send both emails daily). Since 2026-11-23
+it is listed **once per lapse**: the daily task remembers the last date the
+member met it, so a member who catches up and later falls short again is
+notified again. Those dates start with the first run after the upgrade; a
+member already told before then is not re-emailed until they have met it and
+lapsed once more.
 
 A member who has turned training reminders off in their own email settings is
 not sent either, unless the department made that email kind required.
@@ -149,6 +154,15 @@ department.
 
 Then each requirement still has to apply to the member on its own terms — join
 date, rank and membership type — before it counts.
+
+**Admin-hours targets come from the same profile** _(owner decision
+2026-11-23)_. A member's **Required Admin Hours** are those of the profile
+chosen above, when it sets any. When it sets none, they come from the
+highest-priority matching profile that does. Before, admin hours chose a
+profile with matching rules of their own that ignored the **junior** option,
+so a junior member graded under a Junior profile could take the admin-hours
+targets of the profile matching their stored membership type (often
+Probationary) — one member under two profiles.
 
 > **A profile saved with no Required Training Requirements ticked grades its
 > members against nothing**, so every one of them reads N/A and drops out of the

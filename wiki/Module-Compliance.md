@@ -194,6 +194,48 @@ POST   /api/v1/training/certifications/process-alerts/all-orgs  # Cert alert cro
 
 ---
 
+## Compliance changes of 2026-11-23
+
+Owner decisions of 2026-11-23 ("start A-E, accept all recommended"). Defaults
+taken are in `docs/KNOWN_LIMITATIONS.md`, "Compliance Consistency — Defaults
+Taken".
+
+- **Former members read "Not a Current Member"** (#4606). The member profile's
+  compliance card and the officer's view of a member (the Training History
+  page's **Requirements** section) no longer grade anyone whose account status
+  is outside **Active** / **Probationary** (so **Leave** and **Suspended**
+  too) or whose account was deleted. The card is grey with one sentence saying
+  the person is not graded; their records are still listed. The matrix
+  already left them out.
+- **Shift Compliance hours rows use the shared grader** (#4606). A
+  shift-credited Hours requirement is graded like a Shifts one: hours on
+  finalized shifts, counted outside shifts and approved pre-shift work on
+  finalized shifts, over the requirement's own window, with training waivers
+  applied. Hours on a shift not yet finalized stop counting until it is.
+  Before, the report used its own period and a leave-only adjustment for
+  rolling requirements.
+- **The monthly average counts a partly excused month for its unexcused
+  share** (#4606): half excused is half a month, with all its hours. A wholly
+  excused month is still left out. The officer's monthly breakdown uses the
+  same rule.
+- **The dashboard compliance percentage has one decimal** (#4606), the Admin
+  hub's figure, so the two cannot differ by rounding.
+- **Annual and monthly report API:** `record_completeness.records_with_certification`
+  is renamed `records_with_course_name` (#4606).
+- **Admin-hours targets come from the profile that grades the member's
+  training** (#4612), falling back to the highest-priority matching profile
+  that sets admin hours. See [Compliance Configuration](Compliance-Configuration#how-a-members-profile-is-chosen).
+- **A rolling requirement missed again is notified again** (#4614). The daily
+  task stores the last date each member met each rolling requirement
+  (`rolling_requirement_last_met`), so the non-compliance notice lists a
+  rolling requirement once per lapse rather than once ever. This updates the
+  2026-11-21 bullet above ("lists them once per member").
+- **A correction reopens a completed program requirement** (#4621) when it
+  takes the member below the target; training officers are emailed and
+  notified. See [Training](Module-Training#training-compliance-and-waivers-2026-11-23).
+
+---
+
 ## Recent Changes (2026-05-29)
 
 ### Configurable Evaluation Period (Current vs. Prior Month)

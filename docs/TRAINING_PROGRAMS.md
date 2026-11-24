@@ -324,7 +324,7 @@ is locked.
 - Real-time progress calculation
 - Completion percentage tracking (any completed/verified/waived requirement counts as 100%, including non-numeric types)
 - Requirement-level progress with officer verification
-- Enrollment rollup = average of required requirements' percentages, auto-completing at 100% (and re-opening if it later drops below 100%)
+- Enrollment rollup = average of required requirements' percentages, auto-completing at 100% (and re-opening if it later drops below 100%, except after a correction to credit already given — see below)
 - Officer-entered knowledge-test scoring with pass/fail and attempt limits
 - Automatic feeds from shift reports, approved training sessions, and skills tests
 - Progress notes and history
@@ -1563,7 +1563,20 @@ const progress = {
 - **Enrollment rollup**: the enrollment's overall percentage is the **average of
   its _required_ requirements' percentages**. It auto-completes at 100% and, if a
   completed enrollment later drops below 100% (e.g. a new required requirement is
-  added or an over-count is corrected down), it **re-opens to `active`**.
+  added), it **re-opens to `active`**.
+- **A correction reopens the requirement, not the enrollment** _(owner decision
+  2026-11-23)_. When a correction to credit already given — an edited shift
+  report or a re-finalized session (the restate path of
+  `apply_requirement_credit`) or a voided credited record
+  (`revoke_requirement_credit`) — takes a `COMPLETED` requirement below its
+  target, `_reopen_if_below_target` sets it back to `IN_PROGRESS` and clears
+  `completed_at`; a later restore completes it again. `VERIFIED` and `WAIVED`
+  rows and requirements with no numeric target are left alone. On these paths
+  the enrollment's completion, any phase advancement and issued certificates
+  stand (`keep_enrollment_completion` / `keep_completed`); every other progress
+  write keeps the re-open rule above. The training officers get a bell notice
+  and the `program_requirement_reopened` email (`program_requirement_reopen.py`;
+  migration `bfb747c095c3`).
 
 #### Knowledge-Test Scoring
 
@@ -2768,7 +2781,7 @@ When creating a training session linked to a program:
 | Requirement changed from annual to quarterly mid-year | Existing progress is recalculated against the new frequency; members may see progress reset                                                       |
 | Category-based requirement with deleted category      | Records already tagged with the category still count; new records cannot be tagged with the deleted category                                      |
 | Requirement marked completed/verified/waived          | Progress percentage is set to 100 directly, so non-numeric types (checklist, skills, certification, knowledge test) advance the enrollment rollup |
-| Completed enrollment drops below 100%                 | Enrollment re-opens to `active` (e.g. a new required requirement is added, or an over-count is corrected down)                                    |
+| Completed enrollment drops below 100%                 | Enrollment re-opens to `active` (e.g. a new required requirement is added); a credit correction reopens only the requirement                      |
 | Knowledge test with `max_attempts` exhausted          | Further scores are rejected once attempts are used up and the requirement is not yet satisfied                                                    |
 
 ### Waiver Interaction Edge Cases
