@@ -13,7 +13,7 @@ template included, and narrows the enum back. The feedback itself, in
 ``event_request_feedback``, is not touched either way.
 
 Revision ID: d41f7a2c9e58
-Revises: 241c1cc27313
+Revises: bbb6eac6ae34
 Create Date: 2026-11-24 05:00:00.000000
 """
 
@@ -24,7 +24,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d41f7a2c9e58"
-down_revision: Union[str, None] = "241c1cc27313"
+down_revision: Union[str, None] = "bbb6eac6ae34"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
