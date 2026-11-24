@@ -16,6 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4654](https://github.com/thegspiro/the-logbook/pull/4654) (branch
+`claude/friendly-babbage-2isqey`)**: Feature 04
+(Storefront & payments), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here: this session's environment restricts pushes to its own
+assigned branch rather than a freely-chosen
+`claude/security-review-storefront-payments` name.
+
+PR #4644 (Feature 03, Public surface & webhooks, pass 17 — fixed PUB-15,
+five public-surface audit events stamped platform-level instead of
+org-attributed) had already merged before this iteration started; row 03
+marked ✅ above. (PR #4643, a duplicate pass opened by a concurrent watchdog
+session for the same feature at nearly the same moment, found 0 findings
+and was correctly closed in favor of #4644's more thorough one.)
+
+Real delta: window cancel/fulfill lifecycle rules (W67b-12, -16), overpayment
+handling on a PayPal capture applied for more than the balance (W67b-7), a
+new payment-report-rejection endpoint (W67b-14), and a negative-price guard
+(W67b-6) — all owner-decided hardening, all correctly implemented against
+the feature's established patterns (locking, separation of duties,
+org-scoping, the audit-log organization_id fallback, bounded text fields).
+**0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/SF-04-storefront-payments.md`'s **Pass 17** section.
+
+Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
+approvals) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 17, PR #4644, merged), preserved for history</summary>
+
 **PR [#4644](https://github.com/thegspiro/the-logbook/pull/4644) (branch
 `claude/friendly-babbage-8lhliy`)**: Feature 03 (Public surface &
 webhooks), pass 17 — watchdog pickup (the dedicated `/loop 30m
@@ -27696,7 +27728,7 @@ iteration's commit" rule.
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                                                                                                                          | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                                                                                                                           | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (51 unauth routes, added pass 16), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                                                                                 | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ⬜     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (9 routes, added pass 17)                                                                                                                                                                 | ⬜     |
@@ -27787,6 +27819,55 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-24 — Feature 03 (Public surface & webhooks, pass 17) merged (PR #4644, PUB-15 fixed); Feature 04 (Storefront & payments, pass 17): watchdog pickup, real delta (window lifecycle rules, overpayment handling, payment-report rejection, negative-price guard), 0 fixed, 0 new findings
+
+PR #4644 merged; row 03 confirmed ✅ above. (PR #4643, a duplicate pass for
+the same feature opened by a concurrent watchdog session at nearly the same
+moment, found 0 findings and was closed in favor of #4644's more thorough
+one — the orchestrating watchdog turn resolved the resulting `PROGRESS.md`/
+`PUB-03` merge conflict between the two branches by hand, keeping #4644's
+content.) A fresh `list_pull_requests` (state=open) found zero
+`claude/security-review-*` heads, so this iteration continued to Step 1: row
+04 (Storefront & payments) was the next ⬜ row.
+
+Baseline: pass 16's merge `381b447d4` (PR #4359). Real delta: 23 files,
++2008/-631 across 25 non-merge commits, all owner-decided (`W67b-*`)
+hardening — window cancel/fulfill lifecycle rules (`cancel_window` refuses
+while any open order holds money or an unverified payment report;
+`fulfill_window` requires the window closed and every order settled or
+cancelled; both replace a bare status setter that skipped those checks),
+overpayment handling on a PayPal capture applied for more than the balance
+(admin-facing `record_payment` still refuses an overpayment; only the
+internal webhook path opts in), a new `reject-payment-report` endpoint
+(locked read, same SF-9 shape as every other settlement path; its audit
+event's `user_id=` keyword resolves `organization_id` through
+`AuditLogger`'s own fallback — the same mechanism PUB-15 just relied on,
+confirmed by reading `create_log_entry` directly), and a negative-price
+guard across product create/update, offering replacement, and order-line
+pricing. Route count 48 → 49 (the one new route), re-enumerated by AST; all
+49 carry an auth dependency. **0 fixed, 0 new findings** — the real delta is
+hardening that already applies every established pattern correctly; SF-1
+through SF-11, SF8-04-1/2/3 and SF14-04-1 all re-verified FIXED and
+unchanged. Full write-up: `docs/security-review/SF-04-storefront-payments.md`'s
+**Pass 17** section.
+
+**Completion gate:** `flake8`, `black --check` (26.10.1) and
+`isort --check-only` on `app/ tests/ alembic/` all clean (via
+`/usr/bin/python3.13`, matching CI's pins). `validate_migrations.py --strict`
+— 834 revisions, single head `0a4667186b2d`. `check_route_permissions.py
+--strict` — 339 routes, 0 errors/warnings. Schema docs already current (no
+model change this window). Scoped backend pytest (`-k "storefront or stripe
+or payment or refund or checkout or paypal"`) — 678 passed, 1 pre-existing
+environment-only skip (`pywebpush`). Standing guard suites (capacity
+locking, org-scoping ratchet, LIKE escaping, CSV sweep, the new
+`test_public_audit_organization_scoping`, account-status gates, log-call
+shape) — 117 passed. `npm run typecheck` — 0 errors. `npm run lint` — 0
+errors, 0 warnings.
+
+Row 04 → ✅ (pending this PR's merge). Next is Feature 05 (Finance &
+approvals) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-11-24 — Feature 02 (Permissions & roles, pass 17) merged (PR #4633); Feature 03 (Public surface & webhooks, pass 17): watchdog pickup, 1 fixed (PUB-15, 5 call sites), 0 new flagged findings, 1 pre-existing cross-cutting issue escalated
 
