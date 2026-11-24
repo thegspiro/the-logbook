@@ -2089,7 +2089,32 @@ Boundaries drawn without a ruling:
 - **Retired types, counts and tags still appear** when they have activity in
   the period.
 
-Still to build: yearly goals per count (phase 4).
+**Phase 4 — yearly goals (built 2026-11-24).** Events Settings → Outreach
+Goals sets a target for a calendar year, for any Outreach Impact headline
+figure (events held, people reached, member hours) or any CRR count. Outreach
+Impact, the Outreach Overview and the print summary show progress. Owner
+decisions of 2026-11-24: both kinds of goal, the calendar year, all three
+places.
+
+Boundaries drawn without a ruling:
+
+- **Pace is even through the year.** A goal is on pace when it has reached
+  the target times the share of the year gone. Seasonal work (school
+  programmes in term time, alarm drives in October) reads as behind or ahead
+  of pace in between; the mark on the bar shows by how much.
+- **Outreach Impact shows this year's goals whatever its period.** Goals run
+  for the calendar year, and the section says so.
+- **Outreach figures count exactly what Outreach Impact counts**
+  (`CommunityEngagementService.window_totals`); CRR counts sum every
+  activity's quantities in the year, log entries and activities at events
+  alike.
+- **A retired count keeps its goals,** and its progress keeps counting
+  activities recorded before it was retired. Deleting an activity type the
+  department added removes its counts' goals with it.
+- **Last year, this year and next year can be edited.** An older year's goals
+  can be read through the API but are not offered on the screen.
+- **No goal for requests completed.** It is a headline figure, but whether a
+  request finishes depends on the requester as much as the department.
 
 **The footer credit is hidden on a phone,** with the rest of its line: a link
 on every page's footer would be a tap target under 44px on every route. The

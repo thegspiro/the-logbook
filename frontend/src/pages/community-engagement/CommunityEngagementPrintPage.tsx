@@ -19,6 +19,8 @@ import PrintPageStyles from '../../components/print/PrintPageStyles';
 import { dashboardService } from '../../services/api';
 import type { CommunityEngagement, CommunityEventReach } from '../../services/api';
 import type { CrrImpact, CrrImpactCount } from '../../services/communicationsServices';
+import type { OutreachGoalYear } from '../../services/outreachGoalServices';
+import { GOAL_STATUS_LABELS, goalStatus } from './goalProgress';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDateCustom, formatNumber } from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
@@ -89,6 +91,53 @@ const TableScroll: React.FC<{ label: string; children: React.ReactNode }> = ({ l
   <div className="overflow-x-auto" data-mobile-scroll-region role="region" aria-label={label} tabIndex={0}>
     {children}
   </div>
+);
+
+/** This year's goals, each with its target, what it reached and its status. */
+const GoalsPrintSection: React.FC<{ goals: OutreachGoalYear }> = ({ goals }) => (
+  <>
+    <h2 style={SECTION}>Goals for {goals.year}</h2>
+    {goals.goals.length === 0 ? (
+      <p style={{ margin: 0 }}>No goals were set for {goals.year}.</p>
+    ) : (
+      <TableScroll label={`Goals for ${goals.year}`}>
+        <table style={{ ...TABLE, marginBottom: '8pt' }}>
+          <caption style={{ textAlign: 'left', fontWeight: 'bold', fontSize: '10pt', padding: '0 0 3pt 0' }}>
+            Goals for {goals.year}
+            {goals.year_complete ? '' : ' (the year so far)'}
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col" style={HEAD}>
+                Goal
+              </th>
+              <th scope="col" style={HEAD_NUM}>
+                Target
+              </th>
+              <th scope="col" style={HEAD_NUM}>
+                Reached
+              </th>
+              <th scope="col" style={HEAD}>
+                Status
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {goals.goals.map((goal) => (
+              <tr key={goal.id}>
+                <th scope="row" style={{ ...CELL, fontWeight: 'normal' }}>
+                  {goal.label}
+                </th>
+                <td style={NUM}>{formatNumber(goal.target)}</td>
+                <td style={NUM}>{formatNumber(goal.actual)}</td>
+                <td style={CELL}>{GOAL_STATUS_LABELS[goalStatus(goal, goals.year_complete)]}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableScroll>
+    )}
+  </>
 );
 
 /** "Smoke alarm install · Alarms installed 5; Homes 2": a group's counts on one line. */
@@ -529,6 +578,7 @@ const CommunityEngagementPrintPage: React.FC = () => {
             })
           )}
 
+          {report.goals && <GoalsPrintSection goals={report.goals} />}
           {report.crr && <CrrPrintSection crr={report.crr} />}
 
           <h2 style={SECTION}>Outreach events</h2>

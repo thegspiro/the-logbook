@@ -483,6 +483,7 @@ from app.models.operational_rank import OperationalRank
 from app.models.org_chart import OrgChartNode, OrgChartNodeHolder
 from app.models.organization_lock import OrganizationLock
 from app.models.organization_officer import OrganizationOfficer
+from app.models.outreach_goal import OutreachGoal
 from app.models.passkey import UserPasskey, WebAuthnChallenge
 from app.models.pending_file_deletion import (
     PendingDeletionReason,
@@ -840,6 +841,7 @@ __all__ = [
     "CrrActivityType",
     "CrrActivityTypeTag",
     "CrrTag",
+    "OutreachGoal",
     "ApparatusEventTemplateSeat",
     "ApparatusEventTemplateUnit",
     "EventApparatusPlan",

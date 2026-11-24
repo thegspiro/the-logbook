@@ -3,6 +3,7 @@
  */
 
 import type { AxiosRequestConfig } from 'axios';
+import type { OutreachGoalYear } from './outreachGoalServices';
 import api from './apiClient';
 import type { NotificationLogScope, Standing } from '../constants/enums';
 import type {
@@ -391,6 +392,8 @@ export interface CommunityEngagement {
   materials?: CommunityMaterial[];
   recent_events: CommunityEventReach[];
   crr?: CrrImpact;
+  /** This calendar year's outreach goals, whatever `period` is. */
+  goals?: OutreachGoalYear;
 }
 
 export type WidgetPeriod = 'month' | 'quarter' | 'year' | 'rolling_30';

@@ -45,6 +45,7 @@ _EMPTY_REPORT = {
         "by_zip": [],
         "unplaced_activities": 0,
     },
+    "goals": {"year": 2026, "year_fraction": 0.5, "year_complete": False, "goals": []},
 }
 
 
