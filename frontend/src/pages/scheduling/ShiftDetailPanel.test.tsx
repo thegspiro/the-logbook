@@ -1542,4 +1542,27 @@ describe('ShiftDetailPanel — a community outreach signup sheet', () => {
     await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
     expect(mockCreate.mock.calls[0]?.[1]).toMatchObject({ user_id: 'member-9', outreach_role: 'tour_guide' });
   });
+
+  it('is headed by the event it staffs, tagged as community outreach', async () => {
+    grantedPermissions.current = ['scheduling.view'];
+    renderWithRouter(
+      <ShiftDetailPanel
+        shift={{ ...outreachShift, outreach_title: 'Station Tour for Lincoln Elementary' } as never}
+        onClose={vi.fn()}
+      />
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Station Tour for Lincoln Elementary' });
+    expect(within(dialog).getByText('Community outreach')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Shift Details' })).not.toBeInTheDocument();
+  });
+
+  it('labels an open seat with the role still needed, not Volunteer', async () => {
+    grantedPermissions.current = ['scheduling.view'];
+    renderWithRouter(<ShiftDetailPanel shift={outreachShift as never} onClose={vi.fn()} />);
+
+    // Two Tour Guide seats are still needed, so two open seats carry the role.
+    await waitFor(() => expect(screen.getAllByText('Open role')).toHaveLength(2));
+    expect(screen.getAllByText('Tour Guide').length).toBeGreaterThanOrEqual(2);
+  });
 });

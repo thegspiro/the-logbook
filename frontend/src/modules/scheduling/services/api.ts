@@ -132,6 +132,8 @@ export interface ShiftRecord {
    */
   is_outreach?: boolean;
   outreach_roles?: OutreachRoleSlot[];
+  /** What an outreach sheet is for, e.g. "Station Tour for Lincoln Elementary". */
+  outreach_title?: string | null;
   /** `on_call` for a recall shift (crew at home). Absent on older responses. */
   duty_type?: ShiftDutyType;
   attendee_count: number;

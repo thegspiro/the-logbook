@@ -137,6 +137,7 @@ from app.services.call_tracking_service import CallTrackingService
 from app.services.event_request_service import (
     OUTREACH_SEAT_POSITION,
     outreach_role_label,
+    outreach_sheet_titles,
     resolve_outreach_signup_role,
 )
 from app.services.external_shift_hours_service import (
@@ -500,6 +501,7 @@ async def _enrich_shifts(
     outreach_ids = [str(s.id) for s in shifts if getattr(s, "is_outreach", False)]
     outreach_org = None
     outreach_needs: dict[str, list[dict]] = {}
+    outreach_titles: dict[str, str] = {}
     if outreach_ids:
         outreach_org = await service.db.scalar(
             select(Organization).where(Organization.id == str(organization_id))
@@ -524,6 +526,9 @@ async def _enrich_shifts(
         )
         for sheet_id, roles in event_rows.all():
             outreach_needs.setdefault(str(sheet_id), normalize_staffing_roles(roles))
+        outreach_titles = await outreach_sheet_titles(
+            service.db, outreach_org, str(organization_id), outreach_ids
+        )
 
     # Resolve shift officer names
     officer_ids = list({s.shift_officer_id for s in shifts if s.shift_officer_id})
@@ -610,6 +615,7 @@ async def _enrich_shifts(
             outreach_needs.get(str(s.id), []),
             rosters.get(str(s.id), []),
         )
+        d["outreach_title"] = outreach_titles.get(str(s.id))
         d["call_count"] = call_counts.get(str(s.id), 0)
         d["total_hours"] = hours_map.get(str(s.id))
         enriched.append(d)

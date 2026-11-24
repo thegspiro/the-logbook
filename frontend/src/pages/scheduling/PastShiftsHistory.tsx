@@ -26,6 +26,8 @@ import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
 import { formatHours, formatHoursExact } from '../../utils/hoursFormatting';
 import { ASSIGNMENT_STATUS_COLORS } from '../../constants/enums';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
+import OutreachTag from '../../modules/scheduling/components/OutreachTag';
+import { outreachTitle } from '../../modules/scheduling/utils/shiftBoard';
 import {
   ALL_TIME,
   MONTH_NAMES,
@@ -173,6 +175,12 @@ const ShiftRow: React.FC<{
       <div className="min-w-0 flex-1">
         <span className="sr-only">{fullDay}, </span>
         <p className="text-theme-text-primary text-sm font-semibold">{timeRange}</p>
+        {shift && outreachTitle(shift) && (
+          <p className="text-theme-text-primary mt-0.5 flex flex-wrap items-center gap-2 text-xs font-medium">
+            {outreachTitle(shift)}
+            <OutreachTag />
+          </p>
+        )}
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
           {/* Keyed on either field: `unit_number` is the required identifier
             and `name` an optional nickname, so gating on the name would hide

@@ -17,7 +17,8 @@ import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { useEligiblePositions } from '../../hooks/useEligiblePositions';
-import { shiftEndInstant, signupClosedReason } from '../../modules/scheduling/utils/shiftBoard';
+import OutreachTag from '../../modules/scheduling/components/OutreachTag';
+import { outreachTitle, shiftEndInstant, signupClosedReason } from '../../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../../modules/scheduling/hooks/useSignupWindow';
 
 interface OpenShiftsTabProps {
@@ -278,6 +279,12 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift, refre
                               <Clock className="h-5 w-5 text-violet-500 sm:h-6 sm:w-6" />
                             </div>
                             <div className="min-w-0">
+                              {outreachTitle(shift) && (
+                                <p className="text-theme-text-primary mb-0.5 flex flex-wrap items-center gap-2 text-sm font-semibold sm:text-base">
+                                  {outreachTitle(shift)}
+                                  <OutreachTag />
+                                </p>
+                              )}
                               <p className="text-theme-text-primary text-sm font-semibold sm:text-base">
                                 {formatTime(shift.start_time, tz)}
                                 {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}

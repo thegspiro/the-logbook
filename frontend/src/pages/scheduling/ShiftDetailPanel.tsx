@@ -21,6 +21,7 @@ import { useEligiblePositions } from '../../hooks/useEligiblePositions';
 import {
   effectiveLateSignupUntil,
   memberSignupClosedReason,
+  outreachTitle,
   rosterLocked,
   signupClosedReason,
   shiftEndInstant,
@@ -56,6 +57,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import OutreachRoleSignup from '../../modules/scheduling/components/OutreachRoleSignup';
+import OutreachTag from '../../modules/scheduling/components/OutreachTag';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import { trainingProgramService } from '../../services/trainingServices';
 import type { ShiftRecord, PlatoonRosterEntry } from '../../modules/scheduling/services/api';
@@ -348,7 +350,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   // server refuses a signup that does not name the role (tour guide,
   // educator) the member will fill. Its signup goes through OutreachRoleSignup,
   // never the per-seat buttons, which name only a seat.
-  const outreachRoles = shift.is_outreach ? (shift.outreach_roles ?? []) : [];
+  const outreachRoles = useMemo(
+    () => (shift.is_outreach ? (shift.outreach_roles ?? []) : []),
+    [shift.is_outreach, shift.outreach_roles]
+  );
   const isOutreachSheet = outreachRoles.length > 0;
   const openOutreachRoles = outreachRoles.filter((r) => r.remaining > 0);
   // A role that filled while the form was open falls back to the first one left.
@@ -1187,6 +1192,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const crewBoard = useMemo(() => {
     if (!hasApparatusPositions) return null;
     const usedIds = new Set<string>();
+    // On an outreach sheet an open seat is shown as one of the roles still
+    // needed. Which open seat gets which role is arbitrary; the counts are the
+    // server's own, so the board shows exactly what is left to fill.
+    const stillNeeded = outreachRoles.flatMap((role) => Array.from({ length: role.remaining }, () => role.label));
     return apparatusPositions.map((slot) => {
       const posName = typeof slot === 'string' ? slot : slot.position;
       const isRequired = typeof slot === 'string' ? true : slot.required;
@@ -1194,9 +1203,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
         (a) => a.position.toLowerCase() === posName.toLowerCase() && !usedIds.has(a.id)
       );
       if (filled) usedIds.add(filled.id);
-      return { position: posName, required: isRequired, assignment: filled || null };
+      const outreachRoleLabel = filled ? (filled.outreach_role_label ?? null) : (stillNeeded.shift() ?? null);
+      return { position: posName, required: isRequired, assignment: filled || null, outreachRoleLabel };
     });
-  }, [hasApparatusPositions, apparatusPositions, activeAssignments]);
+  }, [hasApparatusPositions, apparatusPositions, activeAssignments, outreachRoles]);
 
   // Active assignments not matching any apparatus position (extra crew)
   const extraAssignments = useMemo(() => {
@@ -1260,11 +1270,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
             <PositionEditor
               assignmentId={assignment.id}
               currentPosition={assignment.position}
+              {...(assignment.outreach_role_label ? { displayLabel: assignment.outreach_role_label } : {})}
               positionOptions={positionOptions}
               onSave={(id, newPos, curPos) => {
                 void handlePositionChange(id, newPos, curPos);
               }}
-              editable={canAssign && !isPast && !isRosterLocked}
+              editable={canAssign && !isPast && !isRosterLocked && !assignment.outreach_role_label}
               updatingPosition={pending.updatingPosition}
             />
             {assignment.is_training && (
@@ -1427,7 +1438,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               <div className="flex flex-wrap items-start gap-x-2 gap-y-3 sm:items-center">
                 <div className="min-w-0 flex-1">
                   <h2 id="shift-detail-title" className="text-theme-text-primary text-lg font-bold sm:text-xl">
-                    Shift Details
+                    {outreachTitle(shift) ?? 'Shift Details'}
                   </h2>
                   <p className="text-theme-text-secondary mt-1 truncate text-xs sm:text-sm">
                     {formatCalendarDate(shift.shift_date, {
@@ -1437,6 +1448,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       year: 'numeric',
                     })}
                   </p>
+                  {outreachTitle(shift) && <OutreachTag className="mt-1.5" />}
                   {platoonsEnabled && shift.platoon && (
                     <span className="mt-1.5 inline-block rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">
                       Platoon {shift.platoon}
@@ -2381,10 +2393,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     </p>
                   )}
                   <div className="space-y-2">
-                    {crewBoard?.map(({ position, required, assignment }, i) => (
+                    {crewBoard?.map(({ position, required, assignment, outreachRoleLabel }, i) => (
                       <CrewBoardSlot
                         key={i}
                         position={position}
+                        outreachRoleLabel={outreachRoleLabel}
                         required={required}
                         assignment={assignment}
                         currentUserId={user?.id}

@@ -14,7 +14,7 @@ import OutreachDayCard from './OutreachDayCard';
 import type { SwapRequest } from '../../../types/scheduling';
 import {
   isShiftClaimable,
-  shiftCrewName,
+  shiftHeading,
   shiftPeriodLetter,
   toDateKey,
 } from '../../../modules/scheduling/utils/shiftBoard';
@@ -36,7 +36,7 @@ export interface DayDetailPanelProps {
   /** Why the member cannot take a seat on a shift, keyed by shift; absent when they can. */
   unavailableByShift?: Record<string, string>;
   pendingShiftId: string | null;
-  onClaim: (shift: ShiftRecord, position: string | null) => void;
+  onClaim: (shift: ShiftRecord, position: string | null, outreachRole?: string | null) => void;
   onRelease: (shift: ShiftRecord, choice?: 'drop' | 'trade') => void;
   onOpenStanding: (shift: ShiftRecord) => void;
   /** Pending offers on the day's shifts, keyed by shift id. */
@@ -105,7 +105,7 @@ export const DayDetailPanel: React.FC<DayDetailPanelProps> = ({
             </span>
           </p>
           <p className="text-theme-text-secondary mt-0.5 text-[13px]">
-            {[shiftLocation(nextShift), shiftCrewName(nextShift, timezone)].filter(Boolean).join(' · ')}
+            {[shiftLocation(nextShift), shiftHeading(nextShift, timezone)].filter(Boolean).join(' · ')}
           </p>
           {/* Both actions disappear while an offer of this seat stands: a
               second release or a second offer would strand the first

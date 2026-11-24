@@ -229,6 +229,35 @@ describe('shiftStatusInfo', () => {
 });
 
 describe('buildSeats', () => {
+  it('gives each seat on an outreach sheet its role: the holder’s own, or one still needed', () => {
+    const seats = buildSeats(
+      shift({
+        is_outreach: true,
+        positions: [
+          { position: 'volunteer', required: true },
+          { position: 'volunteer', required: true },
+          { position: 'volunteer', required: true },
+        ],
+        roster: [
+          { ...seat('u1', 'volunteer', 'Dana Ruiz'), outreach_role: 'educator', outreach_role_label: 'Educator' },
+        ],
+        outreach_roles: [
+          { role: 'tour_guide', label: 'Tour Guide', total: 2, filled: 0, remaining: 2 },
+          { role: 'educator', label: 'Educator', total: 1, filled: 1, remaining: 0 },
+        ],
+      }),
+      ME
+    );
+
+    expect(seats.map((s) => s.outreachRoleLabel)).toEqual(['Educator', 'Tour Guide', 'Tour Guide']);
+    expect(seats.map((s) => s.outreachRole)).toEqual(['educator', 'tour_guide', 'tour_guide']);
+  });
+
+  it('leaves a duty shift’s seats without a role', () => {
+    const seats = buildSeats(shift(), ME);
+    expect(seats.every((s) => s.outreachRole === undefined)).toBe(true);
+  });
+
   it('lays the crew out in the shift’s own seat order', () => {
     const roster = [seat('u3', 'firefighter', 'Casey Lee'), seat('u1', 'officer', 'Dana Ruiz')];
     const seats = buildSeats(shift({ roster }), ME);
