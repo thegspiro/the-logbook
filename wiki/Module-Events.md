@@ -108,8 +108,11 @@ Info too _(2026-11-20)_.
 - **Description** is a textarea with a formatting toolbar that inserts
   Markdown around the selection.
 - **Drafts** — an event can be saved as a draft and published later
-  (`POST /events/{id}/publish`); drafts are hidden from members without
-  `events.manage`.
+  (`POST /events/{id}/publish`, `events.manage`). Who sees a draft is one
+  rule, `app/api/draft_visibility.py` _(2026-11-23)_: `events.manage` sees
+  every draft, `training.manage` sees Training drafts, nobody else sees one —
+  on the event, its attachments, folder and session, the events list and the
+  training calendar.
 - **Require RSVP** on a single event requires an **RSVP Deadline**
   (`EventCreate.validate_dates`); the form asks for it before submitting.
 - **Location double-booking is refused** by the server ("Location is already

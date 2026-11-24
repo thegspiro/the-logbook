@@ -19,8 +19,9 @@ from app.core.utils import generate_uuid
 
 class PendingDeletionReason(str, Enum):
     MEMBER_HARD_DELETE = "member_hard_delete"
-    # A file anonymisation could not delete after dropping the row that named
-    # it (a waiver or applicant document).
+    # Files named by rows an anonymisation removed: a waiver or applicant
+    # document that would not delete, and the documents in the member's
+    # personal Member Files folder (LIFE-11).
     MEMBER_ANONYMIZATION = "member_anonymization"
     # Training attachments named only by a row another workflow deleted: a
     # never-credited record an event void removed, a record an import undo
