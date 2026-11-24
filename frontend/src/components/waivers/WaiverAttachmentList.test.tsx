@@ -83,4 +83,14 @@ describe('WaiverAttachmentList', () => {
     expect(mockToastSuccess).toHaveBeenCalledWith('Document filed.');
     expect(onAttached).toHaveBeenCalled();
   });
+
+  it('offers a remove button only when the page passes onRemove', async () => {
+    const onRemove = vi.fn();
+    const { rerender } = render(<WaiverAttachmentList requestId="r1" attachments={[attachment]} />);
+    expect(screen.queryByRole('button', { name: 'Remove waiver-attachment-1.pdf' })).not.toBeInTheDocument();
+
+    rerender(<WaiverAttachmentList requestId="r1" attachments={[attachment]} onRemove={onRemove} />);
+    await user.click(screen.getByRole('button', { name: 'Remove waiver-attachment-1.pdf' }));
+    expect(onRemove).toHaveBeenCalledWith(attachment);
+  });
 });
