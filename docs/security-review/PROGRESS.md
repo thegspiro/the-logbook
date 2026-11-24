@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (branch `claude/friendly-babbage-2isqey`)**: Feature 05
+**PR [#4655](https://github.com/thegspiro/the-logbook/pull/4655) (branch
+`claude/friendly-babbage-2isqey`)**: Feature 05
 (Finance & approvals), pass 17 — watchdog pickup (the dedicated `/loop 30m
 /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
 unreachable). **Branch-name deviation**, same as prior watchdog-run passes
 recorded here: this session's environment restricts pushes to its own
 assigned branch rather than a freely-chosen
-`claude/security-review-finance-approvals` name. This PR's own number is
-recorded in a follow-up commit on this same branch once known, per Step 8.
+`claude/security-review-finance-approvals` name.
 
 PR #4654 (Feature 04, Storefront & payments, pass 17 — 0 fixed, 0 new
 findings) had already merged before this iteration started; row 04 marked
