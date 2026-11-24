@@ -1,16 +1,9 @@
 ---
+template: home.html
 hide:
   - navigation
+  - toc
 ---
-
-# The Logbook Docs
-
-Everything you need to learn and run The Logbook, the open-source intranet for
-fire departments and emergency services: step-by-step training guides, setup
-and administration instructions, videos and answers to common questions.
-
-New to The Logbook? See [what it does](features.md) and
-[why departments choose it](why.md).
 
 ## Start here
 
