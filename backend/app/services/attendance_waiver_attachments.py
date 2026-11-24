@@ -591,7 +591,7 @@ class AttendanceWaiverAttachmentService:
             )
         ).all()
         deleted: List[str] = []
-        requests: Dict[str, int] = {}
+        removed_by_request: Dict[str, int] = {}
         failed = 0
         for attachment_id, request_id, stored_path in rows:
             path = file_storage.resolve(stored_path, org_id, AREA)
@@ -615,14 +615,16 @@ class AttendanceWaiverAttachmentService:
                 )
             )
             deleted.append(str(attachment_id))
-            requests[str(request_id)] = requests.get(str(request_id), 0) + 1
+            removed_by_request[str(request_id)] = (
+                removed_by_request.get(str(request_id), 0) + 1
+            )
         # Recorded in the same transaction as the row deletes, so a removal
         # is counted exactly once whatever a later run finds (pitfall #36).
         # updated_at is written back as it stands: the retention clock of a
         # withdrawn or voided request reads it, and the column's onupdate
         # would otherwise restart it.
         naive_now = now.astimezone(dt_timezone.utc).replace(tzinfo=None)
-        for request_id, removed in requests.items():
+        for request_id, removed in removed_by_request.items():
             await self.db.execute(
                 update(AttendanceWaiverRequest)
                 .where(
@@ -640,7 +642,7 @@ class AttendanceWaiverAttachmentService:
             )
         return {
             "attachment_ids": deleted,
-            "request_ids": sorted(requests),
+            "request_ids": sorted(removed_by_request),
             "failed": failed,
         }
 
