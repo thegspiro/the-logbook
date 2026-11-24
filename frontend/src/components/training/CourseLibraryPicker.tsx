@@ -17,6 +17,7 @@ import { Link } from 'react-router';
 import { AlertCircle, BookOpen, Search, X } from 'lucide-react';
 import type { TrainingCourse } from '../../types/training';
 import { TRAINING_TYPE_LABELS } from '../../constants/enums';
+import { FIELD_ERROR_CLASS } from '../ux/FormField';
 
 /**
  * Which requirement type the picker is serving.
@@ -38,6 +39,8 @@ interface CourseLibraryPickerProps {
   idPrefix: string;
   /** Render a compact list (used inside modals). */
   compact?: boolean;
+  /** Why the save refused the selection, shown under the picker and read on the search box. */
+  fieldError?: string | undefined;
 }
 
 const COURSE_LIBRARY_PATH = '/training/admin?page=setup&tab=courses';
@@ -51,6 +54,7 @@ export const CourseLibraryPicker: React.FC<CourseLibraryPickerProps> = ({
   error = '',
   idPrefix,
   compact = false,
+  fieldError,
 }) => {
   const [search, setSearch] = useState('');
   // A certification requirement is usually satisfied by a certification-type
@@ -89,6 +93,7 @@ export const CourseLibraryPicker: React.FC<CourseLibraryPickerProps> = ({
 
   const searchId = `${idPrefix}-course-search`;
   const listId = `${idPrefix}-course-list`;
+  const fieldErrorId = `${idPrefix}-course-error`;
 
   return (
     <div className="space-y-2">
@@ -172,6 +177,7 @@ export const CourseLibraryPicker: React.FC<CourseLibraryPickerProps> = ({
               className="form-input-sm pl-8"
               placeholder="Search by course name or code…"
               aria-controls={listId}
+              {...(fieldError ? { 'aria-invalid': true as const, 'aria-describedby': fieldErrorId } : {})}
             />
           </div>
 
@@ -238,6 +244,12 @@ export const CourseLibraryPicker: React.FC<CourseLibraryPickerProps> = ({
             )}
           </p>
         </div>
+      )}
+
+      {fieldError && (
+        <p id={fieldErrorId} className={`text-sm ${FIELD_ERROR_CLASS}`}>
+          {fieldError}
+        </p>
       )}
     </div>
   );
