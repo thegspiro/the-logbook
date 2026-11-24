@@ -303,6 +303,22 @@ codes scan.
 Inventory checkout always refuses a member whose account is not active,
 whichever badge they show.
 
+**Certifications on the digital ID card** _(2026-11-23)_. When you open your
+own ID card, and Training is turned on, a **Certifications** box above the
+barcode lists each certification your department grades you on. Each one
+reads **On file** with "Expires _date_" (or no date if it never expires),
+**Expired** with the date it lapsed, or **Not recorded**. Below the list,
+**Card valid through** gives the soonest expiry among the certificates you
+hold now. It tells you when your next renewal is due; the badge keeps scanning
+after that date. If none of your current certificates expires, no date shows.
+
+- An officer who can manage training records sees the same box on any
+  member's card. An officer who can only issue ID cards sees the card without
+  it.
+- If your department hides certification status from members, the box does
+  not appear on your own card.
+- The printed plastic card (**Print ID Cards**) is unchanged.
+
 ![A member's digital ID card: membership number as text, the badge code under its barcode, the QR code, and the Print ID Card and Reissue badge buttons](./images/01-44-member-id-card.png)
 
 ![The Reissue this badge? confirmation: every printed badge and the phone card stop scanning, with Keep current badge and Reissue badge](./images/01-45-reissue-badge-confirm.png)
@@ -348,6 +364,17 @@ member in without showing their card.
 | **Leave of Absence**    | Any active leave periods. On your own profile, **Ask for leave** when your department takes requests _(2026-11-14)_ | The member, and officers who can manage members                                           |
 
 Date of birth is restricted the same way as emergency contacts.
+
+**Certifications** _(2026-11-23)_. **Training & Certifications** now opens
+with a **Certifications** list of every certification the member is graded
+on, with its state and date, in the same words My Training uses: **On file**
+with "(Expires Mar 14, 2027)", **Expired** with "(Mar 14, 2026)", or **Not
+recorded**. Before, the section showed only the five most recent training
+records, so a certificate earned two years ago was usually missing, and
+"Expiring Soon" was only a count. The recent training records below the list
+now print dates as "Mar 14, 2027" instead of "3/14/2027". If the department
+hides certification status from members, a member does not see the list on
+their own profile.
 
 **Shift & Call History** _(2026-11-04)_ shows, for the member, the same
 figures as their own **My Hours** screen in Scheduling: hours, shifts and calls
@@ -404,6 +431,10 @@ scheduling officers. See [Scheduling](./03-scheduling.md).
 calls and outside-agency hours by month, year and all time (the same figures My
 Hours shows the member). Visible to the member and to holders of **View
 scheduling reports**.
+Since 2026-11-23 it includes **Hours by position**: the credited hours,
+shifts and calls by the seat the member held, for the chosen year or **All
+time**. See
+[Scheduling → Your hours and calls for the year](./03-scheduling.md#your-hours-and-calls-for-the-year).
 
 **Member since** on the profile and ID cards counts credited service, so a
 returning member's years carry over. Officers can also preview the property a
@@ -1147,11 +1178,20 @@ There is no delete button on the profile or the Admin Edit page.
 - event attendance records;
 - shift assignments;
 - the files on their training submissions, training records and attendance
-  waiver documents _(2026-11-17)_; and
+  waiver documents _(2026-11-17)_;
 - their applicant record, if they joined through the membership pipeline,
   with its documents, interviews, notes and form answers _(2026-11-21)_. The
   dialog lists it as **Applicant record, with its documents and form
-  answers**.
+  answers**; and
+- their personal **Member Files** folder in Documents, with its sub-folders
+  and documents _(2026-11-23)_. The dialog does not list this yet, and its
+  **Kept** line about uploaded documents does not count it out, so download
+  anything there the department must keep first.
+
+Their separation letters in **Member Separations** are kept, but lose the
+member's home address and the reason for leaving, and a class they taught
+shows **Former member** as its instructor _(2026-11-23)_. See
+[Privacy & Data Rights](./17-privacy-data-rights.md#what-is-removed).
 
 The files go just after the delete. If the server restarts or the file store
 cannot be reached in between, an hourly task finishes removing them
@@ -1161,7 +1201,8 @@ _(2026-11-20)_. See
 **What is kept, with the member's name removed:** records the member
 **created, approved, issued or uploaded**, such as documents and approvals.
 The record stays; only the link to the member is cleared. Uploaded documents
-are kept. This includes other members' records the deleted member signed:
+outside their personal Member Files folder are kept. This includes other
+members' records the deleted member signed:
 the examiner on a skills test and the officer on a shift report now show
 **Former member** instead of a name.
 
@@ -1248,6 +1289,16 @@ department keeps its record of what they did.
 | Documents attached to their training records _(2026-11-20)_             |                                           |
 
 What is kept stays linked to a placeholder named "Former Member".
+
+**Also removed, though the dialog does not list them yet** _(2026-11-23)_:
+the member's personal **Member Files** folder in Documents, with everything in
+it, and the home address and reason for leaving on their separation letters
+(the letters and their item lists stay). Where the member is named as a
+class's instructor, the name becomes **Former member**. An excused meeting
+stays excused. If a document in their personal folder is catalogued in History
+or backs a submitted finance record, anonymizing is refused until it is
+removed from that record. See
+[Privacy & Data Rights](./17-privacy-data-rights.md#what-is-removed).
 
 **Download training evidence first** _(2026-11-20)_. Files attached to the
 member's training records, by an officer or by the member, are deleted with

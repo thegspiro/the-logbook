@@ -2252,6 +2252,12 @@ name → **Anonymize** enabled (do not confirm).]**
 > skills sheet on that record is something the department must keep, download
 > it first."
 
+> "Same goes for the member's personal folder under **Member Files** in
+> Documents: anonymizing deletes it, everything in it. Their property-return
+> letter in Member Separations stays, with the items and values, but the home
+> address and the reason they left come off it. And where they taught a class,
+> the instructor now reads 'Former member'. Excused meetings stay excused."
+
 **[CALLOUT: "Identity removed. History kept."]**
 
 > "Two things it never touches: the audit log, because it's cryptographically

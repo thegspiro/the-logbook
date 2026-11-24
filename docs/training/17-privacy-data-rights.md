@@ -481,8 +481,39 @@ the files on the training submissions, training records and attendance waiver
 documents the delete removes, once the delete has gone through. A refused
 delete removes nothing. Since 2026-11-20 the files are recorded with the
 delete itself, so a server restart or an unreachable file store in the
-middle no longer leaves them behind: an hourly task finishes the job. Files in a member's personal Member Files folder and
-the separation letter in Documents are not touched by either action yet.
+middle no longer leaves them behind: an hourly task finishes the job.
+
+**Separation letters lose the address and the reason** _(2026-11-23)_.
+Anonymizing a member, and permanently deleting one, now rewrites the
+property-return letters saved for them in the **Member Separations** folder
+in Documents. The member's home address is replaced with "(Address
+removed)", and the **Reason:** line is taken out. The letter itself stays,
+with the member's name, membership number, the item list and the values,
+because the department may still need it to recover unreturned property. A
+letter saved before this version has no link to its member, so it is found
+by its title ("Property Return - _legal name_ - _date_") and, when the member
+has a membership number, by that number printed in it. A letter whose title
+no longer matches (the member was renamed after leaving) is not found and
+keeps the address; edit or delete it by hand.
+
+**The member's personal Member Files folder is deleted** _(2026-11-23)_.
+Both actions also delete every folder the member owns under **Member Files**
+in Documents, with its sub-folders and documents, files included. A file
+another record still uses is kept. **Download anything there the department
+must keep before you anonymize or delete.** If one of those documents cannot
+be deleted (it is catalogued in History, or it is a receipt a submitted
+finance record relies on), the whole anonymization or delete is refused and
+nothing changes. Remove it from that record first, then try again.
+
+**An erased instructor reads "Former member"** _(2026-11-23)_. When the
+member taught a class, their name was stored as the instructor on event
+templates, on the training session and on each attendee's training record.
+Both actions now replace it with **Former member** in all three places. The
+attendees' records still count, and the NFPA completeness report does not
+list them as missing an instructor. A record an officer has since edited to
+a different instructor keeps its value. Members anonymized before this
+version were updated when the system upgraded. A member permanently deleted
+before it, and a name typed in with no member chosen, are not covered.
 
 **Permanently deleting a member also removes their application**
 _(2026-11-21)_. If the member joined through the membership pipeline, their
@@ -500,6 +531,15 @@ Training completions and certifications, attendance and service hours,
 property custody and departure clearance, dues and financial records, meeting
 attendance, and — importantly — screening _status and dates_. You can still
 prove the member was compliant at the time.
+
+**Excused meetings stay excused** _(2026-11-23)_. The reason the member gave
+for missing a meeting is removed, but an excused meeting now reads
+"Excused: approved request" instead of turning into an absence. Before this,
+anonymizing a member lowered their historical meeting attendance. Members
+anonymized earlier had their excusals restored when the system upgraded.
+File names the member gave their uploads are replaced with a neutral
+"certificate" or "attachment" too, including on entries whose file was
+already gone.
 
 ### What is never touched
 
@@ -603,6 +643,11 @@ A year later, the administrator opens Dana's archived record and selects
   of her driver's license uploaded during onboarding.
 - The CPR card she photographed and attached to a self-reported class is gone;
   the training record it supported still counts.
+- The property-return letter in Member Separations still lists the turnout
+  gear and radio she returned, but no longer shows her home address or why
+  she left. Her personal Member Files folder is gone.
+- The two in-house classes she taught show **Former member** as the
+  instructor, on the session and on each attendee's record.
 
 ### Step 5: The audit trail still tells the story
 

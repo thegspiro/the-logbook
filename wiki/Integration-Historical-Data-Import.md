@@ -127,6 +127,12 @@ counts what will go before anything does.
   are. A member the roster moved to another seat goes back to the seat they
   had; a roster written before 2026-11-21 did not record it, so its moved
   members keep the roster's seat.
+- **Files go with the records** _(2026-11-23)_. Undoing training queues the
+  files attached to the imported records it deletes, and undoing drills queues
+  the drill events' attachments, on `pending_file_deletions`
+  (`historical_import_undone`) in the same transaction. The hourly sweep
+  removes them and keeps a file another record still names. Before, the rows
+  went and their files stayed on disk with nothing pointing to them.
 
 API: `GET /integrations/historical-imports/{id}/undo` previews every step;
 `POST /integrations/historical-imports/{id}/undo/{step}` (`admin`, `training`, `drills`,

@@ -1044,6 +1044,10 @@ The rules, and why:
 
 - **A record already deleted by hand** is simply forgotten, so committing the
   step again writes it afresh.
+- **Attached files go too** _(2026-11-23)_. Files attached to the training
+  records or company drills the undo removes are deleted shortly afterwards,
+  unless another record still uses the same file. Before, the records went and
+  their files stayed on the server with nothing pointing to them.
 
 The toast says how many records (and former members) were removed. Only
 holders of `integrations.historical_import` (the IT Manager by default) can

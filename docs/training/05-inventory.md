@@ -1481,7 +1481,23 @@ Needs the **Manage gear, uniforms and equipment** permission.
    medications).
 4. Select **Choose a CSV file** and pick your file. (The box does not take
    dragged files.)
-5. Check the preview of the first rows.
+5. Check the preview of the first rows. _(2026-11-23)_ Under it, The Logbook
+   checks every row of the file against your department's records before
+   anything is saved ("Checking every row against the department's
+   records…"), and then tells you what **Import** will do:
+   - "All 12 rows passed the checks.", or "10 of 12 rows will import. 2 will
+     be skipped:" followed by **Rows that will be skipped**, one line per row
+     with its reason (for example a missing name, a negative quantity or a
+     serial number already on file, or repeated in the file);
+   - **Will import, with a warning**, for rows that import but need a look,
+     such as a category name you do not have.
+
+   Fix the file and choose it again to clear the problems first. Before this
+   check, the problems were listed only after **Import**, when the good rows
+   had already been saved. If the check cannot run, the page says "The rows
+   could not be checked before import. Any that are refused will be listed
+   after you import." and **Import** still works.
+
 6. Select **Import**. The result says how many were imported, and lists any
    rows that were skipped and why.
 

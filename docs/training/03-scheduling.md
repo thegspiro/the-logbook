@@ -501,6 +501,24 @@ The same layout is used for a member's **Shift & Call History** on their
 profile, for the member and for officers with **View scheduling reports**;
 an officer sees the list but not **Log outside shift**.
 
+**Hours by position** _(2026-11-23)_. Under the year-at-a-glance chart, a
+card breaks your credited shifts down by the seat you held on each one, such
+as Driver/Operator or Officer. Each row reads as one line: the seat, its hours,
+its number of shifts and, if your department tracks calls, its calls. The
+year button (for example **2026**) shows the year you picked above, and
+**All time** shows everything.
+
+- Rows are listed most hours first. Shifts where no seat was recorded come
+  last, as **No position recorded**.
+- Shifts with other departments are one row, **Other departments**, so the
+  rows add up to the cards above.
+- As on the cards, only shifts an officer has finalized count. Approved
+  pre-shift work counts under the seat you held on that shift.
+- Imported history counts too: the staffing roster's import records which seat
+  each member sat in.
+
+It also appears on a member's **Shift & Call History** on their profile.
+
 ![My Shifts on its Hours view: This month, this year and all-time cards with the two-colour split bar, the year picker between its Previous year and Next year arrows, the year-at-a-glance chart with its Busiest month, Months with shifts and Avg per active month tiles, and All shifts below](./images/03-104-my-shifts-hours.png)
 
 ![The Hours view with October's bar selected on the year-at-a-glance chart, its tooltip giving the month's hours, shifts and calls: the other months dimmed, and October's shift highlighted in All shifts below](./images/03-143-hours-month-selected.png)
