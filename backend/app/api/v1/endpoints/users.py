@@ -104,6 +104,7 @@ from app.services.email_policy import (
     member_choice,
 )
 from app.services.email_service import welcome_email_can_send
+from app.services.instructor_erasure import replace_instructor_name
 from app.services.member_documents import erase_member_documents
 from app.services.member_files import collect_member_files
 from app.services.member_position_term_service import past_positions_for
@@ -2710,6 +2711,12 @@ async def delete_user(
             },
             PendingDeletionReason.MEMBER_HARD_DELETE,
         )
+        # The member's name as an instructor reads "Former member" (owner
+        # decision 2026-11-23). Before the delete, which sets the sessions'
+        # instructor_id NULL and would leave nothing to find them by.
+        instructor = await replace_instructor_name(
+            db, str(user_id), str(current_user.organization_id)
+        )
 
         # Deleting the User is also what removes its user_positions rows.
         # Deleting them separately first would leave the User.positions
@@ -2764,6 +2771,9 @@ async def delete_user(
                 "separation_letters_redacted": documents.separation_letters_redacted,
                 "personal_folders_deleted": documents.personal_folders_deleted,
                 "personal_documents_deleted": documents.personal_documents_deleted,
+                "instructor_templates_scrubbed": instructor.templates,
+                "instructor_sessions_scrubbed": instructor.sessions,
+                "instructor_records_scrubbed": instructor.records,
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -3931,6 +3941,9 @@ async def anonymize_member(
             "personal_folders_deleted": summary["personal_folders_deleted"],
             "personal_documents_deleted": summary["personal_documents_deleted"],
             "personal_document_files_queued": summary["personal_document_files_queued"],
+            "instructor_templates_scrubbed": summary["instructor_templates_scrubbed"],
+            "instructor_sessions_scrubbed": summary["instructor_sessions_scrubbed"],
+            "instructor_records_scrubbed": summary["instructor_records_scrubbed"],
             # Files whose rows went but which would not delete, queued for
             # the hourly pending_file_deletions sweep.
             "attendance_waiver_files_queued": summary["attendance_waiver_files_queued"],

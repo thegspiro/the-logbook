@@ -53,6 +53,11 @@ docs/COMPLIANCE.md):
   with its documents, the files queued on pending_file_deletions
   (app.services.member_documents). Runs first, while the name, address and
   status reason that find the letters are still on the users row.
+- The member's name where it is stored as an instructor (owner decision
+  2026-11-23): an event template's lead instructor (its id cleared), a
+  training session's instructor name, and the copy of that name on its
+  attendees' training records all read "Former member"
+  (app.services.instructor_erasure).
 
 What is deliberately NOT touched:
 - audit_logs — append-only and hash-chained; rewriting them is tampering.
@@ -115,6 +120,7 @@ from app.services import file_storage_service as file_storage
 from app.services.attendance_waiver_attachments import remove_member_attachments
 from app.services.attendance_waiver_service import MEETING_WAIVER_TEXT
 from app.services.file_storage_service import StorageArea
+from app.services.instructor_erasure import replace_instructor_name
 from app.services.member_documents import erase_member_documents
 from app.services.member_files import (
     collect_member_files,
@@ -309,6 +315,17 @@ class MemberAnonymizationService:
             .values(waiver_reason=MEETING_WAIVER_TEXT)
         )
         counts["meeting_waiver_reasons_scrubbed"] = rows_affected(result) or 0
+
+        # --- the member's name as an instructor -------------------------
+        # Templates, sessions and attendees' records read "Former member"
+        # (owner decision 2026-11-23), never blank: a blank instructor puts
+        # the record on the NFPA completeness report.
+        instructor = await replace_instructor_name(
+            self.db, str(user.id), str(user.organization_id)
+        )
+        counts["instructor_templates_scrubbed"] = instructor.templates
+        counts["instructor_sessions_scrubbed"] = instructor.sessions
+        counts["instructor_records_scrubbed"] = instructor.records
 
         # A waiver request's reason, and the deciders' notes answering it,
         # are about the member and may be medical. The rows stay: they are
