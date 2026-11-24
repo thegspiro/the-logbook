@@ -289,7 +289,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ initial, templat
               <span>
                 Coordinator approves self sign-ups
                 <span className="text-theme-text-muted block text-xs">
-                  Sign me up asks for the seat instead of taking it. The organizer is emailed, and a request nobody
+                  Sign myself up asks for the seat instead of taking it. The organizer is emailed, and a request nobody
                   answers is declined when the night starts.
                 </span>
               </span>
