@@ -16,6 +16,40 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4662](https://github.com/thegspiro/the-logbook/pull/4662) (branch
+`claude/friendly-babbage-ubq8ow`)**: Feature 07
+(Users & organizations), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here: this session's environment restricts pushes to its own
+assigned branch rather than a freely-chosen
+`claude/security-review-users-organizations` name.
+
+PR #4659 (Feature 06, Elections & ballots, pass 17 — 0 fixed, 0 new
+findings) had already merged before this iteration started; row 06 marked
+✅ above.
+
+Real delta since pass 16's merge (`c819f1135`), across 18 commits: an
+approver's own leave request now routes to the Chief rather than fellow
+approvers (closing a self-approval-adjacent gap, owner decision 2026-11-21),
+paired with a new approver-cover (stand-in) feature, leave-request
+escalation, members ending their own leave early, calendar/CSV export for
+officers who manage leave, and the privilege ceiling extended to member
+anonymization. **1 fixed (USR-15, MED, Pitfall #27), 0 new flagged
+findings:** the new approver-cover feature's overlap check locked the
+approver row but read the overlap with a plain SELECT, so two concurrent
+covers for the same approver could both pass the check — fixed by making
+the overlap read itself a locking read, with a new guard test mirroring
+the existing `TestChiefOverrideOverlapLocking`. Full write-up:
+`docs/security-review/USR-07-users-organizations.md`'s **Pass 17** section.
+
+Row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
+pipeline) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 17, PR #4659, merged), preserved for history</summary>
+
 **PR [#4659](https://github.com/thegspiro/the-logbook/pull/4659) (branch
 `claude/friendly-babbage-2isqey`)**: Feature 06
 (Elections & ballots), pass 17 — watchdog pickup (the dedicated `/loop 30m
@@ -44,6 +78,8 @@ findings.** Full write-up:
 Row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
 organizations) — re-check `list_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 17, PR #4655, merged), preserved for history</summary>
@@ -27798,7 +27834,7 @@ iteration's commit" rule.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (9 routes, added pass 17)                                                                                                                                                                 | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (20 routes, added pass 17; Chief routing, approver cover, escalation, calendar/export added pass 17)                                                                                      | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                                                                                                                            | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ⬜     |

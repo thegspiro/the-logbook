@@ -893,6 +893,42 @@ class TestChiefOverrideOverlapLocking:
         assert "with_for_update()" in listing
 
 
+class TestLeaveApproverCoverOverlapLocking:
+    """An approver cover is refused when a live cover for the same approver
+    already covers part of its dates: a read-then-insert (USR-15, pass 17).
+    Two covers set together (a double-tap, two tabs) both read "no overlap"
+    and both insert, leaving two live covers over one day — the opposite of
+    the "no overlap per approver" invariant ``set_cover`` documents."""
+
+    def test_the_approver_row_is_locked_before_the_overlap_read(self):
+        from app.services.leave_request_service import LeaveRequestService
+
+        source = _source_of(LeaveRequestService.set_cover)
+        assert "with_for_update()" in source, (
+            "set_cover must lock the approver row to serialize two covers "
+            "for the same approver."
+        )
+        assert source.index("with_for_update()") < source.rindex(
+            "with_for_update()"
+        ), "set_cover must take two locks: the approver row, then the overlap read."
+
+    def test_the_overlap_read_is_a_locking_read(self):
+        from app.services.leave_request_service import LeaveRequestService
+
+        source = _source_of(LeaveRequestService.set_cover)
+        assert source.count("with_for_update()") == 2, (
+            "The overlap check must be its own locking read, in addition to "
+            "the approver-row lock: under REPEATABLE READ a plain SELECT "
+            "answers from the snapshot taken before the lock (e.g. when "
+            "get_current_user resolved the caller at the start of the "
+            "request), so the loser of the race still sees no overlap "
+            "(pitfall #27)."
+        )
+        assert source.index("LeaveApproverCover.id)") < source.rindex(
+            "with_for_update()"
+        ), "The clash query itself must end in .with_for_update()."
+
+
 class TestTrainingModuleConfigRace:
     """Two concurrent first-ever reads of a department's training visibility
     config (e.g. two members opening a training page the moment the org has
