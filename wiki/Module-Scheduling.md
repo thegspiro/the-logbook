@@ -357,6 +357,10 @@ requests only. Choose All Statuses to see the rest."
 Time-off requests validate their date range; approved time off and leave remove
 a member from assignment dropdowns
 (`GET /scheduling/shifts/{id}/unavailable-members`).
+A member with an **undecided leave request** covering the shift's date stays
+in the dropdown, marked **— leave requested**, with a note when chosen: they
+can still be assigned, and an approval later cancels that assignment
+_(2026-11-21, #4531)_.
 
 ---
 

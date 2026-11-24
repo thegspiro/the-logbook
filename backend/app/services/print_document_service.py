@@ -216,6 +216,24 @@ async def build_shift_roster(
     if shift.platoon:
         subtitle_parts.append(f"Platoon {shift.platoon}")
 
+    # A community outreach sheet is headed by its event and lists each
+    # volunteer by the job they took, as the schedule does: every seat on one
+    # has the same placeholder position, which says nothing on paper.
+    title = "Shift Roster"
+    outreach_org = None
+    if getattr(shift, "is_outreach", False) is True:
+        from app.models.user import Organization
+        from app.services.event_request_service import outreach_sheet_titles
+
+        outreach_org = await db.scalar(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        titles = await outreach_sheet_titles(
+            db, outreach_org, str(organization_id), [shift.id]
+        )
+        title = titles.get(str(shift.id)) or "Community Outreach Event"
+        subtitle_parts.insert(0, "Community outreach")
+
     seat_labels = await department_seat_labels(db, organization_id)
     crew_rows: List[DocumentRow] = []
     for assignment, user in assignments:
@@ -236,9 +254,12 @@ async def build_shift_roster(
             marks.append("unconfirmed")
         if marks:
             name = f"{name} ({', '.join(marks)})"
-        crew_rows.append(
-            DocumentRow(left=name, right=_seat_column(position, seat_labels))
-        )
+        seat = _seat_column(position, seat_labels)
+        if outreach_org is not None and assignment.outreach_role:
+            from app.services.event_request_service import outreach_role_label
+
+            seat = outreach_role_label(outreach_org, assignment.outreach_role)
+        crew_rows.append(DocumentRow(left=name, right=seat))
 
     if not crew_rows:
         crew_rows.append(DocumentRow(left="No one assigned", emphasis=True))
@@ -283,7 +304,7 @@ async def build_shift_roster(
         )
 
     return PrintDocument(
-        title="Shift Roster",
+        title=title,
         subtitle=" | ".join(subtitle_parts),
         sections=sections,
         footer=f"Printed {_in_zone(datetime.now(timezone.utc), tz_name).strftime('%d %b %H:%M')}",

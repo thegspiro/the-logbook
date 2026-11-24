@@ -41,6 +41,13 @@ docker compose up -d
 
 ## 📚 Documentation Sections
 
+> **Also on the web** _(2026-11-23)_: this wiki, the training guides and the
+> reference docs are published as one searchable site at
+> **[thelogbook.us](https://thelogbook.us/)**. It is built from the same
+> Markdown, unedited, so a change here appears there after the next merge to
+> `main`. How it is built, and how to run a copy, is in
+> [`docs-site/README.md`](https://github.com/thegspiro/the-logbook/blob/main/docs-site/README.md).
+
 ### 🎯 Getting Started
 
 - **[Installation Guide](Installation)** - Complete setup instructions
@@ -85,7 +92,7 @@ docker compose up -d
 - **[Performance Evaluations](Module-Evaluations)** - Yearly evaluations and check-ins: forms, figures, signing, PDFs, responses
 - **[Prospective Members](Module-Prospective-Members)** - Applicant pipeline from inquiry to membership
 - **[Meeting Minutes](Module-Meeting-Minutes)** - Agendas, minutes, circulation and adoption
-- **[History](Module-History)** - Past members, the Honor Roll, roster import, person merge, photos and media, documents
+- **[History](Module-History)** - Past members, the Honor Roll, roster import, person merge, photos and media, documents, events, apparatus, timeline, Today in history
 - **[Finance](Module-Finance)** - Budgets, purchase requests, approvals, dues
 - **[Label Printing](Module-Label-Printing)** - Thermal and sheet labels for inventory and equipment
 - **[Salesforce Integration](Integration-Salesforce)** - Bidirectional CRM sync _(2026-04-11)_

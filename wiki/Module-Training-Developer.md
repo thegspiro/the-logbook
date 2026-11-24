@@ -142,6 +142,8 @@ POST   /api/v1/training/course-links                       # Link one name's rec
 POST   /api/v1/training/course-links/link-suggested        # Link every name that has a suggestion (training.manage)
 GET    /api/v1/training/course-links/history               # Recorded links, newest first (training.manage, 2026-11-19)
 POST   /api/v1/training/course-links/{link_id}/undo        # Undo a link once; records edited since are kept (training.manage, 2026-11-19)
+GET    /api/v1/training/double-credit                      # Possible double credit awaiting a decision, oldest first (training.manage, 2026-11-23)
+POST   /api/v1/training/double-credit/{flag_id}/keep-both  # Both records stand; a re-finalize does not raise the pair again (training.manage, 2026-11-23)
 POST   /api/v1/training/courses/{id}/classes/reorder       # Set the syllabus order (order only, not the dates) (training.manage)
 POST   /api/v1/training/courses/{id}/classes/autofill      # Recompute every day offset from a meeting pattern (training.manage)
 GET    /api/v1/training/stats/user/{user_id}               # User training stats
@@ -172,6 +174,19 @@ requirement responses (My Training and the officer's member view) add
 never graded. `POST /training/course-links` and `/link-suggested` answer 409
 when two links collide on the same records ("…Nothing was linked; try
 again.").
+
+**Changed 2026-11-21.** `GET /training/reports/compliance-forecast` returns
+`{members, averages}` instead of a bare list. Each member adds
+`forecast_30_standing`, `forecast_60_standing` and `forecast_90_standing`
+(the member's own grading, as `current_standing`), and each projection is the
+shared grader run as of today + 30, 60 and 90 days on the records already
+logged. `averages.current` / `days_30` / `days_60` / `days_90` each carry
+`pct` (null when nobody is graded) and a `standing` classified by the
+department's thresholds (`ComplianceGrading.classify_average`; under
+`all_required`, compliant only when every graded member is). `GET
+/training/competency-matrix` is retired and answers 404; use
+`/training/compliance-matrix`. A training-record attachment entry carries
+`can_remove`, computed server-side for the caller.
 
 ### Training Programs
 

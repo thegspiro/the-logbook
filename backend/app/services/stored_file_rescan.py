@@ -40,7 +40,10 @@ stored, so the same outcome means removing it: a file is deleted from storage
 and an image is cleared from its row, and the detection is audited through
 the same helper (:func:`~app.services.upload_scanning.record_malware_detection`)
 with the row's id added. The row itself — the document, the training record —
-is kept, and its download then reports the file as not found. A file's removal
+is kept. A training submission's or record's entry for the file is replaced
+by a removal marker (owner decision 2026-11-23), so the screens say the file
+was removed by the malware scan and when, and a download answers 410; any
+other row's download reports the file as not found. A file's removal
 is ordered audit-then-delete (Pitfall #36, at most once for the audit): the
 ledger row and audit commit first, the delete follows, and ``removed_at`` is
 stamped after it; a crash between the two leaves ``removed_at`` empty and the
@@ -51,18 +54,25 @@ is cleared in the same transaction as its audit, so there is no gap.
 import base64
 import binascii
 import hashlib
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, Sequence, TypeVar
 
 from loguru import logger
 from sqlalchemy import Text, cast, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.stored_file_scan import ScanVerdict, StoredFileScan
 from app.models.storefront import StoreProduct, StoreProductImage
-from app.models.training import ShiftEquipmentCheck, ShiftEquipmentCheckItem
+from app.models.training import (
+    ShiftEquipmentCheck,
+    ShiftEquipmentCheckItem,
+    TrainingRecord,
+    TrainingSubmission,
+)
 from app.models.user import Organization, User
 from app.services import file_storage_service as file_storage
 from app.services import malware_scan_service, upload_relocation
@@ -70,6 +80,7 @@ from app.services.file_storage_service import StorageArea
 from app.services.malware_scan_service import MalwareScanUnavailable, ScanResult
 from app.services.upload_scanning import record_malware_detection
 from app.utils.mime_validation import detect_mime_type
+from app.utils.training_attachments import REMOVED_MALWARE, removal_marker
 
 #: Scans per run. A run is one entry in the scheduler's sequential loop, so it
 #: must not hold it for long; the backlog is finished over several runs.
@@ -83,10 +94,18 @@ MAX_CONSECUTIVE_UNAVAILABLE = 3
 #: Keys looked up in the ledger per query.
 _LEDGER_BATCH = 500
 
+_TrainingRow = TypeVar("_TrainingRow", TrainingSubmission, TrainingRecord)
+
 #: The audit record's ``upload`` value for a detection made by this scan.
 UPLOAD_KIND = "stored_file_rescan"
 
 # The column each relocation reference was read from, for the ledger's source.
+#: Ledger sources whose files are training attachments, which a removal
+#: marker replaces once deleted.
+_TRAINING_SOURCES = frozenset(
+    {"training_submissions.attachments", "training_records.attachments"}
+)
+
 _REFERENCE_COLUMNS = {
     "training_submissions": "attachments",
     "training_records": "attachments",
@@ -553,8 +572,69 @@ class StoredFileRescan:
             )
             return False
         ledger.removed_at = datetime.now(timezone.utc)
+        if ledger.source in _TRAINING_SOURCES:
+            await self._mark_training_entries(
+                ledger.organization_id, confined, ledger.removed_at
+            )
         await self.db.commit()
         return True
+
+    async def _rows_naming(
+        self, model: type[_TrainingRow], organization_id: str, needle: str
+    ) -> Sequence[_TrainingRow]:
+        """Lock the department's rows of ``model`` whose attachments mention
+        ``needle``: a cheap narrowing, each entry is confined by the caller."""
+        result = await self.db.execute(
+            select(model)
+            .where(
+                model.organization_id == organization_id,
+                cast(model.attachments, Text).contains(needle, autoescape=True),
+            )
+            .with_for_update()
+        )
+        return result.scalars().all()
+
+    async def _mark_training_entries(
+        self, organization_id: str, confined: str, removed_at: datetime
+    ) -> None:
+        """Replace every training submission's and record's entry for the
+        deleted file with a malware removal marker.
+
+        Every row, not only the ledger's: approval copies a submission's
+        entries onto its record, and the scan keys a file once, under
+        whichever row it met first. Committed with ``removed_at``.
+        """
+        needle = os.path.basename(confined)
+        rows: list[TrainingSubmission | TrainingRecord] = [
+            *await self._rows_naming(TrainingSubmission, organization_id, needle),
+            *await self._rows_naming(TrainingRecord, organization_id, needle),
+        ]
+        for row in rows:
+            if not isinstance(row.attachments, list):
+                continue
+            changed = False
+            rewritten: list[Any] = []
+            for entry in row.attachments:
+                path = entry.get("file_path") if isinstance(entry, dict) else None
+                real = (
+                    file_storage.resolve(
+                        path,
+                        organization_id,
+                        StorageArea.SELF_REPORTS,
+                        StorageArea.TRAINING_RECORDS,
+                    )
+                    if isinstance(path, str)
+                    else None
+                )
+                if real is not None and real == confined:
+                    rewritten.append(removal_marker(entry, REMOVED_MALWARE, removed_at))
+                    changed = True
+                else:
+                    rewritten.append(entry)
+            if changed:
+                # A new list and flag_modified (Pitfall #12).
+                row.attachments = rewritten
+                flag_modified(row, "attachments")
 
     async def _clear_db_value(
         self, candidate: _Candidate, fingerprint: Optional[str], infected: set[bytes]

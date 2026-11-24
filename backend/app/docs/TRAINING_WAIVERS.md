@@ -25,8 +25,8 @@ calculations, and what members see on their end.
        adjusted_required = base_required x (active_months / total_months)
 
 5. The member's compliance percentage and met/not-met status are recalculated
-   everywhere: the member's own training page, the compliance matrix, the
-   competency matrix, training reports, and program enrollment progress.
+   everywhere: the member's own training page, the compliance matrix,
+   training reports, and program enrollment progress.
 
 ---
 
@@ -387,24 +387,33 @@ open every link; the approver presses the button and confirms. A denial needs a
 note to the member. The Chief's override appears only on a denied request and
 only to a Chief.
 
-| Method | Endpoint                                                             | Who                                           |
-| ------ | -------------------------------------------------------------------- | --------------------------------------------- |
-| `GET`  | `/api/v1/training/waivers/requests/policy`                           | Any authenticated user                        |
-| `PUT`  | `/api/v1/training/waivers/requests/policy`                           | `training.manage`                             |
-| `GET`  | `/api/v1/training/waivers/requests/policy/alternate`                 | `training.manage`                             |
-| `GET`  | `/api/v1/training/waivers/requests/eligibility`                      | Any authenticated user, about themselves      |
-| `POST` | `/api/v1/training/waivers/requests`                                  | Any authenticated user, for themselves        |
-| `GET`  | `/api/v1/training/waivers/requests/mine`                             | Any authenticated user                        |
-| `GET`  | `/api/v1/training/waivers/requests`                                  | The requests the caller may decide or decided |
-| `GET`  | `/api/v1/training/waivers/requests/{id}`                             | The member, or someone who may decide         |
-| `POST` | `/api/v1/training/waivers/requests/{id}/withdraw`                    | The member, while pending                     |
-| `POST` | `/api/v1/training/waivers/requests/{id}/confirm`                     | The member, while a moved session waits       |
-| `POST` | `/api/v1/training/waivers/requests/{id}/approve`                     | Someone who may decide, while pending         |
-| `POST` | `/api/v1/training/waivers/requests/{id}/deny`                        | Someone who may decide, while pending         |
-| `POST` | `/api/v1/training/waivers/requests/{id}/override`                    | A Chief, on a denied request                  |
-| `POST` | `/api/v1/training/waivers/requests/with-attachments`                 | Any authenticated user, for themselves        |
-| `POST` | `/api/v1/training/waivers/requests/{id}/attachments`                 | The member, while pending                     |
-| `GET`  | `/api/v1/training/waivers/requests/{id}/attachments/{attachment_id}` | The member, or someone who may decide         |
+| Method   | Endpoint                                                             | Who                                                                    |
+| -------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `GET`    | `/api/v1/training/waivers/requests/policy`                           | Any authenticated user; who decides is shown to `training.manage` only |
+| `PUT`    | `/api/v1/training/waivers/requests/policy`                           | `training.manage`                                                      |
+| `GET`    | `/api/v1/training/waivers/requests/policy/alternate`                 | `training.manage`                                                      |
+| `GET`    | `/api/v1/training/waivers/requests/eligibility`                      | Any authenticated user, about themselves                               |
+| `POST`   | `/api/v1/training/waivers/requests`                                  | Any authenticated user, for themselves                                 |
+| `GET`    | `/api/v1/training/waivers/requests/mine`                             | Any authenticated user                                                 |
+| `GET`    | `/api/v1/training/waivers/requests`                                  | The requests the caller may decide or decided                          |
+| `GET`    | `/api/v1/training/waivers/requests/{id}`                             | The member, or someone who may decide                                  |
+| `POST`   | `/api/v1/training/waivers/requests/{id}/withdraw`                    | The member, while pending                                              |
+| `POST`   | `/api/v1/training/waivers/requests/{id}/confirm`                     | The member, while a moved session waits                                |
+| `POST`   | `/api/v1/training/waivers/requests/{id}/approve`                     | Someone who may decide, while pending                                  |
+| `POST`   | `/api/v1/training/waivers/requests/{id}/deny`                        | Someone who may decide, while pending                                  |
+| `POST`   | `/api/v1/training/waivers/requests/{id}/override`                    | A Chief, on a denied request                                           |
+| `POST`   | `/api/v1/training/waivers/requests/with-attachments`                 | Any authenticated user, for themselves                                 |
+| `POST`   | `/api/v1/training/waivers/requests/{id}/attachments`                 | The member, while pending                                              |
+| `GET`    | `/api/v1/training/waivers/requests/{id}/attachments/{attachment_id}` | The member, or someone who may decide                                  |
+| `DELETE` | `/api/v1/training/waivers/requests/{id}/attachments/{attachment_id}` | The member, while pending                                              |
+
+Since 2026-11-23 (#4608, #4619) the policy read leaves out the approver and
+copy-to position ids and `chief_alternate_user_id` unless the caller holds
+`training.manage` (`meetings.manage` for the meeting policy). A member removes
+a document from their own pending request with the `DELETE` route; the
+response's `can_remove_attachment` says when the button applies. It answers
+400 once the request is decided or withdrawn, or for the last document when
+the policy requires one, 403 for a decider and 404 for anyone else.
 
 ### Expiry seven days after the session
 
@@ -590,8 +599,13 @@ a denial. What differs:
   it builds one (absent members get a row with `present=False`). A minutes
   record created by hand, with no event, cannot be requested; the Secretary's
   grant still works on it.
-- Cancelling or deleting the event voids pending requests (training ones too);
-  decided ones are kept. The member is told in the app and, once the
+- Cancelling or deleting the event voids pending **and approved** requests
+  (training ones too); a denied one is kept. An approved request voided this
+  way stops counting toward the member's yearly limit, and a meeting waiver
+  comes off the minutes (owner decision 2026-11-23, #4619). Before then only
+  pending requests were voided. A correction to a session that had already
+  started, or a move that stays on the same local date, keeps an approval
+  rather than sending it back for confirmation. The member is told in the app and, once the
   cancellation or deletion commits, by email (`void_pending_for_events`
   returns the notices; `EventService` sends them with `send_member_notices`).
   Undoing a historical import's drills or staffing, which deletes the events

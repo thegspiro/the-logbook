@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**430 tables · 6608 columns · 1423 foreign keys**
+**431 tables · 6618 columns · 1428 foreign keys**
 
 ---
 
@@ -896,6 +896,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_approvals`](#training_approvals) | `TrainingApproval` | 15 | Training Approval model |
 | [`training_categories`](#training_categories) | `TrainingCategory` | 14 | Training Category model |
 | [`training_courses`](#training_courses) | `TrainingCourse` | 20 | Training Course model |
+| [`training_credit_duplicate_flags`](#training_credit_duplicate_flags) | `TrainingCreditDuplicateFlag` | 10 | A finalize's credit that may repeat a record the member already had. |
 | [`training_effectiveness_evaluations`](#training_effectiveness_evaluations) | `TrainingEffectivenessEvaluation` | 20 | Training Effectiveness Evaluation model |
 | [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 50 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 24 | Training Program model |
@@ -13444,6 +13445,34 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_training_courses_active` (`active`)
 - `ix_training_courses_grants_qualification` (`grants_qualification`)
 
+### `training_credit_duplicate_flags`
+
+**TrainingCreditDuplicateFlag** · `app/models/training.py`
+
+> A finalize's credit that may repeat a record the member already had. Owner decision 2026-11-23: when a Training event's finalize credits a member who already holds an approved self-report or a hand-entered completed record for the same day and the same course (or a close name), neither record is merged into the other. The pair is flagged here for an officer, who keeps both or voids one. The unique pair is what keeps a re-finalize from flagging again (pitfall #36): the event's record keeps its id across finalizes (it is keyed by ``source_event_id``), so a second detection of the same pair finds this row. A pair is open while ``resolution`` is NULL and both records stand; voiding either record closes it without touching this row.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `event_record_id` | VARCHAR(36) | no | FK |  | → `training_records.id` ON DELETE CASCADE |
+| `other_record_id` | VARCHAR(36) | no | FK, IDX |  | → `training_records.id` ON DELETE CASCADE |
+| `match_reason` | VARCHAR(20) | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `resolution` | VARCHAR(20) | yes |  |  |  |
+| `resolved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `resolved_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- `idx_training_credit_dup_org_open` (`organization_id`, `resolution`)
+- `idx_training_credit_dup_other` (`other_record_id`)
+
+**Constraints**
+
+- UNIQUE `uq_training_credit_dup_pair` (`event_record_id`, `other_record_id`)
+
 ### `training_effectiveness_evaluations`
 
 **TrainingEffectivenessEvaluation** · `app/models/training.py`
@@ -14396,7 +14425,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (507 references)
+### → `users` (509 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14876,6 +14905,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_course_links` | `linked_by` | SET NULL | yes |
 | `training_course_links` | `undone_by` | SET NULL | yes |
 | `training_courses` | `created_by` | SET NULL | yes |
+| `training_credit_duplicate_flags` | `resolved_by` | SET NULL | yes |
+| `training_credit_duplicate_flags` | `user_id` | CASCADE | no |
 | `training_effectiveness_evaluations` | `evaluated_by` | SET NULL | yes |
 | `training_effectiveness_evaluations` | `user_id` | CASCADE | no |
 | `training_module_configs` | `updated_by` | SET NULL | yes |
@@ -14908,7 +14939,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (343 references)
+### → `organizations` (344 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -15237,6 +15268,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_categories` | `organization_id` | CASCADE | no |
 | `training_course_links` | `organization_id` | CASCADE | no |
 | `training_courses` | `organization_id` | CASCADE | no |
+| `training_credit_duplicate_flags` | `organization_id` | CASCADE | no |
 | `training_effectiveness_evaluations` | `organization_id` | CASCADE | no |
 | `training_module_configs` | `organization_id` | CASCADE | no |
 | `training_programs` | `organization_id` | CASCADE | no |
@@ -15466,6 +15498,22 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `minutes_signatures` | `minutes_id` | CASCADE | no |
 | `minutes_suggestions` | `minutes_id` | CASCADE | no |
 
+### → `training_records` (11 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohort_missed_classes` | `training_record_id` | SET NULL | yes |
+| `external_training_imports` | `training_record_id` | SET NULL | yes |
+| `multi_agency_trainings` | `training_record_id` | SET NULL | yes |
+| `renewal_tasks` | `new_record_id` | SET NULL | yes |
+| `renewal_tasks` | `training_record_id` | SET NULL | yes |
+| `training_course_link_records` | `record_id` | CASCADE | no |
+| `training_credit_duplicate_flags` | `event_record_id` | CASCADE | no |
+| `training_credit_duplicate_flags` | `other_record_id` | CASCADE | no |
+| `training_effectiveness_evaluations` | `training_record_id` | CASCADE | yes |
+| `training_submissions` | `training_record_id` | SET NULL | yes |
+| `xapi_statements` | `training_record_id` | SET NULL | yes |
+
 ### → `prospective_members` (10 references)
 
 | From table | Column | On delete | Nullable |
@@ -15522,20 +15570,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_assignments` | `training_program_id` | SET NULL | yes |
 | `training_courses` | `program_id` | SET NULL | yes |
 | `training_sessions` | `program_id` | SET NULL | yes |
-
-### → `training_records` (9 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `course_cohort_missed_classes` | `training_record_id` | SET NULL | yes |
-| `external_training_imports` | `training_record_id` | SET NULL | yes |
-| `multi_agency_trainings` | `training_record_id` | SET NULL | yes |
-| `renewal_tasks` | `new_record_id` | SET NULL | yes |
-| `renewal_tasks` | `training_record_id` | SET NULL | yes |
-| `training_course_link_records` | `record_id` | CASCADE | no |
-| `training_effectiveness_evaluations` | `training_record_id` | CASCADE | yes |
-| `training_submissions` | `training_record_id` | SET NULL | yes |
-| `xapi_statements` | `training_record_id` | SET NULL | yes |
 
 ### → `fundraising_campaigns` (8 references)
 

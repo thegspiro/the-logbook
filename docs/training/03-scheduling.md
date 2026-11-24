@@ -501,6 +501,24 @@ The same layout is used for a member's **Shift & Call History** on their
 profile, for the member and for officers with **View scheduling reports**;
 an officer sees the list but not **Log outside shift**.
 
+**Hours by position** _(2026-11-23)_. Under the year-at-a-glance chart, a
+card breaks your credited shifts down by the seat you held on each one, such
+as Driver/Operator or Officer. Each row reads as one line: the seat, its hours,
+its number of shifts and, if your department tracks calls, its calls. The
+year button (for example **2026**) shows the year you picked above, and
+**All time** shows everything.
+
+- Rows are listed most hours first. Shifts where no seat was recorded come
+  last, as **No position recorded**.
+- Shifts with other departments are one row, **Other departments**, so the
+  rows add up to the cards above.
+- As on the cards, only shifts an officer has finalized count. Approved
+  pre-shift work counts under the seat you held on that shift.
+- Imported history counts too: the staffing roster's import records which seat
+  each member sat in.
+
+It also appears on a member's **Shift & Call History** on their profile.
+
 ![My Shifts on its Hours view: This month, this year and all-time cards with the two-colour split bar, the year picker between its Previous year and Next year arrows, the year-at-a-glance chart with its Busiest month, Months with shifts and Avg per active month tiles, and All shifts below](./images/03-104-my-shifts-hours.png)
 
 ![The Hours view with October's bar selected on the year-at-a-glance chart, its tooltip giving the month's hours, shifts and calls: the other months dimmed, and October's shift highlighted in All shifts below](./images/03-143-hours-month-selected.png)
@@ -787,6 +805,19 @@ isn't cleared for that position under your department's rules, the
 assignment is refused and the message names what is missing. For a
 department's own seat that nothing grants, see
 [Seating a member by officer override](#seating-a-member-by-officer-override-2026-11-05).
+
+**Members who have asked for leave** _(2026-11-21)_. A member with a leave
+request that is not decided yet, covering the shift's date, stays in the list
+with **— leave requested** after their name. Choose them and a note says:
+_"Leave requested: this member has asked for leave covering this date, and it
+is not decided yet. You can still assign them; if the leave is approved, the
+assignment is dropped."_ The request may still be denied, so you are not
+stopped. You are told now so the seat does not empty without warning later. See
+[Membership > Leave of Absence](./01-membership.md#leave-of-absence).
+
+_Screenshot still to make: `03-141-assign-leave-requested.png`, the **Assign
+someone** form with a member marked **— leave requested** chosen and the
+amber note under the member picker._
 
 **Drivers and EVOC.** An apparatus can require a level of Emergency Vehicle
 Operations Course ([EVOC](./GLOSSARY.md)) training for its driver. If you put
@@ -1955,6 +1986,12 @@ requirement exempts, because they joined before it, are left out. See
 >   period.
 > - An **hours** requirement is graded here from shift attendance only when it
 >   is ticked. The Training screens still grade it from training records.
+>   _(2026-11-23)_ A ticked hours row now counts the same hours as My Hours:
+>   shifts an officer has closed out, counted outside shifts and approved
+>   pre-shift work, inside the requirement's own compliance period, with
+>   training waivers and leave applied the way the Training screens apply
+>   them. Before, it counted open shifts too and used the report's own period,
+>   so its figure could disagree with My Hours.
 
 ![Shift Compliance: the Requirements, Requirement Checks, Checks Met and Checks Not Met cards above each requirement, a requirement nobody is held to reading Not applicable](./images/03-14-scheduling-reports.png)
 
@@ -4641,6 +4678,7 @@ assigned, time off is approved, shifts are generated, and staffing is checked.
 | A shift has no end time                                                   | The Logbook cannot compare times, so any other shift that member holds on the same date counts as a clash                                                                                          |
 | "Member is on leave of absence for this date"                             | They have an active leave of absence on the shift's date. Only the date is checked, not the hours                                                                                                  |
 | A member with approved time off is assigned                               | Refused. Approved time off blocks assignments in those dates                                                                                                                                       |
+| A member's name in the picker ends **— leave requested**                  | They have asked for leave covering the shift's date and it is not decided yet. You can still assign them. If the leave is approved, that assignment is cancelled |
 | An officer assigns an Officer, Captain or Lieutenant to a shift with no shift officer | That member becomes the shift officer automatically, with no notification. This never happens when a member signs themselves up                                                         |
 | The shift officer is changed to someone else                              | Anyone else in the **Officer** seat is moved to **Firefighter**. Nobody is notified                                                                                                                |
 | A probationary member signs up or is assigned                             | Allowed. Probationary members count as active. To stop them signing themselves up, exclude their membership type under **Eligibility** in Scheduling Admin                                        |
@@ -5020,13 +5058,15 @@ rather than starting from zero. It needs `scheduling.manage`.
    confidence score), joined entries and duplicates, and **Rows** (edit, revert
    or exclude any row).
    _Added 2026-11-10, date added 2026-11-21._ A row flagged for **overlapping
-   times** shows its date, start and end as boxes right in the table, with
-   **Save**. An overlap is nearly always one mistyped time or date (an
-   overnight shift entered twice on the same day, when the second belongs to
-   the next), so you can fix it without opening the row's edit dialog. Only
-   what you changed is sent, and it is saved as an ordinary row edit, so
-   **Revert** still brings back the file's value. An excluded row keeps its
-   plain text.
+   times** shows its date, start and end as boxes right in the **Date** and
+   **Times** cells, with one **Save** button. An overlap is nearly always one
+   mistyped value, often the date of an overnight shift typed on the same day
+   as the one before it, so you can fix it without opening the row's edit
+   dialog. Press Enter in any box, or select **Save**; only the values you
+   changed are sent, as one ordinary row edit, so **Revert** still brings back
+   the file's value. Only the fields your column mapping reads are offered (a
+   file with a date column but no time columns gets the date alone). An
+   excluded row keeps its plain text.
 4. Choose **Commit**. The dialog says plainly that a commit **cannot be undone**.
    The exception _(2026-11-19)_: batches sent here by a **Historical Data
    Import** can be undone together from that import's page, with **Undo this

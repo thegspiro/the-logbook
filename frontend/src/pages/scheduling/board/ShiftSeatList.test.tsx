@@ -403,3 +403,76 @@ describe('a swap offer on a shift past its signup deadline', () => {
     expect(screen.getByRole('button', { name: /take the shift/i })).toBeInTheDocument();
   });
 });
+
+// A station tour is staffed from the schedule but is not a duty crew (owner
+// decision, 2026-11-24): the sheet is headed by its event, and each seat by
+// the job it is for, because every seat there has the one placeholder position.
+describe('ShiftSeatList on a community outreach sheet', () => {
+  const tour = (overrides: Partial<ShiftRecord> = {}) =>
+    shift({
+      is_outreach: true,
+      outreach_title: 'Station Tour for Lincoln Elementary',
+      positions: [
+        { position: 'volunteer', required: true },
+        { position: 'volunteer', required: true },
+      ],
+      roster: [
+        { ...seat('u1', 'volunteer', 'Dana Ruiz'), outreach_role: 'tour_guide', outreach_role_label: 'Tour Guide' },
+      ],
+      attendee_count: 1,
+      outreach_roles: [{ role: 'tour_guide', label: 'Tour Guide', total: 2, filled: 1, remaining: 1 }],
+      ...overrides,
+    });
+
+  it('is headed by the event and tagged, not named as a duty crew', () => {
+    renderList({ shift: tour(), eligiblePositions: ['volunteer'] });
+
+    expect(screen.getByRole('heading', { name: 'Station Tour for Lincoln Elementary' })).toBeInTheDocument();
+    expect(screen.getByText('Community outreach')).toBeInTheDocument();
+    expect(screen.queryByText(/Duty Crew/)).not.toBeInTheDocument();
+  });
+
+  it('labels each seat with its role instead of Volunteer', () => {
+    renderList({ shift: tour(), eligiblePositions: ['volunteer'] });
+
+    // One for the member holding the role, one for the seat still open.
+    expect(screen.getAllByText('Tour Guide')).toHaveLength(2);
+    expect(screen.queryByText('Volunteer')).not.toBeInTheDocument();
+  });
+
+  it('claims an open seat for the role it shows', async () => {
+    const user = userEvent.setup();
+    renderList({ shift: tour(), eligiblePositions: ['volunteer'] });
+
+    await user.click(screen.getByRole('button', { name: 'Take the Tour Guide seat on this shift' }));
+
+    expect(onClaim).toHaveBeenCalledWith(expect.objectContaining({ id: 's1' }), 'volunteer', 'tour_guide');
+  });
+
+  it('names the role on the main button when only one is left', async () => {
+    const user = userEvent.setup();
+    renderList({ shift: tour(), eligiblePositions: ['volunteer'] });
+
+    await user.click(screen.getByRole('button', { name: 'Sign up as Tour Guide' }));
+
+    expect(onClaim).toHaveBeenCalledWith(expect.objectContaining({ id: 's1' }), 'volunteer', 'tour_guide');
+  });
+
+  it('has the member pick a seat when more than one role is open', () => {
+    renderList({
+      shift: tour({
+        roster: [],
+        attendee_count: 0,
+        outreach_roles: [
+          { role: 'tour_guide', label: 'Tour Guide', total: 1, filled: 0, remaining: 1 },
+          { role: 'educator', label: 'Educator', total: 1, filled: 0, remaining: 1 },
+        ],
+      }),
+      eligiblePositions: ['volunteer'],
+    });
+
+    expect(screen.getByText('Choose a role above to sign up.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Sign up as/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Take the Educator seat on this shift' })).toBeInTheDocument();
+  });
+});

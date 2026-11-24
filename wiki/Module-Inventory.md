@@ -198,7 +198,14 @@ batch scanner is titled **Distribute Items**.
   The downloadable sample includes common medical supplies (no medications);
   its `Category` cells are names matched against categories you have already
   created, and a row that matches none imports uncategorized, which reads as gear
-  (see [Importing supplies from a CSV](Module-Medical-Supplies#importing-supplies-from-a-csv))
+  (see [Importing supplies from a CSV](Module-Medical-Supplies#importing-supplies-from-a-csv)).
+  _(2026-11-23, W43-5)_ Once a file is chosen, the page checks **every row**
+  with a dry run of the same import (`?dry_run=true`, which writes nothing) and
+  shows, under the preview and before **Import**, how many rows will import,
+  **Rows that will be skipped** with each reason, and **Will import, with a
+  warning**. A serial number or asset tag repeated within the file is caught
+  there too. If the check cannot run, the page says so and Import works as
+  before.
 - **CSV Export** — export of the filtered list to CSV (see
   [Item Management](Module-Inventory-Developer#item-management))
 - **Variant Groups, sizes and styles** — see
@@ -238,6 +245,12 @@ batch scanner is titled **Distribute Items**.
   Maintenance records can persist structured NFPA Ch. 6–8 inspection results
   (assessment booleans, contamination level, SCBA fields, recommendation) to
   `nfpa_inspection_details` when supplied
+- **Maintenance page** — tabs for **Due Items**, **Never Inspected** and
+  **Maintenance History**. **Never Inspected** lists active items that need
+  inspecting (their category requires maintenance, or they carry their own
+  interval) but have no inspection on record and no due date, so they would
+  otherwise appear nowhere; **Log Maintenance** records the first inspection
+  and starts the schedule. They are not counted as due on the dashboard
 
 ---
 

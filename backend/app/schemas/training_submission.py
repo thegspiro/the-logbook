@@ -15,6 +15,7 @@ from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase, refuse_attachment_writes
 from app.schemas.column_bounds import FLOAT32_MAX
 from app.schemas.enum_validation import validate_enum_value
+from app.utils.training_attachments import is_removal_marker
 
 # ==================== Self-Report Config Schemas ====================
 
@@ -209,6 +210,10 @@ class SubmissionAttachment(BaseModel):
     file_type: Optional[str] = None
     file_size: Optional[int] = None
     uploaded_at: Optional[str] = None
+    # Set on a removal marker (owner decision 2026-11-23): the file was
+    # deleted by retention or by the malware scan, and when.
+    removed_at: Optional[str] = None
+    removed_reason: Optional[str] = None
 
 
 def sanitize_attachments(attachments: Optional[list]) -> list[dict]:
@@ -220,16 +225,20 @@ def sanitize_attachments(attachments: Optional[list]) -> list[dict]:
     result: list[dict] = []
     for i, a in enumerate(attachments or []):
         if isinstance(a, dict):
-            result.append(
-                {
-                    "index": i,
-                    "id": a.get("id"),
-                    "file_name": a.get("file_name"),
-                    "file_type": a.get("file_type"),
-                    "file_size": a.get("file_size"),
-                    "uploaded_at": a.get("uploaded_at"),
-                }
-            )
+            row = {
+                "index": i,
+                "id": a.get("id"),
+                "file_name": a.get("file_name"),
+                "file_type": a.get("file_type"),
+                "file_size": a.get("file_size"),
+                "uploaded_at": a.get("uploaded_at"),
+            }
+            # Only a removal marker carries these, so an ordinary entry
+            # reads exactly as it did before markers existed.
+            if is_removal_marker(a):
+                row["removed_at"] = a.get("removed_at")
+                row["removed_reason"] = a.get("removed_reason")
+            result.append(row)
         else:
             result.append({"index": i, "id": None, "file_name": str(a)})
     return result

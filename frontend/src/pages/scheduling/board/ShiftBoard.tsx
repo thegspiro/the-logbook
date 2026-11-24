@@ -468,7 +468,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
     setSheetOpen(true);
   };
 
-  const handleClaim = async (shift: ShiftRecord, position: string | null) => {
+  const handleClaim = async (shift: ShiftRecord, position: string | null, outreachRole?: string | null) => {
     // Checked before the optimistic update below, not only in the buttons that
     // reach here: painting the member into a seat the server is about to
     // refuse would seat them and then snap them back out.
@@ -515,7 +515,10 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
     setShifts(optimistic);
 
     try {
-      await schedulingService.signupForShift(shift.id, { position: seat });
+      await schedulingService.signupForShift(shift.id, {
+        position: seat,
+        ...(outreachRole ? { outreach_role: outreachRole } : {}),
+      });
       const fresh = await refresh();
       const updated = fresh.find((s) => s.id === shift.id) ?? shift;
       setConfirmedShift(updated);
@@ -785,7 +788,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
                   pendingShiftId={pendingShiftId}
                   confirmedShift={confirmedShift}
                   onClose={() => setSheetOpen(false)}
-                  onClaim={(shift, position) => void handleClaim(shift, position)}
+                  onClaim={(shift, position, role) => void handleClaim(shift, position, role)}
                   onRelease={openGiveUp}
                   onOpenStanding={setStandingSeed}
                   offersToMe={offersToMe}
@@ -841,7 +844,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
               eligibleByShift={eligibleByShift}
               unavailableByShift={unavailableByShift}
               pendingShiftId={pendingShiftId}
-              onClaim={(shift, position) => void handleClaim(shift, position)}
+              onClaim={(shift, position, role) => void handleClaim(shift, position, role)}
               onRelease={openGiveUp}
               onOpenStanding={setStandingSeed}
               offersToMe={offersToMe}

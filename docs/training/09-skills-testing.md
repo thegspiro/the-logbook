@@ -205,9 +205,10 @@ critical cannot fail the test on its own. **Passing Points** cannot be higher
 than **Max Points**. If you untick **Critical**, the number you typed is kept,
 hidden, and comes back if you tick **Critical** again.
 
-> **What if a step deducts points but nothing earns any?** The template will
-> not save. There is no total for the deduction to come off. Give at least one
-> step a point value first.
+> **What if a step deducts points but nothing earns any?** The sheet will not
+> save (on an existing template, its other settings still do). There is no
+> total for the deduction to come off. Give at least one step a point value
+> first.
 
 ![Skill template builder with its sections and scored criteria](./images/09-04-template-builder.png)
 
@@ -221,6 +222,33 @@ hidden, and comes back if you tick **Critical** again.
 Select **Save Draft** at the top, or **Create Template** at the bottom. The
 template is saved as a draft. You can keep editing a draft at any time. Once
 it is saved, a **Publish** button appears next to **Save Draft**.
+
+### When the builder finds a problem _(2026-11-23)_
+
+The builder marks every problem on the control it belongs to, and lists them
+all in **Fix these and save again** at the top, each named by where it is —
+for example _"Section 1, Criterion 2: Give the criterion a label."_ A
+collapsed section that holds a problem opens by itself. Before, one banner at
+the top listed the problems and nothing on the sheet was marked.
+
+- **A new template is created only once nothing is flagged.**
+- **Saving an existing template saves what it can.** Settings such as the
+  name, category, passing percentage, **Valid for (months)** and the time
+  limit are saved one by one: a refused one keeps its stored value and the
+  page says, for example, _"Template saved, except template name. Fix it and
+  save again."_ The sheet — the sections and steps — is saved as a whole, so
+  while any section or step is flagged, the stored sheet is kept and only the
+  settings are saved. What you typed stays on the screen.
+- **The sheet's own rules still hold the sheet back.** A checklist step with
+  no items, a statement with no text, and a step that deducts points when no
+  step earns any are refused on **Save Draft** as well as on **Publish**.
+- **Publish waits for every problem to be fixed**, and a publish that fails
+  says why on the page rather than in a pop-up.
+- A problem the server finds in a step is shown under **Evaluation Sections**
+  as a whole. (Before, it could land on the template name.)
+- **Enter saves.** **Cancel** after a change asks **Keep editing** /
+  **Discard changes**, and reloading or closing the tab makes the browser ask
+  first.
 
 ### Linking a Template to a Training Requirement
 
@@ -1635,6 +1663,10 @@ have moved, been renamed or work differently.
   Rate, even when the queue is empty.
 - **Pass Rate and Avg Score show "—", not 0%,** when there is nothing to
   measure.
+- **The builder no longer refuses a whole save over one problem**
+  _(2026-11-23)_. Problems are marked on their controls instead of in one
+  banner, and saving an existing template keeps every setting it can; see
+  [When the builder finds a problem](#when-the-builder-finds-a-problem-2026-11-23).
 
 ---
 

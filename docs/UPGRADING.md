@@ -892,6 +892,70 @@ Nothing blocks a restart, and no migration ships with this change.
 - A file that cannot be removed straight away (an unreachable remote store)
   is retried by the hourly `pending_file_deletions` sweep.
 
+### Erasure repairs, apparatus sign-up approval, requester feedback and waiver rules (2026-11-23)
+
+Nothing blocks a restart. Ten migrations arrive together and run in one
+`alembic upgrade head`; the single head afterwards is `07abf8e6553b`. Two of
+them rewrite stored data and **cannot be undone** by a downgrade, so take the
+backup described above first.
+
+- **`1f3a6c2d9e40` (data only, irreversible, #4615).** For members already
+  anonymised, it renames training attachment entries that kept a file name but
+  no stored file to "certificate" or "attachment", and it re-excuses meeting
+  attendance rows that anonymisation had turned into absences although a
+  waiver was granted. Batched, and safe to run twice.
+- **`9c41e7b2d5a3` (data only, irreversible, #4624).** Writes "Former member"
+  where an anonymised member's name was stored as an instructor:
+  `event_templates.training_details`, `training_sessions.instructor` and the
+  matching attendees' `training_records.instructor`.
+- **`5c8e1f3a9d27` (#4613).** Adds `require_signup_approval` (default off) to
+  apparatus event templates and plans, and creates
+  `apparatus_event_seat_requests`. **New scheduled task**
+  `apparatus_seat_request_lapse`, every 15 minutes. A deployment that drives
+  tasks from an external cron needs the line
+  `*/15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=apparatus_seat_request_lapse`.
+  No new email goes out until a template turns approval on.
+- **`0a4667186b2d` (#4587).** Creates `event_request_feedback`. No email
+  changes until a department picks a feedback form. Once one is picked, the
+  built-in **Completed** email to an outreach requester carries a link to the
+  status page to leave feedback. Two new public, rate-limited routes, `GET`
+  and `POST /api/v1/event-requests/status/{token}/feedback`, serve it.
+- **`07abf8e6553b` (#4614).** Creates the empty table
+  `rolling_requirement_last_met`. It has no backfill: last-met dates start with
+  the first daily compliance run after the upgrade, so a member already told
+  about a lapse is not emailed again until they meet the requirement and lapse
+  again.
+- **`bfb747c095c3` (#4621).** Adds `program_requirement_reopened` to the email
+  template type columns. A downgrade deletes rows of that type.
+- **`b37218495d33` (#4608).** Drops the index `idx_meeting_attendees_meeting`
+  where another index leads on `meeting_id`. It does nothing otherwise, and no
+  rows change.
+- **Merges:** `39818e142d35`, `986d6575af35`, `e7ed388345a4`.
+
+Behaviour that changes on upgrade, with no setting to restore the old one:
+
+- **Cancelling or deleting an event voids approved waiver requests**, not
+  only pending ones (owner decision of 2026-11-23, #4619). Each voided approval
+  stops counting toward the member's yearly limit, comes off the minutes for a
+  meeting, and the member is told. Denied requests are kept.
+- **Meeting-waiver notices are required.** The expiry, moved-meeting and
+  question emails go out under **Changes to your training record**, which a
+  member cannot switch off.
+- **The waiver policy read is narrower.** `GET .../waivers/requests/policy`
+  (training and meetings) no longer returns the approver and copy-to position
+  ids or `chief_alternate_user_id` unless the caller holds the workflow's
+  manage permission.
+- **Report key renamed.** The annual and monthly compliance reports'
+  `record_completeness.records_with_certification` is now
+  `records_with_course_name`. Reports stored before the upgrade keep the old
+  key, so a script reading both needs to accept either.
+- **Draft events.** A holder of `training.manage` now sees and opens draft
+  Training events; members see no drafts anywhere, the training calendar
+  included (#4641).
+- **Webhook audit events.** Five public-webhook audit events are now recorded
+  against the department (#4644). Rows written before the upgrade stay
+  platform-level; there is no backfill.
+
 ### Community risk reduction tracking, and a street map that loads tiles from OpenStreetMap (2026-11-23)
 
 Nothing blocks a restart. Migrations `89c0b481fe55` and `5c2e8a417d90` create
@@ -1043,6 +1107,44 @@ Nothing blocks a restart, and nothing is migrated.
   make it required.
 - **Store announcements now covers only** the ordering-window notices and the
   vendor-order update.
+
+### History events and apparatus; outreach positions renamed; Zeffy dues wait for a treasurer (2026-11-22)
+
+Nothing blocks a restart. Recorded by the November 21 – 22 documentation
+pass for changes that merged without an entry here.
+
+- **History: events, apparatus, timeline and "Today in history"**
+  (`9cce83b31c70`, #4537). Adds twelve `history_*` tables,
+  `history_titles.show_on_timeline` (off for every existing title) and
+  optional held-from / held-to dates on `historical_member_period_titles`.
+  Existing rows get no dates; nothing is guessed from a service period, so
+  nothing reaches the timeline until the Historian dates a held title and
+  switches the title on. With the History module on, a **Today in history**
+  card appears on every member's Dashboard on a day with a matching entry.
+  **Downgrading** past this revision drops every event, historical apparatus
+  record, their links, the station and type lists, the timeline switches and
+  the title dates: take a backup first.
+- **Outreach positions are renamed** (`1a5c18b46791`, #4505). The seeded
+  **Public Outreach** position becomes **Community Outreach Manager** and
+  **Community Education / Outreach Team** becomes **Community Outreach
+  Team**, with their descriptions, and the guest headcount reminder email now
+  names the report **Outreach Impact**. Only rows still carrying the seeded
+  wording change: a position your department renamed keeps its name. Slugs
+  and permissions are unchanged.
+- **A volunteer's RSVP no longer takes an attendee seat** (`c7e1a94d2f58`,
+  #4524). Existing volunteer RSVPs on outreach signup sheets are marked, so an
+  event's free places can rise after the upgrade.
+- **Zeffy membership payments are no longer credited to dues automatically**
+  (#4519, ADV2-11). Each new dues payment waits as **Awaiting confirmation**
+  on Grants & Fundraising → Zeffy until a `finance.manage` holder confirms
+  whose dues it pays. Payments already credited are unchanged.
+- **An applicant who edited their own details** (`809893462b67`, #4542) is
+  matched to a member only by the transfer link. The migration backfills
+  this from the activity log for applications already edited.
+- **`GET /api/v1/training/reports/compliance-forecast`** (#4485) now returns
+  `{members, averages}` instead of a bare list. A script reading the list
+  must read `.members`. `GET /api/v1/training/competency-matrix` is retired
+  and answers 404 (#4540); the Compliance Matrix answers the same question.
 
 ### Leave requests: an approver's own request goes to the Chief; approver cover (2026-11-21)
 

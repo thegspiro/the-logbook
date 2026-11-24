@@ -14,7 +14,12 @@ import { AlertTriangle, ArrowLeftRight, Check, Loader2, X } from 'lucide-react';
 import { Modal } from '../../../components/Modal';
 import { schedulingService } from '../../../modules/scheduling';
 import type { ShiftRecord, StandingShiftClaim, TradeCandidate } from '../../../modules/scheduling';
-import { memberInitials, shiftCrewName, shiftStatusInfo } from '../../../modules/scheduling/utils/shiftBoard';
+import {
+  memberInitials,
+  outreachTitle,
+  shiftCrewName,
+  shiftStatusInfo,
+} from '../../../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../../../modules/scheduling/hooks/useSignupWindow';
 import { positionLabel } from '../../../modules/scheduling/utils/positionLabels';
 import { calendarDaysFromToday, formatCalendarDate, formatTime } from '../../../utils/dateFormatting';
@@ -66,7 +71,7 @@ export const GiveUpShiftModal: React.FC<GiveUpShiftModalProps> = ({
     `${shiftCrewName(shift, timezone).replace(' Duty Crew', '')} ${formatTime(shift.start_time, timezone)}${
       shift.end_time ? `–${formatTime(shift.end_time, timezone)}` : ''
     }`,
-    shift.apparatus_unit_number ?? shift.apparatus_name ?? '',
+    outreachTitle(shift) ?? shift.apparatus_unit_number ?? shift.apparatus_name ?? '',
   ]
     .filter(Boolean)
     .join(' · ');

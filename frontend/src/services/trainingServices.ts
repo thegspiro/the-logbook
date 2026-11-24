@@ -43,6 +43,8 @@ import type {
   CourseLinkResult,
   CourseLinksView,
   CourseUnlinkResult,
+  DoubleCreditPair,
+  DoubleCreditView,
   CourseCohortClass,
   CourseCohortCreate,
   CourseCohortDetail,
@@ -125,6 +127,7 @@ import type {
   RequirementOverride,
   RequirementOverrideCreate,
   MandatoryTiersResponse,
+  FileRemovalReason,
 } from '../types/training';
 import type { ComplianceMatrix, ExpiringCertification } from './communicationsServices';
 
@@ -272,6 +275,18 @@ export const trainingService = {
   /** Put a link's records back as they were before it. */
   async undoCourseLink(linkId: string): Promise<CourseUnlinkResult> {
     const response = await api.post<CourseUnlinkResult>(`/training/course-links/${linkId}/undo`);
+    return response.data;
+  },
+
+  /** Possible double credit an officer has yet to decide, oldest first. */
+  async getDoubleCredit(): Promise<DoubleCreditView> {
+    const response = await api.get<DoubleCreditView>('/training/double-credit');
+    return response.data;
+  },
+
+  /** Decide both records of a possible double credit stand. */
+  async keepBothDoubleCredit(flagId: string): Promise<DoubleCreditPair> {
+    const response = await api.post<DoubleCreditPair>(`/training/double-credit/${flagId}/keep-both`);
     return response.data;
   },
 
@@ -2370,6 +2385,9 @@ export interface TrainingAttachment {
   file_type: string | null;
   file_size: number | null;
   uploaded_at: string | null;
+  /** Set when the file was removed; the entry then has nothing to download. */
+  removed_at?: string | null;
+  removed_reason?: FileRemovalReason | null;
 }
 
 export const documentService = {

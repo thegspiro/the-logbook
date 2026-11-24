@@ -86,6 +86,13 @@ import { EmptyState } from '../../components/ux/EmptyState';
 import { attributionName } from '../../utils/memberName';
 import { evaluationAverageLabel, formatEvaluationAverage } from '../../utils/shiftEvaluations';
 import { StatGrid } from '@/components/ux/StatGrid';
+import { outreachTitle } from '../../modules/scheduling/utils/shiftBoard';
+
+/** The lead of a linked shift's label: the event on an outreach sheet, otherwise the rig. */
+const shiftReportLabel = (shift: ShiftRecord): string => {
+  const name = outreachTitle(shift) ?? shift.apparatus_name;
+  return name ? `${name} — ` : '';
+};
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'department' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
@@ -403,7 +410,7 @@ export const ShiftReportsTab: React.FC = () => {
         const shift = await schedulingService.getShift(linkedShiftId);
         if (cancelled) return;
         const shiftDate = shift.shift_date ?? getTodayLocalDate(tz);
-        setLinkedShiftLabel(`${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shiftDate}`);
+        setLinkedShiftLabel(`${shiftReportLabel(shift)}${shiftDate}`);
         setShiftApparatusType(shift.apparatus_type ?? null);
         const hours = shiftHoursForOneMember(shift);
         setForm((prev) => ({
@@ -655,7 +662,7 @@ export const ShiftReportsTab: React.FC = () => {
       hours_on_shift: shiftHoursForOneMember(shift),
       calls_responded: shift.call_count || 0,
     }));
-    setLinkedShiftLabel(`${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shift.shift_date}`);
+    setLinkedShiftLabel(`${shiftReportLabel(shift)}${shift.shift_date}`);
     setShiftApparatusType(shift.apparatus_type ?? null);
     await loadCrewForShift(shift.id);
   };
@@ -1917,7 +1924,7 @@ export const ShiftReportsTab: React.FC = () => {
                           </div>
                           <div>
                             <p className="text-theme-text-primary font-medium">
-                              {shift.apparatus_name || 'Shift'} — {shift.shift_date}
+                              {outreachTitle(shift) ?? (shift.apparatus_name || 'Shift')} — {shift.shift_date}
                             </p>
                             <p className="text-theme-text-muted text-xs">
                               {shift.attendee_count} member{shift.attendee_count !== 1 ? 's' : ''}

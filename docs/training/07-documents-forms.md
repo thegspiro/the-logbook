@@ -117,6 +117,15 @@ to document managers in general. Only a full administrator sees every folder.
 | Member Files                                                                                | Each member sees only their own folder                                                                                                           |
 | History _(2026-11-14)_                                                                      | Members who can manage History. Filled through History, which catalogues each document; see below                                                |
 
+**When a member is erased** _(2026-11-23)_, anonymizing or permanently
+deleting them removes the home address and the reason for leaving from their
+property-return reports in **Member Separations** (the report and its item
+list stay), and deletes their personal folder under **Member Files** with
+everything in it. A document there that is catalogued in History, or is a
+receipt a submitted finance record relies on, blocks the erasure until it is
+removed from that record. See
+[Privacy & Data Rights](./17-privacy-data-rights.md#what-is-removed).
+
 A built-in folder keeps its name and place and cannot be deleted, because the
 part of The Logbook that made it files into it. You can still change its
 description and who can open it, but its built-in access always applies too.

@@ -605,12 +605,12 @@ Setup creates 31 built-in positions (fewer for an EMS-only department; see
 edit them, and add your own. The full list, with each position's description
 and permissions, is on the **Role Management** screen.
 
-| Group                    | Positions                                                                                                                                                                                                                                                                                                           |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Operational ladder**   | Chief, Deputy Chief, Assistant Chief, Captain, Lieutenant, Engineer / Driver Operator, Firefighter, EMT                                                                                                                                                                                                             |
-| **System**               | IT Manager (the System Owner, with full access), Member (held by everyone)                                                                                                                                                                                                                                          |
-| **Leadership and board** | President, Vice President, Treasurer, Secretary, Assistant Secretary, Board of Directors                                                                                                                                                                                                                            |
-| **Officer roles**        | Quartermaster, EMS Supply Officer, Apparatus Officer, Facilities Manager, Safety Officer, Compliance Officer, Training Officer, Scheduling Officer, Membership Coordinator, Assistant Membership Coordinator, Communications Officer / PIO, Public Outreach, Fundraising Chair, Historian, Meeting Hall Coordinator |
+| Group                    | Positions                                                                                                                                                                                                                                                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Operational ladder**   | Chief, Deputy Chief, Assistant Chief, Captain, Lieutenant, Engineer / Driver Operator, Firefighter, EMT                                                                                                                                                                                                                        |
+| **System**               | IT Manager (the System Owner, with full access), Member (held by everyone)                                                                                                                                                                                                                                                     |
+| **Leadership and board** | President, Vice President, Treasurer, Secretary, Assistant Secretary, Board of Directors                                                                                                                                                                                                                                       |
+| **Officer roles**        | Quartermaster, EMS Supply Officer, Apparatus Officer, Facilities Manager, Safety Officer, Compliance Officer, Training Officer, Scheduling Officer, Membership Coordinator, Assistant Membership Coordinator, Communications Officer / PIO, Community Outreach Manager, Fundraising Chair, Historian, Meeting Hall Coordinator |
 
 ### Managing Permissions
 
@@ -991,6 +991,23 @@ enough to stay a table from tablet width up and become cards only on a phone.
 CSV and PDF downloads are unchanged. _Screenshot: replace any image of a
 report's on-screen results, such as the Certification Expiration or Member
 Roster report._
+
+_Corrected 2026-11-24._ **On a computer or tablet, wide reports are a table
+again** _(since 2026-11-21)_. Cards hide the column headers, and sorting lives
+in the headers, so a report shown as cards at every width could not be sorted
+at all. Now every report shows as cards on a phone only. From tablet width up
+it is a table, and a wide one, such as **Certification Expiration** or
+**Member Roster**, scrolls sideways inside the report window. To scroll it
+with the keyboard, Tab to the results and use the arrow keys.
+
+**Sorting a report** _(2026-11-23)_. Select a column heading to sort by it:
+the first press sorts ascending, the second descending, and the third returns
+the rows to the report's own order. An arrow beside the heading shows the
+current order. The headings are now buttons, so you can also Tab to one and
+press **Enter** or **Space**, and a screen reader announces which column the
+report is sorted by. Before, only a mouse could sort, and pressing a heading a
+third time just flipped the order again. Sorting is not available on a phone,
+where the results are cards.
 
 **A Source column where rows can come from an import** _(2026-11-19)_. Two
 reports say where each row came from in their **CSV** and **PDF** downloads

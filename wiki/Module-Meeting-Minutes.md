@@ -291,6 +291,38 @@ period, waived meetings and meetings during leave, and a **Voting** column.
   `PUT /meetings/waiver-requests/policy` with `attachment` other than `off` is
   refused, and a stored one reads as off. The member guide is
   [Events & Meetings](https://github.com/thegspiro/the-logbook/blob/main/docs/training/04-events-meetings.md#business-meeting-waiver-requests-the-screens-2026-11-13).
+- **Waiver rules of 2026-11-23** (owner decisions, #4608, #4619), shared with
+  the training workflow:
+  - **Cancelling or deleting the meeting's event voids approved requests as
+    well as pending ones** (`void_pending_for_events`): the request reads
+    **Voided**, stops counting toward the policy's cap, its excused roll-call
+    row comes off the minutes (`_unapply_meeting_waiver`; a waiver the
+    Secretary granted stays), and the member is emailed after the commit. A
+    denied request is kept.
+  - **A held correction keeps an approval.** Moving the start of a meeting
+    that had already started, or to another time on the same local date,
+    leaves an approved request approved and its minutes row in place; only the
+    request's title, start and date follow the event
+    (`_correction_keeps_decision`). Any other move still sends the request back
+    to the member to confirm.
+  - **The record notices are mandatory.** The expiry, moved-meeting and
+    decider-question emails now go under **Changes to your training record**
+    (`member_record_email_kind = TRAINING_RECORD_CHANGES`), which members
+    cannot turn off; the decision and void emails still follow **Event changes
+    and cancellations**.
+  - **Confirming a moved meeting** now runs the refusals a new request does
+    (`_not_counted_refusal`), including the on-leave check.
+  - **The queue pages each list.** `GET /meetings/waiver-requests` takes
+    `state=pending|decided`, and **Waiting for a decision** and **Decided and
+    closed** load 50 at a time with their own **Show more** buttons.
+  - **`GET /meetings/waiver-requests/policy`** returns the routing (approver
+    and CC positions, the alternate) only to `meetings.manage`; everyone else
+    gets the member-facing policy.
+  - Migration `b37218495d33` drops the redundant
+    `idx_meeting_attendees_meeting` index; the unique `(meeting_id, user_id)`
+    index already leads on `meeting_id`.
+  - Viewing and removing a request's documents (#4619, #4645) applies to
+    training requests only: the meeting policy takes no documents.
 
 ## Minutes settings
 

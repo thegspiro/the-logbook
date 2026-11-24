@@ -95,6 +95,20 @@ edit never moves a recorded mark or turns a recorded pass into a fail.
 **Archive** stops a sheet being offered for new tests without deleting it;
 archived templates cannot be edited. **Duplicate** makes a draft copy.
 
+**A problem is marked where it is** _(2026-11-23, #4609)_. Every open problem
+is flagged on its control and listed in **Fix these and save again**
+("Section 1, Criterion 2: …"); a collapsed section holding one opens. A new
+template is created only once nothing is flagged. **Save Draft** on an
+existing template saves each setting it can (_"Template saved, except
+template name"_; the refused setting keeps its stored value), but sends the
+sheet only when no section or step is flagged, because the update replaces the
+sheet whole. Rules the API does not enforce — a checklist step with no items,
+a statement with no text, a deduction with nothing to come off — still hold
+the sheet back on save as well as on publish. **Publish** waits until nothing
+is flagged. A 422 on `sections.N.criteria.M.*` is shown on the sheet as a
+whole. Cancel and leaving ask before discarding. Officer guide:
+[When the builder finds a problem](https://github.com/thegspiro/the-logbook/blob/main/docs/training/09-skills-testing.md#when-the-builder-finds-a-problem-2026-11-23).
+
 ## Running a test
 
 1. Start from **Training → Skills Testing → Available Tests** (tap a sheet), or

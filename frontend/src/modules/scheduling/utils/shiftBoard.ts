@@ -50,6 +50,14 @@ export interface ShiftSeat {
   member: ShiftRosterSeat | null;
   /** True when the current member holds this seat. */
   isMine: boolean;
+  /**
+   * On a community outreach sheet, the job this seat is for: the holder's own
+   * role, or for an open seat one of the roles still needed. Every seat on
+   * such a sheet has the same placeholder position, so the position alone
+   * cannot say which seat is the tour guide's.
+   */
+  outreachRole?: string | null;
+  outreachRoleLabel?: string | null;
 }
 
 export interface ShiftStatusInfo {
@@ -523,6 +531,24 @@ export const buildSeats = (shift: ShiftRecord, currentUserId?: string | null): S
       seats.push({ position: null, member: null, isMine: false });
     }
   }
+  if (shift.is_outreach) {
+    // Open seats are handed the roles still needed, in the order the sheet
+    // lists them. Which open seat gets which role is arbitrary, but the counts
+    // are the server's own, so the list shows exactly what is left to fill.
+    const stillNeeded = (shift.outreach_roles ?? []).flatMap((slot) =>
+      Array.from({ length: slot.remaining }, () => slot)
+    );
+    for (const seat of seats) {
+      if (seat.member) {
+        seat.outreachRole = seat.member.outreach_role ?? null;
+        seat.outreachRoleLabel = seat.member.outreach_role_label ?? null;
+      } else {
+        const slot = stillNeeded.shift();
+        seat.outreachRole = slot?.role ?? null;
+        seat.outreachRoleLabel = slot?.label ?? null;
+      }
+    }
+  }
   return seats;
 };
 
@@ -646,6 +672,22 @@ export const shiftStartHour = (shift: ShiftRecord, timezone?: string): number | 
 /** "Day Duty Crew" / "Night Duty Crew" — the block heading in the day panel. */
 export const shiftCrewName = (shift: ShiftRecord, timezone?: string): string =>
   shiftPeriodLetter(shift, timezone) === 'D' ? 'Day Duty Crew' : 'Night Duty Crew';
+
+/** The tag shown beside a community outreach sheet wherever the schedule lists one. */
+export const OUTREACH_TAG = 'Community outreach';
+
+/**
+ * The event a community outreach sheet staffs, or null on a duty shift.
+ *
+ * A station tour is not a duty crew, so the schedule heads its sheet with the
+ * event. The fallback covers a sheet whose event can no longer be resolved.
+ */
+export const outreachTitle = (shift: ShiftRecord): string | null =>
+  shift.is_outreach ? shift.outreach_title?.trim() || 'Community outreach event' : null;
+
+/** What to head a shift with: the event on an outreach sheet, otherwise the crew. */
+export const shiftHeading = (shift: ShiftRecord, timezone?: string): string =>
+  outreachTitle(shift) ?? shiftCrewName(shift, timezone);
 
 /** Initials for a seat avatar: "Tam Nguyen" → "TN". */
 export const memberInitials = (name?: string | null): string => {

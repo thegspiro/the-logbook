@@ -1036,6 +1036,25 @@ class SchedulingService:
                     configured.get(str(d.get("organization_id")), []), role
                 )
 
+    async def _outreach_titles(
+        self, organization_id: UUID | str, shifts: List[Shift]
+    ) -> Dict[str, str]:
+        """The event each outreach sheet in the batch staffs, by shift id.
+
+        Costs nothing for a batch of duty shifts, which is nearly every one.
+        """
+        sheet_ids = [str(s.id) for s in shifts if s.is_outreach]
+        if not sheet_ids:
+            return {}
+        from app.services.event_request_service import outreach_sheet_titles
+
+        org = await self.db.scalar(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        return await outreach_sheet_titles(
+            self.db, org, str(organization_id), sheet_ids
+        )
+
     async def enrich_assignments_with_shifts(
         self, assignments: List[ShiftAssignment], organization_id: UUID | str
     ) -> List[Dict[str, Any]]:
@@ -1069,6 +1088,7 @@ class SchedulingService:
             apparatus_map = await self._get_apparatus_map(
                 organization_id, [s.apparatus_id for s in shifts if s.apparatus_id]
             )
+            outreach_titles = await self._outreach_titles(organization_id, shifts)
             for s in shifts:
                 apparatus = (
                     apparatus_map.get(s.apparatus_id) if s.apparatus_id else None
@@ -1086,6 +1106,8 @@ class SchedulingService:
                     ),
                     "shift_officer_id": s.shift_officer_id,
                     "color": s.color,
+                    "is_outreach": bool(s.is_outreach),
+                    "outreach_title": outreach_titles.get(str(s.id)),
                 }
 
         result = []

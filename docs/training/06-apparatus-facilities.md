@@ -539,6 +539,15 @@ The dashboard shows:
 - **All Facilities:** a card for each facility with its name, type, address
   and status, and a search box
 
+**Upcoming Inspections counts what it opens** _(2026-11-23)_. The tile and
+the panel count inspections next due in the next 30 days at facilities that
+are not archived, the same as the main dashboard's tile. Selecting the tile,
+or the panel's **View all**, opens **Inspections** filtered to those, with a
+note reading "Showing only inspections next due in the next 30 days, at
+facilities that are not archived." and **Show all inspections** to clear it.
+Before, the tile also counted archived facilities' inspections, and both links
+opened the whole list, so the numbers did not match.
+
 The header has **Add Facility** (for officers who can create facility
 records), **Print Labels**, and **Facility Settings** (for full facility
 managers). With no facilities yet, the list reads "No facilities yet. Select
@@ -961,6 +970,15 @@ The maintenance types offered are your department's own list, set up in
 6. Select **Create Record** (**Save Changes** when editing).
 
 If a save is refused, the message gives the reason.
+
+**A record stays with its facility** _(2026-11-23)_. When you edit a record
+from the department-wide **Maintenance** page, the dialog shows
+**Facility:** and the facility's name as text, not a picker. The facility is
+chosen when the record is created. Before, the picker was there on edit, but
+the change was ignored on save while the page still said the record was
+updated. If a record went to the wrong facility, delete it and create it
+again under the right one. The same applies to inspections edited from the
+department-wide **Inspections** page.
 
 ![New facility maintenance record form with its facility, type, date, vendor and cost fields](./images/06-15-facility-maintenance-form.png)
 

@@ -1927,6 +1927,22 @@ export interface SelfReportConfigUpdate {
 }
 
 /**
+ * Why a certificate file is no longer stored (owner decision 2026-11-23):
+ * the department's retention policy or the malware scan deleted it, and when.
+ */
+// Type only: the named constants are FILE_REMOVAL_REASON in
+// utils/fileRemoval.ts. A runtime value here would make every training page
+// that shows the notice load this module's chunk, which lands in the
+// first-load preload map (scripts/check-initial-bundle.mjs).
+export type FileRemovalReason = 'retention' | 'malware';
+
+export interface FileRemoval {
+  /** ISO timestamp, UTC. */
+  removed_at: string | null;
+  removed_reason: FileRemovalReason | null;
+}
+
+/**
  * One stored certificate/photo on a submission, as the API reports it.
  * Server file paths are stripped before the list leaves the backend, so an
  * attachment is addressed by its index, never by path.
@@ -1939,6 +1955,9 @@ export interface SubmissionAttachment {
   file_type?: string | null;
   file_size?: number | null;
   uploaded_at?: string | null;
+  /** Set when the file was removed; the entry then has nothing to download. */
+  removed_at?: string | null;
+  removed_reason?: FileRemovalReason | null;
 }
 
 export interface TrainingSubmission {
@@ -2531,6 +2550,8 @@ export interface MyTrainingHistoryRecord {
   void_reason?: string | null;
   source: TrainingRecordSource;
   source_label: string;
+  /** Certificates removed from this record, and why. Absent from an older server. */
+  file_removals?: FileRemoval[];
 }
 
 export interface MyTrainingHistoryYear {
@@ -2678,6 +2699,8 @@ export interface MyTrainingSummary {
     status: string;
     submitted_at: string | null;
     reviewed_at: string | null;
+    /** Certificates removed from this submission, and why. Absent from an older server. */
+    file_removals?: FileRemoval[];
   }>;
 }
 
@@ -3896,6 +3919,40 @@ export interface RequirementOverrideCreate {
   start_date: string;
   end_date: string;
   reason: string;
+}
+
+// ── Possible double credit ────────────────────────────────────────
+
+/** One side of a possible double credit (snake_case, as the API serves it). */
+export interface DoubleCreditRecord {
+  id: string;
+  course_name: string;
+  course_id?: string | null;
+  completion_date?: string | null;
+  hours_completed: number;
+  source_event_id?: string | null;
+}
+
+/**
+ * A finalized event's record beside the member's own record of the same class
+ * and day (owner decision 2026-11-23: flagged, never merged).
+ */
+export interface DoubleCreditPair {
+  id: string;
+  user_id: string;
+  member_name: string;
+  /** `same_course`: both name one library course. `same_name`: equal names, ignoring case and punctuation. */
+  match_reason: string;
+  detected_at: string;
+  event_record: DoubleCreditRecord;
+  other_record: DoubleCreditRecord;
+  /** The other record came from an approved self-report; otherwise an officer entered it. */
+  other_from_self_report: boolean;
+}
+
+export interface DoubleCreditView {
+  items: DoubleCreditPair[];
+  total: number;
 }
 
 // ── Course links ──────────────────────────────────────────────────

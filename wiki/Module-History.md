@@ -1,7 +1,8 @@
 # History Module
 
 _(Phase 1 2026-11-03; roster import and merge, photos and media 2026-11-13;
-documents 2026-11-14)_
+documents 2026-11-14; events, apparatus, timelines and "Today in history"
+2026-11-21)_
 
 > The full engineering reference is [docs/HISTORY_MODULE.md](https://github.com/thegspiro/the-logbook/blob/main/docs/HISTORY_MODULE.md).
 > The step-by-step guide to past members, the Honor Roll, titles and clearance
@@ -11,8 +12,8 @@ documents 2026-11-14)_
 > [docs/KNOWN_LIMITATIONS.md](https://github.com/thegspiro/the-logbook/blob/main/docs/KNOWN_LIMITATIONS.md#history--decisions-the-module-ships-with-2026-11-03).
 
 The department archive: everyone who served, the Honor Roll, photos,
-recordings and papers, and a review list before anything goes public. **Off by
-default.**
+recordings and papers, the department's past events and apparatus, a timeline,
+and a review list before anything goes public. **Off by default.**
 
 ---
 
@@ -24,25 +25,29 @@ Modules**.
 
 Once it is on, **History** appears in the menu with **Overview**, **Past
 Members** and **Honor Roll**. The **Department History** overview has cards
-for **Past members**, **Photos and media**, **Documents** and **Honor Roll**,
-plus **Import a roster** for the historian and **Titles and clearance** for
-anyone who can configure the module.
+for **Past members**, **Photos and media**, **Documents**, **Honor Roll**,
+**Timeline**, **Events** and **Apparatus** _(2026-11-21)_, plus **Import a
+roster** for the historian and **Titles, lists and clearance** for anyone who
+can configure the module. Below the cards is **Today in history** (see
+[below](#today-in-history-2026-11-21)). The menu itself still lists only
+Overview, Past Members and Honor Roll; reach the rest from the overview.
 
 Every signed-in member can read what has been published. Nothing else needs a
 permission.
 
-| Permission        | What it lets you do                                                                                  |
-| ----------------- | ---------------------------------------------------------------------------------------------------- |
-| `history.view`    | Read drafts, the research fields and each record's change history                                    |
-| `history.manage`  | Add and edit people, photos and documents; import, merge, albums, titles, sources and document types |
-| `history.publish` | Publish to members or to the public                                                                  |
+| Permission        | What it lets you do                                                                                                                                                                 |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `history.view`    | Read drafts, the research fields and each record's change history                                                                                                                   |
+| `history.manage`  | Add and edit people, photos, documents, events and apparatus; import, merge, albums, titles and the managed lists (sources, document types, stations, apparatus types, event types) |
+| `history.publish` | Publish to members or to the public                                                                                                                                                 |
 
 The seeded **Historian** position holds all three. Officers with
 `settings.manage` can also open **Titles and clearance** to edit the clearance
 list.
 
 Restricted fields — birth date, addresses, verification sources and research
-notes — are encrypted and never shown outside the keepers.
+notes (on people, events and apparatus) — are encrypted and never shown
+outside the keepers.
 
 ## Past members
 
@@ -53,9 +58,18 @@ biography, family links, and memorial and line-of-duty details, each with its
 own visibility. Titles come from one managed list, so renaming a title
 corrects every record. **Honor Roll** lists the line-of-duty deaths.
 
+**Held-title dates** _(2026-11-21)_. Under **Edit periods of service and
+titles**, each title held now has optional **_Title_: held from** and
+**_Title_: held to** dates (partial and approximate like any other date). A
+title reaches the timeline only through its own "held from" date, never the
+service period's start: someone who served 1950–1990 and was Chief from 1975
+is not "Chief, 1950". Titles entered before 2026-11-21 have no dates until you
+add them. A person's page now also lists the **Events** they took part in and
+their own **Timeline**.
+
 ## Publication levels
 
-People, photos, recordings and documents share one model:
+People, photos, recordings, documents, events and apparatus share one model:
 
 | Level                    | Who can read it                                                          |
 | ------------------------ | ------------------------------------------------------------------------ |
@@ -151,18 +165,116 @@ transcription. Filter by type and decade, and search the text.
   accession number, transcription and the text inside a PDF. A scan's words
   are found only through its transcription: there is no text recognition.
 
+## Apparatus _(2026-11-21)_
+
+**Apparatus** catalogues the department's engines and trucks, past and
+present. These are History's own records, so the archive works with the
+Apparatus module off and keeps a truck after the fleet deletes it. Filter by
+**Type**, **Station**, **In service during** (a decade) and, for the keepers,
+**Publication**.
+
+**Add an apparatus** (`history.manage`): **Name** (the only required field),
+**Type**, **Year built**, **Make**, **Model**, **Body builder**, **Pump
+(GPM)**, **Tank (gallons)**, **Ladder (feet)**, **Into service** and **Out of
+service** (partial or approximate dates), **What became of it**, **Where it is
+now**, **Description**, **Source or donor**, **Accession number** and
+**Research notes (Historian only)**. **Unit numbers** records each number it
+carried, with its **Station**, **From** and **To**: Engine 1 from 1924,
+Engine 3 from 1951. Changing anything a reader sees, unit numbers included, is
+a substantial edit.
+
+**Start from a truck in the fleet.** With the Apparatus module on, the new
+apparatus form offers **Start from a truck in the fleet**: choose the
+**Truck** and select **Start record**. Its name, type, year, make, model,
+figures, unit number, in-service date and disposal are copied once, as a
+draft. Nothing syncs afterwards, and no price, VIN, plate, financing or
+maintenance figure is ever copied. A truck already in History is greyed out
+(**already in History**): each truck can start one record.
+
+The apparatus page shows its details, its unit numbers, a **Timeline** (into
+and out of service, each change of unit number, its events) and the **Photos
+and media** and **Documents** tagged with it. Photos and documents gain an
+**Apparatus** section on their edit pages for that tagging; it asks no consent
+question.
+
+## Events _(2026-11-21)_
+
+**Events** lists fires, openings, ceremonies and anything else worth keeping.
+Filter by **Type**, **Station**, **Decade** and, for the keepers,
+**Publication**.
+
+**Add an event** (`history.manage`): **Title** and **Began** are required
+(an undated event cannot go on the timeline); **Ended (if it ran over days or
+years)**, **Type**, **Station**, **Place**, **What happened**, **Source or
+donor** and **Research notes (Historian only)** are optional. **Type** and
+**Station** each offer **Add a … to the list** for a missing entry. Then link:
+
+- **People**: past-member records, each with an optional **Role** in your
+  own words ("commanded", "injured").
+- **Apparatus**: search by name, unit number or year.
+- **Photos and documents**: **Add a photo, recording or film** and **Add a
+  document** link items already in the archive.
+
+There are **no fields for members of the public**. Name a civilian in **What
+happened** only if the clearance list should check it before anything goes
+public; otherwise keep the name in the research notes. A member reading an
+event sees only the links they could open themselves: a draft person, truck,
+photo or document is left out. Merging two person records moves their event
+links.
+
+## Timeline _(2026-11-21)_
+
+**Timeline** shows events and milestones by decade, newest decade open; open
+another to load it. Milestones are read from the records each time, so
+correcting a record corrects the timeline:
+
+| Milestone                                        | Shown to members when                                                                                            |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| **Apparatus into service** / **out of service**  | the apparatus is published to members                                                                            |
+| **Line-of-duty death**                           | the person is published **and** their **Date of death shown to** is Members or Public                            |
+| **Title** (a title's start, e.g. a chief's term) | the title is switched **On the timeline** in settings (off by default) and the held title has a "held from" date |
+
+Filters: **Event type** (narrows events only), **Show milestones as well as
+events**, and a **Milestones** box for each kind. Your choices are remembered
+in your browser. The archive's keepers also see drafts, badged.
+
+## Today in history _(2026-11-21)_
+
+A **Today in history** card lists entries dated to the exact day whose day and
+month are today's (on the department's calendar), from earlier years, oldest
+first: events, apparatus into and out of service, line-of-duty deaths and
+switched-on title starts, under the same visibility rules as the timeline. A
+date entered as a month or a year only never matches. An entry on 29 February
+shows on 28 February in other years.
+
+It is on the History overview, which says **Nothing in the archive happened on
+this day.** when there is nothing, and on every member's **Dashboard** while
+the module is on, where it hides itself on an empty day (or if it cannot
+load).
+
 ## Settings
 
-**Titles and clearance** holds the **Clearance list**, **Historical titles**,
-**Sources and donors** (shared by photos and documents) and **Document
-types**.
+**Titles, lists and clearance** (the page itself is headed **Titles and
+Clearance**) holds the **Clearance list**, **Historical titles**, **Sources
+and donors** (shared by photos, documents, events and apparatus),
+**Document types** and, since 2026-11-21, **Stations**, **Apparatus types**
+and **Event types**. Each of those lists is kept like sources: renaming an
+entry corrects every record, an entry in use is retired or merged, never
+deleted, and each row shows how many records use it. A department starts
+with a set of apparatus and event types; stations start empty. Stations are
+names only for now, with no address or photos of their own.
+
+Each historical title has an **On the timeline** box, off for every title
+until you tick it, which puts that title's start on the department timeline
+for each person whose record dates it.
 
 ## Not yet
 
-- Public records are not shown outside the app.
-- Events and timelines with historical apparatus (phase 5), articles with
-  PDF and Word export (phase 6), and the public portal feed and "Today in
-  history" widget (phase 7) are later phases.
+- Public records are not shown outside the app, and the public "Today in
+  history" widget comes with the public feed (phase 7).
+- Articles with PDF and Word export are phase 6.
+- Apparatus and events cannot be merged: delete a duplicate while it is a
+  draft. Stations are not full records yet.
 
 ---
 

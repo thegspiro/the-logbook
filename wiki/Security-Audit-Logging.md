@@ -263,6 +263,20 @@ the keyed hash chain from hash version 3 onward so org attribution on new rows
 is tamper-proof. Platform-level events (no acting user, no org) are visible to
 no organization.
 
+**An unauthenticated handler must pass `organization_id=` itself.** The column
+is stamped only from the `organization_id=` keyword (or from `user_id=`); an
+`"organization_id"` key inside `event_data` is not read. A webhook or public
+link has no acting user, so leaving out the keyword writes a platform-level
+row that the department's own Audit Log and Security Monitoring screens never
+show. Five public events did exactly that until 2026-11-23 (security review
+PUB-15): `store_payment_received` (PayPal), `salesforce.webhook.received`,
+`documenso.webhook.received`, `calcom.webhook.received` and
+`shift_evaluation_submitted` (a preceptor's emailed link). They now carry the
+department's id, as the Zeffy webhook's event already did.
+`tests/test_public_audit_organization_scoping.py` fails on any
+`log_audit_event` call under `app/api/public/` with neither keyword. Rows
+written before the fix stay platform-level.
+
 ### Via UI
 
 Navigate to the **Audit Log** admin page at `/admin/audit-log` to browse,

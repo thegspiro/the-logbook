@@ -303,6 +303,22 @@ codes scan.
 Inventory checkout always refuses a member whose account is not active,
 whichever badge they show.
 
+**Certifications on the digital ID card** _(2026-11-23)_. When you open your
+own ID card, and Training is turned on, a **Certifications** box above the
+barcode lists each certification your department grades you on. Each one
+reads **On file** with "Expires _date_" (or no date if it never expires),
+**Expired** with the date it lapsed, or **Not recorded**. Below the list,
+**Card valid through** gives the soonest expiry among the certificates you
+hold now. It tells you when your next renewal is due; the badge keeps scanning
+after that date. If none of your current certificates expires, no date shows.
+
+- An officer who can manage training records sees the same box on any
+  member's card. An officer who can only issue ID cards sees the card without
+  it.
+- If your department hides certification status from members, the box does
+  not appear on your own card.
+- The printed plastic card (**Print ID Cards**) is unchanged.
+
 ![A member's digital ID card: membership number as text, the badge code under its barcode, the QR code, and the Print ID Card and Reissue badge buttons](./images/01-44-member-id-card.png)
 
 ![The Reissue this badge? confirmation: every printed badge and the phone card stop scanning, with Keep current badge and Reissue badge](./images/01-45-reissue-badge-confirm.png)
@@ -348,6 +364,17 @@ member in without showing their card.
 | **Leave of Absence**    | Any active leave periods. On your own profile, **Ask for leave** when your department takes requests _(2026-11-14)_ | The member, and officers who can manage members                                           |
 
 Date of birth is restricted the same way as emergency contacts.
+
+**Certifications** _(2026-11-23)_. **Training & Certifications** now opens
+with a **Certifications** list of every certification the member is graded
+on, with its state and date, in the same words My Training uses: **On file**
+with "(Expires Mar 14, 2027)", **Expired** with "(Mar 14, 2026)", or **Not
+recorded**. Before, the section showed only the five most recent training
+records, so a certificate earned two years ago was usually missing, and
+"Expiring Soon" was only a count. The recent training records below the list
+now print dates as "Mar 14, 2027" instead of "3/14/2027". If the department
+hides certification status from members, a member does not see the list on
+their own profile.
 
 **Shift & Call History** _(2026-11-04)_ shows, for the member, the same
 figures as their own **My Hours** screen in Scheduling: hours, shifts and calls
@@ -404,6 +431,10 @@ scheduling officers. See [Scheduling](./03-scheduling.md).
 calls and outside-agency hours by month, year and all time (the same figures My
 Hours shows the member). Visible to the member and to holders of **View
 scheduling reports**.
+Since 2026-11-23 it includes **Hours by position**: the credited hours,
+shifts and calls by the seat the member held, for the chosen year or **All
+time**. See
+[Scheduling → Your hours and calls for the year](./03-scheduling.md#your-hours-and-calls-for-the-year).
 
 **Member since** on the profile and ID cards counts credited service, so a
 returning member's years carry over. Officers can also preview the property a
@@ -1147,21 +1178,36 @@ There is no delete button on the profile or the Admin Edit page.
 - event attendance records;
 - shift assignments;
 - the files on their training submissions, training records and attendance
-  waiver documents _(2026-11-17)_; and
+  waiver documents _(2026-11-17)_;
 - their applicant record, if they joined through the membership pipeline,
   with its documents, interviews, notes and form answers _(2026-11-21)_. The
   dialog lists it as **Applicant record, with its documents and form
-  answers**.
+  answers**; and
+- their personal **Member Files** folder in Documents, with its sub-folders
+  and documents _(2026-11-23)_. The dialog does not list this yet, and its
+  **Kept** line about uploaded documents does not count it out, so download
+  anything there the department must keep first.
+
+Their separation letters in **Member Separations** are kept, but lose the
+member's home address and the reason for leaving, and a class they taught
+shows **Former member** as its instructor _(2026-11-23)_. See
+[Privacy & Data Rights](./17-privacy-data-rights.md#what-is-removed).
 
 The files go just after the delete. If the server restarts or the file store
 cannot be reached in between, an hourly task finishes removing them
 _(2026-11-20)_. See
 [Privacy & Data Rights](./17-privacy-data-rights.md#what-is-removed).
 
+The delete is recorded in the audit log as part of the delete itself
+_(2026-11-21)_. If that record cannot be written, nothing is deleted and the
+page shows: "The member was not deleted: the audit record a permanent
+delete requires could not be written. Nothing was changed; please try again."
+
 **What is kept, with the member's name removed:** records the member
 **created, approved, issued or uploaded**, such as documents and approvals.
 The record stays; only the link to the member is cleared. Uploaded documents
-are kept. This includes other members' records the deleted member signed:
+outside their personal Member Files folder are kept. This includes other
+members' records the deleted member signed:
 the examiner on a skills test and the officer on a shift report now show
 **Former member** instead of a name.
 
@@ -1237,17 +1283,30 @@ department keeps its record of what they did.
 3. Read what is removed and what is kept. Type the member's name to confirm,
    and select **Anonymize**. To back out, select **Keep their details**.
 
-| Removed                                                                 | Kept                                      |
-| ----------------------------------------------------------------------- | ----------------------------------------- |
-| Name, email, phone numbers and address                                  | Training, attendance and hours            |
-| Date of birth, photo and emergency contacts                             | Equipment custody and dues history        |
-| Sign-in credentials                                                     | Audit log and election records, unchanged |
-| Medical screening details, and the reasons given for leaves and waivers |                                           |
-| Their original application                                              |                                           |
-| Certificates uploaded with their training reports _(2026-11-17)_        |                                           |
-| Documents attached to their training records _(2026-11-20)_             |                                           |
+| Removed                                                                        | Kept                                      |
+| ------------------------------------------------------------------------------ | ----------------------------------------- |
+| Name, email, phone numbers and address                                         | Training, attendance and hours            |
+| Date of birth, photo and emergency contacts                                    | Equipment custody and dues history        |
+| Sign-in credentials                                                            | Audit log and election records, unchanged |
+| Medical screening details, and the reasons given for leaves and waivers        |                                           |
+| Their original application                                                     |                                           |
+| Certificates uploaded with their training reports _(2026-11-17)_               |                                           |
+| Documents attached to their training records _(2026-11-20)_                    |                                           |
+| Their personal Member Files folder and its documents _(2026-11-23)_            |                                           |
+| Home address and reason for leaving on their separation letters _(2026-11-23)_ |                                           |
 
 What is kept stays linked to a placeholder named "Former Member".
+
+**The personal folder and separation letters** _(2026-11-23)_: the
+member's personal **Member Files** folder in Documents is deleted with
+everything in it, and their separation letters lose the home address and the
+reason for leaving (the letters and their item lists stay). The dialog lists
+both under **Removed** since 2026-11-24. Where the member is named as a
+class's instructor, the name becomes **Former member**. An excused meeting
+stays excused. If a document in their personal folder is catalogued in History
+or backs a submitted finance record, anonymizing is refused until it is
+removed from that record. See
+[Privacy & Data Rights](./17-privacy-data-rights.md#what-is-removed).
 
 **Download training evidence first** _(2026-11-20)_. Files attached to the
 member's training records, by an officer or by the member, are deleted with
@@ -2374,7 +2433,8 @@ while a request to extend it is still waiting.
 hold one of the approver positions and ask for leave yourself, the Chief
 decides your request, not the other approvers; **Your requests** says
 **As an approver yourself, your request goes to the Chief.** If you are the
-Chief, the officers who manage leave decide it. A request made before
+Chief, or nobody else holds the Chief's position, the officers who manage leave
+decide it. A request made before
 2026-11-21 keeps the approvers it had.
 
 **Approver cover** _(2026-11-21)_. An approver who will be away can name an
@@ -2448,7 +2508,8 @@ days; export the rest separately."
 to a shift, the member list marks anyone with an undecided leave request
 covering the shift's date as **leave requested**, and choosing them shows a
 note. You can still assign them; if the leave is approved, the assignment is
-dropped.
+dropped. See
+[Scheduling > Shift Assignments](./03-scheduling.md#shift-assignments).
 
 ![Leave Requests as an approver: Bram Hollis's request under To decide with Ask a question open, the Your question to the member box and Send question](./images/01-59-leave-request-ask-question.png)
 
@@ -2457,6 +2518,12 @@ dropped.
 ![Your leave on Leave Requests for a member whose leave is in progress: its dates, I’m back early opened to Your first day back filled in three days from now, and End my leave](./images/01-61-leave-back-early.png)
 
 ![Members Admin, Settings, Leave of Absence with leave requests on: the approver positions, how they decide, and Tell the Chief about a request still undecided after this many days set to 21](./images/01-62-leave-escalation-setting.png)
+
+> **Screenshot to create:** `01-63-leave-approver-cover.png`, **Leave
+> Requests** with the **Approver cover** card showing one cover ("… stands in
+> for …", **in effect now**, **End cover**) above the **Stand-in**, **First
+> day away** and **Last day away** form. See
+> [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
 
 The reason is shown to the member, their approvers and officers who can manage
 member profiles only. No email, from
@@ -3049,9 +3116,14 @@ enough.
 The **Department History** page shows:
 
 - cards for **Past members**, **Photos and media** _(2026-11-13)_,
-  **Documents** _(2026-11-14)_ and **Honor Roll**, plus **Import a roster**
-  if you can edit records and **Titles and clearance** if you can configure
-  the module;
+  **Documents** _(2026-11-14)_, **Honor Roll**, and **Timeline**,
+  **Events** and **Apparatus** _(2026-11-21)_, plus **Import a roster** if
+  you can edit records and **Titles, lists and clearance** if you can
+  configure the module (the page it opens is headed **Titles and
+  Clearance**);
+- **Today in history** _(2026-11-21)_, entries dated to this day in earlier
+  years (it reads _Nothing in the archive happened on this day._ when there
+  are none);
 - **Awaiting my clearance**, if a record is waiting for you to review it;
 - **Drafts**, if you can edit records; and
 - **From the archive**, the latest published records.
@@ -3059,11 +3131,11 @@ The **Department History** page shows:
 Three permissions control the rest. The seeded **Historian** position holds
 all three.
 
-| Permission        | What it lets you do                                                           |
-| ----------------- | ----------------------------------------------------------------------------- |
-| `history.view`    | Read draft records, the research fields and each record's change history      |
-| `history.manage`  | Add and edit records and family links, and edit titles and the clearance list |
-| `history.publish` | Publish a record to members or to the public                                  |
+| Permission        | What it lets you do                                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `history.view`    | Read draft records, the research fields and each record's change history                                                |
+| `history.manage`  | Add and edit people, photos, documents, events and apparatus, and edit titles, the managed lists and the clearance list |
+| `history.publish` | Publish a record to members or to the public                                                                            |
 
 **Titles and clearance** also opens for officers with permission to manage
 the department's settings. They can edit the clearance list there, but not
@@ -3274,6 +3346,48 @@ Newspaper clipping, Certificate, Programme, Report and Other.
 See the [History wiki page](../../wiki/Module-History.md) and
 [`HISTORY_MODULE.md`](../HISTORY_MODULE.md).
 
+### Events, Apparatus and the Timeline _(2026-11-21)_
+
+**Apparatus** catalogues the department's engines and trucks, past and
+present. Select **Add an apparatus**; only **Name** is required. Under
+**Unit numbers**, record each number it carried with its **Station**,
+**From** and **To**. If your department uses the Apparatus module, **Start
+from a truck in the fleet** copies a truck's name, type, year, make, model,
+figures, unit number, in-service date and disposal once. Nothing syncs
+afterwards, and no price, VIN, plate or maintenance record is copied.
+
+**Events** keeps fires, openings, ceremonies and other occasions. Select
+**Add an event**; **Title** and **Began** are required. Link **People** (each
+with an optional **Role**, such as "commanded"), **Apparatus**, and photos
+and documents already in History. There are no fields for members of the
+public: name a civilian in **What happened** only if the clearance list
+should check it, and otherwise keep the name in **Research notes (Historian
+only)**. Members see only the links they could open themselves.
+
+**Timeline** shows events and milestones by decade: apparatus going into and
+out of service, line-of-duty deaths (only when **Date of death shown to** is
+Members or Public), and the start of a title. A title appears only when it is
+ticked **On the timeline** on **Titles and Clearance** (it is off by default)
+and the person's record gives the date they took it: under **Edit periods of
+service and titles**, each title now has **held from** and **held to** dates.
+Titles entered before 2026-11-21 have none, and none are guessed from the
+service period. Filter with **Event type**, **Show milestones as well as
+events** and the **Milestones** boxes. A person's page now lists their
+**Events** and their own **Timeline**.
+
+**Today in history** lists entries dated to this exact day in earlier years.
+It is on the History overview and on every member's Dashboard, where it is
+hidden on a day with nothing.
+
+**Stations**, **Apparatus types** and **Event types** are kept on **Titles
+and Clearance** like sources: rename one to correct every record, retire or
+merge it, but you cannot delete one in use.
+
+> **Screenshots needed:** `01-64-history-timeline` (a decade open, the
+> Milestones boxes showing), `01-65-history-event-form` (People with a Role,
+> Apparatus, Photos and documents), `01-66-history-apparatus-page` (Unit
+> numbers and its Timeline), `01-67-today-in-history-dashboard`.
+
 ### What History Does Not Do Yet
 
 - **Public records are not shown outside the app yet.** Publishing to the
@@ -3281,8 +3395,9 @@ See the [History wiki page](../../wiki/Module-History.md) and
   page says so beside the button.
 - **No text recognition for scans.** Type a transcription to make a scan's
   words searchable.
-- **Events, timelines, articles and a "Today in history" widget** are planned
-  and not yet built.
+- **Articles** (with PDF and Word export) and a public **Today in history**
+  widget are planned and not yet built. Apparatus and event records cannot be
+  merged; delete a duplicate while it is still a draft.
 - **Anonymizing a member does not change their History record.** See
   [Anonymizing a Former Member](#anonymizing-a-former-member).
 
