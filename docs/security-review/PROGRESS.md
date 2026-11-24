@@ -16,6 +16,40 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (branch `claude/friendly-babbage-2isqey`), to be recorded by number in
+a second commit on this same branch**: Feature 03 (Public surface &
+webhooks), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here (`claude/friendly-babbage-n4b791`,
+`claude/friendly-babbage-v1mcno`): this session's environment restricts
+pushes to its own assigned branch rather than a freely-chosen
+`claude/security-review-public-surface-webhooks-pNN` name.
+
+PR #4633 (Feature 02, Permissions & roles, pass 17) had already merged
+before this iteration started; row 02 marked ✅ above.
+
+Baseline: pass 16's merge `15d61fa5` (PR #4349). **True zero-delta pass:**
+`git diff 15d61fa5 HEAD --stat` against every file this feature tracks
+(`app/api/public/`, `public_portal_security.py`, `webhook_service.py`,
+`webhook_replay.py`) returns empty — not one line changed in 1251 commits.
+A sweep for any unclaimed new webhook/public-named file added in that range
+found none. Route count re-enumerated by a corrected AST walk: 51, identical
+to pass 16. **0 fixed, 0 new findings.** `validate_migrations.py --strict`
+reports a pre-existing, unrelated 2-head fork (`5c2e8a417d90`/`9c41e7b2d5a3`,
+from PRs #4572 and #4624) that the repo's own automated rejoin workflow has
+already opened PR #4642 to close — left to that PR rather than fixed here,
+per the same handling pass 16's log recorded for PR #4549. Full write-up:
+`docs/security-review/PUB-03-public-surface-webhooks.md`'s **Pass 17**
+section.
+
+Row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
+payments) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 17, PR #4633, merged), preserved for history</summary>
+
 **PR [#4633](https://github.com/thegspiro/the-logbook/pull/4633) (branch
 `claude/friendly-babbage-2isqey`)**: Feature 02 (Permissions &
 roles), pass 17 — watchdog pickup (the dedicated `/loop 30m
@@ -45,6 +79,8 @@ re-enumerated by AST). **0 fixed, 0 new findings.** Full write-up:
 Row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public surface &
 webhooks) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 17, PR #4625, merged), preserved for history</summary>
@@ -27645,7 +27681,7 @@ iteration's commit" rule.
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                                                                                                                                                         | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                                                                                                                          | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                                                                                                                           | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (51 unauth routes, added pass 16), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                                                                                 | ⬜     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (51 unauth routes, added pass 16), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                                                                                 | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ⬜     |

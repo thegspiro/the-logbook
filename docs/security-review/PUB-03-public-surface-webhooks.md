@@ -1,6 +1,76 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup), 2026-11-16 (pass 16, watchdog pickup) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (PR #3399), pass 11 (PR #3558), pass 13 (PR #3804), pass 15 (PR #4022), pass 16 (this PR)
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup), 2026-11-16 (pass 16, watchdog pickup), 2026-11-24 (pass 17, watchdog pickup) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (PR #3399), pass 11 (PR #3558), pass 13 (PR #3804), pass 15 (PR #4022), pass 16 (PR #4349), pass 17 (this PR)
+
+---
+
+## Pass 17 (2026-11-24, watchdog pickup) — true zero-delta pass; no file in scope changed since pass 16; 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable, confirmed via
+`ListAgents` ("No reachable agents"). Step 0: a fresh `list_pull_requests`
+(state `open`) found 0 results with a `claude/security-review-*` head — PR
+#4633 (Feature 02, Permissions & roles, pass 17) had just merged. Row 03
+confirmed the next `⬜` row by reading `PROGRESS.md`'s table directly on a
+freshly-fetched `main`, not from a rotation note.
+
+**Baseline:** `15d61fa5` (pass 16's merge, PR #4349). **Head:** current
+`main` (1251 commits since the baseline, 630 non-merge). `git diff 15d61fa5
+HEAD --stat -- backend/app/api/public/ backend/app/core/public_portal_security.py
+backend/app/services/integration_services/webhook_service.py
+backend/app/utils/webhook_replay.py` returns **empty** — not one line
+changed in any tracked file. Confirmed this is not an artifact of the path
+spec missing a new file: `git ls-tree -r <rev> --name-only --
+backend/app/api/public/` lists the identical 19 filenames at both the
+baseline and the current head. A broader sweep for any new file anywhere in
+the tree whose name contains `webhook` or `public` added in this commit
+range (`git diff 15d61fa5 HEAD --diff-filter=A --name-only`, filtered,
+excluding `frontend/`/`test_`/`docs/`) found none — no unclaimed new public
+or webhook surface landed this lap, unlike pass 16's `shift_evaluations.py`.
+
+**Route re-enumeration (per Step 3's instruction that a repeat pass
+re-derives the count rather than trust it forward):** an AST walk (fixed to
+match `ast.Call`/`ast.Attribute` decorator nodes directly, not a dump-string
+substring test) of every `@router.<verb>` decorator across all 17
+route-bearing files under `app/api/public/` (`responses.py` and
+`__init__.py` excluded), cross-checked against
+`grep -c '^@router\.\(get\|post\|put\|patch\|delete\)'` (both agreeing),
+finds **51 routes** — identical to pass 16's count, consistent with the
+empty diff.
+
+**Nothing to fix, nothing to flag.** PUB-1 through PUB-14 remain fixed
+(unaffected, since nothing changed); PUB-3 (INFO, `ApprovalChain`'s tables
+remain `create_all`-only, by design) is unchanged and still accurate. No
+`KNOWN_LIMITATIONS.md` entry needed — nothing is flagged.
+
+**Standing cross-cutting issue, noted rather than fixed here (not this
+feature's own file set):** `main`'s Alembic chain is currently forked —
+`5c2e8a417d90` (from PR #4572, CRR tracking) and `9c41e7b2d5a3` (from PR
+#4624, former-member instructor names) merged on different parents. Neither
+table belongs to this feature. The repo's automated Rejoin Migration Heads
+workflow has already written the merge revision and opened PR #4642
+(`automation/rejoin-heads-5c2e8a-9c41e7`) to close it, blocked only on an
+owner-level GitHub Actions setting per that PR's own body. Left to that PR
+rather than fixed here, to avoid adding a third fork — the same handling
+pass 16's PROGRESS log recorded for PR #4549. `validate_migrations.py
+--strict` is therefore reported FAILED in this pass's own gate table below
+for exactly this pre-existing, unrelated reason, not because this PR touches
+a migration (it touches no file under `backend/`).
+
+### Completion gate (pass 17)
+
+| Check                                                                                                                                                                                                                                                                                                                                                                      | Result                                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                                                                                                                                                                                                                                                                                                                      | ✅ 0 violations                                                                                                           |
+| `black --check app/ tests/ alembic/` (26.10.1)                                                                                                                                                                                                                                                                                                                             | ✅ 3483 files unchanged                                                                                                   |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                                                                                                                                                                                                                                                                                                          | ✅ clean                                                                                                                  |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                                          | ❌ two heads (`5c2e8a417d90`, `9c41e7b2d5a3`) — pre-existing, unrelated to this feature, already tracked by open PR #4642 |
+| scoped pytest (`-k "public or webhook or paypal or salesforce or integrations or minutes or mcp_oauth or calendar or finance_approval or branding or kiosk or guest or event_guest or embed or legal or display or security_txt or portal or next_meeting or follow_up or error_reporting or shift_evaluation or zeffy" -m "not integration and not slow and not docker"`) | ✅ 1978 passed, 1 skipped (`pywebpush`, pre-existing)                                                                     |
+| `cd frontend && npm run typecheck` (sandbox note: `node_modules` lacked `leaflet`, a dependency a prior unrelated PR (#4572) added to `package.json`/`package-lock.json`; repaired with `npm ci` from the repo root per CLAUDE.md's own sanctioned recovery path)                                                                                                          | ✅ 0 errors                                                                                                               |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                                                                                                              | ✅ 0 errors, 0 warnings                                                                                                   |
+
+Rotation row 03 → ✅ (pending this PR's merge); next is Feature 04
+(Storefront & payments).
 
 ---
 
