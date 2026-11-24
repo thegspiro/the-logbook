@@ -83,4 +83,36 @@ describe('rwd-table container-query tiers', () => {
       for (const other of others) expect(body).not.toContain(other);
     }
   });
+
+  // `rwd-table-fields` turns a wide reflowed card into a grid of fields. It can
+  // only apply while its tier has the table reflowed, so it repeats per tier
+  // for the same reason the tiers do, and can drift the same way.
+  describe('rwd-table-fields', () => {
+    const FIELD_TIERS = TIERS.filter(({ cls }) => cls !== 'rwd-table-narrow');
+    const fieldsBlockFor = (width: string): string =>
+      bodyOf(`@container rwd-table (width >= 30rem) and (width < ${width}) {`).body;
+
+    it.each(FIELD_TIERS)('has a $cls block that ends where the tier does, at $width', ({ cls, width }) => {
+      const body = fieldsBlockFor(width);
+      expect(body, `no fields block for the ${width} tier`).not.toBe('');
+      expect(body).toContain(`.rwd-table.${cls}.rwd-table-fields :is(tbody, tfoot) tr`);
+      expect(body).toMatch(/display:\s*grid/);
+    });
+
+    it('keeps every block identical apart from its tier class', () => {
+      const [first, ...rest] = FIELD_TIERS.map(({ cls, width }) =>
+        fieldsBlockFor(width).split(cls).join('TIER').trim()
+      );
+      expect(first).not.toBe('');
+      for (const body of rest) expect(body).toBe(first);
+    });
+
+    it('is on screen only, like the tiers it depends on', () => {
+      for (const { width } of FIELD_TIERS) {
+        const open = `@container rwd-table (width >= 30rem) and (width < ${width}) {`;
+        const before = stylesheet.slice(0, stylesheet.indexOf(open));
+        expect(before.lastIndexOf('@media screen {')).toBeGreaterThan(before.lastIndexOf('\n}\n'));
+      }
+    });
+  });
 });

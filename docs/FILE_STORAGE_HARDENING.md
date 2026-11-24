@@ -475,12 +475,12 @@ empties after 30 days.
 
 ### Phase 11 — one command for every platform, and backing up a Shared Drive (2026-10-25)
 
-| Piece                | Where                                                                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| The move             | `scripts/migrate_uploads_to_remote.py`; `migrate_uploads_to_s3.py` stays as a one-line alias that runs it, for runbooks and old hosts |
-| Inventory            | `--stores`, with `--buckets` still accepted; the JSON it prints is unchanged, `bucket` naming the bucket or the drive                 |
-| Backups              | `backup.sh` asks for the new name and falls back to the old one, so an updated host works against an older backend image              |
-| Shared Drive backups | `docs/BACKUP.md`: the drive's trash restores a file with its id; a copy kept elsewhere is a new file, so a reference cannot find it   |
+| Piece                | Where                                                                                                                                               |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The move             | `scripts/migrate_uploads_to_remote.py`; `migrate_uploads_to_s3.py` stays as a one-line alias that runs it, for runbooks and old hosts               |
+| Inventory            | `--stores`, with `--buckets` still accepted; the JSON it prints is unchanged, `bucket` naming the bucket or the drive                               |
+| Backups              | `backup.sh` asks for the new name and falls back to the old one, so an updated host works against an older backend image                            |
+| Shared Drive backups | `docs/BACKUP.md`: the drive's trash restores a file with its id; a copy kept elsewhere is a new file, repointed by `relink_restored_drive_files.py` |
 
 The manifest directory and kind keep their S3-era names, so a manifest from an
 earlier run still rolls back and finalizes. That a Drive copy cannot simply be
