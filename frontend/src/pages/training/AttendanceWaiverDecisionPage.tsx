@@ -39,6 +39,7 @@ import {
 import type { AttendanceWaiverRequest } from '../../types/attendanceWaiver';
 import { formatCalendarDate, formatDateTime } from '../../utils/dateFormatting';
 import { WaiverAttachmentList } from '../../components/waivers/WaiverAttachmentList';
+import { waiverAttachmentService, type WaiverAttachment } from '../../services/waiverAttachmentService';
 import {
   AttendanceWaiverAnswerForm,
   AttendanceWaiverConversation,
@@ -253,6 +254,30 @@ export const AttendanceWaiverDecisionPage: React.FC<AttendanceWaiverDecisionPage
     }
   };
 
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  const handleRemoveAttachment = async (attachment: WaiverAttachment) => {
+    if (!request) return;
+    const confirmed = await confirm({
+      title: 'Remove this document?',
+      message: `${attachment.filename} will be taken off your request and deleted. The officers will no longer see it.`,
+      confirmLabel: 'Remove document',
+      cancelLabel: 'Keep it',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
+    setRemovingId(attachment.id);
+    try {
+      await waiverAttachmentService.removeAttachment(request.id, attachment.id);
+      toast.success('Document removed');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'The document could not be removed'));
+    } finally {
+      setRemovingId(null);
+      await reload();
+    }
+  };
+
   const handleWithdraw = async () => {
     if (!request) return;
     const confirmed = await confirm({
@@ -371,6 +396,9 @@ export const AttendanceWaiverDecisionPage: React.FC<AttendanceWaiverDecisionPage
               attachments={request.attachments ?? []}
               canAttach={request.can_attach === true}
               onAttached={() => void reload()}
+              {...(request.can_remove_attachment
+                ? { onRemove: (a: WaiverAttachment) => void handleRemoveAttachment(a), removingId }
+                : {})}
             />
           )}
         </section>

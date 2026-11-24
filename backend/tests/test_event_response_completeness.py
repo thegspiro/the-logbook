@@ -91,6 +91,10 @@ CALLER_SUPPLIED = {
     # events.manage on an outreach event that is not cancelled. Per caller,
     # detail endpoint only; False is the honest default elsewhere.
     "can_staff_event",
+    # Whether this caller may record CRR activities against the event:
+    # crr.record or events.manage on an outreach event that is not cancelled.
+    # Per caller, detail endpoint only; False is the honest default elsewhere.
+    "can_record_crr",
     # The live signup sheet as this caller sees it: its roles and their own
     # seat (member_signup_sheet). Per caller, detail endpoint only; None is the
     # honest default elsewhere, where no single member is implied.

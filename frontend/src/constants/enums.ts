@@ -1374,6 +1374,8 @@ export const AdminHoursEntryMethod = {
   EVENT_ATTENDANCE: 'event_attendance',
   // Brought in from a previous system by Historical Data Import.
   IMPORT: 'import',
+  // Credited from a CRR activity log entry.
+  CRR_ACTIVITY: 'crr_activity',
 } as const;
 export type AdminHoursEntryMethod = (typeof AdminHoursEntryMethod)[keyof typeof AdminHoursEntryMethod];
 
@@ -1383,6 +1385,7 @@ export const ADMIN_HOURS_ENTRY_METHOD_LABELS: Record<string, string> = {
   manual: 'Manual',
   event_attendance: 'Event Attendance',
   import: 'Imported',
+  crr_activity: 'CRR Activity',
 };
 
 // ============================================

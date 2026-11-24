@@ -1,0 +1,3 @@
+# Test-only dependencies for docs-site/tests, on top of requirements.txt.
+-r requirements.txt
+pytest==9.2.0

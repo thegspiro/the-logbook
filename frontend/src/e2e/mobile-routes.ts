@@ -175,6 +175,15 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: ['events.manage'],
     expectText: 'My phone died before I could scan the QR code; I was there the whole time.',
   },
+  // The CRR log: a manager's view, so resident details render on the
+  // activity that has them.
+  {
+    path: '/events/crr-activities',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['crr.record', 'crr.view_contact'],
+    expectText: 'Jordan Whitfield-Castellanos',
+  },
   {
     path: '/events/analytics',
     maxSmallTargets: 0,
@@ -596,6 +605,14 @@ export const ALL_ROUTES: RouteCheck[] = [
     // The drawer a request opens in: the whole of the coordinator's work on a
     // request happens there, so it is measured at phone width like the list.
     states: [{ selector: 'li button[aria-haspopup="dialog"]', label: 'Request drawer', max: 1 }],
+  },
+  // The CRR log inside the hub, where its cards sit under the tab's own h2.
+  {
+    path: '/events/admin?tab=crr_activities',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage', 'crr.view_contact'],
+    expectText: 'Jordan Whitfield-Castellanos',
   },
   // The outreach report: KPI row, two charts and the events list, which a
   // phone draws as a stacked list rather than the desktop table.

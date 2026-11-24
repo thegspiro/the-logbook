@@ -1,4 +1,4 @@
-import { BarChart3, Calendar, FileText, Hand } from 'lucide-react';
+import { BarChart3, Calendar, FileText, Hand, ShieldCheck } from 'lucide-react';
 import type { SectionNavItem } from './sectionNavigation';
 
 /**
@@ -15,4 +15,10 @@ export const EVENTS_NAV_ITEMS: SectionNavItem[] = [
   { label: 'Attendance Requests', path: '/events/attendance-requests', icon: Hand },
   { label: 'Event Templates', path: '/events/templates', icon: FileText, permission: 'events.manage' },
   { label: 'Attendance Trends', path: '/events/analytics', icon: BarChart3, permission: 'analytics.view' },
+  {
+    label: 'CRR Activities',
+    path: '/events/crr-activities',
+    icon: ShieldCheck,
+    anyPermission: ['crr.record', 'events.manage'],
+  },
 ];

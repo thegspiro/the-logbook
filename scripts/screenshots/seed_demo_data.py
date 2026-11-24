@@ -8270,6 +8270,340 @@ class Seeder:
             self._stage_closeout_attendance(shift_id, crew, start_at, end_at)
         return shift
 
+    EVALUATION_TEMPLATE = "Annual Member Evaluation"
+    EVALUATION_LAST_PERIOD = "2025"
+    EVALUATION_THIS_PERIOD = "2026"
+    # (username, rating for the plainly rated items, rating for the three
+    # data-backed ones, finalize). Different ratings give different grades on
+    # Period results; the fourth stays in progress, so it reads 3 of 4.
+    EVALUATION_LAST_YEAR = (
+        ("isolberg", 4, 4, True),
+        ("smarchetti", 3, 3, True),
+        ("mbell", 3, 2, True),
+        ("ytanaka", 3, 3, False),
+    )
+    # This year's review, in progress, whose page carries Assign on its
+    # calibration step and the Last review card from last year's.
+    EVALUATION_REVIEWED_MEMBER = "isolberg"
+    EVALUATION_GOAL_TEXT = "Complete the driver-operator course before summer."
+
+    def _evaluation_part(self, plain: int, data: int, goal: str) -> dict:
+        """An evaluator's part for the annual starter, complete enough to submit.
+
+        No item is rated 1, 2 or 5 where the form asks for an example then, and
+        the three items with a figure behind them carry a justification, which
+        a rating that differs from the suggested one requires.
+        """
+        reason = "Discussed with the member at the review."
+        answers = {
+            "training_participation": {"rating": data, "justification": reason},
+            "training_requirements": {"rating": data, "justification": reason},
+            "meeting_attendance": {"rating": data, "justification": reason},
+            "certifications": {"text": "EMT and CPR current all year."},
+            "scene_performance": {"rating": plain},
+            "safety": {"rating": max(plain, 3)},
+            "duty_participation": {"rating": plain},
+            "teamwork": {"rating": plain},
+            "conduct": {"rating": plain},
+            "strengths": {"text": "Steady on the fireground and a good teacher."},
+            "development_areas": {"text": "Take on more of the station paperwork."},
+            "goals": {
+                "goals": [
+                    {
+                        "id": "goal-1",
+                        "text": goal,
+                        "target_date": f"{TODAY.year}-06-30",
+                    }
+                ]
+            },
+        }
+        return {"content": {"answers": answers}}
+
+    def _evaluation_steps(self, evaluation_id: str) -> tuple[dict, dict[str, str]]:
+        detail = self.api.get(f"/evaluations/{evaluation_id}")
+        steps = {
+            str(pick(st, "key")): str(pick(st, "status"))
+            for st in pick(detail, "steps") or []
+        }
+        return detail, steps
+
+    def seed_backlog_02_evaluations(self) -> dict[str, str]:
+        """Annual evaluations for guide 02's Assign, Last review and Period results.
+
+        Nothing else seeds the evaluations module. The annual starter is
+        published as version 1 and last year's reviews are taken through it to
+        finalized: the administrator writes and submits the evaluator part (the
+        member's self-evaluation is skipped, its deadline long past), then each
+        member signs their acknowledgement in their own session, which only
+        they can. Version 2 adds a calibration step, because Assign shows only
+        on a calibration or approval step and the starter has neither, and
+        this year's review for one of them is drafted on it and left in
+        progress. Every part is found again before it is made, so a re-run
+        carries on where an earlier one stopped and adds nothing once done.
+        """
+        result: dict[str, str] = {}
+        templates = items(self.api.get("/evaluations/templates"), "templates")
+        template = next(
+            (t for t in templates if pick(t, "name") == self.EVALUATION_TEMPLATE), None
+        )
+        if template is None:
+            template = self.api.post(
+                "/evaluations/templates",
+                {
+                    "name": self.EVALUATION_TEMPLATE,
+                    "kind": "annual",
+                    "starter": "annual_member",
+                },
+            )
+            self._publish_evaluation_template(str(pick(template, "id")))
+            result["template"] = "published"
+        template_id = str(pick(template, "id"))
+
+        periods = {
+            pick(pr, "name"): pr
+            for pr in items(self.api.get("/evaluations/periods"), "periods")
+        }
+        for name, year in (
+            (self.EVALUATION_LAST_PERIOD, TODAY.year - 1),
+            (self.EVALUATION_THIS_PERIOD, TODAY.year),
+        ):
+            if name not in periods:
+                periods[name] = self.api.post(
+                    "/evaluations/periods",
+                    {
+                        "name": name,
+                        "start_date": f"{year}-01-01",
+                        "end_date": f"{year}-12-31",
+                    },
+                )
+        admin_id = str(pick(self.api.get("/auth/me"), "id"))
+        existing = items(self.api.get("/evaluations"), "evaluations")
+
+        def find(member_id: str, period: dict) -> dict | None:
+            return next(
+                (
+                    e
+                    for e in existing
+                    if str(pick(pick(e, "member") or {}, "id")) == member_id
+                    and str(pick(e, "period_id")) == str(pick(period, "id"))
+                ),
+                None,
+            )
+
+        last_period = periods[self.EVALUATION_LAST_PERIOD]
+        for username, plain, data, finalize in self.EVALUATION_LAST_YEAR:
+            member_id = self._user_id(username)
+            evaluation = find(member_id, last_period)
+            if evaluation is None:
+                evaluation = self.api.post(
+                    "/evaluations",
+                    {
+                        "member_id": member_id,
+                        "period_id": pick(last_period, "id"),
+                        "evaluator_id": admin_id,
+                        "template_id": template_id,
+                    },
+                )
+            evaluation_id = str(pick(evaluation, "id"))
+            detail, steps = self._evaluation_steps(evaluation_id)
+            if pick(detail, "status") == "finalized":
+                continue
+            if steps.get("evaluator") == "open":
+                goal = (
+                    self.EVALUATION_GOAL_TEXT
+                    if username == self.EVALUATION_REVIEWED_MEMBER
+                    else "Keep up the training hours."
+                )
+                self.api.put(
+                    f"/evaluations/{evaluation_id}/parts/evaluator",
+                    self._evaluation_part(plain, data, goal),
+                )
+                if not finalize:
+                    result[username] = "left in progress"
+                    continue
+                self.api.post(
+                    f"/evaluations/{evaluation_id}/parts/evaluator/submit", {}
+                )
+                detail, steps = self._evaluation_steps(evaluation_id)
+            if finalize and steps.get("member_acknowledgement") == "open":
+                member_api = Api(self.base_url)
+                member_api.login_as(username, DEMO_MEMBER_PASSWORD)
+                member_api.step_up()
+                me = member_api.get("/auth/me")
+                member_api.post(
+                    f"/evaluations/{evaluation_id}/sign",
+                    {
+                        "signed_name": (
+                            f"{pick(me, 'first_name')} {pick(me, 'last_name')}"
+                        ),
+                        "disposition": "acknowledged",
+                        "intent_confirmed": True,
+                    },
+                )
+                result[username] = "finalized"
+
+        if self._add_evaluation_calibration(template_id):
+            result["template v2"] = "calibration added"
+
+        this_period = periods[self.EVALUATION_THIS_PERIOD]
+        reviewed_id = self._user_id(self.EVALUATION_REVIEWED_MEMBER)
+        if find(reviewed_id, this_period) is None:
+            self.api.post(
+                "/evaluations",
+                {
+                    "member_id": reviewed_id,
+                    "period_id": pick(this_period, "id"),
+                    "evaluator_id": admin_id,
+                    "template_id": template_id,
+                },
+            )
+            result["this year"] = "drafted"
+        return result or {"evaluations": "already"}
+
+    def _publish_evaluation_template(self, template_id: str) -> None:
+        # A draft that is not ready answers 200 with published false and its
+        # errors, so the answer has to be read, not just the status.
+        outcome = self.api.post(f"/evaluations/templates/{template_id}/publish", {})
+        if not pick(outcome, "published"):
+            raise ApiError(
+                "POST",
+                f"/evaluations/templates/{template_id}/publish",
+                400,
+                str(pick(outcome, "errors")),
+            )
+
+    def _add_evaluation_calibration(self, template_id: str) -> bool:
+        """Publish a version with a calibration step after the evaluator's.
+
+        Named "calibration": the evaluation page finds the step by that key.
+        Due with the evaluator's step, since due days may not go down from one
+        step to the next. False when the published version already has one.
+        """
+        detail = self.api.get(f"/evaluations/templates/{template_id}")
+        published = pick(detail, "published") or {}
+        workflow = dict(pick(published, "workflow") or {})
+        steps = list(pick(workflow, "steps") or [])
+        if any(pick(st, "type") == "calibration" for st in steps):
+            return False
+        at = next(i for i, st in enumerate(steps) if pick(st, "key") == "evaluator")
+        steps.insert(
+            at + 1,
+            {
+                "key": "calibration",
+                "type": "calibration",
+                "label": "Calibration",
+                "actor": {"kind": "view_all"},
+                "due_days": pick(steps[at], "due_days"),
+            },
+        )
+        self.api.put(
+            f"/evaluations/templates/{template_id}/draft",
+            {
+                "definition": pick(published, "definition"),
+                "workflow": {**workflow, "steps": steps},
+            },
+        )
+        self._publish_evaluation_template(template_id)
+        return True
+
+    OFFICER_CLOSEOUT_NOTE = "Shift officer close-out fixture"
+    # A firefighter running the shift: Shift Officer without scheduling.manage,
+    # which every officer rank in the demo holds. Must match
+    # DEMO_SHIFT_OFFICER_CREDENTIALS in manifest.mjs.
+    OFFICER_CLOSEOUT_OFFICER = "ytanaka"
+    OFFICER_CLOSEOUT_CREW = ("isolberg", "smarchetti", "vbrennan", "rduarte")
+
+    def seed_backlog_03_officer_closeout(self) -> str:
+        """An ended shift whose Shift Officer cannot manage scheduling.
+
+        Guide 03 pictures close-out step 1 as that officer: their own row's
+        Start, End and Hours greyed out, with the line saying their times come
+        from their check-in and check-out. Two days ago, twelve hours, no
+        apparatus so no end-of-shift checklist intervenes, with the officer and
+        up to two of the crew candidates seated (one free at those hours is
+        enough: the picture is the officer's row beside an editable one), each
+        checked in and out. Found again by its note, and topped up rather than
+        made twice.
+        """
+        officer_id = self._user_id(self.OFFICER_CLOSEOUT_OFFICER)
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        shift = next(
+            (
+                sh
+                for sh in shifts
+                if str(pick(sh, "notes") or "").strip() == self.OFFICER_CLOSEOUT_NOTE
+            ),
+            None,
+        )
+        if shift is None:
+            day = TODAY - timedelta(days=2)
+            start_at = datetime.combine(
+                day, time(hour=8), tzinfo=ORG_TIMEZONE
+            ).astimezone(timezone.utc)
+            # Naming the Shift Officer seats them on the crew as well.
+            shift = self.api.post(
+                "/scheduling/shifts",
+                {
+                    "shift_date": str(day),
+                    "start_time": iso(start_at),
+                    "end_time": iso(start_at + timedelta(hours=12)),
+                    "shift_officer_id": officer_id,
+                    "min_staffing": 3,
+                    "positions": ["officer", "firefighter", "firefighter"],
+                    "notes": self.OFFICER_CLOSEOUT_NOTE,
+                },
+            )
+        shift_id = pick(shift, "id")
+        start_at = datetime.fromisoformat(
+            str(pick(shift, "start_time")).replace("Z", "+00:00")
+        )
+        end_at = datetime.fromisoformat(
+            str(pick(shift, "end_time")).replace("Z", "+00:00")
+        )
+        path = f"/scheduling/shifts/{shift_id}/assignments"
+        crew = [
+            str(pick(row, "user_id"))
+            for row in items(self.api.get(path), "assignments")
+        ]
+        if officer_id not in crew:
+            self.api.post(path, {"user_id": officer_id, "position": "officer"})
+            crew.insert(0, officer_id)
+        for username in self.OFFICER_CLOSEOUT_CREW:
+            if len(crew) >= 3:
+                break
+            user_id = self._user_id(username)
+            if user_id in crew:
+                continue
+            try:
+                self.api.post(path, {"user_id": user_id, "position": "firefighter"})
+            except ApiError as exc:
+                # On another shift at the same hours: the next candidate.
+                if exc.code not in (400, 409):
+                    raise
+                continue
+            crew.append(user_id)
+        attended = {
+            str(pick(row, "user_id"))
+            for row in items(
+                self.api.get(f"/scheduling/shifts/{shift_id}/attendance"), "attendance"
+            )
+            if pick(row, "checked_in_at", "checkedInAt")
+        }
+        added = 0
+        for index, user_id in enumerate(crew):
+            if user_id in attended:
+                continue
+            self.api.post(
+                f"/scheduling/shifts/{shift_id}/attendance",
+                {
+                    "user_id": user_id,
+                    "checked_in_at": iso(start_at + timedelta(minutes=index * 3)),
+                    "checked_out_at": iso(end_at - timedelta(minutes=index * 5)),
+                },
+            )
+            added += 1
+        return f"{len(crew)} on the crew, {added} check-ins added"
+
     def _ensure_closeout_check_template(self, unit: dict) -> None:
         """An end-of-shift template for the fixture's own apparatus.
 
@@ -22185,6 +22519,145 @@ class Seeder:
         self.api.put(f"/grants/{pick(created, 'id')}", {"isActive": False})
         return True
 
+    # The legacy export guide 16's undo shots are taken on. Its people left the
+    # department before the app existed, so the import creates each of them as
+    # an archived former member: their records reach no current member's
+    # history, totals or compliance, and no roster or picker lists them.
+    HISTORICAL_SOURCE = "Oakville Legacy Hours DB"
+    HISTORICAL_FILENAME = "legacy-hours-2014.csv"
+    HISTORICAL_DRILL_REQUIREMENT = "Company Drill Attendance (legacy records)"
+    HISTORICAL_MEMBERS = {
+        "501": ("Harold", "Pruitt"),
+        "502": ("Doris", "Whitcomb"),
+        "503": ("Leon", "Abernathy"),
+        "504": ("Marta", "Cole"),
+    }
+    HISTORICAL_CSV = "\n".join(
+        [
+            "VID,Date,Start,End,Training,UniqueID,TrainingSubject,"
+            "TrainingInstructor,Instructor,CompanyDrill",
+            # A held company drill: three members on one evening.
+            "501,2014-03-11,1900,2100,2.0,8101,Hose Advancement,Capt. Pruitt,0,1",
+            "502,2014-03-11,1900,2100,2.0,8102,Hose Advancement,Capt. Pruitt,0,1",
+            "503,2014-03-11,1915,2100,1.75,8103,Hose Advancement,Capt. Pruitt,0,1",
+            # Ordinary training records.
+            "501,2014-04-02,1900,2200,3.0,8104,Pump Operations,Lt. Cole,0,0",
+            "502,2014-04-19,0900,1300,4.0,8105,CPR Refresher,AHA,0,0",
+            "503,2014-05-06,1900,2100,2.0,8106,Ladder Raises,Capt. Pruitt,0,0",
+            "504,2014-05-06,1900,2100,2.0,8107,Ladder Raises,Capt. Pruitt,0,0",
+            "504,2014-06-14,0800,1700,8.0,8108,Vehicle Extrication,County Academy,0,0",
+        ]
+    )
+
+    def seed_backlog_16_historical_import(self) -> dict[str, Any]:
+        """A historical import with its training and company drills committed.
+
+        Guide 16 pictures each committed step's **Undo this step**, the
+        training step greyed out behind the drills, the confirmation and the
+        notice for records kept after an undo. Those shots undo the steps for
+        real and commit them again afterwards; a run that stopped half way is
+        put right here, by committing whichever step is not committed.
+
+        The drills step needs an active session-attendance requirement to link
+        its held drill to. An active one would grade every current member on
+        session attendance and move the department's compliance in every
+        training shot, so it is switched on for the commit and off after it:
+        the 2014 drill keeps its link, and nothing current counts it.
+        """
+        base = "/integrations/historical-imports"
+        record = next(
+            (
+                r
+                for r in items(self.api.get(base), "imports")
+                if pick(r, "source_system", "sourceSystem") == self.HISTORICAL_SOURCE
+            ),
+            None,
+        )
+        result: dict[str, Any] = {}
+        if record is None:
+            record = self.api.post_file(
+                base,
+                {"source_system": self.HISTORICAL_SOURCE},
+                self.HISTORICAL_FILENAME,
+                self.HISTORICAL_CSV.encode(),
+                "text/csv",
+            )
+            result["import"] = "created"
+        import_id = str(pick(record, "id"))
+        result["id"] = import_id
+
+        steps = pick(self.api.get(f"{base}/{import_id}/undo"), "steps") or {}
+
+        def committed(step: str) -> bool:
+            return bool((steps.get(step) or {}).get("committed"))
+
+        if not committed("training"):
+            # Only the members still waiting on a decision. One an undo kept,
+            # because a record of theirs was edited, is already mapped, and a
+            # second "create" would collide on the membership number. An undo
+            # also resets a removed member's decision to a bare "create",
+            # dropping the name typed for it, so the names go in again here.
+            preview = self.api.get(f"{base}/{import_id}/training")
+            waiting = {
+                str(pick(m, "key"))
+                for m in items(pick(preview, "members") or [], "members")
+            }
+            decisions = {
+                f"number:{number}": {
+                    "action": "create",
+                    "first_name": first,
+                    "last_name": last,
+                }
+                for number, (first, last) in self.HISTORICAL_MEMBERS.items()
+                if f"number:{number}" in waiting
+            }
+            if decisions:
+                self.api.put(f"{base}/{import_id}/members", {"members": decisions})
+            self.api.post(f"{base}/{import_id}/training/commit")
+            result["training"] = "committed"
+        if not committed("drills"):
+            requirement_id = self._historical_drill_requirement()
+            # Choosing the requirement is refused while it is inactive too.
+            self.api.patch(f"/training/requirements/{requirement_id}", {"active": True})
+            try:
+                self.api.patch(
+                    f"{base}/{import_id}/training-settings",
+                    {"drill_requirement_ids": [requirement_id]},
+                )
+                self.api.post(f"{base}/{import_id}/drills/commit")
+            finally:
+                self.api.patch(
+                    f"/training/requirements/{requirement_id}", {"active": False}
+                )
+            result["drills"] = "committed"
+        if len(result) == 1:
+            result["steps"] = "already committed"
+        return result
+
+    def _historical_drill_requirement(self) -> str:
+        """The legacy drills' requirement, made inactive if it is new."""
+        for requirement in items(
+            self.api.get("/training/requirements?active_only=false"), "requirements"
+        ):
+            if pick(requirement, "name") == self.HISTORICAL_DRILL_REQUIREMENT:
+                return str(pick(requirement, "id"))
+        created = self.api.post(
+            "/training/requirements",
+            {
+                "name": self.HISTORICAL_DRILL_REQUIREMENT,
+                "description": (
+                    "Company drills held before the department moved to The "
+                    "Logbook, from the legacy hours database."
+                ),
+                "requirement_type": "session_attendance",
+                "frequency": "annual",
+                "required_attendance_pct": 50,
+            },
+        )
+        requirement_id = str(pick(created, "id"))
+        self.api.patch(f"/training/requirements/{requirement_id}", {"active": False})
+        return requirement_id
+
     def run(self) -> int:
         print("Seeding demo data...")
         self.step("enable all modules", self.enable_all_modules)
@@ -22401,6 +22874,8 @@ class Seeder:
             lambda: self.seed_call_tracking_closeout(members),
         )
         self.step("guide 03 scheduling states", self.seed_guide03_scheduling)
+        self.step("backlog 03 officer close-out", self.seed_backlog_03_officer_closeout)
+        self.step("backlog 02 evaluations", self.seed_backlog_02_evaluations)
         self.step("label printers", self.seed_label_printers)
         self.step("id cards", self.seed_id_cards)
         self.step("card taps", self.seed_card_taps)
@@ -22458,6 +22933,9 @@ class Seeder:
         )
         self.step(
             "backlog 12 retired opportunity", self.seed_backlog_12_retired_opportunity
+        )
+        self.step(
+            "backlog 16 historical import", self.seed_backlog_16_historical_import
         )
 
         print(f"\nMembers on file: {len(members)}")

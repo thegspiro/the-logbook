@@ -39,6 +39,7 @@ const CommunityEngagementTab = lazyWithRetry(() => import('./CommunityEngagement
 const PastEventsTab = lazyWithRetry(() => import('./PastEventsTab'));
 const EventRequestsTab = lazyWithRetry(() => import('./EventRequestsTab'));
 const OutreachOverviewTab = lazyWithRetry(() => import('./outreach-overview/OutreachOverviewTab'));
+const CrrActivitiesPage = lazyWithRetry(() => import('./crr/CrrActivitiesPage'));
 const EventsSettingsTab = lazyWithRetry(() => import('./EventsSettingsTab'));
 const EventCardCheckinsTab = lazyWithRetry(() => import('./EventCardCheckinsTab'));
 const ApparatusEventsTab = lazyWithRetry(() => import('./ApparatusEventsTab'));
@@ -59,6 +60,8 @@ const TabContent: React.FC<{ tab: EventsAdminTab; onMetricsSaved: () => void }> 
       return <OutreachOverviewTab />;
     case 'requests':
       return <EventRequestsTab />;
+    case 'crr_activities':
+      return <CrrActivitiesPage embedded />;
     case 'analytics':
       return <AnalyticsDashboardPage embedded />;
     case 'community':

@@ -683,6 +683,66 @@ class CommunityEventReach(BaseModel):
     photos: str | None = None
 
 
+class CrrImpactTypeCount(BaseModel):
+    measure_id: str
+    label: str
+    quantity: int
+    previous_quantity: int | None = None
+
+
+class CrrImpactType(BaseModel):
+    """One activity type's work in the period, against the previous one."""
+
+    activity_type_id: str
+    name: str
+    activities: int
+    previous_activities: int | None = None
+    counts: list[CrrImpactTypeCount]
+
+
+class CrrImpactCount(BaseModel):
+    """A measure's total within a tag or ZIP code, named with its type."""
+
+    measure_id: str
+    activity_type_name: str
+    label: str
+    quantity: int
+
+
+class CrrImpactTag(BaseModel):
+    tag_id: str
+    kind: Literal["risk", "population"]
+    label: str
+    activities: int
+    counts: list[CrrImpactCount]
+
+
+class CrrImpactZip(BaseModel):
+    zip_code: str
+    city: str | None = None
+    state: str | None = None
+    # The ZIP's centre from the bundled GeoNames data, for the map.
+    latitude: float | None = None
+    longitude: float | None = None
+    activities: int
+    counts: list[CrrImpactCount]
+
+
+class CrrImpact(BaseModel):
+    """Community risk reduction work in the report's period.
+
+    ``by_tag`` counts an activity under every tag it carries, so its rows do
+    not sum to ``activities``; ``unplaced_activities`` had no ZIP code.
+    """
+
+    activities: int
+    previous_activities: int | None = None
+    by_type: list[CrrImpactType]
+    by_tag: list[CrrImpactTag]
+    by_zip: list[CrrImpactZip]
+    unplaced_activities: int
+
+
 class CommunityEngagement(BaseModel):
     """Outreach Impact metrics for the Community Outreach Manager.
 
@@ -707,6 +767,7 @@ class CommunityEngagement(BaseModel):
     # Everything handed out across the period, one line per item, most first.
     materials: list[CommunityMaterial] = []
     recent_events: list[CommunityEventReach]
+    crr: CrrImpact
 
 
 class OperationsItem(BaseModel):

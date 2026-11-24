@@ -170,9 +170,7 @@ describe('BulkAddItemsModal', () => {
 
     const list = screen.getByLabelText(/One item per line/);
     expect(list).toHaveAttribute('aria-invalid', 'true');
-    expect(list).toHaveAccessibleDescription(
-      expect.stringContaining('Paste or type at least one item name, one per line.')
-    );
+    expect(list).toHaveAccessibleDescription(/Paste or type at least one item name, one per line\./);
     expect(list).toHaveFocus();
     expect(mockCreateItemsBulk).not.toHaveBeenCalled();
   });
@@ -207,7 +205,7 @@ describe('BulkAddItemsModal', () => {
 
     const list = screen.getByLabelText(/One item per line/);
     await waitFor(() => expect(list).toHaveAttribute('aria-invalid', 'true'));
-    expect(list).toHaveAccessibleDescription(expect.stringContaining('Item 2, unit: Value is too long.'));
+    expect(list).toHaveAccessibleDescription(/Item 2, unit: Value is too long\./);
     expect(onClose).not.toHaveBeenCalled();
   });
 
