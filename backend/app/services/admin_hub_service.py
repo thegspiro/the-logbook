@@ -114,6 +114,7 @@ from app.services.training_course_links import TrainingCourseLinkService
 from app.services.training_module_config_service import (
     get_practical_skills_method,
 )
+from app.utils.duty_shifts import duty_shifts_only
 from app.utils.org_timezone import scheduling_timezone
 
 #: The always-on fourth slot. Reported by every module, chosen by none.
@@ -1677,6 +1678,7 @@ async def _scheduling_hours_this_month(ctx: MetricContext) -> tuple[str, str]:
                 Shift.organization_id == ctx.organization_id,
                 Shift.shift_date >= month_start,
                 Shift.shift_date < next_month,
+                duty_shifts_only(),
             )
         )
     ).scalar()

@@ -25,6 +25,19 @@ from app.services.training_session_service import (
 )
 from tests.clock_support import reread_each_test
 
+
+@pytest.fixture(autouse=True)
+def _no_staffing_sheet(monkeypatch):
+    """Finalize here runs against a scripted session with no signup sheet.
+
+    Finalize now carries a signup sheet's attendance onto the roster first
+    (owner decision, 2026-11-24), which is one more read than these scripts
+    hold. That step is covered against real rows in
+    ``test_outreach_sheet_credit.py``.
+    """
+    monkeypatch.setattr(EventService, "_mirror_staffing_sheet", AsyncMock())
+
+
 pytestmark = pytest.mark.unit
 
 

@@ -37,6 +37,7 @@ from app.models.training import (
     TrainingStatus,
 )
 from app.models.user import Organization
+from app.utils.duty_shifts import duty_shifts_only
 from app.utils.org_timezone import scheduling_timezone
 
 STATION_TYPE_NAME = "Fire Station"
@@ -120,6 +121,9 @@ async def volunteer_hours_ytd(
             Shift.organization_id == org_id,
             Shift.shift_date >= jan_1,
             Shift.shift_date <= today,
+            # An outreach sheet's time reaches this total through its event's
+            # check-ins below; counting the sheet too counted it twice.
+            duty_shifts_only(),
         )
     )
     counted_as_admin_hours = (
