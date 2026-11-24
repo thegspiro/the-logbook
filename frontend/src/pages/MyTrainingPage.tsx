@@ -896,24 +896,24 @@ const MyTrainingPage: React.FC = () => {
                 role="region"
                 aria-label="Training records"
               >
-                <table className="rwd-table rwd-table-wide w-full text-left text-sm">
+                <table className="rwd-table rwd-table-narrow w-full text-left text-sm">
                   <thead className="text-theme-text-muted bg-theme-surface-secondary text-xs uppercase">
                     <tr>
-                      <th scope="col" className="px-4 py-2">
+                      <th scope="col" className="px-2.5 py-2">
                         Course
                       </th>
-                      <th scope="col" className="px-4 py-2">
+                      <th scope="col" className="px-2.5 py-2">
                         Type
                       </th>
-                      <th scope="col" className="px-4 py-2">
+                      <th scope="col" className="px-2.5 py-2">
                         Date
                       </th>
                       {v.show_training_hours && (
-                        <th scope="col" className="px-4 py-2">
+                        <th scope="col" className="px-2.5 py-2">
                           Hours
                         </th>
                       )}
-                      <th scope="col" className="px-4 py-2">
+                      <th scope="col" className="px-2.5 py-2">
                         Status
                       </th>
                     </tr>
@@ -921,21 +921,21 @@ const MyTrainingPage: React.FC = () => {
                   <tbody className="divide-theme-surface-border divide-y">
                     {recentRecords.map((r) => (
                       <tr key={r.id} className="text-theme-text-secondary">
-                        <td className="rwd-table-lead px-4 py-2" data-label="Course">
+                        <td className="rwd-table-lead px-2.5 py-2" data-label="Course">
                           {r.course_name}
                         </td>
-                        <td className="px-4 py-2 whitespace-nowrap" data-label="Type">
+                        <td className="px-2.5 py-2" data-label="Type">
                           {TRAINING_TYPE_LABELS[r.training_type] ?? r.training_type.replace('_', ' ')}
                         </td>
-                        <td className="px-4 py-2 whitespace-nowrap" data-label="Date">
+                        <td className="px-2.5 py-2 whitespace-nowrap" data-label="Date">
                           {formatDate(r.completion_date, tz)}
                         </td>
                         {v.show_training_hours && (
-                          <td className="px-4 py-2 whitespace-nowrap" data-label="Hours">
+                          <td className="px-2.5 py-2 whitespace-nowrap" data-label="Hours">
                             {formatHours(r.hours_completed)}
                           </td>
                         )}
-                        <td className="px-4 py-2" data-label="Status">
+                        <td className="px-2.5 py-2" data-label="Status">
                           {r.voided_at ? (
                             <span className="w-fit rounded-sm bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
                               voided
