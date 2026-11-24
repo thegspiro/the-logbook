@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**421 tables · 6528 columns · 1399 foreign keys**
+**421 tables · 6530 columns · 1399 foreign keys**
 
 ---
 
@@ -128,7 +128,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`attendance_waiver_attachments`](#attendance_waiver_attachments) | `AttendanceWaiverAttachment` | 10 | A file a member filed with their request, when the policy takes them. |
 | [`attendance_waiver_email_sends`](#attendance_waiver_email_sends) | `AttendanceWaiverEmailSend` | 8 | One email sent, or being sent, about one decision-log row. |
 | [`attendance_waiver_request_actions`](#attendance_waiver_request_actions) | `AttendanceWaiverRequestAction` | 7 | The decision log: one row per thing that happened to a request. |
-| [`attendance_waiver_requests`](#attendance_waiver_requests) | `AttendanceWaiverRequest` | 20 | One member's request to be excused from one session. |
+| [`attendance_waiver_requests`](#attendance_waiver_requests) | `AttendanceWaiverRequest` | 22 | One member's request to be excused from one session. |
 
 ### Audit & Compliance Logging
 
@@ -2359,6 +2359,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `chief_override` | BOOL | no |  | `0` |  |
 | `info_requested_at` | DATETIME | yes |  |  |  |
 | `reconfirm_requested_at` | DATETIME | yes |  |  |  |
+| `attachments_removed_count` | INTEGER | yes |  |  |  |
+| `attachments_removed_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
