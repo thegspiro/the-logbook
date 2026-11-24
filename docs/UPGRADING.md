@@ -135,6 +135,29 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### The History widget needs an nginx location in a self-managed proxy (2026-11-24)
+
+The History "Today in history" widget is served at `/embed/history/<token>`
+and is the second page another site may frame (after `/embed/f/<slug>`). All
+three nginx configs shipped with the app gain a location for it:
+
+- `frontend/nginx.conf` asks the backend which websites may frame the page
+  (`/api/public/v1/history/widget/<token>/embed-policy`) and writes the answer
+  into `frame-ancestors`;
+- `infrastructure/nginx/nginx.conf` and `infrastructure/nginx/docker.conf`
+  pass the page through without their server-level `X-Frame-Options DENY`.
+
+A Docker, Unraid or AWS install using the shipped images picks these up with
+the new images. **An installation that runs its own nginx in front** must copy
+the `/embed/history/` location (and, on the site serving the frontend, the
+internal `/_history_widget_embed_policy` location) from the shipped config.
+Nothing fails to start without it: until then the widget simply refuses to be
+framed, and every other page is unchanged.
+
+A migration (`46accab49bc1`) adds the table `history_public_settings`. It
+changes no existing table, and with no row a department reads as every
+History part switched off. Its downgrade drops the table.
+
 ### Duplicate meeting attendance rows are removed, and cannot be restored (2026-11-11)
 
 A migration (`7b6db9dd8e4f`) runs on the next start and adds a unique index on

@@ -6,23 +6,24 @@ Complete reference of all pages in the application, organized by module.
 
 ## Public Pages (No Authentication Required)
 
-| URL                                    | Page                   | Description                                                                                                                               |
-| -------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`                                    | Welcome                | Landing / onboarding entry point                                                                                                          |
-| `/login`                               | Login                  | User authentication                                                                                                                       |
-| `/forgot-password`                     | Forgot Password        | Password reset request                                                                                                                    |
-| `/reset-password`                      | Reset Password         | Password reset form                                                                                                                       |
-| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)                                                                            |
-| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                                                                                      |
-| `/embed/f/:slug`                       | Public Form (embedded) | The same form inside an iframe on a department's own website; framing allowed only from the sites it lists _(2026-10-25)_                 |
-| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                                                                                        |
-| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based); reads member ID cards where the room has badge check-in on _(2026-10-03)_      |
-| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                                                                  |
-| `/event-guest/:token`                  | `GuestCheckInPage`     | Guest (non-member) sign-in through the event's own guest QR code, for an event with no room kiosk (token-based) _(2026-10-25)_            |
-| `/privacy`                             | Privacy Policy         | Public privacy notice; department control + status-based access, dated; department-configurable text                                      |
-| `/terms`                               | Terms of Service       | Public terms of use; department control + status-based access, dated; department-configurable text                                        |
-| `/public/minutes`                      | Public Minutes         | Minutes the department posted publicly (list); off until the department turns on public posting under Minutes → Publishing _(2026-10-17)_ |
-| `/public/minutes/:copyId`              | Public Minutes         | One posted set of minutes, in the narrower public form; shows the version it replaced and a notice while under correction _(2026-10-17)_  |
+| URL                                    | Page                      | Description                                                                                                                                                                         |
+| -------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                                    | Welcome                   | Landing / onboarding entry point                                                                                                                                                    |
+| `/login`                               | Login                     | User authentication                                                                                                                                                                 |
+| `/forgot-password`                     | Forgot Password           | Password reset request                                                                                                                                                              |
+| `/reset-password`                      | Reset Password            | Password reset form                                                                                                                                                                 |
+| `/auth/callback`                       | `OAuthCallbackPage`       | OAuth sign-in landing page (handles Google/Microsoft redirect)                                                                                                                      |
+| `/f/:slug`                             | Public Form               | Public form submission (token-based)                                                                                                                                                |
+| `/embed/f/:slug`                       | Public Form (embedded)    | The same form inside an iframe on a department's own website; framing allowed only from the sites it lists _(2026-10-25)_                                                           |
+| `/embed/history/:token`                | History widget (embedded) | The "Today in history" widget inside an iframe on a department's own website, reached by its secret link; framing allowed only from the department's listed websites _(2026-11-24)_ |
+| `/ballot`                              | Ballot Voting             | Public ballot voting (token-based)                                                                                                                                                  |
+| `/display/:code`                       | Location Kiosk Display    | QR code display for tablets in rooms (display-code-based); reads member ID cards where the room has badge check-in on _(2026-10-03)_                                                |
+| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`        | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                                                                                                            |
+| `/event-guest/:token`                  | `GuestCheckInPage`        | Guest (non-member) sign-in through the event's own guest QR code, for an event with no room kiosk (token-based) _(2026-10-25)_                                                      |
+| `/privacy`                             | Privacy Policy            | Public privacy notice; department control + status-based access, dated; department-configurable text                                                                                |
+| `/terms`                               | Terms of Service          | Public terms of use; department control + status-based access, dated; department-configurable text                                                                                  |
+| `/public/minutes`                      | Public Minutes            | Minutes the department posted publicly (list); off until the department turns on public posting under Minutes → Publishing _(2026-10-17)_                                           |
+| `/public/minutes/:copyId`              | Public Minutes            | One posted set of minutes, in the narrower public form; shows the version it replaced and a notice while under correction _(2026-10-17)_                                            |
 
 > **Badge check-in at the room kiosk** _(2026-10-03)_. A room with **Badge
 > check-in** switched on (Check-In QR Codes, `locations.manage_nfc_tags`, needs
@@ -1275,42 +1276,42 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## History _(2026-11-03)_
 
-| URL                                    | Page                        | Permission                            |
-| -------------------------------------- | --------------------------- | ------------------------------------- |
-| `/history`                             | History home                | Authenticated                         |
-| `/history/people`                      | Past members                | Authenticated                         |
-| `/history/people/new`                  | Add a past member           | `history.manage`                      |
-| `/history/people/:personId`            | Past member                 | Authenticated                         |
-| `/history/people/:personId/edit`       | Edit a past member          | `history.manage`                      |
-| `/history/people/:personId/merge`      | Merge two records           | `history.manage`                      |
-| `/history/import`                      | Import a roster             | `history.manage`                      |
-| `/history/media`                       | Photos and media            | Authenticated                         |
-| `/history/media/upload`                | Upload photos and media     | `history.manage`                      |
-| `/history/media/:mediaId`              | Photo or media item         | Authenticated                         |
-| `/history/media/:mediaId/edit`         | Edit a photo or media item  | `history.manage`                      |
-| `/history/documents`                   | Documents                   | Authenticated                         |
-| `/history/documents/upload`            | Upload documents            | `history.manage`                      |
-| `/history/documents/:documentId`       | Document                    | Authenticated                         |
-| `/history/documents/:documentId/edit`  | Edit a document             | `history.manage`                      |
-| `/history/timeline`                    | Timeline                    | Authenticated                         |
-| `/history/events`                      | Historical events           | Authenticated                         |
-| `/history/events/new`                  | Add an event                | `history.manage`                      |
-| `/history/events/:eventId`             | Event                       | Authenticated                         |
-| `/history/events/:eventId/edit`        | Edit an event               | `history.manage`                      |
-| `/history/articles`                    | Articles                    | Authenticated                         |
-| `/history/articles/new`                | Write an article            | `history.manage`                      |
-| `/history/articles/:articleId`         | Article                     | Authenticated                         |
-| `/history/articles/:articleId/edit`    | Edit an article             | `history.manage`                      |
-| `/history/apparatus`                   | Historical apparatus        | Authenticated                         |
-| `/history/apparatus/new`               | Add an apparatus            | `history.manage`                      |
-| `/history/apparatus/:apparatusId`      | Historical apparatus record | Authenticated                         |
-| `/history/apparatus/:apparatusId/edit` | Edit an apparatus           | `history.manage`                      |
-| `/history/albums`                      | Albums                      | Authenticated                         |
-| `/history/albums/:albumId`             | Album                       | Authenticated                         |
-| `/history/import/:importId`            | Review a roster import      | `history.manage`                      |
-| `/history/honor-roll`                  | Honor Roll                  | Authenticated                         |
-| `/history/clearance/:requestId`        | Clearance review            | Authenticated                         |
-| `/history/settings`                    | Titles and clearance list   | `history.manage` or `settings.manage` |
+| URL                                    | Page                                      | Permission                            |
+| -------------------------------------- | ----------------------------------------- | ------------------------------------- |
+| `/history`                             | History home                              | Authenticated                         |
+| `/history/people`                      | Past members                              | Authenticated                         |
+| `/history/people/new`                  | Add a past member                         | `history.manage`                      |
+| `/history/people/:personId`            | Past member                               | Authenticated                         |
+| `/history/people/:personId/edit`       | Edit a past member                        | `history.manage`                      |
+| `/history/people/:personId/merge`      | Merge two records                         | `history.manage`                      |
+| `/history/import`                      | Import a roster                           | `history.manage`                      |
+| `/history/media`                       | Photos and media                          | Authenticated                         |
+| `/history/media/upload`                | Upload photos and media                   | `history.manage`                      |
+| `/history/media/:mediaId`              | Photo or media item                       | Authenticated                         |
+| `/history/media/:mediaId/edit`         | Edit a photo or media item                | `history.manage`                      |
+| `/history/documents`                   | Documents                                 | Authenticated                         |
+| `/history/documents/upload`            | Upload documents                          | `history.manage`                      |
+| `/history/documents/:documentId`       | Document                                  | Authenticated                         |
+| `/history/documents/:documentId/edit`  | Edit a document                           | `history.manage`                      |
+| `/history/timeline`                    | Timeline                                  | Authenticated                         |
+| `/history/events`                      | Historical events                         | Authenticated                         |
+| `/history/events/new`                  | Add an event                              | `history.manage`                      |
+| `/history/events/:eventId`             | Event                                     | Authenticated                         |
+| `/history/events/:eventId/edit`        | Edit an event                             | `history.manage`                      |
+| `/history/articles`                    | Articles                                  | Authenticated                         |
+| `/history/articles/new`                | Write an article                          | `history.manage`                      |
+| `/history/articles/:articleId`         | Article                                   | Authenticated                         |
+| `/history/articles/:articleId/edit`    | Edit an article                           | `history.manage`                      |
+| `/history/apparatus`                   | Historical apparatus                      | Authenticated                         |
+| `/history/apparatus/new`               | Add an apparatus                          | `history.manage`                      |
+| `/history/apparatus/:apparatusId`      | Historical apparatus record               | Authenticated                         |
+| `/history/apparatus/:apparatusId/edit` | Edit an apparatus                         | `history.manage`                      |
+| `/history/albums`                      | Albums                                    | Authenticated                         |
+| `/history/albums/:albumId`             | Album                                     | Authenticated                         |
+| `/history/import/:importId`            | Review a roster import                    | `history.manage`                      |
+| `/history/honor-roll`                  | Honor Roll                                | Authenticated                         |
+| `/history/clearance/:requestId`        | Clearance review                          | Authenticated                         |
+| `/history/settings`                    | Titles, clearance list and public website | `history.manage` or `settings.manage` |
 
 > The department archive, off by default and turned on under Settings → Modules. Any signed-in member reads what is published to members; the server decides what each caller receives, so a member's response never carries a past member's birth date, addresses, verification sources or research notes, and each memorial detail (date of death, circumstances, resting place) only where its own visibility allows. `history.view` reads drafts and research without editing, `history.manage` creates and edits, and `history.publish` publishes. Publishing to the public needs the department's clearance list — each step a position, any one holder of which clears it — to have cleared the record's latest substantial revision; with no list, a publisher publishes directly. The review page opens for the archive's keepers, the member who submitted the record and holders of a step's position. Public records are stored now and appear on the department's website once the public feed ships. A roster CSV is imported through a reviewed draft: each row is matched to an existing record (which only gains the fields it is missing), mapped to a member account, created as a new draft record, or skipped, and no login account is ever created. Merging two records of one person keeps one, moves the other's service, family links and change history to it, and forwards the removed record's address. Photos, audio and video keep their original exactly as uploaded, downloadable by `history.manage` only; everyone else sees a photo as a re-encoded copy with its location and camera data stripped, and audio and video as a copy with their recording-device tags and data tracks removed. TIFF is not accepted. Documents (PDFs and scans) live in the protected History folder in Documents with their catalogue in History; everyone but `history.manage` opens a copy rebuilt without its metadata, scripts or attachments, in the browser's own viewer in a new tab, and search covers each PDF's own text and transcription. A tagged person's photo-use answer is shown to the archive's keepers as a warning, never a block. Events (a start date, an optional end, and links to people with their roles, apparatus, photos and documents) and historical apparatus (with their unit numbers over time; one can start from an Apparatus-module truck, copying only its descriptive details once) are published the same way. The timeline shows events plus milestones read from the published records — apparatus in and out of service, line-of-duty deaths where the death date's own visibility allows, and the starts of titles the Historian has switched on and dated — and "Today in history" lists day-precise entries on today's date in earlier years, on the History home and the Dashboard.
 

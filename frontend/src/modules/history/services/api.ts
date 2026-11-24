@@ -81,6 +81,8 @@ import type {
   ArticleSummary,
   ArticleUpdate,
   ArticleView,
+  HistoryPublicSettings,
+  HistoryPublicSettingsUpdate,
 } from '../types';
 
 const api = createApiClient();
@@ -226,6 +228,28 @@ export const historyService = {
   async listClearancePositions(): Promise<{ id: string; name: string }[]> {
     const { data } = await api.get<{ id: string; name: string }[]>(`${BASE}/clearance/positions`);
     return asArray(data);
+  },
+
+  // --- Public website ---
+
+  async getPublicSettings(): Promise<HistoryPublicSettings> {
+    const { data } = await api.get<HistoryPublicSettings>(`${BASE}/public-settings`);
+    return data;
+  },
+
+  async updatePublicSettings(values: HistoryPublicSettingsUpdate): Promise<HistoryPublicSettings> {
+    const { data } = await api.put<HistoryPublicSettings>(`${BASE}/public-settings`, values);
+    return data;
+  },
+
+  /** A new widget link. Its secret is returned this once. */
+  async makeWidgetLink(): Promise<string> {
+    const { data } = await api.post<{ token: string }>(`${BASE}/public-settings/widget-link`);
+    return data.token;
+  },
+
+  async removeWidgetLink(): Promise<void> {
+    await api.delete(`${BASE}/public-settings/widget-link`);
   },
 
   async replaceClearanceSteps(steps: { name: string; position_id: string }[]): Promise<ClearanceStep[]> {

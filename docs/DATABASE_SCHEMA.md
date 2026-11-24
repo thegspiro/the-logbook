@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**428 tables · 6580 columns · 1418 foreign keys**
+**429 tables · 6598 columns · 1420 foreign keys**
 
 ---
 
@@ -427,6 +427,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`history_media_apparatus_tags`](#history_media_apparatus_tags) | `HistoryMediaApparatusTag` | 4 | An apparatus shown or heard in a media item. No consent warning: a |
 | [`history_media_files`](#history_media_files) | `HistoryMediaFile` | 8 | One stored file of a media item: its original, viewing copy or |
 | [`history_media_tags`](#history_media_tags) | `HistoryMediaTag` | 4 | A person shown or heard in a media item. |
+| [`history_public_settings`](#history_public_settings) | `HistoryPublicSettings` | 18 | What the department's website may show of its history, one row per |
 | [`history_record_redirects`](#history_record_redirects) | `HistoryRecordRedirect` | 7 | Where a merged-away record's address now leads. |
 | [`history_revisions`](#history_revisions) | `HistoryRevision` | 10 | One entry in an archive record's change history. |
 | [`history_sources`](#history_sources) | `HistorySource` | 9 | One entry in a department's managed list of sources and donors. |
@@ -7168,6 +7169,38 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_history_media_tags_member` (`member_id`)
+
+### `history_public_settings`
+
+**HistoryPublicSettings** · `app/models/history.py`
+
+> What the department's website may show of its history, one row per department. Each switch opens one part of the public portal's History API, and all start off: publishing a record to the public clears it, but the department decides separately when its website starts showing that kind of record. Nothing here widens what a record shows; the clearance list decided that, and only the cleared public copy is ever served. ``widget_token_hash`` is the SHA-256 of the "Today in history" widget's secret link. The secret itself is shown once, when it is made, and never stored, like the calendar feed's token; replacing it stops the old link.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, UQ |  | → `organizations.id` ON DELETE CASCADE |
+| `show_people` | BOOL | no |  | `0` |  |
+| `show_honor_roll` | BOOL | no |  | `0` |  |
+| `show_photos` | BOOL | no |  | `0` |  |
+| `show_documents` | BOOL | no |  | `0` |  |
+| `show_events` | BOOL | no |  | `0` |  |
+| `show_apparatus` | BOOL | no |  | `0` |  |
+| `show_articles` | BOOL | no |  | `0` |  |
+| `show_timeline` | BOOL | no |  | `0` |  |
+| `show_today` | BOOL | no |  | `0` |  |
+| `widget_token_hash` | VARCHAR(64) | yes | UQ |  |  |
+| `widget_token_created_at` | DATETIME | yes |  |  |  |
+| `widget_theme` | ENUM(`auto`, `light`, `dark`) | no |  | `auto` |  |
+| `widget_show_branding` | BOOL | no |  | `1` |  |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_history_public_settings_organization_id` (`organization_id`)
+- UNIQUE `uq_history_public_settings_widget_token_hash` (`widget_token_hash`)
 
 ### `history_record_redirects`
 
@@ -14335,7 +14368,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (505 references)
+### → `users` (506 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14571,6 +14604,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `history_media` | `updated_by` | SET NULL | yes |
 | `history_media_apparatus_tags` | `created_by` | SET NULL | yes |
 | `history_media_tags` | `created_by` | SET NULL | yes |
+| `history_public_settings` | `updated_by` | SET NULL | yes |
 | `history_record_redirects` | `merged_by` | SET NULL | yes |
 | `history_revisions` | `actor_id` | SET NULL | yes |
 | `history_sources` | `created_by` | SET NULL | yes |
@@ -14845,7 +14879,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (341 references)
+### → `organizations` (342 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -15008,6 +15042,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `history_import_title_mappings` | `organization_id` | CASCADE | no |
 | `history_imports` | `organization_id` | CASCADE | no |
 | `history_media` | `organization_id` | CASCADE | no |
+| `history_public_settings` | `organization_id` | CASCADE | no |
 | `history_record_redirects` | `organization_id` | CASCADE | no |
 | `history_revisions` | `organization_id` | CASCADE | no |
 | `history_sources` | `organization_id` | CASCADE | no |

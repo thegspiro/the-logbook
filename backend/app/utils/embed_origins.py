@@ -64,3 +64,13 @@ def valid_embed_origins(values: Iterable[object]) -> List[str]:
         if len(origins) == MAX_EMBED_ORIGINS:
             break
     return origins
+
+
+def department_embed_origins(org_settings: object) -> List[str]:
+    """The department's own websites, as listed under Organization Settings →
+    Forms (``settings["forms"]["embed_allowed_origins"]``), re-checked. The
+    History widget is framed from the same list as embedded forms, so a
+    department keeps one list of its websites (owner decision, 2026-11-24)."""
+    forms = org_settings.get("forms") if isinstance(org_settings, dict) else None
+    stored = forms.get("embed_allowed_origins") if isinstance(forms, dict) else None
+    return valid_embed_origins(stored if isinstance(stored, list) else [])

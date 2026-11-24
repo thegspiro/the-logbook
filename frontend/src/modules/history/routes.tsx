@@ -6,6 +6,7 @@
  * as on the API.
  */
 
+import { Suspense } from 'react';
 import { Route } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
@@ -40,6 +41,7 @@ const HistoryArticleFormPage = lazyWithRetry(() => import('./pages/HistoryArticl
 const HistoryApparatusListPage = lazyWithRetry(() => import('./pages/HistoryApparatusListPage'));
 const HistoryApparatusPage = lazyWithRetry(() => import('./pages/HistoryApparatusPage'));
 const HistoryApparatusFormPage = lazyWithRetry(() => import('./pages/HistoryApparatusFormPage'));
+const HistoryWidgetPage = lazyWithRetry(() => import('./pages/HistoryWidgetPage'));
 
 export function getHistoryRoutes() {
   return (
@@ -321,5 +323,23 @@ export function getHistoryRoutes() {
         }
       />
     </>
+  );
+}
+
+/**
+ * The "Today in history" widget, the one History page another site may frame
+ * (see the /embed/history/ locations in the nginx configs). Public: its secret
+ * link is its only credential.
+ */
+export function getHistoryPublicRoutes() {
+  return (
+    <Route
+      path="/embed/history/:token"
+      element={
+        <Suspense fallback={null}>
+          <HistoryWidgetPage />
+        </Suspense>
+      }
+    />
   );
 }

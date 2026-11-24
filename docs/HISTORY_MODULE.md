@@ -10,8 +10,8 @@ papers, kept in a protected History folder in Documents. Phase 5 (2026-11-21)
 adds events, historical apparatus, the department timeline and "Today in
 history" inside the app, with managed lists of stations, apparatus types and
 event types. Phase 6 (2026-11-23) adds articles, with PDF and Word export.
-Phase 7 publishes outward: the public portal feed and the public "Today in
-history" widget.
+Phase 7 (2026-11-24) publishes outward: the department's website reads History
+through the Public Portal, and a "Today in history" widget can be framed on it.
 
 Decisions the owner made are recorded in
 [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md#history--decisions-the-module-ships-with-2026-11-03).
@@ -478,6 +478,84 @@ so a search never parses HTML row by row.
   an error, never half a file. Each export is audited by article id and format,
   never its text.
 
+## Publishing outward
+
+Phase 7, built to the owner-approved spec of 2026-11-24. The department's own
+website reads History through the existing Public Portal
+(`/api/public/v1/history`), with the same API keys, rate limits and access
+log. Everything served is a record's **cleared public copy**
+(`public_snapshot`), never the live record: an edit waiting for the clearance
+list, a member-only field or the research notes cannot reach the website,
+because none of them is in that copy. Each view names its fields one by one,
+so a field added to a record's copy later is not published by accident.
+
+**What has to be on.** The portal (switched on, with the Public Information
+module), the History module, and the part asked for, under History settings →
+"Public website" (`history_public_settings`, one row per department). Each part
+starts switched off: people, the Honor Roll, photos, documents, events,
+apparatus, articles, the timeline and "Today in history". A part that is off
+answers 404, the same as a record that does not exist, so a website cannot tell
+what the department keeps. A portal that is off answers 503, as the portal's
+other routes do. Holders of `history.manage` or `settings.manage` edit the
+switches; the Public Portal's Configuration tab points there.
+
+**What a website can read** (each with the portal key in `X-API-Key`):
+
+- `GET /feed?limit=&before=`: what was most recently made public, newest
+  first, across every part that is on. Page back with `before` set to the last
+  item's `published_at`.
+- `GET /people`, `/people/{id}`, `/honor-roll`, `/photos`, `/photos/{id}`,
+  `/documents`, `/documents/{id}`, `/events`, `/events/{id}`, `/apparatus`,
+  `/apparatus/{id}`, `/articles`, `/articles/{id}`. Lists are paged
+  (`limit`, `offset`) and, except articles, filter by `decade` (its first
+  year: `1950`). There is no text search.
+- `GET /timeline/decades`, `GET /timeline?decade=` and `GET /today`, built from
+  the cleared copies by the rules inside the app: day precision for "today",
+  and a line-of-duty death only when its date was itself set to public. On a
+  quiet day `/today` answers with the next seven days' anniversaries
+  (`mode: "week"`), and with none of those `mode: "none"`.
+
+**Links between records** appear only when the record linked to is public and
+its part is on: an event lists its photos only while photos are on. Names the
+cleared copy holds as text (the people on an event, the apparatus in a photo)
+were cleared with the record and are given as text. A photo shown inside a
+public article is linked through the article, so it opens with the photo
+section off.
+
+**Files** are named by signed links, `GET /api/public/v1/history/files/{token}`,
+because a browser drawing an image cannot carry an API key. Each link is an
+HMAC-SHA256, under a key derived from `SECRET_KEY` for this purpose alone, over
+the department, the kind of record, its id, which copy, the article it is shown
+in (if any) and an expiry 24 hours ahead (rounded to the hour, so a page
+loaded twice in an hour gets the same link). Every request re-checks that the
+record is still public, its part still on and the portal still on, so a
+withdrawn photo's link stops working at once. The copies a link can name are a
+photo's display copy or thumbnail, a document's thumbnail or cleaned PDF, and
+an article's public PDF; never an original, and recordings and films are
+listed but not streamed. The article PDF is printed from the cleared copy in
+the phase 6 layout, with only its public photos.
+
+**The "Today in history" widget** is one `<iframe>` line on the department's
+website, at `/embed/history/<token>`. The token is a secret made under History
+settings → "Public website", shown once, and kept only as its SHA-256; making a
+new one stops the old one at once. The page reads
+`GET /api/public/v1/history/widget/<token>/today` (no API key, rate-limited per
+address) and shows today's entries, or "This week in history", or nothing at
+all. It can follow the visitor's light or dark setting or be fixed to one, and
+the department's name and logo can be left out.
+
+Which websites may frame it is the same list embedded forms use: the
+department's websites under Organization Settings → Forms. nginx asks
+`/api/public/v1/history/widget/<token>/embed-policy` on every load and writes
+the answer into `frame-ancestors`; the answer is `'none'` unless the link is
+current, "Today in history" is on and the portal is on. (The Public Portal's
+own `allowed_origins` is still read by nothing, as before; owner decision,
+2026-11-24.)
+
+**Caching.** The security middleware sends `no-store` with every API answer,
+so nothing a website reads is cached and a withdrawal takes effect on the next
+request.
+
 ## API
 
 `/api/v1/history`, gated on the module. Every by-id read filters the
@@ -512,6 +590,7 @@ position) is checked against it before it is stored.
 | `POST /articles`, `PATCH /articles/{id}`, `DELETE /articles/{id}`                                                                                                                                                                                            | `history.manage`                                                                                                     |
 | `POST /articles/{id}/publish`, `/unpublish`                                                                                                                                                                                                                  | `history.publish`                                                                                                    |
 | `GET /articles/{id}/revisions`                                                                                                                                                                                                                               | `history.view` / `history.manage`, or a clearer                                                                      |
+| `GET /public-settings`, `PUT /public-settings`, `POST /public-settings/widget-link`, `DELETE /public-settings/widget-link`                                                                                                                                   | `history.manage` or `settings.manage`                                                                                |
 
 Markdown is rendered on the server (`app/utils/markdown_render.py`:
 `markdown-it-py` with raw HTML and images off, then `nh3` against an

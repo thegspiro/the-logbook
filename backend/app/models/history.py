@@ -2310,3 +2310,94 @@ class HistoryArticleDocument(Base):
     history_document: Mapped["HistoryDocument"] = relationship("HistoryDocument")
 
     __table_args__ = (Index("ix_history_article_documents_document", "document_id"),)
+
+
+# --- Phase 7: publishing outward ---
+
+
+class PublicWidgetTheme(str, enum.Enum):
+    """How the "Today in history" widget is drawn on a department's website."""
+
+    AUTO = "auto"
+    LIGHT = "light"
+    DARK = "dark"
+
+
+class HistoryPublicSettings(Base):
+    """What the department's website may show of its history, one row per
+    department.
+
+    Each switch opens one part of the public portal's History API, and all
+    start off: publishing a record to the public clears it, but the department
+    decides separately when its website starts showing that kind of record.
+    Nothing here widens what a record shows; the clearance list decided that,
+    and only the cleared public copy is ever served.
+
+    ``widget_token_hash`` is the SHA-256 of the "Today in history" widget's
+    secret link. The secret itself is shown once, when it is made, and never
+    stored, like the calendar feed's token; replacing it stops the old link.
+    """
+
+    __tablename__ = "history_public_settings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    show_people: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    show_honor_roll: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    show_photos: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    show_documents: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    show_events: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    show_apparatus: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    show_articles: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    show_timeline: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    show_today: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    widget_token_hash: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True, unique=True
+    )
+    widget_token_created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    widget_theme: Mapped[PublicWidgetTheme] = mapped_column(
+        _enum(PublicWidgetTheme),
+        nullable=False,
+        default=PublicWidgetTheme.AUTO,
+        server_default="auto",
+    )
+    widget_show_branding: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    updated_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )

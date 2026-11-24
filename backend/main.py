@@ -32,6 +32,8 @@ from app.api.public.event_guest import router as public_event_guest_router
 from app.api.public.finance_approvals import router as finance_approvals_router
 from app.api.public.follow_up_forms import router as public_follow_up_forms_router
 from app.api.public.forms import router as public_forms_router
+from app.api.public.history import open_router as public_history_open_router
+from app.api.public.history import router as public_history_router
 from app.api.public.integrations_webhook import router as integrations_webhook_router
 from app.api.public.legal import router as public_legal_router
 from app.api.public.mcp_oauth import router as mcp_oauth_router
@@ -2403,6 +2405,18 @@ app.include_router(api_router, prefix="/api/v1")
 # Include public portal API (no /api/v1 prefix - uses /api/public/v1)
 app.include_router(
     public_portal_router, prefix="/api", responses=public_responses.PORTAL
+)
+
+# Include the department's History for its website (/api/public/v1/history):
+# the portal-key API, then the signed files and the widget, which a browser
+# reaches without a key.
+app.include_router(
+    public_history_router, prefix="/api", responses=public_responses.PORTAL
+)
+app.include_router(
+    public_history_open_router,
+    prefix="/api",
+    responses=public_responses.TOKEN_ADDRESSED,
 )
 
 # Include public forms API (no auth required - uses /api/public/v1/forms)

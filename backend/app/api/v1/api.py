@@ -50,6 +50,7 @@ from app.api.v1.endpoints import (
     history_events,
     history_import,
     history_media,
+    history_public,
     integrations,
     inventory,
     inventory_kiosk,
@@ -419,6 +420,12 @@ api_router.include_router(
 )
 api_router.include_router(
     history_events.router,
+    prefix="/history",
+    tags=["history"],
+    dependencies=module_gate("history", "History"),
+)
+api_router.include_router(
+    history_public.router,
     prefix="/history",
     tags=["history"],
     dependencies=module_gate("history", "History"),
